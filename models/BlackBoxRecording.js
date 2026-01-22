@@ -347,7 +347,7 @@ const BlackBoxRecordingSchema = new Schema({
   // ─────────────────────────────────────────────────────────────────────────
   // ERROR COLLECTION
   // ─────────────────────────────────────────────────────────────────────────
-  errors: [{
+  errorEvents: [{
     ts: Date,
     source: {
       type: String,
@@ -389,12 +389,18 @@ const BlackBoxRecordingSchema = new Schema({
   // ─────────────────────────────────────────────────────────────────────────
   createdAt: { 
     type: Date, 
-    default: Date.now,
-    index: true
+    default: Date.now
   }
 }, {
   timestamps: false,  // We manage createdAt manually
   collection: 'blackbox_recordings'
+});
+
+// Backward compatibility: map legacy "errors" field into errorEvents on read
+BlackBoxRecordingSchema.pre('init', function(doc) {
+  if (doc && doc.errors && !doc.errorEvents) {
+    doc.errorEvents = doc.errors;
+  }
 });
 
 // ============================================================================

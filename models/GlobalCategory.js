@@ -38,9 +38,6 @@ const GlobalCategorySchema = new mongoose.Schema(
 // INDEXES
 // ============================================================================
 
-// Ensure unique category names (case-sensitive)
-GlobalCategorySchema.index({ name: 1 }, { unique: true });
-
 // ============================================================================
 // INSTANCE METHODS
 // ============================================================================

@@ -644,12 +644,45 @@ Answer: ${cheatSheetKnowledge.answer}
         }
         
         if (contextParts.length > 0) {
-            discoveryContext = `
-WHAT CALLER HAS TOLD YOU THIS CALL:
-${contextParts.map(p => `- ${p}`).join('\n')}
+            // V88: Build empathetic, human response instructions
+            const hasRecentService = disc.previousVisitTime && disc.mentionedTechName;
+            const hasRecurringIssue = disc.issue && disc.previousVisitTime;
+            
+            let empathyInstruction = '';
+            if (hasRecurringIssue) {
+                empathyInstruction = `
+⚠️ RECURRING ISSUE DETECTED: The caller had service ${disc.previousVisitTime || 'recently'} and is calling back about a problem.
+THIS IS A SERVICE RECOVERY SITUATION. Your response MUST:
+1. Express genuine empathy: "I'm sorry to hear you're still having trouble after ${disc.mentionedTechName ? disc.mentionedTechName + "'s" : 'our'} visit"
+2. Reference their specific situation: "${disc.previousVisitTime}", "${disc.mentionedTechName || 'the technician'}", "${disc.mentionedEquipment || 'the system'}"
+3. Ask a SMART follow-up: "Is this the same issue or did you notice something different this time?"
+4. Sound like you CARE about making this right
 
-IMPORTANT: If the caller asks about something they already mentioned (like "do you know who was out here?"), 
-reference this context! Example: "Yes, you mentioned ${disc.mentionedTechName || 'the technician'} was out ${disc.previousVisitTime || 'recently'}."
+GOOD EXAMPLE: "I'm so sorry to hear that, ${callerName || 'and I appreciate you letting us know'}. It sounds like ${disc.mentionedTechName || 'our tech'} was out ${disc.previousVisitTime || 'recently'} to work on your ${disc.mentionedEquipment || 'system'}, and now you're having issues again. Is this the same problem, or did you notice something different this time?"
+
+BAD EXAMPLE: "I understand. Let me get you scheduled. What's your name?" (ROBOTIC - ignores everything they said!)`;
+            } else if (hasRecentService) {
+                empathyInstruction = `
+The caller mentioned ${disc.mentionedTechName || 'a technician'} was out ${disc.previousVisitTime || 'recently'}.
+Reference this naturally: "I see ${disc.mentionedTechName || 'we'} was out ${disc.previousVisitTime}..."`;
+            }
+            
+            discoveryContext = `
+═══════════════════════════════════════════════════════════════════
+CALLER CONTEXT (USE THIS IN YOUR RESPONSE!)
+═══════════════════════════════════════════════════════════════════
+${contextParts.map(p => `• ${p}`).join('\n')}
+${empathyInstruction}
+
+CRITICAL: You MUST acknowledge the specific details the caller shared.
+- If they gave their name, use it
+- If they mentioned a technician, reference them by name
+- If they mentioned a timeframe, reference it
+- If they mentioned equipment, acknowledge it
+- If it's a recurring issue after service, express empathy and ask if it's the same problem
+
+DO NOT jump straight to "Let me get you scheduled" - that sounds robotic and dismissive.
+═══════════════════════════════════════════════════════════════════
 `;
         }
         

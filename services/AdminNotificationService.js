@@ -117,6 +117,8 @@ class AdminNotificationService {
             if (!validationResult.isValid) {
                 logger.error(`❌ [ADMIN NOTIFICATION] Validation failed for ${code}:`, validationResult.errors);
                 // Continue anyway - we want the alert logged even if delivery fails
+            } else if (Array.isArray(validationResult.warnings) && validationResult.warnings.length > 0) {
+                logger.warn(`⚠️ [ADMIN NOTIFICATION] Validation warnings for ${code}:`, validationResult.warnings);
             }
             
             // ================================================================
@@ -633,6 +635,11 @@ View: https://app.clientsvia.com/admin-notification-center.html
         const fromNumber = settings.notificationCenter.twilio.phoneNumber;
         const smsContacts = adminContacts.filter(c => c.receiveSMS !== false);
         
+        if (smsContacts.length === 0) {
+            logger.warn('⚠️ [SMS] No admin contacts with SMS enabled - skipping SMS delivery');
+            return results;
+        }
+        
         for (const contact of smsContacts) {
             try {
                 // Skip if To and From are the same (Twilio rejects this)
@@ -832,7 +839,8 @@ View full details: https://clientsvia-backend.onrender.com/admin-notification-ce
     static async validateNotificationSystem() {
         const checks = {
             isValid: true,
-            errors: []
+            errors: [],
+            warnings: []
         };
         
         try {
@@ -857,14 +865,18 @@ View full details: https://clientsvia-backend.onrender.com/admin-notification-ce
             // Check 3: At least one contact has SMS enabled
             const smsEnabledContacts = adminContacts.filter(c => c.receiveSMS !== false);
             if (smsEnabledContacts.length === 0) {
-                checks.isValid = false;
-                checks.errors.push('No admin contacts with SMS enabled');
+                checks.warnings.push('No admin contacts with SMS enabled');
+            }
+
+            // Check 3.5: At least one contact has email enabled
+            const emailEnabledContacts = adminContacts.filter(c => c.email && c.receiveEmail !== false);
+            if (emailEnabledContacts.length === 0) {
+                checks.warnings.push('No admin contacts with email enabled');
             }
             
             // Check 4: SMS client configured
             if (!smsClient || !smsClient.send) {
-                checks.isValid = false;
-                checks.errors.push('SMS client not configured');
+                checks.warnings.push('SMS client not configured');
             }
             
             // Check 5: Twilio credentials (from AdminSettings or env vars)
@@ -872,8 +884,7 @@ View full details: https://clientsvia-backend.onrender.com/admin-notification-ce
             const hasTwilioInEnv = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN;
             
             if (!hasTwilioInSettings && !hasTwilioInEnv) {
-                checks.isValid = false;
-                checks.errors.push('Twilio credentials not configured (check Settings tab)');
+                checks.warnings.push('Twilio credentials not configured (SMS will be skipped)');
             }
             
         } catch (error) {

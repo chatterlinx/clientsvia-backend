@@ -56,6 +56,10 @@ class MongoDBPerformanceMonitor {
         // Alert cooldown (prevent spam)
         ALERT_COOLDOWN_HOURS: 24
     };
+
+    // Cache serverStatus permission state to avoid noisy warnings
+    static serverStatusAllowed = true;
+    static serverStatusWarned = false;
     
     // ========================================================================
     // MAIN: CHECK PERFORMANCE AND SEND ALERTS
@@ -106,11 +110,27 @@ class MongoDBPerformanceMonitor {
         
         // Get server status (detailed metrics) - may fail if no permissions
         let serverStatus;
-        try {
-            serverStatus = await admin.serverStatus();
-        } catch (error) {
-            console.warn('[MongoDB Monitor] ⚠️ Cannot get serverStatus (permission issue?):', error.message);
-            // Fallback: use limited metrics
+        if (this.serverStatusAllowed) {
+            try {
+                serverStatus = await admin.serverStatus();
+            } catch (error) {
+                const isUnauthorized = error?.code === 13 || /not authorized|unauthorized/i.test(String(error?.message || ''));
+                if (isUnauthorized) {
+                    this.serverStatusAllowed = false;
+                }
+                if (!this.serverStatusWarned) {
+                    this.serverStatusWarned = true;
+                    console.warn('[MongoDB Monitor] ⚠️ Cannot get serverStatus (permission issue?):', error.message);
+                    logger.warn('[MongoDB Monitor] serverStatus permission missing - skipping in future checks', {
+                        code: error?.code,
+                        message: error?.message
+                    });
+                }
+            }
+        }
+
+        // Fallback: use limited metrics when serverStatus not available
+        if (!serverStatus) {
             serverStatus = {
                 mem: { resident: 0, virtual: 0 },
                 connections: { current: 0, available: 1000 },

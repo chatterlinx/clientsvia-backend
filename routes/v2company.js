@@ -10,9 +10,22 @@ const Company = require('../models/v2Company'); // V2 Company model import
 // ============================================================================
 // REDIS HELPER: Safe cache operations with null/cold-start protection
 // ============================================================================
+const redisNotReadyWarnings = new Set();
+
+function warnRedisNotReady(context, detail) {
+    const label = context ? ` ${context}` : '';
+    const key = `${context || 'default'}:${detail || 'unknown'}`;
+    if (!redisNotReadyWarnings.has(key)) {
+        redisNotReadyWarnings.add(key);
+        logger.warn(`⚠️ [CACHE${label}] Redis not ready, ${detail}`);
+        return;
+    }
+    logger.debug(`⚠️ [CACHE${label}] Redis not ready, ${detail}`);
+}
+
 async function safeRedisDel(key, context = '') {
     if (!redisClient || !redisClient.isReady) {
-        logger.warn(`⚠️ [CACHE${context ? ' ' + context : ''}] Redis not ready, skipping delete of ${key}`);
+        warnRedisNotReady(context, `skipping delete of ${key}`);
         return false;
     }
     try {
@@ -344,7 +357,7 @@ async function checkCompanyCache(req, res, next) {
     try {
         // Check if Redis is available before trying to use it
         if (!redisClient || !redisClient.isReady) {
-            logger.warn(`⚠️ [CACHE] Redis not ready, skipping cache check`);
+            warnRedisNotReady('READ', 'skipping cache check');
             return next(); // Skip cache, proceed to MongoDB
         }
         
@@ -436,7 +449,7 @@ router.get('/company/:id', checkCompanyCache, async (req, res) => {
                 logger.warn(`⚠️ [CACHE] Failed to save to Redis (non-critical):`, cacheError.message);
             }
         } else {
-            logger.warn(`⚠️ [CACHE] Redis not ready, skipping cache save`);
+            warnRedisNotReady('WRITE', 'skipping cache save');
         }
         
         // Debug: Log if aiAgentSettings exists
@@ -529,7 +542,7 @@ router.delete('/company/:id', async (req, res) => {
                     }
                 }
             } else {
-                logger.warn(`⚠️ [CACHE] Redis not ready, skipping cache clear on delete`);
+                warnRedisNotReady('DELETE', 'skipping cache clear on delete');
             }
             
             logger.debug(`[API DELETE /api/company/:id] ✅ Cleared ${cacheKeys.length} cache keys`);

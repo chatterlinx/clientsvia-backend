@@ -148,7 +148,7 @@ const CallDailyStatsSchema = new mongoose.Schema({
   /**
    * Calls with errors
    */
-  errors: {
+  errorCount: {
     type: Number,
     default: 0,
     min: 0
@@ -360,6 +360,13 @@ const CallDailyStatsSchema = new mongoose.Schema({
 }, { 
   timestamps: true,
   collection: 'call_daily_stats'
+});
+
+// Backward compatibility: map legacy "errors" field into errorCount on read
+CallDailyStatsSchema.pre('init', function(doc) {
+  if (doc && doc.errors !== undefined && doc.errorCount === undefined) {
+    doc.errorCount = doc.errors;
+  }
 });
 
 

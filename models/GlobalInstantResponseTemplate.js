@@ -2205,7 +2205,6 @@ globalInstantResponseTemplateSchema.statics.getPublishedTemplates = async functi
 // Note: Field-level "index: true" removed to avoid Mongoose duplicate index warnings
 // All indexes declared here for clarity and control
 
-globalInstantResponseTemplateSchema.index({ version: 1 });
 globalInstantResponseTemplateSchema.index({ isActive: 1 });
 globalInstantResponseTemplateSchema.index({ isPublished: 1 });
 globalInstantResponseTemplateSchema.index({ isDefaultTemplate: 1 });

@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const logger = require('../../utils/logger');
 
 const SIGNING_SECRET = process.env.SNAPSHOT_SIGNING_SECRET;
+let missingSecretWarned = false;
 const ALGORITHM = 'sha256';
 
 /**
@@ -46,7 +47,10 @@ function signSnapshot(snapshot) {
     
     // If no secret configured, return with warning
     if (!SIGNING_SECRET) {
-        logger.warn('[SNAPSHOT INTEGRITY] SNAPSHOT_SIGNING_SECRET not configured - snapshot unsigned');
+        if (!missingSecretWarned) {
+            missingSecretWarned = true;
+            logger.warn('[SNAPSHOT INTEGRITY] SNAPSHOT_SIGNING_SECRET not configured - snapshot unsigned');
+        }
         return {
             ...snapshot,
             _integrity: {

@@ -258,7 +258,7 @@ class PlatformHealthCheckService {
                     totalQnAEntries: 0 // TODO: Add Q&A count
                 },
                 
-                errors: {
+                errorStats: {
                     criticalCount: errorCounts.CRITICAL,
                     warningCount: errorCounts.WARNING,
                     infoCount: errorCounts.INFO,

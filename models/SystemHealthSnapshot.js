@@ -23,8 +23,7 @@ const systemHealthSnapshotSchema = new mongoose.Schema({
     // ========================================================================
     timestamp: { 
         type: Date, 
-        default: Date.now,
-        index: true
+        default: Date.now
     },
     
     snapshotType: {
@@ -89,7 +88,7 @@ const systemHealthSnapshotSchema = new mongoose.Schema({
     // ========================================================================
     // ERROR METRICS (Last 5 minutes)
     // ========================================================================
-    errors: {
+    errorStats: {
         criticalCount: { type: Number, default: 0 },
         warningCount: { type: Number, default: 0 },
         infoCount: { type: Number, default: 0 },
@@ -166,7 +165,16 @@ const systemHealthSnapshotSchema = new mongoose.Schema({
 // ============================================================================
 systemHealthSnapshotSchema.index({ timestamp: -1 });
 systemHealthSnapshotSchema.index({ overallStatus: 1, timestamp: -1 });
-systemHealthSnapshotSchema.index({ 'errors.criticalCount': 1, timestamp: -1 });
+systemHealthSnapshotSchema.index({ 'errorStats.criticalCount': 1, timestamp: -1 });
+
+// ============================================================================
+// BACKWARD COMPATIBILITY
+// ============================================================================
+systemHealthSnapshotSchema.pre('init', function(doc) {
+    if (doc && doc.errors && !doc.errorStats) {
+        doc.errorStats = doc.errors;
+    }
+});
 
 // ============================================================================
 // STATIC METHODS
@@ -226,8 +234,8 @@ systemHealthSnapshotSchema.statics.compareSnapshots = function(current, previous
     }
     
     // Check error rate changes
-    const currentErrorRate = current.errors.totalCount;
-    const previousErrorRate = previous.errors.totalCount;
+    const currentErrorRate = current.errorStats.totalCount;
+    const previousErrorRate = previous.errorStats.totalCount;
     
     if (currentErrorRate > previousErrorRate * 2) {
         changes.push({
@@ -241,12 +249,12 @@ systemHealthSnapshotSchema.statics.compareSnapshots = function(current, previous
     }
     
     // Check for new errors
-    if (current.errors.newErrors && current.errors.newErrors.length > 0) {
+    if (current.errorStats.newErrors && current.errorStats.newErrors.length > 0) {
         changes.push({
             category: 'ERRORS',
             component: 'New Errors',
             before: 'None',
-            after: current.errors.newErrors.join(', '),
+            after: current.errorStats.newErrors.join(', '),
             severity: 'WARNING'
         });
     }
@@ -298,7 +306,7 @@ systemHealthSnapshotSchema.statics.getTrend = async function(minutes = 60) {
     
     return this.find({ timestamp: { $gte: since } })
         .sort({ timestamp: 1 })
-        .select('timestamp overallStatus errors.totalCount errors.criticalCount performance.errorRate')
+        .select('timestamp overallStatus errorStats.totalCount errorStats.criticalCount performance.errorRate')
         .exec();
 };
 

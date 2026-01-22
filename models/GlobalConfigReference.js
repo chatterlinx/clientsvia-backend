@@ -31,8 +31,7 @@ const GlobalConfigReferenceSchema = new mongoose.Schema(
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Company', // Must match the model name in v2Company.js: mongoose.model('Company', ...)
-      required: true,
-      index: true
+      required: true
     },
     
     cheatSheetVersionId: {
@@ -44,8 +43,7 @@ const GlobalConfigReferenceSchema = new mongoose.Schema(
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'GlobalCategory',
-      required: true,
-      index: true
+      required: true
     }
   },
   {

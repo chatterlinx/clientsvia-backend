@@ -207,7 +207,7 @@ async function appendError({ callId, companyId, source, error }) {
       { callId, companyId },
       {
         $push: {
-          errors: {
+          errorEvents: {
             ts: now,
             source: source || 'UNKNOWN',
             message: error?.message || String(error),

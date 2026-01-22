@@ -31,8 +31,7 @@ const AppointmentSchema = new mongoose.Schema({
   locationId: { 
     type: ObjectId, 
     ref: 'Location',
-    required: true,
-    index: true 
+    required: true
   },
   
   // Call tracking

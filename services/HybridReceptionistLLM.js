@@ -749,10 +749,51 @@ class HybridReceptionistLLM {
                     keyFacts: keyFacts
                 };
 
-                // Build prompt with key facts if available
+                // Build prompt with key facts if available - V88 ENHANCED for human-like responses
                 let headerPrompt = promptTexts.systemHeader || '';
                 if (keyFacts.length > 0) {
-                    headerPrompt += `\n\n=== CONVERSATION CONTEXT ===\nThe caller has mentioned:\n${keyFacts.map(f => `• ${f}`).join('\n')}\n\nACKNOWLEDGE this context naturally when relevant. For example:\n- If they mentioned a technician, reference them: "I'll make a note that [tech name] was out before"\n- If they mentioned equipment, acknowledge it: "I'll let the tech know about your [equipment]"\n- If they mentioned a previous visit, reference it: "Since they were out [time], we'll follow up on that"\n===`;
+                    // Check for service recovery situation
+                    const hasTechMention = keyFacts.some(f => f.startsWith('Technician:'));
+                    const hasVisitMention = keyFacts.some(f => f.startsWith('Previous visit:'));
+                    const hasIssueMention = keyFacts.some(f => f.startsWith('Issue:'));
+                    const isServiceRecovery = hasTechMention && hasVisitMention && hasIssueMention;
+                    
+                    let contextInstruction = '';
+                    if (isServiceRecovery) {
+                        contextInstruction = `
+═══════════════════════════════════════════════════════════════════
+⚠️ SERVICE RECOVERY SITUATION - HANDLE WITH CARE
+═══════════════════════════════════════════════════════════════════
+This caller had recent service and is calling back with an issue.
+Your tone should convey: "We take responsibility and will make this right."
+
+The caller has shared:
+${keyFacts.map(f => `• ${f}`).join('\n')}
+
+RESPOND LIKE A CARING HUMAN:
+✓ "I'm sorry you're still having trouble after our visit"
+✓ "Let me make sure we get this resolved for you"
+✓ "I'll note that [tech] was out before so the team knows the history"
+✓ "Is this the same issue or something different this time?"
+
+DO NOT:
+✗ Jump straight to "What's your name?" (dismissive)
+✗ Ignore the service history they mentioned
+✗ Sound robotic or scripted
+═══════════════════════════════════════════════════════════════════`;
+                    } else {
+                        contextInstruction = `
+=== CONVERSATION CONTEXT ===
+The caller has mentioned:
+${keyFacts.map(f => `• ${f}`).join('\n')}
+
+ACKNOWLEDGE this context naturally:
+- Use their name if provided
+- Reference technician names, equipment, and timeframes they mentioned
+- Sound like you're listening and you care
+===`;
+                    }
+                    headerPrompt += `\n\n${contextInstruction}`;
                 }
                 
                 systemPrompt = `${headerPrompt}\n\nCONTEXT_JSON:\n${JSON.stringify(contextPayload, null, 2)}`.trim();

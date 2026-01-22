@@ -298,8 +298,7 @@ const suggestionKnowledgeBaseSchema = new Schema({
     
     firstDetected: {
         type: Date,
-        default: Date.now,
-        index: true
+        default: Date.now
     },
     
     lastUpdated: {

@@ -22,7 +22,7 @@ const healthCheckLogSchema = new mongoose.Schema({
     // ========================================================================
     // HEALTH CHECK METADATA
     // ========================================================================
-    timestamp: { type: Date, default: Date.now, index: true },
+    timestamp: { type: Date, default: Date.now },
     
     triggeredBy: {
         type: String,

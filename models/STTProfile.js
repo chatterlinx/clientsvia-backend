@@ -144,9 +144,7 @@ const STTProfileSchema = new Schema({
     templateId: {
         type: Schema.Types.ObjectId,
         ref: 'GlobalInstantResponseTemplate',
-        required: true,
-        unique: true,
-        index: true
+        required: true
     },
     templateName: { type: String, required: true, trim: true, maxlength: 100 },
     templateSlug: { type: String, trim: true, lowercase: true },

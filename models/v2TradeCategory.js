@@ -145,8 +145,7 @@ const TradeCategorySchema = new mongoose.Schema({
     // Legacy compatibility fields
     createdAt: {
         type: Date,
-        default: Date.now,
-        index: true
+        default: Date.now
     },
     updatedAt: {
         type: Date,
@@ -257,12 +256,5 @@ TradeCategorySchema.statics.searchQnAs = function(searchTerm, companyId = null) 
         { $sort: { 'qnas.confidence': -1 } }
     ]);
 };
-
-// V2 OPTIMIZED INDEXES - V2 Performance
-TradeCategorySchema.index({ companyId: 1, name: 1 }, { unique: true, name: 'v2_company_name_unique' });
-TradeCategorySchema.index({ companyId: 1, isActive: 1 }, { name: 'v2_company_active' });
-TradeCategorySchema.index({ 'qnas.keywords': 1 }, { name: 'v2_qna_keywords' });
-TradeCategorySchema.index({ createdAt: 1 }, { name: 'v2_created_date' });
-TradeCategorySchema.index({ 'qnas.isActive': 1, 'qnas.confidence': -1 }, { name: 'v2_qna_performance' });
 
 module.exports = mongoose.model('TradeCategory', TradeCategorySchema);

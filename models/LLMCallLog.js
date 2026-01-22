@@ -199,7 +199,7 @@ const llmCallLogSchema = new Schema({
     // ERROR TRACKING
     // ============================================
     
-    errors: [{
+    errorEvents: [{
         tier: { type: Number, enum: [1, 2, 3] },
         errorType: { type: String },
         errorMessage: { type: String },
@@ -249,6 +249,13 @@ const llmCallLogSchema = new Schema({
 }, {
     timestamps: true,
     collection: 'llmcalllogs'
+});
+
+// Backward compatibility: map legacy "errors" field into errorEvents on read
+llmCallLogSchema.pre('init', function(doc) {
+    if (doc && doc.errors && !doc.errorEvents) {
+        doc.errorEvents = doc.errors;
+    }
 });
 
 // ============================================

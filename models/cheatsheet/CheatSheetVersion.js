@@ -41,8 +41,7 @@ const CheatSheetVersionSchema = new mongoose.Schema({
   versionId: { 
     type: String, 
     required: true, 
-    unique: true,
-    index: true
+    unique: true
   },
   
   // ============================================================================
@@ -134,9 +133,6 @@ CheatSheetVersionSchema.index({ companyId: 1, status: 1 });
 
 // Version history queries (sorted by activation date)
 CheatSheetVersionSchema.index({ companyId: 1, status: 1, activatedAt: -1 });
-
-// Lookup by versionId (for restore operations)
-CheatSheetVersionSchema.index({ versionId: 1 });
 
 // Cleanup/archival queries
 CheatSheetVersionSchema.index({ status: 1, archivedAt: 1 });
