@@ -973,23 +973,6 @@
                 });
             });
             
-            // Setup trigger input
-            document.getElementById('trigger-input').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addTrigger(e.target.value);
-                    e.target.value = '';
-                }
-            });
-            
-            document.getElementById('negative-trigger-input').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addNegativeTrigger(e.target.value);
-                    e.target.value = '';
-                }
-            });
-            
             loadGaps();
         });
         
