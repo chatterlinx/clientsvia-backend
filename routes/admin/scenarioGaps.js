@@ -190,6 +190,53 @@ async function generateScenarioFromGap(gap, company) {
         return generateFallbackScenario(gap, company);
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FETCH COMPANY'S TEMPLATE FOR TRADE-SPECIFIC RULES
+    // ═══════════════════════════════════════════════════════════════════════════
+    let tradeType = 'general';
+    let existingScenariosSample = '';
+    
+    try {
+        // Get the company's assigned template
+        const templateRef = company.templateReferences?.[0];
+        if (templateRef?.templateId) {
+            const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+            const template = await GlobalInstantResponseTemplate.findById(templateRef.templateId).lean();
+            
+            if (template) {
+                // Get the trade type from template
+                tradeType = template.templateType?.toLowerCase() || 'general';
+                logger.debug(`[SCENARIO GAPS] Using template trade type: ${tradeType}`);
+                
+                // Get a sample of existing scenarios for GPT-4o context
+                const sampleScenarios = [];
+                for (const category of (template.categories || []).slice(0, 3)) {
+                    for (const scenario of (category.scenarios || []).slice(0, 2)) {
+                        if (scenario.status === 'live' && scenario.quickReplies?.length > 0) {
+                            sampleScenarios.push({
+                                name: scenario.name,
+                                triggers: scenario.triggers?.slice(0, 3) || [],
+                                quickReply: scenario.quickReplies[0]
+                            });
+                        }
+                        if (sampleScenarios.length >= 5) break;
+                    }
+                    if (sampleScenarios.length >= 5) break;
+                }
+                
+                if (sampleScenarios.length > 0) {
+                    existingScenariosSample = `
+EXISTING SCENARIOS IN THIS TEMPLATE (match this style):
+${sampleScenarios.map(s => `• "${s.name}" - Trigger: "${s.triggers[0] || 'n/a'}" → Reply: "${s.quickReply}"`).join('\n')}
+`;
+                    logger.debug(`[SCENARIO GAPS] Loaded ${sampleScenarios.length} sample scenarios for context`);
+                }
+            }
+        }
+    } catch (err) {
+        logger.warn('[SCENARIO GAPS] Could not load template for trade type:', err.message);
+    }
+    
     // Clean up the examples for better LLM input
     const cleanedExamples = gap.examples
         .slice(0, 5)
@@ -198,7 +245,7 @@ async function generateScenarioFromGap(gap, company) {
     
     const examples = cleanedExamples.map(e => `- "${e}"`).join('\n');
     
-    const tradeName = company.tradeKey?.toUpperCase() || 'SERVICE';
+    const tradeName = tradeType.toUpperCase() || 'SERVICE';
     
     const prompt = `You are creating scenarios for an EXPERIENCED ${tradeName} SERVICE DISPATCHER.
 
@@ -226,8 +273,8 @@ Your job: Make them feel HEARD quickly and move toward getting the problem FIXED
 CONTEXT
 ═══════════════════════════════════════════════════════════════════════════════
 COMPANY: ${company.companyName || 'Service Company'}
-TRADE: ${company.tradeKey || 'general'}
-
+TRADE: ${tradeType}
+${existingScenariosSample}
 CALLER PHRASES (asked ${gap.totalCalls} times):
 ${examples}
 
@@ -351,7 +398,7 @@ THE DISPATCHER FLOW:
 • Bridge sentence (optional): "Alright. That's helpful."
 • Full replies = BOOKING ("We'll get a technician out. Morning or afternoon?")
 
-${company.tradeKey === 'hvac' ? `
+${tradeType === 'hvac' ? `
 HVAC-SPECIFIC - ONLY THESE 3 CLASSIFICATION QUESTIONS:
 • "Is the system running but not cooling, or not turning on?"
 • "Is the thermostat screen on or blank?"
