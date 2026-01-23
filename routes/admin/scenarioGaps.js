@@ -704,6 +704,53 @@ GREETING:
 ✅ Good: "Hi {name}. What's going on?"
 
 ═══════════════════════════════════════════════════════════════════════════════
+👤 PERSONALIZATION RULES (CRITICAL - Recognition ≠ Warmth)
+═══════════════════════════════════════════════════════════════════════════════
+A real receptionist acknowledges NAME and LOYALTY — then pivots to purpose.
+This is NOT warmth. This is RECOGNITION + RESPECT.
+
+PLACEHOLDER RULES:
+• Only use {name} as a placeholder for caller's name
+• Do NOT invent names - only use {name} as placeholder
+• Runtime will replace {name} with actual name or remove it gracefully
+
+NAME ACKNOWLEDGMENT (when caller provides name):
+• Acknowledge the name ONCE in the next response
+• Keep acknowledgment under 10 words
+• Then immediately pivot to classify or book
+
+APPROVED NAME ACKNOWLEDGMENTS (use these exactly):
+• "Thanks, {name}."
+• "Appreciate it, {name}."
+• "Good to hear from you, {name}."
+
+LOYALTY ACKNOWLEDGMENT (when caller mentions returning/long-time customer):
+• Acknowledge loyalty ONCE, briefly
+• Return customers are GOLD - never take them for granted
+• Then pivot to the reason for their call
+
+APPROVED LOYALTY ACKNOWLEDGMENTS:
+• "We appreciate you, {name}."
+• "Thanks for being a long-time customer, {name}."
+• "Glad to have you back, {name}."
+• "Good to hear from you again, {name}."
+
+COMBINED EXAMPLE (name + loyalty + pivot):
+Caller: "My name is Mark. I'm a long-time customer and I'm having AC issues."
+❌ Bad: "Alright. What's going on with your system?"
+✅ Good: "Thanks, {name} — we appreciate you being a long-time customer. What's going on with the AC today?"
+
+THE THREE MICRO-ACKNOWLEDGMENTS (in order):
+1. Name acknowledgment (once, immediately after capture)
+2. Loyalty acknowledgment (only if mentioned)
+3. Pivot to purpose (classify or book)
+
+TWO-VARIANT REPLIES (provide BOTH for flexibility):
+For scenarios where name may or may not be available:
+• WITH NAME: "Thanks, {name}. What's going on with the AC today?"
+• WITHOUT NAME: "Thanks. What's going on with the AC today?"
+
+═══════════════════════════════════════════════════════════════════════════════
 🔥 PRO DISPATCHER RULES (BULLETPROOF)
 ═══════════════════════════════════════════════════════════════════════════════
 1. Ask only ONE question per response
@@ -784,14 +831,25 @@ OUTPUT FORMAT (JSON only, no markdown):
     "negativeTriggers": ["phrases that look similar but mean something DIFFERENT"],
     
     "quickReplies": [
-        "I understand. [ONE classification question - running/not running, air/no air, thermostat on/off]",
-        "[Same question, slightly different wording]",
-        "[Third variation of the classification question]"
+        "Thanks, {name}. Is the unit running but not cooling, or not turning on?",
+        "I understand. Is the unit running but not cooling, or not turning on?",
+        "Alright. Is air coming out of the vents?"
+    ],
+    
+    "quickReplies_noName": [
+        "Thanks. Is the unit running but not cooling, or not turning on?",
+        "I understand. Is the unit running but not cooling, or not turning on?",
+        "Alright. Is air coming out of the vents?"
     ],
     
     "fullReplies": [
-        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?",
-        "We'll get a technician out. Morning or afternoon?"
+        "Thanks, {name}. We'll get a technician out. Morning or afternoon?",
+        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?"
+    ],
+    
+    "fullReplies_noName": [
+        "Thanks. We'll get a technician out. Morning or afternoon?",
+        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?"
     ],
     
     "followUpFunnel": "We'll get a technician out. Morning or afternoon?",
@@ -842,6 +900,21 @@ ENTITY CAPTURE GUIDE (what to extract from caller speech):
 - time_preference: Preferred appointment time
 - equipment: For service calls (AC model, furnace type)
 - urgency: Emergency indicators
+
+PERSONALIZATION GUIDE (name + loyalty recognition):
+1. ALWAYS include {name} in at least ONE quickReply and ONE fullReply
+2. ALWAYS provide _noName variants for runtime flexibility
+3. Name acknowledgment = recognition, NOT warmth
+4. Loyalty acknowledgment = respect for returning customers
+5. Three micro-acknowledgments in order: Name → Loyalty → Purpose
+6. Keep all acknowledgments under 10 words
+7. Approved patterns:
+   - "Thanks, {name}." / "Thanks."
+   - "Appreciate it, {name}." / "Appreciate it."
+   - "Good to hear from you, {name}." / "Good to hear from you."
+8. For returning/long-time customer scenarios:
+   - "We appreciate you, {name}."
+   - "Thanks for being a long-time customer, {name}."
 
 TEMPLATE VARIABLES GUIDE (fallbacks for {placeholders}):
 - Format: key=fallback value
@@ -1003,11 +1076,15 @@ Output VALID JSON only. No markdown. No explanations.`
                 triggers: Array.isArray(s.triggers) ? s.triggers : [gap.representative],
                 negativeTriggers: Array.isArray(s.negativeTriggers) ? s.negativeTriggers : [],
                 
-                // Replies (support both single and array formats)
+                // Replies WITH {name} placeholder (primary)
                 quickReplies: Array.isArray(s.quickReplies) ? s.quickReplies : 
                     (s.quickReply ? [s.quickReply] : ['I can help with that.']),
                 fullReplies: Array.isArray(s.fullReplies) ? s.fullReplies : 
                     (s.fullReply ? [s.fullReply] : []),
+                
+                // Replies WITHOUT {name} placeholder (fallback when name not available)
+                quickReplies_noName: Array.isArray(s.quickReplies_noName) ? s.quickReplies_noName : null,
+                fullReplies_noName: Array.isArray(s.fullReplies_noName) ? s.fullReplies_noName : null,
                 
                 // Follow-up behavior
                 followUpMode: s.followUpMode || 'NONE',
