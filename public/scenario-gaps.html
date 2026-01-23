@@ -771,6 +771,248 @@
         
         .toast.success i { color: var(--accent-green); }
         .toast.error i { color: var(--accent-red); }
+        
+        /* Sub-tabs Navigation */
+        .sub-tabs {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 32px;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .sub-tab {
+            padding: 16px 24px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .sub-tab:hover {
+            color: var(--text-primary);
+        }
+        
+        .sub-tab.active {
+            color: var(--accent-purple);
+            border-bottom-color: var(--accent-purple);
+        }
+        
+        .sub-tab .badge {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .sub-tab.active .badge {
+            background: rgba(167, 139, 250, 0.2);
+            color: var(--accent-purple);
+        }
+        
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Audit Section Styles */
+        .audit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        
+        .audit-actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .run-audit-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            border: none;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        .run-audit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(167, 139, 250, 0.4);
+        }
+        
+        .run-audit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .health-score-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        
+        .health-score {
+            font-size: 72px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .health-score.excellent { color: var(--accent-green); }
+        .health-score.good { color: var(--accent-blue); }
+        .health-score.fair { color: var(--accent-yellow); }
+        .health-score.poor { color: var(--accent-red); }
+        
+        .health-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+        
+        .health-stats {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-top: 16px;
+        }
+        
+        .health-stat {
+            text-align: center;
+        }
+        
+        .health-stat-value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        
+        .health-stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        
+        .violations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .violation-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 20px;
+        }
+        
+        .violation-card.error {
+            border-left: 4px solid var(--accent-red);
+        }
+        
+        .violation-card.warning {
+            border-left: 4px solid var(--accent-yellow);
+        }
+        
+        .violation-card.info {
+            border-left: 4px solid var(--accent-blue);
+        }
+        
+        .violation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+        
+        .violation-scenario {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .violation-severity {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .violation-severity.error {
+            background: rgba(248, 113, 113, 0.2);
+            color: var(--accent-red);
+        }
+        
+        .violation-severity.warning {
+            background: rgba(251, 191, 36, 0.2);
+            color: var(--accent-yellow);
+        }
+        
+        .violation-severity.info {
+            background: rgba(96, 165, 250, 0.2);
+            color: var(--accent-blue);
+        }
+        
+        .violation-message {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .violation-field {
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .violation-suggestion {
+            font-size: 13px;
+            color: var(--accent-green);
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(52, 211, 153, 0.1);
+            border-radius: 6px;
+        }
+        
+        .audit-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .audit-empty i {
+            font-size: 48px;
+            color: var(--accent-green);
+            margin-bottom: 16px;
+        }
+        
+        .audit-empty h3 {
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
     </style>
 </head>
 <body>
@@ -800,10 +1042,26 @@
         </div>
     </header>
     
+    <!-- Sub-tabs Navigation -->
+    <nav class="sub-tabs">
+        <button class="sub-tab active" data-tab="gaps" onclick="switchTab('gaps')">
+            <i class="fas fa-search"></i>
+            Gap Fill
+            <span class="badge" id="gaps-count">0</span>
+        </button>
+        <button class="sub-tab" data-tab="audit" onclick="switchTab('audit')">
+            <i class="fas fa-clipboard-check"></i>
+            Template Audit
+            <span class="badge" id="health-badge">--</span>
+        </button>
+    </nav>
+    
     <!-- Main Content -->
     <main class="main-content">
-        <!-- Summary Cards -->
-        <div class="summary-grid" id="summary-grid">
+        <!-- TAB 1: Gap Fill (existing content) -->
+        <div class="tab-content active" id="tab-gaps">
+            <!-- Summary Cards -->
+            <div class="summary-grid" id="summary-grid">
             <div class="summary-card">
                 <div class="summary-value pink" id="total-tier3">--</div>
                 <div class="summary-label">Tier 3 Calls</div>
@@ -829,6 +1087,78 @@
                 <p style="margin-top: 16px; color: var(--text-secondary);">Analyzing call patterns...</p>
             </div>
         </div>
+        </div><!-- END tab-gaps -->
+        
+        <!-- TAB 2: Template Audit -->
+        <div class="tab-content" id="tab-audit">
+            <div class="audit-header">
+                <div>
+                    <h2 style="margin-bottom: 4px;">Template Health Check</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px;">
+                        Audit all scenarios against dispatcher personality rules
+                    </p>
+                </div>
+                <div class="audit-actions">
+                    <button class="run-audit-btn" onclick="runAudit()" id="run-audit-btn">
+                        <i class="fas fa-play"></i>
+                        Run Audit
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Health Score (hidden until audit runs) -->
+            <div id="audit-results" style="display: none;">
+                <div class="health-score-card">
+                    <div class="health-score" id="audit-health-score">--</div>
+                    <div class="health-label">Template Health Score</div>
+                    <div class="health-stats">
+                        <div class="health-stat">
+                            <div class="health-stat-value" id="audit-total" style="color: var(--accent-purple);">--</div>
+                            <div class="health-stat-label">Scenarios</div>
+                        </div>
+                        <div class="health-stat">
+                            <div class="health-stat-value" id="audit-passing" style="color: var(--accent-green);">--</div>
+                            <div class="health-stat-label">Passing</div>
+                        </div>
+                        <div class="health-stat">
+                            <div class="health-stat-value" id="audit-errors" style="color: var(--accent-red);">--</div>
+                            <div class="health-stat-label">Errors</div>
+                        </div>
+                        <div class="health-stat">
+                            <div class="health-stat-value" id="audit-warnings" style="color: var(--accent-yellow);">--</div>
+                            <div class="health-stat-label">Warnings</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Violations List -->
+                <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-exclamation-triangle" style="color: var(--accent-yellow);"></i>
+                    Issues Found
+                    <span id="violations-count" style="color: var(--text-muted); font-weight: normal; font-size: 14px;"></span>
+                </h3>
+                <div class="violations-list" id="violations-list">
+                    <!-- Violations will be populated here -->
+                </div>
+            </div>
+            
+            <!-- Empty state (shown before audit) -->
+            <div id="audit-empty" class="audit-empty">
+                <i class="fas fa-clipboard-check"></i>
+                <h3>No Audit Run Yet</h3>
+                <p>Click "Run Audit" to check your template against 8 quality rules:</p>
+                <ul style="text-align: left; display: inline-block; margin-top: 16px; color: var(--text-muted); font-size: 14px;">
+                    <li>Banned phrases (chatbot/helpdesk language)</li>
+                    <li>Personalization ({name} placeholder usage)</li>
+                    <li>Response length (word count limits)</li>
+                    <li>Structure (quick=classify, full=book)</li>
+                    <li>Triggers (count, generics, regex validity)</li>
+                    <li>Wiring (action types, flow connections)</li>
+                    <li>Completeness (required fields)</li>
+                    <li>Priority (ranges per scenario type)</li>
+                </ul>
+            </div>
+        </div><!-- END tab-audit -->
     </main>
     
     <!-- Create Scenario Modal - SIMPLIFIED: Preview + Open Global Brain -->
@@ -957,6 +1287,160 @@
         let currentGap = null;
         let currentPreview = null;
         let selectedDays = 14;
+        let lastAuditResult = null;
+        
+        // ========================================
+        // TAB SWITCHING
+        // ========================================
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.sub-tab').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+        
+        // ========================================
+        // AUDIT FUNCTIONS
+        // ========================================
+        async function runAudit() {
+            const btn = document.getElementById('run-audit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/run`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Audit failed');
+                }
+                
+                const result = await response.json();
+                lastAuditResult = result;
+                displayAuditResults(result);
+                
+            } catch (error) {
+                console.error('Audit error:', error);
+                showToast('Audit failed: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-play"></i> Run Audit';
+            }
+        }
+        
+        function displayAuditResults(result) {
+            // Show results, hide empty state
+            document.getElementById('audit-empty').style.display = 'none';
+            document.getElementById('audit-results').style.display = 'block';
+            
+            // Update health score
+            const healthScore = result.summary?.healthScore || 0;
+            const scoreEl = document.getElementById('audit-health-score');
+            scoreEl.textContent = healthScore;
+            scoreEl.className = 'health-score ' + getHealthClass(healthScore);
+            
+            // Update badge in tab
+            const badge = document.getElementById('health-badge');
+            badge.textContent = healthScore;
+            badge.style.background = getHealthColor(healthScore);
+            badge.style.color = 'white';
+            
+            // Update stats
+            document.getElementById('audit-total').textContent = result.summary?.totalScenarios || 0;
+            document.getElementById('audit-passing').textContent = result.summary?.scenariosPassing || 0;
+            document.getElementById('audit-errors').textContent = result.summary?.scenariosWithErrors || 0;
+            document.getElementById('audit-warnings').textContent = result.summary?.scenariosWithWarnings || 0;
+            
+            // Build violations list
+            const violationsList = document.getElementById('violations-list');
+            const allViolations = [];
+            
+            // Collect all violations from all scenarios
+            (result.scenarios || []).forEach(scenario => {
+                (scenario.violations || []).forEach(v => {
+                    allViolations.push({
+                        ...v,
+                        scenarioName: scenario.name,
+                        scenarioId: scenario.scenarioId
+                    });
+                });
+            });
+            
+            // Update count
+            document.getElementById('violations-count').textContent = `(${allViolations.length} total)`;
+            
+            if (allViolations.length === 0) {
+                violationsList.innerHTML = `
+                    <div class="audit-empty" style="padding: 40px;">
+                        <i class="fas fa-check-circle" style="color: var(--accent-green);"></i>
+                        <h3>All Scenarios Pass!</h3>
+                        <p>No violations found. Your template follows all dispatcher personality rules.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Sort by severity (errors first)
+            const severityOrder = { error: 0, warning: 1, info: 2 };
+            allViolations.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+            
+            // Render violations (limit to first 50)
+            violationsList.innerHTML = allViolations.slice(0, 50).map(v => `
+                <div class="violation-card ${v.severity}">
+                    <div class="violation-header">
+                        <span class="violation-scenario">${escapeHtml(v.scenarioName)}</span>
+                        <span class="violation-severity ${v.severity}">${v.severity}</span>
+                    </div>
+                    <div class="violation-message">${escapeHtml(v.message)}</div>
+                    <span class="violation-field">${escapeHtml(v.field)}</span>
+                    ${v.suggestion ? `<div class="violation-suggestion"><i class="fas fa-lightbulb"></i> ${escapeHtml(v.suggestion)}</div>` : ''}
+                </div>
+            `).join('');
+            
+            if (allViolations.length > 50) {
+                violationsList.innerHTML += `
+                    <p style="text-align: center; color: var(--text-muted); padding: 16px;">
+                        ...and ${allViolations.length - 50} more violations
+                    </p>
+                `;
+            }
+        }
+        
+        function getHealthClass(score) {
+            if (score >= 90) return 'excellent';
+            if (score >= 70) return 'good';
+            if (score >= 50) return 'fair';
+            return 'poor';
+        }
+        
+        function getHealthColor(score) {
+            if (score >= 90) return 'var(--accent-green)';
+            if (score >= 70) return 'var(--accent-blue)';
+            if (score >= 50) return 'var(--accent-yellow)';
+            return 'var(--accent-red)';
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
 
         function getAuthToken() {
             return localStorage.getItem('adminToken')
@@ -1035,6 +1519,9 @@
                 
                 document.getElementById('company-name').textContent = data.companyName || 'Company';
                 currentGaps = data.gaps || [];
+                
+                // Update gaps count badge
+                document.getElementById('gaps-count').textContent = currentGaps.length;
                 
                 renderSummary(data.summary);
                 renderGaps(data.gaps);
