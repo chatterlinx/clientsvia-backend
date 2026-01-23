@@ -671,33 +671,66 @@
             font-style: italic;
         }
         
-        /* Advanced Settings Accordion */
-        .advanced-toggle {
+        /* Preview Sections */
+        .preview-section {
+            margin-bottom: 16px;
+        }
+        
+        .preview-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
             display: flex;
             align-items: center;
             gap: 8px;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 14px;
-            margin-top: 20px;
-            padding: 12px;
+        }
+        
+        .preview-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .preview-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .preview-reply {
             background: var(--bg-tertiary);
+            padding: 12px 16px;
             border-radius: 8px;
-        }
-        
-        .advanced-toggle:hover {
             color: var(--text-secondary);
+            font-style: italic;
+            line-height: 1.5;
         }
         
-        .advanced-content {
-            display: none;
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid var(--border-color);
+        .info-box {
+            display: flex;
+            gap: 12px;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.1));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 10px;
+            margin-top: 20px;
         }
         
-        .advanced-content.show {
-            display: block;
+        .info-box i {
+            color: var(--accent-purple);
+            font-size: 20px;
+            margin-top: 2px;
+        }
+        
+        .info-box strong {
+            color: var(--accent-pink);
+        }
+        
+        .btn-large {
+            padding: 14px 28px !important;
+            font-size: 16px !important;
         }
         
         /* Toast */
@@ -798,107 +831,70 @@
         </div>
     </main>
     
-    <!-- Create Scenario Modal -->
+    <!-- Create Scenario Modal - SIMPLIFIED: Preview + Open Global Brain -->
     <div class="modal-overlay" id="create-modal">
-        <div class="modal">
+        <div class="modal" style="max-width: 600px;">
             <div class="modal-header">
-                <h2><i class="fas fa-magic"></i> <span id="modal-title">Create Scenario</span></h2>
+                <h2><i class="fas fa-magic"></i> AI-Generated Scenario</h2>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <!-- Mode Selector -->
-                <div class="form-group">
-                    <label class="form-label">What would you like to do?</label>
-                    <div class="mode-selector">
-                        <button class="mode-btn active" id="mode-existing" onclick="setMode('existing')">
-                            <i class="fas fa-plus-circle"></i> Add to Existing Scenario
-                        </button>
-                        <button class="mode-btn" id="mode-new" onclick="setMode('new')">
-                            <i class="fas fa-file-plus"></i> Create New Scenario
-                        </button>
-                    </div>
+                <!-- Loading State -->
+                <div id="preview-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p style="margin-top: 12px; color: var(--text-secondary);">AI is analyzing and generating scenario...</p>
                 </div>
                 
-                <!-- Existing Scenario Selector (shown in 'existing' mode) -->
-                <div class="form-group" id="existing-scenario-group">
-                    <label class="form-label">Select Existing Scenario</label>
-                    <select class="form-input" id="existing-scenario-select" onchange="onExistingScenarioChange()">
-                        <option value="">-- Loading scenarios... --</option>
-                    </select>
-                    <p id="existing-scenario-info" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;"></p>
-                </div>
-                
-                <!-- New Scenario Fields (shown in 'new' mode) -->
-                <div id="new-scenario-fields" style="display: none;">
-                    <div class="form-group">
-                        <label class="form-label">Scenario Name <span class="badge">AI Suggested</span></label>
-                        <input type="text" class="form-input" id="scenario-name" placeholder="e.g., Duct Cleaning Price">
+                <!-- Preview Content (hidden until loaded) -->
+                <div id="preview-content" style="display: none;">
+                    <!-- Scenario Name -->
+                    <div class="preview-section">
+                        <div class="preview-label">Scenario Name</div>
+                        <div class="preview-value" id="preview-name">--</div>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="form-label">Category</label>
-                        <select class="form-input" id="scenario-category">
-                            <option value="FAQ">FAQ</option>
-                            <option value="Pricing">Pricing</option>
-                            <option value="Hours">Hours</option>
-                            <option value="Service Area">Service Area</option>
-                            <option value="Emergency">Emergency</option>
-                            <option value="Warranty">Warranty</option>
-                            <option value="Booking">Booking</option>
-                            <option value="Scheduling">Scheduling</option>
-                            <option value="Billing">Billing</option>
-                            <option value="General">General</option>
-                            <option value="Other">Other</option>
-                        </select>
+                    <!-- Category & Type -->
+                    <div class="preview-row">
+                        <div class="preview-section" style="flex: 1;">
+                            <div class="preview-label">Category</div>
+                            <div class="preview-value" id="preview-category">--</div>
+                        </div>
+                        <div class="preview-section" style="flex: 1;">
+                            <div class="preview-label">Type</div>
+                            <div class="preview-value" id="preview-type">--</div>
+                        </div>
+                        <div class="preview-section" style="flex: 1;">
+                            <div class="preview-label">Priority</div>
+                            <div class="preview-value" id="preview-priority">--</div>
+                        </div>
                     </div>
                     
-                    <!-- AI Metadata Display -->
-                    <div id="ai-metadata" style="margin-bottom: 16px;"></div>
-                </div>
-                
-                <!-- Triggers (always shown) -->
-                <div class="form-group">
-                    <label class="form-label">
-                        <span id="triggers-label">New Triggers to Add</span>
-                        <span class="badge">AI Suggested</span>
-                    </label>
-                    <input type="text" class="form-input" id="trigger-input" placeholder="Type and press Enter to add">
-                    <div class="triggers-list" id="triggers-list"></div>
-                </div>
-                
-                <!-- Quick Reply (only for new mode) -->
-                <div class="form-group" id="reply-group" style="display: none;">
-                    <label class="form-label">Quick Reply <span class="badge">AI Suggested</span></label>
-                    <textarea class="form-input form-textarea" id="scenario-reply" placeholder="The response the AI will give. Use {placeholders} for values like {price}"></textarea>
-                </div>
-                
-                <div class="advanced-toggle" onclick="toggleAdvanced()" id="advanced-toggle-section" style="display: none;">
-                    <i class="fas fa-chevron-right" id="advanced-icon"></i>
-                    <span>Advanced Settings (30+ options - usually not needed)</span>
-                </div>
-                
-                <div class="advanced-content" id="advanced-content">
-                    <div class="form-group">
-                        <label class="form-label">Negative Triggers (phrases that should NOT match)</label>
-                        <input type="text" class="form-input" id="negative-trigger-input" placeholder="Type and press Enter to add">
-                        <div class="triggers-list" id="negative-triggers-list"></div>
+                    <!-- Triggers -->
+                    <div class="preview-section">
+                        <div class="preview-label">Triggers <span class="badge" id="trigger-count">0</span></div>
+                        <div class="triggers-list" id="preview-triggers"></div>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="form-label">Full Reply (longer version, optional)</label>
-                        <textarea class="form-input form-textarea" id="scenario-full-reply" placeholder="Extended response for when caller needs more detail"></textarea>
+                    <!-- Quick Reply Preview -->
+                    <div class="preview-section">
+                        <div class="preview-label">Quick Reply</div>
+                        <div class="preview-reply" id="preview-reply">--</div>
                     </div>
                     
-                    <p style="color: var(--text-muted); font-size: 12px; margin-top: 16px;">
-                        <i class="fas fa-info-circle"></i> 
-                        More settings available in Control Plane → Data & Config → Scenarios after creation.
-                    </p>
+                    <!-- Info box -->
+                    <div class="info-box">
+                        <i class="fas fa-info-circle"></i>
+                        <div>
+                            <strong>Next step:</strong> Click "Open in Global Brain" to review the full form, 
+                            select the category, and save. All fields will be pre-filled!
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="saveScenario()" id="create-btn">
-                    <i class="fas fa-plus"></i> <span id="save-btn-text">Add Triggers</span>
+                <button class="btn btn-primary btn-large" onclick="openInGlobalBrain()" id="create-btn">
+                    <i class="fas fa-external-link-alt"></i> Open in Global Brain
                 </button>
             </div>
         </div>
@@ -935,13 +931,8 @@
         let companyId = null;
         let currentGaps = [];
         let currentGap = null;
-        let triggers = [];
-        let negativeTriggers = [];
+        let currentPreview = null;
         let selectedDays = 14;
-        let currentMode = 'existing';  // 'existing' or 'new'
-        let existingScenarios = [];
-        let selectedExistingScenario = null;
-        let currentPreview = null;  // Stores full AI-generated scenario data
 
         function getAuthToken() {
             return localStorage.getItem('adminToken')
@@ -1063,74 +1054,6 @@
             } catch (error) {
                 console.error('Error generating preview:', error);
                 return null;
-            }
-        }
-        
-        async function createScenario() {
-            const btn = document.getElementById('create-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Opening Global Brain...';
-            
-            try {
-                // Build comprehensive scenario object for Global Brain
-                const scenarioData = {
-                    // Basic info
-                    name: document.getElementById('scenario-name').value,
-                    category: document.getElementById('scenario-category').value,
-                    status: 'draft',
-                    
-                    // Classification (from AI or default)
-                    scenarioType: currentPreview?.scenarioType || 'FAQ',
-                    priority: currentPreview?.priority || 50,
-                    
-                    // Triggers
-                    triggers: triggers,
-                    negativeTriggers: negativeTriggers,
-                    
-                    // Replies (multiple variations)
-                    quickReplies: currentPreview?.quickReplies || [document.getElementById('scenario-reply').value],
-                    fullReplies: currentPreview?.fullReplies || (document.getElementById('scenario-full-reply').value ? [document.getElementById('scenario-full-reply').value] : []),
-                    
-                    // Follow-up behavior
-                    followUpMode: currentPreview?.followUpMode || 'NONE',
-                    followUpQuestionText: currentPreview?.followUpQuestionText || null,
-                    
-                    // Wiring/Actions  
-                    actionType: currentPreview?.actionType || 'REPLY_ONLY',
-                    bookingIntent: currentPreview?.bookingIntent || false,
-                    
-                    // Entity capture
-                    entityCapture: currentPreview?.entityCapture || [],
-                    
-                    // Admin notes
-                    notes: currentPreview?.notes || `Created from Scenario Gaps. Gap: "${currentGap?.representative}"`,
-                    
-                    // Placeholders
-                    suggestedPlaceholders: currentPreview?.suggestedPlaceholders || [],
-                    
-                    // Source tracking
-                    source: 'scenario-gaps',
-                    sourceGap: currentGap?.representative
-                };
-                
-                // Store in sessionStorage for Global Brain to pick up
-                sessionStorage.setItem('scenarioPrefill', JSON.stringify(scenarioData));
-                
-                // Close modal
-                closeModal();
-                
-                // Open Global Brain with prefill flag
-                // The scenario form will open directly with data pre-filled
-                window.open('/admin-global-instant-responses.html?prefill=scenario', '_blank');
-                
-                showToast('Opening Global Brain with pre-filled data...', 'success');
-                
-            } catch (error) {
-                console.error('Error preparing scenario:', error);
-                showToast('Failed to prepare scenario', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-magic"></i> Create Scenario';
             }
         }
         
@@ -1292,289 +1215,104 @@
         }
         
         // ========================================
-        // MODAL
+        // MODAL - SIMPLIFIED: Preview + Open Global Brain
         // ========================================
         async function openCreateModal(gap) {
             currentGap = gap;
             currentPreview = null;
-            triggers = [];
-            negativeTriggers = [];
-            selectedExistingScenario = null;
             
-            // Show modal
+            // Show modal with loading state
             document.getElementById('create-modal').classList.add('active');
+            document.getElementById('preview-loading').style.display = 'block';
+            document.getElementById('preview-content').style.display = 'none';
             
-            // Set default mode to 'existing'
-            setMode('existing');
-            
-            // Load existing scenarios for dropdown
-            await loadExistingScenarios();
-            
-            // Generate AI preview - now returns comprehensive scenario data
+            // Generate AI preview
             const preview = await generatePreview(gap);
             
+            // Hide loading, show content
+            document.getElementById('preview-loading').style.display = 'none';
+            document.getElementById('preview-content').style.display = 'block';
+            
             if (preview) {
-                // Store full preview for later use
                 currentPreview = preview;
                 
-                // Basic info
-                document.getElementById('scenario-name').value = preview.name || '';
-                document.getElementById('scenario-category').value = preview.category || 'FAQ';
+                // Populate preview display
+                document.getElementById('preview-name').textContent = preview.name || gap.representative.substring(0, 50);
+                document.getElementById('preview-category').textContent = preview.category || 'FAQ';
+                document.getElementById('preview-type').textContent = preview.scenarioType || 'FAQ';
+                document.getElementById('preview-priority').textContent = preview.priority || 50;
                 
-                // Replies - handle both array and single formats
-                const quickReply = Array.isArray(preview.quickReplies) ? preview.quickReplies[0] : (preview.quickReply || '');
-                const fullReply = Array.isArray(preview.fullReplies) ? preview.fullReplies[0] : (preview.fullReply || '');
-                document.getElementById('scenario-reply').value = quickReply;
-                document.getElementById('scenario-full-reply').value = fullReply;
+                // Triggers
+                const triggersEl = document.getElementById('preview-triggers');
+                const triggers = preview.triggers || [gap.representative];
+                document.getElementById('trigger-count').textContent = triggers.length;
+                triggersEl.innerHTML = triggers.slice(0, 10).map(t => 
+                    `<span class="trigger-tag">${escapeHtml(t)}</span>`
+                ).join('') + (triggers.length > 10 ? `<span class="trigger-tag" style="background: var(--bg-tertiary);">+${triggers.length - 10} more</span>` : '');
                 
-                // Set triggers (used for both modes)
-                triggers = preview.triggers || [gap.representative];
-                renderTriggers();
+                // Reply
+                const quickReply = Array.isArray(preview.quickReplies) ? preview.quickReplies[0] : (preview.quickReply || 'I can help with that.');
+                document.getElementById('preview-reply').textContent = quickReply;
                 
-                negativeTriggers = preview.negativeTriggers || [];
-                renderNegativeTriggers();
-                
-                // Show AI metadata in the modal if available
-                updateAIMetadataDisplay(preview);
             } else {
-                // Fallback
-                currentPreview = null;
-                document.getElementById('scenario-name').value = gap.representative.substring(0, 50);
-                document.getElementById('scenario-reply').value = '';
-                triggers = gap.examples.slice(0, 5).map(e => e.text.toLowerCase());
-                renderTriggers();
+                // Fallback display
+                document.getElementById('preview-name').textContent = gap.representative.substring(0, 50);
+                document.getElementById('preview-category').textContent = 'FAQ';
+                document.getElementById('preview-type').textContent = 'FAQ';
+                document.getElementById('preview-priority').textContent = '50';
+                document.getElementById('trigger-count').textContent = gap.examples?.length || 1;
+                document.getElementById('preview-triggers').innerHTML = gap.examples?.slice(0, 5).map(e => 
+                    `<span class="trigger-tag">${escapeHtml(e.text)}</span>`
+                ).join('') || `<span class="trigger-tag">${escapeHtml(gap.representative)}</span>`;
+                document.getElementById('preview-reply').textContent = 'I can help with that. Let me get more information.';
             }
         }
         
-        function updateAIMetadataDisplay(preview) {
-            // Show what AI detected (scenarioType, priority, followUpMode, etc.)
-            const metaEl = document.getElementById('ai-metadata');
-            if (metaEl && preview) {
-                const type = preview.scenarioType || 'FAQ';
-                const priority = preview.priority || 50;
-                const action = preview.actionType || 'REPLY_ONLY';
-                const followUp = preview.followUpMode || 'NONE';
-                
-                metaEl.innerHTML = `
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
-                        <span class="badge" style="background: var(--bg-tertiary);">Type: ${type}</span>
-                        <span class="badge" style="background: var(--bg-tertiary);">Priority: ${priority}</span>
-                        <span class="badge" style="background: var(--bg-tertiary);">Action: ${action}</span>
-                        ${followUp !== 'NONE' ? `<span class="badge" style="background: var(--accent-purple); color: white;">Follow-up: ${followUp}</span>` : ''}
-                        ${preview.bookingIntent ? '<span class="badge" style="background: var(--accent-pink); color: white;">Booking Intent</span>' : ''}
-                    </div>
-                `;
-            }
-        }
-        
-        async function loadExistingScenarios() {
-            const select = document.getElementById('existing-scenario-select');
-            select.innerHTML = '<option value="">-- Loading... --</option>';
-            
-            try {
-                const token = getAuthToken();
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/scenarios`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (!response.ok) throw new Error('Failed to load scenarios');
-                
-                const data = await response.json();
-                existingScenarios = data.scenarios || [];
-                
-                // Build dropdown grouped by category
-                let html = '<option value="">-- Select a scenario to add triggers to --</option>';
-                
-                // Group by category
-                const byCategory = {};
-                for (const s of existingScenarios) {
-                    if (!byCategory[s.category]) byCategory[s.category] = [];
-                    byCategory[s.category].push(s);
-                }
-                
-                for (const [category, scenarios] of Object.entries(byCategory)) {
-                    html += `<optgroup label="${escapeHtml(category)}">`;
-                    for (const s of scenarios) {
-                        html += `<option value="${escapeHtml(s.id)}" data-category="${escapeHtml(s.category)}" data-name="${escapeHtml(s.name)}">
-                            ${escapeHtml(s.name)} (${s.triggersCount} triggers)
-                        </option>`;
-                    }
-                    html += '</optgroup>';
-                }
-                
-                select.innerHTML = html;
-                
-            } catch (error) {
-                console.error('Error loading scenarios:', error);
-                select.innerHTML = '<option value="">-- Failed to load --</option>';
-            }
-        }
-        
-        function setMode(mode) {
-            currentMode = mode;
-            
-            // Update button states
-            document.getElementById('mode-existing').classList.toggle('active', mode === 'existing');
-            document.getElementById('mode-new').classList.toggle('active', mode === 'new');
-            
-            // Show/hide relevant sections
-            document.getElementById('existing-scenario-group').style.display = mode === 'existing' ? 'block' : 'none';
-            document.getElementById('new-scenario-fields').style.display = mode === 'new' ? 'block' : 'none';
-            document.getElementById('reply-group').style.display = mode === 'new' ? 'block' : 'none';
-            document.getElementById('advanced-toggle-section').style.display = mode === 'new' ? 'block' : 'none';
-            
-            // Update labels and button text
-            if (mode === 'existing') {
-                document.getElementById('modal-title').textContent = 'Add Triggers to Existing';
-                document.getElementById('triggers-label').textContent = 'New Triggers to Add';
-                document.getElementById('save-btn-text').textContent = 'Add Triggers';
-            } else {
-                document.getElementById('modal-title').textContent = 'Create New Scenario';
-                document.getElementById('triggers-label').textContent = 'Triggers (phrases that match)';
-                document.getElementById('save-btn-text').textContent = 'Create Scenario';
-            }
-        }
-        
-        function onExistingScenarioChange() {
-            const select = document.getElementById('existing-scenario-select');
-            const info = document.getElementById('existing-scenario-info');
-            const selectedId = select.value;
-            
-            if (!selectedId) {
-                selectedExistingScenario = null;
-                info.innerHTML = '';
+        function openInGlobalBrain() {
+            if (!currentPreview && !currentGap) {
+                showToast('No scenario data available', 'error');
                 return;
             }
             
-            selectedExistingScenario = existingScenarios.find(s => s.id === selectedId);
+            // Build comprehensive scenario object for Global Brain
+            const p = currentPreview || {};
+            const scenarioData = {
+                name: p.name || currentGap?.representative?.substring(0, 50) || 'New Scenario',
+                category: p.category || 'FAQ',
+                status: 'draft',
+                scenarioType: p.scenarioType || 'FAQ',
+                priority: p.priority || 50,
+                triggers: p.triggers || [currentGap?.representative],
+                negativeTriggers: p.negativeTriggers || [],
+                quickReplies: p.quickReplies || [p.quickReply || 'I can help with that.'],
+                fullReplies: p.fullReplies || [],
+                followUpMode: p.followUpMode || 'NONE',
+                followUpQuestionText: p.followUpQuestionText || null,
+                actionType: p.actionType || 'REPLY_ONLY',
+                bookingIntent: p.bookingIntent || false,
+                entityCapture: p.entityCapture || [],
+                notes: p.notes || `Created from Scenario Gaps. Gap: "${currentGap?.representative}"`,
+                suggestedPlaceholders: p.suggestedPlaceholders || [],
+                source: 'scenario-gaps',
+                sourceGap: currentGap?.representative
+            };
             
-            if (selectedExistingScenario) {
-                const existingTriggers = selectedExistingScenario.triggers?.slice(0, 3).join(', ') || 'None';
-                info.innerHTML = `
-                    <strong>Current triggers:</strong> ${escapeHtml(existingTriggers)}${selectedExistingScenario.triggersCount > 3 ? '...' : ''}
-                    <br><strong>Quick reply:</strong> ${escapeHtml(selectedExistingScenario.quickReply?.substring(0, 80) || 'None')}${selectedExistingScenario.quickReply?.length > 80 ? '...' : ''}
-                `;
-            }
-        }
-        
-        async function saveScenario() {
-            if (currentMode === 'existing') {
-                await addTriggersToExisting();
-            } else {
-                await createScenario();
-            }
-        }
-        
-        async function addTriggersToExisting() {
-            if (!selectedExistingScenario) {
-                showToast('Please select an existing scenario', 'error');
-                return;
-            }
+            // Store in sessionStorage for Global Brain to pick up
+            sessionStorage.setItem('scenarioPrefill', JSON.stringify(scenarioData));
             
-            if (triggers.length === 0) {
-                showToast('Please add at least one trigger', 'error');
-                return;
-            }
+            // Close modal
+            closeModal();
             
-            const btn = document.getElementById('create-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            // Open Global Brain with prefill flag
+            window.open('/admin-global-instant-responses.html?prefill=scenario', '_blank');
             
-            try {
-                const token = getAuthToken();
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/scenarios/add-triggers`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        scenarioId: selectedExistingScenario.id,
-                        categoryName: selectedExistingScenario.category,
-                        scenarioName: selectedExistingScenario.name,
-                        newTriggers: triggers
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.details || data.error || 'Failed to add triggers');
-                }
-                
-                closeModal();
-                showToast(data.message || `Added ${data.addedCount} triggers!`, 'success');
-                loadGaps();
-                
-            } catch (error) {
-                console.error('Error adding triggers:', error);
-                showToast(`Failed: ${error.message}`, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-plus"></i> <span id="save-btn-text">Add Triggers</span>';
-            }
+            showToast('Opening Global Brain with pre-filled data...', 'success');
         }
         
         function closeModal() {
             document.getElementById('create-modal').classList.remove('active');
             currentGap = null;
-            selectedExistingScenario = null;
-        }
-        
-        function toggleAdvanced() {
-            const content = document.getElementById('advanced-content');
-            const icon = document.getElementById('advanced-icon');
-            content.classList.toggle('show');
-            icon.style.transform = content.classList.contains('show') ? 'rotate(90deg)' : '';
-        }
-        
-        // ========================================
-        // TRIGGERS
-        // ========================================
-        function addTrigger(text) {
-            text = text.trim().toLowerCase();
-            if (text && !triggers.includes(text)) {
-                triggers.push(text);
-                renderTriggers();
-            }
-        }
-        
-        function removeTrigger(index) {
-            triggers.splice(index, 1);
-            renderTriggers();
-        }
-        
-        function renderTriggers() {
-            const list = document.getElementById('triggers-list');
-            list.innerHTML = triggers.map((t, i) => `
-                <span class="trigger-tag">
-                    ${escapeHtml(t)}
-                    <button onclick="removeTrigger(${i})">&times;</button>
-                </span>
-            `).join('');
-        }
-        
-        function addNegativeTrigger(text) {
-            text = text.trim().toLowerCase();
-            if (text && !negativeTriggers.includes(text)) {
-                negativeTriggers.push(text);
-                renderNegativeTriggers();
-            }
-        }
-        
-        function removeNegativeTrigger(index) {
-            negativeTriggers.splice(index, 1);
-            renderNegativeTriggers();
-        }
-        
-        function renderNegativeTriggers() {
-            const list = document.getElementById('negative-triggers-list');
-            list.innerHTML = negativeTriggers.map((t, i) => `
-                <span class="trigger-tag" style="background: rgba(248, 113, 113, 0.2);">
-                    ${escapeHtml(t)}
-                    <button onclick="removeNegativeTrigger(${i})">&times;</button>
-                </span>
-            `).join('');
+            currentPreview = null;
         }
         
         // ========================================
