@@ -1528,8 +1528,8 @@
                 <!-- Two Column Layout -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; min-height: 400px;">
                     <!-- Left Column: Current Data -->
-                    <div style="padding: 20px; border-right: 1px solid var(--border-color); background: var(--bg-tertiary);">
-                        <h3 style="margin-bottom: 16px; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">
+                    <div style="padding: 20px; border-right: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
+                        <h3 style="margin-bottom: 16px; font-size: 13px; color: #a78bfa; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">
                             <i class="fas fa-file-alt"></i> Current Scenario Data
                         </h3>
                         <div id="review-current-data">
@@ -1538,9 +1538,9 @@
                     </div>
                     
                     <!-- Right Column: Audit Results -->
-                    <div style="padding: 20px;">
-                        <h3 style="margin-bottom: 16px; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">
-                            <i class="fas fa-check-double"></i> Audit Results
+                    <div style="padding: 20px; background: rgba(239, 68, 68, 0.05);">
+                        <h3 style="margin-bottom: 16px; font-size: 13px; color: #f87171; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">
+                            <i class="fas fa-exclamation-circle"></i> Issues to Fix
                         </h3>
                         <div id="review-audit-results">
                             <!-- Populated by JS -->
@@ -1874,15 +1874,17 @@
                 if (field.isArray && Array.isArray(value)) {
                     const items = field.limit ? value.slice(0, field.limit) : value;
                     displayValue = items.map((item, i) => 
-                        `<div style="padding: 4px 8px; background: var(--bg-secondary); border-radius: 4px; margin: 2px 0; font-size: 12px;">
-                            <span style="color: var(--text-muted);">[${i}]</span> ${escapeHtml(typeof item === 'string' ? item : JSON.stringify(item))}
+                        `<div style="padding: 6px 10px; background: rgba(255,255,255,0.08); border-radius: 6px; margin: 4px 0; font-size: 13px; color: #fff;">
+                            <span style="color: #a78bfa; font-weight: 600;">[${i}]</span> ${escapeHtml(typeof item === 'string' ? item : JSON.stringify(item))}
                         </div>`
                     ).join('');
                     if (field.limit && value.length > field.limit) {
-                        displayValue += `<div style="font-size: 11px; color: var(--text-muted); padding: 4px;">+${value.length - field.limit} more</div>`;
+                        displayValue += `<div style="font-size: 12px; color: #a78bfa; padding: 4px;">+${value.length - field.limit} more</div>`;
                     }
+                } else if (value === undefined || value === null || value === '') {
+                    displayValue = `<span style="color: #888; font-style: italic;">(not set)</span>`;
                 } else {
-                    displayValue = `<span style="color: var(--text-primary);">${escapeHtml(value?.toString() || '(not set)')}</span>`;
+                    displayValue = `<span style="color: #fff; font-weight: 500;">${escapeHtml(value?.toString())}</span>`;
                 }
                 
                 // Check if this field has violations
@@ -1892,12 +1894,12 @@
                 const hasIssue = fieldViolations.length > 0;
                 
                 return `
-                    <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid ${hasIssue ? 'var(--accent-red)' : 'var(--accent-green)'};">
-                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                    <div style="margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 4px solid ${hasIssue ? '#ef4444' : '#22c55e'};">
+                        <div style="font-size: 13px; color: #c4b5fd; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-weight: 600;">
                             <i class="fas ${field.icon}"></i> ${field.label}
-                            ${hasIssue ? `<span style="color: var(--accent-red);">(${fieldViolations.length} issue${fieldViolations.length > 1 ? 's' : ''})</span>` : '<span style="color: var(--accent-green);">✓</span>'}
+                            ${hasIssue ? `<span style="color: #f87171;">(${fieldViolations.length} issue${fieldViolations.length > 1 ? 's' : ''})</span>` : '<span style="color: #4ade80;">✓</span>'}
                         </div>
-                        <div style="font-size: 13px;">
+                        <div style="font-size: 13px; line-height: 1.5;">
                             ${displayValue}
                         </div>
                     </div>
@@ -1925,15 +1927,15 @@
             });
             
             return Object.entries(byField).map(([fieldKey, violations]) => `
-                <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px;">
-                    <div style="font-weight: 600; margin-bottom: 8px; color: var(--accent-red);">
+                <div style="margin-bottom: 16px; padding: 14px; background: rgba(239, 68, 68, 0.1); border-radius: 10px; border: 1px solid rgba(239, 68, 68, 0.3);">
+                    <div style="font-weight: 700; margin-bottom: 10px; color: #f87171; font-size: 14px;">
                         <i class="fas fa-exclamation-triangle"></i> ${escapeHtml(fieldKey)}
                     </div>
                     ${violations.map(v => `
-                        <div style="padding: 8px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${v.severity === 'error' ? 'var(--accent-red)' : v.severity === 'warning' ? 'var(--accent-yellow)' : 'var(--accent-blue)'};">
-                            <div style="font-size: 13px; margin-bottom: 4px;">${escapeHtml(v.message)}</div>
-                            ${v.value ? `<div style="font-size: 11px; color: var(--text-muted); font-family: monospace; background: var(--bg-tertiary); padding: 4px 6px; border-radius: 4px; margin-bottom: 4px;">Current: "${escapeHtml(v.value?.toString().substring(0, 80))}${v.value?.toString().length > 80 ? '...' : ''}"</div>` : ''}
-                            ${v.suggestion ? `<div style="font-size: 12px; color: var(--accent-green);"><i class="fas fa-lightbulb"></i> ${escapeHtml(v.suggestion)}</div>` : ''}
+                        <div style="padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; margin-bottom: 8px; border-left: 4px solid ${v.severity === 'error' ? '#ef4444' : v.severity === 'warning' ? '#eab308' : '#3b82f6'};">
+                            <div style="font-size: 13px; margin-bottom: 6px; color: #fff; font-weight: 500;">${escapeHtml(v.message)}</div>
+                            ${v.value ? `<div style="font-size: 12px; color: #d1d5db; font-family: monospace; background: rgba(0,0,0,0.4); padding: 6px 8px; border-radius: 6px; margin-bottom: 6px; word-break: break-word;">Current: "${escapeHtml(v.value?.toString().substring(0, 80))}${v.value?.toString().length > 80 ? '...' : ''}"</div>` : ''}
+                            ${v.suggestion ? `<div style="font-size: 13px; color: #4ade80; font-weight: 500;"><i class="fas fa-lightbulb"></i> ${escapeHtml(v.suggestion)}</div>` : ''}
                         </div>
                     `).join('')}
                 </div>
