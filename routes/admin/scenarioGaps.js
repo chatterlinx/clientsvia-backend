@@ -1703,6 +1703,8 @@ router.post('/:companyId/scenarios/add-triggers', async (req, res) => {
  * 
  * Get basic info for a list of call IDs (for "View Calls" modal)
  * MULTI-TENANT SAFE: Always filters by companyId
+ * 
+ * Uses BlackBoxRecording (the actual call recording model)
  */
 router.post('/:companyId/calls/preview', async (req, res) => {
     const { companyId } = req.params;
@@ -1713,40 +1715,40 @@ router.post('/:companyId/calls/preview', async (req, res) => {
             return res.json({ success: true, calls: [] });
         }
         
-        // CRITICAL: Import CallRecording model
-        const CallRecording = require('../../models/CallRecording');
-        
         // MULTI-TENANT SAFETY: Query MUST include BOTH conditions
         // Even if someone passes callIds from another company, they get NOTHING
-        const calls = await CallRecording.find({
+        const calls = await BlackBoxRecording.find({
             _id: { $in: callIds.slice(0, 20) }, // Limit to 20
-            companyId: companyId // ← HARD FILTER - prevents bleeding
+            companyId: new mongoose.Types.ObjectId(companyId) // ← HARD FILTER - prevents bleeding
         })
-        .select('_id companyId createdAt callerPhone duration outcome transcript callSid')
+        .select('_id companyId createdAt startedAt from durationMs callOutcome transcript callId')
         .sort({ createdAt: -1 })
         .lean();
         
         // Format for frontend
         const formatted = calls.map(call => {
-            // Get first few words of transcript for preview
+            // Get first caller turn from transcript
             let firstLine = '';
-            if (call.transcript && Array.isArray(call.transcript)) {
-                const callerTurn = call.transcript.find(t => t.role === 'caller' || t.speaker === 'caller');
-                if (callerTurn) {
-                    firstLine = (callerTurn.text || callerTurn.content || '').substring(0, 80);
-                    if (firstLine.length === 80) firstLine += '...';
+            if (call.transcript?.callerTurns && call.transcript.callerTurns.length > 0) {
+                const firstTurn = call.transcript.callerTurns[0];
+                if (firstTurn?.text) {
+                    firstLine = firstTurn.text.substring(0, 80);
+                    if (firstTurn.text.length > 80) firstLine += '...';
                 }
             }
             
+            // Convert durationMs to seconds
+            const durationSeconds = call.durationMs ? Math.round(call.durationMs / 1000) : 0;
+            
             return {
                 id: call._id.toString(),
-                date: call.createdAt,
-                phone: call.callerPhone || 'Unknown',
-                duration: call.duration || 0,
-                durationFormatted: formatDuration(call.duration || 0),
-                outcome: call.outcome || 'unknown',
+                date: call.startedAt || call.createdAt,
+                phone: call.from || 'Unknown',
+                duration: durationSeconds,
+                durationFormatted: formatDuration(durationSeconds),
+                outcome: call.callOutcome || 'unknown',
                 firstLine: firstLine || 'No transcript available',
-                callSid: call.callSid
+                callId: call.callId
             };
         });
         
