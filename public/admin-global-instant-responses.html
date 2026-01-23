@@ -12224,6 +12224,18 @@ Higher = detailed, thorough scenarios (more context)
                 const followUpQuestion = document.getElementById('scenario-followup-question');
                 if (followUpQuestion && p.followUpQuestionText) followUpQuestion.value = p.followUpQuestionText;
                 
+                // Entity Capture - one entity per line
+                const entityCaptureTextarea = document.getElementById('scenario-entity-capture');
+                if (entityCaptureTextarea && p.entityCapture) {
+                    entityCaptureTextarea.value = arrayToLines(p.entityCapture);
+                }
+                
+                // Dynamic Template Variables - key=value format per line
+                const dynamicVarsTextarea = document.getElementById('scenario-dynamic-variables');
+                if (dynamicVarsTextarea && p.templateVariables) {
+                    dynamicVarsTextarea.value = arrayToLines(p.templateVariables);
+                }
+                
                 // Notes
                 const notesInput = document.getElementById('scenario-notes');
                 if (notesInput && p.notes) notesInput.value = p.notes;

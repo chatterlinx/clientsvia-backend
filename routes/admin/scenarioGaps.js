@@ -203,6 +203,24 @@ async function generateScenarioFromGap(gap, company) {
     const prompt = `You are an expert at creating WARM, HUMAN, IMPRESSIVE voice AI receptionist scenarios for ${tradeName} businesses.
 
 ═══════════════════════════════════════════════════════════════════════════════
+🎯 THE SOUL OF THIS AI RECEPTIONIST
+═══════════════════════════════════════════════════════════════════════════════
+You are NOT just creating a chatbot. You are creating the BEST receptionist experience:
+
+✨ PERSONALITY: Friendly, warm, genuine - like a helpful neighbor who happens to work there
+✨ INTELLIGENCE: Smart, clever, picks up on context - remembers what callers said
+✨ CUSTOMER-FOCUSED: Every response should make the caller feel HEARD and VALUED  
+✨ GOAL-ORIENTED: Efficiently guide callers toward decisions (book, transfer, get info)
+✨ NEVER ROBOTIC: No corporate speak, no "How may I assist you", no scripted feeling
+
+The AI should feel like talking to the BEST employee at the company - someone who:
+- Genuinely cares about solving the caller's problem
+- Makes callers feel like VIPs, not ticket numbers  
+- Is efficient but never rushed or dismissive
+- Naturally steers toward helpful outcomes (booking, answers, transfers)
+- Builds trust and rapport in seconds
+
+═══════════════════════════════════════════════════════════════════════════════
 CONTEXT
 ═══════════════════════════════════════════════════════════════════════════════
 COMPANY: ${company.companyName || 'Service Company'}
@@ -212,7 +230,7 @@ CALLER PHRASES (asked ${gap.totalCalls} times, fell through to expensive LLM):
 ${examples}
 
 ═══════════════════════════════════════════════════════════════════════════════
-YOUR MISSION: Create a scenario that sounds HUMAN, WARM, and IMPRESSIVE
+YOUR MISSION: Create a scenario that embodies this friendly, smart receptionist
 ═══════════════════════════════════════════════════════════════════════════════
 
 ⚡ TRIGGER RULES (CRITICAL):
@@ -301,15 +319,37 @@ OUTPUT FORMAT (JSON only, no markdown):
     "actionType": "REPLY_ONLY|REQUIRE_BOOKING|TRANSFER",
     "bookingIntent": false,
     
-    "entityCapture": ["name"],
+    "entityCapture": ["name", "phone", "issue"],
     
-    "notes": "Internal note about when this scenario fires",
+    "templateVariables": [
+        "name=valued customer",
+        "technician=our team member", 
+        "time=as soon as possible",
+        "location=your area"
+    ],
+    
+    "notes": "Internal note about when this scenario fires and edge cases",
     
     "suggestedPlaceholders": [
         {"key": "name", "description": "Caller's name (auto-captured)", "exampleValue": "Mark"},
         {"key": "companyName", "description": "Your business name", "exampleValue": "${company.companyName || 'Our Company'}"}
     ]
 }
+
+ENTITY CAPTURE GUIDE (what to extract from caller speech):
+- name: Always include - caller's name
+- phone: If they might provide callback number
+- address: If location/service area matters
+- issue: The problem or request description
+- time_preference: Preferred appointment time
+- equipment: For service calls (AC model, furnace type)
+- urgency: Emergency indicators
+
+TEMPLATE VARIABLES GUIDE (fallbacks for {placeholders}):
+- Format: key=fallback value
+- Example: name=valued customer (if we don't have their name yet)
+- Example: technician=our team member (if tech name not specified)
+- Example: time=shortly (if no specific time mentioned)
 
 BEHAVIOR GUIDE (pick the most appropriate):
 - friendly_warm: Casual, welcoming, great for most scenarios
@@ -333,22 +373,33 @@ FOLLOW-UP MODE GUIDE:
 
     try {
         const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
+            model: 'gpt-4o',  // 🚀 Using GPT-4o for highest quality scenario generation
             messages: [
                 { 
                     role: 'system', 
-                    content: `You are an expert scenario creator for voice AI systems.
-Create COMPREHENSIVE scenarios with:
-- 10-15 clean triggers (no leading punctuation), SHORT + LONG versions
-- 3 quickReplies variations
-- 2 fullReplies variations
-- Proper scenarioType, priority, followUpMode, actionType
+                    content: `You are creating scenarios for the BEST AI receptionist in the world.
+
+YOUR MINDSET:
+- You're crafting how a WARM, INTELLIGENT, CARING human receptionist would respond
+- Every response should make callers feel like VIPs, not ticket numbers
+- Be efficient but NEVER robotic or dismissive
+- Naturally guide toward helpful outcomes (booking, answers, transfers)
+
+CREATE COMPREHENSIVE SCENARIOS WITH:
+- 10-15 clean triggers (SHORT 2-3 words + LONG 5-8 words, no leading punctuation)
+- 2-4 regex patterns for catching variations
+- 3 quickReplies (varied, warm, personal - use {name} placeholder)
+- 2 fullReplies (detailed but still warm and human)
+- Appropriate entityCapture (name, phone, issue, etc.)
+- templateVariables with fallbacks (name=valued customer, etc.)
+- Smart followUpFunnel to steer conversation
+
 Output VALID JSON only. No markdown. No explanations.` 
                 },
                 { role: 'user', content: prompt }
             ],
-            temperature: 0.5,
-            max_tokens: 1500
+            temperature: 0.7,  // Slightly higher for more creative, human responses
+            max_tokens: 2000   // More tokens for comprehensive output
         });
         
         const content = response.choices[0]?.message?.content || '';
