@@ -21,6 +21,93 @@ const { normalizeScenarioType } = require('../utils/scenarioTypeDetector');
 
 class ResponseEngine {
   /**
+   * ============================================================================
+   * PERSONALIZATION: Get the right reply arrays based on caller name availability
+   * ============================================================================
+   * 
+   * If caller name is NOT known, use _noName variants to avoid awkward responses
+   * like "Thanks, {name}." where {name} gets stripped.
+   * 
+   * @param {Object} scenario - The scenario with reply arrays
+   * @param {Object} context - Context with callerName, callerInfo, etc.
+   * @returns {Object} { quickReplies, fullReplies, hasCallerName }
+   */
+  _getPersonalizedReplyArrays(scenario, context = {}) {
+    // Check if we have caller name from various sources
+    const callerName = context.callerName 
+      || context.callerInfo?.name 
+      || context.callerInfo?.firstName
+      || context.extractedEntities?.name
+      || context.conversationState?.callerName
+      || null;
+    
+    const hasCallerName = !!callerName && callerName.trim().length > 0;
+    
+    // Decide which arrays to use
+    let quickReplies = scenario.quickReplies || [];
+    let fullReplies = scenario.fullReplies || [];
+    
+    if (!hasCallerName) {
+      // Use _noName variants if available
+      if (scenario.quickReplies_noName && scenario.quickReplies_noName.length > 0) {
+        quickReplies = scenario.quickReplies_noName;
+        logger.info('[RESPONSE ENGINE] Using quickReplies_noName (caller name unknown)');
+      }
+      if (scenario.fullReplies_noName && scenario.fullReplies_noName.length > 0) {
+        fullReplies = scenario.fullReplies_noName;
+        logger.info('[RESPONSE ENGINE] Using fullReplies_noName (caller name unknown)');
+      }
+    }
+    
+    return { quickReplies, fullReplies, hasCallerName, callerName };
+  }
+  
+  /**
+   * ============================================================================
+   * PERSONALIZATION: Replace placeholders in reply text
+   * ============================================================================
+   * 
+   * Replaces {name}, {companyName}, etc. with actual values from context.
+   * Gracefully handles missing values.
+   * 
+   * @param {String} text - The reply text with placeholders
+   * @param {Object} context - Context with placeholder values
+   * @param {String} callerName - The caller's name (or null)
+   * @returns {String} Text with placeholders replaced
+   */
+  _replacePlaceholders(text, context = {}, callerName = null) {
+    if (!text) return text;
+    
+    let result = text;
+    
+    // Replace {name} with caller name, or remove gracefully
+    if (callerName && callerName.trim()) {
+      result = result.replace(/\{name\}/gi, callerName.trim());
+    } else {
+      // Remove {name} patterns gracefully:
+      // "Thanks, {name}." → "Thanks."
+      // "Thanks, {name}. What's..." → "Thanks. What's..."
+      result = result.replace(/,?\s*\{name\}\.?\s*/gi, '. ').replace(/\.\s*\./g, '.').trim();
+      // Clean up double spaces
+      result = result.replace(/\s+/g, ' ');
+    }
+    
+    // Replace other common placeholders
+    const company = context.company || context.companyInfo || {};
+    result = result.replace(/\{companyName\}/gi, company.companyName || company.name || 'our company');
+    result = result.replace(/\{companyname\}/gi, company.companyName || company.name || 'our company');
+    result = result.replace(/\{phone\}/gi, company.phone || company.primaryPhone || '');
+    result = result.replace(/\{office_city\}/gi, company.city || company.serviceArea || '');
+    
+    // Replace technician placeholder
+    result = result.replace(/\{technician\}/gi, context.technicianName || 'our technician');
+    
+    // Replace time placeholder
+    result = result.replace(/\{time\}/gi, context.appointmentTime || context.time || 'soon');
+    
+    return result;
+  }
+  /**
    * Main entry point: Build the final response for a scenario
    * 
    * @param {Object} params
@@ -83,19 +170,22 @@ class ResponseEngine {
         ({ text, strategyUsed } = this._decideVoiceReply({
           scenario,
           scenarioTypeResolved,
-          replyStrategyResolved
+          replyStrategyResolved,
+          context
         }));
       } else if (channel === 'sms' || channel === 'chat') {
         ({ text, strategyUsed } = this._decideSmsOrChatReply({
           scenario,
-          replyStrategyResolved
+          replyStrategyResolved,
+          context
         }));
       } else {
         // Unknown channel, default to voice rules
         ({ text, strategyUsed } = this._decideVoiceReply({
           scenario,
           scenarioTypeResolved,
-          replyStrategyResolved
+          replyStrategyResolved,
+          context
         }));
       }
       
@@ -173,9 +263,12 @@ class ResponseEngine {
    * 
    * ============================================================================
    */
-  _decideVoiceReply({ scenario, scenarioTypeResolved, replyStrategyResolved }) {
-    const hasFullReplies = scenario.fullReplies && scenario.fullReplies.length > 0;
-    const hasQuickReplies = scenario.quickReplies && scenario.quickReplies.length > 0;
+  _decideVoiceReply({ scenario, scenarioTypeResolved, replyStrategyResolved, context = {} }) {
+    // Get personalized reply arrays (uses _noName variants if caller name unknown)
+    const { quickReplies, fullReplies, hasCallerName, callerName } = this._getPersonalizedReplyArrays(scenario, context);
+    
+    const hasFullReplies = fullReplies && fullReplies.length > 0;
+    const hasQuickReplies = quickReplies && quickReplies.length > 0;
     
     let text;
     let strategyUsed;
@@ -187,14 +280,14 @@ class ResponseEngine {
       if (replyStrategyResolved === 'AUTO' || replyStrategyResolved === 'FULL_ONLY') {
         // Info scenarios on voice MUST always include full reply
         if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else if (hasQuickReplies) {
           // Fallback to quick if no full replies (scenario broken, but handle gracefully)
           logger.warn(`⚠️ [RESPONSE ENGINE] ${scenarioTypeResolved} scenario missing fullReplies`, {
             scenarioName: scenario.name
           });
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           // No replies at all
@@ -207,16 +300,16 @@ class ResponseEngine {
       } else if (replyStrategyResolved === 'QUICK_THEN_FULL') {
         // Combine quick intro with full detail
         if (hasQuickReplies && hasFullReplies) {
-          const quick = this._selectRandom(scenario.quickReplies);
-          const full = this._selectRandom(scenario.fullReplies);
+          const quick = this._selectRandom(quickReplies);
+          const full = this._selectRandom(fullReplies);
           text = `${quick} ${full}`;
           strategyUsed = 'QUICK_THEN_FULL';
         } else if (hasFullReplies) {
           // Fall back to full only
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           text = null;
@@ -229,11 +322,11 @@ class ResponseEngine {
           replyStrategy: replyStrategyResolved
         });
         if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (hasFullReplies) {
           // Fallback to full
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else {
           text = null;
@@ -243,10 +336,10 @@ class ResponseEngine {
         // LLM features not yet implemented
         // For now, use FULL_ONLY and mark as such
         if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY'; // Not LLM_WRAP yet
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           text = null;
@@ -262,10 +355,10 @@ class ResponseEngine {
       if (replyStrategyResolved === 'AUTO') {
         // Default: quick if available, else full
         if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else {
           text = null;
@@ -273,10 +366,10 @@ class ResponseEngine {
         }
       } else if (replyStrategyResolved === 'QUICK_ONLY') {
         if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else {
           text = null;
@@ -284,10 +377,10 @@ class ResponseEngine {
         }
       } else if (replyStrategyResolved === 'FULL_ONLY') {
         if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           text = null;
@@ -295,15 +388,15 @@ class ResponseEngine {
         }
       } else if (replyStrategyResolved === 'QUICK_THEN_FULL') {
         if (hasQuickReplies && hasFullReplies) {
-          const quick = this._selectRandom(scenario.quickReplies);
-          const full = this._selectRandom(scenario.fullReplies);
+          const quick = this._selectRandom(quickReplies);
+          const full = this._selectRandom(fullReplies);
           text = `${quick} ${full}`;
           strategyUsed = 'QUICK_THEN_FULL';
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else {
           text = null;
@@ -312,10 +405,10 @@ class ResponseEngine {
       } else if (replyStrategyResolved === 'LLM_WRAP' || replyStrategyResolved === 'LLM_CONTEXT') {
         // For now, use same logic as AUTO
         if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else {
           text = null;
@@ -331,15 +424,15 @@ class ResponseEngine {
       if (replyStrategyResolved === 'AUTO') {
         // Default: quick+full if both exist, else full, else quick
         if (hasQuickReplies && hasFullReplies) {
-          const quick = this._selectRandom(scenario.quickReplies);
-          const full = this._selectRandom(scenario.fullReplies);
+          const quick = this._selectRandom(quickReplies);
+          const full = this._selectRandom(fullReplies);
           text = `${quick} ${full}`;
           strategyUsed = 'QUICK_THEN_FULL';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           text = null;
@@ -347,10 +440,10 @@ class ResponseEngine {
         }
       } else if (replyStrategyResolved === 'FULL_ONLY') {
         if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           text = null;
@@ -358,10 +451,10 @@ class ResponseEngine {
         }
       } else if (replyStrategyResolved === 'QUICK_ONLY') {
         if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else {
           text = null;
@@ -369,15 +462,15 @@ class ResponseEngine {
         }
       } else if (replyStrategyResolved === 'QUICK_THEN_FULL') {
         if (hasQuickReplies && hasFullReplies) {
-          const quick = this._selectRandom(scenario.quickReplies);
-          const full = this._selectRandom(scenario.fullReplies);
+          const quick = this._selectRandom(quickReplies);
+          const full = this._selectRandom(fullReplies);
           text = `${quick} ${full}`;
           strategyUsed = 'QUICK_THEN_FULL';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           text = null;
@@ -386,15 +479,15 @@ class ResponseEngine {
       } else if (replyStrategyResolved === 'LLM_WRAP' || replyStrategyResolved === 'LLM_CONTEXT') {
         // For now, use same logic as AUTO
         if (hasQuickReplies && hasFullReplies) {
-          const quick = this._selectRandom(scenario.quickReplies);
-          const full = this._selectRandom(scenario.fullReplies);
+          const quick = this._selectRandom(quickReplies);
+          const full = this._selectRandom(fullReplies);
           text = `${quick} ${full}`;
           strategyUsed = 'QUICK_THEN_FULL';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else {
           text = null;
@@ -410,10 +503,10 @@ class ResponseEngine {
       if (replyStrategyResolved === 'AUTO') {
         // Default: quick if available, else full
         if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else {
           text = null;
@@ -422,21 +515,21 @@ class ResponseEngine {
       } else {
         // Respect explicit strategy
         if (replyStrategyResolved === 'QUICK_ONLY' && hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (replyStrategyResolved === 'FULL_ONLY' && hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else if (replyStrategyResolved === 'QUICK_THEN_FULL' && hasQuickReplies && hasFullReplies) {
-          const quick = this._selectRandom(scenario.quickReplies);
-          const full = this._selectRandom(scenario.fullReplies);
+          const quick = this._selectRandom(quickReplies);
+          const full = this._selectRandom(fullReplies);
           text = `${quick} ${full}`;
           strategyUsed = 'QUICK_THEN_FULL';
         } else if (hasQuickReplies) {
-          text = this._selectRandom(scenario.quickReplies);
+          text = this._selectRandom(quickReplies);
           strategyUsed = 'QUICK_ONLY';
         } else if (hasFullReplies) {
-          text = this._selectRandom(scenario.fullReplies);
+          text = this._selectRandom(fullReplies);
           strategyUsed = 'FULL_ONLY';
         } else {
           text = null;
@@ -448,10 +541,10 @@ class ResponseEngine {
     // Unknown scenario type, default to FAQ rules
     else {
       if (hasFullReplies) {
-        text = this._selectRandom(scenario.fullReplies);
+        text = this._selectRandom(fullReplies);
         strategyUsed = 'FULL_ONLY';
       } else if (hasQuickReplies) {
-        text = this._selectRandom(scenario.quickReplies);
+        text = this._selectRandom(quickReplies);
         strategyUsed = 'QUICK_ONLY';
       } else {
         text = null;
@@ -459,7 +552,23 @@ class ResponseEngine {
       }
     }
     
-    return { text, strategyUsed };
+    // ========================================================================
+    // PERSONALIZATION: Replace placeholders in final text
+    // ========================================================================
+    if (text) {
+      text = this._replacePlaceholders(text, context, callerName);
+      
+      // Log personalization info
+      logger.info('[RESPONSE ENGINE] Personalized response', {
+        scenarioName: scenario.name,
+        hasCallerName,
+        callerName: callerName || '(none)',
+        usedNoNameVariants: !hasCallerName && (scenario.quickReplies_noName?.length > 0 || scenario.fullReplies_noName?.length > 0),
+        strategyUsed
+      });
+    }
+    
+    return { text, strategyUsed, hasCallerName, callerName };
   }
   
   /**
@@ -473,9 +582,12 @@ class ResponseEngine {
    * 
    * ============================================================================
    */
-  _decideSmsOrChatReply({ scenario, replyStrategyResolved }) {
-    const hasFullReplies = scenario.fullReplies && scenario.fullReplies.length > 0;
-    const hasQuickReplies = scenario.quickReplies && scenario.quickReplies.length > 0;
+  _decideSmsOrChatReply({ scenario, replyStrategyResolved, context = {} }) {
+    // Get personalized reply arrays (uses _noName variants if caller name unknown)
+    const { quickReplies, fullReplies, hasCallerName, callerName } = this._getPersonalizedReplyArrays(scenario, context);
+    
+    const hasFullReplies = fullReplies && fullReplies.length > 0;
+    const hasQuickReplies = quickReplies && quickReplies.length > 0;
     
     let text;
     let strategyUsed;
@@ -483,10 +595,10 @@ class ResponseEngine {
     if (replyStrategyResolved === 'AUTO') {
       // Default: prefer full, fallback to quick
       if (hasFullReplies) {
-        text = this._selectRandom(scenario.fullReplies);
+        text = this._selectRandom(fullReplies);
         strategyUsed = 'FULL_ONLY';
       } else if (hasQuickReplies) {
-        text = this._selectRandom(scenario.quickReplies);
+        text = this._selectRandom(quickReplies);
         strategyUsed = 'QUICK_ONLY';
       } else {
         text = null;
@@ -494,10 +606,10 @@ class ResponseEngine {
       }
     } else if (replyStrategyResolved === 'FULL_ONLY') {
       if (hasFullReplies) {
-        text = this._selectRandom(scenario.fullReplies);
+        text = this._selectRandom(fullReplies);
         strategyUsed = 'FULL_ONLY';
       } else if (hasQuickReplies) {
-        text = this._selectRandom(scenario.quickReplies);
+        text = this._selectRandom(quickReplies);
         strategyUsed = 'QUICK_ONLY';
       } else {
         text = null;
@@ -505,10 +617,10 @@ class ResponseEngine {
       }
     } else if (replyStrategyResolved === 'QUICK_ONLY') {
       if (hasQuickReplies) {
-        text = this._selectRandom(scenario.quickReplies);
+        text = this._selectRandom(quickReplies);
         strategyUsed = 'QUICK_ONLY';
       } else if (hasFullReplies) {
-        text = this._selectRandom(scenario.fullReplies);
+        text = this._selectRandom(fullReplies);
         strategyUsed = 'FULL_ONLY';
       } else {
         text = null;
@@ -516,15 +628,15 @@ class ResponseEngine {
       }
     } else if (replyStrategyResolved === 'QUICK_THEN_FULL') {
       if (hasQuickReplies && hasFullReplies) {
-        const quick = this._selectRandom(scenario.quickReplies);
-        const full = this._selectRandom(scenario.fullReplies);
+        const quick = this._selectRandom(quickReplies);
+        const full = this._selectRandom(fullReplies);
         text = `${quick} ${full}`;
         strategyUsed = 'QUICK_THEN_FULL';
       } else if (hasFullReplies) {
-        text = this._selectRandom(scenario.fullReplies);
+        text = this._selectRandom(fullReplies);
         strategyUsed = 'FULL_ONLY';
       } else if (hasQuickReplies) {
-        text = this._selectRandom(scenario.quickReplies);
+        text = this._selectRandom(quickReplies);
         strategyUsed = 'QUICK_ONLY';
       } else {
         text = null;
@@ -533,10 +645,10 @@ class ResponseEngine {
     } else if (replyStrategyResolved === 'LLM_WRAP' || replyStrategyResolved === 'LLM_CONTEXT') {
       // For now, use AUTO behavior
       if (hasFullReplies) {
-        text = this._selectRandom(scenario.fullReplies);
+        text = this._selectRandom(fullReplies);
         strategyUsed = 'FULL_ONLY';
       } else if (hasQuickReplies) {
-        text = this._selectRandom(scenario.quickReplies);
+        text = this._selectRandom(quickReplies);
         strategyUsed = 'QUICK_ONLY';
       } else {
         text = null;
@@ -544,7 +656,14 @@ class ResponseEngine {
       }
     }
     
-    return { text, strategyUsed };
+    // ========================================================================
+    // PERSONALIZATION: Replace placeholders in final text
+    // ========================================================================
+    if (text) {
+      text = this._replacePlaceholders(text, context, callerName);
+    }
+    
+    return { text, strategyUsed, hasCallerName, callerName };
   }
   
   /**
