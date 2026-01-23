@@ -12138,6 +12138,13 @@ Higher = detailed, thorough scenarios (more context)
                 console.log('📋 [PREFILL] Auto-filling scenario form with prefill data');
                 const p = window.scenarioPrefillData;
                 
+                // Helper: Convert array to newline-separated string
+                const arrayToLines = (arr) => {
+                    if (!arr) return '';
+                    if (Array.isArray(arr)) return arr.join('\n');
+                    return String(arr);
+                };
+                
                 // Basic Info tab
                 const nameInput = document.getElementById('scenario-name');
                 if (nameInput && p.name) nameInput.value = p.name;
@@ -12151,79 +12158,48 @@ Higher = detailed, thorough scenarios (more context)
                 const typeSelect = document.getElementById('scenario-type');
                 if (typeSelect && p.scenarioType) typeSelect.value = p.scenarioType;
                 
-                // Replies & Flow tab
-                const quickReply = document.getElementById('quick-reply-0') || document.getElementById('quick-reply');
-                if (quickReply) {
-                    const qr = Array.isArray(p.quickReplies) ? p.quickReplies[0] : p.quickReply;
-                    if (qr) quickReply.value = qr;
+                // Triggers - textarea format (one per line)
+                const triggersTextarea = document.getElementById('scenario-triggers');
+                if (triggersTextarea && p.triggers) {
+                    triggersTextarea.value = arrayToLines(p.triggers);
                 }
                 
-                const fullReply = document.getElementById('full-reply-0') || document.getElementById('full-reply');
-                if (fullReply) {
-                    const fr = Array.isArray(p.fullReplies) ? p.fullReplies[0] : p.fullReply;
-                    if (fr) fullReply.value = fr;
+                // Negative Triggers - textarea format (one per line)
+                const negativeTriggersTextarea = document.getElementById('scenario-negative-triggers');
+                if (negativeTriggersTextarea && p.negativeTriggers) {
+                    negativeTriggersTextarea.value = arrayToLines(p.negativeTriggers);
                 }
                 
-                // Triggers - populate the triggers container
-                if (p.triggers && Array.isArray(p.triggers)) {
-                    const triggersContainer = document.getElementById('triggers-container');
-                    if (triggersContainer) {
-                        triggersContainer.innerHTML = '';
-                        p.triggers.forEach((t, i) => {
-                            const div = document.createElement('div');
-                            div.className = 'flex items-center gap-2 mb-2';
-                            div.innerHTML = `
-                                <input type="text" name="triggers[]" value="${escapeHtml(t)}" 
-                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="Trigger phrase ${i + 1}">
-                                <button type="button" onclick="this.parentElement.remove()" class="p-2 text-red-500 hover:bg-red-50 rounded">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            `;
-                            triggersContainer.appendChild(div);
-                        });
-                    }
+                // Quick Replies - textarea format (one per line)
+                const quickRepliesTextarea = document.getElementById('scenario-quick-replies');
+                if (quickRepliesTextarea && p.quickReplies) {
+                    quickRepliesTextarea.value = arrayToLines(p.quickReplies);
                 }
                 
-                // Negative Triggers
-                if (p.negativeTriggers && Array.isArray(p.negativeTriggers) && p.negativeTriggers.length > 0) {
-                    const negContainer = document.getElementById('negative-triggers-container');
-                    if (negContainer) {
-                        negContainer.innerHTML = '';
-                        p.negativeTriggers.forEach((t, i) => {
-                            const div = document.createElement('div');
-                            div.className = 'flex items-center gap-2 mb-2';
-                            div.innerHTML = `
-                                <input type="text" name="negativeTriggers[]" value="${escapeHtml(t)}" 
-                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="Negative trigger ${i + 1}">
-                                <button type="button" onclick="this.parentElement.remove()" class="p-2 text-red-500 hover:bg-red-50 rounded">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            `;
-                            negContainer.appendChild(div);
-                        });
-                    }
+                // Full Replies - textarea format (one per line)
+                const fullRepliesTextarea = document.getElementById('scenario-full-replies');
+                if (fullRepliesTextarea && p.fullReplies) {
+                    fullRepliesTextarea.value = arrayToLines(p.fullReplies);
                 }
                 
-                // Advanced Settings
+                // Follow-Up Settings
                 const followUpMode = document.getElementById('scenario-followup-mode');
                 if (followUpMode && p.followUpMode) followUpMode.value = p.followUpMode;
                 
                 const followUpQuestion = document.getElementById('scenario-followup-question');
                 if (followUpQuestion && p.followUpQuestionText) followUpQuestion.value = p.followUpQuestionText;
                 
-                const actionType = document.getElementById('scenario-action-type');
-                if (actionType && p.actionType) actionType.value = p.actionType;
-                
-                const bookingIntent = document.getElementById('scenario-booking-intent');
-                if (bookingIntent) bookingIntent.checked = p.bookingIntent === true;
-                
+                // Notes
                 const notesInput = document.getElementById('scenario-notes');
                 if (notesInput && p.notes) notesInput.value = p.notes;
                 
                 // Show success message
-                console.log('✅ [PREFILL] Form auto-filled with AI-generated scenario data');
+                console.log('✅ [PREFILL] Form auto-filled with AI-generated scenario data:', {
+                    name: p.name,
+                    triggers: p.triggers?.length,
+                    quickReplies: p.quickReplies?.length,
+                    fullReplies: p.fullReplies?.length
+                });
                 
                 // Close the banner
                 closePrefillBanner();
