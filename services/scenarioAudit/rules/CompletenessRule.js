@@ -63,6 +63,9 @@ class CompletenessRule extends BaseRule {
         // 5. Check for empty replies
         violations.push(...this._checkEmptyReplies(scenario));
         
+        // 6. Check reply variety (AI should never sound like a robot!)
+        violations.push(...this._checkReplyVariety(scenario));
+        
         return violations;
     }
     
@@ -233,6 +236,73 @@ class CompletenessRule extends BaseRule {
                         meta: { index: i }
                     }));
                 }
+            }
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check that replies have enough variety so AI doesn't sound robotic
+     * quickReplies should have 4-7 variations
+     * fullReplies should have 4-5 variations
+     */
+    _checkReplyVariety(scenario) {
+        const violations = [];
+        
+        const quickReplies = scenario.quickReplies || [];
+        const fullReplies = scenario.fullReplies || [];
+        
+        // Check quickReplies variety (should have at least 4)
+        if (quickReplies.length > 0 && quickReplies.length < 4) {
+            violations.push(this.createViolation({
+                field: 'quickReplies',
+                value: `${quickReplies.length} variations`,
+                message: `Only ${quickReplies.length} quick reply variation${quickReplies.length === 1 ? '' : 's'} - AI will sound robotic!`,
+                suggestion: 'Add 4-7 quick reply variations with different wording',
+                meta: { count: quickReplies.length, recommended: '4-7' }
+            }));
+        }
+        
+        // Check fullReplies variety (should have at least 4)
+        if (fullReplies.length > 0 && fullReplies.length < 4) {
+            violations.push(this.createViolation({
+                field: 'fullReplies',
+                value: `${fullReplies.length} variations`,
+                message: `Only ${fullReplies.length} full reply variation${fullReplies.length === 1 ? '' : 's'} - AI will sound robotic!`,
+                suggestion: 'Add 4-5 full reply variations with different wording',
+                meta: { count: fullReplies.length, recommended: '4-5' }
+            }));
+        }
+        
+        // Check _noName variants exist if main replies use {name}
+        const hasNamePlaceholder = [...quickReplies, ...fullReplies].some(r => {
+            const text = typeof r === 'string' ? r : r?.text;
+            return text && text.includes('{name}');
+        });
+        
+        if (hasNamePlaceholder) {
+            const quickNoName = scenario.quickReplies_noName || [];
+            const fullNoName = scenario.fullReplies_noName || [];
+            
+            if (quickNoName.length === 0 && quickReplies.some(r => (typeof r === 'string' ? r : r?.text)?.includes('{name}'))) {
+                violations.push(this.createViolation({
+                    field: 'quickReplies_noName',
+                    value: null,
+                    message: 'Missing _noName variants for quick replies that use {name}',
+                    suggestion: 'Add quickReplies_noName array with versions that don\'t use {name}',
+                    meta: { reason: 'fallback when caller name unknown' }
+                }));
+            }
+            
+            if (fullNoName.length === 0 && fullReplies.some(r => (typeof r === 'string' ? r : r?.text)?.includes('{name}'))) {
+                violations.push(this.createViolation({
+                    field: 'fullReplies_noName',
+                    value: null,
+                    message: 'Missing _noName variants for full replies that use {name}',
+                    suggestion: 'Add fullReplies_noName array with versions that don\'t use {name}',
+                    meta: { reason: 'fallback when caller name unknown' }
+                }));
             }
         }
         

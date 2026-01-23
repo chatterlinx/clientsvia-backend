@@ -635,14 +635,19 @@ Include 10-15 trigger variations:
 
 KEEP RESPONSES UNDER 20 WORDS (unless collecting booking details)
 
-quickReplies (3 variations) - DISPATCHER STYLE:
+quickReplies (5-7 variations) - DISPATCHER STYLE:
 • Acknowledge briefly + ask ONE specific diagnostic question
 • Sound like you've handled this 10,000 times
 • Move toward understanding the problem
+• MUST have 5-7 variations so AI never sounds like a robot!
+• Vary the acknowledgment: "I understand." / "Alright." / "Okay." / "Thanks, {name}."
+• Vary the question phrasing while asking the same thing
 
-fullReplies (2 variations) - STILL DISPATCHER STYLE:
+fullReplies (4-5 variations) - STILL DISPATCHER STYLE:
 • Slightly more context but STILL under 25 words
 • Never paragraphs, never fluffy
+• MUST have 4-5 variations for natural conversation
+• Vary the booking language: "Morning or afternoon?" / "What day works?" / "When would you like us out?"
 
 ═══════════════════════════════════════════════════════════════════════════════
 ❌ BANNED PHRASES (instant failure if you use these)
@@ -835,23 +840,35 @@ OUTPUT FORMAT (JSON only, no markdown):
     "quickReplies": [
         "Thanks, {name}. Is the unit running but not cooling, or not turning on?",
         "I understand. Is the unit running but not cooling, or not turning on?",
-        "Alright. Is air coming out of the vents?"
+        "Alright. Is air coming out of the vents?",
+        "Okay, {name}. Is the system blowing warm air or nothing at all?",
+        "Got the picture. Is it running but not cooling, or completely off?",
+        "Appreciate it, {name}. Is the thermostat showing anything?"
     ],
     
     "quickReplies_noName": [
         "Thanks. Is the unit running but not cooling, or not turning on?",
         "I understand. Is the unit running but not cooling, or not turning on?",
-        "Alright. Is air coming out of the vents?"
+        "Alright. Is air coming out of the vents?",
+        "Okay. Is the system blowing warm air or nothing at all?",
+        "Got the picture. Is it running but not cooling, or completely off?",
+        "Appreciate it. Is the thermostat showing anything?"
     ],
     
     "fullReplies": [
         "Thanks, {name}. We'll get a technician out. Morning or afternoon?",
-        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?"
+        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?",
+        "I understand, {name}. Let's get you on the schedule. What day works best?",
+        "Okay. We can have someone out today or tomorrow. Which works better?",
+        "Sounds like we need a tech out there. When would you like us to come by?"
     ],
     
     "fullReplies_noName": [
         "Thanks. We'll get a technician out. Morning or afternoon?",
-        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?"
+        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?",
+        "I understand. Let's get you on the schedule. What day works best?",
+        "Okay. We can have someone out today or tomorrow. Which works better?",
+        "Sounds like we need a tech out there. When would you like us to come by?"
     ],
     
     "followUpFunnel": "We'll get a technician out. Morning or afternoon?",
