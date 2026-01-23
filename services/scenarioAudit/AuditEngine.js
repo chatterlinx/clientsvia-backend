@@ -131,6 +131,23 @@ class AuditEngine {
         
         this.logger.info(`[AUDIT] Starting audit of ${scenarios.length} scenarios from template "${template.templateType}"`);
         
+        // Track per-rule statistics
+        const ruleStats = {};
+        for (const rule of this.rules) {
+            ruleStats[rule.id] = {
+                ruleId: rule.id,
+                ruleName: rule.name,
+                category: rule.category,
+                severity: rule.severity,
+                description: rule.description,
+                checksRun: 0,
+                violationsFound: 0,
+                scenariosPassed: 0,
+                scenariosFailed: 0,
+                status: 'pending'
+            };
+        }
+        
         // Audit each scenario
         const scenarioResults = [];
         for (const scenario of scenarios) {
@@ -143,10 +160,36 @@ class AuditEngine {
                 }
             });
             scenarioResults.push(result);
+            
+            // Update per-rule stats
+            for (const rule of this.rules) {
+                ruleStats[rule.id].checksRun++;
+                const ruleViolations = result.violations.filter(v => v.ruleId === rule.id);
+                if (ruleViolations.length > 0) {
+                    ruleStats[rule.id].violationsFound += ruleViolations.length;
+                    ruleStats[rule.id].scenariosFailed++;
+                } else {
+                    ruleStats[rule.id].scenariosPassed++;
+                }
+            }
+        }
+        
+        // Mark all rules as completed
+        for (const rule of this.rules) {
+            ruleStats[rule.id].status = 'completed';
         }
         
         // Build summary
         const summary = this._buildSummary(scenarioResults);
+        
+        // Build rules checklist (for UI transparency)
+        const rulesChecklist = this.rules.map(rule => ({
+            ...ruleStats[rule.id],
+            passed: ruleStats[rule.id].violationsFound === 0,
+            passRate: ruleStats[rule.id].checksRun > 0 
+                ? Math.round((ruleStats[rule.id].scenariosPassed / ruleStats[rule.id].checksRun) * 100)
+                : 100
+        }));
         
         const report = {
             templateId: template._id,
@@ -155,12 +198,18 @@ class AuditEngine {
             summary,
             scenarios: scenarioResults,
             rulesRun: this.rules.map(r => r.getMetadata()),
+            rulesChecklist,  // NEW: Detailed per-rule breakdown
+            auditComplete: true,
+            totalRulesRun: this.rules.length,
+            totalChecksPerformed: scenarios.length * this.rules.length,
             timestamp: new Date().toISOString(),
             duration: Date.now() - startTime
         };
         
         this.logger.info(`[AUDIT] Completed in ${report.duration}ms:`, {
             totalScenarios: summary.totalScenarios,
+            totalRulesRun: this.rules.length,
+            totalChecksPerformed: report.totalChecksPerformed,
             scenariosWithViolations: summary.scenariosWithViolations,
             totalViolations: summary.totalViolations,
             errors: summary.bySeverity.error,

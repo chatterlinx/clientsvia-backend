@@ -1220,6 +1220,19 @@
                     </div>
                 </div>
                 
+                <!-- Rules Checked (Transparency) -->
+                <div class="rules-checked-section" style="margin-bottom: 24px;">
+                    <h3 style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer;" onclick="toggleRulesChecked()">
+                        <i class="fas fa-clipboard-check" style="color: var(--accent-green);"></i>
+                        Rules Checked
+                        <span id="rules-checked-count" style="color: var(--text-muted); font-weight: normal; font-size: 14px;"></span>
+                        <i class="fas fa-chevron-down" id="rules-toggle-icon" style="margin-left: auto; font-size: 12px;"></i>
+                    </h3>
+                    <div id="rules-checked-list" style="display: none;">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+                
                 <!-- Violations List -->
                 <h3 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
                     <i class="fas fa-exclamation-triangle" style="color: var(--accent-yellow);"></i>
@@ -1589,6 +1602,18 @@
             }
         }
         
+        function toggleRulesChecked() {
+            const list = document.getElementById('rules-checked-list');
+            const icon = document.getElementById('rules-toggle-icon');
+            if (list.style.display === 'none') {
+                list.style.display = 'block';
+                icon.className = 'fas fa-chevron-up';
+            } else {
+                list.style.display = 'none';
+                icon.className = 'fas fa-chevron-down';
+            }
+        }
+        
         function displayAuditResults(result) {
             // Show results, hide empty state
             document.getElementById('audit-empty').style.display = 'none';
@@ -1611,6 +1636,39 @@
             document.getElementById('audit-passing').textContent = result.summary?.scenariosPassing || 0;
             document.getElementById('audit-errors').textContent = result.summary?.scenariosWithErrors || 0;
             document.getElementById('audit-warnings').textContent = result.summary?.scenariosWithWarnings || 0;
+            
+            // Update rules checked section
+            const rulesChecklist = result.rulesChecklist || [];
+            const totalChecks = result.totalChecksPerformed || 0;
+            document.getElementById('rules-checked-count').textContent = 
+                `(${rulesChecklist.length} rules, ${totalChecks} total checks)`;
+            
+            const rulesListEl = document.getElementById('rules-checked-list');
+            rulesListEl.innerHTML = rulesChecklist.map(rule => `
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--bg-tertiary); border-radius: 8px; margin-bottom: 8px;">
+                    <div style="width: 24px; text-align: center;">
+                        ${rule.status === 'completed' 
+                            ? `<i class="fas fa-check-circle" style="color: var(--accent-green);"></i>`
+                            : `<i class="fas fa-spinner fa-spin" style="color: var(--text-muted);"></i>`
+                        }
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 13px;">${escapeHtml(rule.ruleName)}</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(rule.description || '')}</div>
+                    </div>
+                    <div style="text-align: right; min-width: 100px;">
+                        ${rule.violationsFound > 0 
+                            ? `<span style="color: var(--accent-red); font-weight: 600;">${rule.violationsFound} issues</span>`
+                            : `<span style="color: var(--accent-green);">All passed</span>`
+                        }
+                        <div style="font-size: 11px; color: var(--text-muted);">${rule.checksRun} checks</div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Auto-expand rules checked section to show completeness
+            document.getElementById('rules-checked-list').style.display = 'block';
+            document.getElementById('rules-toggle-icon').className = 'fas fa-chevron-up';
             
             // Build violations list
             const violationsList = document.getElementById('violations-list');
