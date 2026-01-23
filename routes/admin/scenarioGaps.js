@@ -108,15 +108,29 @@ async function getCompanyTemplate(company, options = {}) {
     }
     
     // Step 4: Log successful resolution (for debugging/tracing)
+    // Include WHICH templateRef was selected for full traceability
+    const scenarioCount = (template.categories || []).reduce((sum, c) => sum + (c.scenarios?.length || 0), 0);
+    const categoryCount = (template.categories || []).length;
+    
     logger.info('[SCENARIO GAPS] Template resolved', {
         companyId,
         companyName,
+        // Template details
         templateId: template._id?.toString(),
         templateName: template.name,
         templateType: template.templateType,
-        scenarioCount: (template.categories || []).reduce((sum, c) => sum + (c.scenarios?.length || 0), 0),
-        categoryCount: (template.categories || []).length,
-        selectionMethod: sortedRefs.length > 0 ? 'priority_sorted' : 'first_available'
+        scenarioCount,
+        categoryCount,
+        // Selection details (which ref was chosen and why)
+        selectedRef: {
+            templateId: activeRef.templateId,
+            priority: activeRef.priority || 'default',
+            enabled: activeRef.enabled !== false,
+            clonedAt: activeRef.clonedAt
+        },
+        selectionMethod: sortedRefs.length > 0 ? 'priority_sorted' : 'first_available',
+        totalRefs: templateRefs.length,
+        enabledRefs: enabledRefs.length
     });
     
     return { template, error: null };
@@ -159,37 +173,84 @@ function buildScenarioListForGPT(template) {
 }
 
 // ============================================================================
+// STOPWORDS - Common words to remove for better matching
+// ============================================================================
+const STOPWORDS = new Set([
+    // Articles
+    'a', 'an', 'the',
+    // Pronouns
+    'i', 'my', 'me', 'we', 'our', 'you', 'your', 'it', 'its',
+    // Prepositions
+    'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'out',
+    // Conjunctions
+    'and', 'or', 'but', 'so',
+    // Common verbs (low semantic value in triggers)
+    'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did',
+    'can', 'could', 'will', 'would', 'should', 'may', 'might',
+    'get', 'got', 'getting',
+    // Common filler
+    'just', 'also', 'very', 'really', 'please', 'thanks', 'thank',
+    // Question words (keep some context)
+    'what', 'when', 'where', 'why', 'how',
+    // Negations (important but handled separately)
+    // 'not', "n't", 'no' - keep these for semantic meaning
+]);
+
+// ============================================================================
+// HELPER: Extract meaningful tokens from text (stopwords removed)
+// ============================================================================
+function extractMeaningfulTokens(text) {
+    return normalizeText(text)
+        .split(' ')
+        .filter(w => w.length > 2 && !STOPWORDS.has(w));
+}
+
+// ============================================================================
 // HELPER: Deterministic duplicate detection (BEFORE LLM - fast + cheap)
 // ============================================================================
 // Checks keyword overlap between gap phrase and existing triggers
+// Uses stopword removal for better matching
 // Returns match if overlap score > threshold (prevents LLM call for obvious cases)
+// 
+// LIMITATIONS (handled by LLM fallback):
+// - Misses synonyms ("won't cool" vs "blowing warm air")
+// - Word order differences
+// - Very short/generic triggers
 // ============================================================================
-function findDeterministicDuplicate(gapPhrase, allScenarios, threshold = 0.6) {
-    const gapWords = new Set(
-        normalizeText(gapPhrase)
-            .split(' ')
-            .filter(w => w.length > 2)
-    );
+function findDeterministicDuplicate(gapPhrase, allScenarios, threshold = 0.5) {
+    const gapTokens = extractMeaningfulTokens(gapPhrase);
+    const gapWords = new Set(gapTokens);
     
-    if (gapWords.size === 0) return null;
+    if (gapWords.size === 0) {
+        logger.debug('[SCENARIO GAPS] No meaningful tokens in gap phrase', { gapPhrase });
+        return null;
+    }
     
     let bestMatch = null;
     let bestScore = 0;
     
     for (const scenario of allScenarios) {
-        for (const trigger of (scenario.triggers || [])) {
-            const triggerWords = new Set(
-                normalizeText(trigger)
-                    .split(' ')
-                    .filter(w => w.length > 2)
-            );
+        // Check ALL triggers for this scenario (not just first 5)
+        const allTriggers = scenario.triggers || [];
+        
+        for (const trigger of allTriggers) {
+            const triggerTokens = extractMeaningfulTokens(trigger);
+            const triggerWords = new Set(triggerTokens);
             
             if (triggerWords.size === 0) continue;
             
-            // Jaccard similarity
+            // Jaccard similarity on meaningful tokens
             const intersection = [...gapWords].filter(w => triggerWords.has(w)).length;
             const union = new Set([...gapWords, ...triggerWords]).size;
-            const score = intersection / union;
+            const jaccardScore = intersection / union;
+            
+            // Bonus: Check if gap contains ALL trigger words (subset match)
+            // "ac not cooling at all" should match "ac not cooling"
+            const triggerCoverage = [...triggerWords].filter(w => gapWords.has(w)).length / triggerWords.size;
+            
+            // Combined score: Jaccard + bonus for high trigger coverage
+            const score = jaccardScore + (triggerCoverage >= 0.9 ? 0.15 : 0);
             
             if (score > bestScore) {
                 bestScore = score;
@@ -198,7 +259,9 @@ function findDeterministicDuplicate(gapPhrase, allScenarios, threshold = 0.6) {
                     scenarioName: scenario.name,
                     category: scenario.category,
                     matchedTrigger: trigger,
-                    similarityScore: score
+                    similarityScore: Math.min(score, 1.0), // Cap at 1.0
+                    jaccardScore,
+                    triggerCoverage
                 };
             }
         }
@@ -207,13 +270,60 @@ function findDeterministicDuplicate(gapPhrase, allScenarios, threshold = 0.6) {
     if (bestScore >= threshold) {
         logger.info('[SCENARIO GAPS] Deterministic duplicate found', {
             gapPhrase,
-            match: bestMatch,
-            score: bestScore.toFixed(3)
+            gapTokens,
+            match: {
+                scenarioName: bestMatch.scenarioName,
+                scenarioId: bestMatch.scenarioId,
+                matchedTrigger: bestMatch.matchedTrigger,
+                similarityScore: bestMatch.similarityScore.toFixed(3),
+                jaccardScore: bestMatch.jaccardScore.toFixed(3),
+                triggerCoverage: bestMatch.triggerCoverage.toFixed(3)
+            }
         });
         return bestMatch;
     }
     
+    logger.debug('[SCENARIO GAPS] No deterministic duplicate found', {
+        gapPhrase,
+        gapTokens,
+        bestScore: bestScore.toFixed(3),
+        threshold
+    });
+    
     return null;
+}
+
+// ============================================================================
+// HELPER: Resolve scenario name to ID (server-side, don't trust GPT)
+// ============================================================================
+// When GPT returns a duplicate by name, we resolve to ID deterministically
+// This prevents broken UI actions from GPT hallucinating wrong IDs
+// ============================================================================
+function resolveScenarioNameToId(scenarioName, allScenarios) {
+    if (!scenarioName) return null;
+    
+    const normalized = scenarioName.toLowerCase().trim();
+    
+    // Exact match first
+    const exactMatch = allScenarios.find(s => 
+        s.name.toLowerCase().trim() === normalized
+    );
+    if (exactMatch) return exactMatch;
+    
+    // Fuzzy match (contains)
+    const fuzzyMatch = allScenarios.find(s => 
+        s.name.toLowerCase().includes(normalized) ||
+        normalized.includes(s.name.toLowerCase())
+    );
+    if (fuzzyMatch) {
+        logger.debug('[SCENARIO GAPS] Fuzzy matched scenario name', {
+            input: scenarioName,
+            matched: fuzzyMatch.name,
+            scenarioId: fuzzyMatch.scenarioId
+        });
+    }
+    
+    return fuzzyMatch || null;
 }
 
 // ============================================================================
@@ -842,21 +952,35 @@ Output VALID JSON only. No markdown. No explanations.`
         
         // Check if GPT-4o detected this as a duplicate
         if (s.isDuplicate === true) {
+            // SERVER-SIDE RESOLUTION: Don't trust GPT's scenarioId - resolve by name
+            const gptScenarioName = s.duplicateScenarioName || s.existingScenario;
+            const resolvedScenario = resolveScenarioNameToId(gptScenarioName, allScenarios);
+            
+            // Use server-resolved ID if found, otherwise use what GPT provided
+            const resolvedId = resolvedScenario?.scenarioId || s.duplicateScenarioId || null;
+            const resolvedName = resolvedScenario?.name || gptScenarioName;
+            const resolvedCategory = resolvedScenario?.category || s.duplicateCategory || null;
+            
             logger.info('[SCENARIO GAPS] GPT-4o detected duplicate scenario', {
-                duplicateScenarioId: s.duplicateScenarioId,
-                duplicateScenarioName: s.duplicateScenarioName || s.existingScenario,
+                gptProvidedName: gptScenarioName,
+                gptProvidedId: s.duplicateScenarioId,
+                serverResolvedId: resolvedId,
+                serverResolvedName: resolvedName,
+                resolutionMethod: resolvedScenario ? 'server_matched' : 'gpt_only',
                 recommendedAction: s.recommendedAction || s.suggestedAction
             });
+            
             return {
                 success: true,
                 isDuplicate: true,
-                duplicateScenarioId: s.duplicateScenarioId || null,
-                duplicateScenarioName: s.duplicateScenarioName || s.existingScenario,
-                duplicateCategory: s.duplicateCategory || null,
+                duplicateScenarioId: resolvedId,
+                duplicateScenarioName: resolvedName,
+                duplicateCategory: resolvedCategory,
                 recommendedAction: s.recommendedAction || s.suggestedAction || 'ADD_TRIGGERS',
                 suggestedTriggers: gap.examples.map(e => cleanCallerText(e.text)).filter(t => t.length > 5),
-                explanation: s.explanation || `LLM detected this gap matches existing scenario "${s.duplicateScenarioName || s.existingScenario}"`,
+                explanation: s.explanation || `LLM detected this gap matches existing scenario "${resolvedName}"`,
                 detectionMethod: 'llm',
+                resolutionMethod: resolvedScenario ? 'server_matched' : 'gpt_only',
                 tokensUsed: response.usage?.total_tokens || 0
             };
         }
