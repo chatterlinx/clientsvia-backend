@@ -454,143 +454,199 @@ const RULE_CATEGORIES = {
 // ⚠️ ALL THREE SHOULD MATCH for every important setting
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * SCENARIO_SETTINGS_REGISTRY - Master list of all scenario settings
+ * 
+ * PURPOSE TYPES:
+ * - "runtime": Setting actively used by agent when responding
+ * - "generation": Setting influences how replies are WRITTEN (Gap), not DELIVERED
+ * - "system": Internal/automatic setting, not user-facing
+ * - "future": Planned but not yet implemented
+ * 
+ * ALIGNMENT RULES:
+ * 1. If agent uses it → audit should check it
+ * 2. If purpose="generation" → agent=false is EXPECTED (not a gap)
+ * 3. If purpose="future" → can ignore for now
+ */
 const SCENARIO_SETTINGS_REGISTRY = {
     // ============================================
     // IDENTITY & LIFECYCLE (8 settings)
     // ============================================
-    scenarioId:       { audit: true,  gap: true,  agent: true,  description: 'Unique scenario identifier' },
-    version:          { audit: false, gap: false, agent: false, description: 'Version number for rollback' },
-    status:           { audit: true,  gap: true,  agent: true,  description: 'draft/live/archived - only live scenarios match' },
-    name:             { audit: true,  gap: true,  agent: true,  description: 'Human-readable scenario name' },
-    isActive:         { audit: true,  gap: true,  agent: true,  description: 'Quick on/off toggle' },
-    scope:            { audit: false, gap: false, agent: true,  description: 'GLOBAL vs COMPANY scope' },
-    ownerCompanyId:   { audit: false, gap: false, agent: true,  description: 'Company that owns this scenario' },
-    notes:            { audit: false, gap: false, agent: false, description: 'Admin notes (not used by AI)' },
+    scenarioId:       { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Unique scenario identifier' },
+    version:          { audit: false, gap: false, agent: false, purpose: 'system', description: 'Version number for rollback' },
+    status:           { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'draft/live/archived - only live scenarios match' },
+    name:             { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Human-readable scenario name' },
+    isActive:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Quick on/off toggle' },
+    scope:            { audit: false, gap: false, agent: true,  purpose: 'system', description: 'GLOBAL vs COMPANY scope' },
+    ownerCompanyId:   { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Company that owns this scenario' },
+    notes:            { audit: false, gap: false, agent: false, purpose: 'system', description: 'Admin notes (not used by AI)' },
     
     // ============================================
     // CATEGORIZATION (4 settings)
     // ============================================
-    categories:       { audit: true,  gap: true,  agent: true,  description: 'Category tags for organization' },
-    scenarioType:     { audit: true,  gap: true,  agent: true,  description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy' },
-    priority:         { audit: true,  gap: true,  agent: true,  description: 'Tie-breaker when multiple scenarios match' },
-    cooldownSeconds:  { audit: true,  gap: true,  agent: true,  description: 'Prevents scenario from firing again within N seconds' },
+    categories:       { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Category tags for organization' },
+    scenarioType:     { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy' },
+    priority:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Tie-breaker when multiple scenarios match' },
+    cooldownSeconds:  { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Prevents scenario from firing again within N seconds' },
     
     // ============================================
     // MATCHING - TRIGGERS (7 settings)
     // ============================================
-    triggers:         { audit: true,  gap: true,  agent: true,  description: 'Plain phrases for BM25 keyword matching' },
-    regexTriggers:    { audit: true,  gap: true,  agent: true,  description: 'Advanced pattern matching (regex)' },
-    negativeTriggers: { audit: true,  gap: true,  agent: true,  description: 'Phrases that PREVENT matching' },
-    keywords:         { audit: true,  gap: false, agent: true,  description: 'Fast Tier-1 matching keywords' },
-    negativeKeywords: { audit: true,  gap: false, agent: true,  description: 'Keywords that veto matches' },
-    embeddingVector:  { audit: false, gap: false, agent: true,  description: 'Precomputed semantic embedding' },
-    contextWeight:    { audit: false, gap: false, agent: true,  description: 'Multiplier for final match score' },
+    triggers:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Plain phrases for BM25 keyword matching' },
+    regexTriggers:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Advanced pattern matching (regex)' },
+    negativeTriggers: { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Phrases that PREVENT matching' },
+    keywords:         { audit: true,  gap: false, agent: true,  purpose: 'system', description: 'Fast Tier-1 matching keywords (auto-generated)' },
+    negativeKeywords: { audit: true,  gap: false, agent: true,  purpose: 'system', description: 'Keywords that veto matches (auto-generated)' },
+    embeddingVector:  { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Precomputed semantic embedding (auto-generated)' },
+    contextWeight:    { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Multiplier for final match score' },
     
     // ============================================
-    // CONFIDENCE & PRIORITY (2 settings)
+    // CONFIDENCE & PRIORITY (1 setting)
     // ============================================
-    minConfidence:    { audit: true,  gap: true,  agent: true,  description: 'Scenario-level confidence threshold' },
-    // priority is above in categorization
+    minConfidence:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Scenario-level confidence threshold' },
     
     // ============================================
-    // REPLIES - CORE (9 settings)
+    // REPLIES - CORE (8 settings)
     // ============================================
-    quickReplies:     { audit: true,  gap: true,  agent: true,  description: 'Short/quick response variations' },
-    fullReplies:      { audit: true,  gap: true,  agent: true,  description: 'Full/detailed response variations' },
-    quickReplies_noName: { audit: true,  gap: true,  agent: true,  description: 'Quick replies without {name} for unknown callers' },
-    fullReplies_noName:  { audit: true,  gap: true,  agent: true,  description: 'Full replies without {name} for unknown callers' },
-    replyStrategy:    { audit: true,  gap: false, agent: true,  description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc' },
-    replySelection:   { audit: false, gap: false, agent: true,  description: 'sequential/random/bandit selection' },
-    replyBundles:     { audit: false, gap: false, agent: false, description: 'Reply bundle system (future)' },
-    replyPolicy:      { audit: false, gap: false, agent: false, description: 'ROTATE_PER_CALLER/etc (future)' },
+    quickReplies:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Short/quick response variations' },
+    fullReplies:          { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Full/detailed response variations' },
+    quickReplies_noName:  { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Quick replies without {name} for unknown callers' },
+    fullReplies_noName:   { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Full replies without {name} for unknown callers' },
+    replyStrategy:        { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc' },
+    replySelection:       { audit: false, gap: false, agent: true,  purpose: 'system', description: 'sequential/random/bandit selection' },
+    replyBundles:         { audit: false, gap: false, agent: false, purpose: 'future', description: 'Reply bundle system (future)' },
+    replyPolicy:          { audit: false, gap: false, agent: false, purpose: 'future', description: 'ROTATE_PER_CALLER/etc (future)' },
     
     // ============================================
     // FOLLOW-UP BEHAVIOR (5 settings)
     // ============================================
-    followUpMode:     { audit: true,  gap: true,  agent: true,  description: 'NONE/ASK_FOLLOWUP_QUESTION/ASK_IF_BOOK/TRANSFER' },
-    followUpQuestionText: { audit: true,  gap: true,  agent: true,  description: 'Text to ask for follow-up' },
-    followUpPrompts:  { audit: true,  gap: false, agent: false, description: 'Follow-up prompts (future)' },
-    followUpFunnel:   { audit: false, gap: false, agent: false, description: 'Re-engagement prompt (future)' },
-    transferTarget:   { audit: true,  gap: false, agent: true,  description: 'Queue/extension for transfer' },
+    followUpMode:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'NONE/ASK_FOLLOWUP_QUESTION/ASK_IF_BOOK/TRANSFER' },
+    followUpQuestionText: { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Text to ask for follow-up' },
+    followUpPrompts:      { audit: false, gap: false, agent: false, purpose: 'future', description: 'Follow-up prompts (future)' },
+    followUpFunnel:       { audit: false, gap: false, agent: false, purpose: 'future', description: 'Re-engagement prompt (future)' },
+    transferTarget:       { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Queue/extension for transfer (manual config)' },
     
     // ============================================
     // WIRING - ACTION (5 settings)
     // ============================================
-    actionType:       { audit: true,  gap: true,  agent: true,  description: 'REPLY_ONLY/START_FLOW/REQUIRE_BOOKING/TRANSFER' },
-    flowId:           { audit: true,  gap: false, agent: true,  description: 'Dynamic Flow to execute if START_FLOW' },
-    bookingIntent:    { audit: true,  gap: true,  agent: true,  description: 'true = caller wants to book' },
-    requiredSlots:    { audit: false, gap: false, agent: true,  description: 'Slots to collect for booking' },
-    stopRouting:      { audit: false, gap: false, agent: true,  description: 'Stop evaluating other scenarios after match' },
+    actionType:       { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'REPLY_ONLY/START_FLOW/REQUIRE_BOOKING/TRANSFER' },
+    flowId:           { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Dynamic Flow to execute (manual config)' },
+    bookingIntent:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'true = caller wants to book' },
+    requiredSlots:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Slots to collect for booking (manual config)' },
+    stopRouting:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Stop routing flag (manual config)' },
     
     // ============================================
     // ENTITY CAPTURE (3 settings)
     // ============================================
-    entityCapture:    { audit: true,  gap: true,  agent: false, description: '⚠️ NOT IMPLEMENTED AT RUNTIME - entities to extract' },
-    entityValidation: { audit: true,  gap: false, agent: false, description: '⚠️ NOT IMPLEMENTED - validation rules per entity' },
-    dynamicVariables: { audit: true,  gap: true,  agent: true,  description: 'Variable fallbacks when entity missing' },
+    entityCapture:    { audit: true,  gap: true,  agent: false, purpose: 'future', description: 'Entities to extract (future runtime implementation)' },
+    entityValidation: { audit: true,  gap: false, agent: false, purpose: 'future', description: 'Validation rules per entity (future)' },
+    dynamicVariables: { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Variable fallbacks when entity missing' },
     
     // ============================================
     // BEHAVIOR & VOICE (4 settings)
     // ============================================
-    behavior:         { audit: true,  gap: true,  agent: false, description: '⚠️ NOT IMPLEMENTED AT RUNTIME - AI personality' },
-    toneLevel:        { audit: false, gap: false, agent: false, description: 'DEPRECATED - use behavior instead' },
-    ttsOverride:      { audit: true,  gap: false, agent: true,  description: 'pitch/rate/volume overrides for TTS' },
-    channel:          { audit: true,  gap: true,  agent: true,  description: 'voice/sms/chat/any channel restriction' },
+    behavior:         { audit: true,  gap: true,  agent: false, purpose: 'generation', description: 'AI personality - influences how replies are WRITTEN' },
+    toneLevel:        { audit: false, gap: false, agent: false, purpose: 'system', description: 'DEPRECATED - use behavior instead' },
+    ttsOverride:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'TTS pitch/rate/volume (manual config)' },
+    channel:          { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'voice/sms/chat/any channel restriction' },
     
     // ============================================
     // TIMING & SILENCE (2 settings)
     // ============================================
-    timedFollowUp:    { audit: true,  gap: false, agent: true,  description: 'Check-in after delay (enabled/delay/messages)' },
-    silencePolicy:    { audit: true,  gap: false, agent: true,  description: 'Action after consecutive silent turns' },
+    timedFollowUp:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Timed follow-up settings (manual config)' },
+    silencePolicy:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Silence handling policy (manual config)' },
     
     // ============================================
     // ACTION HOOKS (2 settings)
     // ============================================
-    actionHooks:      { audit: true,  gap: false, agent: true,  description: 'References to GlobalActionHook hookIds' },
-    handoffPolicy:    { audit: true,  gap: true,  agent: true,  description: 'When to escalate to human' },
+    actionHooks:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Action hooks (manual config)' },
+    handoffPolicy:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'When to escalate to human' },
     
     // ============================================
     // STATE MACHINE (2 settings)
     // ============================================
-    preconditions:    { audit: false, gap: false, agent: true,  description: 'Conditions for scenario to match' },
-    effects:          { audit: false, gap: false, agent: true,  description: 'State changes after scenario executes' },
+    preconditions:    { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Conditions for scenario to match' },
+    effects:          { audit: false, gap: false, agent: true,  purpose: 'system', description: 'State changes after scenario executes' },
     
     // ============================================
     // AI INTELLIGENCE (4 settings)
     // ============================================
-    qnaPairs:         { audit: false, gap: false, agent: true,  description: 'Training data for semantic matching' },
-    testPhrases:      { audit: false, gap: false, agent: false, description: 'Validation test cases' },
-    examples:         { audit: false, gap: false, agent: false, description: 'Sample conversations for admin' },
-    escalationFlags:  { audit: false, gap: false, agent: true,  description: 'Triggers for human handoff' },
+    qnaPairs:         { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Training data for semantic matching (auto-generated)' },
+    testPhrases:      { audit: false, gap: false, agent: false, purpose: 'system', description: 'Validation test cases' },
+    examples:         { audit: false, gap: false, agent: false, purpose: 'system', description: 'Sample conversations for admin' },
+    escalationFlags:  { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Triggers for human handoff' },
     
     // ============================================
     // MULTILINGUAL (1 setting)
     // ============================================
-    language:         { audit: false, gap: false, agent: true,  description: 'auto/en/es/fr language setting' }
+    language:         { audit: false, gap: false, agent: true,  purpose: 'system', description: 'auto/en/es/fr language setting' }
 };
 
 /**
  * Get settings count summary
- * @returns {Object} { total, audited, gapGenerated, agentUsed, mismatches }
+ * @returns {Object} { total, audited, gapGenerated, agentUsed, aligned, gaps }
  */
 function getSettingsCount() {
     const settings = Object.entries(SCENARIO_SETTINGS_REGISTRY);
     const total = settings.length;
+    
+    // Count by flag
     const audited = settings.filter(([_, v]) => v.audit).length;
     const gapGenerated = settings.filter(([_, v]) => v.gap).length;
     const agentUsed = settings.filter(([_, v]) => v.agent).length;
     
-    // Find mismatches: settings where audit or gap is true but agent is false
-    const mismatches = settings.filter(([_, v]) => (v.audit || v.gap) && !v.agent);
+    // Count by purpose
+    const runtimeSettings = settings.filter(([_, v]) => v.purpose === 'runtime');
+    const runtimeManualSettings = settings.filter(([_, v]) => v.purpose === 'runtime_manual');
+    const generationSettings = settings.filter(([_, v]) => v.purpose === 'generation');
+    const systemSettings = settings.filter(([_, v]) => v.purpose === 'system');
+    const futureSettings = settings.filter(([_, v]) => v.purpose === 'future');
     
-    // Find critical settings: used by agent but not audited
-    const unaudited = settings.filter(([_, v]) => v.agent && !v.audit);
+    // ✅ ALIGNED RUNTIME: Gap-generated settings where audit=true, gap=true, agent=true
+    const alignedRuntime = runtimeSettings.filter(([_, v]) => v.audit && v.gap && v.agent);
+    
+    // ✅ ALIGNED MANUAL: Manual settings where audit=true, agent=true (gap not required)
+    const alignedManual = runtimeManualSettings.filter(([_, v]) => v.audit && v.agent);
+    
+    // Total aligned = runtime + manual
+    const totalAligned = [...alignedRuntime, ...alignedManual];
+    const totalRuntimeSettings = runtimeSettings.length + runtimeManualSettings.length;
+    
+    // ⚠️ GAPS: Runtime settings that should be aligned but aren't
+    const gapsRuntime = runtimeSettings.filter(([_, v]) => !(v.audit && v.gap && v.agent));
+    const gapsManual = runtimeManualSettings.filter(([_, v]) => !(v.audit && v.agent));
+    const gaps = [...gapsRuntime, ...gapsManual];
+    
+    // For backwards compatibility, still track these
+    const mismatches = settings.filter(([_, v]) => 
+        v.purpose === 'future' && (v.audit || v.gap) && !v.agent
+    );
+    const unaudited = [...runtimeSettings, ...runtimeManualSettings].filter(([_, v]) => v.agent && !v.audit);
     
     return {
         total,
         audited,
         gapGenerated,
         agentUsed,
+        
+        // Purpose breakdown
+        byPurpose: {
+            runtime: runtimeSettings.length,
+            runtimeManual: runtimeManualSettings.length,
+            generation: generationSettings.length,
+            system: systemSettings.length,
+            future: futureSettings.length
+        },
+        
+        // Alignment status
+        aligned: totalAligned.map(([k, v]) => ({ setting: k, ...v })),
+        alignedCount: totalAligned.length,
+        totalRuntimeSettings,
+        
+        gaps: gaps.map(([k, v]) => ({ setting: k, ...v })),
+        gapsCount: gaps.length,
+        
+        // Legacy (for UI compatibility)
         mismatches: mismatches.map(([k, v]) => ({ setting: k, ...v })),
         unaudited: unaudited.map(([k, v]) => ({ setting: k, ...v }))
     };

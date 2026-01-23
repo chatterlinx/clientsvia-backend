@@ -1932,6 +1932,11 @@ router.get('/:companyId/audit/settings-registry', async (req, res) => {
         const counts = getSettingsCount();
         const byCategory = getSettingsByCategory();
         
+        // Calculate runtime alignment (what matters most)
+        const runtimeTotal = counts.totalRuntimeSettings;
+        const runtimeAligned = counts.alignedCount;
+        const alignmentPct = runtimeTotal > 0 ? Math.round(runtimeAligned / runtimeTotal * 100) : 0;
+        
         res.json({
             success: true,
             summary: {
@@ -1945,14 +1950,34 @@ router.get('/:companyId/audit/settings-registry', async (req, res) => {
                     agentCoverage: `${Math.round(counts.agentUsed / counts.total * 100)}%`
                 }
             },
+            
+            // 🎯 PURPOSE BREAKDOWN - The key insight
+            byPurpose: {
+                runtime: counts.byPurpose.runtime,           // Auto-generated runtime settings
+                runtimeManual: counts.byPurpose.runtimeManual, // Manual-config runtime settings
+                generation: counts.byPurpose.generation,     // Settings that influence reply writing
+                system: counts.byPurpose.system,             // Internal/automatic settings
+                future: counts.byPurpose.future              // Planned but not implemented
+            },
+            
+            // ✅ ALIGNMENT STATUS - What we really care about
+            alignment: {
+                runtimeTotal,
+                runtimeAligned,
+                alignmentPct,
+                status: alignmentPct === 100 ? 'PERFECT' : alignmentPct >= 80 ? 'GOOD' : 'NEEDS_WORK',
+                gaps: counts.gaps,
+                gapsCount: counts.gapsCount
+            },
+            
+            // Legacy warnings (for backward compatibility)
             warnings: {
-                // Settings audited/generated but NOT used by agent (waste of effort)
                 notUsedByAgent: counts.mismatches,
                 notUsedByAgentCount: counts.mismatches.length,
-                // Settings used by agent but NOT audited (potential quality gap)
                 unaudited: counts.unaudited,
                 unauditedCount: counts.unaudited.length
             },
+            
             settingsByCategory: byCategory,
             allSettings: SCENARIO_SETTINGS_REGISTRY
         });

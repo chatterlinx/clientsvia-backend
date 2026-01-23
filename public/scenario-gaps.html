@@ -1754,59 +1754,96 @@
                 
                 const data = await response.json();
                 
-                // Update counts
-                document.getElementById('reg-total').textContent = data.summary.totalSettings;
+                // Update main counts (now showing RUNTIME alignment)
+                document.getElementById('reg-total').textContent = data.byPurpose.runtime;
                 document.getElementById('reg-audit').textContent = data.summary.auditedSettings;
                 document.getElementById('reg-gap').textContent = data.summary.gapGeneratedSettings;
-                document.getElementById('reg-agent').textContent = data.summary.agentUsedSettings;
+                document.getElementById('reg-agent').textContent = data.alignment.runtimeAligned;
                 
-                // Update coverage percentages and bars
-                const auditPct = parseInt(data.summary.coverage.auditCoverage);
-                const gapPct = parseInt(data.summary.coverage.gapCoverage);
-                const agentPct = parseInt(data.summary.coverage.agentCoverage);
+                // Update labels to reflect runtime focus
+                document.getElementById('reg-total').nextElementSibling.textContent = 'Runtime Settings';
+                document.getElementById('reg-agent').nextElementSibling.textContent = 'Fully Aligned';
                 
-                document.getElementById('reg-audit-pct').textContent = data.summary.coverage.auditCoverage;
+                // Update alignment bar (the important one)
+                const alignPct = data.alignment.alignmentPct;
+                document.getElementById('reg-audit-pct').textContent = `${alignPct}%`;
                 document.getElementById('reg-gap-pct').textContent = data.summary.coverage.gapCoverage;
                 document.getElementById('reg-agent-pct').textContent = data.summary.coverage.agentCoverage;
                 
-                document.getElementById('reg-audit-bar').style.width = `${auditPct}%`;
-                document.getElementById('reg-gap-bar').style.width = `${gapPct}%`;
-                document.getElementById('reg-agent-bar').style.width = `${agentPct}%`;
+                document.getElementById('reg-audit-bar').style.width = `${alignPct}%`;
+                document.getElementById('reg-gap-bar').style.width = `${parseInt(data.summary.coverage.gapCoverage)}%`;
+                document.getElementById('reg-agent-bar').style.width = `${parseInt(data.summary.coverage.agentCoverage)}%`;
                 
-                // Show warnings if any
+                // Update first bar label
+                document.querySelector('#reg-audit-pct').parentElement.querySelector('span:first-child').textContent = 'Runtime Alignment';
+                
+                // Color the alignment bar based on status
+                const alignBar = document.getElementById('reg-audit-bar');
+                if (data.alignment.status === 'PERFECT') {
+                    alignBar.style.background = 'var(--accent-green)';
+                } else if (data.alignment.status === 'GOOD') {
+                    alignBar.style.background = 'var(--accent-blue)';
+                } else {
+                    alignBar.style.background = 'var(--accent-orange)';
+                }
+                
+                // Show gaps if any
                 const warningsDiv = document.getElementById('registry-warnings');
                 const warningsContent = document.getElementById('registry-warnings-content');
                 
-                if (data.warnings.notUsedByAgentCount > 0 || data.warnings.unauditedCount > 0) {
+                if (data.alignment.gapsCount > 0) {
                     warningsDiv.style.display = 'block';
-                    let html = '';
+                    let html = `<div style="margin-bottom: 8px;">
+                        <strong>⚠️ ${data.alignment.gapsCount} runtime settings need alignment:</strong>
+                        <div style="margin-top: 8px; display: grid; gap: 6px;">
+                            ${data.alignment.gaps.map(s => 
+                                `<div style="display: flex; align-items: center; gap: 8px;">
+                                    <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px; font-size: 11px;">${s.setting}</code>
+                                    <span style="font-size: 11px;">
+                                        Audit: ${s.audit ? '✅' : '❌'} | 
+                                        Gap: ${s.gap ? '✅' : '❌'} | 
+                                        Agent: ${s.agent ? '✅' : '❌'}
+                                    </span>
+                                </div>`
+                            ).join('')}
+                        </div>
+                    </div>`;
                     
-                    if (data.warnings.notUsedByAgentCount > 0) {
-                        html += `<div style="margin-bottom: 8px;">
-                            <strong>⚠️ ${data.warnings.notUsedByAgentCount} settings audited/generated but NOT used by agent:</strong>
-                            <div style="margin-top: 4px; padding-left: 12px;">
-                                ${data.warnings.notUsedByAgent.map(s => 
-                                    `<div>• <code style="background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px;">${s.setting}</code> - ${s.description}</div>`
-                                ).join('')}
-                            </div>
-                        </div>`;
-                    }
-                    
-                    if (data.warnings.unauditedCount > 0) {
-                        html += `<div>
-                            <strong>⚠️ ${data.warnings.unauditedCount} settings used by agent but NOT audited:</strong>
-                            <div style="margin-top: 4px; padding-left: 12px;">
-                                ${data.warnings.unaudited.slice(0, 5).map(s => 
-                                    `<div>• <code style="background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px;">${s.setting}</code> - ${s.description}</div>`
-                                ).join('')}
-                                ${data.warnings.unauditedCount > 5 ? `<div style="color: var(--text-muted);">...and ${data.warnings.unauditedCount - 5} more</div>` : ''}
-                            </div>
-                        </div>`;
-                    }
+                    // Show purpose breakdown
+                    html += `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <strong>Settings by Purpose:</strong>
+                        <div style="display: flex; gap: 16px; margin-top: 6px; font-size: 11px;">
+                            <span>🎯 Runtime: ${data.byPurpose.runtime} (auto) + ${data.byPurpose.runtimeManual} (manual)</span>
+                            <span>✏️ Generation: ${data.byPurpose.generation}</span>
+                            <span>⚙️ System: ${data.byPurpose.system}</span>
+                            <span>🔮 Future: ${data.byPurpose.future}</span>
+                        </div>
+                    </div>`;
                     
                     warningsContent.innerHTML = html;
                 } else {
-                    warningsDiv.style.display = 'none';
+                    // Perfect alignment!
+                    warningsDiv.style.display = 'block';
+                    warningsDiv.style.background = 'rgba(16,185,129,0.15)';
+                    warningsDiv.style.borderColor = 'var(--accent-green)';
+                    warningsContent.innerHTML = `
+                        <div style="color: var(--accent-green);">
+                            <strong>✅ PERFECT ALIGNMENT</strong>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6ee7b7;">
+                                All ${data.alignment.runtimeTotal} runtime settings are properly covered:
+                                <br>• ${data.byPurpose.runtime} auto-generated (audit ✓ gap ✓ agent ✓)
+                                <br>• ${data.byPurpose.runtimeManual} manual-config (audit ✓ agent ✓)
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                            <strong style="color: #fff;">Settings by Purpose:</strong>
+                            <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                                <span>🎯 Runtime: ${data.byPurpose.runtime} (auto) + ${data.byPurpose.runtimeManual} (manual)</span>
+                                <span>✏️ Generation: ${data.byPurpose.generation}</span>
+                                <span>⚙️ System: ${data.byPurpose.system}</span>
+                                <span>🔮 Future: ${data.byPurpose.future}</span>
+                            </div>
+                        </div>`;
                 }
                 
             } catch (error) {
