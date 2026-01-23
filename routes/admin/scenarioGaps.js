@@ -2389,19 +2389,30 @@ router.post('/:companyId/audit/fix-scenario', async (req, res) => {
             return res.status(400).json({ error: error.message });
         }
         
-        // Find the scenario
+        // Find the scenario - handle both scenarioId and _id formats
         let targetScenario = null;
         let categoryIndex = -1;
         let scenarioIndex = -1;
+        const searchId = scenarioId?.toString();
+        
+        logger.info('[AUDIT FIX-SCENARIO] Searching for scenario', { searchId });
         
         for (let ci = 0; ci < (template.categories || []).length; ci++) {
             const category = template.categories[ci];
             for (let si = 0; si < (category.scenarios || []).length; si++) {
                 const scenario = category.scenarios[si];
-                if (scenario.scenarioId === scenarioId || scenario._id?.toString() === scenarioId) {
+                const sId = scenario.scenarioId?.toString();
+                const sObjId = scenario._id?.toString();
+                
+                if (sId === searchId || sObjId === searchId) {
                     targetScenario = scenario;
                     categoryIndex = ci;
                     scenarioIndex = si;
+                    logger.info('[AUDIT FIX-SCENARIO] Found scenario', { 
+                        name: scenario.name,
+                        categoryIndex: ci,
+                        scenarioIndex: si 
+                    });
                     break;
                 }
             }
@@ -2409,7 +2420,11 @@ router.post('/:companyId/audit/fix-scenario', async (req, res) => {
         }
         
         if (!targetScenario) {
-            return res.status(404).json({ error: 'Scenario not found' });
+            logger.error('[AUDIT FIX-SCENARIO] Scenario not found', { 
+                searchId,
+                categoriesCount: template.categories?.length || 0
+            });
+            return res.status(404).json({ error: 'Scenario not found', searchId });
         }
         
         logger.info('[AUDIT FIX-SCENARIO] Starting batch fix', {
@@ -2438,24 +2453,40 @@ router.post('/:companyId/audit/fix-scenario', async (req, res) => {
         
         for (const violation of (violations || [])) {
             try {
+                // Skip violations without a field
+                if (!violation.field) {
+                    logger.info('[AUDIT FIX-SCENARIO] Skipping violation without field');
+                    continue;
+                }
+                
                 // Get current value for this field
                 const fieldPath = violation.field.replace(/\[(\d+)\]/g, '.$1').split('.');
                 let currentValue = targetScenario;
                 for (const key of fieldPath) {
-                    currentValue = currentValue?.[key];
+                    if (currentValue === undefined || currentValue === null) break;
+                    currentValue = currentValue[key];
                 }
                 
                 // Skip if it's not a text field we can fix
-                if (typeof currentValue !== 'string' && !Array.isArray(currentValue)) {
-                    logger.info('[AUDIT FIX-SCENARIO] Skipping non-text field', { field: violation.field });
-                    continue;
+                if (typeof currentValue !== 'string') {
+                    // For array items, try to use the violation.value instead
+                    if (violation.value && typeof violation.value === 'string') {
+                        currentValue = violation.value;
+                    } else {
+                        logger.info('[AUDIT FIX-SCENARIO] Skipping non-text field', { 
+                            field: violation.field,
+                            valueType: typeof currentValue 
+                        });
+                        continue;
+                    }
                 }
                 
-                // If it's an array index, get the specific item
-                const isArrayItem = /\[\d+\]/.test(violation.field);
-                const valueToFix = typeof currentValue === 'string' ? currentValue : violation.value;
+                const valueToFix = currentValue || violation.value;
                 
-                if (!valueToFix) continue;
+                if (!valueToFix || typeof valueToFix !== 'string') {
+                    logger.info('[AUDIT FIX-SCENARIO] No value to fix', { field: violation.field });
+                    continue;
+                }
                 
                 // Generate fix using GPT-4o
                 const fixPrompt = `Fix this dispatcher scenario text that has a violation.
@@ -2579,11 +2610,13 @@ Return ONLY the fixed text. No quotes, no explanation.`;
         logger.error('[AUDIT FIX-SCENARIO] Error', { 
             companyId, 
             scenarioId,
-            error: error.message 
+            error: error.message,
+            stack: error.stack
         });
         res.status(500).json({ 
             error: 'Failed to fix scenario', 
-            details: error.message 
+            details: error.message,
+            scenarioId
         });
     }
 });
