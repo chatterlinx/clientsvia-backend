@@ -39,6 +39,7 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 // Services
 const openaiClient = require('../../config/openai');
 const logger = require('../../utils/logger');
+const { AuditEngine, getAvailableRules } = require('../../services/scenarioAudit');
 
 // ============================================================================
 // MIDDLEWARE - All routes require authentication
@@ -1815,6 +1816,205 @@ router.post('/:companyId/gaps/dismiss', async (req, res) => {
     } catch (error) {
         logger.error('[SCENARIO GAPS] Error dismissing gap', { error: error.message });
         res.status(500).json({ error: 'Failed to dismiss gap', details: error.message });
+    }
+});
+
+// ============================================================================
+// TEMPLATE AUDIT ROUTES - Scenario Quality Assurance
+// ============================================================================
+
+/**
+ * GET /:companyId/audit/rules
+ * 
+ * Get list of available audit rules (for UI checkboxes)
+ */
+router.get('/:companyId/audit/rules', async (req, res) => {
+    try {
+        const rules = getAvailableRules();
+        res.json({
+            success: true,
+            rules,
+            totalRules: rules.length,
+            deterministicRules: rules.filter(r => r.costType === 'deterministic').length,
+            llmRules: rules.filter(r => r.costType === 'llm').length
+        });
+    } catch (error) {
+        logger.error('[AUDIT] Error getting rules', { error: error.message });
+        res.status(500).json({ error: 'Failed to get audit rules', details: error.message });
+    }
+});
+
+/**
+ * POST /:companyId/audit/run
+ * 
+ * Run full audit on company's template
+ * 
+ * Body:
+ * - rules: string[] (optional) - specific rule IDs to run
+ * - category: string (optional) - audit only this category
+ */
+router.post('/:companyId/audit/run', async (req, res) => {
+    const { companyId } = req.params;
+    const { rules: ruleIds, category } = req.body;
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get company's template
+        const { template, error } = await getCompanyTemplate(company, { 
+            populateCategories: true 
+        });
+        
+        if (error) {
+            return res.status(400).json({
+                error: error.message,
+                code: error.code,
+                fix: error.fix
+            });
+        }
+        
+        // Run audit
+        const engine = new AuditEngine({ logger });
+        let report;
+        
+        if (category) {
+            // Audit specific category
+            report = await engine.auditCategory(template, category, {
+                rules: ruleIds
+            });
+        } else {
+            // Audit entire template
+            report = await engine.auditTemplate(template, {
+                rules: ruleIds
+            });
+        }
+        
+        logger.info('[AUDIT] Completed audit', {
+            companyId,
+            templateId: template._id,
+            templateType: template.templateType,
+            totalScenarios: report.summary?.totalScenarios || report.scenarios?.length,
+            violations: report.summary?.totalViolations,
+            healthScore: report.summary?.healthScore,
+            duration: report.duration
+        });
+        
+        res.json({
+            success: true,
+            companyId,
+            templateId: template._id,
+            templateType: template.templateType,
+            ...report
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT] Error running audit', { 
+            companyId, 
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ 
+            error: 'Failed to run audit', 
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * POST /:companyId/audit/scenario
+ * 
+ * Audit a single scenario (for inline validation)
+ * 
+ * Body:
+ * - scenario: object - the scenario to audit
+ * - rules: string[] (optional) - specific rule IDs to run
+ */
+router.post('/:companyId/audit/scenario', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenario, rules: ruleIds } = req.body;
+    
+    if (!scenario) {
+        return res.status(400).json({ error: 'Scenario object is required' });
+    }
+    
+    try {
+        const engine = new AuditEngine({ logger });
+        const result = await engine.auditScenario(scenario, {
+            rules: ruleIds
+        });
+        
+        res.json({
+            success: true,
+            ...result
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT] Error auditing scenario', { 
+            companyId, 
+            scenarioName: scenario?.name,
+            error: error.message 
+        });
+        res.status(500).json({ 
+            error: 'Failed to audit scenario', 
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * GET /:companyId/audit/health
+ * 
+ * Quick health check - returns health score only
+ */
+router.get('/:companyId/audit/health', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        const { template, error } = await getCompanyTemplate(company, {
+            populateCategories: true
+        });
+        
+        if (error) {
+            return res.status(400).json({
+                error: error.message,
+                code: error.code,
+                fix: error.fix
+            });
+        }
+        
+        const engine = new AuditEngine({ logger });
+        const report = await engine.auditTemplate(template);
+        
+        res.json({
+            success: true,
+            companyId,
+            templateId: template._id,
+            templateType: template.templateType,
+            healthScore: report.summary.healthScore,
+            totalScenarios: report.summary.totalScenarios,
+            scenariosWithErrors: report.summary.scenariosWithErrors,
+            scenariosWithWarnings: report.summary.scenariosWithWarnings,
+            scenariosPassing: report.summary.scenariosPassing,
+            topViolations: report.summary.topViolations
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT] Error checking health', { 
+            companyId, 
+            error: error.message 
+        });
+        res.status(500).json({ 
+            error: 'Failed to check health', 
+            details: error.message 
+        });
     }
 });
 
