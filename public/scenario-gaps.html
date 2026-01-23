@@ -1389,23 +1389,24 @@
         // ========================================
         // HELPER: Smart default follow-up funnel
         // ========================================
+        // DISPATCHER-STYLE follow-up funnels (brief, action-oriented)
         function getDefaultFollowUpFunnel(scenarioType, bookingIntent) {
             if (bookingIntent) {
-                return "Would you like me to get that scheduled for you, {name}?";
+                return "Let's get this scheduled. Morning or afternoon work better?";
             }
             switch (scenarioType) {
                 case 'EMERGENCY':
-                    return "Let me get someone out to you right away, {name}. Is the issue happening now?";
+                    return "Let me get someone out right away. Are you available now?";
                 case 'BOOKING':
-                    return "Would you like me to schedule that appointment, {name}?";
+                    return "Let's get this on the schedule. What day works for you?";
                 case 'TROUBLESHOOT':
-                    return "Would it help if we sent a technician out to take a look, {name}?";
+                    return "Let's get a tech out to take a look. What's your availability?";
                 case 'BILLING':
-                    return "Is there anything else about your account I can help with, {name}?";
+                    return "Anything else on the account I can help with?";
                 case 'SMALL_TALK':
-                    return "Is there something I can help you with today, {name}?";
+                    return "What can I help you with today?";
                 default:
-                    return "Is there anything else I can help you with, {name}?";
+                    return "Anything else I can help with?";
             }
         }
         
