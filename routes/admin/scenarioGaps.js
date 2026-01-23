@@ -2067,31 +2067,100 @@ router.post('/:companyId/audit/fix', async (req, res) => {
             currentFieldValue = currentFieldValue?.[key];
         }
         
-        // Generate fix using GPT-4
+        // Build FULL scenario context for GPT-4
+        const scenarioContext = {
+            name: scenario.name,
+            scenarioType: scenario.scenarioType || 'UNKNOWN',
+            category: scenario.categories?.[0] || scenario.category || 'General',
+            behavior: scenario.behavior || 'calm_professional',
+            triggers: (scenario.triggers || []).slice(0, 10), // First 10 triggers
+            quickReplies: scenario.quickReplies || [],
+            fullReplies: scenario.fullReplies || [],
+            quickReplies_noName: scenario.quickReplies_noName || [],
+            fullReplies_noName: scenario.fullReplies_noName || [],
+            followUpMode: scenario.followUpMode,
+            actionType: scenario.actionType,
+            bookingIntent: scenario.bookingIntent,
+            priority: scenario.priority
+        };
+        
+        // Generate fix using GPT-4 with FULL context
         const fixPrompt = `You are fixing a dispatcher AI scenario that has a violation.
 
-SCENARIO: "${scenarioName}"
+═══════════════════════════════════════════════════════════════════════════════
+FULL SCENARIO CONTEXT (so you understand what this scenario does)
+═══════════════════════════════════════════════════════════════════════════════
+Name: ${scenarioContext.name}
+Type: ${scenarioContext.scenarioType}
+Category: ${scenarioContext.category}
+Behavior: ${scenarioContext.behavior}
+Action: ${scenarioContext.actionType || 'REPLY_ONLY'}
+Booking Intent: ${scenarioContext.bookingIntent || false}
+Priority: ${scenarioContext.priority || 0}
+
+TRIGGERS (what callers say to activate this):
+${scenarioContext.triggers.map(t => `  - "${t}"`).join('\n')}
+
+CURRENT QUICK REPLIES:
+${scenarioContext.quickReplies.map((r, i) => `  [${i}] "${typeof r === 'string' ? r : r?.text || r}"`).join('\n')}
+
+CURRENT FULL REPLIES:
+${scenarioContext.fullReplies.map((r, i) => `  [${i}] "${typeof r === 'string' ? r : r?.text || r}"`).join('\n')}
+
+═══════════════════════════════════════════════════════════════════════════════
+THE VIOLATION TO FIX
+═══════════════════════════════════════════════════════════════════════════════
 FIELD: ${field}
 CURRENT VALUE: "${currentFieldValue || currentValue}"
-
 VIOLATION: ${message}
 SUGGESTED ACTION: ${suggestion || 'Fix this issue'}
 
-DISPATCHER RULES:
-- Dispatchers are calm, professional, experienced
-- They acknowledge briefly (1-3 words: "I understand." "Alright." "Okay.")
-- They ask ONE specific question, not vague questions
-- They move toward booking, not troubleshooting
-- They acknowledge caller's name with {name} placeholder
-- They are NOT chatbots, NOT help desk, NOT concierge
+═══════════════════════════════════════════════════════════════════════════════
+DISPATCHER RULES (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+WHO YOU ARE:
+- You are an EXPERIENCED dispatcher, not a chatbot
+- Calm, professional, confident - you've handled this 10,000 times
+- Every word moves toward resolution (classify → book)
 
-BANNED PHRASES:
+RESPONSE STRUCTURE:
+- Quick replies: Acknowledge briefly + ONE classification question (under 20 words)
+- Full replies: Move toward booking (under 25 words)
+- Use {name} placeholder to personalize when appropriate
+
+BANNED PHRASES (never use):
 - "Got it", "No problem", "Absolutely", "Of course" (help desk)
-- "Let me help you with that", "I'd be happy to help" (chatbot)
-- "Have you checked...", "Have you tried..." (troubleshooting)
+- "Let me help you with that", "I'd be happy to help", "happy to help" (chatbot)
+- "Have you checked...", "Have you tried...", "Is it set correctly?" (troubleshooting)
+- "Wonderful", "Great", "Awesome" (over-enthusiastic)
+
+APPROVED ACKNOWLEDGMENTS:
+- "I understand."
+- "Alright."
+- "Okay."
+- "Thanks, {name}."
+
+═══════════════════════════════════════════════════════════════════════════════
+YOUR TASK
+═══════════════════════════════════════════════════════════════════════════════
+Fix the violation in field "${field}".
+Make sure the fix:
+1. Removes the banned phrase/pattern
+2. Matches the dispatcher tone
+3. Is appropriate for this scenario's purpose (based on triggers)
+4. Is consistent with the other replies in this scenario
 
 RETURN ONLY the fixed text, nothing else. No quotes, no explanation.
 Just the corrected value that should replace the current one.`;
+        
+        logger.info('[AUDIT FIX] Generating fix with full context', {
+            companyId,
+            scenarioId,
+            scenarioName: scenario.name,
+            field,
+            triggersCount: scenarioContext.triggers.length,
+            quickRepliesCount: scenarioContext.quickReplies.length
+        });
 
         const response = await openaiClient.chat.completions.create({
             model: 'gpt-4o',
