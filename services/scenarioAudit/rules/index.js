@@ -44,6 +44,7 @@ const TriggersRule = require('./TriggersRule');
 const WiringRule = require('./WiringRule');
 const CompletenessRule = require('./CompletenessRule');
 const PriorityRule = require('./PriorityRule');
+const FullScenarioRule = require('./FullScenarioRule');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RULE REGISTRY
@@ -70,7 +71,8 @@ const RULES = [
     new PersonalizationRule(), // Placeholder usage
     new ResponseLengthRule(),  // Length violations
     new TriggersRule(),        // Trigger quality
-    new PriorityRule()         // Priority mismatches
+    new PriorityRule(),        // Priority mismatches
+    new FullScenarioRule()     // Comprehensive check (all other settings)
 ];
 
 /**
@@ -155,5 +157,6 @@ module.exports = {
     TriggersRule,
     WiringRule,
     CompletenessRule,
-    PriorityRule
+    PriorityRule,
+    FullScenarioRule
 };

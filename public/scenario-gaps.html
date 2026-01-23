@@ -1231,21 +1231,157 @@
                 </div>
             </div>
             
+            <!-- Audit Rules Checklist (always visible) -->
+            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                        <i class="fas fa-list-check" style="color: var(--accent-purple);"></i>
+                        What GPT-4 Audit Checks (9 Rules, 40+ Validations)
+                    </h3>
+                    <button onclick="toggleChecklist()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 13px;">
+                        <i class="fas fa-chevron-down" id="checklist-toggle-icon"></i>
+                    </button>
+                </div>
+                <div id="audit-checklist" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                    <!-- Rule 1: Completeness -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-blue); margin-bottom: 8px;">
+                            <i class="fas fa-check-square"></i> Completeness
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>name is present</li>
+                            <li>triggers[] has items</li>
+                            <li>quickReplies[] has items</li>
+                            <li>scenarioType is not UNKNOWN</li>
+                            <li>categories[] assigned</li>
+                            <li>behavior is set</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 2: Wiring -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-pink); margin-bottom: 8px;">
+                            <i class="fas fa-plug"></i> Wiring
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>actionType is valid</li>
+                            <li>flowId exists if START_FLOW</li>
+                            <li>transferTarget exists if TRANSFER</li>
+                            <li>bookingIntent matches type</li>
+                            <li>followUpMode is valid</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 3: Banned Phrases -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-red); margin-bottom: 8px;">
+                            <i class="fas fa-ban"></i> Banned Phrases
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>No chatbot words in quickReplies</li>
+                            <li>No help desk words in fullReplies</li>
+                            <li>No troubleshooting questions</li>
+                            <li>No "Got it", "No problem", etc.</li>
+                            <li>Checks ALL text fields</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 4: Structure -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-yellow); margin-bottom: 8px;">
+                            <i class="fas fa-sitemap"></i> Structure
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>quickReplies = classify (no booking)</li>
+                            <li>fullReplies = book (move forward)</li>
+                            <li>No stacked acknowledgments</li>
+                            <li>Only ONE question per reply</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 5: Personalization -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-green); margin-bottom: 8px;">
+                            <i class="fas fa-user"></i> Personalization
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>{name} placeholder used</li>
+                            <li>_noName variants exist</li>
+                            <li>No deprecated placeholders</li>
+                            <li>Consistent placeholder naming</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 6: Response Length -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-purple); margin-bottom: 8px;">
+                            <i class="fas fa-ruler"></i> Response Length
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>quickReplies ≤ 20 words</li>
+                            <li>fullReplies ≤ 25 words</li>
+                            <li>followUpMessages ≤ 20 words</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 7: Triggers -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-blue); margin-bottom: 8px;">
+                            <i class="fas fa-bolt"></i> Triggers
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>3-20 triggers per scenario</li>
+                            <li>No generic triggers ("yes", "ok")</li>
+                            <li>Has short (2-3 word) triggers</li>
+                            <li>Has long (5+ word) triggers</li>
+                            <li>regexTriggers[] are valid</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 8: Priority -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-yellow); margin-bottom: 8px;">
+                            <i class="fas fa-sort-amount-up"></i> Priority
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>EMERGENCY: 90-100</li>
+                            <li>BOOKING: 70-85</li>
+                            <li>TRANSFER: 80-90</li>
+                            <li>FAQ/BILLING: 40-60</li>
+                            <li>SMALL_TALK: -5 to 10</li>
+                            <li>minConfidence is reasonable</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 9: Full Scenario -->
+                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--accent-pink); margin-bottom: 8px;">
+                            <i class="fas fa-cogs"></i> Full Scenario Check
+                        </div>
+                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                            <li>status = "live"</li>
+                            <li>isActive = true</li>
+                            <li>followUpQuestionText when needed</li>
+                            <li>followUpMessages[] no banned phrases</li>
+                            <li>silencePolicy validated</li>
+                            <li>negativeTriggers don't conflict</li>
+                            <li>cooldownSeconds reasonable</li>
+                            <li>entityCapture[] valid types</li>
+                            <li>replyBundles have variety</li>
+                            <li>Regex has word boundaries</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Empty state (shown before audit) -->
             <div id="audit-empty" class="audit-empty">
                 <i class="fas fa-clipboard-check"></i>
-                <h3>No Audit Run Yet</h3>
-                <p>Click "Run Audit" to check your template against 8 quality rules:</p>
-                <ul style="text-align: left; display: inline-block; margin-top: 16px; color: var(--text-muted); font-size: 14px;">
-                    <li>Banned phrases (chatbot/helpdesk language)</li>
-                    <li>Personalization ({name} placeholder usage)</li>
-                    <li>Response length (word count limits)</li>
-                    <li>Structure (quick=classify, full=book)</li>
-                    <li>Triggers (count, generics, regex validity)</li>
-                    <li>Wiring (action types, flow connections)</li>
-                    <li>Completeness (required fields)</li>
-                    <li>Priority (ranges per scenario type)</li>
-                </ul>
+                <h3>Ready to Audit</h3>
+                <p>Click "Run Audit" to check all 73 scenarios against these 9 rules.</p>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px;">
+                    Zero LLM cost - all checks are deterministic.
+                </p>
             </div>
         </div><!-- END tab-audit -->
     </main>
@@ -1381,6 +1517,20 @@
         // ========================================
         // TAB SWITCHING
         // ========================================
+        function toggleChecklist() {
+            const checklist = document.getElementById('audit-checklist');
+            const icon = document.getElementById('checklist-toggle-icon');
+            if (checklist.style.display === 'none') {
+                checklist.style.display = 'grid';
+                icon.classList.remove('fa-chevron-right');
+                icon.classList.add('fa-chevron-down');
+            } else {
+                checklist.style.display = 'none';
+                icon.classList.remove('fa-chevron-down');
+                icon.classList.add('fa-chevron-right');
+            }
+        }
+        
         function switchTab(tabName) {
             // Update tab buttons
             document.querySelectorAll('.sub-tab').forEach(btn => {
