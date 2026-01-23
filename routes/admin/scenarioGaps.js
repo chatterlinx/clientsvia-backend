@@ -649,6 +649,152 @@ router.post('/:companyId/gaps/create', async (req, res) => {
 });
 
 /**
+ * GET /:companyId/scenarios
+ * 
+ * Get existing scenarios from the company's template for "Add to Existing" feature
+ */
+router.get('/:companyId/scenarios', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get the template for this company's trade
+        const template = await GlobalInstantResponseTemplate.findOne({
+            tradeKey: company.tradeKey || 'universal'
+        }).lean();
+        
+        if (!template) {
+            return res.json({ success: true, scenarios: [], categories: [] });
+        }
+        
+        // Extract scenarios with their categories
+        const scenarios = [];
+        const categoryNames = [];
+        
+        for (const category of (template.categories || [])) {
+            categoryNames.push(category.name);
+            
+            for (const scenario of (category.scenarios || [])) {
+                scenarios.push({
+                    id: scenario._id?.toString() || `${category.name}_${scenario.name}`,
+                    name: scenario.name,
+                    category: category.name,
+                    triggersCount: scenario.triggers?.length || 0,
+                    triggers: (scenario.triggers || []).slice(0, 5), // Preview first 5
+                    quickReply: scenario.quickReplies?.[0] || scenario.quickReply || ''
+                });
+            }
+        }
+        
+        // Sort by name
+        scenarios.sort((a, b) => a.name.localeCompare(b.name));
+        
+        res.json({
+            success: true,
+            templateId: template._id.toString(),
+            templateName: template.name,
+            categories: categoryNames,
+            scenarios
+        });
+        
+    } catch (error) {
+        logger.error('[SCENARIO GAPS] Error fetching scenarios', { error: error.message, companyId });
+        res.status(500).json({ error: 'Failed to fetch scenarios', details: error.message });
+    }
+});
+
+/**
+ * POST /:companyId/scenarios/add-triggers
+ * 
+ * Add triggers to an existing scenario (instead of creating new)
+ */
+router.post('/:companyId/scenarios/add-triggers', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenarioId, categoryName, scenarioName, newTriggers } = req.body;
+    
+    try {
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get the template
+        const template = await GlobalInstantResponseTemplate.findOne({
+            tradeKey: company.tradeKey || 'universal'
+        });
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Find the category and scenario
+        let found = false;
+        let addedCount = 0;
+        let existingTriggers = [];
+        
+        for (const category of (template.categories || [])) {
+            if (category.name !== categoryName) continue;
+            
+            for (const scenario of (category.scenarios || [])) {
+                const matchById = scenarioId && scenario._id?.toString() === scenarioId;
+                const matchByName = scenario.name === scenarioName;
+                
+                if (matchById || matchByName) {
+                    existingTriggers = scenario.triggers || [];
+                    
+                    // Add new triggers that don't already exist
+                    const existingSet = new Set(existingTriggers.map(t => t.toLowerCase()));
+                    
+                    for (const trigger of (newTriggers || [])) {
+                        const normalized = trigger.toLowerCase().trim();
+                        if (normalized && !existingSet.has(normalized)) {
+                            scenario.triggers.push(trigger.trim());
+                            existingSet.add(normalized);
+                            addedCount++;
+                        }
+                    }
+                    
+                    found = true;
+                    break;
+                }
+            }
+            if (found) break;
+        }
+        
+        if (!found) {
+            return res.status(404).json({ error: 'Scenario not found in template' });
+        }
+        
+        // Save template
+        template.markModified('categories');
+        await template.save();
+        
+        logger.info('[SCENARIO GAPS] Triggers added to existing scenario', {
+            companyId,
+            scenarioName,
+            categoryName,
+            addedCount,
+            totalTriggers: existingTriggers.length + addedCount
+        });
+        
+        res.json({
+            success: true,
+            message: `Added ${addedCount} new trigger${addedCount !== 1 ? 's' : ''} to "${scenarioName}"`,
+            addedCount,
+            totalTriggers: existingTriggers.length + addedCount
+        });
+        
+    } catch (error) {
+        logger.error('[SCENARIO GAPS] Error adding triggers', { error: error.message, companyId });
+        res.status(500).json({ error: 'Failed to add triggers', details: error.message });
+    }
+});
+
+/**
  * POST /:companyId/gaps/dismiss
  * 
  * Dismiss a gap (user doesn't want a scenario for this)

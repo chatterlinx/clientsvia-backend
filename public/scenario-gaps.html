@@ -555,6 +555,39 @@
             resize: vertical;
         }
         
+        .mode-selector {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        
+        .mode-btn {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .mode-btn:hover {
+            border-color: var(--accent-purple);
+            color: var(--text-primary);
+        }
+        
+        .mode-btn.active {
+            border-color: var(--accent-pink);
+            background: rgba(244, 114, 182, 0.15);
+            color: var(--accent-pink);
+        }
+        
         .triggers-list {
             display: flex;
             flex-wrap: wrap;
@@ -725,41 +758,72 @@
     <div class="modal-overlay" id="create-modal">
         <div class="modal">
             <div class="modal-header">
-                <h2><i class="fas fa-magic"></i> Create Scenario</h2>
+                <h2><i class="fas fa-magic"></i> <span id="modal-title">Create Scenario</span></h2>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
+                <!-- Mode Selector -->
                 <div class="form-group">
-                    <label class="form-label">Scenario Name <span class="badge">AI Suggested</span></label>
-                    <input type="text" class="form-input" id="scenario-name" placeholder="e.g., Duct Cleaning Price">
+                    <label class="form-label">What would you like to do?</label>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" id="mode-existing" onclick="setMode('existing')">
+                            <i class="fas fa-plus-circle"></i> Add to Existing Scenario
+                        </button>
+                        <button class="mode-btn" id="mode-new" onclick="setMode('new')">
+                            <i class="fas fa-file-plus"></i> Create New Scenario
+                        </button>
+                    </div>
                 </div>
                 
-                <div class="form-group">
-                    <label class="form-label">Category</label>
-                    <select class="form-input" id="scenario-category">
-                        <option value="FAQ">FAQ</option>
-                        <option value="Pricing">Pricing</option>
-                        <option value="Hours">Hours</option>
-                        <option value="Service Area">Service Area</option>
-                        <option value="Emergency">Emergency</option>
-                        <option value="Warranty">Warranty</option>
-                        <option value="Booking">Booking</option>
-                        <option value="Other">Other</option>
+                <!-- Existing Scenario Selector (shown in 'existing' mode) -->
+                <div class="form-group" id="existing-scenario-group">
+                    <label class="form-label">Select Existing Scenario</label>
+                    <select class="form-input" id="existing-scenario-select" onchange="onExistingScenarioChange()">
+                        <option value="">-- Loading scenarios... --</option>
                     </select>
+                    <p id="existing-scenario-info" style="font-size: 12px; color: var(--text-muted); margin-top: 8px;"></p>
                 </div>
                 
+                <!-- New Scenario Fields (shown in 'new' mode) -->
+                <div id="new-scenario-fields" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Scenario Name <span class="badge">AI Suggested</span></label>
+                        <input type="text" class="form-input" id="scenario-name" placeholder="e.g., Duct Cleaning Price">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <select class="form-input" id="scenario-category">
+                            <option value="FAQ">FAQ</option>
+                            <option value="Pricing">Pricing</option>
+                            <option value="Hours">Hours</option>
+                            <option value="Service Area">Service Area</option>
+                            <option value="Emergency">Emergency</option>
+                            <option value="Warranty">Warranty</option>
+                            <option value="Booking">Booking</option>
+                            <option value="Scheduling">Scheduling</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Triggers (always shown) -->
                 <div class="form-group">
-                    <label class="form-label">Triggers (phrases that match this scenario) <span class="badge">AI Suggested</span></label>
+                    <label class="form-label">
+                        <span id="triggers-label">New Triggers to Add</span>
+                        <span class="badge">AI Suggested</span>
+                    </label>
                     <input type="text" class="form-input" id="trigger-input" placeholder="Type and press Enter to add">
                     <div class="triggers-list" id="triggers-list"></div>
                 </div>
                 
-                <div class="form-group">
+                <!-- Quick Reply (only for new mode) -->
+                <div class="form-group" id="reply-group" style="display: none;">
                     <label class="form-label">Quick Reply <span class="badge">AI Suggested</span></label>
                     <textarea class="form-input form-textarea" id="scenario-reply" placeholder="The response the AI will give. Use {placeholders} for values like {price}"></textarea>
                 </div>
                 
-                <div class="advanced-toggle" onclick="toggleAdvanced()">
+                <div class="advanced-toggle" onclick="toggleAdvanced()" id="advanced-toggle-section" style="display: none;">
                     <i class="fas fa-chevron-right" id="advanced-icon"></i>
                     <span>Advanced Settings (30+ options - usually not needed)</span>
                 </div>
@@ -784,8 +848,8 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="createScenario()" id="create-btn">
-                    <i class="fas fa-magic"></i> Create Scenario
+                <button class="btn btn-primary" onclick="saveScenario()" id="create-btn">
+                    <i class="fas fa-plus"></i> <span id="save-btn-text">Add Triggers</span>
                 </button>
             </div>
         </div>
@@ -807,6 +871,9 @@
         let triggers = [];
         let negativeTriggers = [];
         let selectedDays = 14;
+        let currentMode = 'existing';  // 'existing' or 'new'
+        let existingScenarios = [];
+        let selectedExistingScenario = null;
 
         function getAuthToken() {
             return localStorage.getItem('adminToken')
@@ -1139,22 +1206,28 @@
             currentGap = gap;
             triggers = [];
             negativeTriggers = [];
+            selectedExistingScenario = null;
             
-            // Show modal with loading state
+            // Show modal
             document.getElementById('create-modal').classList.add('active');
-            document.getElementById('scenario-name').value = 'Loading...';
-            document.getElementById('scenario-reply').value = 'Generating AI suggestion...';
             
-            // Generate AI preview
+            // Set default mode to 'existing'
+            setMode('existing');
+            
+            // Load existing scenarios for dropdown
+            await loadExistingScenarios();
+            
+            // Generate AI preview for triggers
             const preview = await generatePreview(gap);
             
             if (preview) {
+                // Store for new mode
                 document.getElementById('scenario-name').value = preview.name || '';
                 document.getElementById('scenario-category').value = preview.category || 'FAQ';
                 document.getElementById('scenario-reply').value = preview.quickReply || '';
                 document.getElementById('scenario-full-reply').value = preview.fullReply || '';
                 
-                // Set triggers
+                // Set triggers (used for both modes)
                 triggers = preview.triggers || [gap.representative];
                 renderTriggers();
                 
@@ -1169,9 +1242,158 @@
             }
         }
         
+        async function loadExistingScenarios() {
+            const select = document.getElementById('existing-scenario-select');
+            select.innerHTML = '<option value="">-- Loading... --</option>';
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/scenarios`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load scenarios');
+                
+                const data = await response.json();
+                existingScenarios = data.scenarios || [];
+                
+                // Build dropdown grouped by category
+                let html = '<option value="">-- Select a scenario to add triggers to --</option>';
+                
+                // Group by category
+                const byCategory = {};
+                for (const s of existingScenarios) {
+                    if (!byCategory[s.category]) byCategory[s.category] = [];
+                    byCategory[s.category].push(s);
+                }
+                
+                for (const [category, scenarios] of Object.entries(byCategory)) {
+                    html += `<optgroup label="${escapeHtml(category)}">`;
+                    for (const s of scenarios) {
+                        html += `<option value="${escapeHtml(s.id)}" data-category="${escapeHtml(s.category)}" data-name="${escapeHtml(s.name)}">
+                            ${escapeHtml(s.name)} (${s.triggersCount} triggers)
+                        </option>`;
+                    }
+                    html += '</optgroup>';
+                }
+                
+                select.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error loading scenarios:', error);
+                select.innerHTML = '<option value="">-- Failed to load --</option>';
+            }
+        }
+        
+        function setMode(mode) {
+            currentMode = mode;
+            
+            // Update button states
+            document.getElementById('mode-existing').classList.toggle('active', mode === 'existing');
+            document.getElementById('mode-new').classList.toggle('active', mode === 'new');
+            
+            // Show/hide relevant sections
+            document.getElementById('existing-scenario-group').style.display = mode === 'existing' ? 'block' : 'none';
+            document.getElementById('new-scenario-fields').style.display = mode === 'new' ? 'block' : 'none';
+            document.getElementById('reply-group').style.display = mode === 'new' ? 'block' : 'none';
+            document.getElementById('advanced-toggle-section').style.display = mode === 'new' ? 'block' : 'none';
+            
+            // Update labels and button text
+            if (mode === 'existing') {
+                document.getElementById('modal-title').textContent = 'Add Triggers to Existing';
+                document.getElementById('triggers-label').textContent = 'New Triggers to Add';
+                document.getElementById('save-btn-text').textContent = 'Add Triggers';
+            } else {
+                document.getElementById('modal-title').textContent = 'Create New Scenario';
+                document.getElementById('triggers-label').textContent = 'Triggers (phrases that match)';
+                document.getElementById('save-btn-text').textContent = 'Create Scenario';
+            }
+        }
+        
+        function onExistingScenarioChange() {
+            const select = document.getElementById('existing-scenario-select');
+            const info = document.getElementById('existing-scenario-info');
+            const selectedId = select.value;
+            
+            if (!selectedId) {
+                selectedExistingScenario = null;
+                info.innerHTML = '';
+                return;
+            }
+            
+            selectedExistingScenario = existingScenarios.find(s => s.id === selectedId);
+            
+            if (selectedExistingScenario) {
+                const existingTriggers = selectedExistingScenario.triggers?.slice(0, 3).join(', ') || 'None';
+                info.innerHTML = `
+                    <strong>Current triggers:</strong> ${escapeHtml(existingTriggers)}${selectedExistingScenario.triggersCount > 3 ? '...' : ''}
+                    <br><strong>Quick reply:</strong> ${escapeHtml(selectedExistingScenario.quickReply?.substring(0, 80) || 'None')}${selectedExistingScenario.quickReply?.length > 80 ? '...' : ''}
+                `;
+            }
+        }
+        
+        async function saveScenario() {
+            if (currentMode === 'existing') {
+                await addTriggersToExisting();
+            } else {
+                await createScenario();
+            }
+        }
+        
+        async function addTriggersToExisting() {
+            if (!selectedExistingScenario) {
+                showToast('Please select an existing scenario', 'error');
+                return;
+            }
+            
+            if (triggers.length === 0) {
+                showToast('Please add at least one trigger', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('create-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/scenarios/add-triggers`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scenarioId: selectedExistingScenario.id,
+                        categoryName: selectedExistingScenario.category,
+                        scenarioName: selectedExistingScenario.name,
+                        newTriggers: triggers
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.details || data.error || 'Failed to add triggers');
+                }
+                
+                closeModal();
+                showToast(data.message || `Added ${data.addedCount} triggers!`, 'success');
+                loadGaps();
+                
+            } catch (error) {
+                console.error('Error adding triggers:', error);
+                showToast(`Failed: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-plus"></i> <span id="save-btn-text">Add Triggers</span>';
+            }
+        }
+        
         function closeModal() {
             document.getElementById('create-modal').classList.remove('active');
             currentGap = null;
+            selectedExistingScenario = null;
         }
         
         function toggleAdvanced() {
