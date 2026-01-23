@@ -441,6 +441,225 @@ const RULE_CATEGORIES = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 🎯 MASTER SETTINGS REGISTRY - SINGLE SOURCE OF TRUTH
+// ═══════════════════════════════════════════════════════════════════════════════
+// 
+// This registry tracks ALL scenario settings and which systems use them:
+// - AUDIT: Does the audit system check this setting?
+// - GAP: Does gap generation create this setting?
+// - AGENT: Does the runtime agent use this setting?
+// 
+// ⚠️ If AUDIT=true but AGENT=false, we're checking something that doesn't matter
+// ⚠️ If GAP=true but AGENT=false, we're generating something that gets ignored
+// ⚠️ ALL THREE SHOULD MATCH for every important setting
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const SCENARIO_SETTINGS_REGISTRY = {
+    // ============================================
+    // IDENTITY & LIFECYCLE (8 settings)
+    // ============================================
+    scenarioId:       { audit: true,  gap: true,  agent: true,  description: 'Unique scenario identifier' },
+    version:          { audit: false, gap: false, agent: false, description: 'Version number for rollback' },
+    status:           { audit: true,  gap: true,  agent: true,  description: 'draft/live/archived - only live scenarios match' },
+    name:             { audit: true,  gap: true,  agent: true,  description: 'Human-readable scenario name' },
+    isActive:         { audit: true,  gap: true,  agent: true,  description: 'Quick on/off toggle' },
+    scope:            { audit: false, gap: false, agent: true,  description: 'GLOBAL vs COMPANY scope' },
+    ownerCompanyId:   { audit: false, gap: false, agent: true,  description: 'Company that owns this scenario' },
+    notes:            { audit: false, gap: false, agent: false, description: 'Admin notes (not used by AI)' },
+    
+    // ============================================
+    // CATEGORIZATION (4 settings)
+    // ============================================
+    categories:       { audit: true,  gap: true,  agent: true,  description: 'Category tags for organization' },
+    scenarioType:     { audit: true,  gap: true,  agent: true,  description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy' },
+    priority:         { audit: true,  gap: true,  agent: true,  description: 'Tie-breaker when multiple scenarios match' },
+    cooldownSeconds:  { audit: true,  gap: true,  agent: true,  description: 'Prevents scenario from firing again within N seconds' },
+    
+    // ============================================
+    // MATCHING - TRIGGERS (7 settings)
+    // ============================================
+    triggers:         { audit: true,  gap: true,  agent: true,  description: 'Plain phrases for BM25 keyword matching' },
+    regexTriggers:    { audit: true,  gap: true,  agent: true,  description: 'Advanced pattern matching (regex)' },
+    negativeTriggers: { audit: true,  gap: true,  agent: true,  description: 'Phrases that PREVENT matching' },
+    keywords:         { audit: true,  gap: false, agent: true,  description: 'Fast Tier-1 matching keywords' },
+    negativeKeywords: { audit: true,  gap: false, agent: true,  description: 'Keywords that veto matches' },
+    embeddingVector:  { audit: false, gap: false, agent: true,  description: 'Precomputed semantic embedding' },
+    contextWeight:    { audit: false, gap: false, agent: true,  description: 'Multiplier for final match score' },
+    
+    // ============================================
+    // CONFIDENCE & PRIORITY (2 settings)
+    // ============================================
+    minConfidence:    { audit: true,  gap: true,  agent: true,  description: 'Scenario-level confidence threshold' },
+    // priority is above in categorization
+    
+    // ============================================
+    // REPLIES - CORE (9 settings)
+    // ============================================
+    quickReplies:     { audit: true,  gap: true,  agent: true,  description: 'Short/quick response variations' },
+    fullReplies:      { audit: true,  gap: true,  agent: true,  description: 'Full/detailed response variations' },
+    quickReplies_noName: { audit: true,  gap: true,  agent: true,  description: 'Quick replies without {name} for unknown callers' },
+    fullReplies_noName:  { audit: true,  gap: true,  agent: true,  description: 'Full replies without {name} for unknown callers' },
+    replyStrategy:    { audit: true,  gap: false, agent: true,  description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc' },
+    replySelection:   { audit: false, gap: false, agent: true,  description: 'sequential/random/bandit selection' },
+    replyBundles:     { audit: false, gap: false, agent: false, description: 'Reply bundle system (future)' },
+    replyPolicy:      { audit: false, gap: false, agent: false, description: 'ROTATE_PER_CALLER/etc (future)' },
+    
+    // ============================================
+    // FOLLOW-UP BEHAVIOR (5 settings)
+    // ============================================
+    followUpMode:     { audit: true,  gap: true,  agent: true,  description: 'NONE/ASK_FOLLOWUP_QUESTION/ASK_IF_BOOK/TRANSFER' },
+    followUpQuestionText: { audit: true,  gap: true,  agent: true,  description: 'Text to ask for follow-up' },
+    followUpPrompts:  { audit: true,  gap: false, agent: false, description: 'Follow-up prompts (future)' },
+    followUpFunnel:   { audit: false, gap: false, agent: false, description: 'Re-engagement prompt (future)' },
+    transferTarget:   { audit: true,  gap: false, agent: true,  description: 'Queue/extension for transfer' },
+    
+    // ============================================
+    // WIRING - ACTION (5 settings)
+    // ============================================
+    actionType:       { audit: true,  gap: true,  agent: true,  description: 'REPLY_ONLY/START_FLOW/REQUIRE_BOOKING/TRANSFER' },
+    flowId:           { audit: true,  gap: false, agent: true,  description: 'Dynamic Flow to execute if START_FLOW' },
+    bookingIntent:    { audit: true,  gap: true,  agent: true,  description: 'true = caller wants to book' },
+    requiredSlots:    { audit: false, gap: false, agent: true,  description: 'Slots to collect for booking' },
+    stopRouting:      { audit: false, gap: false, agent: true,  description: 'Stop evaluating other scenarios after match' },
+    
+    // ============================================
+    // ENTITY CAPTURE (3 settings)
+    // ============================================
+    entityCapture:    { audit: true,  gap: true,  agent: false, description: '⚠️ NOT IMPLEMENTED AT RUNTIME - entities to extract' },
+    entityValidation: { audit: true,  gap: false, agent: false, description: '⚠️ NOT IMPLEMENTED - validation rules per entity' },
+    dynamicVariables: { audit: true,  gap: true,  agent: true,  description: 'Variable fallbacks when entity missing' },
+    
+    // ============================================
+    // BEHAVIOR & VOICE (4 settings)
+    // ============================================
+    behavior:         { audit: true,  gap: true,  agent: false, description: '⚠️ NOT IMPLEMENTED AT RUNTIME - AI personality' },
+    toneLevel:        { audit: false, gap: false, agent: false, description: 'DEPRECATED - use behavior instead' },
+    ttsOverride:      { audit: true,  gap: false, agent: true,  description: 'pitch/rate/volume overrides for TTS' },
+    channel:          { audit: true,  gap: true,  agent: true,  description: 'voice/sms/chat/any channel restriction' },
+    
+    // ============================================
+    // TIMING & SILENCE (2 settings)
+    // ============================================
+    timedFollowUp:    { audit: true,  gap: false, agent: true,  description: 'Check-in after delay (enabled/delay/messages)' },
+    silencePolicy:    { audit: true,  gap: false, agent: true,  description: 'Action after consecutive silent turns' },
+    
+    // ============================================
+    // ACTION HOOKS (2 settings)
+    // ============================================
+    actionHooks:      { audit: true,  gap: false, agent: true,  description: 'References to GlobalActionHook hookIds' },
+    handoffPolicy:    { audit: true,  gap: true,  agent: true,  description: 'When to escalate to human' },
+    
+    // ============================================
+    // STATE MACHINE (2 settings)
+    // ============================================
+    preconditions:    { audit: false, gap: false, agent: true,  description: 'Conditions for scenario to match' },
+    effects:          { audit: false, gap: false, agent: true,  description: 'State changes after scenario executes' },
+    
+    // ============================================
+    // AI INTELLIGENCE (4 settings)
+    // ============================================
+    qnaPairs:         { audit: false, gap: false, agent: true,  description: 'Training data for semantic matching' },
+    testPhrases:      { audit: false, gap: false, agent: false, description: 'Validation test cases' },
+    examples:         { audit: false, gap: false, agent: false, description: 'Sample conversations for admin' },
+    escalationFlags:  { audit: false, gap: false, agent: true,  description: 'Triggers for human handoff' },
+    
+    // ============================================
+    // MULTILINGUAL (1 setting)
+    // ============================================
+    language:         { audit: false, gap: false, agent: true,  description: 'auto/en/es/fr language setting' }
+};
+
+/**
+ * Get settings count summary
+ * @returns {Object} { total, audited, gapGenerated, agentUsed, mismatches }
+ */
+function getSettingsCount() {
+    const settings = Object.entries(SCENARIO_SETTINGS_REGISTRY);
+    const total = settings.length;
+    const audited = settings.filter(([_, v]) => v.audit).length;
+    const gapGenerated = settings.filter(([_, v]) => v.gap).length;
+    const agentUsed = settings.filter(([_, v]) => v.agent).length;
+    
+    // Find mismatches: settings where audit or gap is true but agent is false
+    const mismatches = settings.filter(([_, v]) => (v.audit || v.gap) && !v.agent);
+    
+    // Find critical settings: used by agent but not audited
+    const unaudited = settings.filter(([_, v]) => v.agent && !v.audit);
+    
+    return {
+        total,
+        audited,
+        gapGenerated,
+        agentUsed,
+        mismatches: mismatches.map(([k, v]) => ({ setting: k, ...v })),
+        unaudited: unaudited.map(([k, v]) => ({ setting: k, ...v }))
+    };
+}
+
+/**
+ * Get all settings by category
+ * @returns {Object} Settings grouped by their section
+ */
+function getSettingsByCategory() {
+    const categories = {
+        'Identity & Lifecycle': ['scenarioId', 'version', 'status', 'name', 'isActive', 'scope', 'ownerCompanyId', 'notes'],
+        'Categorization': ['categories', 'scenarioType', 'priority', 'cooldownSeconds'],
+        'Matching - Triggers': ['triggers', 'regexTriggers', 'negativeTriggers', 'keywords', 'negativeKeywords', 'embeddingVector', 'contextWeight'],
+        'Confidence & Priority': ['minConfidence'],
+        'Replies - Core': ['quickReplies', 'fullReplies', 'quickReplies_noName', 'fullReplies_noName', 'replyStrategy', 'replySelection', 'replyBundles', 'replyPolicy'],
+        'Follow-Up Behavior': ['followUpMode', 'followUpQuestionText', 'followUpPrompts', 'followUpFunnel', 'transferTarget'],
+        'Wiring - Action': ['actionType', 'flowId', 'bookingIntent', 'requiredSlots', 'stopRouting'],
+        'Entity Capture': ['entityCapture', 'entityValidation', 'dynamicVariables'],
+        'Behavior & Voice': ['behavior', 'toneLevel', 'ttsOverride', 'channel'],
+        'Timing & Silence': ['timedFollowUp', 'silencePolicy'],
+        'Action Hooks': ['actionHooks', 'handoffPolicy'],
+        'State Machine': ['preconditions', 'effects'],
+        'AI Intelligence': ['qnaPairs', 'testPhrases', 'examples', 'escalationFlags'],
+        'Multilingual': ['language']
+    };
+    
+    const result = {};
+    for (const [category, settingNames] of Object.entries(categories)) {
+        result[category] = settingNames.map(name => ({
+            name,
+            ...SCENARIO_SETTINGS_REGISTRY[name]
+        }));
+    }
+    return result;
+}
+
+/**
+ * Validate that a setting is properly implemented
+ * @param {string} settingName - Name of the setting
+ * @returns {Object} { valid, issues }
+ */
+function validateSettingImplementation(settingName) {
+    const setting = SCENARIO_SETTINGS_REGISTRY[settingName];
+    if (!setting) {
+        return { valid: false, issues: ['Setting not found in registry'] };
+    }
+    
+    const issues = [];
+    
+    // Warning: Audited/Generated but not used by agent
+    if ((setting.audit || setting.gap) && !setting.agent) {
+        if (!setting.description.includes('NOT IMPLEMENTED')) {
+            issues.push(`⚠️ ${settingName} is audited/generated but agent doesn't use it`);
+        }
+    }
+    
+    // Warning: Used by agent but not audited
+    if (setting.agent && !setting.audit) {
+        issues.push(`⚠️ ${settingName} is used by agent but not audited`);
+    }
+    
+    return {
+        valid: issues.length === 0,
+        issues
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -486,5 +705,11 @@ module.exports = {
     
     // Meta
     SEVERITY,
-    RULE_CATEGORIES
+    RULE_CATEGORIES,
+    
+    // 🎯 MASTER SETTINGS REGISTRY - Single source of truth
+    SCENARIO_SETTINGS_REGISTRY,
+    getSettingsCount,
+    getSettingsByCategory,
+    validateSettingImplementation
 };

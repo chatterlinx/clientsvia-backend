@@ -1916,6 +1916,53 @@ router.get('/:companyId/audit/rules', async (req, res) => {
 });
 
 /**
+ * GET /:companyId/audit/settings-registry
+ * 
+ * Get the MASTER SETTINGS REGISTRY showing what each system uses
+ * This is the single source of truth for settings coverage
+ */
+router.get('/:companyId/audit/settings-registry', async (req, res) => {
+    try {
+        const { 
+            SCENARIO_SETTINGS_REGISTRY,
+            getSettingsCount,
+            getSettingsByCategory 
+        } = require('../../services/scenarioAudit/constants');
+        
+        const counts = getSettingsCount();
+        const byCategory = getSettingsByCategory();
+        
+        res.json({
+            success: true,
+            summary: {
+                totalSettings: counts.total,
+                auditedSettings: counts.audited,
+                gapGeneratedSettings: counts.gapGenerated,
+                agentUsedSettings: counts.agentUsed,
+                coverage: {
+                    auditCoverage: `${Math.round(counts.audited / counts.total * 100)}%`,
+                    gapCoverage: `${Math.round(counts.gapGenerated / counts.total * 100)}%`,
+                    agentCoverage: `${Math.round(counts.agentUsed / counts.total * 100)}%`
+                }
+            },
+            warnings: {
+                // Settings audited/generated but NOT used by agent (waste of effort)
+                notUsedByAgent: counts.mismatches,
+                notUsedByAgentCount: counts.mismatches.length,
+                // Settings used by agent but NOT audited (potential quality gap)
+                unaudited: counts.unaudited,
+                unauditedCount: counts.unaudited.length
+            },
+            settingsByCategory: byCategory,
+            allSettings: SCENARIO_SETTINGS_REGISTRY
+        });
+    } catch (error) {
+        logger.error('[AUDIT] Error getting settings registry', { error: error.message });
+        res.status(500).json({ error: 'Failed to get settings registry', details: error.message });
+    }
+});
+
+/**
  * POST /:companyId/audit/run
  * 
  * Run full audit on company's template

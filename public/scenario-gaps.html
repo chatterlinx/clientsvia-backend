@@ -1244,6 +1244,81 @@
                 </div>
             </div>
             
+            <!-- 🎯 SETTINGS COVERAGE REGISTRY -->
+            <div id="settings-registry" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid var(--accent-purple); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: #fff;">
+                        <i class="fas fa-clipboard-check" style="color: var(--accent-purple);"></i>
+                        Settings Coverage Registry
+                        <span style="font-size: 12px; background: var(--accent-purple); padding: 2px 8px; border-radius: 12px;">SINGLE SOURCE OF TRUTH</span>
+                    </h3>
+                    <button onclick="loadSettingsRegistry()" style="background: var(--accent-purple); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+                
+                <!-- Summary Counts -->
+                <div id="registry-summary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+                    <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: bold; color: #fff;" id="reg-total">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Total Settings</div>
+                    </div>
+                    <div style="background: rgba(74,144,226,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-blue);">
+                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-blue);" id="reg-audit">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Audit Checks</div>
+                    </div>
+                    <div style="background: rgba(168,85,247,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-purple);">
+                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-purple);" id="reg-gap">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Gap Generates</div>
+                    </div>
+                    <div style="background: rgba(16,185,129,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-green);">
+                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-green);" id="reg-agent">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Agent Uses</div>
+                    </div>
+                </div>
+                
+                <!-- Warnings -->
+                <div id="registry-warnings" style="display: none; margin-bottom: 16px;">
+                    <div style="background: rgba(239,68,68,0.15); border: 1px solid var(--accent-red); border-radius: 8px; padding: 12px;">
+                        <div style="font-weight: 600; color: var(--accent-red); margin-bottom: 8px;">
+                            <i class="fas fa-exclamation-triangle"></i> Implementation Gaps
+                        </div>
+                        <div id="registry-warnings-content" style="font-size: 12px; color: #fca5a5;"></div>
+                    </div>
+                </div>
+                
+                <!-- Coverage Bars -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">
+                            <span>Audit Coverage</span>
+                            <span id="reg-audit-pct">--%</span>
+                        </div>
+                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                            <div id="reg-audit-bar" style="height: 100%; width: 0%; background: var(--accent-blue); transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">
+                            <span>Gap Coverage</span>
+                            <span id="reg-gap-pct">--%</span>
+                        </div>
+                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                            <div id="reg-gap-bar" style="height: 100%; width: 0%; background: var(--accent-purple); transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">
+                            <span>Agent Coverage</span>
+                            <span id="reg-agent-pct">--%</span>
+                        </div>
+                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                            <div id="reg-agent-bar" style="height: 100%; width: 0%; background: var(--accent-green); transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Audit Rules Checklist (always visible) -->
             <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -1659,7 +1734,94 @@
                 content.classList.remove('active');
             });
             document.getElementById(`tab-${tabName}`).classList.add('active');
+            
+            // Load settings registry when switching to audit tab
+            if (tabName === 'audit') {
+                loadSettingsRegistry();
+            }
         }
+        
+        // ========================================
+        // SETTINGS REGISTRY FUNCTIONS
+        // ========================================
+        async function loadSettingsRegistry() {
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/settings-registry`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load registry');
+                
+                const data = await response.json();
+                
+                // Update counts
+                document.getElementById('reg-total').textContent = data.summary.totalSettings;
+                document.getElementById('reg-audit').textContent = data.summary.auditedSettings;
+                document.getElementById('reg-gap').textContent = data.summary.gapGeneratedSettings;
+                document.getElementById('reg-agent').textContent = data.summary.agentUsedSettings;
+                
+                // Update coverage percentages and bars
+                const auditPct = parseInt(data.summary.coverage.auditCoverage);
+                const gapPct = parseInt(data.summary.coverage.gapCoverage);
+                const agentPct = parseInt(data.summary.coverage.agentCoverage);
+                
+                document.getElementById('reg-audit-pct').textContent = data.summary.coverage.auditCoverage;
+                document.getElementById('reg-gap-pct').textContent = data.summary.coverage.gapCoverage;
+                document.getElementById('reg-agent-pct').textContent = data.summary.coverage.agentCoverage;
+                
+                document.getElementById('reg-audit-bar').style.width = `${auditPct}%`;
+                document.getElementById('reg-gap-bar').style.width = `${gapPct}%`;
+                document.getElementById('reg-agent-bar').style.width = `${agentPct}%`;
+                
+                // Show warnings if any
+                const warningsDiv = document.getElementById('registry-warnings');
+                const warningsContent = document.getElementById('registry-warnings-content');
+                
+                if (data.warnings.notUsedByAgentCount > 0 || data.warnings.unauditedCount > 0) {
+                    warningsDiv.style.display = 'block';
+                    let html = '';
+                    
+                    if (data.warnings.notUsedByAgentCount > 0) {
+                        html += `<div style="margin-bottom: 8px;">
+                            <strong>⚠️ ${data.warnings.notUsedByAgentCount} settings audited/generated but NOT used by agent:</strong>
+                            <div style="margin-top: 4px; padding-left: 12px;">
+                                ${data.warnings.notUsedByAgent.map(s => 
+                                    `<div>• <code style="background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px;">${s.setting}</code> - ${s.description}</div>`
+                                ).join('')}
+                            </div>
+                        </div>`;
+                    }
+                    
+                    if (data.warnings.unauditedCount > 0) {
+                        html += `<div>
+                            <strong>⚠️ ${data.warnings.unauditedCount} settings used by agent but NOT audited:</strong>
+                            <div style="margin-top: 4px; padding-left: 12px;">
+                                ${data.warnings.unaudited.slice(0, 5).map(s => 
+                                    `<div>• <code style="background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px;">${s.setting}</code> - ${s.description}</div>`
+                                ).join('')}
+                                ${data.warnings.unauditedCount > 5 ? `<div style="color: var(--text-muted);">...and ${data.warnings.unauditedCount - 5} more</div>` : ''}
+                            </div>
+                        </div>`;
+                    }
+                    
+                    warningsContent.innerHTML = html;
+                } else {
+                    warningsDiv.style.display = 'none';
+                }
+                
+            } catch (error) {
+                console.error('Error loading settings registry:', error);
+            }
+        }
+        
+        // Load registry when audit tab opens
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if we're on audit tab
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('tab') === 'audit') {
+                loadSettingsRegistry();
+            }
+        });
         
         // ========================================
         // AUDIT FUNCTIONS
