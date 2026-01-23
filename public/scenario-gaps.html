@@ -1483,6 +1483,49 @@
                         <div id="preview-funnel" style="color: #8b5cf6; font-style: italic;"></div>
                     </div>
                     
+                    <!-- Advanced Settings Section -->
+                    <div class="preview-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                        <div class="preview-label" style="margin-bottom: 12px;">⚙️ Advanced Settings</div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Min Confidence</div>
+                                <div id="preview-confidence" style="font-weight: 600; color: var(--accent-blue);">--</div>
+                            </div>
+                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Follow-Up Mode</div>
+                                <div id="preview-followup-mode" style="font-weight: 600; color: var(--accent-purple);">--</div>
+                            </div>
+                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Action Type</div>
+                                <div id="preview-action-type" style="font-weight: 600; color: var(--accent-pink);">--</div>
+                            </div>
+                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Booking Intent</div>
+                                <div id="preview-booking-intent" style="font-weight: 600;">--</div>
+                            </div>
+                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Cooldown</div>
+                                <div id="preview-cooldown" style="font-weight: 600;">--</div>
+                            </div>
+                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Handoff Policy</div>
+                                <div id="preview-handoff" style="font-weight: 600;">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Entity Capture -->
+                    <div class="preview-section" id="entity-section" style="display: none;">
+                        <div class="preview-label">🎯 Entity Capture</div>
+                        <div id="preview-entities" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                    </div>
+                    
+                    <!-- _noName Variants indicator -->
+                    <div class="preview-section" id="noname-section" style="display: none;">
+                        <div class="preview-label">📝 Name Variants</div>
+                        <div id="preview-noname" style="font-size: 13px; color: var(--accent-green);"></div>
+                    </div>
+                    
                     <!-- Info box -->
                     <div class="info-box">
                         <i class="fas fa-info-circle"></i>
@@ -2495,6 +2538,50 @@
                     funnelSection.style.display = 'none';
                 }
                 
+                // Advanced Settings
+                document.getElementById('preview-confidence').textContent = 
+                    preview.minConfidence !== undefined ? (preview.minConfidence * 100).toFixed(0) + '%' : '60%';
+                document.getElementById('preview-followup-mode').textContent = 
+                    preview.followUpMode || 'NONE';
+                document.getElementById('preview-action-type').textContent = 
+                    preview.actionType || 'REPLY_ONLY';
+                document.getElementById('preview-booking-intent').textContent = 
+                    preview.bookingIntent ? '✅ Yes' : '❌ No';
+                document.getElementById('preview-booking-intent').style.color = 
+                    preview.bookingIntent ? 'var(--accent-green)' : 'var(--text-muted)';
+                document.getElementById('preview-cooldown').textContent = 
+                    (preview.cooldownSeconds || 0) + 's';
+                document.getElementById('preview-handoff').textContent = 
+                    preview.handoffPolicy || 'low_confidence';
+                
+                // Entity Capture (if any)
+                const entitySection = document.getElementById('entity-section');
+                const entityEl = document.getElementById('preview-entities');
+                const entities = preview.entityCapture || [];
+                if (entities.length > 0) {
+                    entitySection.style.display = 'block';
+                    entityEl.innerHTML = entities.map(e => 
+                        `<span style="background: var(--accent-purple); color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px;">${escapeHtml(e)}</span>`
+                    ).join('');
+                } else {
+                    entitySection.style.display = 'none';
+                }
+                
+                // _noName Variants indicator
+                const nonameSection = document.getElementById('noname-section');
+                const nonameEl = document.getElementById('preview-noname');
+                const hasNoNameQuick = preview.quickReplies_noName && preview.quickReplies_noName.length > 0;
+                const hasNoNameFull = preview.fullReplies_noName && preview.fullReplies_noName.length > 0;
+                if (hasNoNameQuick || hasNoNameFull) {
+                    nonameSection.style.display = 'block';
+                    nonameEl.innerHTML = `
+                        <span>✅ quickReplies_noName: ${hasNoNameQuick ? preview.quickReplies_noName.length + ' variants' : '❌ missing'}</span><br>
+                        <span>✅ fullReplies_noName: ${hasNoNameFull ? preview.fullReplies_noName.length + ' variants' : '❌ missing'}</span>
+                    `;
+                } else {
+                    nonameSection.style.display = 'none';
+                }
+                
             } else {
                 // Fallback display
                 document.getElementById('preview-name').textContent = gap.representative.substring(0, 50);
@@ -2508,6 +2595,17 @@
                 ).join('') || `<span class="trigger-tag">${escapeHtml(gap.representative)}</span>`;
                 document.getElementById('preview-quick-replies').innerHTML = '<div class="preview-reply" style="background: #10b981; color: white; padding: 12px; border-radius: 8px;">I can help with that. Let me get more information.</div>';
                 document.getElementById('preview-full-replies').innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
+                
+                // Advanced Settings fallback
+                document.getElementById('preview-confidence').textContent = '60%';
+                document.getElementById('preview-followup-mode').textContent = 'NONE';
+                document.getElementById('preview-action-type').textContent = 'REPLY_ONLY';
+                document.getElementById('preview-booking-intent').textContent = '❌ No';
+                document.getElementById('preview-booking-intent').style.color = 'var(--text-muted)';
+                document.getElementById('preview-cooldown').textContent = '0s';
+                document.getElementById('preview-handoff').textContent = 'low_confidence';
+                document.getElementById('entity-section').style.display = 'none';
+                document.getElementById('noname-section').style.display = 'none';
             }
         }
         
