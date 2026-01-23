@@ -12240,6 +12240,44 @@ Higher = detailed, thorough scenarios (more context)
                 const notesInput = document.getElementById('scenario-notes');
                 if (notesInput && p.notes) notesInput.value = p.notes;
                 
+                // ═══════════════════════════════════════════════════════════════
+                // ADVANCED SETTINGS (AI-generated)
+                // ═══════════════════════════════════════════════════════════════
+                
+                // Follow-Up Messages (silence handlers)
+                const timedMessagesTextarea = document.getElementById('scenario-timed-messages');
+                if (timedMessagesTextarea && p.followUpMessages) {
+                    timedMessagesTextarea.value = arrayToLines(p.followUpMessages);
+                }
+                
+                // Cooldown
+                const cooldownInput = document.getElementById('scenario-cooldown');
+                if (cooldownInput && typeof p.cooldown === 'number') {
+                    cooldownInput.value = p.cooldown;
+                }
+                
+                // Handoff Policy
+                const handoffSelect = document.getElementById('scenario-handoff-policy');
+                if (handoffSelect && p.handoffPolicy) {
+                    handoffSelect.value = p.handoffPolicy;
+                }
+                
+                // Action Hooks (comma-separated)
+                const actionHooksInput = document.getElementById('scenario-action-hooks');
+                if (actionHooksInput && p.actionHooks) {
+                    actionHooksInput.value = Array.isArray(p.actionHooks) ? p.actionHooks.join(', ') : p.actionHooks;
+                }
+                
+                // Entity Validation (JSON)
+                const entityValidationTextarea = document.getElementById('scenario-entity-validation');
+                if (entityValidationTextarea && p.entityValidation) {
+                    try {
+                        entityValidationTextarea.value = JSON.stringify(p.entityValidation, null, 2);
+                    } catch (e) {
+                        console.warn('Could not stringify entityValidation:', e);
+                    }
+                }
+                
                 // Show success message
                 console.log('✅ [PREFILL] Form auto-filled with AI-generated scenario data:', {
                     name: p.name,

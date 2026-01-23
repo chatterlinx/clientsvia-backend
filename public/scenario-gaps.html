@@ -1356,6 +1356,14 @@
                 templateVariables: p.templateVariables || ['name=valued customer'],
                 notes: p.notes || `Created from Scenario Gaps. Gap: "${currentGap?.representative}"`,
                 suggestedPlaceholders: p.suggestedPlaceholders || [],
+                
+                // 🎯 ADVANCED SETTINGS (AI-generated)
+                followUpMessages: p.followUpMessages || ['Are you still there, {name}?', 'Just checking in...'],
+                cooldown: p.cooldown || 0,
+                handoffPolicy: p.handoffPolicy || 'low_confidence',
+                actionHooks: p.actionHooks || [],
+                entityValidation: p.entityValidation || null,
+                
                 source: 'scenario-gaps',
                 sourceGap: currentGap?.representative
             };

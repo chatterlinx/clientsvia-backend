@@ -333,7 +333,22 @@ OUTPUT FORMAT (JSON only, no markdown):
     "suggestedPlaceholders": [
         {"key": "name", "description": "Caller's name (auto-captured)", "exampleValue": "Mark"},
         {"key": "companyName", "description": "Your business name", "exampleValue": "${company.companyName || 'Our Company'}"}
-    ]
+    ],
+    
+    "followUpMessages": [
+        "Are you still there, {name}?",
+        "Just checking in - did that answer your question?"
+    ],
+    
+    "cooldown": 0,
+    "handoffPolicy": "low_confidence|always|never",
+    
+    "actionHooks": ["offer_scheduling", "log_inquiry"],
+    
+    "entityValidation": {
+        "phone": {"pattern": "^[0-9]{10}$", "prompt": "Could you give me a 10-digit phone number, {name}?"},
+        "email": {"pattern": "@", "prompt": "What's your email address?"}
+    }
 }
 
 ENTITY CAPTURE GUIDE (what to extract from caller speech):
@@ -369,7 +384,35 @@ SCENARIO TYPE GUIDE:
 FOLLOW-UP MODE GUIDE:
 - NONE: Just answer, let conversation continue
 - ASK_IF_BOOK: After answering, offer to schedule
-- ASK_FOLLOWUP_QUESTION: Ask a specific follow-up`;
+- ASK_FOLLOWUP_QUESTION: Ask a specific follow-up
+
+ADVANCED SETTINGS GUIDE:
+
+followUpMessages: Silence handlers - what to say if caller goes quiet
+- Default: ["Are you still there, {name}?", "Just checking in..."]
+- Emergency: ["I'm still here to help - are you okay?"]
+
+cooldown: Seconds before scenario can fire again (spam prevention)
+- Most scenarios: 0 (no cooldown)
+- Greeting/small talk: 30-60 seconds
+- Emergency: 0 (always allow)
+
+handoffPolicy: When to transfer to human
+- "low_confidence": Only when AI is unsure (DEFAULT for most)
+- "always": Always offer human option (billing, complaints)
+- "never": AI handles fully (simple FAQ, greetings)
+
+actionHooks: System actions to trigger (comma-separated)
+- offer_scheduling: Proactively offer to book
+- escalate_to_human: Flag for manager review
+- log_complaint: Record as complaint
+- send_confirmation: Send SMS confirmation
+- check_availability: Query calendar
+
+entityValidation: JSON validation rules for captured entities
+- phone: {"pattern": "^[0-9]{10}$", "prompt": "Could you give me a 10-digit number?"}
+- email: {"pattern": "@", "prompt": "What's your email address?"}
+- Only include if scenario captures these entities`;
 
     try {
         const response = await openai.chat.completions.create({
