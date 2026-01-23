@@ -997,6 +997,95 @@
             border-radius: 6px;
         }
         
+        .violation-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .fix-btn {
+            padding: 6px 14px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            border: none;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        
+        .fix-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 10px rgba(167, 139, 250, 0.4);
+        }
+        
+        .fix-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .fix-preview {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--accent-purple);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+        }
+        
+        .fix-preview-label {
+            font-size: 11px;
+            color: var(--accent-purple);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .fix-preview-content {
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--accent-green);
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        
+        .fix-preview-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        
+        .apply-fix-btn {
+            padding: 8px 16px;
+            background: var(--accent-green);
+            border: none;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .apply-fix-btn:hover {
+            background: #22c55e;
+        }
+        
+        .cancel-fix-btn {
+            padding: 8px 16px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
         .audit-empty {
             text-align: center;
             padding: 60px 20px;
@@ -1399,9 +1488,12 @@
             const severityOrder = { error: 0, warning: 1, info: 2 };
             allViolations.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
             
+            // Store violations for fix functionality
+            window.auditViolations = allViolations;
+            
             // Render violations (limit to first 50)
-            violationsList.innerHTML = allViolations.slice(0, 50).map(v => `
-                <div class="violation-card ${v.severity}">
+            violationsList.innerHTML = allViolations.slice(0, 50).map((v, idx) => `
+                <div class="violation-card ${v.severity}" id="violation-${idx}">
                     <div class="violation-header">
                         <span class="violation-scenario">${escapeHtml(v.scenarioName)}</span>
                         <span class="violation-severity ${v.severity}">${v.severity}</span>
@@ -1409,6 +1501,13 @@
                     <div class="violation-message">${escapeHtml(v.message)}</div>
                     <span class="violation-field">${escapeHtml(v.field)}</span>
                     ${v.suggestion ? `<div class="violation-suggestion"><i class="fas fa-lightbulb"></i> ${escapeHtml(v.suggestion)}</div>` : ''}
+                    <div class="violation-actions">
+                        <button class="fix-btn" onclick="generateFix(${idx})" id="fix-btn-${idx}">
+                            <i class="fas fa-magic"></i>
+                            Auto-Fix with AI
+                        </button>
+                    </div>
+                    <div id="fix-preview-${idx}" style="display: none;"></div>
                 </div>
             `).join('');
             
@@ -1440,6 +1539,128 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+        
+        // ========================================
+        // AUTO-FIX FUNCTIONS
+        // ========================================
+        async function generateFix(violationIdx) {
+            const violation = window.auditViolations[violationIdx];
+            if (!violation) return;
+            
+            const btn = document.getElementById(`fix-btn-${violationIdx}`);
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/fix`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scenarioId: violation.scenarioId,
+                        scenarioName: violation.scenarioName,
+                        field: violation.field,
+                        currentValue: violation.value,
+                        ruleId: violation.ruleId,
+                        message: violation.message,
+                        suggestion: violation.suggestion
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Fix generation failed');
+                }
+                
+                const result = await response.json();
+                
+                // Show preview
+                const previewEl = document.getElementById(`fix-preview-${violationIdx}`);
+                previewEl.style.display = 'block';
+                previewEl.innerHTML = `
+                    <div class="fix-preview">
+                        <div class="fix-preview-label">AI Suggested Fix</div>
+                        <div class="fix-preview-content">${escapeHtml(result.suggestedFix)}</div>
+                        <div class="fix-preview-actions">
+                            <button class="apply-fix-btn" onclick="applyFix(${violationIdx}, '${escapeAttr(result.suggestedFix)}')">
+                                <i class="fas fa-check"></i> Apply Fix
+                            </button>
+                            <button class="cancel-fix-btn" onclick="cancelFix(${violationIdx})">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                btn.innerHTML = '<i class="fas fa-check"></i> Fix Generated';
+                
+            } catch (error) {
+                console.error('Fix generation error:', error);
+                showToast('Fix failed: ' + error.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-magic"></i> Auto-Fix with AI';
+            }
+        }
+        
+        async function applyFix(violationIdx, suggestedFix) {
+            const violation = window.auditViolations[violationIdx];
+            if (!violation) return;
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/apply-fix`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scenarioId: violation.scenarioId,
+                        field: violation.field,
+                        newValue: suggestedFix
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Apply fix failed');
+                }
+                
+                // Mark as fixed
+                const card = document.getElementById(`violation-${violationIdx}`);
+                card.style.opacity = '0.5';
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px; color: var(--accent-green);">
+                        <i class="fas fa-check-circle" style="font-size: 24px;"></i>
+                        <div>
+                            <strong>${escapeHtml(violation.scenarioName)}</strong>
+                            <div style="font-size: 13px; color: var(--text-secondary);">Fixed successfully!</div>
+                        </div>
+                    </div>
+                `;
+                
+                showToast('Fix applied successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Apply fix error:', error);
+                showToast('Failed to apply fix: ' + error.message, 'error');
+            }
+        }
+        
+        function cancelFix(violationIdx) {
+            const previewEl = document.getElementById(`fix-preview-${violationIdx}`);
+            previewEl.style.display = 'none';
+            
+            const btn = document.getElementById(`fix-btn-${violationIdx}`);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-magic"></i> Auto-Fix with AI';
+        }
+        
+        function escapeAttr(text) {
+            if (!text) return '';
+            return text.replace(/'/g, "\\'").replace(/\n/g, '\\n');
         }
 
         function getAuthToken() {

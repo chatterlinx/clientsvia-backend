@@ -2020,4 +2020,227 @@ router.get('/:companyId/audit/health', async (req, res) => {
     }
 });
 
+/**
+ * POST /:companyId/audit/fix
+ * 
+ * Generate AI fix for a specific violation
+ */
+router.post('/:companyId/audit/fix', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenarioId, scenarioName, field, currentValue, ruleId, message, suggestion } = req.body;
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get the template to find the full scenario
+        const { template, error } = await getCompanyTemplate(company, {
+            populateCategories: true
+        });
+        
+        if (error) {
+            return res.status(400).json({ error: error.message });
+        }
+        
+        // Find the scenario
+        let scenario = null;
+        for (const category of (template.categories || [])) {
+            const found = (category.scenarios || []).find(s => 
+                s.scenarioId === scenarioId || s._id?.toString() === scenarioId
+            );
+            if (found) {
+                scenario = found;
+                break;
+            }
+        }
+        
+        if (!scenario) {
+            return res.status(404).json({ error: 'Scenario not found' });
+        }
+        
+        // Get the current field value
+        const fieldPath = field.replace(/\[(\d+)\]/g, '.$1').split('.');
+        let currentFieldValue = scenario;
+        for (const key of fieldPath) {
+            currentFieldValue = currentFieldValue?.[key];
+        }
+        
+        // Generate fix using GPT-4
+        const fixPrompt = `You are fixing a dispatcher AI scenario that has a violation.
+
+SCENARIO: "${scenarioName}"
+FIELD: ${field}
+CURRENT VALUE: "${currentFieldValue || currentValue}"
+
+VIOLATION: ${message}
+SUGGESTED ACTION: ${suggestion || 'Fix this issue'}
+
+DISPATCHER RULES:
+- Dispatchers are calm, professional, experienced
+- They acknowledge briefly (1-3 words: "I understand." "Alright." "Okay.")
+- They ask ONE specific question, not vague questions
+- They move toward booking, not troubleshooting
+- They acknowledge caller's name with {name} placeholder
+- They are NOT chatbots, NOT help desk, NOT concierge
+
+BANNED PHRASES:
+- "Got it", "No problem", "Absolutely", "Of course" (help desk)
+- "Let me help you with that", "I'd be happy to help" (chatbot)
+- "Have you checked...", "Have you tried..." (troubleshooting)
+
+RETURN ONLY the fixed text, nothing else. No quotes, no explanation.
+Just the corrected value that should replace the current one.`;
+
+        const response = await openaiClient.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+                { role: 'system', content: 'You are a dispatcher scenario editor. Return ONLY the fixed text, no explanation.' },
+                { role: 'user', content: fixPrompt }
+            ],
+            max_tokens: 200,
+            temperature: 0.3
+        });
+        
+        const suggestedFix = response.choices[0]?.message?.content?.trim();
+        
+        if (!suggestedFix) {
+            return res.status(500).json({ error: 'Failed to generate fix' });
+        }
+        
+        logger.info('[AUDIT FIX] Generated fix', {
+            companyId,
+            scenarioId,
+            field,
+            ruleId,
+            currentValue: currentFieldValue,
+            suggestedFix
+        });
+        
+        res.json({
+            success: true,
+            scenarioId,
+            field,
+            currentValue: currentFieldValue || currentValue,
+            suggestedFix,
+            ruleId,
+            tokensUsed: response.usage?.total_tokens || 0
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT FIX] Error generating fix', { 
+            companyId, 
+            scenarioId,
+            error: error.message 
+        });
+        res.status(500).json({ 
+            error: 'Failed to generate fix', 
+            details: error.message 
+        });
+    }
+});
+
+/**
+ * POST /:companyId/audit/apply-fix
+ * 
+ * Apply a fix to a scenario field
+ */
+router.post('/:companyId/audit/apply-fix', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenarioId, field, newValue } = req.body;
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get the template
+        const { template, error } = await getCompanyTemplate(company, {
+            populateCategories: true
+        });
+        
+        if (error) {
+            return res.status(400).json({ error: error.message });
+        }
+        
+        // Find and update the scenario
+        let updated = false;
+        let categoryIndex = -1;
+        let scenarioIndex = -1;
+        
+        for (let ci = 0; ci < (template.categories || []).length; ci++) {
+            const category = template.categories[ci];
+            for (let si = 0; si < (category.scenarios || []).length; si++) {
+                const scenario = category.scenarios[si];
+                if (scenario.scenarioId === scenarioId || scenario._id?.toString() === scenarioId) {
+                    categoryIndex = ci;
+                    scenarioIndex = si;
+                    
+                    // Parse field path (e.g., "quickReplies[0]" -> ["quickReplies", "0"])
+                    const fieldPath = field.replace(/\[(\d+)\]/g, '.$1').split('.');
+                    
+                    // Navigate to parent and set value
+                    let target = scenario;
+                    for (let i = 0; i < fieldPath.length - 1; i++) {
+                        target = target[fieldPath[i]];
+                    }
+                    const lastKey = fieldPath[fieldPath.length - 1];
+                    
+                    const oldValue = target[lastKey];
+                    target[lastKey] = newValue;
+                    
+                    // Mark as modified
+                    scenario.lastEditedAt = new Date();
+                    scenario.lastEditedBy = 'AI Audit Fix';
+                    scenario.lastEditedFromContext = 'AUDIT_FIX';
+                    
+                    updated = true;
+                    
+                    logger.info('[AUDIT FIX] Applied fix', {
+                        companyId,
+                        templateId: template._id,
+                        scenarioId,
+                        field,
+                        oldValue,
+                        newValue
+                    });
+                    
+                    break;
+                }
+            }
+            if (updated) break;
+        }
+        
+        if (!updated) {
+            return res.status(404).json({ error: 'Scenario not found' });
+        }
+        
+        // Save the template
+        template.markModified(`categories.${categoryIndex}.scenarios.${scenarioIndex}`);
+        await template.save();
+        
+        res.json({
+            success: true,
+            scenarioId,
+            field,
+            newValue,
+            message: 'Fix applied successfully'
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT FIX] Error applying fix', { 
+            companyId, 
+            scenarioId,
+            field,
+            error: error.message 
+        });
+        res.status(500).json({ 
+            error: 'Failed to apply fix', 
+            details: error.message 
+        });
+    }
+});
+
 module.exports = router;
