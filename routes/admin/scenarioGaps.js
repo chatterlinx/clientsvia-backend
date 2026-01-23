@@ -164,6 +164,22 @@ function calculateSavings(totalCalls, totalTokens) {
 }
 
 /**
+ * Clean raw caller text for better LLM processing
+ */
+function cleanCallerText(text) {
+    return String(text || '')
+        .toLowerCase()
+        .replace(/^[,.\s]+/, '')           // Remove leading punctuation/spaces
+        .replace(/[,.\s]+$/, '')           // Remove trailing punctuation/spaces
+        .replace(/\s+/g, ' ')              // Normalize whitespace
+        .replace(/\bi\s+i\b/gi, 'I')       // Fix "i i" stutter
+        .replace(/\bum+\b/gi, '')          // Remove um
+        .replace(/\buh+\b/gi, '')          // Remove uh
+        .replace(/\s+/g, ' ')              // Re-normalize whitespace
+        .trim();
+}
+
+/**
  * Generate scenario using LLM
  */
 async function generateScenarioFromGap(gap, company) {
@@ -173,40 +189,76 @@ async function generateScenarioFromGap(gap, company) {
         return generateFallbackScenario(gap, company);
     }
     
-    const examples = gap.examples.slice(0, 5).map(e => `- "${e.text}"`).join('\n');
+    // Clean up the examples for better LLM input
+    const cleanedExamples = gap.examples
+        .slice(0, 5)
+        .map(e => cleanCallerText(e.text))
+        .filter(t => t.length > 5);
     
-    const prompt = `You are an expert at creating voice AI receptionist scenarios for service businesses.
+    const examples = cleanedExamples.map(e => `- "${e}"`).join('\n');
+    
+    const prompt = `You are an expert at creating voice AI receptionist trigger scenarios for ${company.tradeKey?.toUpperCase() || 'service'} businesses.
 
 COMPANY: ${company.companyName || 'Service Company'}
 TRADE: ${company.tradeKey || 'general'}
 
-CALLER PHRASES THAT NEED A SCENARIO (asked ${gap.totalCalls} times, no scenario matched):
+CALLER PHRASES (asked ${gap.totalCalls} times, fell through to expensive LLM):
 ${examples}
 
-Create a scenario that will match these phrases and provide a helpful response.
+Your job is to create a SCENARIO with TRIGGERS that will match these caller phrases.
 
-OUTPUT FORMAT (JSON only, no markdown):
+═══════════════════════════════════════════════════════════════════════════════
+TRIGGER RULES (CRITICAL - READ CAREFULLY):
+═══════════════════════════════════════════════════════════════════════════════
+1. Triggers must be CLEAN phrases - no leading commas, periods, or partial sentences
+2. Include 8-12 trigger variations covering different ways to ask the same thing
+3. Include both LONG and SHORT versions:
+   - Short: "earliest available", "first opening", "soonest appointment"
+   - Long: "what's the earliest you have", "when is your first available"
+4. Include common phrasings people use:
+   - Question format: "when is...", "what's the...", "do you have..."
+   - Statement format: "i need the earliest", "looking for the soonest"
+5. DO NOT include caller-specific details like names, times, or filler words
+6. Each trigger should be 2-6 words ideally (some can be longer)
+
+═══════════════════════════════════════════════════════════════════════════════
+OUTPUT FORMAT (JSON only, no markdown code blocks):
+═══════════════════════════════════════════════════════════════════════════════
 {
-    "name": "Short descriptive name (e.g., 'Duct Cleaning Price')",
-    "category": "Category name (e.g., 'Pricing', 'Service Area', 'Hours', 'FAQ')",
-    "triggers": ["trigger phrase 1", "trigger phrase 2", "trigger phrase 3", "trigger phrase 4", "trigger phrase 5"],
-    "negativeTriggers": ["phrases that should NOT match this scenario"],
-    "quickReply": "Short response (1-2 sentences) that answers the caller's question. Use {placeholder} for company-specific values like {price} or {hours}.",
-    "suggestedPlaceholders": [
-        {"key": "placeholderName", "description": "What this placeholder represents", "exampleValue": "$99"}
+    "name": "Short descriptive name (3-5 words, e.g., 'Earliest Appointment Availability')",
+    "category": "One of: Scheduling, Pricing, Service Area, Hours, Emergency, FAQ, Warranty, General",
+    "triggers": [
+        "short trigger 1",
+        "short trigger 2", 
+        "medium trigger phrase",
+        "longer trigger phrase variation",
+        "another way to ask this",
+        "yet another phrasing",
+        "question format version",
+        "statement format version"
     ],
-    "responseGoal": "What this scenario accomplishes (e.g., 'Answer pricing question and offer to schedule')"
+    "negativeTriggers": ["phrases that look similar but mean something different"],
+    "quickReply": "Helpful 1-2 sentence response. Use {placeholderName} for values the company needs to configure.",
+    "suggestedPlaceholders": [
+        {"key": "placeholderName", "description": "What this represents", "exampleValue": "example"}
+    ],
+    "responseGoal": "What this accomplishes for the caller"
 }`;
 
     try {
         const response = await openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [
-                { role: 'system', content: 'You are a scenario creation assistant. Output valid JSON only, no markdown code blocks.' },
+                { 
+                    role: 'system', 
+                    content: `You are an expert scenario trigger creator for voice AI systems. 
+Your triggers must be CLEAN (no leading punctuation), VARIED (8-12 options), and cover SHORT + LONG phrasings.
+Output valid JSON only. No markdown code blocks. No explanations.` 
+                },
                 { role: 'user', content: prompt }
             ],
-            temperature: 0.3,
-            max_tokens: 800
+            temperature: 0.4,
+            max_tokens: 1200
         });
         
         const content = response.choices[0]?.message?.content || '';
