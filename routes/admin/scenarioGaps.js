@@ -48,31 +48,78 @@ router.use('/:companyId', authenticateJWT, authorizeCompanyAccess);
 // ============================================================================
 // HELPER: Get company's assigned template (DRY - used by multiple routes)
 // ============================================================================
+// STRICT MODE: Returns { template, error } - caller MUST handle error
+// No silent fallbacks - missing template = admin action required
+// ============================================================================
 async function getCompanyTemplate(company, options = {}) {
-    const { lean = true } = options;
+    const { lean = true, throwOnMissing = false } = options;
+    const companyId = company._id?.toString();
+    const companyName = company.companyName || company.businessName || 'Unknown';
     
-    // Get first enabled template from company's templateReferences
+    // Step 1: Check templateReferences exist
     const templateRefs = company.aiAgentSettings?.templateReferences || [];
-    const activeRef = templateRefs.find(ref => ref.enabled !== false) || templateRefs[0];
     
-    if (!activeRef?.templateId) {
-        logger.debug('[SCENARIO GAPS] No template reference found for company', { 
-            companyId: company._id?.toString() 
-        });
-        return null;
+    if (templateRefs.length === 0) {
+        const error = {
+            code: 'NO_TEMPLATE_REFERENCES',
+            message: `Company "${companyName}" has no template references configured`,
+            companyId,
+            fix: 'Admin must assign a template in aiAgentSettings.templateReferences'
+        };
+        logger.error('[SCENARIO GAPS] HARD STOP - No template references', error);
+        if (throwOnMissing) throw new Error(error.message);
+        return { template: null, error };
     }
     
+    // Step 2: Find the ACTIVE template (explicit selection, not [0] blindly)
+    // Priority: enabled=true with lowest priority number, then first enabled, then first overall
+    const enabledRefs = templateRefs.filter(ref => ref.enabled !== false);
+    const sortedRefs = enabledRefs.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+    const activeRef = sortedRefs[0] || templateRefs[0];
+    
+    if (!activeRef?.templateId) {
+        const error = {
+            code: 'INVALID_TEMPLATE_REFERENCE',
+            message: `Company "${companyName}" has template references but no valid templateId`,
+            companyId,
+            templateRefs: templateRefs.length,
+            fix: 'Check templateReferences array - templateId may be missing'
+        };
+        logger.error('[SCENARIO GAPS] HARD STOP - Invalid template reference', error);
+        if (throwOnMissing) throw new Error(error.message);
+        return { template: null, error };
+    }
+    
+    // Step 3: Fetch the template
     const query = GlobalInstantResponseTemplate.findById(activeRef.templateId);
     const template = lean ? await query.lean() : await query;
     
     if (!template) {
-        logger.warn('[SCENARIO GAPS] Template not found', { 
+        const error = {
+            code: 'TEMPLATE_NOT_FOUND',
+            message: `Template ${activeRef.templateId} not found in database`,
+            companyId,
             templateId: activeRef.templateId,
-            companyId: company._id?.toString()
-        });
+            fix: 'Template may have been deleted - reassign a valid template'
+        };
+        logger.error('[SCENARIO GAPS] HARD STOP - Template not found', error);
+        if (throwOnMissing) throw new Error(error.message);
+        return { template: null, error };
     }
     
-    return template;
+    // Step 4: Log successful resolution (for debugging/tracing)
+    logger.info('[SCENARIO GAPS] Template resolved', {
+        companyId,
+        companyName,
+        templateId: template._id?.toString(),
+        templateName: template.name,
+        templateType: template.templateType,
+        scenarioCount: (template.categories || []).reduce((sum, c) => sum + (c.scenarios?.length || 0), 0),
+        categoryCount: (template.categories || []).length,
+        selectionMethod: sortedRefs.length > 0 ? 'priority_sorted' : 'first_available'
+    });
+    
+    return { template, error: null };
 }
 
 // ============================================================================
@@ -86,6 +133,7 @@ function buildScenarioListForGPT(template) {
         for (const scenario of (category.scenarios || [])) {
             // Collect ALL scenarios with name + triggers for duplicate detection
             allScenarios.push({
+                scenarioId: scenario._id?.toString() || scenario.scenarioId,
                 name: scenario.name,
                 category: category.name,
                 triggers: (scenario.triggers || []).slice(0, 5) // First 5 triggers for context
@@ -108,6 +156,64 @@ function buildScenarioListForGPT(template) {
     }
     
     return { allScenarios, toneExamples };
+}
+
+// ============================================================================
+// HELPER: Deterministic duplicate detection (BEFORE LLM - fast + cheap)
+// ============================================================================
+// Checks keyword overlap between gap phrase and existing triggers
+// Returns match if overlap score > threshold (prevents LLM call for obvious cases)
+// ============================================================================
+function findDeterministicDuplicate(gapPhrase, allScenarios, threshold = 0.6) {
+    const gapWords = new Set(
+        normalizeText(gapPhrase)
+            .split(' ')
+            .filter(w => w.length > 2)
+    );
+    
+    if (gapWords.size === 0) return null;
+    
+    let bestMatch = null;
+    let bestScore = 0;
+    
+    for (const scenario of allScenarios) {
+        for (const trigger of (scenario.triggers || [])) {
+            const triggerWords = new Set(
+                normalizeText(trigger)
+                    .split(' ')
+                    .filter(w => w.length > 2)
+            );
+            
+            if (triggerWords.size === 0) continue;
+            
+            // Jaccard similarity
+            const intersection = [...gapWords].filter(w => triggerWords.has(w)).length;
+            const union = new Set([...gapWords, ...triggerWords]).size;
+            const score = intersection / union;
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = {
+                    scenarioId: scenario.scenarioId,
+                    scenarioName: scenario.name,
+                    category: scenario.category,
+                    matchedTrigger: trigger,
+                    similarityScore: score
+                };
+            }
+        }
+    }
+    
+    if (bestScore >= threshold) {
+        logger.info('[SCENARIO GAPS] Deterministic duplicate found', {
+            gapPhrase,
+            match: bestMatch,
+            score: bestScore.toFixed(3)
+        });
+        return bestMatch;
+    }
+    
+    return null;
 }
 
 // ============================================================================
@@ -247,6 +353,11 @@ function cleanCallerText(text) {
 /**
  * Generate scenario using LLM - COMPREHENSIVE VERSION
  * Fills ALL useful scenario fields for the Global Brain form
+ * 
+ * FLOW:
+ * 1. Get company's template (HARD STOP if missing)
+ * 2. Run DETERMINISTIC duplicate check first (fast, cheap)
+ * 3. If no deterministic match, call LLM for generation/secondary duplicate check
  */
 async function generateScenarioFromGap(gap, company) {
     const openai = openaiClient;
@@ -256,51 +367,92 @@ async function generateScenarioFromGap(gap, company) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // FETCH COMPANY'S TEMPLATE FOR TRADE-SPECIFIC RULES + FULL SCENARIO LIST
+    // STEP 1: FETCH COMPANY'S TEMPLATE (HARD STOP IF MISSING)
     // ═══════════════════════════════════════════════════════════════════════════
-    let tradeType = 'general';
+    const { template, error: templateError } = await getCompanyTemplate(company);
+    
+    if (templateError) {
+        // HARD STOP - no silent fallback
+        logger.error('[SCENARIO GAPS] Cannot generate scenario - template error', templateError);
+        return {
+            success: false,
+            error: templateError,
+            message: templateError.message
+        };
+    }
+    
+    const tradeType = template.templateType?.toLowerCase() || 'general';
+    const templateId = template._id?.toString();
+    
+    // Build full scenario list for duplicate detection + tone examples
+    const { allScenarios, toneExamples } = buildScenarioListForGPT(template);
+    
+    logger.info(`[SCENARIO GAPS] Processing gap`, {
+        companyId: company._id?.toString(),
+        templateId,
+        templateName: template.name,
+        tradeType,
+        scenarioCount: allScenarios.length,
+        gapPhrase: gap.representative
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 2: DETERMINISTIC DUPLICATE CHECK (fast, before LLM)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const deterministicMatch = findDeterministicDuplicate(gap.representative, allScenarios, 0.6);
+    
+    if (deterministicMatch) {
+        logger.info('[SCENARIO GAPS] Deterministic duplicate detected - skipping LLM', deterministicMatch);
+        return {
+            success: true,
+            isDuplicate: true,
+            duplicateScenarioId: deterministicMatch.scenarioId,
+            duplicateScenarioName: deterministicMatch.scenarioName,
+            duplicateCategory: deterministicMatch.category,
+            matchedTrigger: deterministicMatch.matchedTrigger,
+            similarityScore: deterministicMatch.similarityScore,
+            recommendedAction: 'ADD_TRIGGERS',
+            suggestedTriggers: gap.examples.map(e => cleanCallerText(e.text)).filter(t => t.length > 5),
+            explanation: `Gap phrase "${gap.representative}" is ${Math.round(deterministicMatch.similarityScore * 100)}% similar to existing trigger "${deterministicMatch.matchedTrigger}" in scenario "${deterministicMatch.scenarioName}". Recommend adding as new trigger instead of creating duplicate.`,
+            detectionMethod: 'deterministic',
+            tokensUsed: 0
+        };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 3: BUILD LLM CONTEXT (only if no deterministic match)
+    // ═══════════════════════════════════════════════════════════════════════════
     let existingScenariosList = '';
     let toneExamplesList = '';
     
-    try {
-        // Get the company's assigned template using helper
-        const template = await getCompanyTemplate(company);
-        
-        if (template) {
-            // Get the trade type from template
-            tradeType = template.templateType?.toLowerCase() || 'general';
-            logger.debug(`[SCENARIO GAPS] Using template: ${template.name}, trade type: ${tradeType}`);
-            
-            // Build full scenario list for duplicate detection + tone examples
-            const { allScenarios, toneExamples } = buildScenarioListForGPT(template);
-            
-            // Build the FULL scenario list (names + key triggers) for duplicate detection
-            if (allScenarios.length > 0) {
-                existingScenariosList = `
+    // Build the FULL scenario list (names + key triggers) for LLM duplicate detection
+    if (allScenarios.length > 0) {
+        existingScenariosList = `
 ═══════════════════════════════════════════════════════════════════════════════
 📋 ALL EXISTING SCENARIOS (${allScenarios.length} total) - DO NOT DUPLICATE
 ═══════════════════════════════════════════════════════════════════════════════
 ${allScenarios.map(s => `• "${s.name}" [${s.category}] - triggers: ${s.triggers.slice(0, 3).join(', ')}${s.triggers.length > 3 ? '...' : ''}`).join('\n')}
 
 ⚠️ CRITICAL: If the gap phrase matches ANY existing scenario above, respond with:
-{ "isDuplicate": true, "existingScenario": "Name of matching scenario", "suggestedAction": "ADD_TRIGGER" }
+{
+  "isDuplicate": true,
+  "duplicateScenarioId": "id or name of matching scenario",
+  "duplicateScenarioName": "Name of matching scenario",
+  "recommendedAction": "ADD_TRIGGERS",
+  "explanation": "Why this is a duplicate (1-2 sentences)"
+}
 Instead of creating a new scenario, the trigger should be added to the existing one.
 `;
-                logger.info(`[SCENARIO GAPS] Loaded ${allScenarios.length} scenarios for duplicate detection`);
-            }
-            
-            // Build tone examples (separate from duplicate list)
-            if (toneExamples.length > 0) {
-                toneExamplesList = `
+    }
+    
+    // Build tone examples (separate from duplicate list)
+    if (toneExamples.length > 0) {
+        toneExamplesList = `
 ═══════════════════════════════════════════════════════════════════════════════
 🎯 TONE EXAMPLES (match this dispatcher style)
 ═══════════════════════════════════════════════════════════════════════════════
 ${toneExamples.map(s => `• "${s.name}" - Trigger: "${s.trigger}" → Reply: "${s.reply}"`).join('\n')}
 `;
-            }
-        }
-    } catch (err) {
-        logger.warn('[SCENARIO GAPS] Could not load template for trade type:', err.message);
     }
     
     // Clean up the examples for better LLM input
@@ -653,7 +805,7 @@ DISPATCHER PERSONALITY:
 • Calm, confident, experienced - heard this 10,000 times
 • Friendly but NOT chatty - no fluff, no filler
 • Every sentence moves toward DIAGNOSIS or BOOKING
-• Empathy in 3 words max: "I understand." "Got it." "No problem."
+• Empathy in 3 words max: "I understand." "Alright." "Okay."
 • Never sounds surprised, never sounds curious - sounds EXPERIENCED
 
 RESPONSE RULES:
@@ -691,15 +843,20 @@ Output VALID JSON only. No markdown. No explanations.`
         // Check if GPT-4o detected this as a duplicate
         if (s.isDuplicate === true) {
             logger.info('[SCENARIO GAPS] GPT-4o detected duplicate scenario', {
-                existingScenario: s.existingScenario,
-                suggestedAction: s.suggestedAction
+                duplicateScenarioId: s.duplicateScenarioId,
+                duplicateScenarioName: s.duplicateScenarioName || s.existingScenario,
+                recommendedAction: s.recommendedAction || s.suggestedAction
             });
             return {
                 success: true,
                 isDuplicate: true,
-                existingScenario: s.existingScenario,
-                suggestedAction: s.suggestedAction || 'ADD_TRIGGER',
+                duplicateScenarioId: s.duplicateScenarioId || null,
+                duplicateScenarioName: s.duplicateScenarioName || s.existingScenario,
+                duplicateCategory: s.duplicateCategory || null,
+                recommendedAction: s.recommendedAction || s.suggestedAction || 'ADD_TRIGGERS',
                 suggestedTriggers: gap.examples.map(e => cleanCallerText(e.text)).filter(t => t.length > 5),
+                explanation: s.explanation || `LLM detected this gap matches existing scenario "${s.duplicateScenarioName || s.existingScenario}"`,
+                detectionMethod: 'llm',
                 tokensUsed: response.usage?.total_tokens || 0
             };
         }
@@ -987,15 +1144,28 @@ router.get('/:companyId/gaps/preview', async (req, res) => {
         // Generate scenario preview
         const result = await generateScenarioFromGap(gap, company);
         
+        // Handle template error (HARD STOP)
+        if (result.error) {
+            return res.status(400).json({
+                success: false,
+                error: result.error,
+                message: result.message
+            });
+        }
+        
         // Handle duplicate detection
         if (result.isDuplicate) {
             return res.json({
                 success: true,
                 isDuplicate: true,
-                existingScenario: result.existingScenario,
-                suggestedAction: result.suggestedAction,
+                duplicateScenarioId: result.duplicateScenarioId,
+                duplicateScenarioName: result.duplicateScenarioName,
+                duplicateCategory: result.duplicateCategory,
+                recommendedAction: result.recommendedAction,
                 suggestedTriggers: result.suggestedTriggers,
-                message: `This appears to match existing scenario "${result.existingScenario}". Consider adding triggers instead of creating a new scenario.`,
+                explanation: result.explanation,
+                detectionMethod: result.detectionMethod,
+                similarityScore: result.similarityScore,
                 tokensUsed: result.tokensUsed
             });
         }
@@ -1039,13 +1209,15 @@ router.post('/:companyId/gaps/create', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        // Get the company's assigned template (not by tradeKey - by templateReferences)
-        const template = await getCompanyTemplate(company, { lean: false });
+        // Get the company's assigned template (HARD STOP if missing)
+        const { template, error: templateError } = await getCompanyTemplate(company, { lean: false });
         
-        if (!template) {
-            return res.status(404).json({ 
-                error: 'No template found for company',
-                hint: 'Company must have aiAgentSettings.templateReferences configured'
+        if (templateError) {
+            return res.status(400).json({ 
+                success: false,
+                error: templateError.code,
+                message: templateError.message,
+                fix: templateError.fix
             });
         }
         
@@ -1181,15 +1353,17 @@ router.get('/:companyId/scenarios', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        // Get the company's assigned template (by templateReferences, not tradeKey)
-        const template = await getCompanyTemplate(company);
+        // Get the company's assigned template (HARD STOP if missing)
+        const { template, error: templateError } = await getCompanyTemplate(company);
         
-        if (!template) {
-            return res.json({ 
-                success: true, 
+        if (templateError) {
+            return res.status(400).json({ 
+                success: false, 
                 scenarios: [], 
                 categories: [],
-                hint: 'No template assigned to this company'
+                error: templateError.code,
+                message: templateError.message,
+                fix: templateError.fix
             });
         }
         
@@ -1202,7 +1376,7 @@ router.get('/:companyId/scenarios', async (req, res) => {
             
             for (const scenario of (category.scenarios || [])) {
                 scenarios.push({
-                    id: scenario._id?.toString() || `${category.name}_${scenario.name}`,
+                    id: scenario._id?.toString() || scenario.scenarioId || `${category.name}_${scenario.name}`,
                     name: scenario.name,
                     category: category.name,
                     triggersCount: scenario.triggers?.length || 0,
@@ -1219,6 +1393,9 @@ router.get('/:companyId/scenarios', async (req, res) => {
             success: true,
             templateId: template._id.toString(),
             templateName: template.name,
+            templateType: template.templateType,
+            scenarioCount: scenarios.length,
+            categoryCount: categoryNames.length,
             categories: categoryNames,
             scenarios
         });
@@ -1244,13 +1421,15 @@ router.post('/:companyId/scenarios/add-triggers', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        // Get the company's assigned template (need non-lean for save)
-        const template = await getCompanyTemplate(company, { lean: false });
+        // Get the company's assigned template (need non-lean for save) - HARD STOP if missing
+        const { template, error: templateError } = await getCompanyTemplate(company, { lean: false });
         
-        if (!template) {
-            return res.status(404).json({ 
-                error: 'Template not found',
-                hint: 'Company must have aiAgentSettings.templateReferences configured'
+        if (templateError) {
+            return res.status(400).json({ 
+                success: false,
+                error: templateError.code,
+                message: templateError.message,
+                fix: templateError.fix
             });
         }
         
