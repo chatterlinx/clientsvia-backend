@@ -12131,6 +12131,112 @@ Higher = detailed, thorough scenarios (more context)
                 await loadScenarioInheritedConfig(activeTemplateId, category.id);
             }
             
+            // ════════════════════════════════════════════════════════════════════════
+            // 🎯 SCENARIO PREFILL: Auto-fill from Scenario Gaps if data available
+            // ════════════════════════════════════════════════════════════════════════
+            if (window.scenarioPrefillData) {
+                console.log('📋 [PREFILL] Auto-filling scenario form with prefill data');
+                const p = window.scenarioPrefillData;
+                
+                // Basic Info tab
+                const nameInput = document.getElementById('scenario-name');
+                if (nameInput && p.name) nameInput.value = p.name;
+                
+                const statusSelect = document.getElementById('scenario-status');
+                if (statusSelect) statusSelect.value = p.status || 'draft';
+                
+                const priorityInput = document.getElementById('scenario-priority');
+                if (priorityInput && typeof p.priority === 'number') priorityInput.value = p.priority;
+                
+                const typeSelect = document.getElementById('scenario-type');
+                if (typeSelect && p.scenarioType) typeSelect.value = p.scenarioType;
+                
+                // Replies & Flow tab
+                const quickReply = document.getElementById('quick-reply-0') || document.getElementById('quick-reply');
+                if (quickReply) {
+                    const qr = Array.isArray(p.quickReplies) ? p.quickReplies[0] : p.quickReply;
+                    if (qr) quickReply.value = qr;
+                }
+                
+                const fullReply = document.getElementById('full-reply-0') || document.getElementById('full-reply');
+                if (fullReply) {
+                    const fr = Array.isArray(p.fullReplies) ? p.fullReplies[0] : p.fullReply;
+                    if (fr) fullReply.value = fr;
+                }
+                
+                // Triggers - populate the triggers container
+                if (p.triggers && Array.isArray(p.triggers)) {
+                    const triggersContainer = document.getElementById('triggers-container');
+                    if (triggersContainer) {
+                        triggersContainer.innerHTML = '';
+                        p.triggers.forEach((t, i) => {
+                            const div = document.createElement('div');
+                            div.className = 'flex items-center gap-2 mb-2';
+                            div.innerHTML = `
+                                <input type="text" name="triggers[]" value="${escapeHtml(t)}" 
+                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Trigger phrase ${i + 1}">
+                                <button type="button" onclick="this.parentElement.remove()" class="p-2 text-red-500 hover:bg-red-50 rounded">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            `;
+                            triggersContainer.appendChild(div);
+                        });
+                    }
+                }
+                
+                // Negative Triggers
+                if (p.negativeTriggers && Array.isArray(p.negativeTriggers) && p.negativeTriggers.length > 0) {
+                    const negContainer = document.getElementById('negative-triggers-container');
+                    if (negContainer) {
+                        negContainer.innerHTML = '';
+                        p.negativeTriggers.forEach((t, i) => {
+                            const div = document.createElement('div');
+                            div.className = 'flex items-center gap-2 mb-2';
+                            div.innerHTML = `
+                                <input type="text" name="negativeTriggers[]" value="${escapeHtml(t)}" 
+                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Negative trigger ${i + 1}">
+                                <button type="button" onclick="this.parentElement.remove()" class="p-2 text-red-500 hover:bg-red-50 rounded">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            `;
+                            negContainer.appendChild(div);
+                        });
+                    }
+                }
+                
+                // Advanced Settings
+                const followUpMode = document.getElementById('scenario-followup-mode');
+                if (followUpMode && p.followUpMode) followUpMode.value = p.followUpMode;
+                
+                const followUpQuestion = document.getElementById('scenario-followup-question');
+                if (followUpQuestion && p.followUpQuestionText) followUpQuestion.value = p.followUpQuestionText;
+                
+                const actionType = document.getElementById('scenario-action-type');
+                if (actionType && p.actionType) actionType.value = p.actionType;
+                
+                const bookingIntent = document.getElementById('scenario-booking-intent');
+                if (bookingIntent) bookingIntent.checked = p.bookingIntent === true;
+                
+                const notesInput = document.getElementById('scenario-notes');
+                if (notesInput && p.notes) notesInput.value = p.notes;
+                
+                // Show success message
+                console.log('✅ [PREFILL] Form auto-filled with AI-generated scenario data');
+                
+                // Close the banner
+                closePrefillBanner();
+                
+                // Show toast
+                if (typeof showToast === 'function') {
+                    showToast('success', 'Form auto-filled from Scenario Gaps! Review and save.');
+                }
+                
+                // Clear prefill data (one-time use)
+                window.scenarioPrefillData = null;
+            }
+            
             // Open the BIG 4-page scenario modal
             document.getElementById('scenario-modal').style.display = 'flex';
             
@@ -20215,8 +20321,102 @@ ${JSON.stringify(healthData, null, 2)}
                 console.log('💡 [PAGE INIT] Showing template selection helper message');
             }
             
+            // ════════════════════════════════════════════════════════════════════════
+            // 🎯 SCENARIO PREFILL: Check if coming from Scenario Gaps with data
+            // ════════════════════════════════════════════════════════════════════════
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('prefill') === 'scenario') {
+                console.log('📋 [PREFILL] Detected scenario prefill from Scenario Gaps');
+                try {
+                    const prefillData = sessionStorage.getItem('scenarioPrefill');
+                    if (prefillData) {
+                        const scenario = JSON.parse(prefillData);
+                        console.log('📋 [PREFILL] Loaded scenario data:', scenario);
+                        
+                        // Show notification banner
+                        showPrefillBanner(scenario);
+                        
+                        // Store for when user opens Add Scenario modal
+                        window.scenarioPrefillData = scenario;
+                        
+                        // Clean up sessionStorage
+                        sessionStorage.removeItem('scenarioPrefill');
+                        
+                        console.log('✅ [PREFILL] Scenario data ready - user should select category and click Add Scenario');
+                    }
+                } catch (e) {
+                    console.error('❌ [PREFILL] Failed to parse prefill data:', e);
+                }
+            }
+            
             console.log('✅ [PAGE INIT] Page initialization complete (both Template and Company modes loaded)');
         });
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // 🎯 SCENARIO PREFILL BANNER & AUTO-FILL SYSTEM
+        // ════════════════════════════════════════════════════════════════════════
+        
+        function showPrefillBanner(scenario) {
+            // Create banner if it doesn't exist
+            let banner = document.getElementById('prefill-banner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'prefill-banner';
+                banner.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+                    color: white;
+                    padding: 16px 24px;
+                    border-radius: 12px;
+                    box-shadow: 0 10px 40px rgba(139, 92, 246, 0.4);
+                    z-index: 10000;
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                    max-width: 600px;
+                    animation: slideDown 0.3s ease-out;
+                `;
+                banner.innerHTML = `
+                    <i class="fas fa-magic" style="font-size: 24px;"></i>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 16px;">📋 Scenario Ready: "${scenario.name || 'New Scenario'}"</div>
+                        <div style="font-size: 13px; opacity: 0.9; margin-top: 4px;">
+                            Select a template, scroll to your category, and click "+ Add Scenario" — form will auto-fill!
+                        </div>
+                    </div>
+                    <button onclick="closePrefillBanner()" style="
+                        background: rgba(255,255,255,0.2);
+                        border: none;
+                        color: white;
+                        width: 28px;
+                        height: 28px;
+                        border-radius: 50%;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">×</button>
+                `;
+                document.body.appendChild(banner);
+                
+                // Add animation
+                const style = document.createElement('style');
+                style.textContent = `
+                    @keyframes slideDown {
+                        from { transform: translateX(-50%) translateY(-100px); opacity: 0; }
+                        to { transform: translateX(-50%) translateY(0); opacity: 1; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        
+        function closePrefillBanner() {
+            const banner = document.getElementById('prefill-banner');
+            if (banner) banner.remove();
+            window.scenarioPrefillData = null;
+        }
 
 
         // ============================================================================

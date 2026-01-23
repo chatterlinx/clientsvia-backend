@@ -180,7 +180,8 @@ function cleanCallerText(text) {
 }
 
 /**
- * Generate scenario using LLM
+ * Generate scenario using LLM - COMPREHENSIVE VERSION
+ * Fills ALL useful scenario fields for the Global Brain form
  */
 async function generateScenarioFromGap(gap, company) {
     const openai = openaiClient;
@@ -197,53 +198,105 @@ async function generateScenarioFromGap(gap, company) {
     
     const examples = cleanedExamples.map(e => `- "${e}"`).join('\n');
     
-    const prompt = `You are an expert at creating voice AI receptionist trigger scenarios for ${company.tradeKey?.toUpperCase() || 'service'} businesses.
+    const tradeName = company.tradeKey?.toUpperCase() || 'SERVICE';
+    
+    const prompt = `You are an expert at creating comprehensive voice AI receptionist scenarios for ${tradeName} businesses.
 
+═══════════════════════════════════════════════════════════════════════════════
+CONTEXT
+═══════════════════════════════════════════════════════════════════════════════
 COMPANY: ${company.companyName || 'Service Company'}
 TRADE: ${company.tradeKey || 'general'}
 
 CALLER PHRASES (asked ${gap.totalCalls} times, fell through to expensive LLM):
 ${examples}
 
-Your job is to create a SCENARIO with TRIGGERS that will match these caller phrases.
+═══════════════════════════════════════════════════════════════════════════════
+YOUR TASK: Create a COMPLETE scenario that covers ALL ways callers might say this
+═══════════════════════════════════════════════════════════════════════════════
+
+TRIGGER RULES (CRITICAL):
+1. Include 10-15 trigger variations - both SHORT (2-3 words) and LONG (5-8 words)
+2. Include question formats: "when is...", "what's the...", "do you have..."
+3. Include statement formats: "i need...", "looking for...", "i want..."
+4. Include slang/casual: "y'all", "gonna", "wanna", contractions
+5. NO caller-specific details (names, times, filler words)
+6. NO leading/trailing punctuation
+
+REPLY RULES:
+1. quickReplies: 3 short variations (1-2 sentences each) - natural & varied
+2. fullReplies: 2 detailed variations (2-4 sentences) - more context
+3. Use {placeholderName} for company-specific values
+4. Sound human, not robotic - avoid corporate speak
 
 ═══════════════════════════════════════════════════════════════════════════════
-TRIGGER RULES (CRITICAL - READ CAREFULLY):
-═══════════════════════════════════════════════════════════════════════════════
-1. Triggers must be CLEAN phrases - no leading commas, periods, or partial sentences
-2. Include 8-12 trigger variations covering different ways to ask the same thing
-3. Include both LONG and SHORT versions:
-   - Short: "earliest available", "first opening", "soonest appointment"
-   - Long: "what's the earliest you have", "when is your first available"
-4. Include common phrasings people use:
-   - Question format: "when is...", "what's the...", "do you have..."
-   - Statement format: "i need the earliest", "looking for the soonest"
-5. DO NOT include caller-specific details like names, times, or filler words
-6. Each trigger should be 2-6 words ideally (some can be longer)
-
-═══════════════════════════════════════════════════════════════════════════════
-OUTPUT FORMAT (JSON only, no markdown code blocks):
+OUTPUT FORMAT (JSON only, no markdown):
 ═══════════════════════════════════════════════════════════════════════════════
 {
-    "name": "Short descriptive name (3-5 words, e.g., 'Earliest Appointment Availability')",
-    "category": "One of: Scheduling, Pricing, Service Area, Hours, Emergency, FAQ, Warranty, General",
+    "name": "Short descriptive name (3-5 words)",
+    "category": "Scheduling|Pricing|Hours|Service Area|Emergency|FAQ|Warranty|Billing|General",
+    
+    "scenarioType": "FAQ|BOOKING|EMERGENCY|TROUBLESHOOT|BILLING|TRANSFER|SMALL_TALK",
+    "priority": 0,
+    
     "triggers": [
-        "short trigger 1",
-        "short trigger 2", 
-        "medium trigger phrase",
-        "longer trigger phrase variation",
-        "another way to ask this",
-        "yet another phrasing",
-        "question format version",
-        "statement format version"
+        "short trigger",
+        "another short one", 
+        "medium length trigger",
+        "what's the trigger question",
+        "longer natural phrasing here",
+        "different way to ask",
+        "casual way to say it",
+        "formal version of question",
+        "i need statement version",
+        "looking for variation"
     ],
-    "negativeTriggers": ["phrases that look similar but mean something different"],
-    "quickReply": "Helpful 1-2 sentence response. Use {placeholderName} for values the company needs to configure.",
+    
+    "negativeTriggers": ["phrases that look similar but mean something DIFFERENT"],
+    
+    "quickReplies": [
+        "Natural response variation 1. {placeholder} if needed.",
+        "Different phrasing for variation 2.",
+        "Third unique way to respond."
+    ],
+    
+    "fullReplies": [
+        "More detailed response with additional context. This gives the caller more information. {placeholder} values work here too.",
+        "Alternative detailed response covering the same topic differently."
+    ],
+    
+    "followUpMode": "NONE|ASK_IF_BOOK|ASK_FOLLOWUP_QUESTION",
+    "followUpQuestionText": "If followUpMode is ASK_FOLLOWUP_QUESTION, what to ask?",
+    
+    "actionType": "REPLY_ONLY|REQUIRE_BOOKING|TRANSFER",
+    "bookingIntent": false,
+    
+    "entityCapture": ["name", "phone", "other_entities_to_extract_if_any"],
+    
+    "notes": "Internal note about when this scenario fires and any edge cases",
+    
     "suggestedPlaceholders": [
-        {"key": "placeholderName", "description": "What this represents", "exampleValue": "example"}
-    ],
-    "responseGoal": "What this accomplishes for the caller"
-}`;
+        {"key": "placeholderName", "description": "What to configure", "exampleValue": "example"}
+    ]
+}
+
+SCENARIO TYPE GUIDE:
+- FAQ: Informational questions (pricing, hours, service area) - priority 40-60
+- BOOKING: Caller wants to schedule - priority 70-85, bookingIntent=true
+- EMERGENCY: Urgent issues (no heat, gas leak, flooding) - priority 90-100
+- TROUBLESHOOT: Problem-solving questions - priority 50-70
+- BILLING: Payment/invoice questions - priority 40-60
+- SMALL_TALK: Greetings, thanks, casual - priority -5 to 10
+
+FOLLOW-UP MODE GUIDE:
+- NONE: Just answer and let conversation continue
+- ASK_IF_BOOK: After answering, ask "Would you like to schedule?"
+- ASK_FOLLOWUP_QUESTION: Ask a specific follow-up question
+
+ACTION TYPE GUIDE:
+- REPLY_ONLY: Just respond (FAQ, info questions)
+- REQUIRE_BOOKING: Start booking collection (set bookingIntent=true)
+- TRANSFER: Escalate to human immediately`;
 
     try {
         const response = await openai.chat.completions.create({
@@ -251,14 +304,18 @@ OUTPUT FORMAT (JSON only, no markdown code blocks):
             messages: [
                 { 
                     role: 'system', 
-                    content: `You are an expert scenario trigger creator for voice AI systems. 
-Your triggers must be CLEAN (no leading punctuation), VARIED (8-12 options), and cover SHORT + LONG phrasings.
-Output valid JSON only. No markdown code blocks. No explanations.` 
+                    content: `You are an expert scenario creator for voice AI systems.
+Create COMPREHENSIVE scenarios with:
+- 10-15 clean triggers (no leading punctuation), SHORT + LONG versions
+- 3 quickReplies variations
+- 2 fullReplies variations
+- Proper scenarioType, priority, followUpMode, actionType
+Output VALID JSON only. No markdown. No explanations.` 
                 },
                 { role: 'user', content: prompt }
             ],
-            temperature: 0.4,
-            max_tokens: 1200
+            temperature: 0.5,
+            max_tokens: 1500
         });
         
         const content = response.choices[0]?.message?.content || '';
@@ -269,20 +326,53 @@ Output valid JSON only. No markdown code blocks. No explanations.`
             jsonStr = jsonStr.replace(/```json?\n?/g, '').replace(/```$/g, '').trim();
         }
         
-        const scenario = JSON.parse(jsonStr);
+        const s = JSON.parse(jsonStr);
         
+        // Build comprehensive scenario object
         return {
             success: true,
             scenario: {
-                name: scenario.name || gap.representative,
-                category: scenario.category || 'FAQ',
-                triggers: scenario.triggers || [gap.representative],
-                negativeTriggers: scenario.negativeTriggers || [],
-                quickReply: scenario.quickReply || `I can help with that. ${gap.representative}`,
-                suggestedPlaceholders: scenario.suggestedPlaceholders || [],
-                responseGoal: scenario.responseGoal || 'Answer caller question',
+                // Identity
+                name: s.name || gap.representative.substring(0, 50),
+                category: s.category || 'FAQ',
+                
+                // Classification
+                scenarioType: s.scenarioType || 'FAQ',
+                priority: typeof s.priority === 'number' ? s.priority : 50,
+                status: 'draft',
+                
+                // Triggers (required)
+                triggers: Array.isArray(s.triggers) ? s.triggers : [gap.representative],
+                negativeTriggers: Array.isArray(s.negativeTriggers) ? s.negativeTriggers : [],
+                
+                // Replies (support both single and array formats)
+                quickReplies: Array.isArray(s.quickReplies) ? s.quickReplies : 
+                    (s.quickReply ? [s.quickReply] : ['I can help with that.']),
+                fullReplies: Array.isArray(s.fullReplies) ? s.fullReplies : 
+                    (s.fullReply ? [s.fullReply] : []),
+                
+                // Follow-up behavior
+                followUpMode: s.followUpMode || 'NONE',
+                followUpQuestionText: s.followUpQuestionText || null,
+                
+                // Wiring/Actions
+                actionType: s.actionType || 'REPLY_ONLY',
+                bookingIntent: s.bookingIntent === true,
+                
+                // Entity extraction
+                entityCapture: Array.isArray(s.entityCapture) ? 
+                    s.entityCapture.filter(e => e && e !== 'none') : [],
+                
+                // Admin notes
+                notes: s.notes || `Auto-generated from Scenario Gaps. Detected ${gap.totalCalls} similar calls.`,
+                
+                // Placeholders for company values
+                suggestedPlaceholders: Array.isArray(s.suggestedPlaceholders) ? s.suggestedPlaceholders : [],
+                
+                // Metadata
                 generatedBy: 'ai',
-                confidence: 0.85
+                confidence: 0.85,
+                sourceGap: gap.representative
             },
             tokensUsed: response.usage?.total_tokens || 0
         };
@@ -293,18 +383,43 @@ Output valid JSON only. No markdown code blocks. No explanations.`
 }
 
 /**
- * Fallback scenario generation (no LLM)
+ * Fallback scenario generation (no LLM) - Comprehensive format
  */
 function generateFallbackScenario(gap, company) {
     const normalized = normalizeText(gap.representative);
     
-    // Extract potential category from keywords
+    // Extract potential category and type from keywords
     let category = 'FAQ';
-    if (/price|cost|how much|rate|fee/.test(normalized)) category = 'Pricing';
-    else if (/hour|open|close|available/.test(normalized)) category = 'Hours';
-    else if (/service|area|location|zip/.test(normalized)) category = 'Service Area';
-    else if (/warranty|guarantee/.test(normalized)) category = 'Warranty';
-    else if (/emergency|urgent|asap/.test(normalized)) category = 'Emergency';
+    let scenarioType = 'FAQ';
+    let priority = 50;
+    let followUpMode = 'NONE';
+    
+    if (/price|cost|how much|rate|fee|charge/.test(normalized)) {
+        category = 'Pricing';
+        scenarioType = 'FAQ';
+        priority = 50;
+    } else if (/hour|open|close|when are you/.test(normalized)) {
+        category = 'Hours';
+        scenarioType = 'FAQ';
+        priority = 45;
+    } else if (/service|area|location|zip|where|serve/.test(normalized)) {
+        category = 'Service Area';
+        scenarioType = 'FAQ';
+        priority = 45;
+    } else if (/warranty|guarantee/.test(normalized)) {
+        category = 'Warranty';
+        scenarioType = 'FAQ';
+        priority = 50;
+    } else if (/emergency|urgent|asap|help|no heat|no ac|leak|flood/.test(normalized)) {
+        category = 'Emergency';
+        scenarioType = 'EMERGENCY';
+        priority = 95;
+    } else if (/book|schedule|appoint|earliest|soonest|available/.test(normalized)) {
+        category = 'Scheduling';
+        scenarioType = 'BOOKING';
+        priority = 75;
+        followUpMode = 'ASK_IF_BOOK';
+    }
     
     // Generate triggers from examples
     const triggers = gap.examples
@@ -317,13 +432,23 @@ function generateFallbackScenario(gap, company) {
         scenario: {
             name: gap.representative.substring(0, 50),
             category,
+            scenarioType,
+            priority,
+            status: 'draft',
             triggers: triggers.length > 0 ? triggers : [normalized],
             negativeTriggers: [],
-            quickReply: `I can help you with that. Let me get more information to assist you.`,
+            quickReplies: ['I can help you with that. Let me get more information to assist you.'],
+            fullReplies: [],
+            followUpMode,
+            followUpQuestionText: followUpMode === 'ASK_IF_BOOK' ? 'Would you like to schedule an appointment?' : null,
+            actionType: scenarioType === 'BOOKING' ? 'REQUIRE_BOOKING' : 'REPLY_ONLY',
+            bookingIntent: scenarioType === 'BOOKING',
+            entityCapture: [],
+            notes: `Auto-generated fallback. Detected ${gap.totalCalls} similar calls.`,
             suggestedPlaceholders: [],
-            responseGoal: 'Answer caller question',
             generatedBy: 'fallback',
-            confidence: 0.5
+            confidence: 0.5,
+            sourceGap: gap.representative
         },
         tokensUsed: 0
     };
@@ -793,6 +918,83 @@ router.post('/:companyId/scenarios/add-triggers', async (req, res) => {
         res.status(500).json({ error: 'Failed to add triggers', details: error.message });
     }
 });
+
+/**
+ * POST /:companyId/calls/preview
+ * 
+ * Get basic info for a list of call IDs (for "View Calls" modal)
+ * MULTI-TENANT SAFE: Always filters by companyId
+ */
+router.post('/:companyId/calls/preview', async (req, res) => {
+    const { companyId } = req.params;
+    const { callIds } = req.body;
+    
+    try {
+        if (!callIds || !Array.isArray(callIds) || callIds.length === 0) {
+            return res.json({ success: true, calls: [] });
+        }
+        
+        // CRITICAL: Import CallRecording model
+        const CallRecording = require('../../models/CallRecording');
+        
+        // MULTI-TENANT SAFETY: Query MUST include BOTH conditions
+        // Even if someone passes callIds from another company, they get NOTHING
+        const calls = await CallRecording.find({
+            _id: { $in: callIds.slice(0, 20) }, // Limit to 20
+            companyId: companyId // ← HARD FILTER - prevents bleeding
+        })
+        .select('_id companyId createdAt callerPhone duration outcome transcript callSid')
+        .sort({ createdAt: -1 })
+        .lean();
+        
+        // Format for frontend
+        const formatted = calls.map(call => {
+            // Get first few words of transcript for preview
+            let firstLine = '';
+            if (call.transcript && Array.isArray(call.transcript)) {
+                const callerTurn = call.transcript.find(t => t.role === 'caller' || t.speaker === 'caller');
+                if (callerTurn) {
+                    firstLine = (callerTurn.text || callerTurn.content || '').substring(0, 80);
+                    if (firstLine.length === 80) firstLine += '...';
+                }
+            }
+            
+            return {
+                id: call._id.toString(),
+                date: call.createdAt,
+                phone: call.callerPhone || 'Unknown',
+                duration: call.duration || 0,
+                durationFormatted: formatDuration(call.duration || 0),
+                outcome: call.outcome || 'unknown',
+                firstLine: firstLine || 'No transcript available',
+                callSid: call.callSid
+            };
+        });
+        
+        logger.debug('[SCENARIO GAPS] Call preview fetched', {
+            companyId,
+            requestedIds: callIds.length,
+            returnedCalls: formatted.length
+        });
+        
+        res.json({
+            success: true,
+            calls: formatted
+        });
+        
+    } catch (error) {
+        logger.error('[SCENARIO GAPS] Error fetching call preview', { error: error.message, companyId });
+        res.status(500).json({ error: 'Failed to fetch calls', details: error.message });
+    }
+});
+
+// Helper to format duration
+function formatDuration(seconds) {
+    if (!seconds || seconds < 0) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
 
 /**
  * POST /:companyId/gaps/dismiss

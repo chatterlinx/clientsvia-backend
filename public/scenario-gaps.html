@@ -627,6 +627,50 @@
             gap: 12px;
         }
         
+        /* Calls Preview Modal */
+        .call-preview-item {
+            padding: 12px 16px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+        
+        .call-preview-item:hover {
+            background: var(--bg-secondary);
+            border-color: var(--accent-purple);
+        }
+        
+        .call-preview-header {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        
+        .call-date {
+            color: var(--text-secondary);
+        }
+        
+        .call-phone {
+            color: var(--accent-pink);
+            font-weight: 500;
+        }
+        
+        .call-duration {
+            color: var(--text-muted);
+            margin-left: auto;
+        }
+        
+        .call-preview-text {
+            color: var(--text-primary);
+            font-size: 14px;
+            font-style: italic;
+        }
+        
         /* Advanced Settings Accordion */
         .advanced-toggle {
             display: flex;
@@ -802,9 +846,14 @@
                             <option value="Warranty">Warranty</option>
                             <option value="Booking">Booking</option>
                             <option value="Scheduling">Scheduling</option>
+                            <option value="Billing">Billing</option>
+                            <option value="General">General</option>
                             <option value="Other">Other</option>
                         </select>
                     </div>
+                    
+                    <!-- AI Metadata Display -->
+                    <div id="ai-metadata" style="margin-bottom: 16px;"></div>
                 </div>
                 
                 <!-- Triggers (always shown) -->
@@ -855,6 +904,24 @@
         </div>
     </div>
     
+    <!-- Calls Preview Modal -->
+    <div class="modal-overlay" id="calls-modal">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-phone-alt"></i> Calls with this phrase</h2>
+                <button class="modal-close" onclick="closeCallsModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+                <div id="calls-modal-content">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeCallsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+    
     <!-- Toast -->
     <div class="toast" id="toast">
         <i class="fas fa-check-circle"></i>
@@ -874,6 +941,7 @@
         let currentMode = 'existing';  // 'existing' or 'new'
         let existingScenarios = [];
         let selectedExistingScenario = null;
+        let currentPreview = null;  // Stores full AI-generated scenario data
 
         function getAuthToken() {
             return localStorage.getItem('adminToken')
@@ -1001,41 +1069,65 @@
         async function createScenario() {
             const btn = document.getElementById('create-btn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Opening Global Brain...';
             
             try {
-                const token = getAuthToken();
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/create`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        representative: currentGap.representative,
-                        examples: currentGap.examples,
-                        name: document.getElementById('scenario-name').value,
-                        category: document.getElementById('scenario-category').value,
-                        triggers: triggers,
-                        negativeTriggers: negativeTriggers,
-                        quickReply: document.getElementById('scenario-reply').value,
-                        fullReply: document.getElementById('scenario-full-reply').value || null
-                    })
-                });
+                // Build comprehensive scenario object for Global Brain
+                const scenarioData = {
+                    // Basic info
+                    name: document.getElementById('scenario-name').value,
+                    category: document.getElementById('scenario-category').value,
+                    status: 'draft',
+                    
+                    // Classification (from AI or default)
+                    scenarioType: currentPreview?.scenarioType || 'FAQ',
+                    priority: currentPreview?.priority || 50,
+                    
+                    // Triggers
+                    triggers: triggers,
+                    negativeTriggers: negativeTriggers,
+                    
+                    // Replies (multiple variations)
+                    quickReplies: currentPreview?.quickReplies || [document.getElementById('scenario-reply').value],
+                    fullReplies: currentPreview?.fullReplies || (document.getElementById('scenario-full-reply').value ? [document.getElementById('scenario-full-reply').value] : []),
+                    
+                    // Follow-up behavior
+                    followUpMode: currentPreview?.followUpMode || 'NONE',
+                    followUpQuestionText: currentPreview?.followUpQuestionText || null,
+                    
+                    // Wiring/Actions  
+                    actionType: currentPreview?.actionType || 'REPLY_ONLY',
+                    bookingIntent: currentPreview?.bookingIntent || false,
+                    
+                    // Entity capture
+                    entityCapture: currentPreview?.entityCapture || [],
+                    
+                    // Admin notes
+                    notes: currentPreview?.notes || `Created from Scenario Gaps. Gap: "${currentGap?.representative}"`,
+                    
+                    // Placeholders
+                    suggestedPlaceholders: currentPreview?.suggestedPlaceholders || [],
+                    
+                    // Source tracking
+                    source: 'scenario-gaps',
+                    sourceGap: currentGap?.representative
+                };
                 
-                if (!response.ok) throw new Error('Failed to create scenario');
+                // Store in sessionStorage for Global Brain to pick up
+                sessionStorage.setItem('scenarioPrefill', JSON.stringify(scenarioData));
                 
-                const data = await response.json();
-                
+                // Close modal
                 closeModal();
-                showToast('Scenario created successfully!', 'success');
                 
-                // Reload gaps
-                loadGaps();
+                // Open Global Brain with prefill flag
+                // The scenario form will open directly with data pre-filled
+                window.open('/admin-global-instant-responses.html?prefill=scenario', '_blank');
+                
+                showToast('Opening Global Brain with pre-filled data...', 'success');
                 
             } catch (error) {
-                console.error('Error creating scenario:', error);
-                showToast('Failed to create scenario', 'error');
+                console.error('Error preparing scenario:', error);
+                showToast('Failed to prepare scenario', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-magic"></i> Create Scenario';
@@ -1188,8 +1280,8 @@
                         <button class="btn btn-primary" onclick="openCreateModalById('${escapeHtml(gapId)}')">
                             <i class="fas fa-magic"></i> Auto-Create Scenario
                         </button>
-                        <button class="btn btn-secondary" onclick="viewCalls('${gap.callIds?.[0] || ''}')">
-                            <i class="fas fa-eye"></i> View Calls
+                        <button class="btn btn-secondary" onclick="viewCalls('${escapeHtml(gapId)}')">
+                            <i class="fas fa-eye"></i> View Calls (${gap.callIds?.length || 0})
                         </button>
                         <button class="btn btn-ghost" onclick="dismissGapById('${escapeHtml(gapId)}')">
                             <i class="fas fa-times"></i> Dismiss
@@ -1204,6 +1296,7 @@
         // ========================================
         async function openCreateModal(gap) {
             currentGap = gap;
+            currentPreview = null;
             triggers = [];
             negativeTriggers = [];
             selectedExistingScenario = null;
@@ -1217,15 +1310,22 @@
             // Load existing scenarios for dropdown
             await loadExistingScenarios();
             
-            // Generate AI preview for triggers
+            // Generate AI preview - now returns comprehensive scenario data
             const preview = await generatePreview(gap);
             
             if (preview) {
-                // Store for new mode
+                // Store full preview for later use
+                currentPreview = preview;
+                
+                // Basic info
                 document.getElementById('scenario-name').value = preview.name || '';
                 document.getElementById('scenario-category').value = preview.category || 'FAQ';
-                document.getElementById('scenario-reply').value = preview.quickReply || '';
-                document.getElementById('scenario-full-reply').value = preview.fullReply || '';
+                
+                // Replies - handle both array and single formats
+                const quickReply = Array.isArray(preview.quickReplies) ? preview.quickReplies[0] : (preview.quickReply || '');
+                const fullReply = Array.isArray(preview.fullReplies) ? preview.fullReplies[0] : (preview.fullReply || '');
+                document.getElementById('scenario-reply').value = quickReply;
+                document.getElementById('scenario-full-reply').value = fullReply;
                 
                 // Set triggers (used for both modes)
                 triggers = preview.triggers || [gap.representative];
@@ -1233,12 +1333,37 @@
                 
                 negativeTriggers = preview.negativeTriggers || [];
                 renderNegativeTriggers();
+                
+                // Show AI metadata in the modal if available
+                updateAIMetadataDisplay(preview);
             } else {
                 // Fallback
+                currentPreview = null;
                 document.getElementById('scenario-name').value = gap.representative.substring(0, 50);
                 document.getElementById('scenario-reply').value = '';
                 triggers = gap.examples.slice(0, 5).map(e => e.text.toLowerCase());
                 renderTriggers();
+            }
+        }
+        
+        function updateAIMetadataDisplay(preview) {
+            // Show what AI detected (scenarioType, priority, followUpMode, etc.)
+            const metaEl = document.getElementById('ai-metadata');
+            if (metaEl && preview) {
+                const type = preview.scenarioType || 'FAQ';
+                const priority = preview.priority || 50;
+                const action = preview.actionType || 'REPLY_ONLY';
+                const followUp = preview.followUpMode || 'NONE';
+                
+                metaEl.innerHTML = `
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+                        <span class="badge" style="background: var(--bg-tertiary);">Type: ${type}</span>
+                        <span class="badge" style="background: var(--bg-tertiary);">Priority: ${priority}</span>
+                        <span class="badge" style="background: var(--bg-tertiary);">Action: ${action}</span>
+                        ${followUp !== 'NONE' ? `<span class="badge" style="background: var(--accent-purple); color: white;">Follow-up: ${followUp}</span>` : ''}
+                        ${preview.bookingIntent ? '<span class="badge" style="background: var(--accent-pink); color: white;">Booking Intent</span>' : ''}
+                    </div>
+                `;
             }
         }
         
@@ -1455,12 +1580,59 @@
         // ========================================
         // UTILS
         // ========================================
-        function viewCalls(callId) {
-            if (callId) {
-                window.open(`/black-box-detail.html?recordingId=${callId}`, '_blank');
-            } else {
-                showToast('No call ID available', 'error');
+        async function viewCalls(gapId) {
+            const gap = currentGaps.find(g => g.id === gapId);
+            if (!gap || !gap.callIds || gap.callIds.length === 0) {
+                showToast('No calls available for this gap', 'error');
+                return;
             }
+            
+            // Show loading state
+            const modal = document.getElementById('calls-modal');
+            const content = document.getElementById('calls-modal-content');
+            content.innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top: 12px;">Loading calls...</p></div>';
+            modal.classList.add('active');
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/calls/preview`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ callIds: gap.callIds })
+                });
+                
+                if (!response.ok) throw new Error('Failed to load calls');
+                
+                const data = await response.json();
+                
+                if (!data.calls || data.calls.length === 0) {
+                    content.innerHTML = '<p style="text-align: center; color: var(--text-muted);">No calls found</p>';
+                    return;
+                }
+                
+                // Render calls list
+                content.innerHTML = data.calls.map(call => `
+                    <div class="call-preview-item" onclick="window.open('/black-box-detail.html?recordingId=${call.id}', '_blank')">
+                        <div class="call-preview-header">
+                            <span class="call-date">${new Date(call.date).toLocaleDateString()} ${new Date(call.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <span class="call-phone">${escapeHtml(call.phone)}</span>
+                            <span class="call-duration">${call.durationFormatted}</span>
+                        </div>
+                        <div class="call-preview-text">"${escapeHtml(call.firstLine)}"</div>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                console.error('Error loading calls:', error);
+                content.innerHTML = `<p style="text-align: center; color: var(--accent-red);">Failed to load calls: ${error.message}</p>`;
+            }
+        }
+        
+        function closeCallsModal() {
+            document.getElementById('calls-modal').classList.remove('active');
         }
         
         function showToast(message, type = 'success') {
