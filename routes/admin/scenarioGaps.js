@@ -808,8 +808,9 @@ OUTPUT FORMAT (JSON only, no markdown):
     
     "scenarioType": "FAQ|BOOKING|EMERGENCY|TROUBLESHOOT|BILLING|TRANSFER|SMALL_TALK",
     "priority": 0,
+    "minConfidence": 0.6,
     
-    "behavior": "calm_professional",
+    "behavior": "calm_professional|empathetic_reassuring|professional_efficient",
     
     "triggers": [
         "short trigger",
@@ -939,6 +940,15 @@ SCENARIO TYPE GUIDE:
 - TROUBLESHOOT: Problem-solving - priority 50-70
 - BILLING: Payment questions - priority 40-60
 - SMALL_TALK: Greetings, thanks - priority -5 to 10
+
+MIN CONFIDENCE GUIDE (how certain AI must be to use this scenario):
+- EMERGENCY: 0.5-0.7 (lower = catch more urgent calls, never miss emergency)
+- BOOKING: 0.6-0.75 (medium)
+- FAQ: 0.5-0.65 (medium)
+- TROUBLESHOOT: 0.6-0.7 (medium-high)
+- BILLING: 0.6-0.75 (medium-high, avoid wrong account issues)
+- SMALL_TALK: 0.4-0.6 (lower = greetings match easily)
+- TRANSFER: 0.7-0.85 (high = be sure before transferring)
 
 FOLLOW-UP MODE GUIDE:
 - NONE: Just answer, let conversation continue
@@ -1071,6 +1081,8 @@ Output VALID JSON only. No markdown. No explanations.`
                 // Classification
                 scenarioType: s.scenarioType || 'FAQ',
                 priority: typeof s.priority === 'number' ? s.priority : 50,
+                minConfidence: typeof s.minConfidence === 'number' ? s.minConfidence : 0.6,
+                behavior: s.behavior || 'calm_professional',
                 status: 'draft',
                 
                 // Triggers (required)
@@ -1104,6 +1116,27 @@ Output VALID JSON only. No markdown. No explanations.`
                 
                 // Placeholders for company values
                 suggestedPlaceholders: Array.isArray(s.suggestedPlaceholders) ? s.suggestedPlaceholders : [],
+                
+                // Advanced settings (if provided by GPT)
+                cooldownSeconds: typeof s.cooldownSeconds === 'number' ? s.cooldownSeconds : 0,
+                followUpMessages: Array.isArray(s.followUpMessages) ? s.followUpMessages : null,
+                actionHooks: Array.isArray(s.actionHooks) ? s.actionHooks : 
+                    (typeof s.actionHooks === 'string' ? s.actionHooks.split(',').map(h => h.trim()) : []),
+                handoffPolicy: s.handoffPolicy || 'low_confidence',
+                
+                // Regex triggers (if provided)
+                regexTriggers: Array.isArray(s.regexTriggers) ? s.regexTriggers : [],
+                
+                // Template variables (if provided) - convert array to object
+                dynamicVariables: Array.isArray(s.templateVariables) 
+                    ? s.templateVariables.reduce((acc, v) => {
+                        if (typeof v === 'string' && v.includes('=')) {
+                            const [key, ...rest] = v.split('=');
+                            acc[key.trim()] = rest.join('=').trim();
+                        }
+                        return acc;
+                    }, {})
+                    : (s.dynamicVariables || null),
                 
                 // Metadata
                 generatedBy: 'ai',
@@ -1163,6 +1196,17 @@ function generateFallbackScenario(gap, company) {
         .map(e => normalizeText(e.text))
         .filter(t => t.length > 5);
     
+    // Determine minConfidence based on scenarioType
+    const minConfidenceMap = {
+        'EMERGENCY': 0.55,
+        'BOOKING': 0.65,
+        'FAQ': 0.6,
+        'TROUBLESHOOT': 0.65,
+        'BILLING': 0.7,
+        'SMALL_TALK': 0.5,
+        'TRANSFER': 0.75
+    };
+    
     return {
         success: true,
         scenario: {
@@ -1170,16 +1214,24 @@ function generateFallbackScenario(gap, company) {
             category,
             scenarioType,
             priority,
+            minConfidence: minConfidenceMap[scenarioType] || 0.6,
+            behavior: scenarioType === 'EMERGENCY' ? 'empathetic_reassuring' : 'calm_professional',
             status: 'draft',
             triggers: triggers.length > 0 ? triggers : [normalized],
             negativeTriggers: [],
+            regexTriggers: [],
             quickReplies: ['I can help you with that. Let me get more information to assist you.'],
             fullReplies: [],
+            quickReplies_noName: null,
+            fullReplies_noName: null,
             followUpMode,
             followUpQuestionText: followUpMode === 'ASK_IF_BOOK' ? 'Would you like to schedule an appointment?' : null,
             actionType: scenarioType === 'BOOKING' ? 'REQUIRE_BOOKING' : 'REPLY_ONLY',
             bookingIntent: scenarioType === 'BOOKING',
             entityCapture: [],
+            cooldownSeconds: scenarioType === 'SMALL_TALK' ? 30 : 0,
+            handoffPolicy: scenarioType === 'BILLING' ? 'always' : 'low_confidence',
+            actionHooks: [],
             notes: `Auto-generated fallback. Detected ${gap.totalCalls} similar calls.`,
             suggestedPlaceholders: [],
             generatedBy: 'fallback',
