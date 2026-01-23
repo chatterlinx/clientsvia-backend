@@ -12158,6 +12158,31 @@ Higher = detailed, thorough scenarios (more context)
                 const typeSelect = document.getElementById('scenario-type');
                 if (typeSelect && p.scenarioType) typeSelect.value = p.scenarioType;
                 
+                // Behavior - dynamically populated dropdown
+                const behaviorSelect = document.getElementById('scenario-behavior');
+                if (behaviorSelect && p.behavior) {
+                    // Map AI behavior values to dropdown values
+                    const behaviorMap = {
+                        'friendly_warm': 'friendly_warm',
+                        'empathetic_reassuring': 'empathetic_reassuring', 
+                        'professional_efficient': 'professional_efficient',
+                        'enthusiastic_positive': 'enthusiastic_positive',
+                        'calm_patient': 'calm_patient'
+                    };
+                    const mappedBehavior = behaviorMap[p.behavior] || p.behavior;
+                    // Try to set immediately, then retry after dropdown populates
+                    const trySetBehavior = () => {
+                        const options = Array.from(behaviorSelect.options).map(o => o.value);
+                        if (options.includes(mappedBehavior)) {
+                            behaviorSelect.value = mappedBehavior;
+                        } else if (options.length <= 1) {
+                            // Dropdown not populated yet, retry
+                            setTimeout(trySetBehavior, 200);
+                        }
+                    };
+                    trySetBehavior();
+                }
+                
                 // Triggers - textarea format (one per line)
                 const triggersTextarea = document.getElementById('scenario-triggers');
                 if (triggersTextarea && p.triggers) {

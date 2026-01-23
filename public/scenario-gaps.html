@@ -853,7 +853,7 @@
                         <div class="preview-value" id="preview-name">--</div>
                     </div>
                     
-                    <!-- Category & Type -->
+                    <!-- Category, Type & Behavior -->
                     <div class="preview-row">
                         <div class="preview-section" style="flex: 1;">
                             <div class="preview-label">Category</div>
@@ -869,6 +869,12 @@
                         </div>
                     </div>
                     
+                    <!-- Behavior -->
+                    <div class="preview-section">
+                        <div class="preview-label">🎭 AI Behavior</div>
+                        <div class="preview-value" id="preview-behavior" style="color: var(--accent-purple);">--</div>
+                    </div>
+                    
                     <!-- Triggers -->
                     <div class="preview-section">
                         <div class="preview-label">Triggers <span class="badge" id="trigger-count">0</span></div>
@@ -877,8 +883,14 @@
                     
                     <!-- Quick Reply Preview -->
                     <div class="preview-section">
-                        <div class="preview-label">Quick Reply</div>
-                        <div class="preview-reply" id="preview-reply">--</div>
+                        <div class="preview-label">⚡ Quick Replies</div>
+                        <div id="preview-quick-replies" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                    </div>
+                    
+                    <!-- Full Reply Preview -->
+                    <div class="preview-section">
+                        <div class="preview-label">💬 Full Replies</div>
+                        <div id="preview-full-replies" style="display: flex; flex-direction: column; gap: 8px;"></div>
                     </div>
                     
                     <!-- Info box -->
@@ -1216,6 +1228,15 @@
             document.getElementById('preview-loading').style.display = 'none';
             document.getElementById('preview-content').style.display = 'block';
             
+            // Behavior display mapping
+            const behaviorLabels = {
+                'friendly_warm': '🤗 Friendly & Warm',
+                'empathetic_reassuring': '😊 Empathetic & Reassuring',
+                'professional_efficient': '💼 Professional & Efficient',
+                'enthusiastic_positive': '🎉 Enthusiastic & Positive',
+                'calm_patient': '🧘 Calm & Patient'
+            };
+            
             if (preview) {
                 currentPreview = preview;
                 
@@ -1225,6 +1246,12 @@
                 document.getElementById('preview-type').textContent = preview.scenarioType || 'FAQ';
                 document.getElementById('preview-priority').textContent = preview.priority || 50;
                 
+                // Behavior
+                const behaviorEl = document.getElementById('preview-behavior');
+                if (behaviorEl) {
+                    behaviorEl.textContent = behaviorLabels[preview.behavior] || preview.behavior || 'Friendly & Warm';
+                }
+                
                 // Triggers
                 const triggersEl = document.getElementById('preview-triggers');
                 const triggers = preview.triggers || [gap.representative];
@@ -1233,9 +1260,23 @@
                     `<span class="trigger-tag">${escapeHtml(t)}</span>`
                 ).join('') + (triggers.length > 10 ? `<span class="trigger-tag" style="background: var(--bg-tertiary);">+${triggers.length - 10} more</span>` : '');
                 
-                // Reply
-                const quickReply = Array.isArray(preview.quickReplies) ? preview.quickReplies[0] : (preview.quickReply || 'I can help with that.');
-                document.getElementById('preview-reply').textContent = quickReply;
+                // Quick Replies (multiple)
+                const quickRepliesEl = document.getElementById('preview-quick-replies');
+                const quickReplies = Array.isArray(preview.quickReplies) ? preview.quickReplies : [preview.quickReply || 'I can help with that.'];
+                quickRepliesEl.innerHTML = quickReplies.map(r => 
+                    `<div class="preview-reply" style="background: #10b981; color: white; padding: 12px; border-radius: 8px; font-size: 14px;">${escapeHtml(r)}</div>`
+                ).join('');
+                
+                // Full Replies (multiple)
+                const fullRepliesEl = document.getElementById('preview-full-replies');
+                const fullReplies = preview.fullReplies || [];
+                if (fullReplies.length > 0) {
+                    fullRepliesEl.innerHTML = fullReplies.map(r => 
+                        `<div class="preview-reply" style="background: #3b82f6; color: white; padding: 12px; border-radius: 8px; font-size: 14px;">${escapeHtml(r)}</div>`
+                    ).join('');
+                } else {
+                    fullRepliesEl.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
+                }
                 
             } else {
                 // Fallback display
@@ -1243,11 +1284,13 @@
                 document.getElementById('preview-category').textContent = 'FAQ';
                 document.getElementById('preview-type').textContent = 'FAQ';
                 document.getElementById('preview-priority').textContent = '50';
+                document.getElementById('preview-behavior').textContent = '🤗 Friendly & Warm';
                 document.getElementById('trigger-count').textContent = gap.examples?.length || 1;
                 document.getElementById('preview-triggers').innerHTML = gap.examples?.slice(0, 5).map(e => 
                     `<span class="trigger-tag">${escapeHtml(e.text)}</span>`
                 ).join('') || `<span class="trigger-tag">${escapeHtml(gap.representative)}</span>`;
-                document.getElementById('preview-reply').textContent = 'I can help with that. Let me get more information.';
+                document.getElementById('preview-quick-replies').innerHTML = '<div class="preview-reply" style="background: #10b981; color: white; padding: 12px; border-radius: 8px;">I can help with that. Let me get more information.</div>';
+                document.getElementById('preview-full-replies').innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
             }
         }
         
@@ -1264,6 +1307,7 @@
                 category: p.category || 'FAQ',
                 status: 'draft',
                 scenarioType: p.scenarioType || 'FAQ',
+                behavior: p.behavior || 'friendly_warm',
                 priority: p.priority || 50,
                 triggers: p.triggers || [currentGap?.representative],
                 negativeTriggers: p.negativeTriggers || [],

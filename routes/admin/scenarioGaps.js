@@ -200,7 +200,7 @@ async function generateScenarioFromGap(gap, company) {
     
     const tradeName = company.tradeKey?.toUpperCase() || 'SERVICE';
     
-    const prompt = `You are an expert at creating comprehensive voice AI receptionist scenarios for ${tradeName} businesses.
+    const prompt = `You are an expert at creating WARM, HUMAN, IMPRESSIVE voice AI receptionist scenarios for ${tradeName} businesses.
 
 ═══════════════════════════════════════════════════════════════════════════════
 CONTEXT
@@ -212,22 +212,36 @@ CALLER PHRASES (asked ${gap.totalCalls} times, fell through to expensive LLM):
 ${examples}
 
 ═══════════════════════════════════════════════════════════════════════════════
-YOUR TASK: Create a COMPLETE scenario that covers ALL ways callers might say this
+YOUR MISSION: Create a scenario that sounds HUMAN, WARM, and IMPRESSIVE
 ═══════════════════════════════════════════════════════════════════════════════
 
-TRIGGER RULES (CRITICAL):
-1. Include 10-15 trigger variations - both SHORT (2-3 words) and LONG (5-8 words)
-2. Include question formats: "when is...", "what's the...", "do you have..."
-3. Include statement formats: "i need...", "looking for...", "i want..."
-4. Include slang/casual: "y'all", "gonna", "wanna", contractions
+⚡ TRIGGER RULES (CRITICAL):
+1. Include 10-15 trigger variations - SHORT (2-3 words) AND LONG (5-8 words)
+2. Question formats: "when is...", "what's the...", "do you have..."
+3. Statement formats: "i need...", "looking for...", "i want..."
+4. Casual/natural: "y'all", "gonna", "wanna", contractions
 5. NO caller-specific details (names, times, filler words)
-6. NO leading/trailing punctuation
 
-REPLY RULES:
-1. quickReplies: 3 short variations (1-2 sentences each) - natural & varied
-2. fullReplies: 2 detailed variations (2-4 sentences) - more context
-3. Use {placeholderName} for company-specific values
-4. Sound human, not robotic - avoid corporate speak
+🎯 REPLY RULES - THIS IS CRITICAL FOR SOUNDING HUMAN:
+1. ALWAYS use {name} placeholder to personalize greetings
+2. Acknowledge returning customers with warmth: "Great to hear from you again!"
+3. Sound like a real person, NOT corporate/robotic
+4. Show genuine care and enthusiasm
+5. quickReplies: 3 variations (1-2 sentences) - warm, personal, varied
+6. fullReplies: 2 variations (2-4 sentences) - more detail, same warmth
+7. Use company-specific placeholders: {companyName}, {servicePrice}, etc.
+
+❌ NEVER SAY (sounds robotic):
+- "How can I assist you today?"
+- "What can I do for you?"
+- "Thank you for calling"
+- Generic corporate greetings
+
+✅ INSTEAD SAY (sounds human):
+- "Hey {name}! Good to hear from you."
+- "Hi {name}! Thanks for reaching out to us."
+- "Great to have you back, {name}!"
+- "{name}, I'm glad you called!"
 
 ═══════════════════════════════════════════════════════════════════════════════
 OUTPUT FORMAT (JSON only, no markdown):
@@ -238,6 +252,8 @@ OUTPUT FORMAT (JSON only, no markdown):
     
     "scenarioType": "FAQ|BOOKING|EMERGENCY|TROUBLESHOOT|BILLING|TRANSFER|SMALL_TALK",
     "priority": 0,
+    
+    "behavior": "friendly_warm|empathetic_reassuring|professional_efficient|enthusiastic_positive|calm_patient",
     
     "triggers": [
         "short trigger",
@@ -255,48 +271,51 @@ OUTPUT FORMAT (JSON only, no markdown):
     "negativeTriggers": ["phrases that look similar but mean something DIFFERENT"],
     
     "quickReplies": [
-        "Natural response variation 1. {placeholder} if needed.",
-        "Different phrasing for variation 2.",
-        "Third unique way to respond."
+        "Hey {name}! [warm, personal response with {placeholder} if relevant]",
+        "{name}, [different warm phrasing variation 2]",
+        "[Third unique warm response]"
     ],
     
     "fullReplies": [
-        "More detailed response with additional context. This gives the caller more information. {placeholder} values work here too.",
-        "Alternative detailed response covering the same topic differently."
+        "Hi {name}! [Warm greeting]. [More detailed helpful response]. [Proactive offer to help further]",
+        "[Alternative warm greeting to {name}]. [Different detailed response]. [Close warmly]"
     ],
     
     "followUpMode": "NONE|ASK_IF_BOOK|ASK_FOLLOWUP_QUESTION",
-    "followUpQuestionText": "If followUpMode is ASK_FOLLOWUP_QUESTION, what to ask?",
+    "followUpQuestionText": "Would you like me to get that set up for you, {name}?",
     
     "actionType": "REPLY_ONLY|REQUIRE_BOOKING|TRANSFER",
     "bookingIntent": false,
     
-    "entityCapture": ["name", "phone", "other_entities_to_extract_if_any"],
+    "entityCapture": ["name"],
     
-    "notes": "Internal note about when this scenario fires and any edge cases",
+    "notes": "Internal note about when this scenario fires",
     
     "suggestedPlaceholders": [
-        {"key": "placeholderName", "description": "What to configure", "exampleValue": "example"}
+        {"key": "name", "description": "Caller's name (auto-captured)", "exampleValue": "Mark"},
+        {"key": "companyName", "description": "Your business name", "exampleValue": "${company.companyName || 'Our Company'}"}
     ]
 }
 
+BEHAVIOR GUIDE (pick the most appropriate):
+- friendly_warm: Casual, welcoming, great for most scenarios
+- empathetic_reassuring: For problems, complaints, service issues
+- professional_efficient: Business inquiries, billing, formal
+- enthusiastic_positive: Booking, returning customers, good news
+- calm_patient: Frustrated callers, complex questions, emergencies
+
 SCENARIO TYPE GUIDE:
-- FAQ: Informational questions (pricing, hours, service area) - priority 40-60
-- BOOKING: Caller wants to schedule - priority 70-85, bookingIntent=true
-- EMERGENCY: Urgent issues (no heat, gas leak, flooding) - priority 90-100
-- TROUBLESHOOT: Problem-solving questions - priority 50-70
-- BILLING: Payment/invoice questions - priority 40-60
-- SMALL_TALK: Greetings, thanks, casual - priority -5 to 10
+- FAQ: Informational (pricing, hours, area) - priority 40-60
+- BOOKING: Wants to schedule - priority 70-85, bookingIntent=true
+- EMERGENCY: Urgent (no heat, leak, flood) - priority 90-100
+- TROUBLESHOOT: Problem-solving - priority 50-70
+- BILLING: Payment questions - priority 40-60
+- SMALL_TALK: Greetings, thanks - priority -5 to 10
 
 FOLLOW-UP MODE GUIDE:
-- NONE: Just answer and let conversation continue
-- ASK_IF_BOOK: After answering, ask "Would you like to schedule?"
-- ASK_FOLLOWUP_QUESTION: Ask a specific follow-up question
-
-ACTION TYPE GUIDE:
-- REPLY_ONLY: Just respond (FAQ, info questions)
-- REQUIRE_BOOKING: Start booking collection (set bookingIntent=true)
-- TRANSFER: Escalate to human immediately`;
+- NONE: Just answer, let conversation continue
+- ASK_IF_BOOK: After answering, offer to schedule
+- ASK_FOLLOWUP_QUESTION: Ask a specific follow-up`;
 
     try {
         const response = await openai.chat.completions.create({
