@@ -1517,6 +1517,53 @@
         </div>
     </div>
     
+    <!-- Scenario Review Modal (2-column) -->
+    <div class="modal-overlay" id="scenario-review-modal">
+        <div class="modal" style="max-width: 1100px; width: 95%;">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-check"></i> <span id="review-scenario-name">Scenario Review</span></h2>
+                <button class="modal-close" onclick="closeScenarioReview()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 0; max-height: 70vh; overflow-y: auto;">
+                <!-- Two Column Layout -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; min-height: 400px;">
+                    <!-- Left Column: Current Data -->
+                    <div style="padding: 20px; border-right: 1px solid var(--border-color); background: var(--bg-tertiary);">
+                        <h3 style="margin-bottom: 16px; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">
+                            <i class="fas fa-file-alt"></i> Current Scenario Data
+                        </h3>
+                        <div id="review-current-data">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column: Audit Results -->
+                    <div style="padding: 20px;">
+                        <h3 style="margin-bottom: 16px; font-size: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">
+                            <i class="fas fa-check-double"></i> Audit Results
+                        </h3>
+                        <div id="review-audit-results">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 13px; color: var(--text-muted);">
+                    <span id="review-issue-count">0 issues</span> in this scenario
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-secondary" onclick="skipScenarioReview()">
+                        <i class="fas fa-forward"></i> Skip
+                    </button>
+                    <button class="btn btn-primary btn-large" onclick="approveAndFixScenario()" id="approve-fix-btn">
+                        <i class="fas fa-magic"></i> Approve & Auto-Fix All
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Toast -->
     <div class="toast" id="toast">
         <i class="fas fa-check-circle"></i>
@@ -1533,6 +1580,7 @@
         let currentPreview = null;
         let selectedDays = 14;
         let lastAuditResult = null;
+        let currentReviewScenarioIdx = null;
         
         // ========================================
         // TAB SWITCHING
@@ -1670,25 +1718,31 @@
             document.getElementById('rules-checked-list').style.display = 'block';
             document.getElementById('rules-toggle-icon').className = 'fas fa-chevron-up';
             
-            // Build violations list
+            // Build SCENARIO list (grouped by scenario, not individual violations)
             const violationsList = document.getElementById('violations-list');
-            const allViolations = [];
             
-            // Collect all violations from all scenarios
-            (result.scenarios || []).forEach(scenario => {
-                (scenario.violations || []).forEach(v => {
-                    allViolations.push({
-                        ...v,
-                        scenarioName: scenario.name,
-                        scenarioId: scenario.scenarioId
-                    });
+            // Get scenarios with issues
+            const scenariosWithIssues = (result.scenarios || [])
+                .filter(s => s.violations && s.violations.length > 0)
+                .sort((a, b) => {
+                    // Sort by error count, then warning count
+                    const aErrors = a.violations.filter(v => v.severity === 'error').length;
+                    const bErrors = b.violations.filter(v => v.severity === 'error').length;
+                    if (aErrors !== bErrors) return bErrors - aErrors;
+                    return b.violations.length - a.violations.length;
                 });
-            });
+            
+            // Store for modal use
+            window.auditScenarios = scenariosWithIssues;
+            window.fullAuditResult = result;
+            
+            const totalViolations = scenariosWithIssues.reduce((sum, s) => sum + s.violations.length, 0);
             
             // Update count
-            document.getElementById('violations-count').textContent = `(${allViolations.length} total)`;
+            document.getElementById('violations-count').textContent = 
+                `(${scenariosWithIssues.length} scenarios, ${totalViolations} issues)`;
             
-            if (allViolations.length === 0) {
+            if (scenariosWithIssues.length === 0) {
                 violationsList.innerHTML = `
                     <div class="audit-empty" style="padding: 40px;">
                         <i class="fas fa-check-circle" style="color: var(--accent-green);"></i>
@@ -1699,40 +1753,49 @@
                 return;
             }
             
-            // Sort by severity (errors first)
-            const severityOrder = { error: 0, warning: 1, info: 2 };
-            allViolations.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
-            
-            // Store violations for fix functionality
-            window.auditViolations = allViolations;
-            
-            // Render violations (limit to first 50)
-            violationsList.innerHTML = allViolations.slice(0, 50).map((v, idx) => `
-                <div class="violation-card ${v.severity}" id="violation-${idx}">
-                    <div class="violation-header">
-                        <span class="violation-scenario">${escapeHtml(v.scenarioName)}</span>
-                        <span class="violation-severity ${v.severity}">${v.severity}</span>
+            // Render SCENARIO cards (not individual violations)
+            violationsList.innerHTML = scenariosWithIssues.map((scenario, idx) => {
+                const errorCount = scenario.violations.filter(v => v.severity === 'error').length;
+                const warningCount = scenario.violations.filter(v => v.severity === 'warning').length;
+                const infoCount = scenario.violations.filter(v => v.severity === 'info').length;
+                
+                return `
+                <div class="scenario-audit-card" onclick="openScenarioReview(${idx})" style="
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border-color);
+                    border-radius: 12px;
+                    padding: 16px;
+                    margin-bottom: 12px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                " onmouseover="this.style.borderColor='var(--accent-purple)'" onmouseout="this.style.borderColor='var(--border-color)'">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 15px; margin-bottom: 4px;">
+                                ${escapeHtml(scenario.name)}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted);">
+                                ${escapeHtml(scenario.scenarioType || 'FAQ')} • ${escapeHtml(scenario.category || 'General')}
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            ${errorCount > 0 ? `<span style="background: var(--accent-red); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${errorCount} errors</span>` : ''}
+                            ${warningCount > 0 ? `<span style="background: var(--accent-yellow); color: #000; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${warningCount} warnings</span>` : ''}
+                            ${infoCount > 0 ? `<span style="background: var(--accent-blue); color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">${infoCount} info</span>` : ''}
+                        </div>
                     </div>
-                    <div class="violation-message">${escapeHtml(v.message)}</div>
-                    <span class="violation-field">${escapeHtml(v.field)}</span>
-                    ${v.suggestion ? `<div class="violation-suggestion"><i class="fas fa-lightbulb"></i> ${escapeHtml(v.suggestion)}</div>` : ''}
-                    <div class="violation-actions">
-                        <button class="fix-btn" onclick="generateFix(${idx})" id="fix-btn-${idx}">
-                            <i class="fas fa-magic"></i>
-                            Auto-Fix with AI
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            ${scenario.violations.slice(0, 2).map(v => `<span style="margin-right: 8px;">• ${escapeHtml(v.message.substring(0, 40))}${v.message.length > 40 ? '...' : ''}</span>`).join('')}
+                            ${scenario.violations.length > 2 ? `<span>+${scenario.violations.length - 2} more</span>` : ''}
+                        </div>
+                        <button style="background: var(--accent-purple); color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer;">
+                            <i class="fas fa-search"></i> Review & Fix
                         </button>
                     </div>
-                    <div id="fix-preview-${idx}" style="display: none;"></div>
                 </div>
-            `).join('');
-            
-            if (allViolations.length > 50) {
-                violationsList.innerHTML += `
-                    <p style="text-align: center; color: var(--text-muted); padding: 16px;">
-                        ...and ${allViolations.length - 50} more violations
-                    </p>
                 `;
-            }
+            }).join('');
         }
         
         function getHealthClass(score) {
@@ -1754,6 +1817,200 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+        
+        // ========================================
+        // SCENARIO REVIEW MODAL
+        // ========================================
+        function openScenarioReview(scenarioIdx) {
+            const scenario = window.auditScenarios[scenarioIdx];
+            if (!scenario) return;
+            
+            currentReviewScenarioIdx = scenarioIdx;
+            
+            // Update modal header
+            document.getElementById('review-scenario-name').textContent = scenario.name;
+            document.getElementById('review-issue-count').textContent = 
+                `${scenario.violations.length} issue${scenario.violations.length !== 1 ? 's' : ''}`;
+            
+            // Build left column (current data)
+            const currentDataEl = document.getElementById('review-current-data');
+            currentDataEl.innerHTML = buildCurrentDataView(scenario);
+            
+            // Build right column (audit results)
+            const auditResultsEl = document.getElementById('review-audit-results');
+            auditResultsEl.innerHTML = buildAuditResultsView(scenario);
+            
+            // Show modal
+            document.getElementById('scenario-review-modal').classList.add('active');
+        }
+        
+        function buildCurrentDataView(scenario) {
+            // Get full scenario data from audit result
+            const fullScenario = window.fullAuditResult?.scenarios?.find(
+                s => s.scenarioId === scenario.scenarioId
+            ) || scenario;
+            
+            // Find the matching scenario in raw data if needed
+            let rawScenario = fullScenario;
+            
+            const fields = [
+                { key: 'name', label: 'Name', icon: 'fa-tag' },
+                { key: 'scenarioType', label: 'Type', icon: 'fa-folder' },
+                { key: 'category', label: 'Category', icon: 'fa-list' },
+                { key: 'behavior', label: 'Behavior', icon: 'fa-user' },
+                { key: 'minConfidence', label: 'Min Confidence', icon: 'fa-chart-line' },
+                { key: 'triggers', label: 'Triggers', icon: 'fa-bolt', isArray: true, limit: 5 },
+                { key: 'quickReplies', label: 'Quick Replies', icon: 'fa-comment', isArray: true },
+                { key: 'fullReplies', label: 'Full Replies', icon: 'fa-comments', isArray: true },
+                { key: 'followUpMode', label: 'Follow-Up Mode', icon: 'fa-forward' },
+                { key: 'actionType', label: 'Action Type', icon: 'fa-cog' }
+            ];
+            
+            return fields.map(field => {
+                let value = rawScenario[field.key];
+                let displayValue = '';
+                
+                if (field.isArray && Array.isArray(value)) {
+                    const items = field.limit ? value.slice(0, field.limit) : value;
+                    displayValue = items.map((item, i) => 
+                        `<div style="padding: 4px 8px; background: var(--bg-secondary); border-radius: 4px; margin: 2px 0; font-size: 12px;">
+                            <span style="color: var(--text-muted);">[${i}]</span> ${escapeHtml(typeof item === 'string' ? item : JSON.stringify(item))}
+                        </div>`
+                    ).join('');
+                    if (field.limit && value.length > field.limit) {
+                        displayValue += `<div style="font-size: 11px; color: var(--text-muted); padding: 4px;">+${value.length - field.limit} more</div>`;
+                    }
+                } else {
+                    displayValue = `<span style="color: var(--text-primary);">${escapeHtml(value?.toString() || '(not set)')}</span>`;
+                }
+                
+                // Check if this field has violations
+                const fieldViolations = scenario.violations.filter(v => 
+                    v.field === field.key || v.field.startsWith(field.key + '[')
+                );
+                const hasIssue = fieldViolations.length > 0;
+                
+                return `
+                    <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-secondary); border-radius: 8px; border-left: 3px solid ${hasIssue ? 'var(--accent-red)' : 'var(--accent-green)'};">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas ${field.icon}"></i> ${field.label}
+                            ${hasIssue ? `<span style="color: var(--accent-red);">(${fieldViolations.length} issue${fieldViolations.length > 1 ? 's' : ''})</span>` : '<span style="color: var(--accent-green);">✓</span>'}
+                        </div>
+                        <div style="font-size: 13px;">
+                            ${displayValue}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function buildAuditResultsView(scenario) {
+            if (!scenario.violations || scenario.violations.length === 0) {
+                return `
+                    <div style="text-align: center; padding: 40px; color: var(--accent-green);">
+                        <i class="fas fa-check-circle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                        <h3>All Checks Passed!</h3>
+                        <p style="color: var(--text-muted);">This scenario meets all dispatcher guidelines.</p>
+                    </div>
+                `;
+            }
+            
+            // Group violations by field
+            const byField = {};
+            scenario.violations.forEach(v => {
+                const fieldKey = v.field.split('[')[0]; // Group array items together
+                if (!byField[fieldKey]) byField[fieldKey] = [];
+                byField[fieldKey].push(v);
+            });
+            
+            return Object.entries(byField).map(([fieldKey, violations]) => `
+                <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px;">
+                    <div style="font-weight: 600; margin-bottom: 8px; color: var(--accent-red);">
+                        <i class="fas fa-exclamation-triangle"></i> ${escapeHtml(fieldKey)}
+                    </div>
+                    ${violations.map(v => `
+                        <div style="padding: 8px; background: var(--bg-secondary); border-radius: 6px; margin-bottom: 6px; border-left: 3px solid ${v.severity === 'error' ? 'var(--accent-red)' : v.severity === 'warning' ? 'var(--accent-yellow)' : 'var(--accent-blue)'};">
+                            <div style="font-size: 13px; margin-bottom: 4px;">${escapeHtml(v.message)}</div>
+                            ${v.value ? `<div style="font-size: 11px; color: var(--text-muted); font-family: monospace; background: var(--bg-tertiary); padding: 4px 6px; border-radius: 4px; margin-bottom: 4px;">Current: "${escapeHtml(v.value?.toString().substring(0, 80))}${v.value?.toString().length > 80 ? '...' : ''}"</div>` : ''}
+                            ${v.suggestion ? `<div style="font-size: 12px; color: var(--accent-green);"><i class="fas fa-lightbulb"></i> ${escapeHtml(v.suggestion)}</div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+        }
+        
+        function closeScenarioReview() {
+            document.getElementById('scenario-review-modal').classList.remove('active');
+            currentReviewScenarioIdx = null;
+        }
+        
+        function skipScenarioReview() {
+            // Move to next scenario with issues
+            if (currentReviewScenarioIdx !== null && window.auditScenarios) {
+                const nextIdx = currentReviewScenarioIdx + 1;
+                if (nextIdx < window.auditScenarios.length) {
+                    openScenarioReview(nextIdx);
+                } else {
+                    closeScenarioReview();
+                    showToast('All scenarios reviewed!', 'success');
+                }
+            } else {
+                closeScenarioReview();
+            }
+        }
+        
+        async function approveAndFixScenario() {
+            const scenario = window.auditScenarios[currentReviewScenarioIdx];
+            if (!scenario) return;
+            
+            const btn = document.getElementById('approve-fix-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Fixing all issues...';
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/fix-scenario`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scenarioId: scenario.scenarioId,
+                        violations: scenario.violations
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showToast(`Fixed ${result.fixesApplied} issues in "${scenario.name}"`, 'success');
+                    
+                    // Remove this scenario from the list
+                    window.auditScenarios.splice(currentReviewScenarioIdx, 1);
+                    
+                    // Update the violations list UI
+                    displayAuditResults(window.fullAuditResult);
+                    
+                    // Move to next scenario or close
+                    if (window.auditScenarios.length > 0) {
+                        const nextIdx = Math.min(currentReviewScenarioIdx, window.auditScenarios.length - 1);
+                        openScenarioReview(nextIdx);
+                    } else {
+                        closeScenarioReview();
+                        showToast('All scenarios fixed!', 'success');
+                    }
+                } else {
+                    throw new Error(result.error || 'Fix failed');
+                }
+                
+            } catch (error) {
+                console.error('Fix error:', error);
+                showToast('Fix failed: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-magic"></i> Approve & Auto-Fix All';
+            }
         }
         
         // ========================================

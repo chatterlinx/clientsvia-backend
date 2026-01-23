@@ -2364,4 +2364,228 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
     }
 });
 
+/**
+ * POST /:companyId/audit/fix-scenario
+ * 
+ * Fix ALL violations in a single scenario at once
+ * Uses GPT-4o to generate fixes for each violation, then applies them all
+ */
+router.post('/:companyId/audit/fix-scenario', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenarioId, violations } = req.body;
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get the template
+        const { template, error } = await getCompanyTemplate(company, {
+            populateCategories: true
+        });
+        
+        if (error) {
+            return res.status(400).json({ error: error.message });
+        }
+        
+        // Find the scenario
+        let targetScenario = null;
+        let categoryIndex = -1;
+        let scenarioIndex = -1;
+        
+        for (let ci = 0; ci < (template.categories || []).length; ci++) {
+            const category = template.categories[ci];
+            for (let si = 0; si < (category.scenarios || []).length; si++) {
+                const scenario = category.scenarios[si];
+                if (scenario.scenarioId === scenarioId || scenario._id?.toString() === scenarioId) {
+                    targetScenario = scenario;
+                    categoryIndex = ci;
+                    scenarioIndex = si;
+                    break;
+                }
+            }
+            if (targetScenario) break;
+        }
+        
+        if (!targetScenario) {
+            return res.status(404).json({ error: 'Scenario not found' });
+        }
+        
+        logger.info('[AUDIT FIX-SCENARIO] Starting batch fix', {
+            companyId,
+            scenarioId,
+            scenarioName: targetScenario.name,
+            violationCount: violations?.length || 0
+        });
+        
+        // Build full scenario context for GPT
+        const scenarioContext = {
+            name: targetScenario.name,
+            scenarioType: targetScenario.scenarioType || 'FAQ',
+            category: targetScenario.categories?.[0] || template.categories?.[categoryIndex]?.name || 'General',
+            behavior: targetScenario.behavior || 'calm_professional',
+            triggers: (targetScenario.triggers || []).slice(0, 10),
+            quickReplies: targetScenario.quickReplies || [],
+            fullReplies: targetScenario.fullReplies || [],
+            followUpMode: targetScenario.followUpMode,
+            actionType: targetScenario.actionType
+        };
+        
+        // Generate fixes for all violations
+        const fixes = [];
+        let tokensUsed = 0;
+        
+        for (const violation of (violations || [])) {
+            try {
+                // Get current value for this field
+                const fieldPath = violation.field.replace(/\[(\d+)\]/g, '.$1').split('.');
+                let currentValue = targetScenario;
+                for (const key of fieldPath) {
+                    currentValue = currentValue?.[key];
+                }
+                
+                // Skip if it's not a text field we can fix
+                if (typeof currentValue !== 'string' && !Array.isArray(currentValue)) {
+                    logger.info('[AUDIT FIX-SCENARIO] Skipping non-text field', { field: violation.field });
+                    continue;
+                }
+                
+                // If it's an array index, get the specific item
+                const isArrayItem = /\[\d+\]/.test(violation.field);
+                const valueToFix = typeof currentValue === 'string' ? currentValue : violation.value;
+                
+                if (!valueToFix) continue;
+                
+                // Generate fix using GPT-4o
+                const fixPrompt = `Fix this dispatcher scenario text that has a violation.
+
+SCENARIO CONTEXT:
+- Name: ${scenarioContext.name}
+- Type: ${scenarioContext.scenarioType}
+- Purpose: ${scenarioContext.triggers.slice(0, 3).join(', ')}
+
+CURRENT VALUE: "${valueToFix}"
+VIOLATION: ${violation.message}
+SUGGESTION: ${violation.suggestion || 'Fix the issue'}
+
+RULES:
+- Keep under 20 words for quick replies, 25 for full replies
+- Use {name} placeholder appropriately
+- Sound like an experienced dispatcher (calm, professional)
+- Never use: "Got it", "No problem", "happy to help", "let me help"
+- Approved: "I understand.", "Alright.", "Okay.", "Thanks, {name}."
+
+Return ONLY the fixed text. No quotes, no explanation.`;
+
+                const response = await openaiClient.chat.completions.create({
+                    model: 'gpt-4o',
+                    messages: [
+                        { role: 'system', content: 'Return only the corrected text. No quotes or explanation.' },
+                        { role: 'user', content: fixPrompt }
+                    ],
+                    max_tokens: 150,
+                    temperature: 0.3
+                });
+                
+                const suggestedFix = response.choices[0]?.message?.content?.trim();
+                tokensUsed += response.usage?.total_tokens || 0;
+                
+                if (suggestedFix && suggestedFix !== valueToFix) {
+                    fixes.push({
+                        field: violation.field,
+                        oldValue: valueToFix,
+                        newValue: suggestedFix,
+                        ruleId: violation.ruleId,
+                        message: violation.message
+                    });
+                }
+                
+            } catch (fixError) {
+                logger.error('[AUDIT FIX-SCENARIO] Error generating fix for field', {
+                    field: violation.field,
+                    error: fixError.message
+                });
+            }
+        }
+        
+        // Apply all fixes to the scenario
+        let fixesApplied = 0;
+        for (const fix of fixes) {
+            try {
+                const fieldPath = fix.field.replace(/\[(\d+)\]/g, '.$1').split('.');
+                
+                // Navigate to parent and set value
+                let target = targetScenario;
+                for (let i = 0; i < fieldPath.length - 1; i++) {
+                    target = target[fieldPath[i]];
+                }
+                const lastKey = fieldPath[fieldPath.length - 1];
+                
+                if (target && lastKey !== undefined) {
+                    target[lastKey] = fix.newValue;
+                    fixesApplied++;
+                    
+                    logger.info('[AUDIT FIX-SCENARIO] Applied fix', {
+                        field: fix.field,
+                        oldValue: fix.oldValue?.substring(0, 50),
+                        newValue: fix.newValue?.substring(0, 50)
+                    });
+                }
+            } catch (applyError) {
+                logger.error('[AUDIT FIX-SCENARIO] Error applying fix', {
+                    field: fix.field,
+                    error: applyError.message
+                });
+            }
+        }
+        
+        // Mark scenario as modified
+        targetScenario.lastEditedAt = new Date();
+        targetScenario.lastEditedBy = 'AI Audit Batch Fix';
+        targetScenario.lastEditedFromContext = 'AUDIT_FIX_SCENARIO';
+        
+        // Save the template
+        template.markModified(`categories.${categoryIndex}.scenarios.${scenarioIndex}`);
+        await template.save();
+        
+        logger.info('[AUDIT FIX-SCENARIO] Batch fix complete', {
+            companyId,
+            scenarioId,
+            scenarioName: targetScenario.name,
+            totalViolations: violations?.length || 0,
+            fixesGenerated: fixes.length,
+            fixesApplied,
+            tokensUsed
+        });
+        
+        res.json({
+            success: true,
+            scenarioId,
+            scenarioName: targetScenario.name,
+            totalViolations: violations?.length || 0,
+            fixesGenerated: fixes.length,
+            fixesApplied,
+            fixes: fixes.map(f => ({
+                field: f.field,
+                oldValue: f.oldValue?.substring(0, 50),
+                newValue: f.newValue?.substring(0, 50)
+            })),
+            tokensUsed,
+            message: `Applied ${fixesApplied} fixes to scenario`
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT FIX-SCENARIO] Error', { 
+            companyId, 
+            scenarioId,
+            error: error.message 
+        });
+        res.status(500).json({ 
+            error: 'Failed to fix scenario', 
+            details: error.message 
+        });
+    }
+});
+
 module.exports = router;
