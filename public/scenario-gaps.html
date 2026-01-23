@@ -1346,7 +1346,8 @@
                 negativeTriggers: p.negativeTriggers || [],
                 quickReplies: p.quickReplies || [p.quickReply || 'I can help with that.'],
                 fullReplies: p.fullReplies || [],
-                followUpFunnel: p.followUpFunnel || '',  // 🎯 Steer caller back in discovery
+                // 🎯 Follow-up funnel with smart default based on scenario type
+                followUpFunnel: p.followUpFunnel || getDefaultFollowUpFunnel(p.scenarioType, p.bookingIntent),
                 followUpMode: p.followUpMode || 'NONE',
                 followUpQuestionText: p.followUpQuestionText || null,
                 actionType: p.actionType || 'REPLY_ONLY',
@@ -1374,6 +1375,29 @@
             document.getElementById('create-modal').classList.remove('active');
             currentGap = null;
             currentPreview = null;
+        }
+        
+        // ========================================
+        // HELPER: Smart default follow-up funnel
+        // ========================================
+        function getDefaultFollowUpFunnel(scenarioType, bookingIntent) {
+            if (bookingIntent) {
+                return "Would you like me to get that scheduled for you, {name}?";
+            }
+            switch (scenarioType) {
+                case 'EMERGENCY':
+                    return "Let me get someone out to you right away, {name}. Is the issue happening now?";
+                case 'BOOKING':
+                    return "Would you like me to schedule that appointment, {name}?";
+                case 'TROUBLESHOOT':
+                    return "Would it help if we sent a technician out to take a look, {name}?";
+                case 'BILLING':
+                    return "Is there anything else about your account I can help with, {name}?";
+                case 'SMALL_TALK':
+                    return "Is there something I can help you with today, {name}?";
+                default:
+                    return "Is there anything else I can help you with, {name}?";
+            }
         }
         
         // ========================================
