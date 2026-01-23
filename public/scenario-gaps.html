@@ -1356,19 +1356,26 @@
                     <!-- Rule 9: Full Scenario -->
                     <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
                         <div style="font-weight: 600; color: var(--accent-pink); margin-bottom: 8px;">
-                            <i class="fas fa-cogs"></i> Full Scenario Check
+                            <i class="fas fa-cogs"></i> Full Scenario Check (18 sub-checks)
                         </div>
                         <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>status = "live"</li>
-                            <li>isActive = true</li>
+                            <li>status = "live", isActive = true</li>
                             <li>followUpQuestionText when needed</li>
                             <li>followUpMessages[] no banned phrases</li>
                             <li>silencePolicy validated</li>
                             <li>negativeTriggers don't conflict</li>
-                            <li>cooldownSeconds reasonable</li>
+                            <li>cooldownSeconds 0-300</li>
                             <li>entityCapture[] valid types</li>
                             <li>replyBundles have variety</li>
                             <li>Regex has word boundaries</li>
+                            <li><strong>timedFollowUp.messages[]</strong> no chatbot</li>
+                            <li><strong>behavior</strong> not "Friendly & Warm"</li>
+                            <li><strong>actionHooks[]</strong> valid format</li>
+                            <li><strong>channel</strong> is valid</li>
+                            <li><strong>minConfidence</strong> per scenarioType</li>
+                            <li><strong>entityValidation</strong> regex valid</li>
+                            <li><strong>dynamicVariables</strong> valid</li>
+                            <li><strong>ttsOverride</strong> reasonable</li>
                         </ul>
                     </div>
                 </div>

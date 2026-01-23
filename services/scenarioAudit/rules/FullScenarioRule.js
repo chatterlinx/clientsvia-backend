@@ -41,6 +41,8 @@ const BaseRule = require('./BaseRule');
 const {
     ALL_BANNED_PHRASES,
     ALLOWED_PLACEHOLDERS,
+    BANNED_BEHAVIORS,
+    APPROVED_BEHAVIORS,
     SEVERITY,
     RULE_CATEGORIES
 } = require('../constants');
@@ -65,6 +67,24 @@ class FullScenarioRule extends BaseRule {
             'time', 'date', 'time_preference', 'appointment',
             'equipment', 'model', 'brand',
             'urgency', 'priority'
+        ];
+        
+        // Valid channels
+        this.validChannels = ['voice', 'sms', 'chat', 'any'];
+        
+        // Valid action hooks (common ones)
+        this.validActionHooks = [
+            'offer_scheduling', 'capture_contact', 'log_inquiry',
+            'escalate_to_human', 'send_sms', 'send_email',
+            'log_sentiment_positive', 'log_sentiment_negative',
+            'start_booking', 'confirm_booking', 'cancel_booking',
+            'transfer_call', 'end_call', 'play_hold_music'
+        ];
+        
+        // Banned behavior keywords (from screenshots - "Friendly & Warm", "Enthusiastic & Positive" etc.)
+        this.bannedBehaviorKeywords = [
+            'friendly', 'warm', 'enthusiastic', 'positive', 'excited',
+            'cheerful', 'bubbly', 'upbeat', 'casual'
         ];
     }
     
@@ -100,6 +120,30 @@ class FullScenarioRule extends BaseRule {
         
         // 10. Silence Policy
         violations.push(...this._checkSilencePolicy(scenario));
+        
+        // 11. Timed Follow-Up (Auto-Prompt)
+        violations.push(...this._checkTimedFollowUp(scenario));
+        
+        // 12. Behavior Selection
+        violations.push(...this._checkBehavior(scenario));
+        
+        // 13. Action Hooks
+        violations.push(...this._checkActionHooks(scenario));
+        
+        // 14. Channel
+        violations.push(...this._checkChannel(scenario));
+        
+        // 15. Min Confidence
+        violations.push(...this._checkMinConfidence(scenario));
+        
+        // 16. Entity Validation Rules (regex patterns)
+        violations.push(...this._checkEntityValidation(scenario));
+        
+        // 17. Dynamic Variables
+        violations.push(...this._checkDynamicVariables(scenario));
+        
+        // 18. TTS Override
+        violations.push(...this._checkTTSOverride(scenario));
         
         return violations;
     }
@@ -545,6 +589,360 @@ class FullScenarioRule extends BaseRule {
                     message: `maxConsecutive of ${policy.maxConsecutive} is very patient - may frustrate callers`,
                     suggestion: 'Consider reducing to 2-3',
                     meta: { checkType: 'silencePolicy' }
+                }));
+            }
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check Timed Follow-Up (Auto-Prompt) settings
+     */
+    _checkTimedFollowUp(scenario) {
+        const violations = [];
+        const timedFollowUp = scenario.timedFollowUp;
+        
+        if (!timedFollowUp || !timedFollowUp.enabled) return violations;
+        
+        // Check delay is reasonable
+        if (timedFollowUp.delaySeconds !== undefined) {
+            if (timedFollowUp.delaySeconds < 10) {
+                violations.push(this.createViolation({
+                    field: 'timedFollowUp.delaySeconds',
+                    value: timedFollowUp.delaySeconds,
+                    message: `Delay of ${timedFollowUp.delaySeconds}s is too short - will interrupt caller`,
+                    suggestion: 'Set to at least 30-60 seconds',
+                    meta: { checkType: 'timedFollowUp' }
+                }));
+            }
+            
+            if (timedFollowUp.delaySeconds > 120) {
+                violations.push(this.createViolation({
+                    field: 'timedFollowUp.delaySeconds',
+                    value: timedFollowUp.delaySeconds,
+                    message: `Delay of ${timedFollowUp.delaySeconds}s (${Math.round(timedFollowUp.delaySeconds/60)} min) is very long`,
+                    suggestion: 'Consider 30-60 seconds for typical calls',
+                    meta: { checkType: 'timedFollowUp' }
+                }));
+            }
+        }
+        
+        // Check timed follow-up messages for banned phrases
+        const messages = timedFollowUp.messages || [];
+        for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
+            if (!msg) continue;
+            
+            const banned = this.containsPhrase(msg, ALL_BANNED_PHRASES);
+            if (banned) {
+                violations.push(this.createViolation({
+                    field: `timedFollowUp.messages[${i}]`,
+                    value: msg,
+                    message: `Timed follow-up contains banned phrase: "${banned}"`,
+                    suggestion: 'Use dispatcher-style prompts like "Are you still there?" or "Hello?"',
+                    meta: { checkType: 'timedFollowUp', bannedPhrase: banned }
+                }));
+            }
+            
+            // Check for chatbot-style messages
+            const chatbotPhrases = ['if you need me', 'here to help', 'take your time', 'whenever you\'re ready'];
+            for (const phrase of chatbotPhrases) {
+                if (msg.toLowerCase().includes(phrase)) {
+                    violations.push(this.createViolation({
+                        field: `timedFollowUp.messages[${i}]`,
+                        value: msg,
+                        message: `Chatbot-style phrase: "${phrase}"`,
+                        suggestion: 'Dispatchers say "Are you still there?" or "Hello?" - not supportive phrases',
+                        meta: { checkType: 'timedFollowUp', chatbotPhrase: phrase }
+                    }));
+                    break;
+                }
+            }
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check behavior selection
+     */
+    _checkBehavior(scenario) {
+        const violations = [];
+        const behavior = scenario.behavior;
+        
+        if (!behavior) return violations;
+        
+        const lowerBehavior = behavior.toLowerCase();
+        
+        // Check for banned behavior keywords
+        for (const keyword of this.bannedBehaviorKeywords) {
+            if (lowerBehavior.includes(keyword)) {
+                violations.push(this.createViolation({
+                    field: 'behavior',
+                    value: behavior,
+                    message: `Behavior "${behavior}" contains banned keyword "${keyword}" - makes AI chatty`,
+                    suggestion: 'Use: calm_professional, empathetic_reassuring, or professional_efficient',
+                    meta: { checkType: 'behavior', bannedKeyword: keyword }
+                }));
+                break;
+            }
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check action hooks are valid
+     */
+    _checkActionHooks(scenario) {
+        const violations = [];
+        const hooks = scenario.actionHooks || [];
+        
+        for (let i = 0; i < hooks.length; i++) {
+            const hook = hooks[i];
+            if (!hook) continue;
+            
+            // Check if hook looks valid (contains underscore, reasonable length)
+            if (!hook.includes('_') && hook.length > 20) {
+                violations.push(this.createViolation({
+                    field: `actionHooks[${i}]`,
+                    value: hook,
+                    message: `Action hook "${hook}" looks malformed - may be concatenated hooks`,
+                    suggestion: 'Separate hooks with commas (e.g., "offer_scheduling, capture_contact")',
+                    meta: { checkType: 'actionHooks' }
+                }));
+            }
+            
+            // Check if it's a known hook
+            const isKnown = this.validActionHooks.some(valid => 
+                hook.toLowerCase().includes(valid.toLowerCase())
+            );
+            
+            if (!isKnown && hook.length > 5) {
+                // Just info, not error - custom hooks are allowed
+                this.severity = SEVERITY.INFO;
+                violations.push(this.createViolation({
+                    field: `actionHooks[${i}]`,
+                    value: hook,
+                    message: `Custom action hook: "${hook}" - verify it exists`,
+                    suggestion: `Common hooks: ${this.validActionHooks.slice(0, 5).join(', ')}...`,
+                    meta: { checkType: 'actionHooks' }
+                }));
+                this.severity = SEVERITY.WARNING;
+            }
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check channel is valid
+     */
+    _checkChannel(scenario) {
+        const violations = [];
+        const channel = scenario.channel;
+        
+        if (!channel) return violations;
+        
+        if (!this.validChannels.includes(channel.toLowerCase())) {
+            violations.push(this.createViolation({
+                field: 'channel',
+                value: channel,
+                message: `Invalid channel: "${channel}"`,
+                suggestion: `Valid channels: ${this.validChannels.join(', ')}`,
+                meta: { checkType: 'channel' }
+            }));
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check minConfidence is reasonable
+     */
+    _checkMinConfidence(scenario) {
+        const violations = [];
+        const minConfidence = scenario.minConfidence;
+        const scenarioType = scenario.scenarioType;
+        
+        if (minConfidence === undefined || minConfidence === null) return violations;
+        
+        // Already checked in PriorityRule, but add type-specific checks here
+        
+        // SMALL_TALK with high confidence is wrong
+        if (scenarioType === 'SMALL_TALK' && minConfidence > 0.7) {
+            violations.push(this.createViolation({
+                field: 'minConfidence',
+                value: minConfidence,
+                message: `SMALL_TALK scenario with high confidence (${minConfidence}) - greetings should match easily`,
+                suggestion: 'Lower to 0.4-0.6 for small talk',
+                meta: { checkType: 'minConfidence', scenarioType }
+            }));
+        }
+        
+        // EMERGENCY with high confidence might miss urgent calls
+        if (scenarioType === 'EMERGENCY' && minConfidence > 0.8) {
+            violations.push(this.createViolation({
+                field: 'minConfidence',
+                value: minConfidence,
+                message: `EMERGENCY scenario with very high confidence (${minConfidence}) may miss urgent calls`,
+                suggestion: 'Lower to 0.5-0.7 to catch more emergency variations',
+                meta: { checkType: 'minConfidence', scenarioType }
+            }));
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check entity validation rules (regex patterns)
+     */
+    _checkEntityValidation(scenario) {
+        const violations = [];
+        const entityValidation = scenario.entityValidation;
+        
+        if (!entityValidation) return violations;
+        
+        // entityValidation is a Map, iterate its entries
+        const entries = entityValidation instanceof Map 
+            ? Array.from(entityValidation.entries())
+            : Object.entries(entityValidation);
+        
+        for (const [entityName, rules] of entries) {
+            if (!rules) continue;
+            
+            // Check regex pattern if present
+            if (rules.pattern || rules.regex) {
+                const pattern = rules.pattern || rules.regex;
+                try {
+                    new RegExp(pattern);
+                } catch (e) {
+                    violations.push(this.createViolation({
+                        field: `entityValidation.${entityName}.pattern`,
+                        value: pattern,
+                        message: `Invalid regex pattern for ${entityName}: ${e.message}`,
+                        suggestion: 'Fix the regex syntax',
+                        meta: { checkType: 'entityValidation', entity: entityName }
+                    }));
+                }
+            }
+            
+            // Check prompt for banned phrases
+            if (rules.prompt) {
+                const banned = this.containsPhrase(rules.prompt, ALL_BANNED_PHRASES);
+                if (banned) {
+                    violations.push(this.createViolation({
+                        field: `entityValidation.${entityName}.prompt`,
+                        value: rules.prompt,
+                        message: `Entity prompt contains banned phrase: "${banned}"`,
+                        suggestion: 'Use dispatcher-style prompts',
+                        meta: { checkType: 'entityValidation', entity: entityName, bannedPhrase: banned }
+                    }));
+                }
+            }
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check dynamic variables / template variables
+     */
+    _checkDynamicVariables(scenario) {
+        const violations = [];
+        const dynamicVariables = scenario.dynamicVariables;
+        
+        if (!dynamicVariables) return violations;
+        
+        const entries = dynamicVariables instanceof Map 
+            ? Array.from(dynamicVariables.entries())
+            : Object.entries(dynamicVariables);
+        
+        for (const [varName, fallbackValue] of entries) {
+            if (!varName) continue;
+            
+            // Check variable name format
+            const expectedPlaceholder = `{${varName}}`;
+            const isApproved = ALLOWED_PLACEHOLDERS.some(
+                ph => ph.toLowerCase() === expectedPlaceholder.toLowerCase()
+            );
+            
+            if (!isApproved) {
+                this.severity = SEVERITY.INFO;
+                violations.push(this.createViolation({
+                    field: `dynamicVariables.${varName}`,
+                    value: fallbackValue,
+                    message: `Custom variable {${varName}} - not in standard list`,
+                    suggestion: `Standard variables: ${ALLOWED_PLACEHOLDERS.join(', ')}`,
+                    meta: { checkType: 'dynamicVariables', variable: varName }
+                }));
+                this.severity = SEVERITY.WARNING;
+            }
+            
+            // Check fallback value doesn't have banned phrases
+            if (fallbackValue) {
+                const banned = this.containsPhrase(fallbackValue, ALL_BANNED_PHRASES);
+                if (banned) {
+                    violations.push(this.createViolation({
+                        field: `dynamicVariables.${varName}`,
+                        value: fallbackValue,
+                        message: `Fallback value contains banned phrase: "${banned}"`,
+                        suggestion: 'Use neutral fallback values',
+                        meta: { checkType: 'dynamicVariables', variable: varName, bannedPhrase: banned }
+                    }));
+                }
+            }
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check TTS override settings
+     */
+    _checkTTSOverride(scenario) {
+        const violations = [];
+        const ttsOverride = scenario.ttsOverride;
+        
+        if (!ttsOverride) return violations;
+        
+        // Check rate is reasonable
+        if (ttsOverride.rate) {
+            const rate = parseFloat(ttsOverride.rate);
+            if (!isNaN(rate)) {
+                if (rate < 0.5) {
+                    violations.push(this.createViolation({
+                        field: 'ttsOverride.rate',
+                        value: ttsOverride.rate,
+                        message: `TTS rate ${ttsOverride.rate} is very slow - may frustrate callers`,
+                        suggestion: 'Use 0.9-1.1 for natural speech',
+                        meta: { checkType: 'ttsOverride' }
+                    }));
+                }
+                if (rate > 1.5) {
+                    violations.push(this.createViolation({
+                        field: 'ttsOverride.rate',
+                        value: ttsOverride.rate,
+                        message: `TTS rate ${ttsOverride.rate} is very fast - may be hard to understand`,
+                        suggestion: 'Use 0.9-1.1 for natural speech',
+                        meta: { checkType: 'ttsOverride' }
+                    }));
+                }
+            }
+        }
+        
+        // Check pitch is reasonable
+        if (ttsOverride.pitch) {
+            const pitch = ttsOverride.pitch.replace('%', '').replace('+', '').replace('-', '');
+            const pitchNum = parseFloat(pitch);
+            if (!isNaN(pitchNum) && Math.abs(pitchNum) > 20) {
+                violations.push(this.createViolation({
+                    field: 'ttsOverride.pitch',
+                    value: ttsOverride.pitch,
+                    message: `TTS pitch ${ttsOverride.pitch} is extreme - may sound unnatural`,
+                    suggestion: 'Use ±10% for subtle adjustments',
+                    meta: { checkType: 'ttsOverride' }
                 }));
             }
         }
