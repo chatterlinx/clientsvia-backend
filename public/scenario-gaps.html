@@ -1822,28 +1822,55 @@
                     
                     warningsContent.innerHTML = html;
                 } else {
-                    // Perfect alignment!
-                    warningsDiv.style.display = 'block';
-                    warningsDiv.style.background = 'rgba(16,185,129,0.15)';
-                    warningsDiv.style.borderColor = 'var(--accent-green)';
-                    warningsContent.innerHTML = `
-                        <div style="color: var(--accent-green);">
-                            <strong>✅ PERFECT ALIGNMENT</strong>
-                            <div style="margin-top: 4px; font-size: 12px; color: #6ee7b7;">
-                                All ${data.alignment.runtimeTotal} runtime settings are properly covered:
-                                <br>• ${data.byPurpose.runtime} auto-generated (audit ✓ gap ✓ agent ✓)
-                                <br>• ${data.byPurpose.runtimeManual} manual-config (audit ✓ agent ✓)
+                    // Check for NOT IMPLEMENTED settings
+                    if (data.notImplemented && data.notImplemented.length > 0) {
+                        warningsDiv.style.display = 'block';
+                        warningsDiv.style.background = 'rgba(251,146,60,0.15)';
+                        warningsDiv.style.borderColor = 'var(--accent-orange)';
+                        warningsContent.innerHTML = `
+                            <div style="color: var(--accent-orange);">
+                                <strong>⚠️ ${data.notImplemented.length} UI FORMS WITH NO RUNTIME CODE</strong>
+                                <div style="margin-top: 8px; font-size: 12px; color: #fdba74;">
+                                    These settings have forms in the UI but the agent ignores them:
+                                    ${data.notImplemented.map(s => 
+                                        `<div style="margin-top: 4px;">❌ <code style="background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px;">${s.setting}</code></div>`
+                                    ).join('')}
+                                </div>
                             </div>
-                        </div>
-                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
-                            <strong style="color: #fff;">Settings by Purpose:</strong>
-                            <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                                <span>🎯 Runtime: ${data.byPurpose.runtime} (auto) + ${data.byPurpose.runtimeManual} (manual)</span>
-                                <span>✏️ Generation: ${data.byPurpose.generation}</span>
-                                <span>⚙️ System: ${data.byPurpose.system}</span>
-                                <span>🔮 Future: ${data.byPurpose.future}</span>
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                                <strong style="color: #fff;">Settings by Purpose:</strong>
+                                <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                                    <span>🎯 Runtime: ${data.byPurpose.runtime} + ${data.byPurpose.runtimeManual}</span>
+                                    <span>✏️ Generation: ${data.byPurpose.generation}</span>
+                                    <span>⚙️ System: ${data.byPurpose.system}</span>
+                                    <span style="color: var(--accent-orange);">⚠️ Not Implemented: ${data.byPurpose.notImplemented}</span>
+                                    <span>🔮 Future: ${data.byPurpose.future}</span>
+                                </div>
+                            </div>`;
+                    } else {
+                        // Perfect alignment!
+                        warningsDiv.style.display = 'block';
+                        warningsDiv.style.background = 'rgba(16,185,129,0.15)';
+                        warningsDiv.style.borderColor = 'var(--accent-green)';
+                        warningsContent.innerHTML = `
+                            <div style="color: var(--accent-green);">
+                                <strong>✅ PERFECT ALIGNMENT</strong>
+                                <div style="margin-top: 4px; font-size: 12px; color: #6ee7b7;">
+                                    All ${data.alignment.runtimeTotal} runtime settings are properly covered:
+                                    <br>• ${data.byPurpose.runtime} auto-generated (audit ✓ gap ✓ agent ✓)
+                                    <br>• ${data.byPurpose.runtimeManual} manual-config (audit ✓ agent ✓)
+                                </div>
                             </div>
-                        </div>`;
+                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                                <strong style="color: #fff;">Settings by Purpose:</strong>
+                                <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                                    <span>🎯 Runtime: ${data.byPurpose.runtime} (auto) + ${data.byPurpose.runtimeManual} (manual)</span>
+                                    <span>✏️ Generation: ${data.byPurpose.generation}</span>
+                                    <span>⚙️ System: ${data.byPurpose.system}</span>
+                                    <span>🔮 Future: ${data.byPurpose.future}</span>
+                                </div>
+                            </div>`;
+                    }
                 }
                 
             } catch (error) {

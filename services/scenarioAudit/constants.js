@@ -547,26 +547,26 @@ const SCENARIO_SETTINGS_REGISTRY = {
     // ============================================
     behavior:         { audit: true,  gap: true,  agent: false, purpose: 'generation', description: 'AI personality - influences how replies are WRITTEN' },
     toneLevel:        { audit: false, gap: false, agent: false, purpose: 'system', description: 'DEPRECATED - use behavior instead' },
-    ttsOverride:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'TTS pitch/rate/volume (manual config)' },
+    ttsOverride:      { audit: true,  gap: false, agent: false, purpose: 'not_implemented', description: '⚠️ NOT IMPLEMENTED - TTS uses company-level settings only' },
     channel:          { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'voice/sms/chat/any channel restriction' },
     
     // ============================================
     // TIMING & SILENCE (2 settings)
     // ============================================
-    timedFollowUp:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Timed follow-up settings (manual config)' },
+    timedFollowUp:    { audit: true,  gap: false, agent: false, purpose: 'not_implemented', description: '⚠️ NOT IMPLEMENTED - Stored but timer never triggers' },
     silencePolicy:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Silence handling policy (manual config)' },
     
     // ============================================
     // ACTION HOOKS (2 settings)
     // ============================================
-    actionHooks:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Action hooks (manual config)' },
+    actionHooks:      { audit: true,  gap: false, agent: false, purpose: 'not_implemented', description: '⚠️ NOT IMPLEMENTED - Stored but never executed' },
     handoffPolicy:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'When to escalate to human' },
     
     // ============================================
     // STATE MACHINE (2 settings)
     // ============================================
-    preconditions:    { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Conditions for scenario to match' },
-    effects:          { audit: false, gap: false, agent: true,  purpose: 'system', description: 'State changes after scenario executes' },
+    preconditions:    { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Conditions for scenario to match - WORKING in HybridScenarioSelector' },
+    effects:          { audit: false, gap: false, agent: false, purpose: 'not_implemented', description: '⚠️ NOT IMPLEMENTED - Effects stored but never applied' },
     
     // ============================================
     // AI INTELLIGENCE (4 settings)
@@ -601,6 +601,7 @@ function getSettingsCount() {
     const generationSettings = settings.filter(([_, v]) => v.purpose === 'generation');
     const systemSettings = settings.filter(([_, v]) => v.purpose === 'system');
     const futureSettings = settings.filter(([_, v]) => v.purpose === 'future');
+    const notImplementedSettings = settings.filter(([_, v]) => v.purpose === 'not_implemented');
     
     // ✅ ALIGNED RUNTIME: Gap-generated settings where audit=true, gap=true, agent=true
     const alignedRuntime = runtimeSettings.filter(([_, v]) => v.audit && v.gap && v.agent);
@@ -635,8 +636,12 @@ function getSettingsCount() {
             runtimeManual: runtimeManualSettings.length,
             generation: generationSettings.length,
             system: systemSettings.length,
-            future: futureSettings.length
+            future: futureSettings.length,
+            notImplemented: notImplementedSettings.length
         },
+        
+        // ⚠️ NOT IMPLEMENTED: Settings with UI forms but no runtime code
+        notImplemented: notImplementedSettings.map(([k, v]) => ({ setting: k, ...v })),
         
         // Alignment status
         aligned: totalAligned.map(([k, v]) => ({ setting: k, ...v })),

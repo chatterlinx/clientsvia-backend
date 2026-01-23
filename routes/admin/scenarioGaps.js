@@ -1957,8 +1957,12 @@ router.get('/:companyId/audit/settings-registry', async (req, res) => {
                 runtimeManual: counts.byPurpose.runtimeManual, // Manual-config runtime settings
                 generation: counts.byPurpose.generation,     // Settings that influence reply writing
                 system: counts.byPurpose.system,             // Internal/automatic settings
-                future: counts.byPurpose.future              // Planned but not implemented
+                future: counts.byPurpose.future,             // Planned but not implemented
+                notImplemented: counts.byPurpose.notImplemented // ⚠️ UI exists but runtime doesn't use
             },
+            
+            // ⚠️ CRITICAL: Settings with UI forms but NO runtime implementation
+            notImplemented: counts.notImplemented || [],
             
             // ✅ ALIGNMENT STATUS - What we really care about
             alignment: {
