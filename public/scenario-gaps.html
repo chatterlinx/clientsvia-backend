@@ -881,6 +881,12 @@
                         <div class="triggers-list" id="preview-triggers"></div>
                     </div>
                     
+                    <!-- Regex Triggers -->
+                    <div class="preview-section" id="regex-section" style="display: none;">
+                        <div class="preview-label">🔧 Regex Patterns</div>
+                        <div id="preview-regex" style="font-family: 'Courier New', monospace; font-size: 12px; background: var(--bg-tertiary); padding: 10px; border-radius: 8px; color: #f59e0b;"></div>
+                    </div>
+                    
                     <!-- Quick Reply Preview -->
                     <div class="preview-section">
                         <div class="preview-label">⚡ Quick Replies</div>
@@ -891,6 +897,12 @@
                     <div class="preview-section">
                         <div class="preview-label">💬 Full Replies</div>
                         <div id="preview-full-replies" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                    </div>
+                    
+                    <!-- Follow-Up Funnel -->
+                    <div class="preview-section" id="funnel-section" style="display: none;">
+                        <div class="preview-label">🎯 Follow-Up Funnel</div>
+                        <div id="preview-funnel" style="color: #8b5cf6; font-style: italic;"></div>
                     </div>
                     
                     <!-- Info box -->
@@ -1278,6 +1290,26 @@
                     fullRepliesEl.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
                 }
                 
+                // Regex Triggers (if any)
+                const regexSection = document.getElementById('regex-section');
+                const regexEl = document.getElementById('preview-regex');
+                if (preview.regexTriggers && preview.regexTriggers.length > 0) {
+                    regexSection.style.display = 'block';
+                    regexEl.innerHTML = preview.regexTriggers.map(r => escapeHtml(r)).join('<br>');
+                } else {
+                    regexSection.style.display = 'none';
+                }
+                
+                // Follow-Up Funnel (if any)
+                const funnelSection = document.getElementById('funnel-section');
+                const funnelEl = document.getElementById('preview-funnel');
+                if (preview.followUpFunnel) {
+                    funnelSection.style.display = 'block';
+                    funnelEl.textContent = preview.followUpFunnel;
+                } else {
+                    funnelSection.style.display = 'none';
+                }
+                
             } else {
                 // Fallback display
                 document.getElementById('preview-name').textContent = gap.representative.substring(0, 50);
@@ -1305,14 +1337,16 @@
             const scenarioData = {
                 name: p.name || currentGap?.representative?.substring(0, 50) || 'New Scenario',
                 category: p.category || 'FAQ',
-                status: 'draft',
+                status: 'live',  // 🔥 Default to LIVE so admin doesn't forget!
                 scenarioType: p.scenarioType || 'FAQ',
                 behavior: p.behavior || 'friendly_warm',
                 priority: p.priority || 50,
                 triggers: p.triggers || [currentGap?.representative],
+                regexTriggers: p.regexTriggers || [],  // 🔧 Regex patterns for better matching
                 negativeTriggers: p.negativeTriggers || [],
                 quickReplies: p.quickReplies || [p.quickReply || 'I can help with that.'],
                 fullReplies: p.fullReplies || [],
+                followUpFunnel: p.followUpFunnel || '',  // 🎯 Steer caller back in discovery
                 followUpMode: p.followUpMode || 'NONE',
                 followUpQuestionText: p.followUpQuestionText || null,
                 actionType: p.actionType || 'REPLY_ONLY',

@@ -222,6 +222,13 @@ YOUR MISSION: Create a scenario that sounds HUMAN, WARM, and IMPRESSIVE
 4. Casual/natural: "y'all", "gonna", "wanna", contractions
 5. NO caller-specific details (names, times, filler words)
 
+🔧 REGEX TRIGGERS (for catching variations):
+Generate 2-4 regex patterns that catch key variations:
+- Use \\b for word boundaries, \\s* for optional spaces
+- Example: "\\b(what's|what is|whats)\\s+(the|your)\\s+(earliest|soonest)\\b"
+- Example: "\\b(my name is|this is|i'm|i am)\\s+\\w+\\b"
+- Keep patterns simple and readable
+
 🎯 REPLY RULES - THIS IS CRITICAL FOR SOUNDING HUMAN:
 1. ALWAYS use {name} placeholder to personalize greetings
 2. Acknowledge returning customers with warmth: "Great to hear from you again!"
@@ -268,6 +275,11 @@ OUTPUT FORMAT (JSON only, no markdown):
         "looking for variation"
     ],
     
+    "regexTriggers": [
+        "\\\\b(keyword1|keyword2)\\\\s*(optional)?\\\\b",
+        "\\\\b(another|pattern)\\\\b"
+    ],
+    
     "negativeTriggers": ["phrases that look similar but mean something DIFFERENT"],
     
     "quickReplies": [
@@ -280,6 +292,8 @@ OUTPUT FORMAT (JSON only, no markdown):
         "Hi {name}! [Warm greeting]. [More detailed helpful response]. [Proactive offer to help further]",
         "[Alternative warm greeting to {name}]. [Different detailed response]. [Close warmly]"
     ],
+    
+    "followUpFunnel": "Is there anything else I can help you with today, {name}?",
     
     "followUpMode": "NONE|ASK_IF_BOOK|ASK_FOLLOWUP_QUESTION",
     "followUpQuestionText": "Would you like me to get that set up for you, {name}?",

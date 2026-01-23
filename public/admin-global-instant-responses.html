@@ -12207,6 +12207,16 @@ Higher = detailed, thorough scenarios (more context)
                     fullRepliesTextarea.value = arrayToLines(p.fullReplies);
                 }
                 
+                // Regex Triggers - advanced patterns
+                const regexTriggersTextarea = document.getElementById('scenario-regex-triggers');
+                if (regexTriggersTextarea && p.regexTriggers) {
+                    regexTriggersTextarea.value = arrayToLines(p.regexTriggers);
+                }
+                
+                // Follow-Up Funnel - steer caller back in discovery
+                const followUpFunnel = document.getElementById('scenario-followup-funnel');
+                if (followUpFunnel && p.followUpFunnel) followUpFunnel.value = p.followUpFunnel;
+                
                 // Follow-Up Settings
                 const followUpMode = document.getElementById('scenario-followup-mode');
                 if (followUpMode && p.followUpMode) followUpMode.value = p.followUpMode;
