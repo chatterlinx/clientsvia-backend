@@ -1191,6 +1191,7 @@
                     ${renderCheckCard('🔑 Kill Switches', sc.killSwitches)}
                     ${renderCheckCard('🔗 Template References', sc.templateReferences)}
                     ${renderCheckCard('📦 Scenario Pool', sc.scenarioPool)}
+                    ${renderCheckCard('🔄 Scenario Alignment', sc.scenarioAlignment)}
                     ${renderCheckCard('📋 Booking Slots', sc.bookingSlotNormalization)}
                     ${renderCheckCard('👋 Greeting Intercept', sc.greetingIntercept)}
                     ${renderCheckCard('💾 Redis Cache', sc.redisCache)}
@@ -1257,6 +1258,22 @@
         }
         if (check.missingTriggers?.length > 0) {
             details += `<div>Missing: ${check.missingTriggers.slice(0, 3).join(', ')}${check.missingTriggers.length > 3 ? '...' : ''}</div>`;
+        }
+        
+        // Scenario alignment (Gap Fill + Audit + Agent harmony)
+        if (check.metrics) {
+            const m = check.metrics;
+            details += `<div>Agent sees: <strong class="text-green">${m.agentCanSee}</strong> scenarios</div>`;
+            details += `<div>Gap Fill: <strong class="${m.gapFillScope === m.agentCanSee ? 'text-green' : 'text-yellow'}">${m.gapFillScope}</strong> | Audit: <strong class="${m.auditScope === m.agentCanSee ? 'text-green' : 'text-yellow'}">${m.auditScope}</strong></div>`;
+            if (m.disabledByCompany > 0) {
+                details += `<div>Disabled by company: <strong class="text-yellow">${m.disabledByCompany}</strong></div>`;
+            }
+            if (m.alignmentPercentage !== undefined) {
+                details += `<div>Alignment: <strong class="${m.alignmentPercentage >= 100 ? 'text-green' : m.alignmentPercentage >= 80 ? 'text-yellow' : 'text-red'}">${m.alignmentPercentage}%</strong></div>`;
+            }
+        }
+        if (check.isAligned !== undefined) {
+            details += `<div>Harmony: <strong class="${check.isAligned ? 'text-green' : 'text-yellow'}">${check.isAligned ? '✅ All systems aligned' : '⚠️ Systems misaligned'}</strong></div>`;
         }
         
         return `

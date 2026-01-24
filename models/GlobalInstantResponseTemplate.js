@@ -334,6 +334,23 @@ const scenarioSchema = new Schema({
         // Normalized at runtime via normalizeReplies()
     }],
     
+    // ============================================
+    // NO-NAME VARIANTS (for unknown callers)
+    // ============================================
+    // Used when caller name is not known - avoids awkward {name} placeholders
+    
+    quickReplies_noName: [{
+        type: Schema.Types.Mixed
+        // Quick replies without {name} placeholder for unknown callers
+        // Flexible: accepts String (legacy) or {text: String, weight: Number}
+    }],
+    
+    fullReplies_noName: [{
+        type: Schema.Types.Mixed
+        // Full replies without {name} placeholder for unknown callers
+        // Flexible: accepts String (legacy) or {text: String, weight: Number}
+    }],
+    
     followUpPrompts: [{
         type: Schema.Types.Mixed
         // NEW: Follow-up questions after initial response

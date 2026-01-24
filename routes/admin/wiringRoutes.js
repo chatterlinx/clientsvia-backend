@@ -1284,5 +1284,196 @@ router.get('/:companyId/scenario-coverage', async (req, res) => {
     }
 });
 
+// ============================================================================
+// GET /api/admin/wiring-status/:companyId/scenario-alignment
+// SINGLE SOURCE OF TRUTH - Scenario Pool Alignment Data
+// 
+// Returns complete alignment showing what Gap Fill, Audit, and Agent see.
+// This is the source of truth that ensures all three systems work in harmony.
+// ============================================================================
+router.get('/:companyId/scenario-alignment', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        
+        logger.info('[WIRING API] 📊 Scenario alignment data requested', { companyId });
+        
+        const ScenarioPoolService = require('../../services/ScenarioPoolService');
+        
+        const alignmentData = await ScenarioPoolService.getScenarioAlignmentData(companyId);
+        
+        if (!alignmentData.success) {
+            return res.status(404).json({
+                success: false,
+                error: alignmentData.error || 'Failed to compute alignment',
+                companyId
+            });
+        }
+        
+        // Add recommendation for wiring tab
+        alignmentData.wiringRecommendation = {
+            shouldShowInWiring: true,
+            category: 'SCENARIO_ALIGNMENT',
+            displayName: 'Scenario Pool Alignment',
+            description: 'Ensures Gap Fill, Audit, and LLM Agent all work from the same scenario pool',
+            icon: 'fa-sync-alt',
+            statusIndicator: alignmentData.alignment?.summary?.status || 'UNKNOWN'
+        };
+        
+        logger.info('[WIRING API] ✅ Scenario alignment computed', { 
+            companyId,
+            agentCanSee: alignmentData.alignment?.agentCanSee,
+            isAligned: alignmentData.alignment?.isAligned,
+            computeTimeMs: alignmentData.computeTimeMs
+        });
+        
+        return res.json(alignmentData);
+        
+    } catch (error) {
+        logger.error('[WIRING API] Scenario alignment error', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to compute scenario alignment',
+            details: error.message
+        });
+    }
+});
+
+// ============================================================================
+// GET /api/admin/wiring-status/:companyId/unified-health
+// Combined health check including scenario alignment
+// Returns all health indicators for the wiring tab scoreboard
+// ============================================================================
+router.get('/:companyId/unified-health', async (req, res) => {
+    const startTime = Date.now();
+    
+    try {
+        const { companyId } = req.params;
+        
+        logger.info('[WIRING API] 📊 Unified health check requested', { companyId });
+        
+        // Load company first
+        const companyDoc = await Company.findById(companyId)
+            .select('companyName businessName aiAgentSettings.templateReferences')
+            .lean();
+        
+        if (!companyDoc) {
+            return res.status(404).json({
+                health: 'RED',
+                error: 'Company not found'
+            });
+        }
+        
+        // Run all health checks in parallel
+        const ScenarioPoolService = require('../../services/ScenarioPoolService');
+        const { getSettingsCount } = require('../../services/scenarioAudit/constants');
+        
+        const [alignmentData, settingsCounts] = await Promise.all([
+            ScenarioPoolService.getScenarioAlignmentData(companyId),
+            Promise.resolve(getSettingsCount())
+        ]);
+        
+        // Build unified health response
+        const result = {
+            companyId,
+            companyName: companyDoc.companyName || companyDoc.businessName,
+            computedAt: new Date().toISOString(),
+            computeTimeMs: Date.now() - startTime,
+            
+            // Overall health
+            health: 'GREEN',
+            issues: [],
+            
+            // Scenario alignment (Gap Fill + Audit + Agent harmony)
+            scenarioAlignment: alignmentData.success ? {
+                status: alignmentData.alignment?.summary?.status || 'UNKNOWN',
+                label: alignmentData.alignment?.summary?.label || 'Unknown',
+                message: alignmentData.alignment?.summary?.message || '',
+                metrics: {
+                    totalInTemplates: alignmentData.alignment?.totalInTemplates || 0,
+                    activeInTemplates: alignmentData.alignment?.activeInTemplates || 0,
+                    agentCanSee: alignmentData.alignment?.agentCanSee || 0,
+                    gapFillScope: alignmentData.alignment?.gapFillScope || 0,
+                    auditScope: alignmentData.alignment?.auditScope || 0,
+                    disabledByCompany: alignmentData.alignment?.disabledByCompany || 0,
+                    alignmentPercentage: alignmentData.alignment?.alignmentPercentage || 0
+                },
+                isAligned: alignmentData.alignment?.isAligned || false
+            } : {
+                status: 'RED',
+                label: 'ERROR',
+                message: alignmentData.error || 'Failed to compute alignment',
+                isAligned: false
+            },
+            
+            // Settings registry alignment (from constants.js)
+            settingsRegistry: {
+                total: settingsCounts.total,
+                audited: settingsCounts.audited,
+                gapGenerated: settingsCounts.gapGenerated,
+                agentUsed: settingsCounts.agentUsed,
+                aligned: settingsCounts.aligned,
+                gaps: settingsCounts.gaps,
+                runtime: {
+                    autoGenerated: settingsCounts.runtimeAuto,
+                    manualConfig: settingsCounts.runtimeManual
+                },
+                coverage: {
+                    audit: settingsCounts.audited > 0 ? Math.round((settingsCounts.audited / settingsCounts.agentUsed) * 100) : 0,
+                    gap: settingsCounts.gapGenerated > 0 ? Math.round((settingsCounts.gapGenerated / settingsCounts.agentUsed) * 100) : 0,
+                    agent: 100 // Agent is the baseline
+                }
+            },
+            
+            // Template health
+            templateHealth: {
+                hasTemplates: (companyDoc.aiAgentSettings?.templateReferences || []).length > 0,
+                enabledCount: (companyDoc.aiAgentSettings?.templateReferences || []).filter(r => r.enabled !== false).length
+            }
+        };
+        
+        // Determine overall health
+        if (!result.templateHealth.hasTemplates) {
+            result.health = 'RED';
+            result.issues.push('No templates configured');
+        }
+        
+        if (result.scenarioAlignment.status === 'RED') {
+            result.health = 'RED';
+            result.issues.push('Scenario alignment issue: ' + result.scenarioAlignment.message);
+        } else if (result.scenarioAlignment.status === 'YELLOW') {
+            if (result.health !== 'RED') result.health = 'YELLOW';
+            result.issues.push('Scenario alignment warning: ' + result.scenarioAlignment.message);
+        }
+        
+        if (result.settingsRegistry.gaps.length > 0) {
+            if (result.health !== 'RED') result.health = 'YELLOW';
+            result.issues.push(`${result.settingsRegistry.gaps.length} settings registry alignment gaps`);
+        }
+        
+        logger.info('[WIRING API] ✅ Unified health computed', { 
+            companyId,
+            health: result.health,
+            issueCount: result.issues.length,
+            computeTimeMs: result.computeTimeMs
+        });
+        
+        return res.json(result);
+        
+    } catch (error) {
+        logger.error('[WIRING API] Unified health error', { 
+            error: error.message, 
+            stack: error.stack 
+        });
+        return res.status(500).json({
+            health: 'RED',
+            error: 'Failed to compute unified health',
+            details: error.message
+        });
+    }
+});
+
 module.exports = router;
 

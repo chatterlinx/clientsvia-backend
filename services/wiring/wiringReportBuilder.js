@@ -145,6 +145,50 @@ async function checkScenarioPool(companyId) {
 }
 
 // ============================================================================
+// SCENARIO ALIGNMENT CHECK - Gap Fill + Audit + Agent Harmony
+// ============================================================================
+
+async function checkScenarioAlignment(companyId) {
+    try {
+        const ScenarioPoolService = require('../../services/ScenarioPoolService');
+        const alignmentData = await ScenarioPoolService.getScenarioAlignmentData(companyId);
+        
+        if (!alignmentData.success) {
+            return {
+                status: 'ERROR',
+                health: 'RED',
+                error: alignmentData.error
+            };
+        }
+        
+        const alignment = alignmentData.alignment;
+        
+        return {
+            status: alignment.summary.label,
+            health: alignment.summary.status,
+            message: alignment.summary.message,
+            metrics: {
+                totalInTemplates: alignment.totalInTemplates,
+                activeInTemplates: alignment.activeInTemplates,
+                agentCanSee: alignment.agentCanSee,
+                gapFillScope: alignment.gapFillScope,
+                auditScope: alignment.auditScope,
+                disabledByCompany: alignment.disabledByCompany,
+                alignmentPercentage: alignment.alignmentPercentage
+            },
+            isAligned: alignment.isAligned,
+            description: 'Ensures Gap Fill, Audit, and LLM Agent work from the same scenario pool'
+        };
+    } catch (error) {
+        return {
+            status: 'ERROR',
+            health: 'RED',
+            error: error.message
+        };
+    }
+}
+
+// ============================================================================
 // DYNAMIC FLOW CHECK
 // ============================================================================
 
@@ -587,6 +631,9 @@ async function buildWiringReport({
     
     // Scenario pool check
     specialChecks.scenarioPool = await checkScenarioPool(companyId);
+    
+    // Scenario alignment check (Gap Fill + Audit + Agent harmony)
+    specialChecks.scenarioAlignment = await checkScenarioAlignment(companyId);
     
     // Dynamic flows check
     specialChecks.dynamicFlows = await checkDynamicFlows(companyId);

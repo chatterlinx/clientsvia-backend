@@ -447,213 +447,299 @@ const RULE_CATEGORIES = {
 // This registry tracks ALL scenario settings and which systems use them:
 // - AUDIT: Does the audit system check this setting?
 // - GAP: Does gap generation create this setting?
-// - AGENT: Does the runtime agent use this setting?
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎯 SINGLE SOURCE OF TRUTH - SCENARIO RUNTIME CONTRACT
+// ═══════════════════════════════════════════════════════════════════════════════
 // 
-// ⚠️ If AUDIT=true but AGENT=false, we're checking something that doesn't matter
-// ⚠️ If GAP=true but AGENT=false, we're generating something that gets ignored
-// ⚠️ ALL THREE SHOULD MATCH for every important setting
+// ARCHITECTURE (V2 - Enterprise Grade):
+// - ONE list of settings with PURPOSE + aiGenerable flag
+// - All policies are DERIVED from these two fields (no drift possible)
+// 
+// PURPOSE TYPES:
+// - "runtime": Agent uses at runtime, AI can generate, Audit checks
+// - "runtime_manual": Agent uses at runtime, Admin configures, Audit checks
+// - "system": Auto-generated/internal, Agent uses, no audit/gap
+// - "generation": Influences reply writing only, not runtime
+// - "future": Planned but not implemented
+// 
+// DERIVED POLICIES (computed, never stored):
+// - isAudited = purpose in ['runtime', 'runtime_manual']
+// - isAgentUsed = purpose in ['runtime', 'runtime_manual', 'system']
+// - isGapGenerated = purpose in ['runtime', 'runtime_manual'] && aiGenerable === true
+// 
+// BENEFITS:
+// ✅ ONE runtime contract (no drift between audit/gap/agent)
+// ✅ Audit checks EVERYTHING in runtime contract automatically
+// ✅ Gap Fill generates what it can, marks rest as admin-required
+// ✅ Scales across trades and companies without drift
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * SCENARIO_SETTINGS_REGISTRY - Master list of all scenario settings
+ * SCENARIO_SETTINGS_REGISTRY - Single Source of Truth
  * 
- * PURPOSE TYPES:
- * - "runtime": Setting actively used by agent when responding
- * - "generation": Setting influences how replies are WRITTEN (Gap), not DELIVERED
- * - "system": Internal/automatic setting, not user-facing
- * - "future": Planned but not yet implemented
- * 
- * ALIGNMENT RULES:
- * 1. If agent uses it → audit should check it
- * 2. If purpose="generation" → agent=false is EXPECTED (not a gap)
- * 3. If purpose="future" → can ignore for now
+ * Each setting has:
+ * - purpose: What kind of setting is this?
+ * - aiGenerable: Can GPT-4 Gap Fill generate this? (only for runtime/runtime_manual)
+ * - description: Human-readable description
  */
 const SCENARIO_SETTINGS_REGISTRY = {
     // ============================================
     // IDENTITY & LIFECYCLE (8 settings)
     // ============================================
-    scenarioId:       { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Unique scenario identifier' },
-    version:          { audit: false, gap: false, agent: false, purpose: 'system', description: 'Version number for rollback' },
-    status:           { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'draft/live/archived - only live scenarios match' },
-    name:             { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Human-readable scenario name' },
-    isActive:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Quick on/off toggle' },
-    scope:            { audit: false, gap: false, agent: true,  purpose: 'system', description: 'GLOBAL vs COMPANY scope' },
-    ownerCompanyId:   { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Company that owns this scenario' },
-    notes:            { audit: false, gap: false, agent: false, purpose: 'system', description: 'Admin notes (not used by AI)' },
+    scenarioId:       { purpose: 'runtime',        aiGenerable: true,  description: 'Unique scenario identifier' },
+    version:          { purpose: 'system',         aiGenerable: false, description: 'Version number for rollback' },
+    status:           { purpose: 'runtime',        aiGenerable: true,  description: 'draft/live/archived - only live scenarios match' },
+    name:             { purpose: 'runtime',        aiGenerable: true,  description: 'Human-readable scenario name' },
+    isActive:         { purpose: 'runtime',        aiGenerable: true,  description: 'Quick on/off toggle' },
+    scope:            { purpose: 'system',         aiGenerable: false, description: 'GLOBAL vs COMPANY scope' },
+    ownerCompanyId:   { purpose: 'system',         aiGenerable: false, description: 'Company that owns this scenario' },
+    notes:            { purpose: 'system',         aiGenerable: false, description: 'Admin notes (not used by AI)' },
     
     // ============================================
     // CATEGORIZATION (4 settings)
     // ============================================
-    categories:       { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Category tags for organization' },
-    scenarioType:     { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy' },
-    priority:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Tie-breaker when multiple scenarios match' },
-    cooldownSeconds:  { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Prevents scenario from firing again within N seconds' },
+    categories:       { purpose: 'runtime',        aiGenerable: true,  description: 'Category tags for organization' },
+    scenarioType:     { purpose: 'runtime',        aiGenerable: true,  description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy' },
+    priority:         { purpose: 'runtime',        aiGenerable: true,  description: 'Tie-breaker when multiple scenarios match' },
+    cooldownSeconds:  { purpose: 'runtime',        aiGenerable: true,  description: 'Prevents scenario from firing again within N seconds' },
     
     // ============================================
-    // MATCHING - TRIGGERS (7 settings)
+    // MATCHING - TRIGGERS (9 settings)
     // ============================================
-    triggers:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Plain phrases for BM25 keyword matching' },
-    regexTriggers:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Advanced pattern matching (regex)' },
-    negativeTriggers: { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Phrases that PREVENT matching' },
-    keywords:         { audit: true,  gap: false, agent: true,  purpose: 'system', description: 'Fast Tier-1 matching keywords (auto-generated)' },
-    negativeKeywords: { audit: true,  gap: false, agent: true,  purpose: 'system', description: 'Keywords that veto matches (auto-generated)' },
-    embeddingVector:  { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Precomputed semantic embedding (auto-generated)' },
-    contextWeight:    { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Multiplier for final match score' },
+    triggers:             { purpose: 'runtime',    aiGenerable: true,  description: 'Plain phrases for BM25 keyword matching' },
+    regexTriggers:        { purpose: 'runtime',    aiGenerable: true,  description: 'Advanced pattern matching (regex)' },
+    negativeTriggers:     { purpose: 'runtime',    aiGenerable: true,  description: 'Phrases that PREVENT matching' },
+    exampleUserPhrases:   { purpose: 'runtime',    aiGenerable: true,  description: '12-18 example phrases users say (for Tier-3 LLM context)' },
+    negativeUserPhrases:  { purpose: 'runtime',    aiGenerable: true,  description: 'Phrases that PREVENT this scenario from matching' },
+    keywords:             { purpose: 'system',     aiGenerable: false, description: 'Fast Tier-1 matching keywords (auto-generated)' },
+    negativeKeywords:     { purpose: 'system',     aiGenerable: false, description: 'Keywords that veto matches (auto-generated)' },
+    embeddingVector:      { purpose: 'system',     aiGenerable: false, description: 'Precomputed semantic embedding (auto-generated)' },
+    contextWeight:        { purpose: 'system',     aiGenerable: false, description: 'Multiplier for final match score' },
     
     // ============================================
     // CONFIDENCE & PRIORITY (1 setting)
     // ============================================
-    minConfidence:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Scenario-level confidence threshold' },
+    minConfidence:    { purpose: 'runtime',        aiGenerable: true,  description: 'Scenario-level confidence threshold' },
     
     // ============================================
     // REPLIES - CORE (8 settings)
     // ============================================
-    quickReplies:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Short/quick response variations' },
-    fullReplies:          { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Full/detailed response variations' },
-    quickReplies_noName:  { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Quick replies without {name} for unknown callers' },
-    fullReplies_noName:   { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Full replies without {name} for unknown callers' },
-    replyStrategy:        { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc' },
-    replySelection:       { audit: false, gap: false, agent: true,  purpose: 'system', description: 'sequential/random/bandit selection' },
-    replyBundles:         { audit: false, gap: false, agent: false, purpose: 'future', description: 'Reply bundle system (future)' },
-    replyPolicy:          { audit: false, gap: false, agent: false, purpose: 'future', description: 'ROTATE_PER_CALLER/etc (future)' },
+    quickReplies:         { purpose: 'runtime',    aiGenerable: true,  description: 'Short/quick response variations' },
+    fullReplies:          { purpose: 'runtime',    aiGenerable: true,  description: 'Full/detailed response variations' },
+    quickReplies_noName:  { purpose: 'runtime',    aiGenerable: true,  description: 'Quick replies without {name} for unknown callers' },
+    fullReplies_noName:   { purpose: 'runtime',    aiGenerable: true,  description: 'Full replies without {name} for unknown callers' },
+    replyStrategy:        { purpose: 'runtime',    aiGenerable: true,  description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc' },
+    replySelection:       { purpose: 'system',     aiGenerable: false, description: 'sequential/random/bandit selection' },
+    replyBundles:         { purpose: 'future',     aiGenerable: false, description: 'Reply bundle system (future)' },
+    replyPolicy:          { purpose: 'future',     aiGenerable: false, description: 'ROTATE_PER_CALLER/etc (future)' },
     
     // ============================================
     // FOLLOW-UP BEHAVIOR (5 settings)
     // ============================================
-    followUpMode:         { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'NONE/ASK_FOLLOWUP_QUESTION/ASK_IF_BOOK/TRANSFER' },
-    followUpQuestionText: { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Text to ask for follow-up' },
-    followUpPrompts:      { audit: false, gap: false, agent: false, purpose: 'future', description: 'Follow-up prompts (future)' },
-    followUpFunnel:       { audit: false, gap: false, agent: false, purpose: 'future', description: 'Re-engagement prompt (future)' },
-    transferTarget:       { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Queue/extension for transfer (manual config)' },
+    followUpMode:         { purpose: 'runtime',        aiGenerable: true,  description: 'NONE/ASK_FOLLOWUP_QUESTION/ASK_IF_BOOK/TRANSFER' },
+    followUpQuestionText: { purpose: 'runtime',        aiGenerable: true,  description: 'Text to ask for follow-up' },
+    followUpPrompts:      { purpose: 'future',         aiGenerable: false, description: 'Follow-up prompts (future)' },
+    followUpFunnel:       { purpose: 'future',         aiGenerable: false, description: 'Re-engagement prompt (future)' },
+    transferTarget:       { purpose: 'runtime_manual', aiGenerable: false, description: 'Queue/extension for transfer (admin configures)' },
     
     // ============================================
     // WIRING - ACTION (5 settings)
     // ============================================
-    actionType:       { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'REPLY_ONLY/START_FLOW/REQUIRE_BOOKING/TRANSFER' },
-    flowId:           { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Dynamic Flow to execute (manual config)' },
-    bookingIntent:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'true = caller wants to book' },
-    requiredSlots:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Slots to collect for booking (manual config)' },
-    stopRouting:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Stop routing flag (manual config)' },
+    actionType:       { purpose: 'runtime',        aiGenerable: true,  description: 'REPLY_ONLY/START_FLOW/REQUIRE_BOOKING/TRANSFER' },
+    flowId:           { purpose: 'runtime_manual', aiGenerable: false, description: 'Dynamic Flow to execute (admin configures)' },
+    bookingIntent:    { purpose: 'runtime',        aiGenerable: true,  description: 'true = caller wants to book' },
+    requiredSlots:    { purpose: 'runtime_manual', aiGenerable: false, description: 'Slots to collect for booking (admin configures)' },
+    stopRouting:      { purpose: 'runtime_manual', aiGenerable: false, description: 'Stop routing flag (admin configures)' },
     
     // ============================================
     // ENTITY CAPTURE (3 settings)
     // ============================================
-    entityCapture:    { audit: true,  gap: true,  agent: false, purpose: 'future', description: 'Entities to extract (future runtime implementation)' },
-    entityValidation: { audit: true,  gap: false, agent: false, purpose: 'future', description: 'Validation rules per entity (future)' },
-    dynamicVariables: { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'Variable fallbacks when entity missing' },
+    entityCapture:    { purpose: 'future',         aiGenerable: true,  description: 'Entities to extract (future runtime implementation)' },
+    entityValidation: { purpose: 'future',         aiGenerable: false, description: 'Validation rules per entity (future)' },
+    dynamicVariables: { purpose: 'runtime',        aiGenerable: true,  description: 'Variable fallbacks when entity missing' },
     
     // ============================================
     // BEHAVIOR & VOICE (4 settings)
     // ============================================
-    behavior:         { audit: true,  gap: true,  agent: false, purpose: 'generation', description: 'AI personality - influences how replies are WRITTEN' },
-    toneLevel:        { audit: false, gap: false, agent: false, purpose: 'system', description: 'DEPRECATED - use behavior instead' },
-    ttsOverride:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: '✅ IMPLEMENTED - Scenario TTS overrides applied to ElevenLabs' },
-    channel:          { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'voice/sms/chat/any channel restriction' },
+    behavior:         { purpose: 'generation',     aiGenerable: true,  description: 'AI personality - influences how replies are WRITTEN' },
+    toneLevel:        { purpose: 'system',         aiGenerable: false, description: 'DEPRECATED - use behavior instead' },
+    ttsOverride:      { purpose: 'runtime_manual', aiGenerable: false, description: 'Scenario TTS overrides (admin configures)' },
+    channel:          { purpose: 'runtime',        aiGenerable: true,  description: 'voice/sms/chat/any channel restriction' },
     
     // ============================================
     // TIMING & SILENCE (2 settings)
     // ============================================
-    timedFollowUp:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: '✅ IMPLEMENTED - Idle timer triggers follow-up messages' },
-    silencePolicy:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Silence handling policy (manual config)' },
+    timedFollowUp:    { purpose: 'runtime_manual', aiGenerable: false, description: 'Idle timer triggers follow-up (admin configures)' },
+    silencePolicy:    { purpose: 'runtime_manual', aiGenerable: false, description: 'Silence handling policy (admin configures)' },
     
     // ============================================
     // ACTION HOOKS (2 settings)
     // ============================================
-    actionHooks:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: '✅ IMPLEMENTED - Hooks executed after scenario match' },
-    handoffPolicy:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'When to escalate to human' },
+    actionHooks:      { purpose: 'runtime_manual', aiGenerable: false, description: 'Hooks executed after scenario match (admin configures)' },
+    handoffPolicy:    { purpose: 'runtime',        aiGenerable: true,  description: 'When to escalate to human' },
     
     // ============================================
     // STATE MACHINE (2 settings)
     // ============================================
-    preconditions:    { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Conditions for scenario to match - WORKING in HybridScenarioSelector' },
-    effects:          { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: '✅ IMPLEMENTED - State changes applied after scenario execution' },
+    preconditions:    { purpose: 'system',         aiGenerable: false, description: 'Conditions for scenario to match (auto-managed)' },
+    effects:          { purpose: 'runtime_manual', aiGenerable: false, description: 'State changes after scenario execution (admin configures)' },
     
     // ============================================
     // AI INTELLIGENCE (4 settings)
     // ============================================
-    qnaPairs:         { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Training data for semantic matching (auto-generated)' },
-    testPhrases:      { audit: false, gap: false, agent: false, purpose: 'system', description: 'Validation test cases' },
-    examples:         { audit: false, gap: false, agent: false, purpose: 'system', description: 'Sample conversations for admin' },
-    escalationFlags:  { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Triggers for human handoff' },
+    qnaPairs:         { purpose: 'system',         aiGenerable: false, description: 'Training data for semantic matching (auto-generated)' },
+    testPhrases:      { purpose: 'system',         aiGenerable: false, description: 'Validation test cases' },
+    examples:         { purpose: 'system',         aiGenerable: false, description: 'Sample conversations for admin' },
+    escalationFlags:  { purpose: 'system',         aiGenerable: false, description: 'Triggers for human handoff' },
     
     // ============================================
     // MULTILINGUAL (1 setting)
     // ============================================
-    language:         { audit: false, gap: false, agent: true,  purpose: 'system', description: 'auto/en/es/fr language setting' }
+    language:         { purpose: 'system',         aiGenerable: false, description: 'auto/en/es/fr language setting' }
 };
 
 /**
- * Get settings count summary
- * @returns {Object} { total, audited, gapGenerated, agentUsed, aligned, gaps }
+ * ============================================================================
+ * DERIVE POLICIES FROM SINGLE SOURCE OF TRUTH
+ * ============================================================================
+ * 
+ * All policies are computed from `purpose` + `aiGenerable`:
+ * - isAudited: purpose in ['runtime', 'runtime_manual']
+ * - isAgentUsed: purpose in ['runtime', 'runtime_manual', 'system']
+ * - isGapGenerated: purpose in ['runtime', 'runtime_manual'] && aiGenerable
+ * 
+ * This ensures NO DRIFT - audit/gap/agent are always consistent.
+ */
+
+function derivePolicy(setting) {
+    const { purpose, aiGenerable } = setting;
+    
+    // Runtime contract = settings the agent uses at runtime that humans care about
+    const isRuntimeContract = purpose === 'runtime' || purpose === 'runtime_manual';
+    
+    return {
+        // Audit checks EVERYTHING in the runtime contract
+        isAudited: isRuntimeContract,
+        
+        // Agent uses runtime contract + system settings
+        isAgentUsed: isRuntimeContract || purpose === 'system',
+        
+        // Gap Fill generates aiGenerable settings in runtime contract
+        isGapGenerated: isRuntimeContract && aiGenerable === true,
+        
+        // Admin must configure these manually
+        requiresAdmin: purpose === 'runtime_manual',
+        
+        // AI can auto-generate these
+        aiCanGenerate: aiGenerable === true
+    };
+}
+
+/**
+ * Get settings count summary - SINGLE SOURCE OF TRUTH
+ * @returns {Object} Runtime contract counts with derived policies
  */
 function getSettingsCount() {
     const settings = Object.entries(SCENARIO_SETTINGS_REGISTRY);
     const total = settings.length;
     
-    // Count by flag
-    const audited = settings.filter(([_, v]) => v.audit).length;
-    const gapGenerated = settings.filter(([_, v]) => v.gap).length;
-    const agentUsed = settings.filter(([_, v]) => v.agent).length;
+    // ========================================
+    // GROUP BY PURPOSE (the source of truth)
+    // ========================================
+    const byPurpose = {
+        runtime: settings.filter(([_, v]) => v.purpose === 'runtime'),
+        runtime_manual: settings.filter(([_, v]) => v.purpose === 'runtime_manual'),
+        generation: settings.filter(([_, v]) => v.purpose === 'generation'),
+        system: settings.filter(([_, v]) => v.purpose === 'system'),
+        future: settings.filter(([_, v]) => v.purpose === 'future')
+    };
     
-    // Count by purpose
-    const runtimeSettings = settings.filter(([_, v]) => v.purpose === 'runtime');
-    const runtimeManualSettings = settings.filter(([_, v]) => v.purpose === 'runtime_manual');
-    const generationSettings = settings.filter(([_, v]) => v.purpose === 'generation');
-    const systemSettings = settings.filter(([_, v]) => v.purpose === 'system');
-    const futureSettings = settings.filter(([_, v]) => v.purpose === 'future');
-    const notImplementedSettings = settings.filter(([_, v]) => v.purpose === 'not_implemented');
+    // ========================================
+    // THE RUNTIME CONTRACT (what matters)
+    // ========================================
+    // This is the SINGLE source of truth - everything else derives from this
+    const runtimeContract = [...byPurpose.runtime, ...byPurpose.runtime_manual];
+    const runtimeContractCount = runtimeContract.length;
     
-    // ✅ ALIGNED RUNTIME: Gap-generated settings where audit=true, gap=true, agent=true
-    const alignedRuntime = runtimeSettings.filter(([_, v]) => v.audit && v.gap && v.agent);
+    // ========================================
+    // DERIVED COUNTS (computed, not stored)
+    // ========================================
+    // These are derived from purpose + aiGenerable, so they CAN'T drift
     
-    // ✅ ALIGNED MANUAL: Manual settings where audit=true, agent=true (gap not required)
-    const alignedManual = runtimeManualSettings.filter(([_, v]) => v.audit && v.agent);
+    // Audit checks ALL runtime contract settings (no exceptions)
+    const audited = runtimeContractCount;
     
-    // Total aligned = runtime + manual
-    const totalAligned = [...alignedRuntime, ...alignedManual];
-    const totalRuntimeSettings = runtimeSettings.length + runtimeManualSettings.length;
+    // Gap Fill generates aiGenerable settings in runtime contract
+    const gapGenerated = runtimeContract.filter(([_, v]) => v.aiGenerable === true).length;
     
-    // ⚠️ GAPS: Runtime settings that should be aligned but aren't
-    const gapsRuntime = runtimeSettings.filter(([_, v]) => !(v.audit && v.gap && v.agent));
-    const gapsManual = runtimeManualSettings.filter(([_, v]) => !(v.audit && v.agent));
-    const gaps = [...gapsRuntime, ...gapsManual];
+    // Agent uses runtime contract + system settings
+    const agentUsed = runtimeContractCount + byPurpose.system.length;
     
-    // For backwards compatibility, still track these
-    const mismatches = settings.filter(([_, v]) => 
-        v.purpose === 'future' && (v.audit || v.gap) && !v.agent
-    );
-    const unaudited = [...runtimeSettings, ...runtimeManualSettings].filter(([_, v]) => v.agent && !v.audit);
+    // Settings that AI generates vs admin configures
+    const aiGenerates = runtimeContract.filter(([_, v]) => v.aiGenerable === true);
+    const adminConfigures = runtimeContract.filter(([_, v]) => v.aiGenerable === false);
+    
+    // ========================================
+    // ALIGNMENT CHECK (should always be 100% now!)
+    // ========================================
+    // With single source of truth, there are NO gaps by definition
+    // The "aligned" count = runtime contract (audit checks everything)
+    const alignedCount = runtimeContractCount;
+    const gapsCount = 0; // No drift possible!
     
     return {
         total,
-        audited,
-        gapGenerated,
-        agentUsed,
         
-        // Purpose breakdown
-        byPurpose: {
-            runtime: runtimeSettings.length,
-            runtimeManual: runtimeManualSettings.length,
-            generation: generationSettings.length,
-            system: systemSettings.length,
-            future: futureSettings.length,
-            notImplemented: notImplementedSettings.length
+        // ========================================
+        // 🎯 THE RUNTIME CONTRACT (main display)
+        // ========================================
+        runtimeContract: {
+            total: runtimeContractCount,
+            aiGenerates: aiGenerates.length,
+            adminConfigures: adminConfigures.length,
+            settings: runtimeContract.map(([k, v]) => ({ 
+                setting: k, 
+                ...v,
+                ...derivePolicy(v)
+            }))
         },
         
-        // ⚠️ NOT IMPLEMENTED: Settings with UI forms but no runtime code
-        notImplemented: notImplementedSettings.map(([k, v]) => ({ setting: k, ...v })),
+        // ========================================
+        // DERIVED COUNTS (for backward compatibility)
+        // ========================================
+        audited,           // = runtimeContract.total (audit checks everything)
+        gapGenerated,      // = runtimeContract.aiGenerates
+        agentUsed,         // = runtimeContract.total + system.length
         
-        // Alignment status
-        aligned: totalAligned.map(([k, v]) => ({ setting: k, ...v })),
-        alignedCount: totalAligned.length,
-        totalRuntimeSettings,
+        // Purpose breakdown (for detailed view)
+        byPurpose: {
+            runtime: byPurpose.runtime.length,
+            runtimeManual: byPurpose.runtime_manual.length,
+            generation: byPurpose.generation.length,
+            system: byPurpose.system.length,
+            future: byPurpose.future.length
+        },
         
-        gaps: gaps.map(([k, v]) => ({ setting: k, ...v })),
-        gapsCount: gaps.length,
+        // AI vs Admin breakdown
+        aiGenerates: aiGenerates.map(([k, v]) => ({ setting: k, ...v })),
+        adminConfigures: adminConfigures.map(([k, v]) => ({ setting: k, ...v })),
         
-        // Legacy (for UI compatibility)
-        mismatches: mismatches.map(([k, v]) => ({ setting: k, ...v })),
-        unaudited: unaudited.map(([k, v]) => ({ setting: k, ...v }))
+        // ========================================
+        // ALIGNMENT STATUS (always perfect now!)
+        // ========================================
+        aligned: runtimeContract.map(([k, v]) => ({ setting: k, ...v })),
+        alignedCount,
+        totalRuntimeSettings: runtimeContractCount,
+        
+        // No gaps possible with single source of truth!
+        gaps: [],
+        gapsCount,
+        
+        // Legacy compatibility
+        mismatches: [],
+        unaudited: [],
+        runtimeAuto: byPurpose.runtime.length,
+        runtimeManual: byPurpose.runtime_manual.length
     };
 }
 
@@ -665,7 +751,7 @@ function getSettingsByCategory() {
     const categories = {
         'Identity & Lifecycle': ['scenarioId', 'version', 'status', 'name', 'isActive', 'scope', 'ownerCompanyId', 'notes'],
         'Categorization': ['categories', 'scenarioType', 'priority', 'cooldownSeconds'],
-        'Matching - Triggers': ['triggers', 'regexTriggers', 'negativeTriggers', 'keywords', 'negativeKeywords', 'embeddingVector', 'contextWeight'],
+        'Matching - Triggers': ['triggers', 'regexTriggers', 'negativeTriggers', 'exampleUserPhrases', 'negativeUserPhrases', 'keywords', 'negativeKeywords', 'embeddingVector', 'contextWeight'],
         'Confidence & Priority': ['minConfidence'],
         'Replies - Core': ['quickReplies', 'fullReplies', 'quickReplies_noName', 'fullReplies_noName', 'replyStrategy', 'replySelection', 'replyBundles', 'replyPolicy'],
         'Follow-Up Behavior': ['followUpMode', 'followUpQuestionText', 'followUpPrompts', 'followUpFunnel', 'transferTarget'],

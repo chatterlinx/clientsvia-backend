@@ -1245,75 +1245,142 @@
             </div>
             
             <!-- 🎯 SETTINGS COVERAGE REGISTRY -->
+            <!-- 🎯 RUNTIME CONTRACT - Single Source of Truth -->
             <div id="settings-registry" style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid var(--accent-purple); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: #fff;">
-                        <i class="fas fa-clipboard-check" style="color: var(--accent-purple);"></i>
-                        Settings Coverage Registry
-                        <span style="font-size: 12px; background: var(--accent-purple); padding: 2px 8px; border-radius: 12px;">SINGLE SOURCE OF TRUTH</span>
+                        <i class="fas fa-file-contract" style="color: var(--accent-purple);"></i>
+                        Runtime Contract
+                        <span style="font-size: 12px; background: var(--accent-green); color: #000; padding: 2px 8px; border-radius: 12px; font-weight: 700;">SINGLE SOURCE OF TRUTH</span>
                     </h3>
                     <button onclick="loadSettingsRegistry()" style="background: var(--accent-purple); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;">
                         <i class="fas fa-sync"></i> Refresh
                     </button>
                 </div>
                 
-                <!-- Summary Counts -->
-                <div id="registry-summary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+                <!-- Main Count: The ONE Number -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                    <div style="background: linear-gradient(135deg, rgba(168,85,247,0.3) 0%, rgba(168,85,247,0.1) 100%); padding: 16px; border-radius: 12px; text-align: center; border: 2px solid var(--accent-purple);">
+                        <div style="font-size: 36px; font-weight: bold; color: #fff;" id="reg-contract-total">--</div>
+                        <div style="font-size: 13px; color: var(--text-primary); font-weight: 600;">Runtime Contract</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Settings Audit + Agent Use</div>
+                    </div>
+                    <div style="background: rgba(52,211,153,0.2); padding: 16px; border-radius: 12px; text-align: center; border: 1px solid var(--accent-green);">
+                        <div style="font-size: 36px; font-weight: bold; color: var(--accent-green);" id="reg-ai-generates">--</div>
+                        <div style="font-size: 13px; color: var(--text-primary); font-weight: 600;">AI Generates</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Gap Fill creates these</div>
+                    </div>
+                    <div style="background: rgba(251,191,36,0.2); padding: 16px; border-radius: 12px; text-align: center; border: 1px solid var(--accent-yellow);">
+                        <div style="font-size: 36px; font-weight: bold; color: var(--accent-yellow);" id="reg-admin-configures">--</div>
+                        <div style="font-size: 13px; color: var(--text-primary); font-weight: 600;">Admin Configures</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Manual setup required</div>
+                    </div>
+                </div>
+                
+                <!-- Perfect Alignment Banner -->
+                <div id="registry-status" style="background: rgba(16,185,129,0.15); border: 1px solid var(--accent-green); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">✅</span>
+                        <div>
+                            <div style="font-weight: 600; color: var(--accent-green);">PERFECT ALIGNMENT</div>
+                            <div style="font-size: 12px; color: #6ee7b7;" id="reg-status-message">
+                                Single source of truth - no drift between Audit, Gap Fill, and Agent
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Breakdown -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                    <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">
+                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; font-weight: 600;">Runtime Settings Breakdown</div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+                            <span style="color: var(--text-secondary);">🎯 Auto (AI generates)</span>
+                            <span style="color: #fff; font-weight: 600;" id="reg-auto-count">--</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                            <span style="color: var(--text-secondary);">🔧 Manual (admin configures)</span>
+                            <span style="color: #fff; font-weight: 600;" id="reg-manual-count">--</span>
+                        </div>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">
+                        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; font-weight: 600;">Other Settings</div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px;">
+                            <span style="color: var(--text-secondary);">⚙️ System (auto-computed)</span>
+                            <span style="color: #fff; font-weight: 600;" id="reg-system-count">--</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                            <span style="color: var(--text-secondary);">🔮 Future (planned)</span>
+                            <span style="color: #fff; font-weight: 600;" id="reg-future-count">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 🎯 SCENARIO POOL ALIGNMENT - Single Source of Truth for Scenarios -->
+            <div id="scenario-pool-alignment" style="background: linear-gradient(135deg, #1a2e1a 0%, #162e16 100%); border: 2px solid var(--accent-green); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="display: flex; align-items: center; gap: 8px; margin: 0; color: #fff;">
+                        <i class="fas fa-sync-alt" style="color: var(--accent-green);"></i>
+                        Scenario Pool Alignment
+                        <span style="font-size: 12px; background: var(--accent-green); color: #000; padding: 2px 8px; border-radius: 12px; font-weight: 700;">SINGLE SOURCE OF TRUTH</span>
+                    </h3>
+                    <button onclick="loadScenarioPoolAlignment()" style="background: var(--accent-green); border: none; color: #000; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+                
+                <!-- Alignment Summary -->
+                <div id="scenario-alignment-summary" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
                     <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; text-align: center;">
-                        <div style="font-size: 24px; font-weight: bold; color: #fff;" id="reg-total">--</div>
-                        <div style="font-size: 11px; color: var(--text-muted);">Total Settings</div>
+                        <div style="font-size: 24px; font-weight: bold; color: #fff;" id="align-total">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Total in Templates</div>
                     </div>
-                    <div style="background: rgba(74,144,226,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-blue);">
-                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-blue);" id="reg-audit">--</div>
-                        <div style="font-size: 11px; color: var(--text-muted);">Audit Checks</div>
+                    <div style="background: rgba(96,165,250,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-blue);">
+                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-blue);" id="align-active">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Active Scenarios</div>
                     </div>
-                    <div style="background: rgba(168,85,247,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-purple);">
-                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-purple);" id="reg-gap">--</div>
-                        <div style="font-size: 11px; color: var(--text-muted);">Gap Generates</div>
+                    <div style="background: rgba(244,114,182,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-pink);">
+                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-pink);" id="align-disabled">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Disabled by Company</div>
                     </div>
-                    <div style="background: rgba(16,185,129,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-green);">
-                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-green);" id="reg-agent">--</div>
-                        <div style="font-size: 11px; color: var(--text-muted);">Agent Uses</div>
-                    </div>
-                </div>
-                
-                <!-- Warnings -->
-                <div id="registry-warnings" style="display: none; margin-bottom: 16px;">
-                    <div style="background: rgba(239,68,68,0.15); border: 1px solid var(--accent-red); border-radius: 8px; padding: 12px;">
-                        <div style="font-weight: 600; color: var(--accent-red); margin-bottom: 8px;">
-                            <i class="fas fa-exclamation-triangle"></i> Implementation Gaps
-                        </div>
-                        <div id="registry-warnings-content" style="font-size: 12px; color: #fca5a5;"></div>
+                    <div style="background: rgba(52,211,153,0.2); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid var(--accent-green);">
+                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-green);" id="align-agent">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Agent Can See</div>
                     </div>
                 </div>
                 
-                <!-- Coverage Bars -->
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
-                    <div>
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">
-                            <span>Audit Coverage</span>
-                            <span id="reg-audit-pct">--%</span>
-                        </div>
-                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                            <div id="reg-audit-bar" style="height: 100%; width: 0%; background: var(--accent-blue); transition: width 0.5s;"></div>
-                        </div>
+                <!-- Alignment Status -->
+                <div id="scenario-alignment-status" style="display: none; margin-bottom: 16px;">
+                    <!-- Populated by JS -->
+                </div>
+                
+                <!-- System Harmony Check -->
+                <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 12px;">
+                    <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
+                        <strong style="color: #fff;">System Harmony Check:</strong> All three systems should work with the same scenario pool
                     </div>
-                    <div>
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">
-                            <span>Gap Coverage</span>
-                            <span id="reg-gap-pct">--%</span>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="align-gapfill-icon" style="font-size: 16px;">⏳</span>
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: #fff;">Gap Fill (GPT-4)</div>
+                                <div style="font-size: 11px; color: var(--text-muted);" id="align-gapfill-count">-- scenarios</div>
+                            </div>
                         </div>
-                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                            <div id="reg-gap-bar" style="height: 100%; width: 0%; background: var(--accent-purple); transition: width 0.5s;"></div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="align-audit-icon" style="font-size: 16px;">⏳</span>
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: #fff;">Audit (GPT-4)</div>
+                                <div style="font-size: 11px; color: var(--text-muted);" id="align-audit-count">-- scenarios</div>
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">
-                            <span>Agent Coverage</span>
-                            <span id="reg-agent-pct">--%</span>
-                        </div>
-                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                            <div id="reg-agent-bar" style="height: 100%; width: 0%; background: var(--accent-green); transition: width 0.5s;"></div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="align-runtime-icon" style="font-size: 16px;">⏳</span>
+                            <div>
+                                <div style="font-size: 13px; font-weight: 600; color: #fff;">LLM Agent (Runtime)</div>
+                                <div style="font-size: 11px; color: var(--text-muted);" id="align-runtime-count">-- scenarios</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1500,7 +1567,7 @@
                 
                 <!-- Preview Content (hidden until loaded) -->
                 <div id="preview-content" style="display: none;">
-                    <!-- Health Count Banner -->
+                    <!-- Health Count Banner - Compact -->
                     <div id="health-count-banner" style="
                         background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.1));
                         border: 1px solid rgba(34, 197, 94, 0.3);
@@ -1511,7 +1578,7 @@
                         align-items: center;
                         justify-content: space-between;
                     ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
                             <div style="
                                 width: 40px;
                                 height: 40px;
@@ -1524,11 +1591,11 @@
                                 <i class="fas fa-check-circle" style="color: #22c55e; font-size: 18px;"></i>
                             </div>
                             <div>
-                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 2px;">Settings Verified</div>
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 2px;">AI-Generable Settings</div>
                                 <div style="font-size: 20px; font-weight: 700; color: #22c55e;">
-                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">0</span>
+                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">26</span>
                                 </div>
-                            <div id="health-missing" style="margin-top: 4px; font-size: 11px; color: var(--text-muted);"></div>
+                                <div id="health-missing" style="margin-top: 4px; font-size: 11px; color: var(--text-muted);"></div>
                             </div>
                         </div>
                         <div style="text-align: right;">
@@ -1561,106 +1628,60 @@
                         </div>
                     </div>
                     
-                    <!-- Scenario Name -->
-                    <div class="preview-section">
-                        <div class="preview-label">Scenario Name</div>
-                        <div class="preview-value" id="preview-name">--</div>
-                    </div>
-                    
-                    <!-- Category, Type & Behavior -->
-                    <div class="preview-row">
-                        <div class="preview-section" style="flex: 1;">
-                            <div class="preview-label">Category</div>
-                            <div class="preview-value" id="preview-category">--</div>
+                    <!-- 🎯 TWO-COLUMN SETTINGS TABLE -->
+                    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; margin-bottom: 16px;">
+                        <div style="background: var(--bg-tertiary); padding: 10px 16px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                            <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">Setting</span>
+                            <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">Value</span>
                         </div>
-                        <div class="preview-section" style="flex: 1;">
-                            <div class="preview-label">Type</div>
-                            <div class="preview-value" id="preview-type">--</div>
-                        </div>
-                        <div class="preview-section" style="flex: 1;">
-                            <div class="preview-label">Priority</div>
-                            <div class="preview-value" id="preview-priority">--</div>
+                        <div id="settings-table" style="max-height: 400px; overflow-y: auto;">
+                            <!-- Populated by JavaScript -->
                         </div>
                     </div>
                     
-                    <!-- Behavior -->
-                    <div class="preview-section">
-                        <div class="preview-label">🎭 AI Behavior</div>
-                        <div class="preview-value" id="preview-behavior" style="color: var(--accent-purple);">--</div>
-                    </div>
-                    
-                    <!-- Triggers -->
-                    <div class="preview-section">
-                        <div class="preview-label">Triggers <span class="badge" id="trigger-count">0</span></div>
-                        <div class="triggers-list" id="preview-triggers"></div>
-                    </div>
-                    
-                    <!-- Regex Triggers -->
-                    <div class="preview-section" id="regex-section" style="display: none;">
-                        <div class="preview-label">🔧 Regex Patterns</div>
-                        <div id="preview-regex" style="font-family: 'Courier New', monospace; font-size: 12px; background: var(--bg-tertiary); padding: 10px; border-radius: 8px; color: #f59e0b;"></div>
-                    </div>
-                    
-                    <!-- Quick Reply Preview -->
-                    <div class="preview-section">
-                        <div class="preview-label">⚡ Quick Replies</div>
-                        <div id="preview-quick-replies" style="display: flex; flex-direction: column; gap: 8px;"></div>
-                    </div>
-                    
-                    <!-- Full Reply Preview -->
-                    <div class="preview-section">
-                        <div class="preview-label">💬 Full Replies</div>
-                        <div id="preview-full-replies" style="display: flex; flex-direction: column; gap: 8px;"></div>
-                    </div>
-                    
-                    <!-- Follow-Up Funnel -->
-                    <div class="preview-section" id="funnel-section" style="display: none;">
-                        <div class="preview-label">🎯 Follow-Up Funnel</div>
-                        <div id="preview-funnel" style="color: #8b5cf6; font-style: italic;"></div>
-                    </div>
-                    
-                    <!-- Advanced Settings Section -->
-                    <div class="preview-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
-                        <div class="preview-label" style="margin-bottom: 12px;">⚙️ Advanced Settings</div>
-                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
-                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Min Confidence</div>
-                                <div id="preview-confidence" style="font-weight: 600; color: var(--accent-blue);">--</div>
-                            </div>
-                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Follow-Up Mode</div>
-                                <div id="preview-followup-mode" style="font-weight: 600; color: var(--accent-purple);">--</div>
-                            </div>
-                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Action Type</div>
-                                <div id="preview-action-type" style="font-weight: 600; color: var(--accent-pink);">--</div>
-                            </div>
-                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Booking Intent</div>
-                                <div id="preview-booking-intent" style="font-weight: 600;">--</div>
-                            </div>
-                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Cooldown</div>
-                                <div id="preview-cooldown" style="font-weight: 600;">--</div>
-                            </div>
-                            <div style="background: var(--bg-tertiary); padding: 10px; border-radius: 8px;">
-                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Handoff Policy</div>
-                                <div id="preview-handoff" style="font-weight: 600;">--</div>
-                            </div>
+                    <!-- Triggers Preview (expandable) -->
+                    <details style="margin-bottom: 12px;">
+                        <summary style="cursor: pointer; padding: 10px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-primary);">
+                            <i class="fas fa-bolt" style="color: var(--accent-yellow); margin-right: 8px;"></i>
+                            Triggers <span class="badge" id="trigger-count" style="margin-left: 8px;">0</span>
+                        </summary>
+                        <div style="padding: 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-top: none; border-radius: 0 0 8px 8px;">
+                            <div class="triggers-list" id="preview-triggers"></div>
                         </div>
-                    </div>
+                    </details>
                     
-                    <!-- Entity Capture -->
-                    <div class="preview-section" id="entity-section" style="display: none;">
-                        <div class="preview-label">🎯 Entity Capture</div>
-                        <div id="preview-entities" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
-                    </div>
+                    <!-- Regex Triggers (expandable) -->
+                    <details id="regex-section" style="margin-bottom: 12px; display: none;">
+                        <summary style="cursor: pointer; padding: 10px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-primary);">
+                            <i class="fas fa-code" style="color: var(--accent-orange); margin-right: 8px;"></i>
+                            Regex Patterns
+                        </summary>
+                        <div style="padding: 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-top: none; border-radius: 0 0 8px 8px;">
+                            <div id="preview-regex" style="font-family: 'Courier New', monospace; font-size: 12px; color: #f59e0b;"></div>
+                        </div>
+                    </details>
                     
-                    <!-- _noName Variants indicator -->
-                    <div class="preview-section" id="noname-section" style="display: none;">
-                        <div class="preview-label">📝 Name Variants</div>
-                        <div id="preview-noname" style="font-size: 13px; color: var(--accent-green);"></div>
-                    </div>
+                    <!-- Quick Replies (expandable) -->
+                    <details style="margin-bottom: 12px;">
+                        <summary style="cursor: pointer; padding: 10px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-primary);">
+                            <i class="fas fa-comment" style="color: var(--accent-green); margin-right: 8px;"></i>
+                            Quick Replies
+                        </summary>
+                        <div style="padding: 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-top: none; border-radius: 0 0 8px 8px;">
+                            <div id="preview-quick-replies" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                        </div>
+                    </details>
+                    
+                    <!-- Full Replies (expandable) -->
+                    <details style="margin-bottom: 12px;">
+                        <summary style="cursor: pointer; padding: 10px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-primary);">
+                            <i class="fas fa-comments" style="color: var(--accent-blue); margin-right: 8px;"></i>
+                            Full Replies
+                        </summary>
+                        <div style="padding: 12px; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-top: none; border-radius: 0 0 8px 8px;">
+                            <div id="preview-full-replies" style="display: flex; flex-direction: column; gap: 8px;"></div>
+                        </div>
+                    </details>
                     
                     <!-- Info box -->
                     <div class="info-box">
@@ -1796,15 +1817,117 @@
             });
             document.getElementById(`tab-${tabName}`).classList.add('active');
             
-            // Load settings registry when switching to audit tab
+            // Load alignment data when switching to audit tab
             if (tabName === 'audit') {
                 loadSettingsRegistry();
+                loadScenarioPoolAlignment();
             }
         }
         
         // ========================================
         // SETTINGS REGISTRY FUNCTIONS
         // ========================================
+        // ========================================
+        // SCENARIO POOL ALIGNMENT - Single Source of Truth
+        // ========================================
+        async function loadScenarioPoolAlignment() {
+            try {
+                const response = await fetch(`/api/admin/wiring-status/${companyId}/scenario-alignment`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load scenario alignment');
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    console.error('Scenario alignment error:', data.error);
+                    return;
+                }
+                
+                const alignment = data.alignment;
+                
+                // Update main counts
+                document.getElementById('align-total').textContent = alignment.totalInTemplates;
+                document.getElementById('align-active').textContent = alignment.activeInTemplates;
+                document.getElementById('align-disabled').textContent = alignment.disabledByCompany;
+                document.getElementById('align-agent').textContent = alignment.agentCanSee;
+                
+                // Update system harmony counts (all three should match)
+                document.getElementById('align-gapfill-count').textContent = `${alignment.gapFillScope} scenarios`;
+                document.getElementById('align-audit-count').textContent = `${alignment.auditScope} scenarios`;
+                document.getElementById('align-runtime-count').textContent = `${alignment.agentCanSee} scenarios`;
+                
+                // Update harmony icons based on alignment
+                const isAligned = alignment.isAligned;
+                const gapFillIcon = document.getElementById('align-gapfill-icon');
+                const auditIcon = document.getElementById('align-audit-icon');
+                const runtimeIcon = document.getElementById('align-runtime-icon');
+                
+                if (isAligned) {
+                    gapFillIcon.textContent = '✅';
+                    auditIcon.textContent = '✅';
+                    runtimeIcon.textContent = '✅';
+                } else {
+                    // Check if gap fill and audit match agent
+                    gapFillIcon.textContent = alignment.gapFillScope === alignment.agentCanSee ? '✅' : '⚠️';
+                    auditIcon.textContent = alignment.auditScope === alignment.agentCanSee ? '✅' : '⚠️';
+                    runtimeIcon.textContent = '✅'; // Agent is always the baseline
+                }
+                
+                // Show alignment status
+                const statusDiv = document.getElementById('scenario-alignment-status');
+                statusDiv.style.display = 'block';
+                
+                if (alignment.summary.status === 'GREEN') {
+                    statusDiv.style.background = 'rgba(16,185,129,0.15)';
+                    statusDiv.style.border = '1px solid var(--accent-green)';
+                    statusDiv.style.borderRadius = '8px';
+                    statusDiv.style.padding = '12px';
+                    statusDiv.innerHTML = `
+                        <div style="color: var(--accent-green);">
+                            <strong>✅ ${alignment.summary.label}</strong>
+                            <div style="margin-top: 4px; font-size: 12px; color: #6ee7b7;">
+                                ${alignment.summary.message}
+                            </div>
+                        </div>
+                    `;
+                } else if (alignment.summary.status === 'YELLOW') {
+                    statusDiv.style.background = 'rgba(251,191,36,0.15)';
+                    statusDiv.style.border = '1px solid var(--accent-yellow)';
+                    statusDiv.style.borderRadius = '8px';
+                    statusDiv.style.padding = '12px';
+                    statusDiv.innerHTML = `
+                        <div style="color: var(--accent-yellow);">
+                            <strong>⚠️ ${alignment.summary.label}</strong>
+                            <div style="margin-top: 4px; font-size: 12px; color: #fcd34d;">
+                                ${alignment.summary.message}
+                            </div>
+                            <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">
+                                💡 <strong>Recommendation:</strong> Gap Fill and Audit should use ScenarioPoolService to match the agent's view.
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    statusDiv.style.background = 'rgba(239,68,68,0.15)';
+                    statusDiv.style.border = '1px solid var(--accent-red)';
+                    statusDiv.style.borderRadius = '8px';
+                    statusDiv.style.padding = '12px';
+                    statusDiv.innerHTML = `
+                        <div style="color: var(--accent-red);">
+                            <strong>❌ ${alignment.summary.label}</strong>
+                            <div style="margin-top: 4px; font-size: 12px; color: #fca5a5;">
+                                ${alignment.summary.message}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Error loading scenario pool alignment:', error);
+            }
+        }
+        
         async function loadSettingsRegistry() {
             try {
                 const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/settings-registry`, {
@@ -1815,124 +1938,29 @@
                 
                 const data = await response.json();
                 
-                // Update main counts (now showing RUNTIME alignment)
-                document.getElementById('reg-total').textContent = data.byPurpose.runtime;
-                document.getElementById('reg-audit').textContent = data.summary.auditedSettings;
-                document.getElementById('reg-gap').textContent = data.summary.gapGeneratedSettings;
-                document.getElementById('reg-agent').textContent = data.alignment.runtimeAligned;
+                // ========================================
+                // 🎯 SINGLE SOURCE OF TRUTH DISPLAY
+                // ========================================
                 
-                // Update labels to reflect runtime focus
-                document.getElementById('reg-total').nextElementSibling.textContent = 'Runtime Settings';
-                document.getElementById('reg-agent').nextElementSibling.textContent = 'Fully Aligned';
+                // Main counts - The ONE number (runtime contract) + breakdown
+                const contract = data.runtimeContract;
+                document.getElementById('reg-contract-total').textContent = contract.total;
+                document.getElementById('reg-ai-generates').textContent = contract.aiGenerates;
+                document.getElementById('reg-admin-configures').textContent = contract.adminConfigures;
                 
-                // Update alignment bar (the important one)
-                const alignPct = data.alignment.alignmentPct;
-                document.getElementById('reg-audit-pct').textContent = `${alignPct}%`;
-                document.getElementById('reg-gap-pct').textContent = data.summary.coverage.gapCoverage;
-                document.getElementById('reg-agent-pct').textContent = data.summary.coverage.agentCoverage;
+                // Breakdown counts
+                document.getElementById('reg-auto-count').textContent = data.byPurpose.runtime;
+                document.getElementById('reg-manual-count').textContent = data.byPurpose.runtimeManual;
+                document.getElementById('reg-system-count').textContent = data.byPurpose.system;
+                document.getElementById('reg-future-count').textContent = data.byPurpose.future;
                 
-                document.getElementById('reg-audit-bar').style.width = `${alignPct}%`;
-                document.getElementById('reg-gap-bar').style.width = `${parseInt(data.summary.coverage.gapCoverage)}%`;
-                document.getElementById('reg-agent-bar').style.width = `${parseInt(data.summary.coverage.agentCoverage)}%`;
-                
-                // Update first bar label
-                document.querySelector('#reg-audit-pct').parentElement.querySelector('span:first-child').textContent = 'Runtime Alignment';
-                
-                // Color the alignment bar based on status
-                const alignBar = document.getElementById('reg-audit-bar');
-                if (data.alignment.status === 'PERFECT') {
-                    alignBar.style.background = 'var(--accent-green)';
-                } else if (data.alignment.status === 'GOOD') {
-                    alignBar.style.background = 'var(--accent-blue)';
-                } else {
-                    alignBar.style.background = 'var(--accent-orange)';
-                }
-                
-                // Show gaps if any
-                const warningsDiv = document.getElementById('registry-warnings');
-                const warningsContent = document.getElementById('registry-warnings-content');
-                
-                if (data.alignment.gapsCount > 0) {
-                    warningsDiv.style.display = 'block';
-                    let html = `<div style="margin-bottom: 8px;">
-                        <strong>⚠️ ${data.alignment.gapsCount} runtime settings need alignment:</strong>
-                        <div style="margin-top: 8px; display: grid; gap: 6px;">
-                            ${data.alignment.gaps.map(s => 
-                                `<div style="display: flex; align-items: center; gap: 8px;">
-                                    <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px; font-size: 11px;">${s.setting}</code>
-                                    <span style="font-size: 11px;">
-                                        Audit: ${s.audit ? '✅' : '❌'} | 
-                                        Gap: ${s.gap ? '✅' : '❌'} | 
-                                        Agent: ${s.agent ? '✅' : '❌'}
-                                    </span>
-                                </div>`
-                            ).join('')}
-                        </div>
-                    </div>`;
-                    
-                    // Show purpose breakdown
-                    html += `<div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
-                        <strong>Settings by Purpose:</strong>
-                        <div style="display: flex; gap: 16px; margin-top: 6px; font-size: 11px;">
-                            <span>🎯 Runtime: ${data.byPurpose.runtime} (auto) + ${data.byPurpose.runtimeManual} (manual)</span>
-                            <span>✏️ Generation: ${data.byPurpose.generation}</span>
-                            <span>⚙️ System: ${data.byPurpose.system}</span>
-                            <span>🔮 Future: ${data.byPurpose.future}</span>
-                        </div>
-                    </div>`;
-                    
-                    warningsContent.innerHTML = html;
-                } else {
-                    // Check for NOT IMPLEMENTED settings
-                    if (data.notImplemented && data.notImplemented.length > 0) {
-                        warningsDiv.style.display = 'block';
-                        warningsDiv.style.background = 'rgba(251,146,60,0.15)';
-                        warningsDiv.style.borderColor = 'var(--accent-orange)';
-                        warningsContent.innerHTML = `
-                            <div style="color: var(--accent-orange);">
-                                <strong>⚠️ ${data.notImplemented.length} UI FORMS WITH NO RUNTIME CODE</strong>
-                                <div style="margin-top: 8px; font-size: 12px; color: #fdba74;">
-                                    These settings have forms in the UI but the agent ignores them:
-                                    ${data.notImplemented.map(s => 
-                                        `<div style="margin-top: 4px;">❌ <code style="background: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 3px;">${s.setting}</code></div>`
-                                    ).join('')}
-                                </div>
-                            </div>
-                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
-                                <strong style="color: #fff;">Settings by Purpose:</strong>
-                                <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                                    <span>🎯 Runtime: ${data.byPurpose.runtime} + ${data.byPurpose.runtimeManual}</span>
-                                    <span>✏️ Generation: ${data.byPurpose.generation}</span>
-                                    <span>⚙️ System: ${data.byPurpose.system}</span>
-                                    <span style="color: var(--accent-orange);">⚠️ Not Implemented: ${data.byPurpose.notImplemented}</span>
-                                    <span>🔮 Future: ${data.byPurpose.future}</span>
-                                </div>
-                            </div>`;
-                    } else {
-                        // Perfect alignment!
-                        warningsDiv.style.display = 'block';
-                        warningsDiv.style.background = 'rgba(16,185,129,0.15)';
-                        warningsDiv.style.borderColor = 'var(--accent-green)';
-                        warningsContent.innerHTML = `
-                            <div style="color: var(--accent-green);">
-                                <strong>✅ PERFECT ALIGNMENT</strong>
-                                <div style="margin-top: 4px; font-size: 12px; color: #6ee7b7;">
-                                    All ${data.alignment.runtimeTotal} runtime settings are properly covered:
-                                    <br>• ${data.byPurpose.runtime} auto-generated (audit ✓ gap ✓ agent ✓)
-                                    <br>• ${data.byPurpose.runtimeManual} manual-config (audit ✓ agent ✓)
-                                </div>
-                            </div>
-                            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
-                                <strong style="color: #fff;">Settings by Purpose:</strong>
-                                <div style="display: flex; flex-wrap: wrap; gap: 16px; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
-                                    <span>🎯 Runtime: ${data.byPurpose.runtime} (auto) + ${data.byPurpose.runtimeManual} (manual)</span>
-                                    <span>✏️ Generation: ${data.byPurpose.generation}</span>
-                                    <span>⚙️ System: ${data.byPurpose.system}</span>
-                                    <span>🔮 Future: ${data.byPurpose.future}</span>
-                                </div>
-                            </div>`;
-                    }
-                }
+                // Update status message
+                const statusMsg = document.getElementById('reg-status-message');
+                statusMsg.innerHTML = `
+                    All <strong>${contract.total}</strong> runtime contract settings are tracked:
+                    <strong>${contract.aiGenerates}</strong> AI-generated + <strong>${contract.adminConfigures}</strong> admin-configured.
+                    No drift possible.
+                `;
                 
             } catch (error) {
                 console.error('Error loading settings registry:', error);
@@ -1945,6 +1973,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('tab') === 'audit') {
                 loadSettingsRegistry();
+                loadScenarioPoolAlignment();
             }
         });
         
@@ -2946,11 +2975,15 @@
                 minConfidence: typeof p.minConfidence === 'number' ? p.minConfidence : 0.6,
                 replyStrategy: p.replyStrategy || 'AUTO',
                 
+                isActive: p.isActive !== false, // Default true
+                
                 triggers: Array.isArray(p.triggers) && p.triggers.length > 0 
                     ? p.triggers 
                     : (g.representative ? [g.representative] : []),
                 regexTriggers: Array.isArray(p.regexTriggers) ? p.regexTriggers : [],
                 negativeTriggers: Array.isArray(p.negativeTriggers) ? p.negativeTriggers : [],
+                exampleUserPhrases: Array.isArray(p.exampleUserPhrases) ? p.exampleUserPhrases : [],
+                negativeUserPhrases: Array.isArray(p.negativeUserPhrases) ? p.negativeUserPhrases : [],
                 
                 quickReplies: Array.isArray(p.quickReplies) && p.quickReplies.length > 0 
                     ? p.quickReplies 
@@ -2987,6 +3020,10 @@
                 actionHooks: Array.isArray(p.actionHooks) ? p.actionHooks : [],
                 entityValidation: p.entityValidation || null,
                 
+                // Channel & Variables
+                channel: p.channel || 'any',
+                dynamicVariables: p.dynamicVariables || {},
+                
                 source: 'scenario-gaps',
                 sourceGap: g.representative
             };
@@ -3020,57 +3057,63 @@
         }
         
         // ========================================
-        // HEALTH COUNT BANNER
+        // HEALTH COUNT BANNER - Single Source of Truth
         // ========================================
-        // Count how many settings are populated in the generated scenario
-        // Total 33 runtime settings - show how many we've filled
+        // Tracks all 26 AI-generable settings from the runtime contract
         function updateHealthCount(preview, gap) {
             const scenarioData = buildScenarioPrefill(preview, gap);
             
-            // Settings required by the Scenario Form (24 total)
+            // 🎯 AI-GENERABLE SETTINGS (26 total from runtime contract)
+            // These are the settings Gap Fill can auto-generate (aiGenerable: true)
             const settingsToCheck = [
-                { key: 'name', check: () => scenarioData.name && scenarioData.name.trim() },
-                { key: 'category', check: () => scenarioData.category },
-                { key: 'scenarioType', check: () => scenarioData.scenarioType },
-                { key: 'priority', check: () => typeof scenarioData.priority === 'number' },
-                { key: 'minConfidence', check: () => typeof scenarioData.minConfidence === 'number' },
-                { key: 'behavior', check: () => scenarioData.behavior },
-                { key: 'status', check: () => scenarioData.status },
-                { key: 'replyStrategy', check: () => scenarioData.replyStrategy },
+                // Identity & Lifecycle (5)
+                { key: 'name', label: 'Scenario Name', check: () => scenarioData.name && scenarioData.name.trim(), getValue: () => scenarioData.name },
+                { key: 'status', label: 'Status', check: () => scenarioData.status, getValue: () => scenarioData.status },
+                { key: 'isActive', label: 'Is Active', check: () => scenarioData.isActive !== undefined, getValue: () => scenarioData.isActive ? 'Yes' : 'No' },
+                { key: 'category', label: 'Category', check: () => scenarioData.category, getValue: () => scenarioData.category },
+                { key: 'scenarioType', label: 'Scenario Type', check: () => scenarioData.scenarioType, getValue: () => scenarioData.scenarioType },
                 
-                // Matching
-                { key: 'triggers', check: () => Array.isArray(scenarioData.triggers) && scenarioData.triggers.length > 0 },
-                { key: 'regexTriggers', check: () => Array.isArray(scenarioData.regexTriggers) },
-                { key: 'negativeTriggers', check: () => Array.isArray(scenarioData.negativeTriggers) },
+                // Priority & Confidence (3)
+                { key: 'priority', label: 'Priority', check: () => typeof scenarioData.priority === 'number', getValue: () => scenarioData.priority },
+                { key: 'cooldownSeconds', label: 'Cooldown (sec)', check: () => typeof scenarioData.cooldownSeconds === 'number', getValue: () => scenarioData.cooldownSeconds },
+                { key: 'minConfidence', label: 'Min Confidence', check: () => typeof scenarioData.minConfidence === 'number', getValue: () => scenarioData.minConfidence },
                 
-                // Replies
-                { key: 'quickReplies', check: () => Array.isArray(scenarioData.quickReplies) && scenarioData.quickReplies.length > 0 },
-                { key: 'fullReplies', check: () => Array.isArray(scenarioData.fullReplies) },
-                { key: 'quickReplies_noName', check: () => Array.isArray(scenarioData.quickReplies_noName) },
-                { key: 'fullReplies_noName', check: () => Array.isArray(scenarioData.fullReplies_noName) },
+                // Matching - Triggers (5)
+                { key: 'triggers', label: 'Triggers', check: () => Array.isArray(scenarioData.triggers) && scenarioData.triggers.length > 0, getValue: () => scenarioData.triggers?.length || 0 },
+                { key: 'regexTriggers', label: 'Regex Triggers', check: () => Array.isArray(scenarioData.regexTriggers), getValue: () => scenarioData.regexTriggers?.length || 0 },
+                { key: 'negativeTriggers', label: 'Negative Triggers', check: () => Array.isArray(scenarioData.negativeTriggers), getValue: () => scenarioData.negativeTriggers?.length || 0 },
+                { key: 'exampleUserPhrases', label: 'Example Phrases', check: () => Array.isArray(scenarioData.exampleUserPhrases), getValue: () => scenarioData.exampleUserPhrases?.length || 0 },
+                { key: 'negativeUserPhrases', label: 'Negative Phrases', check: () => Array.isArray(scenarioData.negativeUserPhrases), getValue: () => scenarioData.negativeUserPhrases?.length || 0 },
                 
-                // Follow-Up Behavior
-                { key: 'followUpMode', check: () => scenarioData.followUpMode },
-                { key: 'followUpQuestionText', check: () => {
+                // Replies (5)
+                { key: 'quickReplies', label: 'Quick Replies', check: () => Array.isArray(scenarioData.quickReplies) && scenarioData.quickReplies.length > 0, getValue: () => scenarioData.quickReplies?.length || 0 },
+                { key: 'fullReplies', label: 'Full Replies', check: () => Array.isArray(scenarioData.fullReplies), getValue: () => scenarioData.fullReplies?.length || 0 },
+                { key: 'quickReplies_noName', label: 'Quick (no name)', check: () => Array.isArray(scenarioData.quickReplies_noName), getValue: () => scenarioData.quickReplies_noName?.length || 0 },
+                { key: 'fullReplies_noName', label: 'Full (no name)', check: () => Array.isArray(scenarioData.fullReplies_noName), getValue: () => scenarioData.fullReplies_noName?.length || 0 },
+                { key: 'replyStrategy', label: 'Reply Strategy', check: () => scenarioData.replyStrategy, getValue: () => scenarioData.replyStrategy },
+                
+                // Follow-Up (2)
+                { key: 'followUpMode', label: 'Follow-Up Mode', check: () => scenarioData.followUpMode, getValue: () => scenarioData.followUpMode },
+                { key: 'followUpQuestionText', label: 'Follow-Up Text', check: () => {
                     if (scenarioData.followUpMode === 'ASK_FOLLOWUP_QUESTION' || scenarioData.followUpMode === 'ASK_IF_BOOK') {
                         return Boolean(scenarioData.followUpQuestionText);
                     }
-                    return true; // Not required for other modes
-                }},
-                { key: 'followUpFunnel', check: () => scenarioData.followUpFunnel },
+                    return true;
+                }, getValue: () => scenarioData.followUpQuestionText || '(not required)' },
                 
-                // Wiring
-                { key: 'actionType', check: () => scenarioData.actionType },
-                { key: 'bookingIntent', check: () => typeof scenarioData.bookingIntent === 'boolean' },
+                // Wiring (3)
+                { key: 'actionType', label: 'Action Type', check: () => scenarioData.actionType, getValue: () => scenarioData.actionType },
+                { key: 'bookingIntent', label: 'Booking Intent', check: () => typeof scenarioData.bookingIntent === 'boolean', getValue: () => scenarioData.bookingIntent ? 'Yes' : 'No' },
+                { key: 'handoffPolicy', label: 'Handoff Policy', check: () => scenarioData.handoffPolicy, getValue: () => scenarioData.handoffPolicy },
                 
-                // Entity Capture
-                { key: 'entityCapture', check: () => Array.isArray(scenarioData.entityCapture) && scenarioData.entityCapture.length > 0 },
-                
-                // Advanced Settings
-                { key: 'cooldownSeconds', check: () => typeof scenarioData.cooldownSeconds === 'number' },
-                { key: 'handoffPolicy', check: () => scenarioData.handoffPolicy },
-                { key: 'actionHooks', check: () => Array.isArray(scenarioData.actionHooks) }
+                // Behavior & Other (3)
+                { key: 'behavior', label: 'AI Behavior', check: () => scenarioData.behavior, getValue: () => scenarioData.behavior },
+                { key: 'channel', label: 'Channel', check: () => scenarioData.channel, getValue: () => scenarioData.channel || 'any' },
+                { key: 'dynamicVariables', label: 'Dynamic Variables', check: () => scenarioData.dynamicVariables, getValue: () => Object.keys(scenarioData.dynamicVariables || {}).length || 0 }
             ];
+            
+            // Store for table rendering
+            window._currentSettingsCheck = settingsToCheck;
             
             const missing = settingsToCheck.filter(s => !s.check()).map(s => s.key);
             const filledCount = settingsToCheck.length - missing.length;
@@ -3093,6 +3136,34 @@
                 missingEl.textContent = missing.length > 0 
                     ? `Missing: ${missing.join(', ')}` 
                     : 'All required fields set';
+            }
+            
+            // 🎯 RENDER TWO-COLUMN SETTINGS TABLE
+            const tableEl = document.getElementById('settings-table');
+            if (tableEl) {
+                let tableHtml = '';
+                settingsToCheck.forEach((setting, idx) => {
+                    const isFilled = setting.check();
+                    const value = setting.getValue ? setting.getValue() : '--';
+                    const displayValue = typeof value === 'object' ? JSON.stringify(value) : value;
+                    const bgColor = idx % 2 === 0 ? 'var(--bg-secondary)' : 'var(--bg-tertiary)';
+                    
+                    tableHtml += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: ${bgColor}; border-bottom: 1px solid var(--border-color);">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 11px; color: var(--text-muted); min-width: 20px;">${idx + 1}.</span>
+                                <span style="color: ${isFilled ? 'var(--text-primary)' : 'var(--text-muted)'}; font-size: 13px;">${setting.label}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 13px; font-weight: 500; color: ${isFilled ? 'var(--accent-green)' : 'var(--accent-red)'}; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    ${isFilled ? displayValue : '—'}
+                                </span>
+                                <span style="font-size: 12px;">${isFilled ? '✅' : '❌'}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                tableEl.innerHTML = tableHtml;
             }
             
             // Color coding based on health

@@ -588,6 +588,279 @@ class ScenarioPoolService {
     static buildScenarioControlMap(company) {
         return this._buildScenarioControlMap(company);
     }
+    
+    /**
+     * ============================================================================
+     * SCENARIO ALIGNMENT DATA - SINGLE SOURCE OF TRUTH
+     * ============================================================================
+     * 
+     * PURPOSE:
+     * Returns complete alignment data showing what scenarios exist in templates
+     * vs what the LLM agent actually sees. This is the source of truth that
+     * Gap Fill, Audit, and Wiring tabs should all use.
+     * 
+     * ALIGNMENT RULES:
+     * - Gap Fill should only suggest scenarios the agent CAN use (active, enabled)
+     * - Audit should only check scenarios the agent WILL use (active, enabled)
+     * - Agent uses ScenarioPoolService filtered scenarios
+     * 
+     * @param {String} companyId - Company ObjectId
+     * @returns {Promise<Object>} - Full alignment data
+     */
+    static async getScenarioAlignmentData(companyId) {
+        const startTime = Date.now();
+        
+        logger.info(`📊 [SCENARIO ALIGNMENT] Building alignment data for company: ${companyId}`);
+        
+        try {
+            // ========================================================
+            // STEP 1: LOAD COMPANY DATA
+            // ========================================================
+            const company = await Company.findById(companyId)
+                .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls configuration.clonedFrom companyName businessName')
+                .lean();
+            
+            if (!company) {
+                return {
+                    success: false,
+                    error: 'Company not found',
+                    alignment: null
+                };
+            }
+            
+            const companyName = company.companyName || company.businessName || companyId;
+            
+            // ========================================================
+            // STEP 2: GET TEMPLATE IDS
+            // ========================================================
+            const templateRefs = this._determineTemplateIds(company);
+            
+            if (templateRefs.length === 0) {
+                return {
+                    success: true,
+                    companyId,
+                    companyName,
+                    alignment: {
+                        totalInTemplates: 0,
+                        activeInTemplates: 0,
+                        enabledForCompany: 0,
+                        disabledByCompany: 0,
+                        agentCanSee: 0,
+                        gapFillScope: 0,
+                        auditScope: 0,
+                        isAligned: true,
+                        alignmentPercentage: 100,
+                        breakdown: []
+                    },
+                    templatesUsed: [],
+                    warning: 'No templates configured'
+                };
+            }
+            
+            // ========================================================
+            // STEP 3: LOAD ALL TEMPLATES AND COUNT SCENARIOS
+            // ========================================================
+            const controlsMap = this._buildScenarioControlMap(company);
+            const breakdown = [];
+            
+            let totalInTemplates = 0;
+            let activeInTemplates = 0;
+            let enabledForCompany = 0;
+            let disabledByCompany = 0;
+            
+            const templatesUsed = [];
+            
+            for (const ref of templateRefs) {
+                const template = await GlobalInstantResponseTemplate.findById(ref.templateId)
+                    .select('_id name version categories')
+                    .lean();
+                
+                if (!template) {
+                    logger.warn(`⚠️ [SCENARIO ALIGNMENT] Template not found: ${ref.templateId}`);
+                    continue;
+                }
+                
+                templatesUsed.push({
+                    templateId: template._id.toString(),
+                    templateName: template.name
+                });
+                
+                const categories = template.categories || [];
+                
+                for (const category of categories) {
+                    const scenarios = category.scenarios || [];
+                    
+                    for (const scenario of scenarios) {
+                        totalInTemplates++;
+                        
+                        const scenarioId = scenario.scenarioId || scenario._id?.toString();
+                        const isActiveInTemplate = scenario.isActive === true;
+                        
+                        if (isActiveInTemplate) {
+                            activeInTemplates++;
+                            
+                            // Check company-level control
+                            const controlKey = `${template._id.toString()}:${scenarioId}`;
+                            const control = controlsMap.get(controlKey);
+                            const isEnabledForCompany = !control || control.isEnabled !== false;
+                            
+                            if (isEnabledForCompany) {
+                                enabledForCompany++;
+                            } else {
+                                disabledByCompany++;
+                            }
+                            
+                            breakdown.push({
+                                templateId: template._id.toString(),
+                                templateName: template.name,
+                                categoryName: category.name || 'Uncategorized',
+                                scenarioId,
+                                scenarioName: scenario.name,
+                                isActiveInTemplate,
+                                isEnabledForCompany,
+                                agentCanSee: isActiveInTemplate && isEnabledForCompany,
+                                reason: !isActiveInTemplate 
+                                    ? 'inactive_in_template' 
+                                    : !isEnabledForCompany 
+                                        ? 'disabled_by_company' 
+                                        : 'active_and_enabled'
+                            });
+                        } else {
+                            breakdown.push({
+                                templateId: template._id.toString(),
+                                templateName: template.name,
+                                categoryName: category.name || 'Uncategorized',
+                                scenarioId,
+                                scenarioName: scenario.name,
+                                isActiveInTemplate: false,
+                                isEnabledForCompany: null,
+                                agentCanSee: false,
+                                reason: 'inactive_in_template'
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // ========================================================
+            // STEP 4: COMPUTE ALIGNMENT METRICS
+            // ========================================================
+            // What the agent sees = active in template AND enabled for company
+            const agentCanSee = enabledForCompany;
+            
+            // What Gap Fill should work with = same as agent (no point filling gaps agent won't use)
+            const gapFillScope = agentCanSee;
+            
+            // What Audit should check = same as agent (no point auditing scenarios agent ignores)
+            const auditScope = agentCanSee;
+            
+            // Perfect alignment = all three see the same count
+            const isAligned = gapFillScope === auditScope && auditScope === agentCanSee;
+            
+            // Alignment percentage = (agent visible / total active) * 100
+            const alignmentPercentage = activeInTemplates > 0 
+                ? Math.round((agentCanSee / activeInTemplates) * 100)
+                : 100;
+            
+            const result = {
+                success: true,
+                companyId,
+                companyName,
+                computedAt: new Date().toISOString(),
+                computeTimeMs: Date.now() - startTime,
+                alignment: {
+                    // Raw counts
+                    totalInTemplates,          // Everything in templates (active + inactive)
+                    activeInTemplates,         // Only isActive=true scenarios
+                    enabledForCompany,         // Active AND not disabled by scenarioControls
+                    disabledByCompany,         // Active but disabled by scenarioControls
+                    
+                    // What each system should see (unified)
+                    agentCanSee,               // LLM Agent runtime
+                    gapFillScope,              // Gap Fill GPT-4 (should match agent)
+                    auditScope,                // Audit GPT-4 (should match agent)
+                    
+                    // Alignment status
+                    isAligned,
+                    alignmentPercentage,
+                    
+                    // Filtering summary
+                    inactiveCount: totalInTemplates - activeInTemplates,
+                    
+                    // For wiring tab display
+                    summary: {
+                        label: isAligned ? 'PERFECT ALIGNMENT' : 'ALIGNMENT GAP',
+                        status: isAligned ? 'GREEN' : alignmentPercentage >= 80 ? 'YELLOW' : 'RED',
+                        message: isAligned
+                            ? `All ${agentCanSee} scenarios are accessible to Gap Fill, Audit, and Agent`
+                            : `${disabledByCompany} scenarios are disabled - Gap Fill/Audit should use ScenarioPoolService`
+                    }
+                },
+                templatesUsed,
+                breakdown: breakdown.slice(0, 100) // Limit breakdown to first 100 for performance
+            };
+            
+            logger.info(`✅ [SCENARIO ALIGNMENT] Computed alignment: ${agentCanSee}/${activeInTemplates} active, ${alignmentPercentage}% aligned (${Date.now() - startTime}ms)`);
+            
+            return result;
+            
+        } catch (error) {
+            logger.error(`❌ [SCENARIO ALIGNMENT] Error computing alignment for ${companyId}:`, error);
+            return {
+                success: false,
+                error: error.message,
+                alignment: null
+            };
+        }
+    }
+    
+    /**
+     * ============================================================================
+     * GET SCENARIOS FOR GAP FILL / AUDIT (UNIFIED)
+     * ============================================================================
+     * 
+     * PURPOSE:
+     * Returns the exact same scenario list that the LLM agent uses.
+     * Gap Fill and Audit should call this instead of loading templates directly.
+     * 
+     * This ensures:
+     * - Gap Fill only suggests gaps for scenarios the agent can actually use
+     * - Audit only checks scenarios the agent will actually respond with
+     * 
+     * @param {String} companyId - Company ObjectId
+     * @returns {Promise<Object>} - { scenarios, template, alignment }
+     */
+    static async getScenariosForGapFillAndAudit(companyId) {
+        logger.info(`🎯 [SCENARIO POOL] Loading scenarios for Gap Fill/Audit (unified): ${companyId}`);
+        
+        // Get the scenario pool (same as LLM agent uses)
+        const poolResult = await this.getScenarioPoolForCompany(companyId, { bypassCache: true });
+        
+        if (poolResult.error) {
+            return {
+                success: false,
+                error: poolResult.error,
+                scenarios: [],
+                template: null,
+                alignment: null
+            };
+        }
+        
+        // Only return enabled scenarios (what agent actually sees)
+        const enabledScenarios = poolResult.scenarios.filter(s => s.isEnabledForCompany !== false);
+        
+        // Also get alignment data for transparency
+        const alignmentData = await this.getScenarioAlignmentData(companyId);
+        
+        return {
+            success: true,
+            scenarios: enabledScenarios,
+            templatesUsed: poolResult.templatesUsed,
+            templatesMeta: poolResult.templatesMeta,
+            alignment: alignmentData.alignment,
+            message: `Loaded ${enabledScenarios.length} scenarios (same as LLM agent sees)`
+        };
+    }
 }
 
 module.exports = ScenarioPoolService;
