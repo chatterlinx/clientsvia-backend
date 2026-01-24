@@ -509,20 +509,32 @@ async function findAvailableSlots(companyId, {
         const eventColors = company?.googleCalendar?.eventColors || {};
         const colorMapping = eventColors.colorMapping || [];
         
-        // V89: Flexible service type matching
-        // UI may save "repair_service" but agent detects "repair"
-        // Match if: exact match OR serviceType starts with detected type OR contains it
+        // V89: Service type matching with canonicalType-first strategy
+        // Priority 1: Match by canonicalType field (explicit mapping, most reliable)
+        // Priority 2: Fallback to name-based flexible matching (legacy compatibility)
         const normalizedServiceType = (serviceType || 'service').toLowerCase().trim();
-        const serviceConfig = colorMapping.find(c => {
-            const configType = (c.serviceType || '').toLowerCase().trim();
-            return configType === normalizedServiceType ||                    // exact: "repair" === "repair"
-                   configType.startsWith(normalizedServiceType + '_') ||      // prefix: "repair_service" starts with "repair_"
-                   configType.startsWith(normalizedServiceType + '-') ||      // prefix: "repair-service" starts with "repair-"
-                   configType.includes('_' + normalizedServiceType) ||        // suffix: "hvac_repair" contains "_repair"
-                   configType.includes('-' + normalizedServiceType) ||        // suffix: "hvac-repair" contains "-repair"
-                   normalizedServiceType.startsWith(configType + '_') ||      // reverse: detected "repair_urgent" matches config "repair"
-                   normalizedServiceType.startsWith(configType + '-');
-        }) || {};
+        
+        // First, try to find by canonicalType (the authoritative field)
+        let serviceConfig = colorMapping.find(c => {
+            const canonical = (c.canonicalType || '').toLowerCase().trim();
+            return canonical === normalizedServiceType;
+        });
+        
+        // Fallback: name-based flexible matching (legacy compatibility)
+        if (!serviceConfig) {
+            serviceConfig = colorMapping.find(c => {
+                const configType = (c.serviceType || '').toLowerCase().trim();
+                return configType === normalizedServiceType ||                    // exact: "repair" === "repair"
+                       configType.startsWith(normalizedServiceType + '_') ||      // prefix: "repair_service" starts with "repair_"
+                       configType.startsWith(normalizedServiceType + '-') ||      // prefix: "repair-service" starts with "repair-"
+                       configType.includes('_' + normalizedServiceType) ||        // suffix: "hvac_repair" contains "_repair"
+                       configType.includes('-' + normalizedServiceType) ||        // suffix: "hvac-repair" contains "-repair"
+                       normalizedServiceType.startsWith(configType + '_') ||      // reverse: detected "repair_urgent" matches config "repair"
+                       normalizedServiceType.startsWith(configType + '-');
+            });
+        }
+        
+        serviceConfig = serviceConfig || {};
         
         if (serviceConfig.serviceType) {
             logger.debug('[GOOGLE CALENDAR] Service type matched', {
@@ -903,18 +915,27 @@ async function createBookingEvent(companyId, bookingData) {
             const serviceType = (bookingData.serviceType || 'service').toLowerCase().trim();
             const colorMapping = eventColors?.colorMapping || [];
             
-            // V89: Flexible service type matching for event colors
-            // UI may save "repair_service" but booking has "repair"
-            const matchedColor = colorMapping.find(c => {
-                const configType = (c.serviceType || '').toLowerCase().trim();
-                return configType === serviceType ||
-                       configType.startsWith(serviceType + '_') ||
-                       configType.startsWith(serviceType + '-') ||
-                       configType.includes('_' + serviceType) ||
-                       configType.includes('-' + serviceType) ||
-                       serviceType.startsWith(configType + '_') ||
-                       serviceType.startsWith(configType + '-');
+            // V89: Service type matching for event colors (canonicalType-first strategy)
+            // Priority 1: Match by canonicalType field (explicit mapping)
+            // Priority 2: Fallback to name-based flexible matching
+            let matchedColor = colorMapping.find(c => {
+                const canonical = (c.canonicalType || '').toLowerCase().trim();
+                return canonical === serviceType;
             });
+            
+            // Fallback: name-based matching
+            if (!matchedColor) {
+                matchedColor = colorMapping.find(c => {
+                    const configType = (c.serviceType || '').toLowerCase().trim();
+                    return configType === serviceType ||
+                           configType.startsWith(serviceType + '_') ||
+                           configType.startsWith(serviceType + '-') ||
+                           configType.includes('_' + serviceType) ||
+                           configType.includes('-' + serviceType) ||
+                           serviceType.startsWith(configType + '_') ||
+                           serviceType.startsWith(configType + '-');
+                });
+            }
             colorId = matchedColor?.colorId || eventColors?.defaultColorId || '7'; // Default: Peacock
             
             logger.debug('[GOOGLE CALENDAR] Event color determined', {

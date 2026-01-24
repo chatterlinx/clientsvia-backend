@@ -645,20 +645,64 @@
                                         </div>
                                         
                                         <!-- ═══════════════════════════════════════════════════════════════════════════
+                                             SERVICE TYPE CONTRACT - V89 (Jan 2026)
+                                             Shows canonical types the AI outputs and validates tag mappings
+                                             ═══════════════════════════════════════════════════════════════════════════ -->
+                                        <div class="mt-6 border-t border-gray-200 pt-4">
+                                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4" id="service-type-contract">
+                                                <div class="flex items-start justify-between">
+                                                    <div>
+                                                        <h4 class="text-sm font-semibold text-blue-800 mb-2">
+                                                            <i class="fas fa-file-contract mr-2"></i>Service Type Contract
+                                                        </h4>
+                                                        <p class="text-xs text-blue-700 mb-3">
+                                                            The AI detects a <strong>canonical service type</strong> during calls. Your tags must map to these types for correct scheduling rules + colors.
+                                                        </p>
+                                                    </div>
+                                                    <button type="button" id="gc-validate-mappings" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded">
+                                                        <i class="fas fa-check-circle mr-1"></i>Validate
+                                                    </button>
+                                                </div>
+                                                
+                                                <!-- Canonical Types (chips) -->
+                                                <div class="flex flex-wrap gap-2 mb-3">
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 border border-red-200" data-type="emergency">🚨 emergency</span>
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-800 border border-orange-200" data-type="repair">🔧 repair</span>
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-green-100 text-green-800 border border-green-200" data-type="maintenance">🔄 maintenance</span>
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200" data-type="estimate">💰 estimate</span>
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 border border-blue-200" data-type="installation">📦 installation</span>
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800 border border-purple-200" data-type="inspection">🔍 inspection</span>
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-pink-100 text-pink-800 border border-pink-200" data-type="sales">💼 sales</span>
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 border border-gray-200" data-type="service">⚙️ service (fallback)</span>
+                                                </div>
+                                                
+                                                <!-- Validation Status Summary -->
+                                                <div id="gc-mapping-status" class="text-xs border-t border-blue-200 pt-3 mt-2">
+                                                    <div class="flex items-center gap-4">
+                                                        <span id="gc-mapped-count" class="text-green-700"><i class="fas fa-check mr-1"></i>Mapped: 0/8</span>
+                                                        <span id="gc-missing-types" class="text-yellow-700 hidden"><i class="fas fa-exclamation-triangle mr-1"></i>Missing: </span>
+                                                        <span id="gc-duplicate-types" class="text-red-700 hidden"><i class="fas fa-times-circle mr-1"></i>Duplicates: </span>
+                                                        <span id="gc-unknown-rows" class="text-gray-500 hidden"><i class="fas fa-question-circle mr-1"></i>Unknown: 0</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- ═══════════════════════════════════════════════════════════════════════════
                                              EVENT COLORS - V89 (Jan 2026)
                                              Color-code calendar events by service type
                                              ═══════════════════════════════════════════════════════════════════════════ -->
-                                        <div class="mt-6 border-t border-gray-200 pt-4">
+                                        <div class="mt-4">
                                             <div class="flex items-center justify-between mb-3">
                                                 <h4 class="text-sm font-semibold text-gray-700">
-                                                    <i class="fas fa-palette mr-2 text-purple-600"></i>Event Colors (Tags)
+                                                    <i class="fas fa-palette mr-2 text-purple-600"></i>Service Type Tags
                                                 </h4>
                                                 <div class="flex items-center">
                                                     <input type="checkbox" id="gc-colors-enabled" class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" checked>
                                                     <label for="gc-colors-enabled" class="ml-2 text-sm text-gray-700">Enable color-coding</label>
                                                 </div>
                                             </div>
-                                            <p class="text-xs text-gray-500 mb-3">Color events automatically based on service type. AI detects intent (repair, maintenance, estimate, etc.) and applies the matching color.</p>
+                                            <p class="text-xs text-gray-500 mb-3">Each tag defines scheduling rules (days/hours/lead time) and calendar color. Select a <strong>Canonical Type</strong> for each tag so AI can match correctly.</p>
                                             
                                             <div id="gc-color-mappings" class="space-y-2">
                                                 <!-- Color mappings will be populated by JavaScript -->
@@ -4482,35 +4526,135 @@
             { id: '11', emoji: '🔴', name: 'Tomato' }
         ];
         
+        // V89: Canonical service types (agent outputs these)
+        const CANONICAL_SERVICE_TYPES = ['emergency', 'repair', 'maintenance', 'estimate', 'installation', 'inspection', 'sales', 'service'];
+        const CORE_CANONICAL_TYPES = ['emergency', 'repair', 'maintenance', 'estimate']; // These should always have mappings
+        
         // Default color mappings with schedules + scheduling rules (V88)
+        // V89: Added canonicalType field for explicit mapping
         const DEFAULT_COLOR_MAPPINGS = [
-            { serviceType: 'service', colorId: '7', label: 'Service Call', 
+            { serviceType: 'service', canonicalType: 'service', colorId: '7', label: 'Service Call', 
               schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
               schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
-            { serviceType: 'repair', colorId: '11', label: 'Repair', 
+            { serviceType: 'repair', canonicalType: 'repair', colorId: '11', label: 'Repair', 
               schedule: { days: ['mon','tue','wed','thu','fri','sat'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
               schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
-            { serviceType: 'emergency', colorId: '4', label: 'Emergency', 
+            { serviceType: 'emergency', canonicalType: 'emergency', colorId: '4', label: 'Emergency', 
               schedule: { days: ['mon','tue','wed','thu','fri','sat','sun'], startTime: '00:00', endTime: '23:59', closedHolidays: false },
               schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 30, advanceBookingDays: 0, sameDayAllowed: true } },
-            { serviceType: 'maintenance', colorId: '10', label: 'Maintenance', 
+            { serviceType: 'maintenance', canonicalType: 'maintenance', colorId: '10', label: 'Maintenance', 
               schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
               schedulingRules: { slotIntervalMinutes: 120, leadTimeMinutes: 0, advanceBookingDays: 7, sameDayAllowed: false } },
-            { serviceType: 'estimate', colorId: '5', label: 'Estimate', 
+            { serviceType: 'estimate', canonicalType: 'estimate', colorId: '5', label: 'Estimate', 
               schedule: { days: ['mon','tue','wed','thu','fri','sat'], startTime: '09:00', endTime: '18:00', closedHolidays: true },
               schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 120, advanceBookingDays: 1, sameDayAllowed: false } },
-            { serviceType: 'sales', colorId: '9', label: 'Sales', 
+            { serviceType: 'sales', canonicalType: 'sales', colorId: '9', label: 'Sales', 
               schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '09:00', endTime: '17:00', closedHolidays: true },
               schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } },
-            { serviceType: 'consultation', colorId: '3', label: 'Consultation', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '09:00', endTime: '17:00', closedHolidays: true } },
-            { serviceType: 'installation', colorId: '2', label: 'Installation', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '07:00', endTime: '16:00', closedHolidays: true } },
-            { serviceType: 'inspection', colorId: '6', label: 'Inspection', 
+            { serviceType: 'consultation', canonicalType: 'service', colorId: '3', label: 'Consultation', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '09:00', endTime: '17:00', closedHolidays: true } },
+            { serviceType: 'installation', canonicalType: 'installation', colorId: '2', label: 'Installation', schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '07:00', endTime: '16:00', closedHolidays: true } },
+            { serviceType: 'inspection', canonicalType: 'inspection', colorId: '6', label: 'Inspection', 
               schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
               schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 1, sameDayAllowed: false } },
-            { serviceType: 'other', colorId: '8', label: 'Other', 
+            { serviceType: 'other', canonicalType: 'service', colorId: '8', label: 'Other', 
               schedule: { days: ['mon','tue','wed','thu','fri'], startTime: '08:00', endTime: '17:00', closedHolidays: true },
               schedulingRules: { slotIntervalMinutes: 60, leadTimeMinutes: 60, advanceBookingDays: 0, sameDayAllowed: true } }
         ];
+        
+        // V89: Auto-detect canonical type from tag name (fallback)
+        function detectCanonicalType(tagName) {
+            const name = (tagName || '').toLowerCase();
+            for (const canonical of CANONICAL_SERVICE_TYPES) {
+                if (name === canonical || name.includes(canonical) || name.includes(canonical.replace('_', ''))) {
+                    return canonical;
+                }
+            }
+            // Check common aliases
+            if (name.includes('fix') || name.includes('broken')) return 'repair';
+            if (name.includes('tune') || name.includes('checkup')) return 'maintenance';
+            if (name.includes('urgent') || name.includes('asap')) return 'emergency';
+            if (name.includes('quote') || name.includes('price')) return 'estimate';
+            if (name.includes('install') || name.includes('new unit')) return 'installation';
+            return null; // Unknown
+        }
+        
+        // V89: Validate all mappings and update status display
+        function validateServiceTypeMappings() {
+            const rows = document.querySelectorAll('#gc-color-mappings .gc-color-row');
+            const mappedTypes = new Map(); // canonicalType -> count
+            let unknownCount = 0;
+            
+            rows.forEach(row => {
+                const canonicalSelect = row.querySelector('.gc-canonical-type');
+                const canonical = canonicalSelect?.value || '';
+                const statusBadge = row.querySelector('.gc-mapping-status');
+                
+                if (canonical && canonical !== 'none') {
+                    mappedTypes.set(canonical, (mappedTypes.get(canonical) || 0) + 1);
+                    
+                    // Check for duplicates
+                    if (mappedTypes.get(canonical) > 1) {
+                        if (statusBadge) {
+                            statusBadge.innerHTML = '<span class="text-red-600 text-xs">❌ Duplicate</span>';
+                        }
+                    } else {
+                        if (statusBadge) {
+                            statusBadge.innerHTML = '<span class="text-green-600 text-xs">✅ Mapped</span>';
+                        }
+                    }
+                } else {
+                    unknownCount++;
+                    if (statusBadge) {
+                        statusBadge.innerHTML = '<span class="text-yellow-600 text-xs">⚠️ Unmapped</span>';
+                    }
+                }
+            });
+            
+            // Find missing and duplicate types
+            const missing = CANONICAL_SERVICE_TYPES.filter(t => !mappedTypes.has(t));
+            const duplicates = [...mappedTypes.entries()].filter(([_, count]) => count > 1).map(([type]) => type);
+            
+            // Update summary
+            document.getElementById('gc-mapped-count').innerHTML = `<i class="fas fa-check mr-1"></i>Mapped: ${mappedTypes.size}/${CANONICAL_SERVICE_TYPES.length}`;
+            
+            const missingEl = document.getElementById('gc-missing-types');
+            if (missing.length > 0) {
+                const coreMissing = missing.filter(t => CORE_CANONICAL_TYPES.includes(t));
+                missingEl.innerHTML = `<i class="fas fa-exclamation-triangle mr-1"></i>Missing: ${missing.join(', ')}`;
+                missingEl.classList.remove('hidden');
+                missingEl.className = coreMissing.length > 0 ? 'text-red-700' : 'text-yellow-700';
+            } else {
+                missingEl.classList.add('hidden');
+            }
+            
+            const dupEl = document.getElementById('gc-duplicate-types');
+            if (duplicates.length > 0) {
+                dupEl.innerHTML = `<i class="fas fa-times-circle mr-1"></i>Duplicates: ${duplicates.join(', ')}`;
+                dupEl.classList.remove('hidden');
+            } else {
+                dupEl.classList.add('hidden');
+            }
+            
+            const unknownEl = document.getElementById('gc-unknown-rows');
+            if (unknownCount > 0) {
+                unknownEl.innerHTML = `<i class="fas fa-question-circle mr-1"></i>Unmapped: ${unknownCount}`;
+                unknownEl.classList.remove('hidden');
+            } else {
+                unknownEl.classList.add('hidden');
+            }
+            
+            // Update canonical chips highlighting
+            document.querySelectorAll('.canonical-chip').forEach(chip => {
+                const type = chip.dataset.type;
+                if (mappedTypes.has(type)) {
+                    chip.classList.add('ring-2', 'ring-green-400');
+                    chip.classList.remove('opacity-50');
+                } else {
+                    chip.classList.remove('ring-2', 'ring-green-400');
+                    chip.classList.add('opacity-50');
+                }
+            });
+        }
         
         function renderColorMappings(mappings) {
             const container = document.getElementById('gc-color-mappings');
@@ -4521,6 +4665,14 @@
             container.innerHTML = data.map(item => {
                 const colorOptions = GC_COLOR_OPTIONS.map(c => 
                     `<option value="${c.id}" ${c.id === item.colorId ? 'selected' : ''}>${c.emoji} ${c.name}</option>`
+                ).join('');
+                
+                // V89: Canonical type dropdown
+                const detectedCanonical = item.canonicalType || detectCanonicalType(item.serviceType);
+                const canonicalOptions = ['<option value="none">— Select —</option>'].concat(
+                    CANONICAL_SERVICE_TYPES.map(t => 
+                        `<option value="${t}" ${t === detectedCanonical ? 'selected' : ''}>${t}</option>`
+                    )
                 ).join('');
                 
                 // Schedule defaults (V88: includes advanced scheduling rules)
@@ -4539,8 +4691,10 @@
                 return `
                     <div class="gc-color-row border border-gray-200 rounded-lg p-2 mb-2 bg-white" data-service-type="${item.serviceType}">
                         <div class="flex items-center gap-2">
-                            <input type="text" class="gc-service-name form-input text-sm text-gray-700 w-32 py-1 font-medium capitalize" value="${item.serviceType}" placeholder="service type">
-                            <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
+                            <input type="text" class="gc-service-name form-input text-sm text-gray-700 w-28 py-1 font-medium" value="${item.serviceType}" placeholder="tag name">
+                            <select class="gc-canonical-type form-input text-xs py-1 w-28 bg-blue-50 border-blue-200">${canonicalOptions}</select>
+                            <select class="gc-color-select form-input text-sm py-1 w-32">${colorOptions}</select>
+                            <span class="gc-mapping-status text-xs w-20"></span>
                             <div class="flex-1"></div>
                             <button type="button" class="gc-toggle-schedule text-gray-500 hover:text-gray-700 text-sm px-2" title="Edit Schedule">
                                 <i class="fas fa-clock"></i>
@@ -4633,14 +4787,32 @@
                 });
             });
             
+            // V89: Wire canonical type change handlers
+            container.querySelectorAll('.gc-canonical-type').forEach(select => {
+                select.addEventListener('change', () => {
+                    validateServiceTypeMappings();
+                });
+            });
+            
+            // V89: Validate after render
+            setTimeout(() => validateServiceTypeMappings(), 100);
+            
             // Wire delete buttons
             container.querySelectorAll('.gc-delete-row').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     const row = e.target.closest('.gc-color-row');
                     if (row && confirm('Delete this service type?')) {
                         row.remove();
+                        validateServiceTypeMappings(); // V89: Re-validate after delete
                     }
                 });
+            });
+        }
+        
+        // V89: Wire validate button
+        function wireValidateButton() {
+            document.getElementById('gc-validate-mappings')?.addEventListener('click', () => {
+                validateServiceTypeMappings();
             });
         }
         
@@ -4678,13 +4850,23 @@
                     </label>
                 `).join('');
                 
+                // V89: Detect canonical type and build dropdown
+                const detectedCanonical = detectCanonicalType(newType);
+                const canonicalOptions = ['<option value="none">— Select —</option>'].concat(
+                    CANONICAL_SERVICE_TYPES.map(t => 
+                        `<option value="${t}" ${t === detectedCanonical ? 'selected' : ''}>${t}</option>`
+                    )
+                ).join('');
+                
                 const newRow = document.createElement('div');
                 newRow.className = 'gc-color-row border border-gray-200 rounded-lg p-2 mb-2 bg-white';
                 newRow.dataset.serviceType = newType;
                 newRow.innerHTML = `
                     <div class="flex items-center gap-2">
-                        <input type="text" class="gc-service-name form-input text-sm text-gray-700 w-32 py-1 font-medium capitalize" value="${newType}" placeholder="service type">
-                        <select class="gc-color-select form-input text-sm py-1 w-36">${colorOptions}</select>
+                        <input type="text" class="gc-service-name form-input text-sm text-gray-700 w-28 py-1 font-medium" value="${newType}" placeholder="tag name">
+                        <select class="gc-canonical-type form-input text-xs py-1 w-28 bg-blue-50 border-blue-200">${canonicalOptions}</select>
+                        <select class="gc-color-select form-input text-sm py-1 w-32">${colorOptions}</select>
+                        <span class="gc-mapping-status text-xs w-20"></span>
                         <div class="flex-1"></div>
                         <button type="button" class="gc-toggle-schedule text-gray-500 hover:text-gray-700 text-sm px-2" title="Edit Schedule">
                             <i class="fas fa-clock"></i>
@@ -4894,6 +5076,13 @@
                     document.querySelectorAll('#gc-color-mappings .gc-color-row').forEach(row => {
                         const serviceType = row.querySelector('.gc-service-name')?.value?.trim().toLowerCase().replace(/\s+/g, '_') || row.dataset.serviceType;
                         const colorId = row.querySelector('.gc-color-select')?.value || '7';
+                        // V89: Get canonical type from dropdown (or auto-detect as fallback)
+                        const canonicalSelect = row.querySelector('.gc-canonical-type');
+                        let canonicalType = canonicalSelect?.value || 'none';
+                        if (canonicalType === 'none') {
+                            // Fallback to auto-detection for legacy compatibility
+                            canonicalType = detectCanonicalType(serviceType) || 'service';
+                        }
                         
                         // Gather schedule data (days/hours)
                         const days = [];
@@ -4919,7 +5108,8 @@
                         if (serviceType) {
                             // Label is derived from service type (capitalized)
                             const label = serviceType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                            colorMappings.push({ serviceType, colorId, label, schedule, schedulingRules });
+                            // V89: Include canonicalType for explicit mapping
+                            colorMappings.push({ serviceType, canonicalType, colorId, label, schedule, schedulingRules });
                         }
                     });
                     
@@ -4971,6 +5161,9 @@
             
             // Add service type button
             wireAddServiceTypeButton();
+            
+            // V89: Validate button
+            wireValidateButton();
         }
         
         // ════════════════════════════════════════════════════════════════════════════════

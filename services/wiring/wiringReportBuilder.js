@@ -303,13 +303,24 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
         const missingCore = missingCanonical.filter(t => CORE_SERVICE_TYPES.includes(t));
         const missingOptional = missingCanonical.filter(t => OPTIONAL_SERVICE_TYPES.includes(t));
         
+        // V89: Check if tags use canonicalType field or legacy name-based matching
+        const tagsWithCanonicalType = colorMapping.filter(m => m.canonicalType && m.canonicalType !== 'none');
+        const usesCanonicalTypeField = tagsWithCanonicalType.length > 0;
+        const allTagsHaveCanonical = tagsWithCanonicalType.length === colorMapping.length;
+        
         checks.calendarMappings = {
             total: colorMapping.length,
             matched: canonicalMatches,
             missingCore,      // These SHOULD have mappings (repair, maintenance, emergency, estimate)
             missingOptional,  // These are OK to skip (installation, inspection, consultation)
             missingCanonical, // Full list for reference
-            unmatchedMappings
+            unmatchedMappings,
+            // V89: Canonical type field usage
+            usesCanonicalTypeField,
+            allTagsHaveCanonical,
+            tagsWithCanonicalType: tagsWithCanonicalType.length,
+            matchingStrategy: allTagsHaveCanonical ? 'canonicalType-authoritative' : 
+                              usesCanonicalTypeField ? 'canonicalType-partial' : 'name-based-legacy'
         };
         
         // ─────────────────────────────────────────────────────────────────────
