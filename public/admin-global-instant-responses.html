@@ -12151,7 +12151,11 @@ Higher = detailed, thorough scenarios (more context)
                 if (nameInput && p.name) nameInput.value = p.name;
                 
                 const statusSelect = document.getElementById('scenario-status');
-                if (statusSelect) statusSelect.value = p.status || 'live';  // Default to LIVE for Gap Fill scenarios
+                if (statusSelect) {
+                    const targetStatus = p.status || 'live';
+                    statusSelect.value = targetStatus;
+                    console.log('✅ [PREFILL] Status set to:', targetStatus, '(from p.status:', p.status, ')');
+                }
                 
                 const priorityInput = document.getElementById('scenario-priority');
                 if (priorityInput && typeof p.priority === 'number') priorityInput.value = p.priority;
@@ -12159,37 +12163,52 @@ Higher = detailed, thorough scenarios (more context)
                 const typeSelect = document.getElementById('scenario-type');
                 if (typeSelect && p.scenarioType) typeSelect.value = p.scenarioType;
                 
-                // Behavior - dynamically populated dropdown
+                // Behavior - dynamically populated dropdown (values come from database)
                 const behaviorSelect = document.getElementById('scenario-behavior');
                 if (behaviorSelect && p.behavior) {
-                    // Map AI behavior values to dropdown values (includes all AI-generated behaviors)
-                    const behaviorMap = {
-                        'friendly_warm': 'friendly_warm',
-                        'empathetic_reassuring': 'empathetic_reassuring', 
-                        'professional_efficient': 'professional_efficient',
-                        'enthusiastic_positive': 'enthusiastic_positive',
-                        'calm_patient': 'calm_patient',
-                        // AI prompt generates these values - must map them
-                        'calm_professional': 'calm_professional',
-                        'urgent_action_oriented': 'urgent_action_oriented',
-                        'apologetic_solution_focused': 'apologetic_solution_focused',
-                        'firm_clear_boundaries': 'firm_clear_boundaries',
-                        'educational_informative': 'educational_informative'
-                    };
-                    const mappedBehavior = behaviorMap[p.behavior] || p.behavior;
-                    // Try to set immediately, then retry after dropdown populates
-                    const trySetBehavior = () => {
-                        const options = Array.from(behaviorSelect.options).map(o => o.value);
-                        if (options.includes(mappedBehavior)) {
-                            behaviorSelect.value = mappedBehavior;
-                            console.log('✅ [PREFILL] Behavior set to:', mappedBehavior);
-                        } else if (options.length <= 1) {
+                    const targetBehavior = (p.behavior || 'calm_professional').toLowerCase().trim();
+                    
+                    // Intelligent behavior matching - tries multiple strategies
+                    const trySetBehavior = (retries = 0) => {
+                        const options = Array.from(behaviorSelect.options);
+                        const optionValues = options.map(o => o.value.toLowerCase());
+                        
+                        console.log('🎭 [PREFILL] Looking for behavior:', targetBehavior, 'in options:', optionValues);
+                        
+                        if (optionValues.length <= 1 && retries < 10) {
                             // Dropdown not populated yet, retry
-                            setTimeout(trySetBehavior, 200);
-                        } else {
-                            // Options populated but value not found - try setting directly
-                            console.log('⚠️ [PREFILL] Behavior value not found in options, trying direct set:', mappedBehavior);
-                            behaviorSelect.value = mappedBehavior;
+                            setTimeout(() => trySetBehavior(retries + 1), 200);
+                            return;
+                        }
+                        
+                        // Strategy 1: Exact match (case-insensitive)
+                        let matchedOption = options.find(o => o.value.toLowerCase() === targetBehavior);
+                        
+                        // Strategy 2: Contains match (e.g., "calm_professional" matches "calm_professional_dispatcher")
+                        if (!matchedOption) {
+                            matchedOption = options.find(o => 
+                                o.value.toLowerCase().includes(targetBehavior) || 
+                                targetBehavior.includes(o.value.toLowerCase())
+                            );
+                        }
+                        
+                        // Strategy 3: Keyword match (e.g., "calm" in "calm_professional")
+                        if (!matchedOption) {
+                            const keywords = targetBehavior.split('_');
+                            matchedOption = options.find(o => 
+                                keywords.some(kw => kw.length > 3 && o.value.toLowerCase().includes(kw))
+                            );
+                        }
+                        
+                        // Strategy 4: Default to first non-empty option if nothing matches
+                        if (!matchedOption) {
+                            matchedOption = options.find(o => o.value && o.value !== '');
+                            console.log('⚠️ [PREFILL] No behavior match found, using first option:', matchedOption?.value);
+                        }
+                        
+                        if (matchedOption) {
+                            behaviorSelect.value = matchedOption.value;
+                            console.log('✅ [PREFILL] Behavior set to:', matchedOption.value);
                         }
                     };
                     trySetBehavior();

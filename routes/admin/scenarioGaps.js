@@ -875,6 +875,7 @@ OUTPUT FORMAT (JSON only, no markdown):
 ═══════════════════════════════════════════════════════════════════════════════
 {
     "name": "Short descriptive name (3-5 words)",
+    "status": "live",
     "category": "Scheduling|Pricing|Hours|Service Area|Emergency|FAQ|Warranty|Billing|General",
     
     "scenarioType": "FAQ|BOOKING|EMERGENCY|TROUBLESHOOT|BILLING|TRANSFER|SMALL_TALK",

@@ -3149,7 +3149,7 @@
             return {
                 name: p.name || g.representative?.substring(0, 50) || 'New Scenario',
                 category: p.category || 'FAQ',
-                status: p.status || 'live',
+                status: 'live',  // ALWAYS live for Gap Fill - admin can change if needed
                 scenarioType: p.scenarioType || 'FAQ',
                 behavior: p.behavior || 'calm_professional',
                 priority: typeof p.priority === 'number' ? p.priority : 50,
