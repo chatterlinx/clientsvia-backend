@@ -29,15 +29,29 @@
  */
 
 const logger = require('../utils/logger');
+const { fastCandidateLookup, createRuntimeTrace, buildAppliedSettingsList } = require('./ScenarioRuntimeCompiler');
 
 class HybridScenarioSelector {
-    constructor(fillerWordsArray = null, urgencyKeywordsArray = null, synonymMapObject = null) {
+    constructor(fillerWordsArray = null, urgencyKeywordsArray = null, synonymMapObject = null, options = {}) {
         // ============================================
         // CONFIGURATION
         // ============================================
         
         // 🛡️ SAFETY HELPER: Convert any value to safe array
         this.toArr = (v) => Array.isArray(v) ? v : (v ? [v] : []);
+        
+        // ============================================
+        // 🚀 FAST LOOKUP CONFIGURATION
+        // ============================================
+        // Feature flag for fast lookup (safe rollout)
+        // Set to true to use compiled indexes, false for legacy scan
+        this.useFastLookup = options.useFastLookup !== false; // Default: enabled
+        this.shadowMode = options.shadowMode === true;        // Compare both paths
+        
+        // Compiled pool reference (set via setCompiledPool)
+        this.compiledPool = null;
+        this.triggerIndex = null;
+        this.exactIndex = null;
         
         this.config = {
             // Match strategy weights (must sum to 1.0)
@@ -313,6 +327,68 @@ class HybridScenarioSelector {
     }
     
     // ============================================
+    // 🚀 FAST LOOKUP CONFIGURATION METHODS
+    // ============================================
+    
+    /**
+     * Set the compiled pool for fast scenario lookup
+     * Call this after loading the scenario pool to enable O(1) matching
+     * 
+     * @param {Object} compiledPool - From ScenarioPoolService.getScenarioPoolForCompany().compiled
+     */
+    setCompiledPool(compiledPool) {
+        if (!compiledPool) {
+            this.compiledPool = null;
+            this.triggerIndex = null;
+            this.exactIndex = null;
+            return;
+        }
+        
+        this.compiledPool = compiledPool;
+        
+        // Reconstruct Maps from cached array entries
+        if (compiledPool.triggerIndexEntries) {
+            this.triggerIndex = new Map(compiledPool.triggerIndexEntries);
+        }
+        if (compiledPool.exactIndexEntries) {
+            this.exactIndex = new Map(compiledPool.exactIndexEntries);
+        }
+        
+        logger.info('⚡ [HYBRID SELECTOR] Compiled pool loaded', {
+            specCount: compiledPool.specs?.length || 0,
+            triggerIndexSize: this.triggerIndex?.size || 0,
+            exactIndexSize: this.exactIndex?.size || 0
+        });
+    }
+    
+    /**
+     * Check if fast lookup is available
+     * @returns {boolean}
+     */
+    hasFastLookup() {
+        return !!(this.useFastLookup && this.triggerIndex && this.exactIndex);
+    }
+    
+    /**
+     * Get fast lookup candidates for a phrase
+     * Returns compiled specs that match the phrase
+     * 
+     * @param {string} phrase - Normalized user input
+     * @returns {Object} { exactMatch, candidates, method, lookupTimeMs }
+     */
+    _fastCandidateLookup(phrase) {
+        if (!this.hasFastLookup()) {
+            return { exactMatch: null, candidates: [], method: 'unavailable', lookupTimeMs: 0 };
+        }
+        
+        const startTime = Date.now();
+        const result = fastCandidateLookup(phrase, this.triggerIndex, this.exactIndex);
+        result.lookupTimeMs = Date.now() - startTime;
+        
+        return result;
+    }
+    
+    // ============================================
     // MAIN MATCHING FUNCTION
     // ============================================
     
@@ -382,8 +458,91 @@ class HybridScenarioSelector {
             }
             
             // ============================================
+            // 🚀 STEP 1.25: FAST CANDIDATE LOOKUP (NEW)
+            // ============================================
+            // Use compiled indexes for O(1) exact match and O(k) word match
+            // This replaces the linear scan in STEP 1.5 and STEP 2
+            const fastLookupStart = Date.now();
+            let fastLookupResult = null;
+            let usedFastPath = false;
+            
+            if (this.hasFastLookup()) {
+                fastLookupResult = this._fastCandidateLookup(normalizedPhrase);
+                trace.fastLookup = {
+                    available: true,
+                    method: fastLookupResult.method,
+                    candidateCount: fastLookupResult.candidates.length,
+                    hasExactMatch: !!fastLookupResult.exactMatch,
+                    lookupTimeMs: fastLookupResult.lookupTimeMs
+                };
+                
+                // If we got an exact match from compiled index, use it immediately
+                if (fastLookupResult.exactMatch && fastLookupResult.method === 'exact') {
+                    const spec = fastLookupResult.exactMatch;
+                    
+                    // Find the raw scenario for backward compatibility
+                    const rawScenario = safeScenarios.find(s => 
+                        (s.scenarioId || s._id?.toString()) === spec.id
+                    );
+                    
+                    if (rawScenario) {
+                        usedFastPath = true;
+                        trace.timingMs.fastLookup = Date.now() - fastLookupStart;
+                        trace.selectionReason = `FAST EXACT MATCH (compiled index)`;
+                        trace.matchMethod = 'fast_exact';
+                        trace.appliedSettings = buildAppliedSettingsList(spec);
+                        trace.selectedScenario = {
+                            scenarioId: spec.id,
+                            name: spec.name,
+                            score: 1.0,
+                            confidence: 1.0,
+                            priority: spec.priority,
+                            matchMethod: 'fast_exact'
+                        };
+                        trace.topCandidates = [{
+                            scenarioId: spec.id,
+                            name: spec.name,
+                            score: '1.000',
+                            confidence: '1.000',
+                            priority: spec.priority,
+                            breakdown: { fastExactMatch: 1.0 }
+                        }];
+                        trace.timingMs.total = Date.now() - startTime;
+                        
+                        logger.info('⚡ [SCENARIO SELECTOR] FAST EXACT MATCH', {
+                            phrase: safePhrase,
+                            scenarioId: spec.id,
+                            name: spec.name,
+                            timeMs: trace.timingMs.total,
+                            lookupMs: fastLookupResult.lookupTimeMs
+                        });
+                        
+                        return {
+                            scenario: rawScenario,
+                            score: 1.0,
+                            confidence: 1.0,
+                            breakdown: { fastExactMatch: 1.0 },
+                            trace,
+                            appliedSettings: trace.appliedSettings
+                        };
+                    }
+                }
+                
+                logger.debug('⚡ [FAST LOOKUP] Candidates found', {
+                    method: fastLookupResult.method,
+                    candidateCount: fastLookupResult.candidates.length,
+                    lookupMs: fastLookupResult.lookupTimeMs
+                });
+            } else {
+                trace.fastLookup = { available: false, reason: 'compiled_pool_not_set' };
+            }
+            trace.timingMs.fastLookup = Date.now() - fastLookupStart;
+            
+            // ============================================
             // STEP 1.5: EXACT-MATCH & CONTAINS-MATCH BYPASS
             // ============================================
+            // NOTE: This is the legacy path. If fast lookup found candidates,
+            // we could skip this, but for shadow mode we run both.
             // 🎯 CRITICAL: Two-stage trigger matching:
             // 1. EXACT MATCH: normalizedPhrase === normalizedTrigger → 100% confidence
             // 2. CONTAINS MATCH: normalizedPhrase contains normalizedTrigger → 95% confidence
@@ -425,6 +584,9 @@ class HybridScenarioSelector {
                         }];
                         trace.timingMs.total = Date.now() - startTime;
                         
+                        trace.matchMethod = 'legacy_exact';
+                        trace.appliedSettings = ['replySelection', 'placeholderRendering', 'structureEnforcement'];
+                        
                         logger.info('🎯 [SCENARIO SELECTOR] EXACT MATCH BYPASS', {
                             phrase,
                             normalizedPhrase,
@@ -432,6 +594,7 @@ class HybridScenarioSelector {
                             normalizedTrigger,
                             scenarioId: scenario.scenarioId,
                             name: scenario.name,
+                            matchMethod: 'legacy_exact',
                             timeMs: trace.timingMs.total
                         });
                         
@@ -440,7 +603,9 @@ class HybridScenarioSelector {
                             score: 1.0,
                             confidence: 1.0,
                             breakdown: { exactMatch: 1.0 },
-                            trace
+                            trace,
+                            matchMethod: 'legacy_exact',
+                            appliedSettings: trace.appliedSettings
                         };
                     }
                     
@@ -492,6 +657,9 @@ class HybridScenarioSelector {
                 }];
                 trace.timingMs.total = Date.now() - startTime;
                 
+                trace.matchMethod = 'legacy_contains';
+                trace.appliedSettings = ['replySelection', 'placeholderRendering', 'structureEnforcement'];
+                
                 logger.info('🎯 [SCENARIO SELECTOR] CONTAINS MATCH BYPASS', {
                     phrase,
                     normalizedPhrase,
@@ -500,6 +668,7 @@ class HybridScenarioSelector {
                     triggerWordCount,
                     scenarioId: scenario.scenarioId,
                     name: scenario.name,
+                    matchMethod: 'legacy_contains',
                     timeMs: trace.timingMs.total
                 });
                 
@@ -508,7 +677,9 @@ class HybridScenarioSelector {
                     score: 0.95,
                     confidence: 0.95,
                     breakdown: { containsMatch: 0.95 },
-                    trace
+                    trace,
+                    matchMethod: 'legacy_contains',
+                    appliedSettings: trace.appliedSettings
                 };
             }
             
@@ -536,8 +707,30 @@ class HybridScenarioSelector {
             // ============================================
             // STEP 2: FILTER ELIGIBLE SCENARIOS
             // ============================================
+            // 🚀 OPTIMIZATION: If fast lookup produced candidates, use those
+            // instead of scanning all scenarios. This reduces O(n) to O(k).
             const filterStart = Date.now();
-            const eligibleScenarios = safeScenarios.filter(s => {
+            
+            // Determine which scenarios to filter
+            let scenariosToFilter = safeScenarios;
+            let usedFastCandidates = false;
+            
+            if (fastLookupResult && fastLookupResult.candidates.length > 0 && this.useFastLookup) {
+                // Map compiled specs back to raw scenarios
+                const candidateIds = new Set(fastLookupResult.candidates.map(c => c.id));
+                scenariosToFilter = safeScenarios.filter(s => 
+                    candidateIds.has(s.scenarioId || s._id?.toString())
+                );
+                usedFastCandidates = true;
+                
+                logger.debug('⚡ [FAST FILTER] Using compiled candidates', {
+                    originalCount: safeScenarios.length,
+                    candidateCount: scenariosToFilter.length,
+                    reduction: `${((1 - scenariosToFilter.length / safeScenarios.length) * 100).toFixed(1)}%`
+                });
+            }
+            
+            const eligibleScenarios = scenariosToFilter.filter(s => {
                 // 🛡️ SAFETY: Skip malformed scenarios
                 if (!s || typeof s !== 'object') {
                     logger.error('❌ [SCENARIO SELECTOR] Malformed scenario (not an object)', { scenario: s });
@@ -571,6 +764,8 @@ class HybridScenarioSelector {
             });
             
             trace.scenariosEvaluated = eligibleScenarios.length;
+            trace.scenariosScanned = scenariosToFilter.length;
+            trace.usedFastCandidates = usedFastCandidates;
             trace.timingMs.filter = Date.now() - filterStart;
             
             if (eligibleScenarios.length === 0) {
@@ -779,12 +974,32 @@ class HybridScenarioSelector {
             // ============================================
             trace.timingMs.total = Date.now() - startTime;
             
+            // 🎯 Determine match method for trace
+            const matchMethod = usedFastCandidates 
+                ? (fastLookupResult?.method === 'word_index' ? 'fast_word_index' : 'fast_contains')
+                : 'legacy_scan';
+            trace.matchMethod = matchMethod;
+            
+            // 🎯 Build applied settings list
+            // Find compiled spec if available for accurate needs flags
+            let appliedSettings = ['replySelection', 'placeholderRendering', 'structureEnforcement'];
+            if (fastLookupResult?.candidates?.length > 0) {
+                const matchedSpec = fastLookupResult.candidates.find(c => c.id === bestMatch.scenario.scenarioId);
+                if (matchedSpec) {
+                    appliedSettings = buildAppliedSettingsList(matchedSpec);
+                }
+            }
+            trace.appliedSettings = appliedSettings;
+            
             logger.info('🧠 [SCENARIO SELECTOR] Match found', {
                 phrase,
                 scenarioId: bestMatch.scenario.scenarioId,
                 name: bestMatch.scenario.name,
                 score: bestMatch.score.toFixed(3),
                 confidence: bestMatch.confidence.toFixed(3),
+                matchMethod,
+                candidateCount: trace.scenariosEvaluated,
+                appliedSettingsCount: appliedSettings.length,
                 timeMs: trace.timingMs.total
             });
             
@@ -793,7 +1008,9 @@ class HybridScenarioSelector {
                 score: bestMatch.score,
                 confidence: bestMatch.confidence,
                 breakdown: bestMatch.breakdown,
-                trace
+                trace,
+                matchMethod,
+                appliedSettings
             };
             
         } catch (error) {
