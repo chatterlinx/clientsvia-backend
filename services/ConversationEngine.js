@@ -9772,8 +9772,12 @@ async function processTurn({
             // This is the critical trace that proves:
             // 1. Fast lookup is available and used
             // 2. Candidate reduction is happening
-            // 3. appliedSettings are being tracked
+            // 3. Scenario capabilities are tracked (what the scenario CAN use)
             // 4. Latency breakdown is recorded
+            //
+            // NOTE: scenarioCapabilities = what the matched scenario is CAPABLE of using
+            // (based on scenario's needs flags). For actual execution proof in
+            // ResponseEngine paths, see executionTrace returned from buildResponse().
             // ═══════════════════════════════════════════════════════════════════
             if (scenarioRetrieval.matchingTrace) {
                 const trace = scenarioRetrieval.matchingTrace;
@@ -9799,9 +9803,10 @@ async function processTurn({
                         totalPoolSize: trace.totalPoolSize,
                         candidateReduction: trace.candidateReduction,
                         
-                        // Utilization proof
-                        appliedSettings: trace.appliedSettings,
-                        appliedSettingsCount: trace.appliedSettings?.length || 0,
+                        // Scenario capabilities (what the matched scenario CAN use)
+                        // NOTE: This is capability, not execution proof
+                        scenarioCapabilities: trace.appliedSettings,
+                        scenarioCapabilitiesCount: trace.appliedSettings?.length || 0,
                         
                         // Latency breakdown
                         timingMs: trace.timingMs,
@@ -10646,6 +10651,47 @@ async function processTurn({
                 tokensUsed: llmResult.tokensUsed,
                 mode: session.mode,
                 hasIssue: !!session.discovery?.issue
+            });
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // 🎯 BLACK BOX: RESPONSE_EXECUTION - Truthful execution trace
+            // ═══════════════════════════════════════════════════════════════════
+            // This is the EXECUTION proof (vs MATCHING_PIPELINE's capability list).
+            // Tracks what was ACTUALLY used to generate the response.
+            // ═══════════════════════════════════════════════════════════════════
+            const executionTrace = [];
+            
+            // Track what context was actually provided to LLM
+            if (llmContext.scenarioKnowledge?.length > 0) executionTrace.push('scenarioContext_provided');
+            if (llmContext.callerName) executionTrace.push('callerName_provided');
+            if (llmContext.callerEmotion && llmContext.callerEmotion !== 'neutral') executionTrace.push('emotionContext_provided');
+            if (llmContext.discovery?.issue) executionTrace.push('discoveryIssue_provided');
+            if (cheatSheetUsed) executionTrace.push('cheatSheet_used');
+            if (killSwitches?.bookingRequiresExplicitConsent) executionTrace.push('consentGate_enforced');
+            
+            // Track what came back from LLM
+            if (llmResult.reply) executionTrace.push('reply_generated');
+            if (llmResult.extractedIssue) executionTrace.push('issue_extracted');
+            
+            // Log truthful execution trace (sample: always for now, downsample later)
+            await BlackBoxLogger.logEvent({
+                callId: session._id?.toString(),
+                companyId,
+                type: 'RESPONSE_EXECUTION',
+                turn: session.metrics?.totalTurns || 0,
+                data: {
+                    responseSource: 'LLM',
+                    executionTrace,
+                    executionTraceCount: executionTrace.length,
+                    scenarioCountProvided: llmContext.scenarioKnowledge?.length || 0,
+                    hasCallerName: !!llmContext.callerName,
+                    emotion: llmContext.callerEmotion || 'neutral',
+                    llmLatencyMs: aiLatencyMs,
+                    tokensUsed: llmResult.tokensUsed || 0,
+                    replyLength: llmResult.reply?.length || 0
+                }
+            }).catch(err => {
+                logger.warn('[CONVERSATION ENGINE] Failed to log RESPONSE_EXECUTION event', { error: err.message });
             });
             
             // Increment discovery question count for fast-path gate

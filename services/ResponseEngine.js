@@ -41,7 +41,7 @@ class ResponseEngine {
    * @param {Object} context - Context with callerName, callerInfo, etc.
    * @returns {Object} { quickReplies, fullReplies, hasCallerName, usedFallback }
    */
-  _getPersonalizedReplyArrays(scenario, context = {}) {
+  _getPersonalizedReplyArrays(scenario, context = {}, executionTrace = []) {
     // Check if we have caller name from various sources
     const callerName = context.callerName 
       || context.callerInfo?.name 
@@ -78,6 +78,7 @@ class ResponseEngine {
       if (hasQuickNoName) {
         // Best case: _noName variant exists
         quickReplies = scenario.quickReplies_noName;
+        executionTrace.push('nameVariant_noName_quick');  // 🎯 EXECUTION TRACE
         logger.info('[RESPONSE ENGINE] Using quickReplies_noName (caller name unknown)');
       } else if (quickHasNamePlaceholder) {
         // Fallback: sanitize normal replies to remove {name}
@@ -87,6 +88,7 @@ class ResponseEngine {
         });
         usedFallback = true;
         fallbackType = 'quick';
+        executionTrace.push('nameVariant_sanitized_quick');  // 🎯 EXECUTION TRACE
         logger.warn('[RESPONSE ENGINE] LAZY FALLBACK: Sanitized quickReplies (no _noName, has {name})', {
           ...scenarioMeta,
           lazyNoNameFallbackUsed: true
@@ -98,6 +100,7 @@ class ResponseEngine {
       if (hasFullNoName) {
         // Best case: _noName variant exists
         fullReplies = scenario.fullReplies_noName;
+        executionTrace.push('nameVariant_noName_full');  // 🎯 EXECUTION TRACE
         logger.info('[RESPONSE ENGINE] Using fullReplies_noName (caller name unknown)');
       } else if (fullHasNamePlaceholder) {
         // Fallback: sanitize normal replies to remove {name}
@@ -107,12 +110,16 @@ class ResponseEngine {
         });
         usedFallback = true;
         fallbackType = fallbackType ? 'both' : 'full';
+        executionTrace.push('nameVariant_sanitized_full');  // 🎯 EXECUTION TRACE
         logger.warn('[RESPONSE ENGINE] LAZY FALLBACK: Sanitized fullReplies (no _noName, has {name})', {
           ...scenarioMeta,
           lazyNoNameFallbackUsed: true
         });
       }
       // else: no {name} in fullReplies, safe to use as-is
+    } else {
+      // Caller name known - using named variants
+      executionTrace.push('nameVariant_named');  // 🎯 EXECUTION TRACE
     }
     
     return { 
@@ -223,6 +230,12 @@ class ResponseEngine {
       let replyStrategyResolved = scenario.replyStrategy || 'AUTO';
       
       // ========================================================================
+      // 🎯 EXECUTION TRACE: Track what settings are actually applied at runtime
+      // This is the "truthful" record - not what the scenario needs, but what was executed
+      // ========================================================================
+      const executionTrace = [];
+      
+      // ========================================================================
       // STEP 3: DECISION MATRIX BY CHANNEL & SCENARIO TYPE
       // ========================================================================
       
@@ -234,13 +247,15 @@ class ResponseEngine {
           scenario,
           scenarioTypeResolved,
           replyStrategyResolved,
-          context
+          context,
+          executionTrace
         }));
       } else if (channel === 'sms' || channel === 'chat') {
         ({ text, strategyUsed } = this._decideSmsOrChatReply({
           scenario,
           replyStrategyResolved,
-          context
+          context,
+          executionTrace
         }));
       } else {
         // Unknown channel, default to voice rules
@@ -248,7 +263,8 @@ class ResponseEngine {
           scenario,
           scenarioTypeResolved,
           replyStrategyResolved,
-          context
+          context,
+          executionTrace
         }));
       }
       
@@ -278,7 +294,8 @@ class ResponseEngine {
         strategyUsed,
         channel,
         textLength: text ? text.length : 0,
-        responseTime
+        responseTime,
+        executionTrace  // 🎯 TRUTHFUL: What was actually executed
       });
       
       return {
@@ -291,7 +308,10 @@ class ResponseEngine {
           mode: followUpMode,
           questionText: scenario.followUpQuestionText || null,
           transferTarget: scenario.transferTarget || null
-        }
+        },
+        // 🎯 EXECUTION TRACE: Truthful record of what settings were actually applied
+        // This is NOT the capability list (what scenario needs), but execution proof
+        executionTrace
       };
       
     } catch (error) {
@@ -311,7 +331,9 @@ class ResponseEngine {
           mode: scenario?.followUpMode || 'NONE',
           questionText: scenario?.followUpQuestionText || null,
           transferTarget: scenario?.transferTarget || null
-        }
+        },
+        // 🎯 EXECUTION TRACE: Empty on error
+        executionTrace: ['error']
       };
     }
   }
@@ -326,9 +348,9 @@ class ResponseEngine {
    * 
    * ============================================================================
    */
-  _decideVoiceReply({ scenario, scenarioTypeResolved, replyStrategyResolved, context = {} }) {
+  _decideVoiceReply({ scenario, scenarioTypeResolved, replyStrategyResolved, context = {}, executionTrace = [] }) {
     // Get personalized reply arrays (uses _noName variants if caller name unknown)
-    const { quickReplies, fullReplies, hasCallerName, callerName } = this._getPersonalizedReplyArrays(scenario, context);
+    const { quickReplies, fullReplies, hasCallerName, callerName } = this._getPersonalizedReplyArrays(scenario, context, executionTrace);
     
     const hasFullReplies = fullReplies && fullReplies.length > 0;
     const hasQuickReplies = quickReplies && quickReplies.length > 0;
@@ -619,7 +641,13 @@ class ResponseEngine {
     // PERSONALIZATION: Replace placeholders in final text
     // ========================================================================
     if (text) {
+      const originalText = text;
       text = this._replacePlaceholders(text, context, callerName);
+      
+      // 🎯 EXECUTION TRACE: Track placeholder rendering
+      if (text !== originalText) {
+        executionTrace.push('placeholderRendering');
+      }
       
       // Log personalization info
       logger.info('[RESPONSE ENGINE] Personalized response', {
@@ -631,7 +659,12 @@ class ResponseEngine {
       });
     }
     
-    return { text, strategyUsed, hasCallerName, callerName };
+    // 🎯 EXECUTION TRACE: Track reply selection
+    if (strategyUsed && !strategyUsed.startsWith('ERROR')) {
+      executionTrace.push(`replySelection_${strategyUsed.toLowerCase()}`);
+    }
+    
+    return { text, strategyUsed, hasCallerName, callerName, executionTrace };
   }
   
   /**
@@ -645,9 +678,9 @@ class ResponseEngine {
    * 
    * ============================================================================
    */
-  _decideSmsOrChatReply({ scenario, replyStrategyResolved, context = {} }) {
+  _decideSmsOrChatReply({ scenario, replyStrategyResolved, context = {}, executionTrace = [] }) {
     // Get personalized reply arrays (uses _noName variants if caller name unknown)
-    const { quickReplies, fullReplies, hasCallerName, callerName } = this._getPersonalizedReplyArrays(scenario, context);
+    const { quickReplies, fullReplies, hasCallerName, callerName } = this._getPersonalizedReplyArrays(scenario, context, executionTrace);
     
     const hasFullReplies = fullReplies && fullReplies.length > 0;
     const hasQuickReplies = quickReplies && quickReplies.length > 0;
@@ -723,10 +756,21 @@ class ResponseEngine {
     // PERSONALIZATION: Replace placeholders in final text
     // ========================================================================
     if (text) {
+      const originalText = text;
       text = this._replacePlaceholders(text, context, callerName);
+      
+      // 🎯 EXECUTION TRACE: Track placeholder rendering
+      if (text !== originalText) {
+        executionTrace.push('placeholderRendering');
+      }
     }
     
-    return { text, strategyUsed, hasCallerName, callerName };
+    // 🎯 EXECUTION TRACE: Track reply selection
+    if (strategyUsed && !strategyUsed.startsWith('ERROR')) {
+      executionTrace.push(`replySelection_${strategyUsed.toLowerCase()}`);
+    }
+    
+    return { text, strategyUsed, hasCallerName, callerName, executionTrace };
   }
   
   /**
