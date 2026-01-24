@@ -92,8 +92,13 @@ class LLMDiscoveryEngine {
             const synonymMap = template?.synonymMap || template?.nlpConfig?.synonyms || {};
             
             // 🚀 Feature flag: Use compiled indexes for fast lookup
-            // Can be overridden per-company via aiAgentSettings.performance.useFastLookup
-            const useFastLookup = template?.performance?.useFastLookup !== false;
+            // Scope precedence: company > template > global default (true)
+            // This allows per-company override without affecting other companies on same template
+            const companyFastLookup = poolResult?.companySettings?.performance?.useFastLookup;
+            const templateFastLookup = template?.performance?.useFastLookup;
+            const useFastLookup = companyFastLookup !== undefined 
+                ? companyFastLookup !== false 
+                : (templateFastLookup !== undefined ? templateFastLookup !== false : true);
             
             const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords, synonymMap, {
                 useFastLookup
