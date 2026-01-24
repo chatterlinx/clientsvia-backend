@@ -1734,8 +1734,12 @@ router.post('/seed-test-company', async (req, res) => {
         // ════════════════════════════════════════════════════════════════════
         // 2. Create or update global template with scenarios
         // ════════════════════════════════════════════════════════════════════
+        // Generate unique IDs for scenarios
+        const generateId = () => new mongoose.Types.ObjectId().toString();
+        
         const testScenarios = [
             {
+                scenarioId: generateId(),
                 name: 'AC Not Cooling',
                 status: 'live',
                 isActive: true,
@@ -1751,6 +1755,7 @@ router.post('/seed-test-company', async (req, res) => {
                 entityCapture: ['name', 'phone', 'address', 'issue']
             },
             {
+                scenarioId: generateId(),
                 name: 'Schedule Maintenance',
                 status: 'live',
                 isActive: true,
@@ -1766,6 +1771,7 @@ router.post('/seed-test-company', async (req, res) => {
                 entityCapture: ['name', 'phone', 'address']
             },
             {
+                scenarioId: generateId(),
                 name: 'Emergency No Heat',
                 status: 'live',
                 isActive: true,
@@ -1781,6 +1787,7 @@ router.post('/seed-test-company', async (req, res) => {
                 entityCapture: ['name', 'phone', 'address', 'issue', 'urgency']
             },
             {
+                scenarioId: generateId(),
                 name: 'Request Estimate',
                 status: 'live',
                 isActive: true,
@@ -1796,6 +1803,7 @@ router.post('/seed-test-company', async (req, res) => {
                 entityCapture: ['name', 'phone', 'address', 'estimateType']
             },
             {
+                scenarioId: generateId(),
                 name: 'Business Hours',
                 status: 'live',
                 isActive: true,
@@ -1811,6 +1819,7 @@ router.post('/seed-test-company', async (req, res) => {
                 entityCapture: []
             },
             {
+                scenarioId: generateId(),
                 name: 'Thank You / Goodbye',
                 status: 'live',
                 isActive: true,
@@ -1827,19 +1836,32 @@ router.post('/seed-test-company', async (req, res) => {
             }
         ];
         
+        const testCategory = {
+            id: 'wiring-test-category',
+            name: 'All Scenarios',
+            description: 'Test scenarios for wiring verification',
+            icon: '🔧',
+            scope: 'GLOBAL',
+            scenarios: testScenarios
+        };
+        
         let template = await GlobalInstantResponseTemplate.findOne({ name: 'Wiring Test Template (Dev)' });
         if (template) {
-            template.categories = [{ name: 'All Scenarios', scenarios: testScenarios }];
+            template.categories = [testCategory];
+            template.version = template.version || '1.0';
             await template.save();
             logger.info('[WIRING SEED] Updated existing test template');
         } else {
             template = await GlobalInstantResponseTemplate.create({
+                version: '1.0',
                 name: 'Wiring Test Template (Dev)',
                 description: 'Test template for wiring verification',
                 tradeType: 'hvac',
                 industry: 'hvac',
                 status: 'published',
-                categories: [{ name: 'All Scenarios', scenarios: testScenarios }]
+                isActive: true,
+                isPublished: true,
+                categories: [testCategory]
             });
             logger.info('[WIRING SEED] Created new test template');
         }
