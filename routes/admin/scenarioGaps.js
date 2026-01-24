@@ -1021,13 +1021,14 @@ DO NOT USE:
 - friendly_warm (makes AI chatty)
 - enthusiastic_positive (sounds like sales, not dispatch)
 
-SCENARIO TYPE GUIDE:
-- FAQ: Informational (pricing, hours, area) - priority 40-60
-- BOOKING: Wants to schedule - priority 70-85, bookingIntent=true
-- EMERGENCY: Urgent (no heat, leak, flood) - priority 90-100
-- TROUBLESHOOT: Problem-solving - priority 50-70
-- BILLING: Payment questions - priority 40-60
-- SMALL_TALK: Greetings, thanks - priority -5 to 10
+SCENARIO TYPE GUIDE (priority scale: -10 to +10):
+- EMERGENCY: Urgent (no heat, leak, flood) - priority 8-10 (Critical), bookingIntent=true
+- BOOKING: Wants to schedule - priority 5-8, bookingIntent=true
+- TROUBLESHOOT: Problem-solving - priority 2-5
+- FAQ: Informational (pricing, hours, area) - priority 0-3
+- BILLING: Payment questions - priority 0-2
+- SMALL_TALK: Greetings, thanks - priority -5 to 0 (Low)
+- TRANSFER: Needs human - priority 3-6
 
 MIN CONFIDENCE GUIDE (how certain AI must be to use this scenario):
 - EMERGENCY: 0.5-0.7 (lower = catch more urgent calls, never miss emergency)

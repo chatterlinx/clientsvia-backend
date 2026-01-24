@@ -3152,7 +3152,7 @@
                 status: 'live',  // ALWAYS live for Gap Fill - admin can change if needed
                 scenarioType: p.scenarioType || 'FAQ',
                 behavior: p.behavior || 'calm_professional',
-                priority: typeof p.priority === 'number' ? p.priority : 50,
+                priority: typeof p.priority === 'number' ? Math.max(-10, Math.min(10, p.priority)) : 0,  // Clamp to -10 to +10 range
                 minConfidence: typeof p.minConfidence === 'number' ? p.minConfidence : 0.6,
                 replyStrategy: p.replyStrategy || 'AUTO',
                 
