@@ -2501,9 +2501,18 @@
             // Setup period buttons
             document.querySelectorAll('.period-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
+                    const newDays = parseInt(btn.dataset.days);
+                    if (newDays === selectedDays) return; // Skip if same period
+                    
                     document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    selectedDays = parseInt(btn.dataset.days);
+                    selectedDays = newDays;
+                    
+                    // Visual feedback: flash the summary cards
+                    document.querySelectorAll('.summary-card').forEach(card => {
+                        card.style.opacity = '0.5';
+                    });
+                    
                     loadGaps();
                 });
             });
@@ -2635,10 +2644,26 @@
         // RENDERING
         // ========================================
         function renderSummary(summary) {
+            // Restore opacity on summary cards
+            document.querySelectorAll('.summary-card').forEach(card => {
+                card.style.opacity = '1';
+            });
+            
             document.getElementById('total-tier3').textContent = summary.totalTier3Calls || 0;
             document.getElementById('unique-gaps').textContent = summary.uniqueGaps || 0;
             document.getElementById('potential-savings').textContent = `$${summary.potentialSavings?.toFixed(2) || '0.00'}`;
             document.getElementById('high-priority').textContent = summary.highPriorityCount || 0;
+            
+            // Update period indicator in header
+            const periodText = summary.period || `Last ${selectedDays} days`;
+            // Update summary card labels to show period
+            const tier3Label = document.querySelector('#total-tier3').nextElementSibling;
+            if (tier3Label) {
+                tier3Label.innerHTML = `Tier 3 Calls <span style="font-size: 10px; color: var(--text-muted); display: block;">(${periodText})</span>`;
+            }
+            
+            // Log for debugging
+            console.log(`[GAPS] Period: ${periodText}, Tier3: ${summary.totalTier3Calls}, Gaps: ${summary.uniqueGaps}`);
         }
         
         function renderGaps(gaps) {

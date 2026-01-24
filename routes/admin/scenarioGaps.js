@@ -1287,16 +1287,18 @@ router.get('/:companyId/gaps', async (req, res) => {
         startDate.setDate(startDate.getDate() - daysBack);
         
         // Fetch Tier 3 calls from Black Box
+        // Look for TIER3_LLM_FALLBACK_CALLED events (actual LLM calls that cost money)
         const recordings = await BlackBoxRecording.find({
             companyId: new mongoose.Types.ObjectId(companyId),
             createdAt: { $gte: startDate },
-            'events.type': 'TIER3_FALLBACK'
+            'events.type': { $in: ['TIER3_LLM_FALLBACK_CALLED', 'TIER3_FALLBACK'] }  // Support both old and new event names
         }).lean();
         
         logger.info('[SCENARIO GAPS] Analyzing recordings', { 
             companyId, 
             recordingsFound: recordings.length,
-            daysBack 
+            daysBack,
+            startDate: startDate.toISOString()
         });
         
         // Extract Tier 3 caller phrases
@@ -1308,10 +1310,15 @@ router.get('/:companyId/gaps', async (req, res) => {
             for (let i = 0; i < events.length; i++) {
                 const event = events[i];
                 
-                if (event.type === 'TIER3_FALLBACK') {
+                // Match both event type names
+                if (event.type === 'TIER3_LLM_FALLBACK_CALLED' || event.type === 'TIER3_FALLBACK') {
                     // Find the preceding GATHER_FINAL to get what caller said
                     let callerText = '';
-                    let tokens = event.data?.tokensUsed || 0;
+                    
+                    // Calculate tokens from cost (approx $0.00015 per 1K input + $0.0006 per 1K output)
+                    // Average ~$0.00075 per 1K tokens total
+                    const costUsd = event.data?.costUsd || 0;
+                    let tokens = costUsd > 0 ? Math.round((costUsd / 0.00075) * 1000) : CONFIG.AVG_TOKENS_PER_TIER3_CALL;
                     
                     // Look backwards for the caller input
                     for (let j = i - 1; j >= 0 && j >= i - 10; j--) {
