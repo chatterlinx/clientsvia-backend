@@ -502,127 +502,240 @@ const SCENARIO_SETTINGS_REGISTRY = {
     // ════════════════════════════════════════════════════════════════════════════
     // IDENTITY (Scenario owns - CONTENT)
     // ════════════════════════════════════════════════════════════════════════════
-    name:             { ownership: 'content',  purpose: 'runtime',        description: 'Human-readable scenario name' },
-    status:           { ownership: 'content',  purpose: 'runtime',        description: 'draft/live/archived - only live scenarios match' },
-    isActive:         { ownership: 'content',  purpose: 'runtime',        description: 'Quick on/off toggle' },
-    categories:       { ownership: 'content',  purpose: 'runtime',        description: 'Category tags for organization' },
-    scenarioType:     { ownership: 'content',  purpose: 'runtime',        description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy' },
-    notes:            { ownership: 'content',  purpose: 'system',         description: 'Admin notes (not used by AI)' },
+    name: { 
+        ownership: 'content', purpose: 'runtime', description: 'Human-readable scenario name',
+        audit: { contentChecks: ['required', 'minLength:3', 'maxLength:100'], severity: 'critical' }
+    },
+    status: { 
+        ownership: 'content', purpose: 'runtime', description: 'draft/live/archived - only live scenarios match',
+        audit: { contentChecks: ['enum:draft,live,archived'], severity: 'high' }
+    },
+    isActive: { 
+        ownership: 'content', purpose: 'runtime', description: 'Quick on/off toggle',
+        audit: { contentChecks: ['boolean'], severity: 'info' }
+    },
+    categories: { 
+        ownership: 'content', purpose: 'runtime', description: 'Category tags for organization',
+        audit: { contentChecks: ['array'], severity: 'info' }
+    },
+    scenarioType: { 
+        ownership: 'content', purpose: 'runtime', description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy',
+        audit: { contentChecks: ['required', 'validScenarioType'], severity: 'high' }
+    },
+    notes: { 
+        ownership: 'content', purpose: 'system', description: 'Admin notes (not used by AI)',
+        audit: { contentChecks: [], severity: 'info' }
+    },
     
     // System-managed identity
-    scenarioId:       { ownership: 'system',   purpose: 'runtime',        description: 'Unique scenario identifier' },
-    version:          { ownership: 'system',   purpose: 'system',         description: 'Version number for rollback' },
-    scope:            { ownership: 'system',   purpose: 'system',         description: 'GLOBAL vs COMPANY scope' },
-    ownerCompanyId:   { ownership: 'system',   purpose: 'system',         description: 'Company that owns this scenario' },
+    scenarioId: { ownership: 'system', purpose: 'runtime', description: 'Unique scenario identifier' },
+    version: { ownership: 'system', purpose: 'system', description: 'Version number for rollback' },
+    scope: { ownership: 'system', purpose: 'system', description: 'GLOBAL vs COMPANY scope' },
+    ownerCompanyId: { ownership: 'system', purpose: 'system', description: 'Company that owns this scenario' },
     
     // ════════════════════════════════════════════════════════════════════════════
     // MATCHING PRIORITY (Scenario owns - CONTENT)
     // ════════════════════════════════════════════════════════════════════════════
-    priority:         { ownership: 'content',  purpose: 'runtime',        description: 'Tie-breaker when multiple scenarios match (-10 to +10)' },
-    minConfidence:    { ownership: 'content',  purpose: 'runtime',        description: 'Scenario-level confidence threshold' },
+    priority: { 
+        ownership: 'content', purpose: 'runtime', description: 'Tie-breaker when multiple scenarios match (-10 to +10)',
+        audit: { contentChecks: ['number', 'range:-10,10'], severity: 'warn' }
+    },
+    minConfidence: { 
+        ownership: 'content', purpose: 'runtime', description: 'Scenario-level confidence threshold',
+        audit: { contentChecks: ['number', 'range:0,1'], severity: 'warn' }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // TRIGGERS - When to match (Scenario owns - CONTENT)
     // ════════════════════════════════════════════════════════════════════════════
-    triggers:             { ownership: 'content',  purpose: 'runtime',    description: 'Plain phrases for BM25 keyword matching' },
-    regexTriggers:        { ownership: 'content',  purpose: 'runtime',    description: 'Advanced pattern matching (regex)' },
-    negativeTriggers:     { ownership: 'content',  purpose: 'runtime',    description: 'Phrases that PREVENT matching' },
-    exampleUserPhrases:   { ownership: 'content',  purpose: 'runtime',    description: '12-18 example phrases users say (for Tier-3 LLM context)' },
-    negativeUserPhrases:  { ownership: 'content',  purpose: 'runtime',    description: 'Phrases that PREVENT this scenario from matching' },
+    triggers: { 
+        ownership: 'content', purpose: 'runtime', description: 'Plain phrases for BM25 keyword matching',
+        audit: { contentChecks: ['required', 'array', 'minLength:5', 'noBannedPhrases', 'noGenericTriggers'], severity: 'critical' }
+    },
+    regexTriggers: { 
+        ownership: 'content', purpose: 'runtime', description: 'Advanced pattern matching (regex)',
+        audit: { contentChecks: ['array', 'validRegex'], severity: 'warn' }
+    },
+    negativeTriggers: { 
+        ownership: 'content', purpose: 'runtime', description: 'Phrases that PREVENT matching',
+        audit: { contentChecks: ['array', 'minLength:2'], severity: 'warn' }
+    },
+    exampleUserPhrases: { 
+        ownership: 'content', purpose: 'runtime', description: '12-18 example phrases users say (for Tier-3 LLM context)',
+        audit: { contentChecks: ['array'], severity: 'info' }
+    },
+    negativeUserPhrases: { 
+        ownership: 'content', purpose: 'runtime', description: 'Phrases that PREVENT this scenario from matching',
+        audit: { contentChecks: ['array'], severity: 'info' }
+    },
     
     // System-managed triggers
-    keywords:             { ownership: 'system',   purpose: 'system',     description: 'Fast Tier-1 matching keywords (auto-generated)' },
-    negativeKeywords:     { ownership: 'system',   purpose: 'system',     description: 'Keywords that veto matches (auto-generated)' },
-    embeddingVector:      { ownership: 'system',   purpose: 'system',     description: 'Precomputed semantic embedding (auto-generated)' },
-    contextWeight:        { ownership: 'system',   purpose: 'system',     description: 'Multiplier for final match score' },
+    keywords: { ownership: 'system', purpose: 'system', description: 'Fast Tier-1 matching keywords (auto-generated)' },
+    negativeKeywords: { ownership: 'system', purpose: 'system', description: 'Keywords that veto matches (auto-generated)' },
+    embeddingVector: { ownership: 'system', purpose: 'system', description: 'Precomputed semantic embedding (auto-generated)' },
+    contextWeight: { ownership: 'system', purpose: 'system', description: 'Multiplier for final match score' },
     
     // ════════════════════════════════════════════════════════════════════════════
     // REPLIES - What to say (Scenario owns - CONTENT)
     // ════════════════════════════════════════════════════════════════════════════
-    quickReplies:         { ownership: 'content',  purpose: 'runtime',    description: 'Short/quick response variations' },
-    fullReplies:          { ownership: 'content',  purpose: 'runtime',    description: 'Full/detailed response variations' },
-    quickReplies_noName:  { ownership: 'content',  purpose: 'runtime',    description: 'Quick replies without {name} for unknown callers' },
-    fullReplies_noName:   { ownership: 'content',  purpose: 'runtime',    description: 'Full replies without {name} for unknown callers' },
-    replyStrategy:        { ownership: 'content',  purpose: 'runtime',    description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc' },
+    quickReplies: { 
+        ownership: 'content', purpose: 'runtime', description: 'Short/quick response variations',
+        audit: { contentChecks: ['required', 'array', 'minLength:5', 'noBannedPhrases', 'hasNamePlaceholder'], severity: 'critical' }
+    },
+    fullReplies: { 
+        ownership: 'content', purpose: 'runtime', description: 'Full/detailed response variations',
+        audit: { contentChecks: ['array', 'minLength:3', 'noBannedPhrases', 'hasNamePlaceholder'], severity: 'high' }
+    },
+    quickReplies_noName: { 
+        ownership: 'content', purpose: 'runtime', description: 'Quick replies without {name} for unknown callers',
+        audit: { contentChecks: ['array', 'matchesQuickRepliesCount', 'noNamePlaceholder'], severity: 'high' }
+    },
+    fullReplies_noName: { 
+        ownership: 'content', purpose: 'runtime', description: 'Full replies without {name} for unknown callers',
+        audit: { contentChecks: ['array', 'matchesFullRepliesCount', 'noNamePlaceholder'], severity: 'high' }
+    },
+    replyStrategy: { 
+        ownership: 'content', purpose: 'runtime', description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc',
+        audit: { contentChecks: ['enum:AUTO,FULL_ONLY,QUICK_ONLY,ROTATE'], severity: 'info' }
+    },
     
     // System-managed reply settings
-    replySelection:       { ownership: 'system',   purpose: 'system',     description: 'sequential/random/bandit selection' },
-    replyBundles:         { ownership: 'system',   purpose: 'future',     description: 'Reply bundle system (future)' },
-    replyPolicy:          { ownership: 'system',   purpose: 'future',     description: 'ROTATE_PER_CALLER/etc (future)' },
+    replySelection: { ownership: 'system', purpose: 'system', description: 'sequential/random/bandit selection' },
+    replyBundles: { ownership: 'system', purpose: 'future', description: 'Reply bundle system (future)' },
+    replyPolicy: { ownership: 'system', purpose: 'future', description: 'ROTATE_PER_CALLER/etc (future)' },
     
     // ════════════════════════════════════════════════════════════════════════════
     // PERSONALITY (Scenario owns - CONTENT)
-    // Affects HOW replies are WRITTEN, not how agent BEHAVES
     // ════════════════════════════════════════════════════════════════════════════
-    behavior:         { ownership: 'content',  purpose: 'generation',     description: 'AI personality - influences how replies are WRITTEN' },
+    behavior: { 
+        ownership: 'content', purpose: 'generation', description: 'AI personality - influences how replies are WRITTEN',
+        audit: { contentChecks: ['validBehavior'], severity: 'info' }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // INTENT FLAG (Scenario owns - CONTENT)
-    // Flag only - Runtime decides what to DO with this flag
     // ════════════════════════════════════════════════════════════════════════════
-    bookingIntent:    { ownership: 'content',  purpose: 'runtime',        description: 'true = caller wants to book (Runtime decides behavior)' },
-    entityCapture:    { ownership: 'content',  purpose: 'future',         description: 'Entities to extract (what to capture, not how)' },
-    channel:          { ownership: 'content',  purpose: 'runtime',        description: 'voice/sms/chat/any channel restriction' },
+    bookingIntent: { 
+        ownership: 'content', purpose: 'runtime', description: 'true = caller wants to book (Runtime decides behavior)',
+        audit: { contentChecks: ['boolean'], severity: 'info' }
+    },
+    entityCapture: { 
+        ownership: 'content', purpose: 'future', description: 'Entities to extract (what to capture, not how)',
+        audit: { contentChecks: ['array'], severity: 'info' }
+    },
+    channel: { 
+        ownership: 'content', purpose: 'runtime', description: 'voice/sms/chat/any channel restriction',
+        audit: { contentChecks: ['enum:voice,sms,chat,any'], severity: 'info' }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // FOLLOW-UP BEHAVIOR (Runtime owns - NOT GENERATED)
     // ConversationEngine decides these based on context + bookingIntent
     // ════════════════════════════════════════════════════════════════════════════
-    followUpMode:         { ownership: 'runtime',  purpose: 'runtime',        description: 'Runtime decides: NONE/ASK_IF_BOOK based on context' },
-    followUpQuestionText: { ownership: 'runtime',  purpose: 'runtime',        description: 'Runtime decides follow-up text based on booking flow' },
-    followUpFunnel:       { ownership: 'runtime',  purpose: 'future',         description: 'Re-engagement prompt (Runtime decides)' },
-    followUpPrompts:      { ownership: 'system',   purpose: 'future',         description: 'Follow-up prompts (future)' },
-    transferTarget:       { ownership: 'admin',    purpose: 'runtime_manual', description: 'Queue/extension for transfer (admin configures)' },
+    followUpMode: { 
+        ownership: 'runtime', purpose: 'runtime', description: 'Runtime decides: NONE/ASK_IF_BOOK based on context',
+        audit: { runtimeProofKey: 'followUpMode', allowedValues: ['NONE', 'ASK_IF_BOOK', 'ASK_FOLLOWUP_QUESTION', 'TRANSFER'], severity: 'high' }
+    },
+    followUpQuestionText: { 
+        ownership: 'runtime', purpose: 'runtime', description: 'Runtime decides follow-up text based on booking flow',
+        audit: { runtimeProofKey: 'followUpQuestionText', severity: 'info' }
+    },
+    followUpFunnel: { 
+        ownership: 'runtime', purpose: 'future', description: 'Re-engagement prompt (Runtime decides)',
+        audit: { runtimeProofKey: 'followUpFunnel', severity: 'info' }
+    },
+    followUpPrompts: { ownership: 'system', purpose: 'future', description: 'Follow-up prompts (future)' },
+    transferTarget: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'Queue/extension for transfer (admin configures)',
+        audit: { adminConfigKey: 'frontDesk.transferTarget', severity: 'warn' }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // ACTION TYPE (Runtime owns - NOT GENERATED)
-    // ConversationEngine decides based on confidence, booking flow, etc.
     // ════════════════════════════════════════════════════════════════════════════
-    actionType:       { ownership: 'runtime',  purpose: 'runtime',        description: 'Runtime decides: REPLY_ONLY/REQUIRE_BOOKING based on context' },
-    handoffPolicy:    { ownership: 'runtime',  purpose: 'runtime',        description: 'Runtime decides when to escalate to human' },
-    flowId:           { ownership: 'admin',    purpose: 'runtime_manual', description: 'Dynamic Flow to execute (admin configures)' },
-    requiredSlots:    { ownership: 'admin',    purpose: 'runtime_manual', description: 'Slots to collect for booking (admin configures)' },
-    stopRouting:      { ownership: 'admin',    purpose: 'runtime_manual', description: 'Stop routing flag (admin configures)' },
+    actionType: { 
+        ownership: 'runtime', purpose: 'runtime', description: 'Runtime decides: REPLY_ONLY/REQUIRE_BOOKING based on context',
+        audit: { runtimeProofKey: 'actionType', allowedValues: ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER'], severity: 'high' }
+    },
+    handoffPolicy: { 
+        ownership: 'runtime', purpose: 'runtime', description: 'Runtime decides when to escalate to human',
+        audit: { runtimeProofKey: 'handoffPolicy', allowedValues: ['never', 'low_confidence', 'always_on_keyword', 'emergency_only'], severity: 'high' }
+    },
+    flowId: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'Dynamic Flow to execute (admin configures)',
+        audit: { adminConfigKey: 'dynamicFlows', severity: 'info' }
+    },
+    requiredSlots: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'Slots to collect for booking (admin configures)',
+        audit: { adminConfigKey: 'frontDesk.bookingSlots', severity: 'warn' }
+    },
+    stopRouting: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'Stop routing flag (admin configures)',
+        audit: { adminConfigKey: 'routing.stopRouting', severity: 'info' }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // TIMING & SILENCE (Admin owns - INFRASTRUCTURE)
-    // Global policies, not per-scenario AI decisions
     // ════════════════════════════════════════════════════════════════════════════
-    cooldownSeconds:  { ownership: 'admin',    purpose: 'runtime',        description: 'Prevents scenario from firing again within N seconds' },
-    timedFollowUp:    { ownership: 'admin',    purpose: 'runtime_manual', description: 'Idle timer triggers follow-up (admin configures)' },
-    silencePolicy:    { ownership: 'admin',    purpose: 'runtime_manual', description: 'Silence handling policy (admin configures)' },
+    cooldownSeconds: { 
+        ownership: 'admin', purpose: 'runtime', description: 'Prevents scenario from firing again within N seconds',
+        audit: { adminConfigKey: 'scenarios.cooldownSeconds', severity: 'info' }
+    },
+    timedFollowUp: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'Idle timer triggers follow-up (admin configures)',
+        audit: { adminConfigKey: 'frontDesk.timedFollowUp', checks: ['delayRange:6,15'], severity: 'warn' }
+    },
+    silencePolicy: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'Silence handling policy (admin configures)',
+        audit: { adminConfigKey: 'frontDesk.silencePolicy', checks: ['hasMaxConsecutive', 'hasFinalWarning'], severity: 'high' }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // ACTION HOOKS (Admin owns - INFRASTRUCTURE)
     // ════════════════════════════════════════════════════════════════════════════
-    actionHooks:      { ownership: 'admin',    purpose: 'runtime_manual', description: 'Hooks executed after scenario match (admin configures)' },
-    entityValidation: { ownership: 'admin',    purpose: 'future',         description: 'Validation rules per entity (admin configures)' },
-    dynamicVariables: { ownership: 'admin',    purpose: 'runtime',        description: 'Variable fallbacks when entity missing (admin configures)' },
+    actionHooks: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'Hooks executed after scenario match (admin configures)',
+        audit: { adminConfigKey: 'actionHooks', severity: 'info' }
+    },
+    entityValidation: { 
+        ownership: 'admin', purpose: 'future', description: 'Validation rules per entity (admin configures)',
+        audit: { adminConfigKey: 'entityValidation', severity: 'info' }
+    },
+    dynamicVariables: { 
+        ownership: 'admin', purpose: 'runtime', description: 'Variable fallbacks when entity missing (admin configures)',
+        audit: { adminConfigKey: 'placeholders', severity: 'info' }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // VOICE & TTS (Admin owns - INFRASTRUCTURE)
     // ════════════════════════════════════════════════════════════════════════════
-    ttsOverride:      { ownership: 'admin',    purpose: 'runtime_manual', description: 'Scenario TTS overrides (admin configures)' },
-    toneLevel:        { ownership: 'system',   purpose: 'system',         description: 'DEPRECATED - use behavior instead' },
+    ttsOverride: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'Scenario TTS overrides (admin configures)',
+        audit: { adminConfigKey: 'tts.overrides', severity: 'info' }
+    },
+    toneLevel: { ownership: 'system', purpose: 'system', description: 'DEPRECATED - use behavior instead' },
     
     // ════════════════════════════════════════════════════════════════════════════
     // STATE MACHINE (Admin/System owns)
     // ════════════════════════════════════════════════════════════════════════════
-    preconditions:    { ownership: 'system',   purpose: 'system',         description: 'Conditions for scenario to match (auto-managed)' },
-    effects:          { ownership: 'admin',    purpose: 'runtime_manual', description: 'State changes after scenario execution (admin configures)' },
+    preconditions: { ownership: 'system', purpose: 'system', description: 'Conditions for scenario to match (auto-managed)' },
+    effects: { 
+        ownership: 'admin', purpose: 'runtime_manual', description: 'State changes after scenario execution (admin configures)',
+        audit: { adminConfigKey: 'effects', severity: 'info' }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // AI INTELLIGENCE (System owns - AUTO-GENERATED)
     // ════════════════════════════════════════════════════════════════════════════
-    qnaPairs:         { ownership: 'system',   purpose: 'system',         description: 'Training data for semantic matching (auto-generated)' },
-    testPhrases:      { ownership: 'system',   purpose: 'system',         description: 'Validation test cases' },
-    examples:         { ownership: 'system',   purpose: 'system',         description: 'Sample conversations for admin' },
-    escalationFlags:  { ownership: 'system',   purpose: 'system',         description: 'Triggers for human handoff' },
+    qnaPairs: { ownership: 'system', purpose: 'system', description: 'Training data for semantic matching (auto-generated)' },
+    testPhrases: { ownership: 'system', purpose: 'system', description: 'Validation test cases' },
+    examples: { ownership: 'system', purpose: 'system', description: 'Sample conversations for admin' },
+    escalationFlags: { ownership: 'system', purpose: 'system', description: 'Triggers for human handoff' },
     
     // ════════════════════════════════════════════════════════════════════════════
     // MULTILINGUAL (System owns)
     // ════════════════════════════════════════════════════════════════════════════
-    language:         { ownership: 'system',   purpose: 'system',         description: 'auto/en/es/fr language setting' }
+    language: { ownership: 'system', purpose: 'system', description: 'auto/en/es/fr language setting' }
 };
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -905,6 +1018,56 @@ function validateSettingImplementation(settingName) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+// UNIFIED SEVERITY REDUCER (Used by both Wiring and Audit)
+// ════════════════════════════════════════════════════════════════════════════════
+// Single algorithm ensures Wiring and Audit can't disagree on status
+// ════════════════════════════════════════════════════════════════════════════════
+
+const SEVERITY_ORDER = { critical: 0, high: 1, warn: 2, info: 3 };
+
+/**
+ * Compute overall status from a list of check results
+ * @param {Array} checks - Array of { status: 'pass'|'warn'|'fail', severity: 'critical'|'high'|'warn'|'info' }
+ * @param {Object} options - { hasRuntimeData: boolean }
+ * @returns {{ status: 'GREEN'|'YELLOW'|'RED'|'GRAY', pass: number, warn: number, fail: number }}
+ */
+function computeAuditStatus(checks, options = {}) {
+    const { hasRuntimeData = true } = options;
+    
+    const results = {
+        pass: checks.filter(c => c.status === 'pass').length,
+        warn: checks.filter(c => c.status === 'warn').length,
+        fail: checks.filter(c => c.status === 'fail').length,
+        total: checks.length
+    };
+    
+    // No data for runtime = GRAY (unproven, not fail)
+    if (!hasRuntimeData && results.total === 0) {
+        return { status: 'GRAY', ...results };
+    }
+    
+    // Any critical/high fail = RED
+    const criticalFails = checks.filter(c => c.status === 'fail' && (c.severity === 'critical' || c.severity === 'high'));
+    if (criticalFails.length > 0) {
+        return { status: 'RED', ...results };
+    }
+    
+    // Any warn-severity fail = YELLOW
+    const warnFails = checks.filter(c => c.status === 'fail' && c.severity === 'warn');
+    if (warnFails.length > 0) {
+        return { status: 'YELLOW', ...results };
+    }
+    
+    // Any warnings = YELLOW
+    if (results.warn > 0) {
+        return { status: 'YELLOW', ...results };
+    }
+    
+    // All pass = GREEN
+    return { status: 'GREEN', ...results };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 // OWNERSHIP ENFORCEMENT (Guards against drift)
 // ════════════════════════════════════════════════════════════════════════════════
 
@@ -1109,5 +1272,9 @@ module.exports = {
     getAdminFields,
     enforceContentOwnership,
     exportContentOnly,
-    importContentOnly
+    importContentOnly,
+    
+    // 🎯 UNIFIED SEVERITY - Same algorithm for Wiring and Audit
+    SEVERITY_ORDER,
+    computeAuditStatus
 };

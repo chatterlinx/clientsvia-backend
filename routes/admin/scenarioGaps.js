@@ -36,6 +36,7 @@ const BlackBoxRecording = require('../../models/BlackBoxRecording');
 const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const { BOOKING_PHRASES, SCENARIO_SETTINGS_REGISTRY, getSettingsCount } = require('../../services/scenarioAudit/constants');
+const { runUnifiedAudit } = require('../../services/scenarioAudit/unifiedAuditEngine');
 
 // Services
 const openaiClient = require('../../config/openai');
@@ -1949,6 +1950,45 @@ router.post('/:companyId/gaps/dismiss', async (req, res) => {
 // ============================================================================
 // TEMPLATE AUDIT ROUTES - Scenario Quality Assurance
 // ============================================================================
+
+// ════════════════════════════════════════════════════════════════════════════════
+// UNIFIED AUDIT - Three layers, one registry
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/audit
+ * 
+ * Unified audit with three layers:
+ * - Content Audit: validates ownership=content fields in scenarios
+ * - Runtime Audit: validates ownership=runtime fields via blackbox proof
+ * - Admin Audit: validates ownership=admin fields in company config
+ * 
+ * Query params:
+ * - mode: 'content' | 'runtime' | 'admin' | 'all' (default: 'all')
+ * - hours: time window for runtime proof (default: 24)
+ */
+router.get('/:companyId/audit', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { mode = 'all', hours = '24' } = req.query;
+        
+        logger.info(`[UNIFIED AUDIT] Running ${mode} audit for ${companyId}`);
+        
+        const result = await runUnifiedAudit(companyId, {
+            mode,
+            timeWindowHours: parseInt(hours)
+        });
+        
+        res.json(result);
+        
+    } catch (error) {
+        logger.error('[UNIFIED AUDIT] Error:', { error: error.message, stack: error.stack });
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
 
 /**
  * GET /:companyId/audit/rules
