@@ -91,7 +91,24 @@ class LLMDiscoveryEngine {
             const urgencyKeywords = template?.urgencyKeywords || [];
             const synonymMap = template?.synonymMap || template?.nlpConfig?.synonyms || {};
             
-            const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords, synonymMap);
+            // 🚀 Feature flag: Use compiled indexes for fast lookup
+            // Can be overridden per-company via aiAgentSettings.performance.useFastLookup
+            const useFastLookup = template?.performance?.useFastLookup !== false;
+            
+            const selector = new HybridScenarioSelector(fillerWords, urgencyKeywords, synonymMap, {
+                useFastLookup
+            });
+            
+            // 🚀 CRITICAL: Wire compiled pool for O(1) matching
+            // This is what makes the fast lookup actually work in production
+            if (poolResult?.compiled && useFastLookup) {
+                selector.setCompiledPool(poolResult.compiled);
+                logger.debug('[LLM DISCOVERY] ⚡ Compiled pool wired to selector', {
+                    specCount: poolResult.compiled.specs?.length || 0,
+                    indexSize: poolResult.compiled.stats?.indexSize || 0,
+                    compileTimeMs: poolResult.compiled.stats?.compileTimeMs || 0
+                });
+            }
             
             // Step 4: Find relevant scenarios (selector API is selectScenario())
             // NOTE: For LLM tool context we can include lower-confidence candidates; LLM decides relevance.
@@ -210,13 +227,54 @@ class LLMDiscoveryEngine {
                 triggers: matchResult.scenario.triggers || []
             } : null;
             
+            // ═══════════════════════════════════════════════════════════════════
+            // 🎯 MATCHING TRACE - For observability and proving fast lookup works
+            // ═══════════════════════════════════════════════════════════════════
+            const matchingTrace = {
+                // Fast lookup status
+                fastLookupAvailable: matchResult?.trace?.fastLookup?.available ?? false,
+                fastLookupMethod: matchResult?.trace?.fastLookup?.method || null,
+                usedFastCandidates: matchResult?.trace?.usedFastCandidates ?? false,
+                
+                // Match details
+                matchMethod: matchResult?.matchMethod || matchResult?.trace?.matchMethod || 'unknown',
+                scenarioIdMatched: matchResult?.scenario?.scenarioId || null,
+                scenarioNameMatched: matchResult?.scenario?.name || null,
+                matchConfidence: matchResult?.confidence ?? 0,
+                
+                // Candidate stats (proves optimization)
+                candidateCount: matchResult?.trace?.fastLookup?.candidateCount ?? matchResult?.trace?.scenariosEvaluated ?? 0,
+                totalPoolSize: enabledScenarios.length,
+                candidateReduction: matchResult?.trace?.usedFastCandidates 
+                    ? `${((1 - (matchResult.trace.scenariosEvaluated / enabledScenarios.length)) * 100).toFixed(1)}%`
+                    : '0%',
+                
+                // Applied settings (proves utilization)
+                appliedSettings: matchResult?.appliedSettings || matchResult?.trace?.appliedSettings || [],
+                
+                // Latency breakdown
+                timingMs: {
+                    fastLookup: matchResult?.trace?.timingMs?.fastLookup ?? 0,
+                    normalize: matchResult?.trace?.timingMs?.normalize ?? 0,
+                    filter: matchResult?.trace?.timingMs?.filter ?? 0,
+                    scoring: matchResult?.trace?.timingMs?.scoring ?? 0,
+                    selection: matchResult?.trace?.timingMs?.selection ?? 0,
+                    total: matchResult?.trace?.timingMs?.total ?? 0
+                }
+            };
+            
             logger.info('[LLM DISCOVERY] ✅ Scenarios retrieved', {
                 count: scenarioSummaries.length,
                 retrievalTimeMs,
                 topScenario: scenarioSummaries[0]?.title,
                 // V2: Log match info
                 topMatchConfidence: topMatch?.confidence ?? 0,
-                topMatchName: topMatch?.name || null
+                topMatchName: topMatch?.name || null,
+                // 🚀 Fast lookup proof
+                matchMethod: matchingTrace.matchMethod,
+                fastLookupUsed: matchingTrace.usedFastCandidates,
+                candidateReduction: matchingTrace.candidateReduction,
+                matchTimeMs: matchingTrace.timingMs.total
             });
             
             return {
@@ -230,7 +288,11 @@ class LLMDiscoveryEngine {
                 // and use topMatch.quickReplies/fullReplies directly without LLM
                 // ═══════════════════════════════════════════════════════════════
                 topMatch,
-                topMatchConfidence: topMatch?.confidence ?? 0
+                topMatchConfidence: topMatch?.confidence ?? 0,
+                // ═══════════════════════════════════════════════════════════════
+                // 🚀 MATCHING TRACE - For BlackBoxLogger and production observability
+                // ═══════════════════════════════════════════════════════════════
+                matchingTrace
             };
             
         } catch (error) {

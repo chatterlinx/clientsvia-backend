@@ -9765,6 +9765,52 @@ async function processTurn({
                     }))
                     : []
             });
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // 🎯 BLACK BOX: MATCHING_PIPELINE - Prove fast lookup is working
+            // ═══════════════════════════════════════════════════════════════════
+            // This is the critical trace that proves:
+            // 1. Fast lookup is available and used
+            // 2. Candidate reduction is happening
+            // 3. appliedSettings are being tracked
+            // 4. Latency breakdown is recorded
+            // ═══════════════════════════════════════════════════════════════════
+            if (scenarioRetrieval.matchingTrace) {
+                const trace = scenarioRetrieval.matchingTrace;
+                await BlackBoxLogger.logEvent({
+                    callId: session._id?.toString(),
+                    companyId,
+                    type: 'MATCHING_PIPELINE',
+                    turn: session.metrics?.totalTurns || 0,
+                    data: {
+                        // Fast lookup proof
+                        fastLookupAvailable: trace.fastLookupAvailable,
+                        fastLookupMethod: trace.fastLookupMethod,
+                        usedFastCandidates: trace.usedFastCandidates,
+                        
+                        // Match details
+                        matchMethod: trace.matchMethod,
+                        scenarioIdMatched: trace.scenarioIdMatched,
+                        scenarioNameMatched: trace.scenarioNameMatched,
+                        matchConfidence: trace.matchConfidence,
+                        
+                        // Performance proof
+                        candidateCount: trace.candidateCount,
+                        totalPoolSize: trace.totalPoolSize,
+                        candidateReduction: trace.candidateReduction,
+                        
+                        // Utilization proof
+                        appliedSettings: trace.appliedSettings,
+                        appliedSettingsCount: trace.appliedSettings?.length || 0,
+                        
+                        // Latency breakdown
+                        timingMs: trace.timingMs,
+                        matchTimeMs: trace.timingMs?.total || 0
+                    }
+                }).catch(err => {
+                    logger.warn('[CONVERSATION ENGINE] Failed to log MATCHING_PIPELINE event', { error: err.message });
+                });
+            }
 
             // ═══════════════════════════════════════════════════════════════════
             // 🆕 DETERMINISTIC ISSUE CAPTURE (from scenario tools)
