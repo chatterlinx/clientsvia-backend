@@ -6,15 +6,68 @@
  * PURPOSE: Enforce multi-tenant isolation at the middleware level
  * CRITICAL: Prevents Company A from accessing Company B's data
  * 
+ * VALIDATION ORDER:
+ * 1. companyId format (MongoDB ObjectId) → 400 if invalid
+ * 2. Company exists in database → 404 if not found
+ * 3. User has access to company → 403 if denied
+ * 
  * USAGE:
  * ```javascript
  * router.use('/:companyId/*', authMiddleware, validateCompanyAccess);
+ * // Or for format validation only:
+ * router.use('/:companyId/*', validateCompanyIdFormat);
  * ```
  * 
  * ============================================================================
  */
 
+const mongoose = require('mongoose');
 const logger = require('../utils/logger');
+
+/**
+ * Validate companyId is a valid MongoDB ObjectId format
+ * Returns 400 if invalid format
+ * 
+ * Use this for early validation before any DB calls
+ */
+function validateCompanyIdFormat(req, res, next) {
+    const companyId = req.params.companyId || req.params.id;
+    
+    if (!companyId) {
+        logger.warn('[COMPANY ID] Missing companyId in request', {
+            path: req.path,
+            method: req.method,
+            ip: req.ip
+        });
+        return res.status(400).json({
+            error: 'Bad Request',
+            message: 'companyId parameter is required',
+            code: 'COMPANY_ID_REQUIRED'
+        });
+    }
+    
+    if (!mongoose.Types.ObjectId.isValid(companyId)) {
+        logger.warn('[COMPANY ID] Invalid companyId format', {
+            companyId,
+            path: req.path,
+            method: req.method,
+            ip: req.ip
+        });
+        return res.status(400).json({
+            error: 'Bad Request',
+            message: 'Invalid companyId format',
+            code: 'INVALID_COMPANY_ID_FORMAT',
+            providedId: companyId
+        });
+    }
+    
+    // Normalize: ensure companyId is available as req.params.companyId
+    if (!req.params.companyId && req.params.id) {
+        req.params.companyId = req.params.id;
+    }
+    
+    next();
+}
 
 /**
  * Validate user has access to the requested company
@@ -181,6 +234,7 @@ function auditCompanyAccess(req, res, next) {
 
 module.exports = {
     validateCompanyAccess,
+    validateCompanyIdFormat,  // NEW: Early format validation (400 if invalid)
     requireCompanyId,
     auditCompanyAccess
 };

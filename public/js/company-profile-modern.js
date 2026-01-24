@@ -227,6 +227,84 @@ class CompanyProfileManager {
     }
 
     /* ========================================================================
+       VALIDATION HELPERS
+       ======================================================================== */
+    
+    /**
+     * Check if a string is a valid MongoDB ObjectId format
+     */
+    isValidObjectId(id) {
+        if (!id) return false;
+        // MongoDB ObjectId is 24 hex characters
+        return /^[0-9a-fA-F]{24}$/.test(id);
+    }
+    
+    /**
+     * Show a visible error when companyId is missing or invalid
+     * Prevents the app from loading with bad data
+     */
+    showCompanyIdError(message) {
+        // Create error overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'companyid-error-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 99999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        overlay.innerHTML = `
+            <div style="
+                background: #1a1a2e;
+                border: 2px solid #e74c3c;
+                border-radius: 12px;
+                padding: 40px;
+                max-width: 500px;
+                text-align: center;
+                color: white;
+            ">
+                <div style="font-size: 48px; margin-bottom: 20px;">🚫</div>
+                <h2 style="color: #e74c3c; margin-bottom: 15px;">Company ID Error</h2>
+                <p style="color: #ccc; margin-bottom: 25px;">${message}</p>
+                <p style="color: #888; font-size: 13px; margin-bottom: 20px;">
+                    Expected URL format:<br>
+                    <code style="background: #333; padding: 4px 8px; border-radius: 4px;">
+                        /company-profile.html?companyId=abc123...
+                    </code>
+                </p>
+                <button onclick="window.history.back()" style="
+                    background: #3498db;
+                    color: white;
+                    border: none;
+                    padding: 12px 30px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 14px;
+                ">Go Back</button>
+                <button onclick="window.location.href='/directory.html'" style="
+                    background: #555;
+                    color: white;
+                    border: none;
+                    padding: 12px 30px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 14px;
+                    margin-left: 10px;
+                ">Company Directory</button>
+            </div>
+        `;
+        
+        document.body.appendChild(overlay);
+    }
+
+    /* ========================================================================
        INITIALIZATION & SETUP
        ======================================================================== */
 
@@ -241,8 +319,14 @@ class CompanyProfileManager {
             
             this.initialized = true;
             
-            // Extract company ID from URL
-            this.extractCompanyId();
+            // Extract company ID from URL (returns false if invalid/missing in production)
+            const extractionResult = this.extractCompanyId();
+            
+            // If extraction failed (returned false), error UI is already shown - stop init
+            if (extractionResult === false) {
+                console.error('[CompanyProfile] ❌ Init aborted - companyId extraction failed');
+                return;
+            }
             
             if (!this.companyId) {
                 throw new Error('No company ID found in URL');
@@ -272,35 +356,78 @@ class CompanyProfileManager {
      * Extract company ID from URL parameters
      */
     extractCompanyId() {
-        // First check if company ID was already set by HTML initialization
+        // ════════════════════════════════════════════════════════════════════
+        // COMPANY ID EXTRACTION - Single canonical param with legacy support
+        // ════════════════════════════════════════════════════════════════════
+        // Priority:
+        // 1. window.companyId (set by HTML)
+        // 2. URL param: ?companyId= (canonical)
+        // 3. URL param: ?id= (legacy support)
+        // 4. localStorage (for navigation within app)
+        // 5. FAIL with visible error (no test123 fallback in production)
+        // ════════════════════════════════════════════════════════════════════
+        
+        let resolvedFrom = null;
+        
+        // 1. HTML initialization
         if (window.companyId) {
             this.companyId = window.companyId;
+            resolvedFrom = 'window.companyId';
         } else {
-            // Fallback: extract from URL directly
-            // Support both ?id= and ?companyId= for compatibility
+            // 2 & 3. URL params (canonical + legacy)
             const urlParams = new URLSearchParams(window.location.search);
-            this.companyId = urlParams.get('id') || urlParams.get('companyId');
+            const urlCompanyId = urlParams.get('companyId') || urlParams.get('id');
             
-            if (this.companyId) {
+            if (urlCompanyId) {
+                this.companyId = urlCompanyId;
+                resolvedFrom = urlParams.get('companyId') ? 'URL ?companyId=' : 'URL ?id= (legacy)';
                 localStorage.setItem('lastCompanyId', this.companyId);
             }
         }
         
+        // 4. Fallback to localStorage
         if (!this.companyId) {
             const savedId = localStorage.getItem('lastCompanyId');
-            if (savedId && savedId !== 'test123') {
+            if (savedId && savedId !== 'test123' && this.isValidObjectId(savedId)) {
                 this.companyId = savedId;
-                const newUrl = `${window.location.pathname}?id=${this.companyId}`;
+                resolvedFrom = 'localStorage';
+                const newUrl = `${window.location.pathname}?companyId=${this.companyId}`;
                 window.history.replaceState({}, '', newUrl);
-            } else {
-                this.companyId = 'test123';
             }
         }
+        
+        // 5. FAIL with visible error - NO test123 fallback in production
+        if (!this.companyId) {
+            const isProduction = window.location.hostname !== 'localhost';
+            if (isProduction) {
+                this.showCompanyIdError('Missing company ID. Please use a valid URL with ?companyId=<id>');
+                console.error('[CompanyProfile] ❌ No companyId found. Production mode - no fallback.');
+                return false;
+            } else {
+                // Development only: use test123 for local testing
+                this.companyId = 'test123';
+                resolvedFrom = 'DEV_FALLBACK (test123)';
+                console.warn('[CompanyProfile] ⚠️ Using test123 fallback (dev mode only)');
+            }
+        }
+        
+        // Validate format
+        if (!this.isValidObjectId(this.companyId) && this.companyId !== 'test123') {
+            this.showCompanyIdError(`Invalid company ID format: ${this.companyId}`);
+            console.error('[CompanyProfile] ❌ Invalid companyId format:', this.companyId);
+            return false;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // DIAGNOSTIC LOG - Makes issues instantly diagnosable
+        // ════════════════════════════════════════════════════════════════════
+        console.log(`[CompanyProfile] ✅ resolvedCompanyId=${this.companyId} (from: ${resolvedFrom})`);
         
         // Set global references for legacy compatibility
         window.currentCompanyId = this.companyId;
         window.companyId = this.companyId;
         
+        return true;  // Success
     }
 
     /* ========================================================================

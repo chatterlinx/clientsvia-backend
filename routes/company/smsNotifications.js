@@ -18,12 +18,14 @@
 
 const express = require('express');
 const router = express.Router({ mergeParams: true });
+const mongoose = require('mongoose');
 const SMSNotificationService = require('../../services/SMSNotificationService');
 const v2Company = require('../../models/v2Company');
 const ScheduledSMS = require('../../models/ScheduledSMS');
 const smsClient = require('../../clients/smsClient');
 const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
+const { validateCompanyIdFormat } = require('../../middleware/companyAccess');
 const logger = require('../../utils/logger');
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -32,6 +34,9 @@ const logger = require('../../utils/logger');
 
 router.use(authenticateJWT);
 
+// Validate companyId format early (returns 400 if invalid format)
+router.use(validateCompanyIdFormat);
+
 // ════════════════════════════════════════════════════════════════════════════════
 // STATUS & CONFIGURATION
 // ════════════════════════════════════════════════════════════════════════════════
@@ -39,25 +44,52 @@ router.use(authenticateJWT);
 /**
  * GET /api/company/:companyId/sms-notifications/status
  * Get SMS notification configuration status
+ * 
+ * SAFE RESPONSES:
+ * - 400: Invalid companyId format (handled by middleware)
+ * - 404: Company not found → returns safe { enabled: false, reason: 'company_not_found' }
+ * - 200: Returns config status (even if not configured)
  */
 router.get('/status', requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
     try {
         const { companyId } = req.params;
         
+        logger.debug('[SMS NOTIFICATIONS API] Status check', { companyId });
+        
         const company = await v2Company.findById(companyId)
             .select('smsNotifications companyName twilioConfig')
             .lean();
         
+        // SAFE RESPONSE: Company not found
         if (!company) {
-            return res.status(404).json({ success: false, error: 'Company not found' });
+            logger.warn('[SMS NOTIFICATIONS API] Company not found', { companyId });
+            return res.status(200).json({ 
+                success: true,
+                enabled: false, 
+                reason: 'company_not_found',
+                companyId
+            });
         }
         
         const config = company.smsNotifications || {};
         const hasTwilioCredentials = !!(company.twilioConfig?.accountSid && company.twilioConfig?.authToken);
         
+        // SAFE RESPONSE: Not configured
+        if (!config || Object.keys(config).length === 0) {
+            return res.json({
+                success: true,
+                enabled: false,
+                reason: 'not_configured',
+                companyId,
+                hasTwilioCredentials
+            });
+        }
+        
         res.json({
             success: true,
             enabled: config.enabled || false,
+            reason: config.enabled ? 'configured' : 'disabled',
+            companyId,
             hasTwilioCredentials,
             confirmation: {
                 enabled: config.confirmation?.enabled ?? true,
@@ -89,7 +121,14 @@ router.get('/status', requirePermission(PERMISSIONS.CONFIG_READ), async (req, re
             companyId: req.params.companyId,
             error: err.message 
         });
-        res.status(500).json({ success: false, error: err.message });
+        // SAFE RESPONSE: Error - still return 200 with error info
+        res.status(200).json({ 
+            success: false, 
+            enabled: false,
+            reason: 'error',
+            error: err.message,
+            companyId: req.params.companyId
+        });
     }
 });
 
