@@ -27,6 +27,7 @@ const logger = require('../utils/logger');
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const { computeEffectiveConfigVersion } = require('../utils/effectiveConfigVersion');
+const { compileScenarioPool, fastCandidateLookup } = require('./ScenarioRuntimeCompiler');
 
 class ScenarioPoolService {
     // ============================================================
@@ -225,7 +226,27 @@ class ScenarioPoolService {
             logger.info(`🎯 [SCENARIO POOL] Scenario status: ${enabledCount} enabled, ${disabledCount} disabled (${Date.now() - startTime}ms)`);
             
             // ========================================================
-            // 🔧 PHASE 4: CACHE RESULT IN REDIS
+            // 🚀 PHASE 4.5: COMPILE SCENARIOS INTO RUNTIME SPECS
+            // ========================================================
+            // This is the "compilation" step - transforms raw JSON into
+            // runtime-ready specs with:
+            // - Pre-normalized triggers
+            // - Trigger index for O(1) lookup
+            // - "needs" flags for tiered settings budget
+            // ========================================================
+            const compileStart = Date.now();
+            const compiled = compileScenarioPool(
+                scenarioPool.filter(s => s.isEnabledForCompany),
+                { templateId: templatesUsed[0] || 'multi' }
+            );
+            
+            logger.info(`⚡ [SCENARIO POOL] Compiled ${compiled.specs.length} scenarios (${Date.now() - compileStart}ms)`, {
+                indexSize: compiled.stats.indexSize,
+                totalTriggers: compiled.stats.totalTriggers
+            });
+            
+            // ========================================================
+            // 🔧 PHASE 5: CACHE RESULT IN REDIS
             // ========================================================
             const effectiveConfigVersion = computeEffectiveConfigVersion({
                 companyId,
@@ -234,16 +255,33 @@ class ScenarioPoolService {
                 scenarioControls: company.aiAgentSettings?.scenarioControls || [],
                 templatesMeta,
                 providerVersions: {
-                    scenarioPoolService: 'ScenarioPoolService:v1',
+                    scenarioPoolService: 'ScenarioPoolService:v2-compiled',
                     hybridScenarioSelector: 'HybridScenarioSelector:v1'
                 }
             });
 
+            // ========================================================
+            // RESULT OBJECT
+            // ========================================================
+            // scenarios: Raw scenarios (backward compatibility)
+            // compiled: Runtime specs + indexes (new fast path)
+            // ========================================================
             const result = {
+                // Legacy: raw scenarios (keep for backward compatibility)
                 scenarios: scenarioPool,
                 templatesUsed,
                 templatesMeta,
-                effectiveConfigVersion
+                effectiveConfigVersion,
+                
+                // 🚀 NEW: Compiled runtime specs + indexes
+                compiled: {
+                    specs: compiled.specs,
+                    // Note: Map objects can't be JSON serialized, so we convert to array
+                    // On cache load, we reconstruct the Maps
+                    triggerIndexEntries: Array.from(compiled.triggerIndex.entries()),
+                    exactIndexEntries: Array.from(compiled.exactIndex.entries()),
+                    stats: compiled.stats
+                }
             };
             
             try {
@@ -859,6 +897,76 @@ class ScenarioPoolService {
             templatesMeta: poolResult.templatesMeta,
             alignment: alignmentData.alignment,
             message: `Loaded ${enabledScenarios.length} scenarios (same as LLM agent sees)`
+        };
+    }
+}
+
+    // ============================================================================
+    // 🚀 FAST SCENARIO LOOKUP - Uses compiled indexes
+    // ============================================================================
+    
+    /**
+     * Fast scenario lookup using pre-compiled indexes
+     * 
+     * This is the "fast path" for scenario matching:
+     * - O(1) exact match lookup
+     * - O(k) word-based candidate filtering (k = words in input)
+     * - Returns candidates for scoring, not full pool scan
+     * 
+     * @param {Object} poolResult - Result from getScenarioPoolForCompany
+     * @param {string} userInput - Raw user input
+     * @returns {Object} { exactMatch, candidates, method, lookupTimeMs }
+     */
+    static fastScenarioLookup(poolResult, userInput) {
+        const startTime = Date.now();
+        
+        // Check if compiled data exists
+        if (!poolResult?.compiled?.triggerIndexEntries) {
+            logger.warn('[SCENARIO POOL] No compiled indexes available, falling back to full scan');
+            return {
+                exactMatch: null,
+                candidates: poolResult?.compiled?.specs || poolResult?.scenarios || [],
+                method: 'full_scan',
+                lookupTimeMs: Date.now() - startTime
+            };
+        }
+        
+        // Reconstruct Maps from cached array entries
+        const triggerIndex = new Map(poolResult.compiled.triggerIndexEntries);
+        const exactIndex = new Map(poolResult.compiled.exactIndexEntries);
+        
+        // Use the fast lookup
+        const result = fastCandidateLookup(userInput, triggerIndex, exactIndex);
+        result.lookupTimeMs = Date.now() - startTime;
+        
+        logger.debug(`⚡ [FAST LOOKUP] ${result.method}: ${result.candidates.length} candidates in ${result.lookupTimeMs}ms`);
+        
+        return result;
+    }
+    
+    /**
+     * Get compiled specs from pool result
+     * 
+     * @param {Object} poolResult - Result from getScenarioPoolForCompany
+     * @returns {Array} Compiled scenario specs
+     */
+    static getCompiledSpecs(poolResult) {
+        return poolResult?.compiled?.specs || [];
+    }
+    
+    /**
+     * Get compilation stats
+     * 
+     * @param {Object} poolResult - Result from getScenarioPoolForCompany
+     * @returns {Object} Compilation statistics
+     */
+    static getCompilationStats(poolResult) {
+        return poolResult?.compiled?.stats || {
+            totalScenarios: poolResult?.scenarios?.length || 0,
+            activeScenarios: 0,
+            totalTriggers: 0,
+            indexSize: 0,
+            compileTimeMs: 0
         };
     }
 }
