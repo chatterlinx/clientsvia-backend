@@ -1237,9 +1237,9 @@
                 <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Generated Fields</div>
                     <div style="font-size: 15px; font-weight: 600; color: var(--accent-purple);">
-                        <i class="fas fa-list-check" style="margin-right: 6px;"></i>30 settings
+                        <i class="fas fa-list-check" style="margin-right: 6px;"></i>28 settings
                     </div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Full scenario capacity</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Timers/hooks admin-only</div>
                 </div>
                 
                 <!-- Duplicate Detection -->
@@ -1713,7 +1713,7 @@
                             <div>
                                 <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 2px;">AI-Generable Settings</div>
                                 <div style="font-size: 20px; font-weight: 700; color: #22c55e;">
-                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">30</span>
+                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">28</span>
                                 </div>
                                 <div id="health-missing" style="margin-top: 4px; font-size: 11px; color: var(--text-muted);"></div>
                             </div>
@@ -3173,10 +3173,10 @@
                 quickReplies_noName: Array.isArray(p.quickReplies_noName) ? p.quickReplies_noName : [],
                 fullReplies_noName: Array.isArray(p.fullReplies_noName) ? p.fullReplies_noName : [],
                 
-                // Follow-up behavior
+                // Follow-up behavior (ASK_IF_BOOK only for booking-eligible scenarios)
                 followUpFunnel: p.followUpFunnel || getDefaultFollowUpFunnel(p.scenarioType, p.bookingIntent),
-                followUpMode: p.followUpMode || 'NONE',
-                followUpQuestionText: p.followUpQuestionText || null,
+                followUpMode: getFollowUpModeForScenario(p.scenarioType, p.bookingIntent, p.followUpMode),
+                followUpQuestionText: p.bookingIntent ? (p.followUpQuestionText || "Let's get you on the schedule. What day works?") : null,
                 
                 // Wiring/Actions
                 actionType: p.actionType || 'REPLY_ONLY',
@@ -3185,21 +3185,15 @@
                 // Entity extraction
                 entityCapture: Array.isArray(p.entityCapture) && p.entityCapture.length > 0 
                     ? p.entityCapture 
-                    : ['name'],
+                    : ['name', 'issue'],
                 
                 // Admin notes
                 notes: p.notes || `Created from Scenario Gaps. Gap: "${g.representative || 'Unknown'}"`,
                 
-                // Template variables
-                templateVariables: Array.isArray(p.templateVariables) ? p.templateVariables : ['name=valued customer'],
-                suggestedPlaceholders: Array.isArray(p.suggestedPlaceholders) ? p.suggestedPlaceholders : [],
-                
-                // Advanced settings
-                followUpMessages: Array.isArray(p.followUpMessages) ? p.followUpMessages : [],
+                // Advanced settings (NO timer settings - admin-only)
+                // followUpMessages: REMOVED - admin-only (silence recovery is global policy)
                 cooldownSeconds: typeof p.cooldownSeconds === 'number' ? p.cooldownSeconds : 0,
                 handoffPolicy: p.handoffPolicy || 'low_confidence',
-                actionHooks: Array.isArray(p.actionHooks) ? p.actionHooks : [],
-                entityValidation: p.entityValidation || null,
                 
                 // Channel & Variables
                 channel: p.channel || 'any',
@@ -3273,7 +3267,7 @@
                 { key: 'fullReplies_noName', label: 'Full (no name)', check: () => Array.isArray(scenarioData.fullReplies_noName), getValue: () => scenarioData.fullReplies_noName?.length || 0 },
                 { key: 'replyStrategy', label: 'Reply Strategy', check: () => scenarioData.replyStrategy, getValue: () => scenarioData.replyStrategy },
                 
-                // Follow-Up (4)
+                // Follow-Up (3) - NOTE: followUpMessages removed (admin-only for silence recovery)
                 { key: 'followUpMode', label: 'Follow-Up Mode', check: () => scenarioData.followUpMode, getValue: () => scenarioData.followUpMode },
                 { key: 'followUpFunnel', label: 'Follow-Up Funnel', check: () => scenarioData.followUpFunnel, getValue: () => scenarioData.followUpFunnel || '(auto)' },
                 { key: 'followUpQuestionText', label: 'Follow-Up Text', check: () => {
@@ -3282,13 +3276,11 @@
                     }
                     return true;
                 }, getValue: () => scenarioData.followUpQuestionText || '(not required)' },
-                { key: 'followUpMessages', label: 'Follow-Up Messages', check: () => Array.isArray(scenarioData.followUpMessages), getValue: () => scenarioData.followUpMessages?.length || 0 },
                 
-                // Wiring & Actions (4)
+                // Wiring & Actions (3) - actionHooks removed (admin-only)
                 { key: 'actionType', label: 'Action Type', check: () => scenarioData.actionType, getValue: () => scenarioData.actionType },
                 { key: 'bookingIntent', label: 'Booking Intent', check: () => typeof scenarioData.bookingIntent === 'boolean', getValue: () => scenarioData.bookingIntent ? 'Yes' : 'No' },
                 { key: 'handoffPolicy', label: 'Handoff Policy', check: () => scenarioData.handoffPolicy, getValue: () => scenarioData.handoffPolicy },
-                { key: 'actionHooks', label: 'Action Hooks', check: () => Array.isArray(scenarioData.actionHooks), getValue: () => scenarioData.actionHooks?.length || 0 },
                 
                 // Behavior & Other (4)
                 { key: 'behavior', label: 'AI Behavior', check: () => scenarioData.behavior, getValue: () => scenarioData.behavior },
@@ -3401,6 +3393,27 @@
                 default:
                     return "Anything else I can help with?";
             }
+        }
+        
+        // ========================================
+        // HELPER: Determine Follow-Up Mode based on scenario type
+        // ========================================
+        // ASK_IF_BOOK only for booking-eligible scenarios
+        // This prevents pushy behavior like asking to schedule after a billing question
+        function getFollowUpModeForScenario(scenarioType, bookingIntent, aiSuggestedMode) {
+            // If AI explicitly suggested NONE, respect it
+            if (aiSuggestedMode === 'NONE') return 'NONE';
+            
+            // Booking-eligible scenarios can use ASK_IF_BOOK
+            const bookingEligibleTypes = ['BOOKING', 'EMERGENCY', 'TROUBLESHOOT'];
+            const isBookingEligible = bookingIntent || bookingEligibleTypes.includes(scenarioType);
+            
+            if (isBookingEligible && (aiSuggestedMode === 'ASK_IF_BOOK' || bookingIntent)) {
+                return 'ASK_IF_BOOK';
+            }
+            
+            // Default to NONE for FAQ, BILLING, SMALL_TALK, TRANSFER
+            return 'NONE';
         }
         
         // ========================================
@@ -3524,13 +3537,13 @@ ${(scenarioData.fullReplies_noName || []).map((r, i) => `${i + 1}. "${r}"`).join
 - **Follow-Up Mode:** ${scenarioData.followUpMode || 'NONE'}
 - **Follow-Up Funnel:** ${scenarioData.followUpFunnel || '(auto)'}
 - **Follow-Up Question:** ${scenarioData.followUpQuestionText || '(none)'}
-- **Follow-Up Messages:** ${(scenarioData.followUpMessages || []).length} configured
+- **Note:** Timed silence recovery is a global setting (admin-only)
 
 ### Actions & Wiring
 - **Action Type:** ${scenarioData.actionType || 'REPLY_ONLY'}
 - **Booking Intent:** ${scenarioData.bookingIntent ? 'Yes' : 'No'}
 - **Handoff Policy:** ${scenarioData.handoffPolicy || 'low_confidence'}
-- **Action Hooks:** ${(scenarioData.actionHooks || []).length} configured
+- **Note:** Action hooks and timers are admin-only settings
 
 ### Entity Capture
 ${(scenarioData.entityCapture || []).map(e => `- ${e}`).join('\n') || '- (none)'}
@@ -3577,16 +3590,14 @@ ${(scenarioData.entityCapture || []).map(e => `- ${e}`).join('\n') || '- (none)'
                 Array.isArray(scenarioData.quickReplies_noName),
                 Array.isArray(scenarioData.fullReplies_noName),
                 scenarioData.replyStrategy,
-                // Follow-up (4)
+                // Follow-up (3) - followUpMessages removed (admin-only)
                 scenarioData.followUpMode,
                 scenarioData.followUpFunnel,
                 scenarioData.followUpQuestionText !== undefined,
-                Array.isArray(scenarioData.followUpMessages),
-                // Actions (4)
+                // Actions (3) - actionHooks removed (admin-only)
                 scenarioData.actionType,
                 scenarioData.bookingIntent !== undefined,
                 scenarioData.handoffPolicy,
-                Array.isArray(scenarioData.actionHooks),
                 // Behavior (3)
                 scenarioData.behavior,
                 scenarioData.channel,

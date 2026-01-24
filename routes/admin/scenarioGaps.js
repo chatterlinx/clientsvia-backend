@@ -940,42 +940,18 @@ OUTPUT FORMAT (JSON only, no markdown):
     
     "followUpFunnel": "We'll get a technician out. Morning or afternoon?",
     
-    "followUpMode": "ASK_IF_BOOK",
-    "followUpQuestionText": "Let's get you on the schedule. What day works?",
+    "followUpMode": "NONE",
+    "followUpQuestionText": null,
     
-    "actionType": "REPLY_ONLY|REQUIRE_BOOKING|TRANSFER",
+    "actionType": "REPLY_ONLY",
     "bookingIntent": false,
     
-    "entityCapture": ["name", "phone", "issue"],
-    
-    "templateVariables": [
-        "name=valued customer",
-        "technician=our team member", 
-        "time=as soon as possible",
-        "location=your area"
-    ],
+    "entityCapture": ["name", "issue"],
     
     "notes": "Internal note about when this scenario fires and edge cases",
     
-    "suggestedPlaceholders": [
-        {"key": "name", "description": "Caller's name (auto-captured)", "exampleValue": "Mark"},
-        {"key": "companyName", "description": "Your business name", "exampleValue": "${company.companyName || 'Our Company'}"}
-    ],
-    
-    "followUpMessages": [
-        "Are you still there, {name}?",
-        "Just checking in - did that answer your question?"
-    ],
-    
     "cooldown": 0,
-    "handoffPolicy": "low_confidence|always|never",
-    
-    "actionHooks": ["offer_scheduling", "log_inquiry"],
-    
-    "entityValidation": {
-        "phone": {"pattern": "^[0-9]{10}$", "prompt": "Could you give me a 10-digit phone number, {name}?"},
-        "email": {"pattern": "@", "prompt": "What's your email address?"}
-    }
+    "handoffPolicy": "low_confidence"
 }
 
 ENTITY CAPTURE GUIDE (what to extract from caller speech):
@@ -1039,16 +1015,18 @@ MIN CONFIDENCE GUIDE (how certain AI must be to use this scenario):
 - SMALL_TALK: 0.4-0.6 (lower = greetings match easily)
 - TRANSFER: 0.7-0.85 (high = be sure before transferring)
 
-FOLLOW-UP MODE GUIDE:
-- NONE: Just answer, let conversation continue
-- ASK_IF_BOOK: After answering, offer to schedule
-- ASK_FOLLOWUP_QUESTION: Ask a specific follow-up
+FOLLOW-UP MODE GUIDE (what agent says NEXT, not timer):
+- NONE: DEFAULT - Just answer, let conversation flow naturally (use for FAQ, BILLING, SMALL_TALK)
+- ASK_IF_BOOK: ONLY for booking-eligible scenarios (BOOKING, EMERGENCY, TROUBLESHOOT with repair intent)
+- ASK_FOLLOWUP_QUESTION: Rarely needed - only for complex multi-step flows
 
-ADVANCED SETTINGS GUIDE:
+CRITICAL RULE: Only set followUpMode=ASK_IF_BOOK when bookingIntent=true.
+Otherwise you get pushy behavior like asking to schedule after a billing question.
 
-followUpMessages: Silence handlers - what to say if caller goes quiet
-- Default: ["Are you still there, {name}?", "Just checking in..."]
-- Emergency: ["I'm still here to help - are you okay?"]
+⚠️ DO NOT GENERATE: followUpMessages, timedFollowUp, silencePolicy
+These are ADMIN-ONLY settings for silence recovery timers (global policy, not per-scenario).
+
+ADVANCED SETTINGS (AI can generate):
 
 cooldown: Seconds before scenario can fire again (spam prevention)
 - Most scenarios: 0 (no cooldown)
