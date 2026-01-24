@@ -475,177 +475,245 @@ const RULE_CATEGORIES = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
+ * ════════════════════════════════════════════════════════════════════════════════
  * SCENARIO_SETTINGS_REGISTRY - Single Source of Truth
+ * ════════════════════════════════════════════════════════════════════════════════
+ * 
+ * OWNERSHIP MODEL (the key insight):
+ * 
+ *   CONTENT  = Scenario defines WHAT to say (GPT generates)
+ *   RUNTIME  = ConversationEngine decides HOW/WHEN to behave (not generated)
+ *   ADMIN    = Infrastructure/policy settings (admin configures)
+ *   SYSTEM   = Auto-generated/internal (never touched)
  * 
  * Each setting has:
- * - purpose: What kind of setting is this?
- * - aiGenerable: Can GPT-4 Gap Fill generate this? (only for runtime/runtime_manual)
+ * - ownership: 'content' | 'runtime' | 'admin' | 'system' (WHO owns it)
+ * - purpose: Legacy field for backward compatibility
+ * - aiGenerable: Derived from ownership === 'content'
  * - description: Human-readable description
+ * 
+ * DERIVATION RULE (enforced in code):
+ *   aiGenerable = (ownership === 'content')
+ *   
+ * This ensures Gap Fill, Audit, Agent, and Wiring Tab all read the same contract.
+ * ════════════════════════════════════════════════════════════════════════════════
  */
 const SCENARIO_SETTINGS_REGISTRY = {
-    // ============================================
-    // IDENTITY & LIFECYCLE (8 settings)
-    // ============================================
-    scenarioId:       { purpose: 'runtime',        aiGenerable: true,  description: 'Unique scenario identifier' },
-    version:          { purpose: 'system',         aiGenerable: false, description: 'Version number for rollback' },
-    status:           { purpose: 'runtime',        aiGenerable: true,  description: 'draft/live/archived - only live scenarios match' },
-    name:             { purpose: 'runtime',        aiGenerable: true,  description: 'Human-readable scenario name' },
-    isActive:         { purpose: 'runtime',        aiGenerable: true,  description: 'Quick on/off toggle' },
-    scope:            { purpose: 'system',         aiGenerable: false, description: 'GLOBAL vs COMPANY scope' },
-    ownerCompanyId:   { purpose: 'system',         aiGenerable: false, description: 'Company that owns this scenario' },
-    notes:            { purpose: 'system',         aiGenerable: false, description: 'Admin notes (not used by AI)' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // IDENTITY (Scenario owns - CONTENT)
+    // ════════════════════════════════════════════════════════════════════════════
+    name:             { ownership: 'content',  purpose: 'runtime',        description: 'Human-readable scenario name' },
+    status:           { ownership: 'content',  purpose: 'runtime',        description: 'draft/live/archived - only live scenarios match' },
+    isActive:         { ownership: 'content',  purpose: 'runtime',        description: 'Quick on/off toggle' },
+    categories:       { ownership: 'content',  purpose: 'runtime',        description: 'Category tags for organization' },
+    scenarioType:     { ownership: 'content',  purpose: 'runtime',        description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy' },
+    notes:            { ownership: 'content',  purpose: 'system',         description: 'Admin notes (not used by AI)' },
     
-    // ============================================
-    // CATEGORIZATION (4 settings)
-    // ============================================
-    categories:       { purpose: 'runtime',        aiGenerable: true,  description: 'Category tags for organization' },
-    scenarioType:     { purpose: 'runtime',        aiGenerable: true,  description: 'EMERGENCY/BOOKING/FAQ/etc - determines reply strategy' },
-    priority:         { purpose: 'runtime',        aiGenerable: true,  description: 'Tie-breaker when multiple scenarios match' },
-    cooldownSeconds:  { purpose: 'runtime',        aiGenerable: true,  description: 'Prevents scenario from firing again within N seconds' },
+    // System-managed identity
+    scenarioId:       { ownership: 'system',   purpose: 'runtime',        description: 'Unique scenario identifier' },
+    version:          { ownership: 'system',   purpose: 'system',         description: 'Version number for rollback' },
+    scope:            { ownership: 'system',   purpose: 'system',         description: 'GLOBAL vs COMPANY scope' },
+    ownerCompanyId:   { ownership: 'system',   purpose: 'system',         description: 'Company that owns this scenario' },
     
-    // ============================================
-    // MATCHING - TRIGGERS (9 settings)
-    // ============================================
-    triggers:             { purpose: 'runtime',    aiGenerable: true,  description: 'Plain phrases for BM25 keyword matching' },
-    regexTriggers:        { purpose: 'runtime',    aiGenerable: true,  description: 'Advanced pattern matching (regex)' },
-    negativeTriggers:     { purpose: 'runtime',    aiGenerable: true,  description: 'Phrases that PREVENT matching' },
-    exampleUserPhrases:   { purpose: 'runtime',    aiGenerable: true,  description: '12-18 example phrases users say (for Tier-3 LLM context)' },
-    negativeUserPhrases:  { purpose: 'runtime',    aiGenerable: true,  description: 'Phrases that PREVENT this scenario from matching' },
-    keywords:             { purpose: 'system',     aiGenerable: false, description: 'Fast Tier-1 matching keywords (auto-generated)' },
-    negativeKeywords:     { purpose: 'system',     aiGenerable: false, description: 'Keywords that veto matches (auto-generated)' },
-    embeddingVector:      { purpose: 'system',     aiGenerable: false, description: 'Precomputed semantic embedding (auto-generated)' },
-    contextWeight:        { purpose: 'system',     aiGenerable: false, description: 'Multiplier for final match score' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // MATCHING PRIORITY (Scenario owns - CONTENT)
+    // ════════════════════════════════════════════════════════════════════════════
+    priority:         { ownership: 'content',  purpose: 'runtime',        description: 'Tie-breaker when multiple scenarios match (-10 to +10)' },
+    minConfidence:    { ownership: 'content',  purpose: 'runtime',        description: 'Scenario-level confidence threshold' },
     
-    // ============================================
-    // CONFIDENCE & PRIORITY (1 setting)
-    // ============================================
-    minConfidence:    { purpose: 'runtime',        aiGenerable: true,  description: 'Scenario-level confidence threshold' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // TRIGGERS - When to match (Scenario owns - CONTENT)
+    // ════════════════════════════════════════════════════════════════════════════
+    triggers:             { ownership: 'content',  purpose: 'runtime',    description: 'Plain phrases for BM25 keyword matching' },
+    regexTriggers:        { ownership: 'content',  purpose: 'runtime',    description: 'Advanced pattern matching (regex)' },
+    negativeTriggers:     { ownership: 'content',  purpose: 'runtime',    description: 'Phrases that PREVENT matching' },
+    exampleUserPhrases:   { ownership: 'content',  purpose: 'runtime',    description: '12-18 example phrases users say (for Tier-3 LLM context)' },
+    negativeUserPhrases:  { ownership: 'content',  purpose: 'runtime',    description: 'Phrases that PREVENT this scenario from matching' },
     
-    // ============================================
-    // REPLIES - CORE (8 settings)
-    // ============================================
-    quickReplies:         { purpose: 'runtime',    aiGenerable: true,  description: 'Short/quick response variations' },
-    fullReplies:          { purpose: 'runtime',    aiGenerable: true,  description: 'Full/detailed response variations' },
-    quickReplies_noName:  { purpose: 'runtime',    aiGenerable: true,  description: 'Quick replies without {name} for unknown callers' },
-    fullReplies_noName:   { purpose: 'runtime',    aiGenerable: true,  description: 'Full replies without {name} for unknown callers' },
-    replyStrategy:        { purpose: 'runtime',    aiGenerable: true,  description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc' },
-    replySelection:       { purpose: 'system',     aiGenerable: false, description: 'sequential/random/bandit selection' },
-    replyBundles:         { purpose: 'future',     aiGenerable: false, description: 'Reply bundle system (future)' },
-    replyPolicy:          { purpose: 'future',     aiGenerable: false, description: 'ROTATE_PER_CALLER/etc (future)' },
+    // System-managed triggers
+    keywords:             { ownership: 'system',   purpose: 'system',     description: 'Fast Tier-1 matching keywords (auto-generated)' },
+    negativeKeywords:     { ownership: 'system',   purpose: 'system',     description: 'Keywords that veto matches (auto-generated)' },
+    embeddingVector:      { ownership: 'system',   purpose: 'system',     description: 'Precomputed semantic embedding (auto-generated)' },
+    contextWeight:        { ownership: 'system',   purpose: 'system',     description: 'Multiplier for final match score' },
     
-    // ============================================
-    // FOLLOW-UP BEHAVIOR (5 settings)
-    // ============================================
-    followUpMode:         { purpose: 'runtime',        aiGenerable: true,  description: 'NONE/ASK_FOLLOWUP_QUESTION/ASK_IF_BOOK/TRANSFER' },
-    followUpQuestionText: { purpose: 'runtime',        aiGenerable: true,  description: 'Text to ask for follow-up' },
-    followUpPrompts:      { purpose: 'future',         aiGenerable: false, description: 'Follow-up prompts (future)' },
-    followUpFunnel:       { purpose: 'future',         aiGenerable: false, description: 'Re-engagement prompt (future)' },
-    transferTarget:       { purpose: 'runtime_manual', aiGenerable: false, description: 'Queue/extension for transfer (admin configures)' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // REPLIES - What to say (Scenario owns - CONTENT)
+    // ════════════════════════════════════════════════════════════════════════════
+    quickReplies:         { ownership: 'content',  purpose: 'runtime',    description: 'Short/quick response variations' },
+    fullReplies:          { ownership: 'content',  purpose: 'runtime',    description: 'Full/detailed response variations' },
+    quickReplies_noName:  { ownership: 'content',  purpose: 'runtime',    description: 'Quick replies without {name} for unknown callers' },
+    fullReplies_noName:   { ownership: 'content',  purpose: 'runtime',    description: 'Full replies without {name} for unknown callers' },
+    replyStrategy:        { ownership: 'content',  purpose: 'runtime',    description: 'AUTO/FULL_ONLY/QUICK_ONLY/etc' },
     
-    // ============================================
-    // WIRING - ACTION (5 settings)
-    // ============================================
-    actionType:       { purpose: 'runtime',        aiGenerable: true,  description: 'REPLY_ONLY/START_FLOW/REQUIRE_BOOKING/TRANSFER' },
-    flowId:           { purpose: 'runtime_manual', aiGenerable: false, description: 'Dynamic Flow to execute (admin configures)' },
-    bookingIntent:    { purpose: 'runtime',        aiGenerable: true,  description: 'true = caller wants to book' },
-    requiredSlots:    { purpose: 'runtime_manual', aiGenerable: false, description: 'Slots to collect for booking (admin configures)' },
-    stopRouting:      { purpose: 'runtime_manual', aiGenerable: false, description: 'Stop routing flag (admin configures)' },
+    // System-managed reply settings
+    replySelection:       { ownership: 'system',   purpose: 'system',     description: 'sequential/random/bandit selection' },
+    replyBundles:         { ownership: 'system',   purpose: 'future',     description: 'Reply bundle system (future)' },
+    replyPolicy:          { ownership: 'system',   purpose: 'future',     description: 'ROTATE_PER_CALLER/etc (future)' },
     
-    // ============================================
-    // ENTITY CAPTURE (3 settings)
-    // ============================================
-    entityCapture:    { purpose: 'future',         aiGenerable: true,  description: 'Entities to extract (future runtime implementation)' },
-    entityValidation: { purpose: 'future',         aiGenerable: false, description: 'Validation rules per entity (future)' },
-    dynamicVariables: { purpose: 'runtime',        aiGenerable: true,  description: 'Variable fallbacks when entity missing' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // PERSONALITY (Scenario owns - CONTENT)
+    // Affects HOW replies are WRITTEN, not how agent BEHAVES
+    // ════════════════════════════════════════════════════════════════════════════
+    behavior:         { ownership: 'content',  purpose: 'generation',     description: 'AI personality - influences how replies are WRITTEN' },
     
-    // ============================================
-    // BEHAVIOR & VOICE (4 settings)
-    // ============================================
-    behavior:         { purpose: 'generation',     aiGenerable: true,  description: 'AI personality - influences how replies are WRITTEN' },
-    toneLevel:        { purpose: 'system',         aiGenerable: false, description: 'DEPRECATED - use behavior instead' },
-    ttsOverride:      { purpose: 'runtime_manual', aiGenerable: false, description: 'Scenario TTS overrides (admin configures)' },
-    channel:          { purpose: 'runtime',        aiGenerable: true,  description: 'voice/sms/chat/any channel restriction' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // INTENT FLAG (Scenario owns - CONTENT)
+    // Flag only - Runtime decides what to DO with this flag
+    // ════════════════════════════════════════════════════════════════════════════
+    bookingIntent:    { ownership: 'content',  purpose: 'runtime',        description: 'true = caller wants to book (Runtime decides behavior)' },
+    entityCapture:    { ownership: 'content',  purpose: 'future',         description: 'Entities to extract (what to capture, not how)' },
+    channel:          { ownership: 'content',  purpose: 'runtime',        description: 'voice/sms/chat/any channel restriction' },
     
-    // ============================================
-    // TIMING & SILENCE (2 settings)
-    // ============================================
-    timedFollowUp:    { purpose: 'runtime_manual', aiGenerable: false, description: 'Idle timer triggers follow-up (admin configures)' },
-    silencePolicy:    { purpose: 'runtime_manual', aiGenerable: false, description: 'Silence handling policy (admin configures)' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // FOLLOW-UP BEHAVIOR (Runtime owns - NOT GENERATED)
+    // ConversationEngine decides these based on context + bookingIntent
+    // ════════════════════════════════════════════════════════════════════════════
+    followUpMode:         { ownership: 'runtime',  purpose: 'runtime',        description: 'Runtime decides: NONE/ASK_IF_BOOK based on context' },
+    followUpQuestionText: { ownership: 'runtime',  purpose: 'runtime',        description: 'Runtime decides follow-up text based on booking flow' },
+    followUpFunnel:       { ownership: 'runtime',  purpose: 'future',         description: 'Re-engagement prompt (Runtime decides)' },
+    followUpPrompts:      { ownership: 'system',   purpose: 'future',         description: 'Follow-up prompts (future)' },
+    transferTarget:       { ownership: 'admin',    purpose: 'runtime_manual', description: 'Queue/extension for transfer (admin configures)' },
     
-    // ============================================
-    // ACTION HOOKS (2 settings)
-    // ============================================
-    actionHooks:      { purpose: 'runtime_manual', aiGenerable: false, description: 'Hooks executed after scenario match (admin configures)' },
-    handoffPolicy:    { purpose: 'runtime',        aiGenerable: true,  description: 'When to escalate to human' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // ACTION TYPE (Runtime owns - NOT GENERATED)
+    // ConversationEngine decides based on confidence, booking flow, etc.
+    // ════════════════════════════════════════════════════════════════════════════
+    actionType:       { ownership: 'runtime',  purpose: 'runtime',        description: 'Runtime decides: REPLY_ONLY/REQUIRE_BOOKING based on context' },
+    handoffPolicy:    { ownership: 'runtime',  purpose: 'runtime',        description: 'Runtime decides when to escalate to human' },
+    flowId:           { ownership: 'admin',    purpose: 'runtime_manual', description: 'Dynamic Flow to execute (admin configures)' },
+    requiredSlots:    { ownership: 'admin',    purpose: 'runtime_manual', description: 'Slots to collect for booking (admin configures)' },
+    stopRouting:      { ownership: 'admin',    purpose: 'runtime_manual', description: 'Stop routing flag (admin configures)' },
     
-    // ============================================
-    // STATE MACHINE (2 settings)
-    // ============================================
-    preconditions:    { purpose: 'system',         aiGenerable: false, description: 'Conditions for scenario to match (auto-managed)' },
-    effects:          { purpose: 'runtime_manual', aiGenerable: false, description: 'State changes after scenario execution (admin configures)' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // TIMING & SILENCE (Admin owns - INFRASTRUCTURE)
+    // Global policies, not per-scenario AI decisions
+    // ════════════════════════════════════════════════════════════════════════════
+    cooldownSeconds:  { ownership: 'admin',    purpose: 'runtime',        description: 'Prevents scenario from firing again within N seconds' },
+    timedFollowUp:    { ownership: 'admin',    purpose: 'runtime_manual', description: 'Idle timer triggers follow-up (admin configures)' },
+    silencePolicy:    { ownership: 'admin',    purpose: 'runtime_manual', description: 'Silence handling policy (admin configures)' },
     
-    // ============================================
-    // AI INTELLIGENCE (4 settings)
-    // ============================================
-    qnaPairs:         { purpose: 'system',         aiGenerable: false, description: 'Training data for semantic matching (auto-generated)' },
-    testPhrases:      { purpose: 'system',         aiGenerable: false, description: 'Validation test cases' },
-    examples:         { purpose: 'system',         aiGenerable: false, description: 'Sample conversations for admin' },
-    escalationFlags:  { purpose: 'system',         aiGenerable: false, description: 'Triggers for human handoff' },
+    // ════════════════════════════════════════════════════════════════════════════
+    // ACTION HOOKS (Admin owns - INFRASTRUCTURE)
+    // ════════════════════════════════════════════════════════════════════════════
+    actionHooks:      { ownership: 'admin',    purpose: 'runtime_manual', description: 'Hooks executed after scenario match (admin configures)' },
+    entityValidation: { ownership: 'admin',    purpose: 'future',         description: 'Validation rules per entity (admin configures)' },
+    dynamicVariables: { ownership: 'admin',    purpose: 'runtime',        description: 'Variable fallbacks when entity missing (admin configures)' },
     
-    // ============================================
-    // MULTILINGUAL (1 setting)
-    // ============================================
-    language:         { purpose: 'system',         aiGenerable: false, description: 'auto/en/es/fr language setting' }
+    // ════════════════════════════════════════════════════════════════════════════
+    // VOICE & TTS (Admin owns - INFRASTRUCTURE)
+    // ════════════════════════════════════════════════════════════════════════════
+    ttsOverride:      { ownership: 'admin',    purpose: 'runtime_manual', description: 'Scenario TTS overrides (admin configures)' },
+    toneLevel:        { ownership: 'system',   purpose: 'system',         description: 'DEPRECATED - use behavior instead' },
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // STATE MACHINE (Admin/System owns)
+    // ════════════════════════════════════════════════════════════════════════════
+    preconditions:    { ownership: 'system',   purpose: 'system',         description: 'Conditions for scenario to match (auto-managed)' },
+    effects:          { ownership: 'admin',    purpose: 'runtime_manual', description: 'State changes after scenario execution (admin configures)' },
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // AI INTELLIGENCE (System owns - AUTO-GENERATED)
+    // ════════════════════════════════════════════════════════════════════════════
+    qnaPairs:         { ownership: 'system',   purpose: 'system',         description: 'Training data for semantic matching (auto-generated)' },
+    testPhrases:      { ownership: 'system',   purpose: 'system',         description: 'Validation test cases' },
+    examples:         { ownership: 'system',   purpose: 'system',         description: 'Sample conversations for admin' },
+    escalationFlags:  { ownership: 'system',   purpose: 'system',         description: 'Triggers for human handoff' },
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // MULTILINGUAL (System owns)
+    // ════════════════════════════════════════════════════════════════════════════
+    language:         { ownership: 'system',   purpose: 'system',         description: 'auto/en/es/fr language setting' }
 };
 
+// ════════════════════════════════════════════════════════════════════════════════
+// DERIVE aiGenerable FROM OWNERSHIP (SINGLE SOURCE OF TRUTH)
+// ════════════════════════════════════════════════════════════════════════════════
+// This ensures no drift - aiGenerable is computed, not stored
+Object.keys(SCENARIO_SETTINGS_REGISTRY).forEach(key => {
+    const setting = SCENARIO_SETTINGS_REGISTRY[key];
+    // CONTENT ownership = GPT can generate it
+    setting.aiGenerable = setting.ownership === 'content';
+});
+
 /**
- * ============================================================================
- * DERIVE POLICIES FROM SINGLE SOURCE OF TRUTH
- * ============================================================================
+ * ════════════════════════════════════════════════════════════════════════════════
+ * DERIVE POLICIES FROM OWNERSHIP (SINGLE SOURCE OF TRUTH)
+ * ════════════════════════════════════════════════════════════════════════════════
  * 
- * All policies are computed from `purpose` + `aiGenerable`:
- * - isAudited: purpose in ['runtime', 'runtime_manual']
- * - isAgentUsed: purpose in ['runtime', 'runtime_manual', 'system']
- * - isGapGenerated: purpose in ['runtime', 'runtime_manual'] && aiGenerable
+ * OWNERSHIP MODEL:
+ *   CONTENT  = Scenario owns (GPT generates) - WHAT to say
+ *   RUNTIME  = ConversationEngine owns - HOW/WHEN to behave
+ *   ADMIN    = Admin owns - Infrastructure policies
+ *   SYSTEM   = Auto-generated - Never touched
  * 
- * This ensures NO DRIFT - audit/gap/agent are always consistent.
+ * All policies are derived from ownership:
+ *   isGapGenerated: ownership === 'content'
+ *   isAudited: ownership in ['content', 'runtime', 'admin']
+ *   isAgentUsed: ownership !== 'system' (but system still auto-populates)
+ *   requiresAdmin: ownership === 'admin'
+ *   isRuntimeOwned: ownership === 'runtime'
+ * 
+ * This ensures NO DRIFT - Gap Fill, Audit, Agent, Wiring Tab all consistent.
+ * ════════════════════════════════════════════════════════════════════════════════
  */
 
 function derivePolicy(setting) {
-    const { purpose, aiGenerable } = setting;
+    const { ownership, purpose } = setting;
     
-    // Runtime contract = settings the agent uses at runtime that humans care about
+    // Derived from ownership - the SINGLE source of truth
+    const isContent = ownership === 'content';
+    const isRuntimeOwned = ownership === 'runtime';
+    const isAdminOwned = ownership === 'admin';
+    const isSystemOwned = ownership === 'system';
+    
+    // For backward compatibility with purpose-based code
     const isRuntimeContract = purpose === 'runtime' || purpose === 'runtime_manual';
     
     return {
-        // Audit checks EVERYTHING in the runtime contract
-        isAudited: isRuntimeContract,
+        // Gap Fill ONLY generates CONTENT (what to say)
+        isGapGenerated: isContent,
         
-        // Agent uses runtime contract + system settings
-        isAgentUsed: isRuntimeContract || purpose === 'system',
+        // Audit checks content + runtime + admin (everything except system)
+        isAudited: !isSystemOwned,
         
-        // Gap Fill generates aiGenerable settings in runtime contract
-        isGapGenerated: isRuntimeContract && aiGenerable === true,
+        // Agent uses everything except pure system fields
+        isAgentUsed: !isSystemOwned,
         
         // Admin must configure these manually
-        requiresAdmin: purpose === 'runtime_manual',
+        requiresAdmin: isAdminOwned,
         
-        // AI can auto-generate these
-        aiCanGenerate: aiGenerable === true
+        // Runtime decides these at call time (NOT in scenario)
+        isRuntimeOwned: isRuntimeOwned,
+        
+        // AI can auto-generate content only
+        aiCanGenerate: isContent,
+        
+        // Legacy support
+        isRuntimeContract: isRuntimeContract
     };
 }
 
 /**
  * Get settings count summary - SINGLE SOURCE OF TRUTH
- * @returns {Object} Runtime contract counts with derived policies
+ * @returns {Object} Counts derived from ownership model
  */
 function getSettingsCount() {
     const settings = Object.entries(SCENARIO_SETTINGS_REGISTRY);
     const total = settings.length;
     
-    // ========================================
-    // GROUP BY PURPOSE (the source of truth)
-    // ========================================
+    // ════════════════════════════════════════════════════════════════════════════
+    // GROUP BY OWNERSHIP (the REAL source of truth)
+    // ════════════════════════════════════════════════════════════════════════════
+    const byOwnership = {
+        content: settings.filter(([_, v]) => v.ownership === 'content'),
+        runtime: settings.filter(([_, v]) => v.ownership === 'runtime'),
+        admin: settings.filter(([_, v]) => v.ownership === 'admin'),
+        system: settings.filter(([_, v]) => v.ownership === 'system')
+    };
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // LEGACY: Group by purpose (for backward compatibility)
+    // ════════════════════════════════════════════════════════════════════════════
     const byPurpose = {
         runtime: settings.filter(([_, v]) => v.purpose === 'runtime'),
         runtime_manual: settings.filter(([_, v]) => v.purpose === 'runtime_manual'),
@@ -654,49 +722,79 @@ function getSettingsCount() {
         future: settings.filter(([_, v]) => v.purpose === 'future')
     };
     
-    // ========================================
-    // THE RUNTIME CONTRACT (what matters)
-    // ========================================
-    // This is the SINGLE source of truth - everything else derives from this
-    const runtimeContract = [...byPurpose.runtime, ...byPurpose.runtime_manual];
+    // ════════════════════════════════════════════════════════════════════════════
+    // THE OWNERSHIP CONTRACT (what REALLY matters)
+    // ════════════════════════════════════════════════════════════════════════════
+    // Content = GPT generates (WHAT to say)
+    // Runtime = ConversationEngine decides (HOW/WHEN to behave)
+    // Admin = Infrastructure policies
+    // System = Auto-generated
+    
+    // For backward compatibility, runtimeContract = content + runtime + admin
+    const runtimeContract = [...byOwnership.content, ...byOwnership.runtime, ...byOwnership.admin];
     const runtimeContractCount = runtimeContract.length;
     
-    // ========================================
-    // DERIVED COUNTS (computed, not stored)
-    // ========================================
-    // These are derived from purpose + aiGenerable, so they CAN'T drift
+    // ════════════════════════════════════════════════════════════════════════════
+    // DERIVED COUNTS FROM OWNERSHIP (the truth)
+    // ════════════════════════════════════════════════════════════════════════════
     
-    // Audit checks ALL runtime contract settings (no exceptions)
-    const audited = runtimeContractCount;
+    // Content = WHAT to say (GPT generates these)
+    const contentSettings = byOwnership.content;
+    const contentCount = contentSettings.length;
     
-    // Gap Fill generates aiGenerable settings in runtime contract
-    const gapGenerated = runtimeContract.filter(([_, v]) => v.aiGenerable === true).length;
+    // Runtime = HOW/WHEN to behave (ConversationEngine decides at call time)
+    const runtimeOwnedSettings = byOwnership.runtime;
+    const runtimeOwnedCount = runtimeOwnedSettings.length;
     
-    // Agent uses runtime contract + system settings
-    const agentUsed = runtimeContractCount + byPurpose.system.length;
+    // Admin = Infrastructure policies (admin configures)
+    const adminSettings = byOwnership.admin;
+    const adminCount = adminSettings.length;
     
-    // Settings that AI generates vs admin configures
-    const aiGenerates = runtimeContract.filter(([_, v]) => v.aiGenerable === true);
-    const adminConfigures = runtimeContract.filter(([_, v]) => v.aiGenerable === false);
+    // System = Auto-generated (never touched)
+    const systemCount = byOwnership.system.length;
     
-    // ========================================
+    // Gap Fill generates CONTENT only
+    const gapGenerated = contentCount;
+    
+    // Audit checks content + runtime + admin (everything human-visible)
+    const audited = contentCount + runtimeOwnedCount + adminCount;
+    
+    // Agent uses everything
+    const agentUsed = total;
+    
+    // ════════════════════════════════════════════════════════════════════════════
     // ALIGNMENT CHECK (should always be 100% now!)
-    // ========================================
-    // With single source of truth, there are NO gaps by definition
-    // The "aligned" count = runtime contract (audit checks everything)
-    const alignedCount = runtimeContractCount;
+    // ════════════════════════════════════════════════════════════════════════════
+    // With single ownership source of truth, there are NO gaps by definition
+    const alignedCount = audited;
     const gapsCount = 0; // No drift possible!
     
     return {
         total,
         
-        // ========================================
-        // 🎯 THE RUNTIME CONTRACT (main display)
-        // ========================================
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🎯 OWNERSHIP MODEL (the REAL contract)
+        // ════════════════════════════════════════════════════════════════════════════
+        ownership: {
+            content: contentCount,       // WHAT to say (GPT generates)
+            runtime: runtimeOwnedCount,  // HOW/WHEN (ConversationEngine decides)
+            admin: adminCount,           // Infrastructure (admin configures)
+            system: systemCount,         // Auto-generated (never touched)
+            
+            // Detailed lists
+            contentSettings: contentSettings.map(([k, v]) => ({ setting: k, ...v, ...derivePolicy(v) })),
+            runtimeOwnedSettings: runtimeOwnedSettings.map(([k, v]) => ({ setting: k, ...v, ...derivePolicy(v) })),
+            adminSettings: adminSettings.map(([k, v]) => ({ setting: k, ...v, ...derivePolicy(v) }))
+        },
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // LEGACY: Runtime Contract (for backward compatibility)
+        // ════════════════════════════════════════════════════════════════════════════
         runtimeContract: {
             total: runtimeContractCount,
-            aiGenerates: aiGenerates.length,
-            adminConfigures: adminConfigures.length,
+            aiGenerates: contentCount,        // CONTENT is what AI generates
+            adminConfigures: adminCount,      // ADMIN settings need manual config
+            runtimeOwns: runtimeOwnedCount,   // RUNTIME decides at call time
             settings: runtimeContract.map(([k, v]) => ({ 
                 setting: k, 
                 ...v,
@@ -704,14 +802,14 @@ function getSettingsCount() {
             }))
         },
         
-        // ========================================
+        // ════════════════════════════════════════════════════════════════════════════
         // DERIVED COUNTS (for backward compatibility)
-        // ========================================
-        audited,           // = runtimeContract.total (audit checks everything)
-        gapGenerated,      // = runtimeContract.aiGenerates
-        agentUsed,         // = runtimeContract.total + system.length
+        // ════════════════════════════════════════════════════════════════════════════
+        audited,           // = content + runtime + admin
+        gapGenerated,      // = content only (WHAT to say)
+        agentUsed,         // = everything
         
-        // Purpose breakdown (for detailed view)
+        // Purpose breakdown (legacy)
         byPurpose: {
             runtime: byPurpose.runtime.length,
             runtimeManual: byPurpose.runtime_manual.length,
