@@ -1648,5 +1648,391 @@ router.get('/:companyId/trace/:traceId', async (req, res) => {
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// POST /api/admin/wiring-status/seed-test-company
+// DEV ONLY: Create a test company with scenarios, templates, and blackbox events
+// This enables end-to-end wiring verification in local/dev environments
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/seed-test-company', async (req, res) => {
+    // SAFETY: Only allow in development
+    if (process.env.NODE_ENV === 'production' && !req.query.force) {
+        return res.status(403).json({
+            error: 'SEED_BLOCKED',
+            message: 'Seeding is blocked in production. Use ?force=true to override (dangerous).'
+        });
+    }
+    
+    const startTime = Date.now();
+    
+    try {
+        logger.info('[WIRING SEED] 🌱 Starting test company seed');
+        
+        const mongoose = require('mongoose');
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        const BlackBoxRecording = require('../../models/BlackBoxRecording');
+        
+        // ════════════════════════════════════════════════════════════════════
+        // 1. Create or update test company
+        // ════════════════════════════════════════════════════════════════════
+        const testCompanyData = {
+            companyName: 'Wiring Test Company (Dev)',
+            businessName: 'Dev Test HVAC',
+            industry: 'hvac',
+            isTestCompany: true,
+            aiAgentSettings: {
+                enabled: true,
+                discoveryMode: 'balanced',
+                templateReferences: [],
+                frontDeskBehavior: {
+                    bookingSlots: [
+                        { id: 'name', type: 'name', question: 'May I have your name please?', required: true },
+                        { id: 'phone', type: 'phone', question: 'And your phone number?', required: true },
+                        { id: 'address', type: 'address', question: 'What is the service address?', required: true },
+                        { id: 'issue', type: 'issue', question: 'Can you describe the issue?', required: true }
+                    ],
+                    greetingResponses: [
+                        'Hi, thanks for calling {companyName}. How can I help you today?'
+                    ],
+                    nameSpellingVariants: {
+                        enabled: true,
+                        variantGroups: [
+                            { base: 'Mark', variants: ['Marc'] },
+                            { base: 'Brian', variants: ['Bryan'] }
+                        ]
+                    }
+                },
+                serviceTypeClarification: {
+                    enabled: true,
+                    clarifyPhrases: ['Are you calling about a repair, maintenance, or something else?']
+                }
+            },
+            googleCalendar: {
+                enabled: true,
+                eventColors: {
+                    colorMapping: [
+                        { label: 'Repair Service', canonicalType: 'repair', colorId: '11', schedule: { days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], startTime: '08:00', endTime: '17:00', slotDuration: 60 } },
+                        { label: 'Maintenance', canonicalType: 'maintenance', colorId: '2', schedule: { days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], startTime: '09:00', endTime: '16:00', slotDuration: 90 } },
+                        { label: 'Emergency', canonicalType: 'emergency', colorId: '4', schedule: { days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'], startTime: '00:00', endTime: '23:59', slotDuration: 60 } },
+                        { label: 'Estimate', canonicalType: 'estimate', colorId: '3', schedule: { days: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], startTime: '10:00', endTime: '15:00', slotDuration: 120 } }
+                    ]
+                }
+            }
+        };
+        
+        let testCompany = await Company.findOne({ companyName: 'Wiring Test Company (Dev)' });
+        if (testCompany) {
+            await Company.updateOne({ _id: testCompany._id }, { $set: testCompanyData });
+            testCompany = await Company.findById(testCompany._id);
+            logger.info('[WIRING SEED] Updated existing test company');
+        } else {
+            testCompany = await Company.create(testCompanyData);
+            logger.info('[WIRING SEED] Created new test company');
+        }
+        
+        const companyId = testCompany._id.toString();
+        
+        // ════════════════════════════════════════════════════════════════════
+        // 2. Create or update global template with scenarios
+        // ════════════════════════════════════════════════════════════════════
+        const testScenarios = [
+            {
+                name: 'AC Not Cooling',
+                status: 'live',
+                isActive: true,
+                category: 'TROUBLESHOOT',
+                scenarioType: 'TROUBLESHOOT',
+                priority: 5,
+                minConfidence: 0.6,
+                behavior: 'calm_professional',
+                bookingIntent: true,
+                triggers: ['ac not cooling', 'air not cold', 'no cold air', 'ac broken'],
+                quickReplies: ['I understand. Is the unit running but not cooling, or not turning on at all?'],
+                fullReplies: ['Thanks, {name}. We can have a technician out to take a look. Would morning or afternoon work better?'],
+                entityCapture: ['name', 'phone', 'address', 'issue']
+            },
+            {
+                name: 'Schedule Maintenance',
+                status: 'live',
+                isActive: true,
+                category: 'BOOKING',
+                scenarioType: 'BOOKING',
+                priority: 3,
+                minConfidence: 0.7,
+                behavior: 'calm_professional',
+                bookingIntent: true,
+                triggers: ['schedule maintenance', 'tune up', 'annual service', 'preventive maintenance'],
+                quickReplies: ['Great! When were you hoping to have the maintenance done?'],
+                fullReplies: ['Perfect, {name}. I can get you scheduled for maintenance. Do you prefer morning or afternoon?'],
+                entityCapture: ['name', 'phone', 'address']
+            },
+            {
+                name: 'Emergency No Heat',
+                status: 'live',
+                isActive: true,
+                category: 'EMERGENCY',
+                scenarioType: 'EMERGENCY',
+                priority: 10,
+                minConfidence: 0.5,
+                behavior: 'empathetic_professional',
+                bookingIntent: true,
+                triggers: ['no heat', 'heater not working', 'furnace broken', 'emergency heat'],
+                quickReplies: ['I understand this is urgent. Is there anyone vulnerable in the home - elderly, children, or pets?'],
+                fullReplies: ['We treat no-heat situations as emergencies. Let me get a technician dispatched to you right away, {name}.'],
+                entityCapture: ['name', 'phone', 'address', 'issue', 'urgency']
+            },
+            {
+                name: 'Request Estimate',
+                status: 'live',
+                isActive: true,
+                category: 'ESTIMATE',
+                scenarioType: 'ESTIMATE',
+                priority: 2,
+                minConfidence: 0.6,
+                behavior: 'calm_professional',
+                bookingIntent: true,
+                triggers: ['estimate', 'quote', 'how much', 'pricing', 'cost'],
+                quickReplies: ['I can help with that. What type of estimate are you looking for?'],
+                fullReplies: ['Sure thing, {name}. I can schedule a technician to come out and provide a free estimate. What day works best?'],
+                entityCapture: ['name', 'phone', 'address', 'estimateType']
+            },
+            {
+                name: 'Business Hours',
+                status: 'live',
+                isActive: true,
+                category: 'FAQ',
+                scenarioType: 'FAQ',
+                priority: 0,
+                minConfidence: 0.7,
+                behavior: 'calm_professional',
+                bookingIntent: false,
+                triggers: ['what are your hours', 'when are you open', 'business hours', 'hours of operation'],
+                quickReplies: ['We are open Monday through Friday, 8 AM to 5 PM. Is there anything else I can help you with?'],
+                fullReplies: [],
+                entityCapture: []
+            },
+            {
+                name: 'Thank You / Goodbye',
+                status: 'live',
+                isActive: true,
+                category: 'SMALL_TALK',
+                scenarioType: 'SMALL_TALK',
+                priority: -5,
+                minConfidence: 0.8,
+                behavior: 'calm_professional',
+                bookingIntent: false,
+                triggers: ['thank you', 'thanks', 'goodbye', 'bye', 'have a good day'],
+                quickReplies: ["You're welcome! Have a great day and don't hesitate to call if you need anything else."],
+                fullReplies: [],
+                entityCapture: []
+            }
+        ];
+        
+        let template = await GlobalInstantResponseTemplate.findOne({ name: 'Wiring Test Template (Dev)' });
+        if (template) {
+            template.categories = [{ name: 'All Scenarios', scenarios: testScenarios }];
+            await template.save();
+            logger.info('[WIRING SEED] Updated existing test template');
+        } else {
+            template = await GlobalInstantResponseTemplate.create({
+                name: 'Wiring Test Template (Dev)',
+                description: 'Test template for wiring verification',
+                tradeType: 'hvac',
+                industry: 'hvac',
+                status: 'published',
+                categories: [{ name: 'All Scenarios', scenarios: testScenarios }]
+            });
+            logger.info('[WIRING SEED] Created new test template');
+        }
+        
+        // Link template to company
+        await Company.updateOne(
+            { _id: testCompany._id },
+            { 
+                $set: { 
+                    'aiAgentSettings.templateReferences': [{
+                        templateId: template._id,
+                        templateName: template.name,
+                        enabled: true,
+                        priority: 1,
+                        addedAt: new Date(),
+                        addedBy: 'wiring-seed'
+                    }]
+                }
+            }
+        );
+        
+        // ════════════════════════════════════════════════════════════════════
+        // 3. Create fake BlackBox events (runtime proof)
+        // ════════════════════════════════════════════════════════════════════
+        const fakeEvents = [];
+        const eventTypes = ['RESPONSE_EXECUTION', 'BOOKING_DECISION', 'MATCHING_PIPELINE', 'SERVICE_TYPE_RESOLUTION'];
+        const canonicalTypes = ['repair', 'maintenance', 'emergency', 'estimate'];
+        const actionTypes = ['REPLY_ONLY', 'BOOKING_FLOW', 'TRANSFER', 'ESCALATE'];
+        
+        for (let i = 0; i < 20; i++) {
+            const eventType = eventTypes[i % eventTypes.length];
+            const createdAt = new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000); // Random time in last 24h
+            
+            fakeEvents.push({
+                companyId,
+                callId: `test_call_${i}_${Date.now()}`,
+                type: eventType,
+                createdAt,
+                data: {
+                    scenarioId: testScenarios[i % testScenarios.length].name,
+                    scenarioType: testScenarios[i % testScenarios.length].scenarioType,
+                    confidence: 0.7 + Math.random() * 0.3,
+                    matchMethod: i % 2 === 0 ? 'fast_exact' : 'semantic_embedding',
+                    canonicalType: canonicalTypes[i % canonicalTypes.length],
+                    actionType: actionTypes[i % actionTypes.length],
+                    followUpMode: i % 3 === 0 ? 'ASK_IF_BOOK' : 'NONE',
+                    handoffPolicy: i % 4 === 0 ? 'transfer_to_human' : 'low_confidence',
+                    bookingDecision: i % 2 === 0 ? 'PROCEED' : 'SKIP',
+                    runtimeDecisions: {
+                        followUpMode: i % 3 === 0 ? 'ASK_IF_BOOK' : 'NONE',
+                        actionType: actionTypes[i % actionTypes.length],
+                        handoffPolicy: i % 4 === 0 ? 'transfer_to_human' : 'low_confidence'
+                    }
+                }
+            });
+        }
+        
+        // Clear old test events and insert new ones
+        await BlackBoxRecording.deleteMany({ companyId, callId: /^test_call_/ });
+        await BlackBoxRecording.insertMany(fakeEvents);
+        logger.info('[WIRING SEED] Created fake BlackBox events:', fakeEvents.length);
+        
+        // ════════════════════════════════════════════════════════════════════
+        // 4. Clear Redis cache for test company
+        // ════════════════════════════════════════════════════════════════════
+        try {
+            const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+            if (isRedisConfigured()) {
+                const redis = await getSharedRedisClient();
+                if (redis) {
+                    await redis.del(`scenario-pool:${companyId}`);
+                    await redis.del(`company:${companyId}`);
+                    logger.info('[WIRING SEED] Cleared Redis cache');
+                }
+            }
+        } catch (cacheErr) {
+            logger.warn('[WIRING SEED] Cache clear warning:', cacheErr.message);
+        }
+        
+        const durationMs = Date.now() - startTime;
+        
+        logger.info('[WIRING SEED] ✅ Seed completed', { companyId, durationMs });
+        
+        return res.json({
+            success: true,
+            message: 'Test company seeded successfully',
+            companyId,
+            companyName: testCompany.companyName,
+            templateId: template._id.toString(),
+            templateName: template.name,
+            scenarioCount: testScenarios.length,
+            blackboxEventCount: fakeEvents.length,
+            durationMs,
+            nextSteps: [
+                `Visit Wiring Tab with companyId: ${companyId}`,
+                'Run audit to verify scenario alignment',
+                'Check runtime proof for BlackBox events'
+            ],
+            apiUrls: {
+                wiringReport: `/api/admin/wiring-status/${companyId}`,
+                audit: `/api/admin/scenario-gaps/${companyId}/audit`,
+                runtimeProof: `/api/admin/wiring-status/${companyId}/runtime-proof`
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING SEED] Error:', { error: error.message, stack: error.stack });
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+            durationMs: Date.now() - startTime
+        });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// GET /api/admin/wiring-status/:companyId/last-call-trace
+// Quick access to the most recent call's trace for this company
+// ════════════════════════════════════════════════════════════════════════════════
+router.get('/:companyId/last-call-trace', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const BlackBoxRecording = require('../../models/BlackBoxRecording');
+        
+        logger.info('[WIRING API] Last call trace requested', { companyId });
+        
+        // Find the most recent call for this company
+        const lastEvent = await BlackBoxRecording.findOne({ companyId })
+            .sort({ createdAt: -1 })
+            .lean();
+        
+        if (!lastEvent) {
+            return res.status(404).json({
+                error: 'NO_CALLS_FOUND',
+                message: 'No BlackBox recordings found for this company',
+                companyId
+            });
+        }
+        
+        // Find all events for this call
+        const callEvents = await BlackBoxRecording.find({ 
+            companyId, 
+            callId: lastEvent.callId 
+        })
+        .sort({ createdAt: 1 })
+        .lean();
+        
+        // Extract key runtime decisions
+        const runtimeDecisions = {};
+        const eventTimeline = [];
+        
+        for (const event of callEvents) {
+            eventTimeline.push({
+                type: event.type,
+                timestamp: event.createdAt,
+                dataKeys: Object.keys(event.data || {})
+            });
+            
+            if (event.data?.runtimeDecisions) {
+                Object.assign(runtimeDecisions, event.data.runtimeDecisions);
+            }
+            if (event.data?.canonicalType) {
+                runtimeDecisions.canonicalType = event.data.canonicalType;
+            }
+            if (event.data?.actionType) {
+                runtimeDecisions.actionType = event.data.actionType;
+            }
+            if (event.data?.followUpMode) {
+                runtimeDecisions.followUpMode = event.data.followUpMode;
+            }
+        }
+        
+        return res.json({
+            success: true,
+            companyId,
+            callId: lastEvent.callId,
+            callTimestamp: lastEvent.createdAt,
+            eventCount: callEvents.length,
+            runtimeDecisions,
+            eventTimeline,
+            fullEvents: callEvents.map(e => ({
+                id: e._id.toString(),
+                type: e.type,
+                createdAt: e.createdAt,
+                data: e.data
+            }))
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING API] Last call trace error', { error: error.message });
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
 

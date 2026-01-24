@@ -66,6 +66,121 @@ function computeStatus({ enabled, dbOk, compiledOk, consumerDeclared, hasCritica
 }
 
 // ============================================================================
+// ENVIRONMENT REALITY CHECK (Step 1 of "Truth First")
+// Detects if the database is empty/mis-pointed before wasting time on wiring
+// ============================================================================
+
+async function checkEnvironmentReality(companyId) {
+    const reality = {
+        status: 'UNKNOWN',
+        health: 'GRAY',
+        isProduction: false,
+        isEmpty: true,
+        message: '',
+        counts: {
+            templates: 0,
+            templateScenarios: 0,
+            companies: 0,
+            blackboxRecordings: 0,
+            targetCompanyExists: false
+        },
+        warnings: [],
+        recommendation: ''
+    };
+    
+    try {
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        const Company = require('../../models/v2Company');
+        const BlackBoxRecording = require('../../models/BlackBoxRecording');
+        const mongoose = require('mongoose');
+        
+        // Check MongoDB connection
+        if (mongoose.connection.readyState !== 1) {
+            reality.status = 'NO_DB_CONNECTION';
+            reality.health = 'RED';
+            reality.message = 'MongoDB not connected';
+            return reality;
+        }
+        
+        // Count templates and their scenarios
+        const templates = await GlobalInstantResponseTemplate.find({}).lean();
+        let templateScenarioCount = 0;
+        for (const t of templates) {
+            for (const c of (t.categories || [])) {
+                templateScenarioCount += (c.scenarios || []).length;
+            }
+        }
+        reality.counts.templates = templates.length;
+        reality.counts.templateScenarios = templateScenarioCount;
+        
+        // Count companies
+        reality.counts.companies = await Company.countDocuments({});
+        
+        // Check if target company exists
+        const targetCompany = await Company.findById(companyId).select('_id companyName').lean();
+        reality.counts.targetCompanyExists = !!targetCompany;
+        reality.counts.targetCompanyName = targetCompany?.companyName || null;
+        
+        // Count BlackBox recordings (last 7 days)
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        reality.counts.blackboxRecordings = await BlackBoxRecording.countDocuments({
+            startedAt: { $gte: weekAgo }
+        });
+        
+        // Determine environment status
+        const hasData = templateScenarioCount > 0 || reality.counts.blackboxRecordings > 0;
+        reality.isEmpty = !hasData;
+        reality.isProduction = reality.counts.blackboxRecordings > 10 && templateScenarioCount > 20;
+        
+        // Build warnings and status
+        if (templateScenarioCount === 0) {
+            reality.warnings.push('NO_TEMPLATES: 0 scenario templates in database');
+        }
+        if (!targetCompany) {
+            reality.warnings.push(`COMPANY_NOT_FOUND: companyId ${companyId} does not exist`);
+        }
+        if (reality.counts.blackboxRecordings === 0) {
+            reality.warnings.push('NO_BLACKBOX: 0 call recordings (cannot prove runtime execution)');
+        }
+        
+        // Final status determination
+        if (reality.isEmpty) {
+            reality.status = 'EMPTY_DATASET';
+            reality.health = 'GRAY';
+            reality.message = 'Database appears empty - wiring results will be NO_DATA';
+            reality.recommendation = 'Either: (1) Point to production DB, (2) Run seed script, or (3) Import templates';
+        } else if (!targetCompany) {
+            reality.status = 'COMPANY_NOT_FOUND';
+            reality.health = 'RED';
+            reality.message = `Company ${companyId} not found in database`;
+            reality.recommendation = 'Verify companyId or check if using correct database';
+        } else if (reality.counts.blackboxRecordings === 0) {
+            reality.status = 'NO_CALL_DATA';
+            reality.health = 'YELLOW';
+            reality.message = 'Scenarios exist but no call data - cannot prove runtime execution';
+            reality.recommendation = 'Make test calls to generate BlackBox events';
+        } else if (reality.isProduction) {
+            reality.status = 'PRODUCTION';
+            reality.health = 'GREEN';
+            reality.message = `Production environment: ${templateScenarioCount} scenarios, ${reality.counts.blackboxRecordings} recordings`;
+        } else {
+            reality.status = 'PARTIAL_DATA';
+            reality.health = 'YELLOW';
+            reality.message = 'Some data present but limited';
+        }
+        
+        return reality;
+        
+    } catch (error) {
+        logger.error('[WIRING] Environment reality check failed', { error: error.message });
+        reality.status = 'ERROR';
+        reality.health = 'RED';
+        reality.message = error.message;
+        return reality;
+    }
+}
+
+// ============================================================================
 // REDIS CACHE CHECK
 // ============================================================================
 
@@ -1078,6 +1193,11 @@ async function buildWiringReport({
     
     logger.info('[WIRING REPORT] Building report', { companyId, tradeKey });
     
+    // ========================================================================
+    // ENVIRONMENT REALITY CHECK (FIRST - before wasting time on wiring)
+    // ========================================================================
+    const environmentReality = await checkEnvironmentReality(companyId);
+    
     // Build node index
     const nodeMap = new Map();
     for (const node of wiringRegistryV1.nodes) {
@@ -1245,6 +1365,39 @@ async function buildWiringReport({
             ? `${enabledRefs.length} template(s) linked`
             : 'CRITICAL: No templates linked - scenarios will not load!'
     };
+    
+    // ========================================================================
+    // ENVIRONMENT REALITY ISSUES (show first - these explain everything else)
+    // ========================================================================
+    if (environmentReality.status === 'EMPTY_DATASET') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'ENV_REALITY',
+            label: 'Empty Dataset',
+            status: 'EMPTY_DATASET',
+            reasons: environmentReality.warnings,
+            fix: environmentReality.recommendation,
+            message: '⚠️ All wiring checks below will show NO_DATA because the database is empty'
+        });
+    } else if (environmentReality.status === 'COMPANY_NOT_FOUND') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'ENV_REALITY',
+            label: 'Company Not Found',
+            status: 'COMPANY_NOT_FOUND',
+            reasons: [`CompanyId ${companyId} does not exist in this database`],
+            fix: environmentReality.recommendation
+        });
+    } else if (environmentReality.status === 'NO_CALL_DATA') {
+        issues.push({
+            severity: 'HIGH',
+            nodeId: 'ENV_REALITY',
+            label: 'No Call Data',
+            status: 'NO_CALL_DATA',
+            reasons: ['No BlackBox recordings - cannot prove runtime execution'],
+            fix: 'Make test calls to generate runtime proof events'
+        });
+    }
     
     // Add critical issues from special checks
     if (specialChecks.scenarioPool.status === 'EMPTY') {
@@ -1453,6 +1606,11 @@ async function buildWiringReport({
                 total: issues.length
             }
         },
+        
+        // ════════════════════════════════════════════════════════════════════
+        // ENVIRONMENT REALITY (shows first - prevents wasting time debugging empty DB)
+        // ════════════════════════════════════════════════════════════════════
+        environmentReality,
         
         // Special checks (most important for debugging)
         specialChecks,
