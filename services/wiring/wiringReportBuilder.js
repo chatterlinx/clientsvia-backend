@@ -226,6 +226,163 @@ async function checkDynamicFlows(companyId) {
 }
 
 // ============================================================================
+// RUNTIME PROOF CHECK (V89)
+// Queries BlackBox logs to prove features are actually executing
+// This is the difference between "configured" and "wired"
+// ============================================================================
+
+async function checkRuntimeProof(companyId) {
+    try {
+        const BlackBoxRecording = require('../../models/BlackBoxRecording');
+        
+        // Query last 24 hours of calls for this company
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        
+        const recordings = await BlackBoxRecording.find({
+            companyId,
+            startedAt: { $gte: since }
+        }).select('events').limit(50).lean();
+        
+        if (recordings.length === 0) {
+            return {
+                status: 'NO_DATA',
+                health: 'GRAY',
+                message: 'No calls in last 24 hours - cannot verify runtime execution',
+                callCount: 0
+            };
+        }
+        
+        // Flatten all events
+        const allEvents = recordings.flatMap(r => r.events || []);
+        
+        // Count event types
+        const eventCounts = {};
+        allEvents.forEach(e => {
+            const type = e.type || 'UNKNOWN';
+            eventCounts[type] = (eventCounts[type] || 0) + 1;
+        });
+        
+        // Calculate specific proof metrics
+        const matchingPipeline = allEvents.filter(e => e.type === 'MATCHING_PIPELINE');
+        const responseExecution = allEvents.filter(e => e.type === 'RESPONSE_EXECUTION');
+        const calendarAttempts = allEvents.filter(e => e.type === 'CALENDAR_EVENT_ATTEMPT');
+        const calendarCreated = allEvents.filter(e => e.type === 'CALENDAR_EVENT_CREATED');
+        const calendarFailed = allEvents.filter(e => e.type === 'CALENDAR_EVENT_FAILED');
+        const slotsOffered = allEvents.filter(e => e.type === 'CALENDAR_SLOTS_OFFERED');
+        
+        // Scenario matching stats
+        const fastMatches = matchingPipeline.filter(e => 
+            e.data?.matchMethod?.startsWith('fast_')
+        ).length;
+        const legacyMatches = matchingPipeline.filter(e => 
+            !e.data?.matchMethod?.startsWith('fast_')
+        ).length;
+        
+        // Service type resolution stats
+        const serviceTypeResolutions = allEvents.filter(e => 
+            e.data?.serviceTypeDetection || e.data?.serviceTypeResolution
+        );
+        const clarifierUsed = serviceTypeResolutions.filter(e => 
+            e.data?.serviceTypeDetection?.method === 'clarified' ||
+            e.data?.serviceTypeResolution?.method === 'clarified'
+        ).length;
+        
+        // Compliance stats
+        const complianceEvents = allEvents.filter(e => e.data?.compliance);
+        const hardFails = complianceEvents.filter(e => 
+            e.data?.compliance?.hardFail === true
+        ).length;
+        const avgComplianceScore = complianceEvents.length > 0
+            ? Math.round(complianceEvents.reduce((sum, e) => sum + (e.data?.compliance?.score || 0), 0) / complianceEvents.length)
+            : null;
+        
+        // Calculate health
+        let health = 'GREEN';
+        let status = 'PROVEN';
+        const issues = [];
+        
+        if (matchingPipeline.length === 0) {
+            issues.push('No MATCHING_PIPELINE events - scenario matching not logging');
+            health = 'YELLOW';
+            status = 'PARTIAL';
+        }
+        
+        if (legacyMatches > fastMatches && fastMatches > 0) {
+            issues.push(`Legacy matching (${legacyMatches}) > fast matching (${fastMatches})`);
+        }
+        
+        if (hardFails > complianceEvents.length * 0.05) { // >5% hard fail rate
+            issues.push(`High compliance hard-fail rate: ${hardFails}/${complianceEvents.length}`);
+            health = 'YELLOW';
+        }
+        
+        return {
+            status,
+            health,
+            message: `Runtime proof from ${recordings.length} calls in last 24h`,
+            callCount: recordings.length,
+            eventCount: allEvents.length,
+            
+            // Scenario matching proof
+            scenarioMatching: {
+                total: matchingPipeline.length,
+                fastPath: fastMatches,
+                legacyPath: legacyMatches,
+                fastPathPercent: matchingPipeline.length > 0 
+                    ? Math.round(fastMatches / matchingPipeline.length * 100) + '%'
+                    : 'N/A'
+            },
+            
+            // Service type resolution proof
+            serviceTypeResolution: {
+                total: serviceTypeResolutions.length,
+                clarifierUsed,
+                clarifierPercent: serviceTypeResolutions.length > 0
+                    ? Math.round(clarifierUsed / serviceTypeResolutions.length * 100) + '%'
+                    : 'N/A'
+            },
+            
+            // Calendar execution proof
+            calendarExecution: {
+                slotsOffered: slotsOffered.length,
+                eventAttempts: calendarAttempts.length,
+                eventCreated: calendarCreated.length,
+                eventFailed: calendarFailed.length,
+                successRate: calendarAttempts.length > 0
+                    ? Math.round(calendarCreated.length / calendarAttempts.length * 100) + '%'
+                    : 'N/A'
+            },
+            
+            // Compliance proof
+            compliance: {
+                eventsWithCompliance: complianceEvents.length,
+                hardFails,
+                avgScore: avgComplianceScore,
+                hardFailPercent: complianceEvents.length > 0
+                    ? Math.round(hardFails / complianceEvents.length * 100) + '%'
+                    : 'N/A'
+            },
+            
+            // Raw event type distribution (top 10)
+            eventDistribution: Object.entries(eventCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10)
+                .reduce((obj, [k, v]) => { obj[k] = v; return obj; }, {}),
+            
+            issues
+        };
+        
+    } catch (error) {
+        logger.error('[WIRING] Runtime proof check failed', { companyId, error: error.message });
+        return {
+            status: 'ERROR',
+            health: 'RED',
+            error: error.message
+        };
+    }
+}
+
+// ============================================================================
 // SERVICE TYPE RESOLUTION CHECK (V89)
 // Verifies the ServiceTypeResolver infrastructure is properly wired
 // ============================================================================
@@ -931,6 +1088,9 @@ async function buildWiringReport({
     
     // Service type resolution check (V89)
     specialChecks.serviceTypeResolution = await checkServiceTypeResolution(companyId, companyDoc);
+    
+    // Runtime proof check (V89) - proves features are actually executing
+    specialChecks.runtimeProof = await checkRuntimeProof(companyId);
     
     // Booking contract check
     specialChecks.bookingContract = checkBookingContract(companyDoc);

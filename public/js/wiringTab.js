@@ -1188,6 +1188,7 @@
             <div class="w-panel">
                 <div class="w-panel-title">🔍 Critical Checks (THE blockers we found)</div>
                 <div class="w-checks-grid">
+                    ${renderCheckCard('📊 Runtime Proof', sc.runtimeProof)}
                     ${renderCheckCard('🔑 Kill Switches', sc.killSwitches)}
                     ${renderCheckCard('🔗 Template References', sc.templateReferences)}
                     ${renderCheckCard('📦 Scenario Pool', sc.scenarioPool)}
@@ -1277,6 +1278,33 @@
             details += `<div>Harmony: <strong class="${check.isAligned ? 'text-green' : 'text-yellow'}">${check.isAligned ? '✅ All systems aligned' : '⚠️ Systems misaligned'}</strong></div>`;
         }
         
+        // Runtime Proof (V89) - shows actual execution stats from BlackBox
+        if (check.scenarioMatching || check.calendarExecution || check.compliance) {
+            if (check.callCount !== undefined) {
+                details += `<div>Last 24h: <strong class="${check.callCount > 0 ? 'text-green' : 'text-gray'}">${check.callCount} calls</strong></div>`;
+            }
+            if (check.scenarioMatching) {
+                const sm = check.scenarioMatching;
+                details += `<div>Scenario match: <strong class="${sm.fastPath > sm.legacyPath ? 'text-green' : 'text-yellow'}">fast ${sm.fastPathPercent}</strong> / legacy ${sm.legacyPath}</div>`;
+            }
+            if (check.serviceTypeResolution && check.serviceTypeResolution.total > 0) {
+                details += `<div>ServiceType: ${check.serviceTypeResolution.total} resolved, <strong class="text-blue">${check.serviceTypeResolution.clarifierPercent}</strong> clarified</div>`;
+            }
+            if (check.calendarExecution) {
+                const ce = check.calendarExecution;
+                details += `<div>Calendar: ${ce.eventCreated}/${ce.eventAttempts} created <strong class="${ce.successRate !== 'N/A' && parseInt(ce.successRate) > 80 ? 'text-green' : 'text-yellow'}">(${ce.successRate})</strong></div>`;
+            }
+            if (check.compliance) {
+                const co = check.compliance;
+                if (co.avgScore !== null) {
+                    details += `<div>Compliance: avg <strong class="${co.avgScore >= 80 ? 'text-green' : co.avgScore >= 60 ? 'text-yellow' : 'text-red'}">${co.avgScore}</strong>, hard fails <strong class="${co.hardFails === 0 ? 'text-green' : 'text-red'}">${co.hardFailPercent}</strong></div>`;
+                }
+            }
+            if (check.issues?.length > 0) {
+                details += `<div class="text-yellow">⚠️ ${check.issues[0]}</div>`;
+            }
+        }
+        
         // Service Type Resolution (V89)
         if (check.summary) {
             const s = check.summary;
@@ -1294,6 +1322,19 @@
                 details += `<div>Optional (OK): <span class="text-gray">${check.checks.calendarMappings.missingOptional.join(', ')}</span></div>`;
             }
             details += `<div>Clarification: <strong class="${s.clarificationEnabled ? 'text-green' : 'text-gray'}">${s.clarificationEnabled ? '✅ Enabled' : '⚪ Disabled'}</strong></div>`;
+            // V89: Matching strategy and duplicate check
+            if (check.checks?.calendarMappings?.matchingStrategy) {
+                const strategy = check.checks.calendarMappings.matchingStrategy;
+                const strategyColor = strategy === 'canonicalType-authoritative' ? 'text-green' : 
+                                      strategy === 'canonicalType-partial' ? 'text-yellow' : 'text-red';
+                details += `<div>Strategy: <strong class="${strategyColor}">${strategy}</strong></div>`;
+            }
+            if (check.checks?.calendarMappings?.duplicateCanonical?.length > 0) {
+                details += `<div class="text-red">❌ Duplicates: ${check.checks.calendarMappings.duplicateCanonical.join(', ')}</div>`;
+            }
+            if (check.checks?.calendarMappings?.safeToRenameLabels) {
+                details += `<div class="text-green">✅ Safe to rename tag labels</div>`;
+            }
             // Runtime path verification
             if (check.checks?.runtimePath?.pathVerified) {
                 const method = check.checks.runtimePath.verificationMethod === 'contract_constant' ? '(contract)' : '';
@@ -1304,7 +1345,7 @@
                 details += `<div>Fallback: <strong class="text-green">✅ Safe</strong> → ${check.checks.fallbackBehavior.fallbackType}</div>`;
             }
         }
-        if (check.issues?.length > 0) {
+        if (check.issues?.length > 0 && !check.scenarioMatching) {
             const highIssues = check.issues.filter(i => i.severity === 'HIGH');
             const mediumIssues = check.issues.filter(i => i.severity === 'MEDIUM');
             if (highIssues.length > 0) {
