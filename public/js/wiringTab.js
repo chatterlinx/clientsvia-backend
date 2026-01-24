@@ -1283,21 +1283,34 @@
             details += `<div>Resolver: <strong class="text-green">${s.resolverEnabled ? '✅ Active' : '❌ Inactive'}</strong></div>`;
             details += `<div>Calendar: <strong class="${s.calendarIntegrated ? 'text-green' : 'text-gray'}">${s.calendarIntegrated ? '✅ Integrated' : '⚪ Not connected'}</strong></div>`;
             if (s.mappedTypes?.length > 0) {
-                details += `<div>Mapped types: <strong class="text-green">${s.mappedTypes.join(', ')}</strong></div>`;
+                details += `<div>Mapped: <strong class="text-green">${s.mappedTypes.join(', ')}</strong></div>`;
             }
-            if (check.checks?.calendarMappings?.missingCanonical?.length > 0) {
-                details += `<div>Missing: <strong class="text-yellow">${check.checks.calendarMappings.missingCanonical.join(', ')}</strong></div>`;
+            // Show missing CORE types (these matter)
+            if (check.checks?.calendarMappings?.missingCore?.length > 0) {
+                details += `<div>Missing core: <strong class="text-yellow">${check.checks.calendarMappings.missingCore.join(', ')}</strong></div>`;
+            }
+            // Show missing optional types (just info)
+            if (check.checks?.calendarMappings?.missingOptional?.length > 0) {
+                details += `<div>Optional (OK): <span class="text-gray">${check.checks.calendarMappings.missingOptional.join(', ')}</span></div>`;
             }
             details += `<div>Clarification: <strong class="${s.clarificationEnabled ? 'text-green' : 'text-gray'}">${s.clarificationEnabled ? '✅ Enabled' : '⚪ Disabled'}</strong></div>`;
             // Runtime path verification
             if (check.checks?.runtimePath?.pathVerified) {
-                details += `<div>Runtime path: <strong class="text-green">✅ Verified</strong></div>`;
+                const method = check.checks.runtimePath.verificationMethod === 'contract_constant' ? '(contract)' : '';
+                details += `<div>Runtime path: <strong class="text-green">✅ Verified ${method}</strong></div>`;
+            }
+            // Fallback behavior
+            if (check.checks?.fallbackBehavior?.safeDefault) {
+                details += `<div>Fallback: <strong class="text-green">✅ Safe</strong> → ${check.checks.fallbackBehavior.fallbackType}</div>`;
             }
         }
         if (check.issues?.length > 0) {
             const highIssues = check.issues.filter(i => i.severity === 'HIGH');
+            const mediumIssues = check.issues.filter(i => i.severity === 'MEDIUM');
             if (highIssues.length > 0) {
                 details += `<div class="text-red">⚠️ ${highIssues[0].message}</div>`;
+            } else if (mediumIssues.length > 0) {
+                details += `<div class="text-yellow">⚠️ ${mediumIssues[0].message}</div>`;
             }
         }
         

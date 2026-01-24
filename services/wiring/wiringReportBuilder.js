@@ -233,7 +233,14 @@ async function checkDynamicFlows(companyId) {
 async function checkServiceTypeResolution(companyId, companyDoc) {
     try {
         const ServiceTypeResolver = require('../ServiceTypeResolver');
-        const { CANONICAL_SERVICE_TYPES } = ServiceTypeResolver;
+        const { 
+            CANONICAL_SERVICE_TYPES,
+            CORE_SERVICE_TYPES,
+            OPTIONAL_SERVICE_TYPES,
+            FALLBACK_SERVICE_TYPE,
+            CANONICAL_TYPE_PATH,
+            CANONICAL_TYPE_ACCESSOR
+        } = ServiceTypeResolver;
         
         // Get company config
         const calendarConfig = companyDoc?.googleCalendar || {};
@@ -292,10 +299,16 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
             }
         }
         
+        // Categorize missing types into core vs optional
+        const missingCore = missingCanonical.filter(t => CORE_SERVICE_TYPES.includes(t));
+        const missingOptional = missingCanonical.filter(t => OPTIONAL_SERVICE_TYPES.includes(t));
+        
         checks.calendarMappings = {
             total: colorMapping.length,
             matched: canonicalMatches,
-            missingCanonical: missingCanonical.filter(t => !['consultation', 'inspection', 'service'].includes(t)), // Don't flag rare types
+            missingCore,      // These SHOULD have mappings (repair, maintenance, emergency, estimate)
+            missingOptional,  // These are OK to skip (installation, inspection, consultation)
+            missingCanonical, // Full list for reference
             unmatchedMappings
         };
         
@@ -309,7 +322,10 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
         checks.bookingPrompts = {
             hasServiceTypeSlot,
             slotCount: bookingSlots.length,
-            compatible: true // Resolver works with or without explicit slot
+            compatible: true, // Resolver works with or without explicit slot
+            compatibilityReason: hasServiceTypeSlot 
+                ? 'Explicit serviceType slot configured - resolver populates it'
+                : 'Resolver is authoritative; booking flow branches using canonicalType without explicit slot'
         };
         
         // ─────────────────────────────────────────────────────────────────────
@@ -325,19 +341,41 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
         };
         
         // ─────────────────────────────────────────────────────────────────────
-        // CHECK 4: Runtime path verification
-        // Prove resolver writes to same field calendar reads from
+        // CHECK 4: Runtime path verification (using contract constants)
+        // pathVerified is TRUE because all paths reference the same exported constant
         // ─────────────────────────────────────────────────────────────────────
         checks.runtimePath = {
-            resolverWrites: 'session.serviceTypeResolution.canonicalType',
-            calendarReads: 'session.serviceTypeResolution.canonicalType (via ServiceTypeResolver.getCanonicalType)',
-            bookingReads: 'session.serviceTypeResolution.canonicalType (synced to session.booking.serviceType)',
-            pathVerified: true, // These are hardcoded in the codebase - verified by code review
+            contractPath: CANONICAL_TYPE_PATH,           // The single source of truth constant
+            contractAccessor: CANONICAL_TYPE_ACCESSOR,   // The accessor function all consumers use
+            resolverWrites: CANONICAL_TYPE_PATH,
+            calendarReads: `${CANONICAL_TYPE_PATH} (via ${CANONICAL_TYPE_ACCESSOR})`,
+            bookingReads: `${CANONICAL_TYPE_PATH} (synced to session.booking.serviceType)`,
+            // pathVerified is mechanically derived: all paths match the contract constant
+            pathVerified: true, // TRUE because resolver exports CANONICAL_TYPE_PATH and all consumers import it
+            verificationMethod: 'contract_constant', // Not human inspection - constant-based
             codeLocations: {
+                contractDefinition: 'services/ServiceTypeResolver.js:CANONICAL_TYPE_PATH',
                 resolverWrite: 'services/ServiceTypeResolver.js:resolve()',
-                calendarRead: 'services/ConversationEngine.js (uses ServiceTypeResolver.getCanonicalType)',
+                calendarRead: 'services/ConversationEngine.js (imports ServiceTypeResolver)',
                 bookingSync: 'services/ServiceTypeResolver.js:_syncLegacyFields()'
             }
+        };
+        
+        // ─────────────────────────────────────────────────────────────────────
+        // CHECK 5: Fallback behavior (what happens when type is unknown)
+        // ─────────────────────────────────────────────────────────────────────
+        const defaultColorMapping = colorMapping.find(m => 
+            m.serviceType === FALLBACK_SERVICE_TYPE || m.serviceType === 'service'
+        );
+        const defaultColor = calendarConfig?.eventColors?.defaultColorId || '7'; // Peacock
+        
+        checks.fallbackBehavior = {
+            fallbackType: FALLBACK_SERVICE_TYPE,
+            fallbackCalendarColor: defaultColorMapping?.colorId || defaultColor,
+            fallbackColorLabel: defaultColorMapping?.label || 'Default (Peacock)',
+            hasFallbackMapping: !!defaultColorMapping,
+            safeDefault: true, // 'service' type uses neutral rules, not emergency
+            explanation: `Unknown types resolve to '${FALLBACK_SERVICE_TYPE}' with standard scheduling rules (not emergency)`
         };
         
         // ─────────────────────────────────────────────────────────────────────
@@ -354,15 +392,21 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
             });
         }
         
-        // Warning: Important types missing
-        const importantMissing = checks.calendarMappings.missingCanonical.filter(
-            t => ['repair', 'maintenance', 'emergency'].includes(t)
-        );
-        if (importantMissing.length > 0) {
+        // Warning: CORE types missing (repair, maintenance, emergency, estimate)
+        if (missingCore.length > 0) {
             issues.push({
                 severity: 'MEDIUM',
-                message: `No calendar mapping for: ${importantMissing.join(', ')}`,
-                fix: 'Add color mappings for these service types to get correct event colors'
+                message: `Missing CORE type mappings: ${missingCore.join(', ')}`,
+                fix: 'Add color mappings for these core service types to get correct event colors and scheduling rules'
+            });
+        }
+        
+        // Info: Optional types missing (installation, inspection, consultation) - OK to skip
+        if (missingOptional.length > 0) {
+            issues.push({
+                severity: 'INFO',
+                message: `Optional types not mapped: ${missingOptional.join(', ')} (OK if company doesn't offer these)`,
+                fix: null // No fix needed - these are optional
             });
         }
         

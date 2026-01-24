@@ -49,6 +49,26 @@ const CANONICAL_SERVICE_TYPES = [
     'service'         // Generic fallback
 ];
 
+// Core types that SHOULD have calendar mappings (missing = yellow warning)
+const CORE_SERVICE_TYPES = ['emergency', 'repair', 'maintenance', 'estimate'];
+
+// Optional types (missing = info only, not a warning)
+const OPTIONAL_SERVICE_TYPES = ['installation', 'inspection', 'consultation'];
+
+// Fallback type when detection fails or type is unknown
+const FALLBACK_SERVICE_TYPE = 'service';
+
+// ════════════════════════════════════════════════════════════════════════════════
+// RUNTIME PATH CONTRACT
+// This constant defines WHERE the canonical type is stored.
+// All consumers MUST read from this path. Wiring verifies this.
+// ════════════════════════════════════════════════════════════════════════════════
+
+const CANONICAL_TYPE_PATH = 'session.serviceTypeResolution.canonicalType';
+
+// Accessor function name that consumers should use
+const CANONICAL_TYPE_ACCESSOR = 'ServiceTypeResolver.getCanonicalType(session)';
+
 // ════════════════════════════════════════════════════════════════════════════════
 // RESOLUTION STATES
 // ════════════════════════════════════════════════════════════════════════════════
@@ -869,6 +889,11 @@ class ServiceTypeResolver {
 
 module.exports = ServiceTypeResolver;
 module.exports.CANONICAL_SERVICE_TYPES = CANONICAL_SERVICE_TYPES;
+module.exports.CORE_SERVICE_TYPES = CORE_SERVICE_TYPES;
+module.exports.OPTIONAL_SERVICE_TYPES = OPTIONAL_SERVICE_TYPES;
+module.exports.FALLBACK_SERVICE_TYPE = FALLBACK_SERVICE_TYPE;
+module.exports.CANONICAL_TYPE_PATH = CANONICAL_TYPE_PATH;
+module.exports.CANONICAL_TYPE_ACCESSOR = CANONICAL_TYPE_ACCESSOR;
 module.exports.RESOLUTION_STATES = RESOLUTION_STATES;
 module.exports.SERVICE_TYPE_KEYWORDS = SERVICE_TYPE_KEYWORDS;
 module.exports.CLARIFIERS = CLARIFIERS;
