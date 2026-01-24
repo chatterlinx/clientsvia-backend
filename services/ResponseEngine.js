@@ -18,6 +18,10 @@
 
 const logger = require('../utils/logger');
 const { normalizeScenarioType } = require('../utils/scenarioTypeDetector');
+const { 
+  sanitizeNoNameReplies, 
+  containsNamePlaceholder 
+} = require('../utils/sanitizeNoNameReply');
 
 class ResponseEngine {
   /**
@@ -25,12 +29,17 @@ class ResponseEngine {
    * PERSONALIZATION: Get the right reply arrays based on caller name availability
    * ============================================================================
    * 
-   * If caller name is NOT known, use _noName variants to avoid awkward responses
-   * like "Thanks, {name}." where {name} gets stripped.
+   * SELECTION ORDER (deterministic):
+   * 1. If caller name exists → use normal replies
+   * 2. If no name + _noName exists → use _noName variants
+   * 3. If no name + _noName missing + normal has {name} → use sanitized(normal)
+   * 4. If no name + _noName missing + normal has no {name} → use normal
+   * 
+   * This is a SEATBELT that ensures we NEVER speak "{name}" to a caller.
    * 
    * @param {Object} scenario - The scenario with reply arrays
    * @param {Object} context - Context with callerName, callerInfo, etc.
-   * @returns {Object} { quickReplies, fullReplies, hasCallerName }
+   * @returns {Object} { quickReplies, fullReplies, hasCallerName, usedFallback }
    */
   _getPersonalizedReplyArrays(scenario, context = {}) {
     // Check if we have caller name from various sources
@@ -43,23 +52,77 @@ class ResponseEngine {
     
     const hasCallerName = !!callerName && callerName.trim().length > 0;
     
-    // Decide which arrays to use
+    // Start with default arrays
     let quickReplies = scenario.quickReplies || [];
     let fullReplies = scenario.fullReplies || [];
+    let usedFallback = false;
+    let fallbackType = null;
+    
+    // Scenario metadata for logging
+    const scenarioMeta = {
+      scenarioId: scenario.scenarioId || scenario._id,
+      scenarioName: scenario.name || 'unknown'
+    };
     
     if (!hasCallerName) {
-      // Use _noName variants if available
-      if (scenario.quickReplies_noName && scenario.quickReplies_noName.length > 0) {
+      // ========================================================================
+      // CALLER NAME UNKNOWN - Need to avoid {name} in output
+      // ========================================================================
+      
+      const hasQuickNoName = scenario.quickReplies_noName && scenario.quickReplies_noName.length > 0;
+      const hasFullNoName = scenario.fullReplies_noName && scenario.fullReplies_noName.length > 0;
+      const quickHasNamePlaceholder = containsNamePlaceholder(quickReplies);
+      const fullHasNamePlaceholder = containsNamePlaceholder(fullReplies);
+      
+      // --- QUICK REPLIES ---
+      if (hasQuickNoName) {
+        // Best case: _noName variant exists
         quickReplies = scenario.quickReplies_noName;
         logger.info('[RESPONSE ENGINE] Using quickReplies_noName (caller name unknown)');
+      } else if (quickHasNamePlaceholder) {
+        // Fallback: sanitize normal replies to remove {name}
+        quickReplies = sanitizeNoNameReplies(quickReplies, { 
+          type: 'quick', 
+          ...scenarioMeta 
+        });
+        usedFallback = true;
+        fallbackType = 'quick';
+        logger.warn('[RESPONSE ENGINE] LAZY FALLBACK: Sanitized quickReplies (no _noName, has {name})', {
+          ...scenarioMeta,
+          lazyNoNameFallbackUsed: true
+        });
       }
-      if (scenario.fullReplies_noName && scenario.fullReplies_noName.length > 0) {
+      // else: no {name} in quickReplies, safe to use as-is
+      
+      // --- FULL REPLIES ---
+      if (hasFullNoName) {
+        // Best case: _noName variant exists
         fullReplies = scenario.fullReplies_noName;
         logger.info('[RESPONSE ENGINE] Using fullReplies_noName (caller name unknown)');
+      } else if (fullHasNamePlaceholder) {
+        // Fallback: sanitize normal replies to remove {name}
+        fullReplies = sanitizeNoNameReplies(fullReplies, { 
+          type: 'full', 
+          ...scenarioMeta 
+        });
+        usedFallback = true;
+        fallbackType = fallbackType ? 'both' : 'full';
+        logger.warn('[RESPONSE ENGINE] LAZY FALLBACK: Sanitized fullReplies (no _noName, has {name})', {
+          ...scenarioMeta,
+          lazyNoNameFallbackUsed: true
+        });
       }
+      // else: no {name} in fullReplies, safe to use as-is
     }
     
-    return { quickReplies, fullReplies, hasCallerName, callerName };
+    return { 
+      quickReplies, 
+      fullReplies, 
+      hasCallerName, 
+      callerName,
+      usedFallback,
+      fallbackType
+    };
   }
   
   /**
