@@ -2826,11 +2826,18 @@
             if (preview) {
                 currentPreview = preview;
                 
-                // Populate preview display
-                document.getElementById('preview-name').textContent = preview.name || gap.representative.substring(0, 50);
-                document.getElementById('preview-category').textContent = preview.category || 'FAQ';
-                document.getElementById('preview-type').textContent = preview.scenarioType || 'FAQ';
-                document.getElementById('preview-priority').textContent = preview.priority || 50;
+                // Populate preview display (with null checks for optional elements)
+                const previewNameEl = document.getElementById('preview-name');
+                if (previewNameEl) previewNameEl.textContent = preview.name || gap.representative.substring(0, 50);
+                
+                const previewCategoryEl = document.getElementById('preview-category');
+                if (previewCategoryEl) previewCategoryEl.textContent = preview.category || 'FAQ';
+                
+                const previewTypeEl = document.getElementById('preview-type');
+                if (previewTypeEl) previewTypeEl.textContent = preview.scenarioType || 'FAQ';
+                
+                const previewPriorityEl = document.getElementById('preview-priority');
+                if (previewPriorityEl) previewPriorityEl.textContent = preview.priority || 50;
                 
                 // Behavior
                 const behaviorEl = document.getElementById('preview-behavior');
@@ -2849,19 +2856,23 @@
                 // Quick Replies (multiple)
                 const quickRepliesEl = document.getElementById('preview-quick-replies');
                 const quickReplies = Array.isArray(preview.quickReplies) ? preview.quickReplies : [preview.quickReply || 'I can help with that.'];
-                quickRepliesEl.innerHTML = quickReplies.map(r => 
-                    `<div class="preview-reply" style="background: #10b981; color: white; padding: 12px; border-radius: 8px; font-size: 14px;">${escapeHtml(r)}</div>`
-                ).join('');
+                if (quickRepliesEl) {
+                    quickRepliesEl.innerHTML = quickReplies.map(r => 
+                        `<div class="preview-reply" style="background: #10b981; color: white; padding: 12px; border-radius: 8px; font-size: 14px;">${escapeHtml(r)}</div>`
+                    ).join('');
+                }
                 
                 // Full Replies (multiple)
                 const fullRepliesEl = document.getElementById('preview-full-replies');
                 const fullReplies = preview.fullReplies || [];
-                if (fullReplies.length > 0) {
-                    fullRepliesEl.innerHTML = fullReplies.map(r => 
-                        `<div class="preview-reply" style="background: #3b82f6; color: white; padding: 12px; border-radius: 8px; font-size: 14px;">${escapeHtml(r)}</div>`
-                    ).join('');
-                } else {
-                    fullRepliesEl.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
+                if (fullRepliesEl) {
+                    if (fullReplies.length > 0) {
+                        fullRepliesEl.innerHTML = fullReplies.map(r => 
+                            `<div class="preview-reply" style="background: #3b82f6; color: white; padding: 12px; border-radius: 8px; font-size: 14px;">${escapeHtml(r)}</div>`
+                        ).join('');
+                    } else {
+                        fullRepliesEl.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
+                    }
                 }
                 
                 // Regex Triggers (if any)
@@ -2884,21 +2895,27 @@
                     funnelSection.style.display = 'none';
                 }
                 
-                // Advanced Settings
-                document.getElementById('preview-confidence').textContent = 
-                    preview.minConfidence !== undefined ? (preview.minConfidence * 100).toFixed(0) + '%' : '60%';
-                document.getElementById('preview-followup-mode').textContent = 
-                    preview.followUpMode || 'NONE';
-                document.getElementById('preview-action-type').textContent = 
-                    preview.actionType || 'REPLY_ONLY';
-                document.getElementById('preview-booking-intent').textContent = 
-                    preview.bookingIntent ? '✅ Yes' : '❌ No';
-                document.getElementById('preview-booking-intent').style.color = 
-                    preview.bookingIntent ? 'var(--accent-green)' : 'var(--text-muted)';
-                document.getElementById('preview-cooldown').textContent = 
-                    (preview.cooldownSeconds || 0) + 's';
-                document.getElementById('preview-handoff').textContent = 
-                    preview.handoffPolicy || 'low_confidence';
+                // Advanced Settings (with null checks)
+                const confEl = document.getElementById('preview-confidence');
+                if (confEl) confEl.textContent = preview.minConfidence !== undefined ? (preview.minConfidence * 100).toFixed(0) + '%' : '60%';
+                
+                const followupEl = document.getElementById('preview-followup-mode');
+                if (followupEl) followupEl.textContent = preview.followUpMode || 'NONE';
+                
+                const actionEl = document.getElementById('preview-action-type');
+                if (actionEl) actionEl.textContent = preview.actionType || 'REPLY_ONLY';
+                
+                const bookingEl = document.getElementById('preview-booking-intent');
+                if (bookingEl) {
+                    bookingEl.textContent = preview.bookingIntent ? '✅ Yes' : '❌ No';
+                    bookingEl.style.color = preview.bookingIntent ? 'var(--accent-green)' : 'var(--text-muted)';
+                }
+                
+                const cooldownEl = document.getElementById('preview-cooldown');
+                if (cooldownEl) cooldownEl.textContent = (preview.cooldownSeconds || 0) + 's';
+                
+                const handoffEl = document.getElementById('preview-handoff');
+                if (handoffEl) handoffEl.textContent = preview.handoffPolicy || 'low_confidence';
                 
                 // Entity Capture (if any)
                 const entitySection = document.getElementById('entity-section');
@@ -2932,32 +2949,68 @@
                 updateHealthCount(preview, currentGap);
                 
             } else {
-                // Fallback display
-                document.getElementById('preview-name').textContent = gap.representative.substring(0, 50);
-                document.getElementById('preview-category').textContent = 'FAQ';
-                document.getElementById('preview-type').textContent = 'FAQ';
-                document.getElementById('preview-priority').textContent = '50';
-                document.getElementById('preview-behavior').textContent = '🤗 Friendly & Warm';
-                document.getElementById('trigger-count').textContent = gap.examples?.length || 1;
-                document.getElementById('preview-triggers').innerHTML = gap.examples?.slice(0, 5).map(e => 
-                    `<span class="trigger-tag">${escapeHtml(e.text)}</span>`
-                ).join('') || `<span class="trigger-tag">${escapeHtml(gap.representative)}</span>`;
-                document.getElementById('preview-quick-replies').innerHTML = '<div class="preview-reply" style="background: #10b981; color: white; padding: 12px; border-radius: 8px;">I can help with that. Let me get more information.</div>';
-                document.getElementById('preview-full-replies').innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
+                // Fallback display (with null checks for all optional elements)
+                const fallbackNameEl = document.getElementById('preview-name');
+                if (fallbackNameEl) fallbackNameEl.textContent = gap.representative.substring(0, 50);
+                
+                const fallbackCatEl = document.getElementById('preview-category');
+                if (fallbackCatEl) fallbackCatEl.textContent = 'FAQ';
+                
+                const fallbackTypeEl = document.getElementById('preview-type');
+                if (fallbackTypeEl) fallbackTypeEl.textContent = 'FAQ';
+                
+                const fallbackPriorityEl = document.getElementById('preview-priority');
+                if (fallbackPriorityEl) fallbackPriorityEl.textContent = '50';
+                
+                const fallbackBehaviorEl = document.getElementById('preview-behavior');
+                if (fallbackBehaviorEl) fallbackBehaviorEl.textContent = '🤗 Friendly & Warm';
+                
+                const triggerCountEl = document.getElementById('trigger-count');
+                if (triggerCountEl) triggerCountEl.textContent = gap.examples?.length || 1;
+                
+                const triggersEl = document.getElementById('preview-triggers');
+                if (triggersEl) {
+                    triggersEl.innerHTML = gap.examples?.slice(0, 5).map(e => 
+                        `<span class="trigger-tag">${escapeHtml(e.text)}</span>`
+                    ).join('') || `<span class="trigger-tag">${escapeHtml(gap.representative)}</span>`;
+                }
+                
+                const fallbackQuickEl = document.getElementById('preview-quick-replies');
+                if (fallbackQuickEl) fallbackQuickEl.innerHTML = '<div class="preview-reply" style="background: #10b981; color: white; padding: 12px; border-radius: 8px;">I can help with that. Let me get more information.</div>';
+                
+                const fallbackFullEl = document.getElementById('preview-full-replies');
+                if (fallbackFullEl) fallbackFullEl.innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
                 
                 // Health count for fallback (minimal)
                 updateHealthCount({ name: gap.representative, scenarioType: 'FAQ', priority: 50, triggers: gap.examples || [] }, currentGap);
                 
-                // Advanced Settings fallback
-                document.getElementById('preview-confidence').textContent = '60%';
-                document.getElementById('preview-followup-mode').textContent = 'NONE';
-                document.getElementById('preview-action-type').textContent = 'REPLY_ONLY';
-                document.getElementById('preview-booking-intent').textContent = '❌ No';
-                document.getElementById('preview-booking-intent').style.color = 'var(--text-muted)';
-                document.getElementById('preview-cooldown').textContent = '0s';
-                document.getElementById('preview-handoff').textContent = 'low_confidence';
-                document.getElementById('entity-section').style.display = 'none';
-                document.getElementById('noname-section').style.display = 'none';
+                // Advanced Settings fallback (with null checks)
+                const fbConfEl = document.getElementById('preview-confidence');
+                if (fbConfEl) fbConfEl.textContent = '60%';
+                
+                const fbFollowupEl = document.getElementById('preview-followup-mode');
+                if (fbFollowupEl) fbFollowupEl.textContent = 'NONE';
+                
+                const fbActionEl = document.getElementById('preview-action-type');
+                if (fbActionEl) fbActionEl.textContent = 'REPLY_ONLY';
+                
+                const fbBookingEl = document.getElementById('preview-booking-intent');
+                if (fbBookingEl) {
+                    fbBookingEl.textContent = '❌ No';
+                    fbBookingEl.style.color = 'var(--text-muted)';
+                }
+                
+                const fbCooldownEl = document.getElementById('preview-cooldown');
+                if (fbCooldownEl) fbCooldownEl.textContent = '0s';
+                
+                const fbHandoffEl = document.getElementById('preview-handoff');
+                if (fbHandoffEl) fbHandoffEl.textContent = 'low_confidence';
+                
+                const entitySection = document.getElementById('entity-section');
+                if (entitySection) entitySection.style.display = 'none';
+                
+                const nonameSection = document.getElementById('noname-section');
+                if (nonameSection) nonameSection.style.display = 'none';
             }
         }
         
