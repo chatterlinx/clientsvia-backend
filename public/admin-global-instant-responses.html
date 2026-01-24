@@ -4563,7 +4563,7 @@
                                 </label>
                                 <select id="scenario-status" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px;">
                                     <option value="draft">📝 Draft</option>
-                                    <option value="live">✅ Live</option>
+                                    <option value="live" selected>✅ Live</option>
                                     <option value="archived">📦 Archived</option>
                                 </select>
                             </div>
@@ -12151,7 +12151,7 @@ Higher = detailed, thorough scenarios (more context)
                 if (nameInput && p.name) nameInput.value = p.name;
                 
                 const statusSelect = document.getElementById('scenario-status');
-                if (statusSelect) statusSelect.value = p.status || 'draft';
+                if (statusSelect) statusSelect.value = p.status || 'live';  // Default to LIVE for Gap Fill scenarios
                 
                 const priorityInput = document.getElementById('scenario-priority');
                 if (priorityInput && typeof p.priority === 'number') priorityInput.value = p.priority;
@@ -12663,7 +12663,7 @@ Higher = detailed, thorough scenarios (more context)
             
             // Basic Info Tab
             document.getElementById('scenario-name').value = data.name || '';
-            document.getElementById('scenario-status').value = data.status || 'draft';
+            document.getElementById('scenario-status').value = data.status || 'live';  // Default to LIVE
             document.getElementById('scenario-priority').value = data.priority || 0;
             document.getElementById('scenario-triggers').value = (data.triggers || []).join('\n');
             document.getElementById('scenario-negative-triggers').value = (data.negativeTriggers || []).join('\n');
@@ -13813,7 +13813,7 @@ Higher = detailed, thorough scenarios (more context)
                 
                 // BASIC INFO
                 name: document.getElementById('scenario-name')?.value?.trim() || '',
-                status: document.getElementById('scenario-status')?.value || 'draft',
+                status: document.getElementById('scenario-status')?.value || 'live',
                 priority: parseInt(document.getElementById('scenario-priority')?.value) || 0,
                 scenarioType: document.getElementById('scenario-type')?.value || '',
                 channel: document.getElementById('scenario-channel')?.value || 'any',
