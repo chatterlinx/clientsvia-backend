@@ -277,8 +277,9 @@ class CompanyProfileManager {
             this.companyId = window.companyId;
         } else {
             // Fallback: extract from URL directly
+            // Support both ?id= and ?companyId= for compatibility
             const urlParams = new URLSearchParams(window.location.search);
-            this.companyId = urlParams.get('id');
+            this.companyId = urlParams.get('id') || urlParams.get('companyId');
             
             if (this.companyId) {
                 localStorage.setItem('lastCompanyId', this.companyId);
