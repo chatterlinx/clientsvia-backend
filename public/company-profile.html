@@ -4297,9 +4297,11 @@
                 }, 500); // Give time for page to fully initialize
             }
             
-            // Get company ID from URL
+            // Get company ID from URL (support both ?companyId= and legacy ?id=)
             const urlParams = new URLSearchParams(window.location.search);
-            const companyId = urlParams.get('id');
+            const companyId = urlParams.get('companyId') || urlParams.get('id');
+            
+            console.log(`[CompanyProfile HTML] resolvedCompanyId=${companyId} (from URL)`);
             
             if (companyId) {
                 
@@ -4339,7 +4341,7 @@
                     setTimeout(() => {
                         alert(`✅ Google Calendar connected successfully!\n\nAccount: ${gcEmail || 'Unknown'}\n\nYour AI receptionist can now check real-time availability and create appointments.`);
                         // Clean URL
-                        window.history.replaceState({}, '', `?id=${companyId}`);
+                        window.history.replaceState({}, '', `?companyId=${companyId}`);
                         // Refresh calendar status
                         if (typeof initGoogleCalendar === 'function') {
                             initGoogleCalendar(companyId);
@@ -4350,7 +4352,7 @@
                     setTimeout(() => {
                         alert(`❌ Google Calendar connection failed:\n\n${decodeURIComponent(gcError)}\n\nPlease try again.`);
                         // Clean URL
-                        window.history.replaceState({}, '', `?id=${companyId}`);
+                        window.history.replaceState({}, '', `?companyId=${companyId}`);
                     }, 500);
                 }
             } else {
