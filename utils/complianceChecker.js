@@ -143,30 +143,61 @@ const CLASSIFICATION_SAFE_PATTERNS = [
 ];
 
 // ============================================================================
-// BOOKING MOMENTUM PATTERNS (SHOULD appear when in SCHEDULING phase)
+// BOOKING MOMENTUM PATTERNS - APPROVED BOOKING MARKERS
 // ============================================================================
 // Only required when bookingPhase is 'SCHEDULING' or 'CONFIRMATION'.
 // NOT required during DISCOVERY or CLASSIFICATION phases.
+// 
+// IMPORTANT: These must be SPECIFIC booking markers, not vague.
+// "We can schedule that" is NOT enough. Must include concrete options.
 // ============================================================================
-const BOOKING_MOMENTUM_PATTERNS = [
-  // Time slot language
+
+// TIER 1: Time window markers (strongest signal)
+// These indicate the AI is offering concrete time options
+const TIME_WINDOW_PATTERNS = [
   /morning|afternoon|evening/i,
-  /today|tomorrow|this week|next week/i,
-  /\d{1,2}(:\d{2})?\s*(am|pm)/i,
-  /available|availability/i,
-  
-  // Scheduling action language
-  /schedule|appointment|booking/i,
-  /technician|tech|specialist/i,
-  /send (someone|a tech|our)/i,
-  /get (someone|a tech) out/i,
-  
-  // Confirmation language
-  /does .* work for you/i,
-  /would .* work/i,
-  /i can (get|have|schedule|send)/i,
-  /we can (get|have|send|schedule)/i,
-  /let me (get|have|schedule|book)/i
+  /\b\d{1,2}\s*[-–to]\s*\d{1,2}\b/i,            // "8-10", "8 to 10", "8–12"
+  /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i,            // "8am", "2:00pm"
+  /today|tomorrow/i,
+  /what (day|time) works/i,
+  /which (day|time)/i,
+  /when works (best|for you)/i
+];
+
+// TIER 2: Scheduling action markers (medium signal)
+// These indicate active scheduling, not just mentioning "schedule"
+const SCHEDULING_ACTION_PATTERNS = [
+  /i (can|have|'ve) (got|scheduled|booked)/i,
+  /i have you (down|scheduled|booked) for/i,
+  /we (can|have) (a|an) (opening|slot|appointment)/i,
+  /let me (get|book|schedule) (you|that)/i,
+  /i('ll| will) (get|send|schedule)/i,
+  /send (someone|a tech|our tech)/i,
+  /get (someone|a tech) (out|there)/i
+];
+
+// TIER 3: Confirmation markers (for CONFIRMATION phase)
+const CONFIRMATION_PATTERNS = [
+  /confirm|confirming/i,
+  /you('re| are) (all )?set/i,
+  /does that work/i,
+  /sound good/i,
+  /we('ll| will) see you/i,
+  /expect (a|our) (call|tech|technician)/i
+];
+
+// Combined patterns for momentum check
+// Requires at least one TIER 1 or TIER 2 pattern
+const BOOKING_MOMENTUM_PATTERNS = [
+  ...TIME_WINDOW_PATTERNS,
+  ...SCHEDULING_ACTION_PATTERNS,
+  ...CONFIRMATION_PATTERNS
+];
+
+// Stricter check for SCHEDULING phase - must have time window language
+const SCHEDULING_REQUIRED_PATTERNS = [
+  ...TIME_WINDOW_PATTERNS,
+  ...SCHEDULING_ACTION_PATTERNS
 ];
 
 // ============================================================================
@@ -200,12 +231,30 @@ const DEFAULT_VERBOSITY_LIMITS = {
 };
 
 // ============================================================================
-// PLACEHOLDER PATTERNS
+// PLACEHOLDER PATTERNS - Known placeholder tokens
 // ============================================================================
-// {name} is the most critical, but any placeholder leak is a quality problem.
+// Only treat as placeholder leak if it matches a KNOWN placeholder key.
+// Avoids false positives from callers saying things like "error code {E1}"
 // ============================================================================
 const NAME_PLACEHOLDER_PATTERN = /\{name\}/i;
-const ANY_PLACEHOLDER_PATTERN = /\{[a-zA-Z_][a-zA-Z0-9_]*\}/;  // Any {variable_name}
+
+// Known placeholder keys (from templates) - these are the only ones we flag
+const KNOWN_PLACEHOLDER_KEYS = [
+  'name', 'firstName', 'lastName', 'first_name', 'last_name',
+  'company', 'companyName', 'company_name',
+  'phone', 'phoneNumber', 'phone_number',
+  'address', 'serviceAddress', 'service_address',
+  'time', 'appointmentTime', 'appointment_time', 'preferredTime',
+  'date', 'appointmentDate', 'appointment_date',
+  'technician', 'technicianName', 'tech_name',
+  'issue', 'problemSummary', 'problem_summary',
+  'city', 'state', 'zip', 'zipCode'
+];
+
+// Build regex pattern from known keys (case insensitive)
+const KNOWN_PLACEHOLDER_PATTERN = new RegExp(
+  `\\{(${KNOWN_PLACEHOLDER_KEYS.join('|')})\\}`, 'i'
+);
 
 // ============================================================================
 // MODES THAT DON'T REQUIRE BOOKING MOMENTUM
@@ -306,13 +355,24 @@ function checkCompliance(reply, options = {}) {
   // CHECK 1: Placeholder Leak (weight: 25, HARD FAIL for {name})
   // =========================================================================
   // {name} leak is HARD FAIL (customer-facing cringe)
-  // Other placeholder leaks are soft fails (formatting problem)
+  // Other KNOWN placeholder leaks are soft fails (formatting problem)
+  // Unknown brace patterns (e.g., "{E1}" error codes) are NOT flagged
   // =========================================================================
   const hasNamePlaceholder = NAME_PLACEHOLDER_PATTERN.test(reply);
-  const hasAnyPlaceholder = ANY_PLACEHOLDER_PATTERN.test(reply);
-  const otherPlaceholders = hasAnyPlaceholder && !hasNamePlaceholder 
-    ? (reply.match(ANY_PLACEHOLDER_PATTERN) || []) 
-    : [];
+  
+  // Check for other KNOWN placeholders (not just any {...})
+  const allPlaceholderMatches = reply.match(/\{[a-zA-Z_][a-zA-Z0-9_]*\}/g) || [];
+  const knownPlaceholderLeaks = allPlaceholderMatches.filter(match => {
+    const key = match.slice(1, -1); // Remove { }
+    return KNOWN_PLACEHOLDER_KEYS.some(k => k.toLowerCase() === key.toLowerCase());
+  });
+  const otherPlaceholders = knownPlaceholderLeaks.filter(p => !NAME_PLACEHOLDER_PATTERN.test(p));
+  
+  // Unknown braces (not in our known list) - log but don't penalize
+  const unknownBraces = allPlaceholderMatches.filter(match => {
+    const key = match.slice(1, -1);
+    return !KNOWN_PLACEHOLDER_KEYS.some(k => k.toLowerCase() === key.toLowerCase());
+  });
   
   const hasCallerName = !!callerName && callerName.trim().length > 0;
   const mentionsName = hasCallerName && reply.toLowerCase().includes(callerName.toLowerCase());
@@ -327,10 +387,10 @@ function checkCompliance(reply, options = {}) {
     violations.push('HARD FAIL: Name placeholder {name} leaked into output');
     hardFails.push(HARD_FAIL_RULES.NAME_PLACEHOLDER_LEAK);
   } else if (otherPlaceholders.length > 0) {
-    // Soft fail: other placeholders leaked (formatting issue, not catastrophic)
+    // Soft fail: other KNOWN placeholders leaked (formatting issue, not catastrophic)
     nameUsageCorrect = false;
-    nameUsageReason = 'other_placeholder_leaked';
-    violations.push(`Placeholder leaked: ${otherPlaceholders.slice(0, 3).join(', ')}`);
+    nameUsageReason = 'known_placeholder_leaked';
+    violations.push(`Known placeholder leaked: ${otherPlaceholders.slice(0, 3).join(', ')}`);
     // Not a hard fail, but still fails this check
   } else if (hasCallerName && !mentionsName) {
     nameUsageReason = 'name_available_not_used';
@@ -343,7 +403,8 @@ function checkCompliance(reply, options = {}) {
     hasCallerName,
     usedName: mentionsName,
     reason: nameUsageReason,
-    otherPlaceholders: otherPlaceholders.slice(0, 3),
+    knownPlaceholderLeaks: otherPlaceholders.slice(0, 3),
+    unknownBraces: unknownBraces.slice(0, 3),  // Logged but not penalized
     weight: 25,
     hardFail: hasNamePlaceholder
   };
@@ -454,11 +515,10 @@ function checkCompliance(reply, options = {}) {
   // - effectiveMode is 'BOOKING' (not TRANSFER, MESSAGE_TAKE, EMERGENCY, etc.)
   // - AND bookingPhase is SCHEDULING or CONFIRMATION
   // 
-  // This prevents false "missing momentum" errors on:
-  // - Message-taking calls (after hours)
-  // - Transfer calls
-  // - Emergency dispatch calls
-  // - Discovery/classification phases
+  // STRICTER REQUIREMENTS:
+  // - SCHEDULING phase: Must include time window language (morning/afternoon, 8-10, etc.)
+  // - CONFIRMATION phase: Can use confirmation language ("you're all set", etc.)
+  // - "We can schedule that" alone is NOT enough
   // =========================================================================
   const isBookingModeForMomentum = effectiveMode === 'BOOKING' && !NON_BOOKING_MODES.includes(effectiveMode);
   const requireBookingMomentum = isBookingModeForMomentum && 
@@ -468,22 +528,72 @@ function checkCompliance(reply, options = {}) {
   const legacyRequiresMomentum = expectedBookingMomentum && !NON_BOOKING_MODES.includes(effectiveMode);
   
   if (requireBookingMomentum || legacyRequiresMomentum) {
+    // Use stricter patterns for SCHEDULING phase
+    const patternsToCheck = bookingPhase === 'SCHEDULING' 
+      ? SCHEDULING_REQUIRED_PATTERNS  // Must have time window or scheduling action
+      : BOOKING_MOMENTUM_PATTERNS;    // Confirmation phase can use confirmation language
+    
     const bookingFound = [];
-    for (const pattern of BOOKING_MOMENTUM_PATTERNS) {
+    const timeWindowFound = [];
+    const actionFound = [];
+    const confirmFound = [];
+    
+    // Check time window patterns
+    for (const pattern of TIME_WINDOW_PATTERNS) {
       const match = reply.match(pattern);
       if (match) {
+        timeWindowFound.push(match[0]);
+        bookingFound.push(match[0]);
+      }
+    }
+    
+    // Check scheduling action patterns
+    for (const pattern of SCHEDULING_ACTION_PATTERNS) {
+      const match = reply.match(pattern);
+      if (match) {
+        actionFound.push(match[0]);
+        bookingFound.push(match[0]);
+      }
+    }
+    
+    // Check confirmation patterns
+    for (const pattern of CONFIRMATION_PATTERNS) {
+      const match = reply.match(pattern);
+      if (match) {
+        confirmFound.push(match[0]);
         bookingFound.push(match[0]);
       }
     }
     
     const uniqueBooking = [...new Set(bookingFound)];
-    const hasBookingMomentum = uniqueBooking.length >= 1;
+    
+    // For SCHEDULING phase: require time window OR scheduling action
+    // For CONFIRMATION phase: any of the patterns work
+    let hasBookingMomentum;
+    let momentumReason;
+    
+    if (bookingPhase === 'SCHEDULING') {
+      hasBookingMomentum = timeWindowFound.length > 0 || actionFound.length > 0;
+      momentumReason = hasBookingMomentum 
+        ? (timeWindowFound.length > 0 ? 'time_window' : 'scheduling_action')
+        : 'missing_time_or_action';
+    } else {
+      // CONFIRMATION phase - any momentum works
+      hasBookingMomentum = uniqueBooking.length >= 1;
+      momentumReason = hasBookingMomentum ? 'has_momentum' : 'missing_momentum';
+    }
     
     checks.bookingMomentum = {
       passed: hasBookingMomentum,
       found: uniqueBooking.slice(0, 5),
+      breakdown: {
+        timeWindow: timeWindowFound.slice(0, 3),
+        action: actionFound.slice(0, 3),
+        confirmation: confirmFound.slice(0, 3)
+      },
       bookingPhase,
       effectiveMode,
+      momentumReason,
       weight: 15
     };
     
@@ -491,7 +601,10 @@ function checkCompliance(reply, options = {}) {
     if (checks.bookingMomentum.passed) {
       weightedScore += 15;
     } else {
-      violations.push(`Missing booking momentum in ${bookingPhase || 'booking'} phase (mode: ${effectiveMode})`);
+      const hint = bookingPhase === 'SCHEDULING' 
+        ? '(need time window like "morning/afternoon" or "8-10")' 
+        : '';
+      violations.push(`Missing booking momentum in ${bookingPhase} phase ${hint}`);
     }
   } else {
     // Track that we skipped this check (for debugging)
@@ -628,13 +741,15 @@ function buildComplianceSummary(complianceResult) {
     // Name/placeholder checks
     nameCorrect: nameCheck?.passed ?? true,
     namePlaceholderLeak: nameCheck?.reason === 'name_placeholder_leaked',
-    otherPlaceholderLeak: nameCheck?.reason === 'other_placeholder_leaked',
+    knownPlaceholderLeak: nameCheck?.reason === 'known_placeholder_leaked',
+    unknownBraces: nameCheck?.unknownBraces?.length || 0,  // Logged but not penalized
     // Verbosity
     verbosityOk: complianceResult.checks.verbosity?.passed ?? true,
     wordCount: complianceResult.checks.verbosity?.wordCount || null,
     // Booking momentum (only relevant when not skipped)
     bookingMomentum: bookingCheck?.skipped ? null : (bookingCheck?.passed ?? null),
     bookingMomentumSkipped: bookingCheck?.skipped || false,
+    bookingMomentumReason: bookingCheck?.momentumReason || null,
     // Metadata
     violationCount: complianceResult.violations?.length || 0
   };
@@ -650,8 +765,15 @@ module.exports = {
   // Export for testing/extension
   TROUBLESHOOTING_PATTERNS,
   CLASSIFICATION_SAFE_PATTERNS,
+  // Booking momentum patterns (tiered)
+  TIME_WINDOW_PATTERNS,
+  SCHEDULING_ACTION_PATTERNS,
+  CONFIRMATION_PATTERNS,
   BOOKING_MOMENTUM_PATTERNS,
+  SCHEDULING_REQUIRED_PATTERNS,
+  // Config
   HARD_FAIL_RULES,
   DEFAULT_VERBOSITY_LIMITS,
-  NON_BOOKING_MODES
+  NON_BOOKING_MODES,
+  KNOWN_PLACEHOLDER_KEYS
 };

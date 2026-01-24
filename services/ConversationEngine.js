@@ -10697,7 +10697,8 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             
             // Determine call mode for compliance context
-            // Mode determines whether booking momentum is required
+            // Split into primaryMode (what the call IS) vs handoffMode (how it ends)
+            // This prevents emergencies from vanishing into "transfer" in analytics
             const sessionMode = (session.mode || 'DISCOVERY').toUpperCase();
             const isBookingMode = sessionMode === 'BOOKING';
             const isTransferMode = session.requiresTransfer || session.transferRequested;
@@ -10707,14 +10708,22 @@ async function processTurn({
                                     session.discovery?.isEmergency ||
                                     scenarioRetrieval?.scenarios?.[0]?.scenarioType === 'EMERGENCY';
             
-            // Effective mode for compliance (determines if booking momentum required)
-            let effectiveMode = 'DISCOVERY';
-            if (isTransferMode) effectiveMode = 'TRANSFER';
-            else if (isMessageTakeMode) effectiveMode = 'MESSAGE_TAKE';
-            else if (isEmergencyMode) effectiveMode = 'EMERGENCY';
-            else if (isBookingMode) effectiveMode = 'BOOKING';
-            else if (sessionMode === 'SUPPORT') effectiveMode = 'SUPPORT';
-            else if (sessionMode === 'COMPLETE') effectiveMode = 'COMPLETE';
+            // PRIMARY MODE: What the call fundamentally IS (for analytics/reporting)
+            // Emergencies are still emergencies even if they end in transfer
+            let primaryMode = 'DISCOVERY';
+            if (isEmergencyMode) primaryMode = 'EMERGENCY';
+            else if (isBookingMode) primaryMode = 'BOOKING';
+            else if (isMessageTakeMode) primaryMode = 'MESSAGE_TAKE';
+            else if (sessionMode === 'SUPPORT') primaryMode = 'SUPPORT';
+            else if (sessionMode === 'COMPLETE') primaryMode = 'COMPLETE';
+            
+            // HANDOFF MODE: How the call is being handled (for compliance gating)
+            // Transfer mode skips booking momentum checks
+            const handoffMode = isTransferMode ? 'TRANSFER' : 'NONE';
+            
+            // EFFECTIVE MODE: For compliance (combines primary + handoff)
+            // Transfer overrides for compliance purposes (no booking momentum needed)
+            const effectiveMode = isTransferMode ? 'TRANSFER' : primaryMode;
             
             // Determine booking phase (only relevant when effectiveMode === 'BOOKING')
             let bookingPhase = null;
@@ -10788,8 +10797,10 @@ async function processTurn({
                     scenarioIdMatched: matchedScenarioId,  // 🔗 Correlation with matched scenario
                     executionTrace,
                     executionTraceCount: executionTrace.length,
-                    // Mode context (for booking momentum logic)
-                    effectiveMode,
+                    // Mode context (split for analytics vs compliance)
+                    primaryMode,    // What the call IS (EMERGENCY/BOOKING/etc.) - for analytics
+                    handoffMode,    // How it's ending (TRANSFER/NONE) - for compliance
+                    effectiveMode,  // Combined for compliance checks
                     bookingPhase,
                     // LLM context
                     scenarioCountProvided: llmContext.scenarioKnowledge?.length || 0,
@@ -10832,6 +10843,8 @@ async function processTurn({
                     turn: turnNumber,
                     turnTraceId,
                     scenarioIdMatched: matchedScenarioId,
+                    primaryMode,
+                    handoffMode,
                     effectiveMode,
                     score: complianceResult.score,
                     hardFail: complianceResult.hardFail,
