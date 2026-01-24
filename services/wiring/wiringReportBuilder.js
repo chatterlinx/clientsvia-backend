@@ -308,11 +308,29 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
         const usesCanonicalTypeField = tagsWithCanonicalType.length > 0;
         const allTagsHaveCanonical = tagsWithCanonicalType.length === colorMapping.length;
         
+        // V89: Check for duplicate canonicalType assignments (critical error)
+        const canonicalCounts = new Map();
+        colorMapping.forEach(m => {
+            const canonical = (m.canonicalType || '').toLowerCase().trim();
+            if (canonical && canonical !== 'none' && canonical !== 'service') {
+                canonicalCounts.set(canonical, (canonicalCounts.get(canonical) || 0) + 1);
+            }
+        });
+        const duplicateCanonical = [...canonicalCounts.entries()]
+            .filter(([_, count]) => count > 1)
+            .map(([type]) => type);
+        
+        // V89: Count unknown/unmapped rows
+        const unknownRows = colorMapping.filter(m => {
+            const canonical = (m.canonicalType || '').toLowerCase().trim();
+            return !canonical || canonical === 'none';
+        }).length;
+        
         checks.calendarMappings = {
             total: colorMapping.length,
             matched: canonicalMatches,
             missingCore,      // These SHOULD have mappings (repair, maintenance, emergency, estimate)
-            missingOptional,  // These are OK to skip (installation, inspection, consultation)
+            missingOptional,  // These are OK to skip (installation, inspection, consultation, sales)
             missingCanonical, // Full list for reference
             unmatchedMappings,
             // V89: Canonical type field usage
@@ -320,7 +338,13 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
             allTagsHaveCanonical,
             tagsWithCanonicalType: tagsWithCanonicalType.length,
             matchingStrategy: allTagsHaveCanonical ? 'canonicalType-authoritative' : 
-                              usesCanonicalTypeField ? 'canonicalType-partial' : 'name-based-legacy'
+                              usesCanonicalTypeField ? 'canonicalType-partial' : 'name-based-legacy',
+            // V89: Duplicate and unknown detection
+            duplicateCanonical,
+            unknownRows,
+            // V89: Legacy fallback safety
+            legacyFallbackEnabled: true, // Calendar service has legacy fallback
+            safeToRenameLabels: allTagsHaveCanonical && duplicateCanonical.length === 0
         };
         
         // ─────────────────────────────────────────────────────────────────────
@@ -427,6 +451,24 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
                 severity: 'LOW',
                 message: `Calendar has mappings not matching resolver: ${unmatchedMappings.join(', ')}`,
                 fix: 'These mappings may not be used. Consider using canonical names: repair, maintenance, emergency, estimate, installation'
+            });
+        }
+        
+        // V89: Critical: Duplicate canonical type assignments
+        if (duplicateCanonical.length > 0) {
+            issues.push({
+                severity: 'HIGH',
+                message: `DUPLICATE canonicalType assignments: ${duplicateCanonical.join(', ')}`,
+                fix: 'Each canonical type can only be assigned to ONE tag. Remove duplicates in Profile → Configuration → Service Type Tags'
+            });
+        }
+        
+        // V89: Warning: Unknown/unmapped rows (legacy fallback will be used)
+        if (unknownRows > 0) {
+            issues.push({
+                severity: 'LOW',
+                message: `${unknownRows} tag(s) missing canonicalType - using legacy name-based matching`,
+                fix: 'Assign a canonical type to each tag for rename-proof matching'
             });
         }
         

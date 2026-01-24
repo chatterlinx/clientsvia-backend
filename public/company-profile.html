@@ -664,7 +664,7 @@
                                                     </button>
                                                 </div>
                                                 
-                                                <!-- Canonical Types (chips) -->
+                                                <!-- Canonical Types (chips) - MUST match CANONICAL_SERVICE_TYPES -->
                                                 <div class="flex flex-wrap gap-2 mb-3">
                                                     <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 border border-red-200" data-type="emergency">🚨 emergency</span>
                                                     <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-orange-100 text-orange-800 border border-orange-200" data-type="repair">🔧 repair</span>
@@ -672,6 +672,7 @@
                                                     <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200" data-type="estimate">💰 estimate</span>
                                                     <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 border border-blue-200" data-type="installation">📦 installation</span>
                                                     <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800 border border-purple-200" data-type="inspection">🔍 inspection</span>
+                                                    <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200" data-type="consultation">💬 consultation</span>
                                                     <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-pink-100 text-pink-800 border border-pink-200" data-type="sales">💼 sales</span>
                                                     <span class="canonical-chip px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800 border border-gray-200" data-type="service">⚙️ service (fallback)</span>
                                                 </div>
@@ -4526,9 +4527,11 @@
             { id: '11', emoji: '🔴', name: 'Tomato' }
         ];
         
-        // V89: Canonical service types (agent outputs these)
-        const CANONICAL_SERVICE_TYPES = ['emergency', 'repair', 'maintenance', 'estimate', 'installation', 'inspection', 'sales', 'service'];
+        // V89: Canonical service types (MUST match ServiceTypeResolver.js exactly)
+        // This is the SINGLE SOURCE OF TRUTH for service types
+        const CANONICAL_SERVICE_TYPES = ['emergency', 'repair', 'maintenance', 'estimate', 'installation', 'inspection', 'consultation', 'sales', 'service'];
         const CORE_CANONICAL_TYPES = ['emergency', 'repair', 'maintenance', 'estimate']; // These should always have mappings
+        const OPTIONAL_CANONICAL_TYPES = ['installation', 'inspection', 'consultation', 'sales']; // OK to skip
         
         // Default color mappings with schedules + scheduling rules (V88)
         // V89: Added canonicalType field for explicit mapping
@@ -5067,6 +5070,26 @@
             document.getElementById('gc-save-settings-btn')?.addEventListener('click', async () => {
                 const btn = document.getElementById('gc-save-settings-btn');
                 const originalText = btn.innerHTML;
+                
+                // V89: Pre-save validation - check for duplicates
+                const canonicalCounts = new Map();
+                document.querySelectorAll('#gc-color-mappings .gc-color-row').forEach(row => {
+                    const canonicalSelect = row.querySelector('.gc-canonical-type');
+                    const canonical = canonicalSelect?.value || 'none';
+                    if (canonical && canonical !== 'none' && canonical !== 'service') {
+                        canonicalCounts.set(canonical, (canonicalCounts.get(canonical) || 0) + 1);
+                    }
+                });
+                
+                const duplicates = [...canonicalCounts.entries()]
+                    .filter(([_, count]) => count > 1)
+                    .map(([type]) => type);
+                
+                if (duplicates.length > 0) {
+                    alert(`⚠️ Cannot save: Duplicate canonical types found!\n\nThe following types are mapped to multiple tags:\n• ${duplicates.join('\n• ')}\n\nEach canonical type can only be assigned to ONE tag. Please resolve duplicates first.`);
+                    return;
+                }
+                
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Saving...';
                 btn.disabled = true;
                 

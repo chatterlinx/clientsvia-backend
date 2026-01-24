@@ -46,6 +46,7 @@ const CANONICAL_SERVICE_TYPES = [
     'installation',   // New equipment (3 day advance)
     'inspection',     // System checks (1 day advance)
     'consultation',   // General questions (same day OK)
+    'sales',          // New unit sales, membership, financing
     'service'         // Generic fallback
 ];
 
@@ -53,7 +54,7 @@ const CANONICAL_SERVICE_TYPES = [
 const CORE_SERVICE_TYPES = ['emergency', 'repair', 'maintenance', 'estimate'];
 
 // Optional types (missing = info only, not a warning)
-const OPTIONAL_SERVICE_TYPES = ['installation', 'inspection', 'consultation'];
+const OPTIONAL_SERVICE_TYPES = ['installation', 'inspection', 'consultation', 'sales'];
 
 // Fallback type when detection fails or type is unknown
 const FALLBACK_SERVICE_TYPE = 'service';
