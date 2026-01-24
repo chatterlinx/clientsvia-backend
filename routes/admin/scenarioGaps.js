@@ -938,21 +938,18 @@ OUTPUT FORMAT (JSON only, no markdown):
         "Sounds good. When would you like us to come by?"
     ],
     
-    "followUpFunnel": "We'll get a technician out. Morning or afternoon?",
-    
-    "followUpMode": "NONE",
-    "followUpQuestionText": null,
-    
-    "actionType": "REPLY_ONLY",
     "bookingIntent": false,
     
     "entityCapture": ["name", "issue"],
     
-    "notes": "Internal note about when this scenario fires and edge cases",
-    
-    "cooldown": 0,
-    "handoffPolicy": "low_confidence"
+    "notes": "Internal note about when this scenario fires and edge cases"
 }
+
+⚠️ DO NOT GENERATE THESE (Runtime-owned):
+- followUpMode, followUpFunnel, followUpQuestionText (Runtime decides based on context)
+- actionType, handoffPolicy (Runtime decides based on confidence/booking flow)
+- cooldown, actionHooks, entityValidation (Infrastructure settings)
+- timedFollowUp, silencePolicy, followUpMessages (Global admin settings)
 
 ENTITY CAPTURE GUIDE (what to extract from caller speech):
 - name: Always include - caller's name

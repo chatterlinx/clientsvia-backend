@@ -1235,11 +1235,11 @@
                 
                 <!-- Settings Count -->
                 <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
-                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Generated Fields</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Content Settings</div>
                     <div style="font-size: 15px; font-weight: 600; color: var(--accent-purple);">
-                        <i class="fas fa-list-check" style="margin-right: 6px;"></i>28 settings
+                        <i class="fas fa-list-check" style="margin-right: 6px;"></i>22 fields
                     </div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Timers/hooks admin-only</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">WHAT to say (not behavior)</div>
                 </div>
                 
                 <!-- Duplicate Detection -->
@@ -1713,7 +1713,7 @@
                             <div>
                                 <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 2px;">AI-Generable Settings</div>
                                 <div style="font-size: 20px; font-weight: 700; color: #22c55e;">
-                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">28</span>
+                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">22</span>
                                 </div>
                                 <div id="health-missing" style="margin-top: 4px; font-size: 11px; color: var(--text-muted);"></div>
                             </div>
@@ -3142,22 +3142,45 @@
             }
         }
         
+        // ════════════════════════════════════════════════════════════════════════
+        // RUNTIME CONTRACT: Scenarios define WHAT to say, not HOW/WHEN to behave
+        // ════════════════════════════════════════════════════════════════════════
+        // CONTENT (Scenario owns - GPT generates):
+        //   name, status, category, scenarioType, behavior, priority, minConfidence
+        //   triggers, regexTriggers, negativeTriggers, exampleUserPhrases
+        //   quickReplies, fullReplies, _noName variants
+        //   bookingIntent (flag), entityCapture, channel, notes
+        //
+        // RUNTIME (ConversationEngine owns - NOT generated):
+        //   followUpMode, followUpFunnel, followUpQuestionText (decided by context)
+        //   handoffPolicy (decided by confidence/context)
+        //   actionType (decided by booking flow)
+        //   silencePolicy, timedFollowUp (global admin settings)
+        //   cooldown, actionHooks, entityValidation (infrastructure)
+        // ════════════════════════════════════════════════════════════════════════
         function buildScenarioPrefill(preview = {}, gap = {}) {
             const p = preview || {};
             const g = gap || {};
             
+            // ═══════════════════════════════════════════════════════════════════
+            // CONTENT ONLY - What the agent says when this scenario matches
+            // ═══════════════════════════════════════════════════════════════════
             return {
+                // Identity
                 name: p.name || g.representative?.substring(0, 50) || 'New Scenario',
+                status: 'live',
                 category: p.category || 'FAQ',
-                status: 'live',  // ALWAYS live for Gap Fill - admin can change if needed
                 scenarioType: p.scenarioType || 'FAQ',
+                isActive: true,
+                
+                // Personality (how replies are WRITTEN, not how agent BEHAVES)
                 behavior: p.behavior || 'calm_professional',
-                priority: typeof p.priority === 'number' ? Math.max(-10, Math.min(10, p.priority)) : 0,  // Clamp to -10 to +10 range
+                
+                // Matching priority
+                priority: typeof p.priority === 'number' ? Math.max(-10, Math.min(10, p.priority)) : 0,
                 minConfidence: typeof p.minConfidence === 'number' ? p.minConfidence : 0.6,
-                replyStrategy: p.replyStrategy || 'AUTO',
                 
-                isActive: p.isActive !== false, // Default true
-                
+                // Triggers (when to match)
                 triggers: Array.isArray(p.triggers) && p.triggers.length > 0 
                     ? p.triggers 
                     : (g.representative ? [g.representative] : []),
@@ -3166,41 +3189,40 @@
                 exampleUserPhrases: Array.isArray(p.exampleUserPhrases) ? p.exampleUserPhrases : [],
                 negativeUserPhrases: Array.isArray(p.negativeUserPhrases) ? p.negativeUserPhrases : [],
                 
+                // Replies (what to say)
                 quickReplies: Array.isArray(p.quickReplies) && p.quickReplies.length > 0 
                     ? p.quickReplies 
                     : [p.quickReply || 'I can help with that.'],
                 fullReplies: Array.isArray(p.fullReplies) ? p.fullReplies : [],
                 quickReplies_noName: Array.isArray(p.quickReplies_noName) ? p.quickReplies_noName : [],
                 fullReplies_noName: Array.isArray(p.fullReplies_noName) ? p.fullReplies_noName : [],
+                replyStrategy: p.replyStrategy || 'AUTO',
                 
-                // Follow-up behavior (ASK_IF_BOOK only for booking-eligible scenarios)
-                followUpFunnel: p.followUpFunnel || getDefaultFollowUpFunnel(p.scenarioType, p.bookingIntent),
-                followUpMode: getFollowUpModeForScenario(p.scenarioType, p.bookingIntent, p.followUpMode),
-                followUpQuestionText: p.bookingIntent ? (p.followUpQuestionText || "Let's get you on the schedule. What day works?") : null,
-                
-                // Wiring/Actions
-                actionType: p.actionType || 'REPLY_ONLY',
+                // Intent flag (Runtime uses this to decide behavior)
                 bookingIntent: p.bookingIntent === true,
                 
-                // Entity extraction
+                // Entity extraction (what to capture, not how)
                 entityCapture: Array.isArray(p.entityCapture) && p.entityCapture.length > 0 
                     ? p.entityCapture 
                     : ['name', 'issue'],
                 
+                // Channel restriction
+                channel: p.channel || 'any',
+                
                 // Admin notes
                 notes: p.notes || `Created from Scenario Gaps. Gap: "${g.representative || 'Unknown'}"`,
                 
-                // Advanced settings (NO timer settings - admin-only)
-                // followUpMessages: REMOVED - admin-only (silence recovery is global policy)
-                cooldownSeconds: typeof p.cooldownSeconds === 'number' ? p.cooldownSeconds : 0,
-                handoffPolicy: p.handoffPolicy || 'low_confidence',
-                
-                // Channel & Variables
-                channel: p.channel || 'any',
-                dynamicVariables: p.dynamicVariables || {},
-                
+                // Metadata
                 source: 'scenario-gaps',
                 sourceGap: g.representative
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // RUNTIME-OWNED (NOT included - decided by ConversationEngine):
+                // - followUpMode, followUpFunnel, followUpQuestionText
+                // - handoffPolicy, actionType
+                // - cooldownSeconds, actionHooks, entityValidation
+                // - silencePolicy, timedFollowUp, dynamicVariables
+                // ═══════════════════════════════════════════════════════════════════
             };
         }
         
@@ -3231,62 +3253,57 @@
             currentPreview = null;
         }
         
-        // ========================================
-        // HEALTH COUNT BANNER - Single Source of Truth
-        // ========================================
-        // Tracks all 30 AI-generable settings from the runtime contract
+        // ════════════════════════════════════════════════════════════════════════
+        // HEALTH COUNT BANNER - CONTENT ONLY
+        // ════════════════════════════════════════════════════════════════════════
+        // Only tracks settings that scenarios OWN (WHAT to say)
+        // Runtime-owned settings (HOW/WHEN to behave) are NOT tracked here
+        // ════════════════════════════════════════════════════════════════════════
         function updateHealthCount(preview, gap) {
             const scenarioData = buildScenarioPrefill(preview, gap);
             
-            // 🎯 AI-GENERABLE SETTINGS (30 total from runtime contract)
-            // These are the settings Gap Fill can auto-generate (aiGenerable: true)
+            // 🎯 CONTENT SETTINGS ONLY (22 total)
+            // These are the settings GPT generates - what the agent SAYS
+            // Runtime settings (behavior/timing) are NOT included
             const settingsToCheck = [
-                // Identity & Lifecycle (5)
+                // Identity (5)
                 { key: 'name', label: 'Scenario Name', check: () => scenarioData.name && scenarioData.name.trim(), getValue: () => scenarioData.name },
                 { key: 'status', label: 'Status', check: () => scenarioData.status, getValue: () => scenarioData.status },
                 { key: 'isActive', label: 'Is Active', check: () => scenarioData.isActive !== undefined, getValue: () => scenarioData.isActive ? 'Yes' : 'No' },
                 { key: 'category', label: 'Category', check: () => scenarioData.category, getValue: () => scenarioData.category },
                 { key: 'scenarioType', label: 'Scenario Type', check: () => scenarioData.scenarioType, getValue: () => scenarioData.scenarioType },
                 
-                // Priority & Confidence (3)
+                // Personality & Priority (3)
+                { key: 'behavior', label: 'Personality', check: () => scenarioData.behavior, getValue: () => scenarioData.behavior },
                 { key: 'priority', label: 'Priority', check: () => typeof scenarioData.priority === 'number', getValue: () => scenarioData.priority },
-                { key: 'cooldownSeconds', label: 'Cooldown (sec)', check: () => typeof scenarioData.cooldownSeconds === 'number', getValue: () => scenarioData.cooldownSeconds },
                 { key: 'minConfidence', label: 'Min Confidence', check: () => typeof scenarioData.minConfidence === 'number', getValue: () => scenarioData.minConfidence },
                 
-                // Matching - Triggers (5)
+                // Triggers (5)
                 { key: 'triggers', label: 'Triggers', check: () => Array.isArray(scenarioData.triggers) && scenarioData.triggers.length > 0, getValue: () => scenarioData.triggers?.length || 0 },
                 { key: 'regexTriggers', label: 'Regex Triggers', check: () => Array.isArray(scenarioData.regexTriggers), getValue: () => scenarioData.regexTriggers?.length || 0 },
                 { key: 'negativeTriggers', label: 'Negative Triggers', check: () => Array.isArray(scenarioData.negativeTriggers), getValue: () => scenarioData.negativeTriggers?.length || 0 },
                 { key: 'exampleUserPhrases', label: 'Example Phrases', check: () => Array.isArray(scenarioData.exampleUserPhrases), getValue: () => scenarioData.exampleUserPhrases?.length || 0 },
                 { key: 'negativeUserPhrases', label: 'Negative Phrases', check: () => Array.isArray(scenarioData.negativeUserPhrases), getValue: () => scenarioData.negativeUserPhrases?.length || 0 },
                 
-                // Replies (5)
+                // Replies - WHAT to say (6)
                 { key: 'quickReplies', label: 'Quick Replies', check: () => Array.isArray(scenarioData.quickReplies) && scenarioData.quickReplies.length > 0, getValue: () => scenarioData.quickReplies?.length || 0 },
                 { key: 'fullReplies', label: 'Full Replies', check: () => Array.isArray(scenarioData.fullReplies), getValue: () => scenarioData.fullReplies?.length || 0 },
                 { key: 'quickReplies_noName', label: 'Quick (no name)', check: () => Array.isArray(scenarioData.quickReplies_noName), getValue: () => scenarioData.quickReplies_noName?.length || 0 },
                 { key: 'fullReplies_noName', label: 'Full (no name)', check: () => Array.isArray(scenarioData.fullReplies_noName), getValue: () => scenarioData.fullReplies_noName?.length || 0 },
                 { key: 'replyStrategy', label: 'Reply Strategy', check: () => scenarioData.replyStrategy, getValue: () => scenarioData.replyStrategy },
                 
-                // Follow-Up (3) - NOTE: followUpMessages removed (admin-only for silence recovery)
-                { key: 'followUpMode', label: 'Follow-Up Mode', check: () => scenarioData.followUpMode, getValue: () => scenarioData.followUpMode },
-                { key: 'followUpFunnel', label: 'Follow-Up Funnel', check: () => scenarioData.followUpFunnel, getValue: () => scenarioData.followUpFunnel || '(auto)' },
-                { key: 'followUpQuestionText', label: 'Follow-Up Text', check: () => {
-                    if (scenarioData.followUpMode === 'ASK_FOLLOWUP_QUESTION' || scenarioData.followUpMode === 'ASK_IF_BOOK') {
-                        return Boolean(scenarioData.followUpQuestionText);
-                    }
-                    return true;
-                }, getValue: () => scenarioData.followUpQuestionText || '(not required)' },
-                
-                // Wiring & Actions (3) - actionHooks removed (admin-only)
-                { key: 'actionType', label: 'Action Type', check: () => scenarioData.actionType, getValue: () => scenarioData.actionType },
+                // Intent & Extraction (3)
                 { key: 'bookingIntent', label: 'Booking Intent', check: () => typeof scenarioData.bookingIntent === 'boolean', getValue: () => scenarioData.bookingIntent ? 'Yes' : 'No' },
-                { key: 'handoffPolicy', label: 'Handoff Policy', check: () => scenarioData.handoffPolicy, getValue: () => scenarioData.handoffPolicy },
-                
-                // Behavior & Other (4)
-                { key: 'behavior', label: 'AI Behavior', check: () => scenarioData.behavior, getValue: () => scenarioData.behavior },
-                { key: 'channel', label: 'Channel', check: () => scenarioData.channel, getValue: () => scenarioData.channel || 'any' },
                 { key: 'entityCapture', label: 'Entity Capture', check: () => Array.isArray(scenarioData.entityCapture), getValue: () => scenarioData.entityCapture?.length || 0 },
-                { key: 'dynamicVariables', label: 'Dynamic Variables', check: () => scenarioData.dynamicVariables, getValue: () => Object.keys(scenarioData.dynamicVariables || {}).length || 0 }
+                { key: 'channel', label: 'Channel', check: () => scenarioData.channel, getValue: () => scenarioData.channel || 'any' }
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // NOT TRACKED (Runtime-owned):
+                // - followUpMode, followUpFunnel, followUpQuestionText
+                // - actionType, handoffPolicy, cooldownSeconds
+                // - actionHooks, entityValidation, silencePolicy
+                // - dynamicVariables, timedFollowUp
+                // ═══════════════════════════════════════════════════════════════════
             ];
             
             // Store for table rendering
@@ -3487,30 +3504,28 @@
             const p = currentPreview || {};
             const g = currentGap || {};
             
-            // Build comprehensive scenario preview with ALL 30+ settings
+            // Build CONTENT-ONLY scenario preview
             const scenarioData = buildScenarioPrefill(p, g);
             
             // Count generated settings
             const settingsCount = countGeneratedSettings(scenarioData);
             
-            const summary = `## AI-Generated Scenario Preview (${settingsCount.generated}/${settingsCount.total} settings)
+            const summary = `## AI-Generated Scenario Content (${settingsCount.generated}/${settingsCount.total} fields)
 
-### Identity & Lifecycle
+> **Contract:** Scenarios define WHAT to say, not HOW/WHEN to behave.
+> Runtime (ConversationEngine) owns behavior decisions.
+
+### Identity
 - **Name:** ${scenarioData.name || 'Unknown'}
 - **Status:** ${scenarioData.status || 'live'}
 - **Category:** ${scenarioData.category || 'FAQ'}
 - **Scenario Type:** ${scenarioData.scenarioType || 'FAQ'}
-- **Is Active:** ${scenarioData.isActive !== false ? 'Yes' : 'No'}
 
-### Priority & Confidence
-- **Priority:** ${scenarioData.priority || 0}
-- **Min Confidence:** ${scenarioData.minConfidence || 0.6}
-- **Cooldown:** ${scenarioData.cooldownSeconds || 0}s
-
-### Behavior & Personality
+### Personality & Matching
 - **Behavior:** ${scenarioData.behavior || 'calm_professional'}
-- **Channel:** ${scenarioData.channel || 'any'}
-- **Reply Strategy:** ${scenarioData.replyStrategy || 'AUTO'}
+- **Priority:** ${scenarioData.priority || 0} (-10 to +10)
+- **Min Confidence:** ${scenarioData.minConfidence || 0.6}
+- **Booking Intent:** ${scenarioData.bookingIntent ? 'Yes' : 'No'}
 
 ### Triggers (${(scenarioData.triggers || []).length})
 ${(scenarioData.triggers || []).map(t => `- "${t}"`).join('\n') || '(none)'}
@@ -3533,18 +3548,6 @@ ${(scenarioData.fullReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') 
 ### Full Replies - No Name (${(scenarioData.fullReplies_noName || []).length})
 ${(scenarioData.fullReplies_noName || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
 
-### Follow-Up Settings
-- **Follow-Up Mode:** ${scenarioData.followUpMode || 'NONE'}
-- **Follow-Up Funnel:** ${scenarioData.followUpFunnel || '(auto)'}
-- **Follow-Up Question:** ${scenarioData.followUpQuestionText || '(none)'}
-- **Note:** Timed silence recovery is a global setting (admin-only)
-
-### Actions & Wiring
-- **Action Type:** ${scenarioData.actionType || 'REPLY_ONLY'}
-- **Booking Intent:** ${scenarioData.bookingIntent ? 'Yes' : 'No'}
-- **Handoff Policy:** ${scenarioData.handoffPolicy || 'low_confidence'}
-- **Note:** Action hooks and timers are admin-only settings
-
 ### Entity Capture
 ${(scenarioData.entityCapture || []).map(e => `- ${e}`).join('\n') || '- (none)'}
 
@@ -3554,18 +3557,21 @@ ${(scenarioData.entityCapture || []).map(e => `- ${e}`).join('\n') || '- (none)'
 - **Priority:** ${g.priority || 'MEDIUM'}
 
 ---
+**Runtime-Owned (NOT in scenario):**
+Follow-up mode, action type, handoff policy, timers, hooks, silence policy
+
 *Generated: ${new Date().toISOString()}*
-*Settings Coverage: ${settingsCount.generated}/${settingsCount.total} (${Math.round(settingsCount.generated / settingsCount.total * 100)}%)*`;
+*Content Coverage: ${settingsCount.generated}/${settingsCount.total} (${Math.round(settingsCount.generated / settingsCount.total * 100)}%)*`;
 
             navigator.clipboard.writeText(summary).then(() => {
-                showToast('Full scenario copied to clipboard!', 'success');
+                showToast('Scenario content copied!', 'success');
             }).catch(err => {
                 console.error('Copy failed:', err);
                 showToast('Failed to copy', 'error');
             });
         }
         
-        // Helper to count generated settings
+        // Helper to count CONTENT settings only (22 total)
         function countGeneratedSettings(scenarioData) {
             const checks = [
                 // Identity (5)
@@ -3574,9 +3580,9 @@ ${(scenarioData.entityCapture || []).map(e => `- ${e}`).join('\n') || '- (none)'
                 scenarioData.isActive !== undefined,
                 scenarioData.category,
                 scenarioData.scenarioType,
-                // Priority (3)
+                // Personality & Priority (3)
+                scenarioData.behavior,
                 typeof scenarioData.priority === 'number',
-                typeof scenarioData.cooldownSeconds === 'number',
                 typeof scenarioData.minConfidence === 'number',
                 // Triggers (5)
                 Array.isArray(scenarioData.triggers) && scenarioData.triggers.length > 0,
@@ -3584,24 +3590,22 @@ ${(scenarioData.entityCapture || []).map(e => `- ${e}`).join('\n') || '- (none)'
                 Array.isArray(scenarioData.negativeTriggers),
                 Array.isArray(scenarioData.exampleUserPhrases),
                 Array.isArray(scenarioData.negativeUserPhrases),
-                // Replies (5)
+                // Replies (6)
                 Array.isArray(scenarioData.quickReplies) && scenarioData.quickReplies.length > 0,
                 Array.isArray(scenarioData.fullReplies),
                 Array.isArray(scenarioData.quickReplies_noName),
                 Array.isArray(scenarioData.fullReplies_noName),
                 scenarioData.replyStrategy,
-                // Follow-up (3) - followUpMessages removed (admin-only)
-                scenarioData.followUpMode,
-                scenarioData.followUpFunnel,
-                scenarioData.followUpQuestionText !== undefined,
-                // Actions (3) - actionHooks removed (admin-only)
-                scenarioData.actionType,
+                // Intent & Extraction (3)
                 scenarioData.bookingIntent !== undefined,
-                scenarioData.handoffPolicy,
-                // Behavior (3)
-                scenarioData.behavior,
-                scenarioData.channel,
-                Array.isArray(scenarioData.entityCapture)
+                Array.isArray(scenarioData.entityCapture),
+                scenarioData.channel
+                // ═══════════════════════════════════════════════════════════════════
+                // NOT COUNTED (Runtime-owned):
+                // - followUpMode, followUpFunnel, followUpQuestionText
+                // - actionType, handoffPolicy, cooldownSeconds
+                // - actionHooks, entityValidation, silencePolicy
+                // ═══════════════════════════════════════════════════════════════════
             ];
             
             const generated = checks.filter(Boolean).length;
