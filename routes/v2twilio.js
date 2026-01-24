@@ -1542,6 +1542,20 @@ router.post('/handle-speech', async (req, res) => {
     const callSid = req.body.CallSid;
     const repeatKey = `twilio-repeats:${callSid}`;
 
+    // 🎯 CLEAR TIMED FOLLOW-UP: Caller responded, cancel any pending follow-up timer
+    if (speechText && speechText.trim()) {
+      try {
+        const TimedFollowUpManager = require('../services/TimedFollowUpManager');
+        const wasCleared = TimedFollowUpManager.clearFollowUp(callSid);
+        if (wasCleared) {
+          logger.info(`⏰ [TIMED FOLLOWUP] Cleared - caller responded`, { callSid });
+        }
+      } catch (e) {
+        // Non-fatal - just log
+        logger.debug(`[TIMED FOLLOWUP] Clear error (non-fatal)`, { error: e.message });
+      }
+    }
+
     if (!speechText) {
       logger.info(`[SPEECH ERROR] [ERROR] Empty speech result received from Twilio`);
       // Legacy personality system removed - using configuration error message
@@ -3746,6 +3760,113 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
       }
       
+      // ════════════════════════════════════════════════════════════════════════
+      // 🎯 RUNTIME EXECUTION: Action Hooks, Effects, and Timed Follow-Up
+      // ════════════════════════════════════════════════════════════════════════
+      
+      // 1. Execute Action Hooks (if any)
+      const actionHooks = result.metadata?.actionHooks || [];
+      if (actionHooks.length > 0) {
+        try {
+          const ActionHookExecutor = require('../services/ActionHookExecutor');
+          const hookResults = await ActionHookExecutor.executeHooks(actionHooks, {
+            callId: callSid,
+            companyId: companyID,
+            scenarioId: result.metadata?.scenarioId,
+            conversationState: callState || {}
+          });
+          
+          // Store hook flags in call state for later use
+          if (hookResults.flags && Object.keys(hookResults.flags).length > 0) {
+            if (!callState) callState = {};
+            callState.hookFlags = { ...callState.hookFlags, ...hookResults.flags };
+            
+            // Persist to Redis
+            const redisClient = await getRedis();
+            if (redisClient) {
+              await redisClient.setEx(`call:state:${callSid}`, 3600, JSON.stringify(callState));
+            }
+          }
+          
+          logger.info(`⚡ [HOOKS] Executed ${hookResults.executed.length} hooks`, {
+            callSid,
+            flags: hookResults.flags
+          });
+        } catch (hookError) {
+          logger.error(`❌ [HOOKS] Error executing hooks`, { callSid, error: hookError.message });
+        }
+      }
+      
+      // 2. Apply State Effects (if any)
+      const effects = result.metadata?.effects || {};
+      if (effects && Object.keys(effects).length > 0) {
+        try {
+          const StateEffectsProcessor = require('../services/StateEffectsProcessor');
+          const effectResult = StateEffectsProcessor.applyEffects(effects, callState || {}, {
+            callId: callSid,
+            scenarioId: result.metadata?.scenarioId
+          });
+          
+          if (!effectResult.unchanged) {
+            callState = effectResult.state;
+            
+            // Persist updated state to Redis
+            const redisClient = await getRedis();
+            if (redisClient) {
+              await redisClient.setEx(`call:state:${callSid}`, 3600, JSON.stringify(callState));
+            }
+            
+            logger.info(`🔄 [EFFECTS] Applied ${effectResult.applied.length} state effects`, {
+              callSid,
+              applied: effectResult.applied.map(a => a.key)
+            });
+          }
+        } catch (effectError) {
+          logger.error(`❌ [EFFECTS] Error applying effects`, { callSid, error: effectError.message });
+        }
+      }
+      
+      // 3. Schedule Timed Follow-Up (if enabled)
+      const timedFollowUp = result.metadata?.timedFollowUp;
+      if (timedFollowUp && timedFollowUp.enabled) {
+        try {
+          const TimedFollowUpManager = require('../services/TimedFollowUpManager');
+          TimedFollowUpManager.scheduleFollowUp(callSid, timedFollowUp, {
+            companyId: companyID,
+            scenarioId: result.metadata?.scenarioId
+          }, async (followUpData) => {
+            // This callback fires when the timer triggers
+            logger.info(`⏰ [TIMED FOLLOWUP] Timer fired for call ${callSid}`, {
+              message: followUpData.message,
+              attemptCount: followUpData.attemptCount
+            });
+            
+            // Log to BlackBox for tracking
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'TIMED_FOLLOWUP_TRIGGERED',
+                data: {
+                  message: followUpData.message,
+                  attemptCount: followUpData.attemptCount,
+                  scenarioId: result.metadata?.scenarioId
+                }
+              }).catch(() => {});
+            }
+          });
+          
+          logger.info(`⏰ [TIMED FOLLOWUP] Scheduled for call ${callSid}`, {
+            delaySeconds: timedFollowUp.delaySeconds,
+            messagesCount: timedFollowUp.messages?.length || 0
+          });
+        } catch (timedError) {
+          logger.error(`❌ [TIMED FOLLOWUP] Error scheduling`, { callSid, error: timedError.message });
+        }
+      }
+      
+      // ════════════════════════════════════════════════════════════════════════
+      
       // 🎯 PHASE A – STEP 3B: Build response text with follow-up question (if ASK_FOLLOWUP_QUESTION or ASK_IF_BOOK)
       let responseText = result.response || result.text || "";
       
@@ -3880,14 +4001,54 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           // Generate ElevenLabs audio
           const ttsStart = Date.now();
           const { synthesizeSpeech } = require('../services/v2elevenLabsService');
+          
+          // 🎯 TTS OVERRIDE: Apply scenario-level voice settings if present
+          const ttsOverride = result.metadata?.ttsOverride || {};
+          const baseVoiceSettings = company.aiAgentSettings?.voiceSettings || {};
+          
+          // Map scenario ttsOverride to ElevenLabs parameters
+          // ttsOverride: { rate: '1.1', pitch: '+5%', volume: 'normal' }
+          // ElevenLabs: { stability, similarity_boost, style, use_speaker_boost }
+          let stability = baseVoiceSettings.stability;
+          let similarity_boost = baseVoiceSettings.similarityBoost;
+          let style = baseVoiceSettings.styleExaggeration;
+          
+          // Apply rate override (maps to stability - slower = more stable)
+          if (ttsOverride.rate) {
+            const rate = parseFloat(ttsOverride.rate);
+            if (!isNaN(rate)) {
+              // Rate 0.8 (slow) → higher stability, Rate 1.2 (fast) → lower stability
+              stability = Math.max(0.2, Math.min(0.9, (1.5 - rate) * 0.5 + 0.3));
+            }
+          }
+          
+          // Apply stability override directly if provided as number
+          if (typeof ttsOverride.stability === 'number') {
+            stability = ttsOverride.stability;
+          }
+          
+          // Apply similarity override directly if provided
+          if (typeof ttsOverride.similarity === 'number') {
+            similarity_boost = ttsOverride.similarity;
+          }
+          
+          if (Object.keys(ttsOverride).length > 0) {
+            logger.info(`🎤 [TTS OVERRIDE] Applying scenario overrides`, {
+              callSid,
+              scenarioId: result.metadata?.scenarioId,
+              overrides: ttsOverride,
+              computedStability: stability
+            });
+          }
+          
           const audioBuffer = await synthesizeSpeech({
             text: responseText,
             voiceId: elevenLabsVoice,
-            stability: company.aiAgentSettings?.voiceSettings?.stability,
-            similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
-            style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
-            use_speaker_boost: company.aiAgentSettings?.voiceSettings?.speakerBoost,
-            model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
+            stability: stability,
+            similarity_boost: similarity_boost,
+            style: style,
+            use_speaker_boost: baseVoiceSettings.speakerBoost,
+            model_id: baseVoiceSettings.aiModel,
             company  // ✅ CRITICAL FIX: Pass company object for API key lookup
           });
           perfCheckpoints.ttsGeneration = Date.now() - ttsStart;

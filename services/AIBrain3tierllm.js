@@ -600,7 +600,12 @@ class AIBrain3tierllm {
                             mode: 'NONE',
                             questionText: null,
                             transferTarget: null
-                        }
+                        },
+                        // 🎯 RUNTIME EXECUTION: Pass scenario settings for runtime use
+                        actionHooks: result.scenario.actionHooks || [],
+                        effects: result.scenario.effects || {},
+                        timedFollowUp: result.scenario.timedFollowUp || { enabled: false },
+                        ttsOverride: result.scenario.ttsOverride || {}
                     }
                 };
             }

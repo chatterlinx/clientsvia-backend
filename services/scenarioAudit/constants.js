@@ -547,26 +547,26 @@ const SCENARIO_SETTINGS_REGISTRY = {
     // ============================================
     behavior:         { audit: true,  gap: true,  agent: false, purpose: 'generation', description: 'AI personality - influences how replies are WRITTEN' },
     toneLevel:        { audit: false, gap: false, agent: false, purpose: 'system', description: 'DEPRECATED - use behavior instead' },
-    ttsOverride:      { audit: true,  gap: false, agent: false, purpose: 'not_implemented', description: '⚠️ NOT IMPLEMENTED - TTS uses company-level settings only' },
+    ttsOverride:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: '✅ IMPLEMENTED - Scenario TTS overrides applied to ElevenLabs' },
     channel:          { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'voice/sms/chat/any channel restriction' },
     
     // ============================================
     // TIMING & SILENCE (2 settings)
     // ============================================
-    timedFollowUp:    { audit: true,  gap: false, agent: false, purpose: 'not_implemented', description: '⚠️ NOT IMPLEMENTED - Stored but timer never triggers' },
+    timedFollowUp:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: '✅ IMPLEMENTED - Idle timer triggers follow-up messages' },
     silencePolicy:    { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: 'Silence handling policy (manual config)' },
     
     // ============================================
     // ACTION HOOKS (2 settings)
     // ============================================
-    actionHooks:      { audit: true,  gap: false, agent: false, purpose: 'not_implemented', description: '⚠️ NOT IMPLEMENTED - Stored but never executed' },
+    actionHooks:      { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: '✅ IMPLEMENTED - Hooks executed after scenario match' },
     handoffPolicy:    { audit: true,  gap: true,  agent: true,  purpose: 'runtime', description: 'When to escalate to human' },
     
     // ============================================
     // STATE MACHINE (2 settings)
     // ============================================
     preconditions:    { audit: false, gap: false, agent: true,  purpose: 'system', description: 'Conditions for scenario to match - WORKING in HybridScenarioSelector' },
-    effects:          { audit: false, gap: false, agent: false, purpose: 'not_implemented', description: '⚠️ NOT IMPLEMENTED - Effects stored but never applied' },
+    effects:          { audit: true,  gap: false, agent: true,  purpose: 'runtime_manual', description: '✅ IMPLEMENTED - State changes applied after scenario execution' },
     
     // ============================================
     // AI INTELLIGENCE (4 settings)
