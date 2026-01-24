@@ -711,6 +711,8 @@ fullReplies (4-5 variations) - STILL DISPATCHER STYLE:
 • Slightly more context but STILL under 25 words
 • Never paragraphs, never fluffy
 • MUST have 4-5 variations for natural conversation
+• MUST include {name} in EACH reply (runtime will strip if unknown)
+• Vary the acknowledgment: "Thanks, {name}." / "Alright, {name}." / "Okay, {name}."
 • Vary the booking language: "Morning or afternoon?" / "What day works?" / "When would you like us out?"
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -921,18 +923,18 @@ OUTPUT FORMAT (JSON only, no markdown):
     
     "fullReplies": [
         "Thanks, {name}. We'll get a technician out. Morning or afternoon?",
-        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?",
+        "Alright, {name}. We'll get a technician out. Morning or afternoon?",
         "I understand, {name}. Let's get you on the schedule. What day works best?",
-        "Okay. We can have someone out today or tomorrow. Which works better?",
-        "Sounds like we need a tech out there. When would you like us to come by?"
+        "Okay, {name}. We can have someone out today or tomorrow. Which works better?",
+        "Sounds good, {name}. When would you like us to come by?"
     ],
     
     "fullReplies_noName": [
         "Thanks. We'll get a technician out. Morning or afternoon?",
-        "Alright. That's helpful. We'll get a technician out. Morning or afternoon?",
+        "Alright. We'll get a technician out. Morning or afternoon?",
         "I understand. Let's get you on the schedule. What day works best?",
         "Okay. We can have someone out today or tomorrow. Which works better?",
-        "Sounds like we need a tech out there. When would you like us to come by?"
+        "Sounds good. When would you like us to come by?"
     ],
     
     "followUpFunnel": "We'll get a technician out. Morning or afternoon?",
@@ -985,8 +987,8 @@ ENTITY CAPTURE GUIDE (what to extract from caller speech):
 - urgency: Emergency indicators
 
 PERSONALIZATION GUIDE (name + loyalty recognition):
-1. ALWAYS include {name} in at least ONE quickReply and ONE fullReply
-2. ALWAYS provide _noName variants for runtime flexibility
+1. ALWAYS include {name} in EVERY quickReply and EVERY fullReply
+2. ALWAYS provide matching _noName variants (same count, same order)
 3. Name acknowledgment = recognition, NOT warmth
 4. Loyalty acknowledgment = respect for returning customers
 5. Three micro-acknowledgments in order: Name → Loyalty → Purpose
@@ -994,10 +996,14 @@ PERSONALIZATION GUIDE (name + loyalty recognition):
 7. Approved patterns:
    - "Thanks, {name}." / "Thanks."
    - "Appreciate it, {name}." / "Appreciate it."
+   - "Alright, {name}." / "Alright."
+   - "Okay, {name}." / "Okay."
    - "Good to hear from you, {name}." / "Good to hear from you."
 8. For returning/long-time customer scenarios:
    - "We appreciate you, {name}."
    - "Thanks for being a long-time customer, {name}."
+9. CRITICAL: fullReplies count MUST equal fullReplies_noName count (both 4-5)
+10. CRITICAL: quickReplies count MUST equal quickReplies_noName count (both 5-7)
 
 TEMPLATE VARIABLES GUIDE (fallbacks for {placeholders}):
 - Format: key=fallback value
