@@ -1289,6 +1289,10 @@
                 details += `<div>Missing: <strong class="text-yellow">${check.checks.calendarMappings.missingCanonical.join(', ')}</strong></div>`;
             }
             details += `<div>Clarification: <strong class="${s.clarificationEnabled ? 'text-green' : 'text-gray'}">${s.clarificationEnabled ? '✅ Enabled' : '⚪ Disabled'}</strong></div>`;
+            // Runtime path verification
+            if (check.checks?.runtimePath?.pathVerified) {
+                details += `<div>Runtime path: <strong class="text-green">✅ Verified</strong></div>`;
+            }
         }
         if (check.issues?.length > 0) {
             const highIssues = check.issues.filter(i => i.severity === 'HIGH');

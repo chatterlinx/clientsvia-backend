@@ -320,6 +320,31 @@ function wiringReportToMarkdown(r) {
         lines.push('');
     }
     
+    if (r.specialChecks?.serviceTypeResolution) {
+        const str = r.specialChecks.serviceTypeResolution;
+        lines.push(`### Service Type Resolution`);
+        lines.push(`- **Status:** ${str.status}`);
+        lines.push(`- **Health:** ${str.health}`);
+        if (str.summary) {
+            lines.push(`- **Resolver Enabled:** ${str.summary.resolverEnabled}`);
+            lines.push(`- **Calendar Integrated:** ${str.summary.calendarIntegrated}`);
+            lines.push(`- **Mapped Types:** ${str.summary.mappedTypes?.join(', ') || 'none'}`);
+            lines.push(`- **Clarification Enabled:** ${str.summary.clarificationEnabled}`);
+        }
+        if (str.checks?.calendarMappings?.missingCanonical?.length > 0) {
+            lines.push(`- **Missing Mappings:** ${str.checks.calendarMappings.missingCanonical.join(', ')}`);
+        }
+        if (str.checks?.runtimePath) {
+            lines.push(`- **Runtime Path Verified:** ${str.checks.runtimePath.pathVerified ? '✅ Yes' : '❌ No'}`);
+        }
+        if (str.issues?.length > 0) {
+            lines.push(`- **Issues:**`);
+            str.issues.forEach(i => lines.push(`  - [${i.severity}] ${i.message}`));
+        }
+        lines.push(`- **Message:** ${str.message || 'n/a'}`);
+        lines.push('');
+    }
+    
     // Issues
     lines.push('## Issues');
     lines.push('');
