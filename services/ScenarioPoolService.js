@@ -899,7 +899,6 @@ class ScenarioPoolService {
             message: `Loaded ${enabledScenarios.length} scenarios (same as LLM agent sees)`
         };
     }
-}
 
     // ============================================================================
     // 🚀 FAST SCENARIO LOOKUP - Uses compiled indexes
