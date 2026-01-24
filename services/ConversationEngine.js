@@ -10690,13 +10690,35 @@ async function processTurn({
             // HARD FAIL RULES:
             // - {name} placeholder leak → score capped at 40
             // - Banned phrase detected → score capped at 50
+            // 
+            // MODE-AWARE BOOKING MOMENTUM:
+            // - Only require booking momentum when session.mode === 'BOOKING'
+            // - NOT for: message-taking, transfer, emergency, discovery, support
             // ═══════════════════════════════════════════════════════════════════
             
-            // Determine booking phase for momentum requirements
-            // Only require booking momentum in SCHEDULING/CONFIRMATION phases
-            const isBookingMode = session.mode === 'booking' || session.conversationState?.mode === 'booking';
+            // Determine call mode for compliance context
+            // Mode determines whether booking momentum is required
+            const sessionMode = (session.mode || 'DISCOVERY').toUpperCase();
+            const isBookingMode = sessionMode === 'BOOKING';
+            const isTransferMode = session.requiresTransfer || session.transferRequested;
+            const isMessageTakeMode = session.booking?.outcome === 'message_taken' || 
+                                      session.conversationState?.outcomeMode === 'message_take';
+            const isEmergencyMode = session.discovery?.urgency === 'urgent' || 
+                                    session.discovery?.isEmergency ||
+                                    scenarioRetrieval?.scenarios?.[0]?.scenarioType === 'EMERGENCY';
+            
+            // Effective mode for compliance (determines if booking momentum required)
+            let effectiveMode = 'DISCOVERY';
+            if (isTransferMode) effectiveMode = 'TRANSFER';
+            else if (isMessageTakeMode) effectiveMode = 'MESSAGE_TAKE';
+            else if (isEmergencyMode) effectiveMode = 'EMERGENCY';
+            else if (isBookingMode) effectiveMode = 'BOOKING';
+            else if (sessionMode === 'SUPPORT') effectiveMode = 'SUPPORT';
+            else if (sessionMode === 'COMPLETE') effectiveMode = 'COMPLETE';
+            
+            // Determine booking phase (only relevant when effectiveMode === 'BOOKING')
             let bookingPhase = null;
-            if (isBookingMode) {
+            if (effectiveMode === 'BOOKING') {
                 // Determine phase based on what slots we have
                 const hasConsent = session.locks?.consentGiven || session.conversationState?.consentGiven;
                 const hasTimeSlot = currentSlots?.preferredTime || currentSlots?.appointmentTime;
@@ -10711,15 +10733,15 @@ async function processTurn({
                 } else {
                     bookingPhase = 'CONFIRMATION'; // Confirming details
                 }
-            } else {
-                bookingPhase = 'DISCOVERY'; // Not in booking mode
             }
+            // For non-BOOKING modes, bookingPhase stays null → no booking momentum required
             
             const complianceResult = checkCompliance(llmResult.reply, {
                 company,
                 callerName: llmContext.callerName || currentSlots?.name || null,
                 scenarioType: scenarioRetrieval?.scenarios?.[0]?.scenarioType || null,
-                bookingPhase
+                bookingPhase,
+                effectiveMode  // NEW: Pass mode for context
             });
             
             // Add compliance to execution trace
@@ -10766,6 +10788,10 @@ async function processTurn({
                     scenarioIdMatched: matchedScenarioId,  // 🔗 Correlation with matched scenario
                     executionTrace,
                     executionTraceCount: executionTrace.length,
+                    // Mode context (for booking momentum logic)
+                    effectiveMode,
+                    bookingPhase,
+                    // LLM context
                     scenarioCountProvided: llmContext.scenarioKnowledge?.length || 0,
                     hasCallerName: !!llmContext.callerName,
                     emotion: llmContext.callerEmotion || 'neutral',
@@ -10779,18 +10805,38 @@ async function processTurn({
                 logger.warn('[CONVERSATION ENGINE] Failed to log RESPONSE_EXECUTION event', { error: err.message });
             });
             
-            // Warn if compliance failed (for monitoring dashboards)
+            // ═══════════════════════════════════════════════════════════════════
+            // COMPLIANCE LOGGING - with first-hard-fail-per-call gate
+            // ═══════════════════════════════════════════════════════════════════
+            // - First hard fail per call: ERROR (high signal)
+            // - Subsequent hard fails: WARN (avoid spam)
+            // - Soft fails: WARN (always)
+            // ═══════════════════════════════════════════════════════════════════
             if (!complianceResult.passed) {
-                const logLevel = complianceResult.hardFail ? 'error' : 'warn';
-                logger[logLevel](`[CONVERSATION ENGINE] ${complianceResult.hardFail ? '🚨 HARD FAIL' : '⚠️'} LLM compliance check failed`, {
+                // Track hard fails per call session (first one gets ERROR, rest get WARN)
+                session._complianceHardFailCount = session._complianceHardFailCount || 0;
+                const isFirstHardFail = complianceResult.hardFail && session._complianceHardFailCount === 0;
+                
+                if (complianceResult.hardFail) {
+                    session._complianceHardFailCount++;
+                }
+                
+                // First hard fail → ERROR (high signal), subsequent → WARN (reduce spam)
+                const logLevel = isFirstHardFail ? 'error' : 'warn';
+                const prefix = isFirstHardFail ? '🚨 HARD FAIL' : 
+                              (complianceResult.hardFail ? '⚠️ HARD FAIL (repeat)' : '⚠️');
+                
+                logger[logLevel](`[CONVERSATION ENGINE] ${prefix} LLM compliance check failed`, {
                     callId: session._id?.toString(),
                     companyId,
                     turn: turnNumber,
                     turnTraceId,
                     scenarioIdMatched: matchedScenarioId,
+                    effectiveMode,
                     score: complianceResult.score,
                     hardFail: complianceResult.hardFail,
                     hardFailReason: complianceResult.hardFailReason,
+                    hardFailCount: session._complianceHardFailCount,
                     bookingPhase,
                     wordCount: complianceResult.checks.verbosity?.wordCount,
                     violations: complianceResult.violations?.slice(0, 5)

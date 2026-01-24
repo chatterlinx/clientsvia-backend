@@ -200,9 +200,27 @@ const DEFAULT_VERBOSITY_LIMITS = {
 };
 
 // ============================================================================
-// NAME PLACEHOLDER PATTERN
+// PLACEHOLDER PATTERNS
+// ============================================================================
+// {name} is the most critical, but any placeholder leak is a quality problem.
 // ============================================================================
 const NAME_PLACEHOLDER_PATTERN = /\{name\}/i;
+const ANY_PLACEHOLDER_PATTERN = /\{[a-zA-Z_][a-zA-Z0-9_]*\}/;  // Any {variable_name}
+
+// ============================================================================
+// MODES THAT DON'T REQUIRE BOOKING MOMENTUM
+// ============================================================================
+// Booking momentum is only checked when mode === 'BOOKING'
+// These modes should NOT be penalized for missing scheduling language
+// ============================================================================
+const NON_BOOKING_MODES = [
+  'DISCOVERY',      // Still figuring out what caller needs
+  'SUPPORT',        // General support, not booking
+  'TRANSFER',       // Transferring to human
+  'MESSAGE_TAKE',   // After-hours message taking
+  'EMERGENCY',      // Emergency dispatch (different flow)
+  'COMPLETE'        // Already done
+];
 
 /**
  * Check if a phrase is a classification question (allowed) vs troubleshooting (not allowed)
@@ -249,7 +267,8 @@ function countWords(text) {
  * @param {Object} options.company - Company object with aiAgentSettings
  * @param {string|null} options.callerName - Caller's name if known
  * @param {string} options.scenarioType - Type of scenario (BOOKING, FAQ, etc.)
- * @param {string} options.bookingPhase - DISCOVERY|CLASSIFICATION|SCHEDULING|CONFIRMATION
+ * @param {string} options.bookingPhase - CLASSIFICATION|SCHEDULING|CONFIRMATION (null if not booking)
+ * @param {string} options.effectiveMode - DISCOVERY|SUPPORT|BOOKING|TRANSFER|MESSAGE_TAKE|EMERGENCY|COMPLETE
  * @param {number} options.maxWords - Override max words limit
  * @param {Array} options.customTroubleshootingPatterns - Additional patterns to check
  * @returns {Object} Compliance result with score, checks, and violations
@@ -260,7 +279,8 @@ function checkCompliance(reply, options = {}) {
     callerName = null,
     scenarioType = null,
     bookingPhase = null,
-    expectedBookingMomentum = false, // Legacy support
+    effectiveMode = 'DISCOVERY',  // NEW: Mode determines if booking momentum required
+    expectedBookingMomentum = false, // Legacy support (deprecated)
     maxWords = null,
     customTroubleshootingPatterns = []
   } = options;
@@ -283,9 +303,17 @@ function checkCompliance(reply, options = {}) {
   let weightedScore = 0;
   
   // =========================================================================
-  // CHECK 1: Name Placeholder Leak (weight: 25, HARD FAIL if detected)
+  // CHECK 1: Placeholder Leak (weight: 25, HARD FAIL for {name})
+  // =========================================================================
+  // {name} leak is HARD FAIL (customer-facing cringe)
+  // Other placeholder leaks are soft fails (formatting problem)
   // =========================================================================
   const hasNamePlaceholder = NAME_PLACEHOLDER_PATTERN.test(reply);
+  const hasAnyPlaceholder = ANY_PLACEHOLDER_PATTERN.test(reply);
+  const otherPlaceholders = hasAnyPlaceholder && !hasNamePlaceholder 
+    ? (reply.match(ANY_PLACEHOLDER_PATTERN) || []) 
+    : [];
+  
   const hasCallerName = !!callerName && callerName.trim().length > 0;
   const mentionsName = hasCallerName && reply.toLowerCase().includes(callerName.toLowerCase());
   
@@ -295,9 +323,15 @@ function checkCompliance(reply, options = {}) {
   if (hasNamePlaceholder) {
     // CRITICAL HARD FAIL: {name} placeholder should NEVER appear in final output
     nameUsageCorrect = false;
-    nameUsageReason = 'placeholder_leaked';
+    nameUsageReason = 'name_placeholder_leaked';
     violations.push('HARD FAIL: Name placeholder {name} leaked into output');
     hardFails.push(HARD_FAIL_RULES.NAME_PLACEHOLDER_LEAK);
+  } else if (otherPlaceholders.length > 0) {
+    // Soft fail: other placeholders leaked (formatting issue, not catastrophic)
+    nameUsageCorrect = false;
+    nameUsageReason = 'other_placeholder_leaked';
+    violations.push(`Placeholder leaked: ${otherPlaceholders.slice(0, 3).join(', ')}`);
+    // Not a hard fail, but still fails this check
   } else if (hasCallerName && !mentionsName) {
     nameUsageReason = 'name_available_not_used';
   } else if (hasCallerName && mentionsName) {
@@ -309,6 +343,7 @@ function checkCompliance(reply, options = {}) {
     hasCallerName,
     usedName: mentionsName,
     reason: nameUsageReason,
+    otherPlaceholders: otherPlaceholders.slice(0, 3),
     weight: 25,
     hardFail: hasNamePlaceholder
   };
@@ -413,16 +448,26 @@ function checkCompliance(reply, options = {}) {
   }
   
   // =========================================================================
-  // CHECK 5: Booking Momentum (weight: 15, only in SCHEDULING phase)
+  // CHECK 5: Booking Momentum (weight: 15, only when mode=BOOKING + phase=SCHEDULING/CONFIRMATION)
   // =========================================================================
-  // Only require booking momentum when:
-  // - bookingPhase is SCHEDULING or CONFIRMATION, OR
-  // - Legacy: expectedBookingMomentum is true
-  const requireBookingMomentum = bookingPhase === 'SCHEDULING' 
-    || bookingPhase === 'CONFIRMATION'
-    || expectedBookingMomentum;
+  // CRITICAL: Only require booking momentum when:
+  // - effectiveMode is 'BOOKING' (not TRANSFER, MESSAGE_TAKE, EMERGENCY, etc.)
+  // - AND bookingPhase is SCHEDULING or CONFIRMATION
+  // 
+  // This prevents false "missing momentum" errors on:
+  // - Message-taking calls (after hours)
+  // - Transfer calls
+  // - Emergency dispatch calls
+  // - Discovery/classification phases
+  // =========================================================================
+  const isBookingModeForMomentum = effectiveMode === 'BOOKING' && !NON_BOOKING_MODES.includes(effectiveMode);
+  const requireBookingMomentum = isBookingModeForMomentum && 
+    (bookingPhase === 'SCHEDULING' || bookingPhase === 'CONFIRMATION');
   
-  if (requireBookingMomentum) {
+  // Also check legacy support (deprecated)
+  const legacyRequiresMomentum = expectedBookingMomentum && !NON_BOOKING_MODES.includes(effectiveMode);
+  
+  if (requireBookingMomentum || legacyRequiresMomentum) {
     const bookingFound = [];
     for (const pattern of BOOKING_MOMENTUM_PATTERNS) {
       const match = reply.match(pattern);
@@ -438,6 +483,7 @@ function checkCompliance(reply, options = {}) {
       passed: hasBookingMomentum,
       found: uniqueBooking.slice(0, 5),
       bookingPhase,
+      effectiveMode,
       weight: 15
     };
     
@@ -445,8 +491,18 @@ function checkCompliance(reply, options = {}) {
     if (checks.bookingMomentum.passed) {
       weightedScore += 15;
     } else {
-      violations.push(`Missing booking momentum in ${bookingPhase || 'booking'} phase`);
+      violations.push(`Missing booking momentum in ${bookingPhase || 'booking'} phase (mode: ${effectiveMode})`);
     }
+  } else {
+    // Track that we skipped this check (for debugging)
+    checks.bookingMomentum = {
+      passed: true,
+      skipped: true,
+      reason: `Mode '${effectiveMode}' does not require booking momentum`,
+      effectiveMode,
+      bookingPhase,
+      weight: 0
+    };
   }
   
   // =========================================================================
@@ -559,6 +615,9 @@ function quickVerbosityCheck(reply, maxWords = DEFAULT_VERBOSITY_LIMITS.maxWords
 function buildComplianceSummary(complianceResult) {
   if (!complianceResult) return null;
   
+  const nameCheck = complianceResult.checks.nameUsage;
+  const bookingCheck = complianceResult.checks.bookingMomentum;
+  
   return {
     score: complianceResult.score,
     passed: complianceResult.passed,
@@ -566,11 +625,17 @@ function buildComplianceSummary(complianceResult) {
     hardFailReason: complianceResult.hardFailReason || null,
     bannedHit: !complianceResult.checks.bannedPhrases?.passed,
     troubleshootHit: !complianceResult.checks.troubleshooting?.passed,
-    nameCorrect: complianceResult.checks.nameUsage?.passed ?? true,
-    namePlaceholderLeak: complianceResult.checks.nameUsage?.reason === 'placeholder_leaked',
+    // Name/placeholder checks
+    nameCorrect: nameCheck?.passed ?? true,
+    namePlaceholderLeak: nameCheck?.reason === 'name_placeholder_leaked',
+    otherPlaceholderLeak: nameCheck?.reason === 'other_placeholder_leaked',
+    // Verbosity
     verbosityOk: complianceResult.checks.verbosity?.passed ?? true,
     wordCount: complianceResult.checks.verbosity?.wordCount || null,
-    bookingMomentum: complianceResult.checks.bookingMomentum?.passed ?? null,
+    // Booking momentum (only relevant when not skipped)
+    bookingMomentum: bookingCheck?.skipped ? null : (bookingCheck?.passed ?? null),
+    bookingMomentumSkipped: bookingCheck?.skipped || false,
+    // Metadata
     violationCount: complianceResult.violations?.length || 0
   };
 }
@@ -587,5 +652,6 @@ module.exports = {
   CLASSIFICATION_SAFE_PATTERNS,
   BOOKING_MOMENTUM_PATTERNS,
   HARD_FAIL_RULES,
-  DEFAULT_VERBOSITY_LIMITS
+  DEFAULT_VERBOSITY_LIMITS,
+  NON_BOOKING_MODES
 };
