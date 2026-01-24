@@ -5163,5 +5163,62 @@ companySchema.index({ isDeleted: 1, createdAt: -1 }, {
     background: true
 });
 
+// ============================================================================
+// POST-SAVE HOOK: Auto-invalidate scenario pool cache on template binding changes
+// ============================================================================
+// This ensures that when templateReferences changes, the cached scenario pool
+// is immediately invalidated so the next request rebuilds with the new binding.
+// This prevents the "it's bound but still not loading" confusion.
+// ============================================================================
+companySchema.post('save', async function(doc) {
+    // Check if templateReferences was modified
+    if (this.isModified && this.isModified('aiAgentSettings.templateReferences')) {
+        try {
+            const companyId = doc._id.toString();
+            const logger = require('../utils/logger');
+            
+            logger.info(`[COMPANY HOOK] 🔗 Template binding changed for ${companyId} - invalidating cache`);
+            
+            // Clear Redis cache
+            try {
+                const { getSharedRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
+                if (isRedisConfigured()) {
+                    const redis = await getSharedRedisClient();
+                    if (redis) {
+                        await redis.del(`scenario-pool:${companyId}`);
+                        await redis.del(`company:${companyId}`);
+                        logger.info(`[COMPANY HOOK] ✅ Cache cleared for ${companyId}`);
+                    }
+                }
+            } catch (cacheErr) {
+                logger.warn(`[COMPANY HOOK] Cache clear warning: ${cacheErr.message}`);
+            }
+            
+            // Emit BlackBox event for audit trail (optional but nice)
+            try {
+                const BlackBoxLogger = require('../services/BlackBoxLogger');
+                await BlackBoxLogger.log({
+                    companyId,
+                    type: 'TEMPLATE_BINDING_UPDATED',
+                    data: {
+                        templateReferences: doc.aiAgentSettings?.templateReferences || [],
+                        bindingCount: (doc.aiAgentSettings?.templateReferences || []).length,
+                        enabledCount: (doc.aiAgentSettings?.templateReferences || []).filter(r => r.enabled !== false).length,
+                        updatedAt: new Date().toISOString()
+                    }
+                });
+                logger.info(`[COMPANY HOOK] ✅ BlackBox event emitted for template binding update`);
+            } catch (bbErr) {
+                // Non-blocking - don't fail the save
+                logger.debug(`[COMPANY HOOK] BlackBox logging skipped: ${bbErr.message}`);
+            }
+        } catch (err) {
+            // Non-blocking - don't fail the save
+            const logger = require('../utils/logger');
+            logger.error(`[COMPANY HOOK] Error in post-save hook: ${err.message}`);
+        }
+    }
+});
+
 const Company = mongoose.model('Company', companySchema, 'companiesCollection');
 module.exports = Company;
