@@ -8835,41 +8835,76 @@ async function processTurn({
                         const calendarEnabled = calendarConfig?.enabled && calendarConfig?.connected;
                         
                         if (calendarEnabled) {
-                            // V88: Detect service type from conversation for per-type scheduling rules
-                            // Order of priority: session.booking.serviceType > session.discovery.serviceType > detected from issue
-                            let detectedServiceType = session.booking?.serviceType || session.discovery?.serviceType || 'service';
+                            // ═══════════════════════════════════════════════════════════════════
+                            // V89: HYBRID SERVICE TYPE DETECTION WITH CONFIDENCE SCORING
+                            // Uses ServiceTypeDetector for smart auto-detection + clarification
+                            // ═══════════════════════════════════════════════════════════════════
+                            const ServiceTypeDetector = require('../utils/ServiceTypeDetector');
                             
-                            // If no service type set, try to detect from issue description
-                            if (detectedServiceType === 'service') {
-                                const issueText = (session.discovery?.issue || currentSlots.issue || '').toLowerCase();
-                                if (/\b(emergency|urgent|no heat|no cool|not working|broken|leak|flood)\b/i.test(issueText)) {
-                                    detectedServiceType = 'emergency';
-                                } else if (/\b(maintenance|tune[- ]?up|checkup|annual|seasonal)\b/i.test(issueText)) {
-                                    detectedServiceType = 'maintenance';
-                                } else if (/\b(estimate|quote|bid|price|cost|how much)\b/i.test(issueText)) {
-                                    detectedServiceType = 'estimate';
-                                } else if (/\b(repair|fix|broken|not working|stopped)\b/i.test(issueText)) {
-                                    detectedServiceType = 'repair';
-                                } else if (/\b(install|new unit|replacement|upgrade)\b/i.test(issueText)) {
-                                    detectedServiceType = 'installation';
-                                } else if (/\b(inspect|inspection|check|evaluate)\b/i.test(issueText)) {
-                                    detectedServiceType = 'inspection';
-                                }
-                            }
+                            const issueText = session.discovery?.issue || currentSlots.issue || '';
+                            const existingServiceType = session.booking?.serviceType || session.discovery?.serviceType;
                             
-                            log('📅 TIME: Checking real-time availability', { dayPart, windowPart, serviceType: detectedServiceType });
+                            const detection = ServiceTypeDetector.detectServiceType(issueText, {
+                                companyConfig: company,
+                                existingServiceType
+                            });
                             
-                            try {
-                                const availResult = await GoogleCalendarService.findAvailableSlots(
-                                    company._id.toString(),
-                                    {
-                                        dayPreference: dayPart,
-                                        timePreference: windowPart,
-                                        durationMinutes: calendarConfig.settings?.defaultDurationMinutes || 60,
-                                        maxSlots: 3,
-                                        serviceType: detectedServiceType // V88: Pass service type for per-type rules
-                                    }
-                                );
+                            let detectedServiceType = detection.serviceType;
+                            
+                            // Store detection metadata for audit trail
+                            session.booking = session.booking || {};
+                            session.booking.serviceTypeDetection = {
+                                type: detectedServiceType,
+                                confidence: detection.confidence,
+                                confidenceScore: detection.confidenceScore,
+                                method: detection.detectionMethod,
+                                needsClarification: detection.needsClarification,
+                                clarifierAsked: false
+                            };
+                            
+                            // V89: If detection needs clarification and we haven't asked yet, 
+                            // ask the clarifier BEFORE proceeding with calendar lookup
+                            if (detection.needsClarification && 
+                                !session.booking.serviceTypeDetection.clarifierAsked &&
+                                detection.clarifierQuestion) {
+                                
+                                // Mark that we're asking the clarifier
+                                session.booking.serviceTypeDetection.clarifierAsked = true;
+                                session.booking.serviceTypeDetection.clarifierType = detection.clarifierType;
+                                session.booking.serviceTypeDetection.pendingClarification = true;
+                                
+                                log('🏷️ SERVICE TYPE: Low confidence, asking clarifier', {
+                                    tentativeType: detectedServiceType,
+                                    confidence: detection.confidence,
+                                    clarifierType: detection.clarifierType
+                                });
+                                
+                                // Return the clarifier question instead of calendar slots
+                                finalReply = detection.clarifierQuestion;
+                                nextSlotId = 'serviceType'; // Will capture their response
+                                
+                                // Skip calendar lookup for now - will retry after clarification
+                            } else {
+                                // High confidence or already clarified - proceed with calendar
+                                log('📅 TIME: Checking real-time availability', { 
+                                    dayPart, 
+                                    windowPart, 
+                                    serviceType: detectedServiceType,
+                                    confidence: detection.confidence,
+                                    method: detection.detectionMethod
+                                });
+                            
+                                try {
+                                    const availResult = await GoogleCalendarService.findAvailableSlots(
+                                        company._id.toString(),
+                                        {
+                                            dayPreference: dayPart,
+                                            timePreference: windowPart,
+                                            durationMinutes: calendarConfig.settings?.defaultDurationMinutes || 60,
+                                            maxSlots: 3,
+                                            serviceType: detectedServiceType // V89: Pass service type for per-type rules
+                                        }
+                                    );
                                 
                                 if (!availResult.fallback && availResult.slots.length > 0) {
                                     // We have real availability - offer the slots
@@ -8951,6 +8986,7 @@ async function processTurn({
                                     } catch {}
                                 }
                             }
+                            } // End of else block (high confidence - proceed with calendar)
                         } else {
                             // No calendar connected - use preference capture mode
                             // V34 FIX: Build a realistic time string
