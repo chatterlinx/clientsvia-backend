@@ -1500,6 +1500,66 @@
                 
                 <!-- Preview Content (hidden until loaded) -->
                 <div id="preview-content" style="display: none;">
+                    <!-- Health Count Banner -->
+                    <div id="health-count-banner" style="
+                        background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.1));
+                        border: 1px solid rgba(34, 197, 94, 0.3);
+                        border-radius: 12px;
+                        padding: 12px 16px;
+                        margin-bottom: 16px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="
+                                width: 40px;
+                                height: 40px;
+                                background: rgba(34, 197, 94, 0.2);
+                                border-radius: 50%;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                            ">
+                                <i class="fas fa-check-circle" style="color: #22c55e; font-size: 18px;"></i>
+                            </div>
+                            <div>
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 2px;">Settings Verified</div>
+                                <div style="font-size: 20px; font-weight: 700; color: #22c55e;">
+                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                <span style="font-size: 11px; color: var(--text-muted);">Runtime Ready</span>
+                                <span id="health-runtime-badge" style="
+                                    background: rgba(34, 197, 94, 0.2);
+                                    color: #22c55e;
+                                    font-size: 11px;
+                                    font-weight: 600;
+                                    padding: 2px 8px;
+                                    border-radius: 4px;
+                                ">100%</span>
+                            </div>
+                            <div style="
+                                width: 120px;
+                                height: 6px;
+                                background: rgba(255, 255, 255, 0.1);
+                                border-radius: 3px;
+                                overflow: hidden;
+                            ">
+                                <div id="health-progress-bar" style="
+                                    height: 100%;
+                                    width: 100%;
+                                    background: linear-gradient(90deg, #22c55e, #10b981);
+                                    border-radius: 3px;
+                                    transition: width 0.3s ease;
+                                "></div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Scenario Name -->
                     <div class="preview-section">
                         <div class="preview-label">Scenario Name</div>
@@ -2808,6 +2868,9 @@
                     nonameSection.style.display = 'none';
                 }
                 
+                // 🎯 HEALTH COUNT BANNER - Count populated settings
+                updateHealthCount(preview);
+                
             } else {
                 // Fallback display
                 document.getElementById('preview-name').textContent = gap.representative.substring(0, 50);
@@ -2821,6 +2884,9 @@
                 ).join('') || `<span class="trigger-tag">${escapeHtml(gap.representative)}</span>`;
                 document.getElementById('preview-quick-replies').innerHTML = '<div class="preview-reply" style="background: #10b981; color: white; padding: 12px; border-radius: 8px;">I can help with that. Let me get more information.</div>';
                 document.getElementById('preview-full-replies').innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
+                
+                // Health count for fallback (minimal)
+                updateHealthCount({ name: gap.representative, scenarioType: 'FAQ', priority: 50, triggers: gap.examples || [] });
                 
                 // Advanced Settings fallback
                 document.getElementById('preview-confidence').textContent = '60%';
@@ -2893,6 +2959,103 @@
             document.getElementById('create-modal').classList.remove('active');
             currentGap = null;
             currentPreview = null;
+        }
+        
+        // ========================================
+        // HEALTH COUNT BANNER
+        // ========================================
+        // Count how many settings are populated in the generated scenario
+        // Total 33 runtime settings - show how many we've filled
+        function updateHealthCount(preview) {
+            // Settings that Gap Generation fills (based on SCENARIO_SETTINGS_REGISTRY)
+            const settingsToCheck = [
+                // Identity & Lifecycle (filled by gap)
+                { key: 'name', check: () => preview.name },
+                { key: 'status', check: () => preview.status || 'draft' }, // Always has default
+                { key: 'isActive', check: () => preview.isActive !== undefined },
+                
+                // Categorization
+                { key: 'categories', check: () => preview.category || preview.categories },
+                { key: 'scenarioType', check: () => preview.scenarioType },
+                { key: 'priority', check: () => preview.priority !== undefined },
+                { key: 'cooldownSeconds', check: () => preview.cooldownSeconds !== undefined },
+                
+                // Matching - Triggers
+                { key: 'triggers', check: () => preview.triggers && preview.triggers.length > 0 },
+                { key: 'regexTriggers', check: () => preview.regexTriggers && preview.regexTriggers.length > 0 },
+                { key: 'negativeTriggers', check: () => preview.negativeTriggers && preview.negativeTriggers.length > 0 },
+                
+                // Confidence
+                { key: 'minConfidence', check: () => preview.minConfidence !== undefined },
+                
+                // Replies - Core
+                { key: 'quickReplies', check: () => preview.quickReplies && preview.quickReplies.length > 0 },
+                { key: 'fullReplies', check: () => preview.fullReplies && preview.fullReplies.length > 0 },
+                { key: 'quickReplies_noName', check: () => preview.quickReplies_noName && preview.quickReplies_noName.length > 0 },
+                { key: 'fullReplies_noName', check: () => preview.fullReplies_noName && preview.fullReplies_noName.length > 0 },
+                { key: 'replyStrategy', check: () => preview.replyStrategy },
+                
+                // Follow-Up Behavior
+                { key: 'followUpMode', check: () => preview.followUpMode },
+                { key: 'followUpQuestionText', check: () => preview.followUpQuestionText },
+                { key: 'followUpFunnel', check: () => preview.followUpFunnel },
+                
+                // Wiring
+                { key: 'actionType', check: () => preview.actionType },
+                { key: 'bookingIntent', check: () => preview.bookingIntent !== undefined },
+                
+                // Entity Capture
+                { key: 'entityCapture', check: () => preview.entityCapture && preview.entityCapture.length > 0 },
+                
+                // Handoff
+                { key: 'handoffPolicy', check: () => preview.handoffPolicy },
+                
+                // Behavior
+                { key: 'behavior', check: () => preview.behavior }
+            ];
+            
+            const filledCount = settingsToCheck.filter(s => s.check()).length;
+            const totalCount = settingsToCheck.length;
+            const percentage = Math.round((filledCount / totalCount) * 100);
+            
+            // Update banner
+            const countGenerated = document.getElementById('health-count-generated');
+            const countTotal = document.getElementById('health-count-total');
+            const runtimeBadge = document.getElementById('health-runtime-badge');
+            const progressBar = document.getElementById('health-progress-bar');
+            const banner = document.getElementById('health-count-banner');
+            
+            if (countGenerated) countGenerated.textContent = filledCount;
+            if (countTotal) countTotal.textContent = totalCount;
+            if (runtimeBadge) runtimeBadge.textContent = percentage + '%';
+            if (progressBar) progressBar.style.width = percentage + '%';
+            
+            // Color coding based on health
+            if (percentage >= 90) {
+                // Excellent - green
+                if (banner) banner.style.background = 'linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.1))';
+                if (banner) banner.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+                if (countGenerated) countGenerated.style.color = '#22c55e';
+                if (runtimeBadge) runtimeBadge.style.background = 'rgba(34, 197, 94, 0.2)';
+                if (runtimeBadge) runtimeBadge.style.color = '#22c55e';
+                if (progressBar) progressBar.style.background = 'linear-gradient(90deg, #22c55e, #10b981)';
+            } else if (percentage >= 70) {
+                // Good - blue
+                if (banner) banner.style.background = 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.1))';
+                if (banner) banner.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+                if (countGenerated) countGenerated.style.color = '#3b82f6';
+                if (runtimeBadge) runtimeBadge.style.background = 'rgba(59, 130, 246, 0.2)';
+                if (runtimeBadge) runtimeBadge.style.color = '#3b82f6';
+                if (progressBar) progressBar.style.background = 'linear-gradient(90deg, #3b82f6, #6366f1)';
+            } else {
+                // Needs work - orange
+                if (banner) banner.style.background = 'linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(234, 179, 8, 0.1))';
+                if (banner) banner.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+                if (countGenerated) countGenerated.style.color = '#f59e0b';
+                if (runtimeBadge) runtimeBadge.style.background = 'rgba(245, 158, 11, 0.2)';
+                if (runtimeBadge) runtimeBadge.style.color = '#f59e0b';
+                if (progressBar) progressBar.style.background = 'linear-gradient(90deg, #f59e0b, #eab308)';
+            }
         }
         
         // ========================================
