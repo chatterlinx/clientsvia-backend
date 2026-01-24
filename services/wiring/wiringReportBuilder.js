@@ -226,6 +226,184 @@ async function checkDynamicFlows(companyId) {
 }
 
 // ============================================================================
+// SERVICE TYPE RESOLUTION CHECK (V89)
+// Verifies the ServiceTypeResolver infrastructure is properly wired
+// ============================================================================
+
+async function checkServiceTypeResolution(companyId, companyDoc) {
+    try {
+        const ServiceTypeResolver = require('../ServiceTypeResolver');
+        const { CANONICAL_SERVICE_TYPES } = ServiceTypeResolver;
+        
+        // Get company config
+        const calendarConfig = companyDoc?.googleCalendar || {};
+        const colorMapping = calendarConfig?.eventColors?.colorMapping || [];
+        const bookingSlots = companyDoc?.aiAgentSettings?.frontDeskBehavior?.bookingSlots || [];
+        const serviceTypeClarification = companyDoc?.aiAgentSettings?.serviceTypeClarification || {};
+        
+        const checks = {
+            resolverAvailable: true,
+            calendarEnabled: calendarConfig?.enabled && calendarConfig?.connected,
+            colorMappingCount: colorMapping.length,
+            bookingSlotCount: bookingSlots.length
+        };
+        
+        // ─────────────────────────────────────────────────────────────────────
+        // CHECK 1: Calendar tag mappings vs canonical types
+        // ─────────────────────────────────────────────────────────────────────
+        const mappedTypes = colorMapping.map(m => m.serviceType?.toLowerCase?.() || '');
+        const canonicalMatches = [];
+        const missingCanonical = [];
+        const unmatchedMappings = [];
+        
+        // Check which canonical types have mappings
+        for (const canonical of CANONICAL_SERVICE_TYPES) {
+            if (canonical === 'service') continue; // Skip generic fallback
+            
+            // Check if any mapping matches (exact or flexible)
+            const hasMapping = mappedTypes.some(mapped => {
+                const normalized = mapped.toLowerCase();
+                return normalized === canonical ||
+                       normalized.startsWith(canonical + '_') ||
+                       normalized.startsWith(canonical + '-') ||
+                       normalized.includes('_' + canonical) ||
+                       normalized.includes('-' + canonical);
+            });
+            
+            if (hasMapping) {
+                canonicalMatches.push(canonical);
+            } else {
+                missingCanonical.push(canonical);
+            }
+        }
+        
+        // Check for mappings that don't match any canonical type
+        for (const mapped of mappedTypes) {
+            if (!mapped) continue;
+            const matchesCanonical = CANONICAL_SERVICE_TYPES.some(canonical => {
+                return mapped === canonical ||
+                       mapped.startsWith(canonical + '_') ||
+                       mapped.startsWith(canonical + '-') ||
+                       mapped.includes('_' + canonical) ||
+                       mapped.includes('-' + canonical);
+            });
+            if (!matchesCanonical) {
+                unmatchedMappings.push(mapped);
+            }
+        }
+        
+        checks.calendarMappings = {
+            total: colorMapping.length,
+            matched: canonicalMatches,
+            missingCanonical: missingCanonical.filter(t => !['consultation', 'inspection', 'service'].includes(t)), // Don't flag rare types
+            unmatchedMappings
+        };
+        
+        // ─────────────────────────────────────────────────────────────────────
+        // CHECK 2: Booking prompts compatibility
+        // ─────────────────────────────────────────────────────────────────────
+        const hasServiceTypeSlot = bookingSlots.some(s => 
+            s.slotId === 'serviceType' || s.id === 'serviceType' || s.type === 'serviceType'
+        );
+        
+        checks.bookingPrompts = {
+            hasServiceTypeSlot,
+            slotCount: bookingSlots.length,
+            compatible: true // Resolver works with or without explicit slot
+        };
+        
+        // ─────────────────────────────────────────────────────────────────────
+        // CHECK 3: Clarifier configuration
+        // ─────────────────────────────────────────────────────────────────────
+        const clarificationEnabled = serviceTypeClarification?.enabled !== false;
+        const customServiceTypes = serviceTypeClarification?.serviceTypes || [];
+        
+        checks.clarification = {
+            enabled: clarificationEnabled,
+            customTypesCount: customServiceTypes.length,
+            usingDefaults: customServiceTypes.length === 0
+        };
+        
+        // ─────────────────────────────────────────────────────────────────────
+        // COMPUTE OVERALL STATUS
+        // ─────────────────────────────────────────────────────────────────────
+        const issues = [];
+        
+        // Critical: No calendar mappings at all
+        if (checks.calendarEnabled && colorMapping.length === 0) {
+            issues.push({
+                severity: 'HIGH',
+                message: 'Calendar enabled but no service type → color mappings configured',
+                fix: 'Add color mappings in Profile → Configuration → Google Calendar → Event Colors'
+            });
+        }
+        
+        // Warning: Important types missing
+        const importantMissing = checks.calendarMappings.missingCanonical.filter(
+            t => ['repair', 'maintenance', 'emergency'].includes(t)
+        );
+        if (importantMissing.length > 0) {
+            issues.push({
+                severity: 'MEDIUM',
+                message: `No calendar mapping for: ${importantMissing.join(', ')}`,
+                fix: 'Add color mappings for these service types to get correct event colors'
+            });
+        }
+        
+        // Info: Unmapped calendar types (won't break, but may be confusing)
+        if (unmatchedMappings.length > 0) {
+            issues.push({
+                severity: 'LOW',
+                message: `Calendar has mappings not matching resolver: ${unmatchedMappings.join(', ')}`,
+                fix: 'These mappings may not be used. Consider using canonical names: repair, maintenance, emergency, estimate, installation'
+            });
+        }
+        
+        // Determine health
+        let health = 'GREEN';
+        let status = 'WIRED';
+        
+        if (issues.some(i => i.severity === 'HIGH')) {
+            health = 'RED';
+            status = 'MISCONFIGURED';
+        } else if (issues.some(i => i.severity === 'MEDIUM')) {
+            health = 'YELLOW';
+            status = 'PARTIAL';
+        }
+        
+        if (!checks.calendarEnabled) {
+            health = 'GRAY';
+            status = 'CALENDAR_DISABLED';
+        }
+        
+        return {
+            status,
+            health,
+            checks,
+            canonicalTypes: CANONICAL_SERVICE_TYPES,
+            issues,
+            summary: {
+                resolverEnabled: true,
+                calendarIntegrated: checks.calendarEnabled,
+                mappedTypes: canonicalMatches,
+                clarificationEnabled: clarificationEnabled
+            },
+            message: status === 'WIRED' 
+                ? `Service type resolution wired: ${canonicalMatches.length} types mapped to calendar`
+                : issues[0]?.message || 'Configuration needed'
+        };
+        
+    } catch (error) {
+        logger.error('[WIRING] Service type resolution check failed', { companyId, error: error.message });
+        return {
+            status: 'ERROR',
+            health: 'RED',
+            error: error.message
+        };
+    }
+}
+
+// ============================================================================
 // BOOKING CONTRACT CHECK
 // ============================================================================
 
@@ -637,6 +815,9 @@ async function buildWiringReport({
     
     // Dynamic flows check
     specialChecks.dynamicFlows = await checkDynamicFlows(companyId);
+    
+    // Service type resolution check (V89)
+    specialChecks.serviceTypeResolution = await checkServiceTypeResolution(companyId, companyDoc);
     
     // Booking contract check
     specialChecks.bookingContract = checkBookingContract(companyDoc);

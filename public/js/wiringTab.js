@@ -1192,6 +1192,7 @@
                     ${renderCheckCard('🔗 Template References', sc.templateReferences)}
                     ${renderCheckCard('📦 Scenario Pool', sc.scenarioPool)}
                     ${renderCheckCard('🔄 Scenario Alignment', sc.scenarioAlignment)}
+                    ${renderCheckCard('🏷️ Service Type Resolution', sc.serviceTypeResolution)}
                     ${renderCheckCard('📋 Booking Slots', sc.bookingSlotNormalization)}
                     ${renderCheckCard('👋 Greeting Intercept', sc.greetingIntercept)}
                     ${renderCheckCard('💾 Redis Cache', sc.redisCache)}
@@ -1274,6 +1275,26 @@
         }
         if (check.isAligned !== undefined) {
             details += `<div>Harmony: <strong class="${check.isAligned ? 'text-green' : 'text-yellow'}">${check.isAligned ? '✅ All systems aligned' : '⚠️ Systems misaligned'}</strong></div>`;
+        }
+        
+        // Service Type Resolution (V89)
+        if (check.summary) {
+            const s = check.summary;
+            details += `<div>Resolver: <strong class="text-green">${s.resolverEnabled ? '✅ Active' : '❌ Inactive'}</strong></div>`;
+            details += `<div>Calendar: <strong class="${s.calendarIntegrated ? 'text-green' : 'text-gray'}">${s.calendarIntegrated ? '✅ Integrated' : '⚪ Not connected'}</strong></div>`;
+            if (s.mappedTypes?.length > 0) {
+                details += `<div>Mapped types: <strong class="text-green">${s.mappedTypes.join(', ')}</strong></div>`;
+            }
+            if (check.checks?.calendarMappings?.missingCanonical?.length > 0) {
+                details += `<div>Missing: <strong class="text-yellow">${check.checks.calendarMappings.missingCanonical.join(', ')}</strong></div>`;
+            }
+            details += `<div>Clarification: <strong class="${s.clarificationEnabled ? 'text-green' : 'text-gray'}">${s.clarificationEnabled ? '✅ Enabled' : '⚪ Disabled'}</strong></div>`;
+        }
+        if (check.issues?.length > 0) {
+            const highIssues = check.issues.filter(i => i.severity === 'HIGH');
+            if (highIssues.length > 0) {
+                details += `<div class="text-red">⚠️ ${highIssues[0].message}</div>`;
+            }
         }
         
         return `
