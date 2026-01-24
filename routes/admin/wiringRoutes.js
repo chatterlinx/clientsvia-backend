@@ -1500,5 +1500,153 @@ router.get('/:companyId/unified-health', async (req, res) => {
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// GET /api/admin/wiring-status/:companyId/runtime-proof
+// One-click runtime proof - show evidence of runtime-owned field decisions
+// ════════════════════════════════════════════════════════════════════════════════
+router.get('/:companyId/runtime-proof', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { hours = 24 } = req.query;
+        const { getRuntimeFields, getContentFields, getAdminFields } = require('../../services/scenarioAudit/constants');
+        const BlackBoxRecording = require('../../models/BlackBoxRecording');
+        
+        logger.info('[WIRING API] Runtime proof requested', { companyId, hours });
+        
+        const since = new Date(Date.now() - parseInt(hours) * 60 * 60 * 1000);
+        const runtimeFields = getRuntimeFields();
+        
+        // Query BlackBox for execution events
+        const events = await BlackBoxRecording.find({
+            companyId,
+            type: { $in: ['RESPONSE_EXECUTION', 'BOOKING_DECISION', 'HANDOFF_DECISION', 'FOLLOW_UP_DECISION'] },
+            createdAt: { $gte: since }
+        })
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean();
+        
+        // Build proof summary
+        const proof = {
+            companyId,
+            timeWindow: `${hours} hours`,
+            queriedAt: new Date().toISOString(),
+            eventCount: events.length,
+            runtimeFields: runtimeFields.length,
+            decisions: [],
+            fieldSummary: {}
+        };
+        
+        // Initialize field summary
+        for (const field of runtimeFields) {
+            proof.fieldSummary[field] = {
+                seen: false,
+                count: 0,
+                lastSeenAt: null,
+                values: new Set()
+            };
+        }
+        
+        // Analyze events
+        for (const event of events) {
+            const decision = {
+                eventId: event._id.toString(),
+                type: event.type,
+                createdAt: event.createdAt,
+                callId: event.callId,
+                runtimeDecisions: {}
+            };
+            
+            const data = event.data || {};
+            
+            // Extract runtime field values from event data
+            for (const field of runtimeFields) {
+                const value = data[field] ?? data.runtimeDecisions?.[field] ?? data.execution?.[field];
+                if (value !== undefined) {
+                    decision.runtimeDecisions[field] = value;
+                    proof.fieldSummary[field].seen = true;
+                    proof.fieldSummary[field].count++;
+                    proof.fieldSummary[field].values.add(String(value));
+                    if (!proof.fieldSummary[field].lastSeenAt) {
+                        proof.fieldSummary[field].lastSeenAt = event.createdAt;
+                    }
+                }
+            }
+            
+            if (Object.keys(decision.runtimeDecisions).length > 0) {
+                proof.decisions.push(decision);
+            }
+        }
+        
+        // Convert Sets to Arrays for JSON
+        for (const field of runtimeFields) {
+            proof.fieldSummary[field].values = Array.from(proof.fieldSummary[field].values);
+        }
+        
+        // Calculate status
+        const provenCount = Object.values(proof.fieldSummary).filter(f => f.seen).length;
+        proof.status = provenCount === runtimeFields.length ? 'FULLY_PROVEN' : 
+                       provenCount > 0 ? 'PARTIALLY_PROVEN' : 'UNPROVEN';
+        proof.health = proof.status === 'FULLY_PROVEN' ? 'GREEN' : 
+                       proof.status === 'PARTIALLY_PROVEN' ? 'YELLOW' : 'GRAY';
+        proof.summary = {
+            provenFields: provenCount,
+            totalFields: runtimeFields.length,
+            percentage: Math.round((provenCount / runtimeFields.length) * 100)
+        };
+        
+        // Ownership model for context
+        proof.ownershipModel = {
+            content: { count: getContentFields().length, description: 'WHAT to say (Scenario defines)' },
+            runtime: { count: runtimeFields.length, description: 'HOW/WHEN (Runtime decides)' },
+            admin: { count: getAdminFields().length, description: 'Policies (Admin configures)' }
+        };
+        
+        res.json(proof);
+        
+    } catch (error) {
+        logger.error('[WIRING API] Runtime proof error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// GET /api/admin/wiring-status/:companyId/trace/:traceId
+// One-click trace - show full BlackBox event for a specific trace ID
+// ════════════════════════════════════════════════════════════════════════════════
+router.get('/:companyId/trace/:traceId', async (req, res) => {
+    try {
+        const { companyId, traceId } = req.params;
+        const BlackBoxRecording = require('../../models/BlackBoxRecording');
+        
+        logger.info('[WIRING API] Trace lookup requested', { companyId, traceId });
+        
+        const event = await BlackBoxRecording.findById(traceId).lean();
+        
+        if (!event) {
+            return res.status(404).json({ error: 'Trace not found', traceId });
+        }
+        
+        if (event.companyId !== companyId) {
+            return res.status(403).json({ error: 'Trace does not belong to this company' });
+        }
+        
+        res.json({
+            success: true,
+            trace: {
+                id: event._id.toString(),
+                type: event.type,
+                callId: event.callId,
+                createdAt: event.createdAt,
+                data: event.data
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING API] Trace lookup error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
 

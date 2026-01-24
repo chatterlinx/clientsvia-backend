@@ -18,6 +18,8 @@
 const { wiringRegistryV1, WIRING_SCHEMA_VERSION } = require('./wiringRegistry.v1');
 // promptPacks migration REMOVED Jan 2026 - nuked
 const logger = require('../../utils/logger');
+const { getRuntimeFields, getContentFields, getAdminFields } = require('../scenarioAudit/constants');
+const BlackBoxRecording = require('../../models/BlackBoxRecording');
 
 // ============================================================================
 // UTILITIES
@@ -932,6 +934,130 @@ function checkBookingSlotNormalization(companyDoc) {
     };
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// RUNTIME PROOF - Query BlackBox for evidence of runtime decisions
+// ════════════════════════════════════════════════════════════════════════════════
+// For runtime-owned fields (followUpMode, actionType, handoffPolicy, etc.),
+// we need to PROVE they're being decided at call time, not inferred.
+// This queries BlackBox logs for evidence of actual decisions.
+// ════════════════════════════════════════════════════════════════════════════════
+
+async function buildRuntimeProof(companyId, timeWindowHours = 24) {
+    const runtimeFields = getRuntimeFields();
+    const proof = {
+        timeWindow: `${timeWindowHours} hours`,
+        queriedAt: new Date().toISOString(),
+        fields: {},
+        summary: {
+            totalFields: runtimeFields.length,
+            provenFields: 0,
+            unprovenFields: 0,
+            totalDecisions: 0
+        }
+    };
+    
+    try {
+        const since = new Date(Date.now() - timeWindowHours * 60 * 60 * 1000);
+        
+        // Query BlackBox for RESPONSE_EXECUTION events
+        const events = await BlackBoxRecording.find({
+            companyId,
+            type: { $in: ['RESPONSE_EXECUTION', 'BOOKING_DECISION', 'HANDOFF_DECISION'] },
+            createdAt: { $gte: since }
+        })
+        .sort({ createdAt: -1 })
+        .limit(500)
+        .lean();
+        
+        // Analyze events for runtime decision evidence
+        for (const field of runtimeFields) {
+            const fieldProof = {
+                field,
+                description: getFieldDescription(field),
+                seen: false,
+                lastSeenAt: null,
+                sampleTraceId: null,
+                sampleValue: null,
+                decisionCount: 0,
+                uniqueValues: new Set(),
+                source: null
+            };
+            
+            // Look for evidence of this field in execution events
+            for (const event of events) {
+                const data = event.data || {};
+                
+                // Check if this field was logged in the event
+                if (data[field] !== undefined || 
+                    data.runtimeDecisions?.[field] !== undefined ||
+                    data.execution?.[field] !== undefined) {
+                    
+                    const value = data[field] || 
+                                  data.runtimeDecisions?.[field] || 
+                                  data.execution?.[field];
+                    
+                    fieldProof.decisionCount++;
+                    fieldProof.uniqueValues.add(String(value));
+                    
+                    if (!fieldProof.seen) {
+                        fieldProof.seen = true;
+                        fieldProof.lastSeenAt = event.createdAt;
+                        fieldProof.sampleTraceId = event._id?.toString();
+                        fieldProof.sampleValue = value;
+                        fieldProof.source = event.type;
+                    }
+                }
+            }
+            
+            // Convert Set to Array for JSON
+            fieldProof.uniqueValues = Array.from(fieldProof.uniqueValues);
+            fieldProof.status = fieldProof.seen ? 'PROVEN' : 'UNPROVEN';
+            
+            proof.fields[field] = fieldProof;
+            
+            if (fieldProof.seen) {
+                proof.summary.provenFields++;
+                proof.summary.totalDecisions += fieldProof.decisionCount;
+            } else {
+                proof.summary.unprovenFields++;
+            }
+        }
+        
+        // Overall status
+        if (proof.summary.provenFields === proof.summary.totalFields) {
+            proof.status = 'FULLY_PROVEN';
+            proof.health = 'GREEN';
+        } else if (proof.summary.provenFields > 0) {
+            proof.status = 'PARTIALLY_PROVEN';
+            proof.health = 'YELLOW';
+        } else {
+            proof.status = 'UNPROVEN';
+            proof.health = 'GRAY';
+        }
+        
+        proof.eventCount = events.length;
+        
+    } catch (error) {
+        logger.error('[WIRING] Runtime proof query failed:', error);
+        proof.status = 'ERROR';
+        proof.health = 'RED';
+        proof.error = error.message;
+    }
+    
+    return proof;
+}
+
+function getFieldDescription(field) {
+    const descriptions = {
+        followUpMode: 'Conversation strategy (NONE/ASK_IF_BOOK) - decided by context',
+        followUpQuestionText: 'Follow-up question text - decided by booking flow',
+        followUpFunnel: 'Re-engagement prompt - decided by context',
+        actionType: 'Action to take (REPLY_ONLY/REQUIRE_BOOKING) - decided by intent',
+        handoffPolicy: 'When to escalate to human - decided by confidence'
+    };
+    return descriptions[field] || `Runtime-owned field decided at call time`;
+}
+
 // ============================================================================
 // MAIN REPORT BUILDER
 // ============================================================================
@@ -1241,6 +1367,50 @@ async function buildWiringReport({
     }
     
     // ========================================================================
+    // RUNTIME PROOF - Evidence that runtime-owned fields are decided at call time
+    // ========================================================================
+    
+    const runtimeProof = await buildRuntimeProof(companyId, 24);
+    
+    // Add issue if runtime fields are unproven
+    if (runtimeProof.summary.unprovenFields > 0) {
+        issues.push({
+            id: 'RUNTIME_PROOF_INCOMPLETE',
+            severity: runtimeProof.summary.provenFields === 0 ? 'HIGH' : 'MEDIUM',
+            category: 'RUNTIME_DECISIONS',
+            title: 'Runtime-owned fields not proven in logs',
+            reasons: [
+                `${runtimeProof.summary.unprovenFields} of ${runtimeProof.summary.totalFields} runtime-owned fields have no evidence in last 24h`,
+                `Unproven fields: ${Object.entries(runtimeProof.fields).filter(([_, f]) => !f.seen).map(([k]) => k).join(', ')}`
+            ],
+            fix: 'Make test calls to generate BlackBox events, or check logging in ConversationEngine'
+        });
+    }
+    
+    // ========================================================================
+    // OWNERSHIP MODEL - Single source of truth
+    // ========================================================================
+    
+    const ownershipModel = {
+        content: {
+            count: getContentFields().length,
+            description: 'WHAT to say - Scenario defines, GPT generates',
+            fields: getContentFields()
+        },
+        runtime: {
+            count: getRuntimeFields().length,
+            description: 'HOW/WHEN to behave - ConversationEngine decides at call time',
+            fields: getRuntimeFields(),
+            proof: runtimeProof
+        },
+        admin: {
+            count: getAdminFields().length,
+            description: 'Infrastructure policies - Admin configures globally',
+            fields: getAdminFields()
+        }
+    };
+    
+    // ========================================================================
     // BUILD REPORT
     // ========================================================================
     
@@ -1261,6 +1431,16 @@ async function buildWiringReport({
         
         // Overall status
         health: overallHealth,
+        
+        // ════════════════════════════════════════════════════════════════════
+        // OWNERSHIP MODEL (Single Source of Truth)
+        // ════════════════════════════════════════════════════════════════════
+        ownershipModel,
+        
+        // ════════════════════════════════════════════════════════════════════
+        // RUNTIME PROOF (Evidence from BlackBox logs)
+        // ════════════════════════════════════════════════════════════════════
+        runtimeProof,
         
         // Scoreboard
         counts: {
