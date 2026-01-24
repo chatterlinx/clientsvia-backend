@@ -1173,6 +1173,117 @@
             </div>
         </div>
         
+        <!-- AI Settings Panel (Collapsible) -->
+        <details class="ai-settings-panel" id="ai-settings-panel" style="
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.05));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            margin-bottom: 24px;
+            overflow: hidden;
+        ">
+            <summary style="
+                padding: 14px 20px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                background: rgba(139, 92, 246, 0.1);
+                font-weight: 600;
+                color: var(--text-primary);
+            ">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <i class="fas fa-brain" style="color: var(--accent-purple);"></i>
+                    <span>AI Generation Settings</span>
+                    <span style="
+                        background: rgba(34, 197, 94, 0.2);
+                        color: #22c55e;
+                        font-size: 11px;
+                        padding: 2px 8px;
+                        border-radius: 4px;
+                        font-weight: 500;
+                    " id="ai-model-badge">GPT-4o</span>
+                </div>
+                <i class="fas fa-chevron-down" style="color: var(--text-muted); transition: transform 0.2s;"></i>
+            </summary>
+            <div style="padding: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                <!-- Model -->
+                <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Model</div>
+                    <div style="font-size: 15px; font-weight: 600; color: var(--accent-green);">
+                        <i class="fas fa-microchip" style="margin-right: 6px;"></i>GPT-4o
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Highest quality generation</div>
+                </div>
+                
+                <!-- Temperature -->
+                <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Temperature</div>
+                    <div style="font-size: 15px; font-weight: 600; color: var(--accent-yellow);">
+                        <i class="fas fa-thermometer-half" style="margin-right: 6px;"></i>0.7
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Balanced creativity</div>
+                </div>
+                
+                <!-- Max Tokens -->
+                <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Max Tokens</div>
+                    <div style="font-size: 15px; font-weight: 600; color: var(--accent-blue);">
+                        <i class="fas fa-text-width" style="margin-right: 6px;"></i>4,000
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Response limit</div>
+                </div>
+                
+                <!-- Settings Count -->
+                <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Generated Fields</div>
+                    <div style="font-size: 15px; font-weight: 600; color: var(--accent-purple);">
+                        <i class="fas fa-list-check" style="margin-right: 6px;"></i>30 settings
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Full scenario capacity</div>
+                </div>
+                
+                <!-- Duplicate Detection -->
+                <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Duplicate Detection</div>
+                    <div style="font-size: 15px; font-weight: 600; color: var(--accent-green);">
+                        <i class="fas fa-shield-check" style="margin-right: 6px;"></i>Enabled
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">60% similarity threshold</div>
+                </div>
+                
+                <!-- Tone Examples -->
+                <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Tone Learning</div>
+                    <div style="font-size: 15px; font-weight: 600; color: var(--accent-pink);">
+                        <i class="fas fa-graduation-cap" style="margin-right: 6px;"></i>Enabled
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Learns from existing scenarios</div>
+                </div>
+            </div>
+            
+            <!-- Generation Rules Summary -->
+            <div style="padding: 0 20px 20px 20px;">
+                <div style="background: var(--bg-tertiary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">
+                        <i class="fas fa-gavel" style="color: var(--accent-yellow); margin-right: 6px;"></i>
+                        Generation Rules
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px;">
+                        <span style="background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 4px 8px; border-radius: 4px;">5-7 Quick Replies</span>
+                        <span style="background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 4px 8px; border-radius: 4px;">4-5 Full Replies</span>
+                        <span style="background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 4px 8px; border-radius: 4px;">10-15 Triggers</span>
+                        <span style="background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 4px 8px; border-radius: 4px;">2-4 Regex Patterns</span>
+                        <span style="background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 4px 8px; border-radius: 4px;">{name} Required</span>
+                        <span style="background: rgba(34, 197, 94, 0.2); color: #22c55e; padding: 4px 8px; border-radius: 4px;">_noName Variants</span>
+                        <span style="background: rgba(248, 113, 113, 0.2); color: #f87171; padding: 4px 8px; border-radius: 4px;">No Chatbot Phrases</span>
+                        <span style="background: rgba(248, 113, 113, 0.2); color: #f87171; padding: 4px 8px; border-radius: 4px;">No Troubleshooting</span>
+                        <span style="background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 4px 8px; border-radius: 4px;">Dispatcher Tone</span>
+                        <span style="background: rgba(251, 191, 36, 0.2); color: #fbbf24; padding: 4px 8px; border-radius: 4px;">Max 20 Words</span>
+                    </div>
+                </div>
+            </div>
+        </details>
+        
         <!-- Gaps Content -->
         <div id="gaps-content">
             <div class="loading">
