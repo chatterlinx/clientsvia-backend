@@ -1602,7 +1602,7 @@
                             <div>
                                 <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 2px;">AI-Generable Settings</div>
                                 <div style="font-size: 20px; font-weight: 700; color: #22c55e;">
-                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">26</span>
+                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">30</span>
                                 </div>
                                 <div id="health-missing" style="margin-top: 4px; font-size: 11px; color: var(--text-muted);"></div>
                             </div>
@@ -3129,11 +3129,11 @@
         // ========================================
         // HEALTH COUNT BANNER - Single Source of Truth
         // ========================================
-        // Tracks all 26 AI-generable settings from the runtime contract
+        // Tracks all 30 AI-generable settings from the runtime contract
         function updateHealthCount(preview, gap) {
             const scenarioData = buildScenarioPrefill(preview, gap);
             
-            // 🎯 AI-GENERABLE SETTINGS (26 total from runtime contract)
+            // 🎯 AI-GENERABLE SETTINGS (30 total from runtime contract)
             // These are the settings Gap Fill can auto-generate (aiGenerable: true)
             const settingsToCheck = [
                 // Identity & Lifecycle (5)
@@ -3162,23 +3162,27 @@
                 { key: 'fullReplies_noName', label: 'Full (no name)', check: () => Array.isArray(scenarioData.fullReplies_noName), getValue: () => scenarioData.fullReplies_noName?.length || 0 },
                 { key: 'replyStrategy', label: 'Reply Strategy', check: () => scenarioData.replyStrategy, getValue: () => scenarioData.replyStrategy },
                 
-                // Follow-Up (2)
+                // Follow-Up (4)
                 { key: 'followUpMode', label: 'Follow-Up Mode', check: () => scenarioData.followUpMode, getValue: () => scenarioData.followUpMode },
+                { key: 'followUpFunnel', label: 'Follow-Up Funnel', check: () => scenarioData.followUpFunnel, getValue: () => scenarioData.followUpFunnel || '(auto)' },
                 { key: 'followUpQuestionText', label: 'Follow-Up Text', check: () => {
                     if (scenarioData.followUpMode === 'ASK_FOLLOWUP_QUESTION' || scenarioData.followUpMode === 'ASK_IF_BOOK') {
                         return Boolean(scenarioData.followUpQuestionText);
                     }
                     return true;
                 }, getValue: () => scenarioData.followUpQuestionText || '(not required)' },
+                { key: 'followUpMessages', label: 'Follow-Up Messages', check: () => Array.isArray(scenarioData.followUpMessages), getValue: () => scenarioData.followUpMessages?.length || 0 },
                 
-                // Wiring (3)
+                // Wiring & Actions (4)
                 { key: 'actionType', label: 'Action Type', check: () => scenarioData.actionType, getValue: () => scenarioData.actionType },
                 { key: 'bookingIntent', label: 'Booking Intent', check: () => typeof scenarioData.bookingIntent === 'boolean', getValue: () => scenarioData.bookingIntent ? 'Yes' : 'No' },
                 { key: 'handoffPolicy', label: 'Handoff Policy', check: () => scenarioData.handoffPolicy, getValue: () => scenarioData.handoffPolicy },
+                { key: 'actionHooks', label: 'Action Hooks', check: () => Array.isArray(scenarioData.actionHooks), getValue: () => scenarioData.actionHooks?.length || 0 },
                 
-                // Behavior & Other (3)
+                // Behavior & Other (4)
                 { key: 'behavior', label: 'AI Behavior', check: () => scenarioData.behavior, getValue: () => scenarioData.behavior },
                 { key: 'channel', label: 'Channel', check: () => scenarioData.channel, getValue: () => scenarioData.channel || 'any' },
+                { key: 'entityCapture', label: 'Entity Capture', check: () => Array.isArray(scenarioData.entityCapture), getValue: () => scenarioData.entityCapture?.length || 0 },
                 { key: 'dynamicVariables', label: 'Dynamic Variables', check: () => scenarioData.dynamicVariables, getValue: () => Object.keys(scenarioData.dynamicVariables || {}).length || 0 }
             ];
             
@@ -3359,29 +3363,66 @@
             const p = currentPreview || {};
             const g = currentGap || {};
             
-            const summary = `## AI-Generated Scenario Preview
+            // Build comprehensive scenario preview with ALL 30+ settings
+            const scenarioData = buildScenarioPrefill(p, g);
+            
+            // Count generated settings
+            const settingsCount = countGeneratedSettings(scenarioData);
+            
+            const summary = `## AI-Generated Scenario Preview (${settingsCount.generated}/${settingsCount.total} settings)
 
-### Basic Info
-- **Name:** ${p.name || g.representative?.substring(0, 50) || 'Unknown'}
-- **Type:** ${p.scenarioType || 'FAQ'}
-- **Category:** ${p.category || 'FAQ'}
-- **Priority:** ${p.priority || 50}
-- **Min Confidence:** ${p.minConfidence || 0.6}
+### Identity & Lifecycle
+- **Name:** ${scenarioData.name || 'Unknown'}
+- **Status:** ${scenarioData.status || 'live'}
+- **Category:** ${scenarioData.category || 'FAQ'}
+- **Scenario Type:** ${scenarioData.scenarioType || 'FAQ'}
+- **Is Active:** ${scenarioData.isActive !== false ? 'Yes' : 'No'}
 
-### Triggers (${(p.triggers || []).length})
-${(p.triggers || [g.representative]).slice(0, 10).map(t => `- "${t}"`).join('\n')}
+### Priority & Confidence
+- **Priority:** ${scenarioData.priority || 0}
+- **Min Confidence:** ${scenarioData.minConfidence || 0.6}
+- **Cooldown:** ${scenarioData.cooldownSeconds || 0}s
 
-### Quick Replies (${(p.quickReplies || []).length})
-${(p.quickReplies || []).slice(0, 3).map((r, i) => `${i + 1}. "${r.substring(0, 100)}${r.length > 100 ? '...' : ''}"`).join('\n') || '(none)'}
+### Behavior & Personality
+- **Behavior:** ${scenarioData.behavior || 'calm_professional'}
+- **Channel:** ${scenarioData.channel || 'any'}
+- **Reply Strategy:** ${scenarioData.replyStrategy || 'AUTO'}
 
-### Full Replies (${(p.fullReplies || []).length})
-${(p.fullReplies || []).slice(0, 2).map((r, i) => `${i + 1}. "${r.substring(0, 150)}${r.length > 150 ? '...' : ''}"`).join('\n') || '(none)'}
+### Triggers (${(scenarioData.triggers || []).length})
+${(scenarioData.triggers || []).map(t => `- "${t}"`).join('\n') || '(none)'}
 
-### Advanced Settings
-- **Cooldown:** ${p.cooldownSeconds || 0}s
-- **Handoff Policy:** ${p.handoffPolicy || 'low_confidence'}
-- **Booking Intent:** ${p.bookingIntent ? 'Yes' : 'No'}
-- **Reply Strategy:** ${p.replyStrategy || 'AUTO'}
+### Regex Triggers (${(scenarioData.regexTriggers || []).length})
+${(scenarioData.regexTriggers || []).map(t => `- \`${t}\``).join('\n') || '(none)'}
+
+### Negative Triggers (${(scenarioData.negativeTriggers || []).length})
+${(scenarioData.negativeTriggers || []).map(t => `- "${t}"`).join('\n') || '(none)'}
+
+### Quick Replies (${(scenarioData.quickReplies || []).length})
+${(scenarioData.quickReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
+
+### Quick Replies - No Name (${(scenarioData.quickReplies_noName || []).length})
+${(scenarioData.quickReplies_noName || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
+
+### Full Replies (${(scenarioData.fullReplies || []).length})
+${(scenarioData.fullReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
+
+### Full Replies - No Name (${(scenarioData.fullReplies_noName || []).length})
+${(scenarioData.fullReplies_noName || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
+
+### Follow-Up Settings
+- **Follow-Up Mode:** ${scenarioData.followUpMode || 'NONE'}
+- **Follow-Up Funnel:** ${scenarioData.followUpFunnel || '(auto)'}
+- **Follow-Up Question:** ${scenarioData.followUpQuestionText || '(none)'}
+- **Follow-Up Messages:** ${(scenarioData.followUpMessages || []).length} configured
+
+### Actions & Wiring
+- **Action Type:** ${scenarioData.actionType || 'REPLY_ONLY'}
+- **Booking Intent:** ${scenarioData.bookingIntent ? 'Yes' : 'No'}
+- **Handoff Policy:** ${scenarioData.handoffPolicy || 'low_confidence'}
+- **Action Hooks:** ${(scenarioData.actionHooks || []).length} configured
+
+### Entity Capture
+${(scenarioData.entityCapture || []).map(e => `- ${e}`).join('\n') || '- (none)'}
 
 ### Gap Context
 - **Representative phrase:** "${g.representative || 'N/A'}"
@@ -3389,14 +3430,60 @@ ${(p.fullReplies || []).slice(0, 2).map((r, i) => `${i + 1}. "${r.substring(0, 1
 - **Priority:** ${g.priority || 'MEDIUM'}
 
 ---
-*Generated: ${new Date().toISOString()}*`;
+*Generated: ${new Date().toISOString()}*
+*Settings Coverage: ${settingsCount.generated}/${settingsCount.total} (${Math.round(settingsCount.generated / settingsCount.total * 100)}%)*`;
 
             navigator.clipboard.writeText(summary).then(() => {
-                showToast('Scenario copied to clipboard!', 'success');
+                showToast('Full scenario copied to clipboard!', 'success');
             }).catch(err => {
                 console.error('Copy failed:', err);
                 showToast('Failed to copy', 'error');
             });
+        }
+        
+        // Helper to count generated settings
+        function countGeneratedSettings(scenarioData) {
+            const checks = [
+                // Identity (5)
+                scenarioData.name?.trim(),
+                scenarioData.status,
+                scenarioData.isActive !== undefined,
+                scenarioData.category,
+                scenarioData.scenarioType,
+                // Priority (3)
+                typeof scenarioData.priority === 'number',
+                typeof scenarioData.cooldownSeconds === 'number',
+                typeof scenarioData.minConfidence === 'number',
+                // Triggers (5)
+                Array.isArray(scenarioData.triggers) && scenarioData.triggers.length > 0,
+                Array.isArray(scenarioData.regexTriggers),
+                Array.isArray(scenarioData.negativeTriggers),
+                Array.isArray(scenarioData.exampleUserPhrases),
+                Array.isArray(scenarioData.negativeUserPhrases),
+                // Replies (5)
+                Array.isArray(scenarioData.quickReplies) && scenarioData.quickReplies.length > 0,
+                Array.isArray(scenarioData.fullReplies),
+                Array.isArray(scenarioData.quickReplies_noName),
+                Array.isArray(scenarioData.fullReplies_noName),
+                scenarioData.replyStrategy,
+                // Follow-up (4)
+                scenarioData.followUpMode,
+                scenarioData.followUpFunnel,
+                scenarioData.followUpQuestionText !== undefined,
+                Array.isArray(scenarioData.followUpMessages),
+                // Actions (4)
+                scenarioData.actionType,
+                scenarioData.bookingIntent !== undefined,
+                scenarioData.handoffPolicy,
+                Array.isArray(scenarioData.actionHooks),
+                // Behavior (3)
+                scenarioData.behavior,
+                scenarioData.channel,
+                Array.isArray(scenarioData.entityCapture)
+            ];
+            
+            const generated = checks.filter(Boolean).length;
+            return { generated, total: checks.length };
         }
         
         function copyPageSummary() {
