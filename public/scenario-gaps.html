@@ -1511,7 +1511,7 @@
                         align-items: center;
                         justify-content: space-between;
                     ">
-                        <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
                             <div style="
                                 width: 40px;
                                 height: 40px;
@@ -1528,6 +1528,7 @@
                                 <div style="font-size: 20px; font-weight: 700; color: #22c55e;">
                                     <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">0</span>
                                 </div>
+                            <div id="health-missing" style="margin-top: 4px; font-size: 11px; color: var(--text-muted);"></div>
                             </div>
                         </div>
                         <div style="text-align: right;">
@@ -2899,7 +2900,7 @@
                 }
                 
                 // 🎯 HEALTH COUNT BANNER - Count populated settings
-                updateHealthCount(preview);
+                updateHealthCount(preview, currentGap);
                 
             } else {
                 // Fallback display
@@ -2916,7 +2917,7 @@
                 document.getElementById('preview-full-replies').innerHTML = '<div style="color: var(--text-muted); font-style: italic;">No full replies generated</div>';
                 
                 // Health count for fallback (minimal)
-                updateHealthCount({ name: gap.representative, scenarioType: 'FAQ', priority: 50, triggers: gap.examples || [] });
+                updateHealthCount({ name: gap.representative, scenarioType: 'FAQ', priority: 50, triggers: gap.examples || [] }, currentGap);
                 
                 // Advanced Settings fallback
                 document.getElementById('preview-confidence').textContent = '60%';
@@ -2931,6 +2932,66 @@
             }
         }
         
+        function buildScenarioPrefill(preview = {}, gap = {}) {
+            const p = preview || {};
+            const g = gap || {};
+            
+            return {
+                name: p.name || g.representative?.substring(0, 50) || 'New Scenario',
+                category: p.category || 'FAQ',
+                status: p.status || 'live',
+                scenarioType: p.scenarioType || 'FAQ',
+                behavior: p.behavior || 'calm_professional',
+                priority: typeof p.priority === 'number' ? p.priority : 50,
+                minConfidence: typeof p.minConfidence === 'number' ? p.minConfidence : 0.6,
+                replyStrategy: p.replyStrategy || 'AUTO',
+                
+                triggers: Array.isArray(p.triggers) && p.triggers.length > 0 
+                    ? p.triggers 
+                    : (g.representative ? [g.representative] : []),
+                regexTriggers: Array.isArray(p.regexTriggers) ? p.regexTriggers : [],
+                negativeTriggers: Array.isArray(p.negativeTriggers) ? p.negativeTriggers : [],
+                
+                quickReplies: Array.isArray(p.quickReplies) && p.quickReplies.length > 0 
+                    ? p.quickReplies 
+                    : [p.quickReply || 'I can help with that.'],
+                fullReplies: Array.isArray(p.fullReplies) ? p.fullReplies : [],
+                quickReplies_noName: Array.isArray(p.quickReplies_noName) ? p.quickReplies_noName : [],
+                fullReplies_noName: Array.isArray(p.fullReplies_noName) ? p.fullReplies_noName : [],
+                
+                // Follow-up behavior
+                followUpFunnel: p.followUpFunnel || getDefaultFollowUpFunnel(p.scenarioType, p.bookingIntent),
+                followUpMode: p.followUpMode || 'NONE',
+                followUpQuestionText: p.followUpQuestionText || null,
+                
+                // Wiring/Actions
+                actionType: p.actionType || 'REPLY_ONLY',
+                bookingIntent: p.bookingIntent === true,
+                
+                // Entity extraction
+                entityCapture: Array.isArray(p.entityCapture) && p.entityCapture.length > 0 
+                    ? p.entityCapture 
+                    : ['name'],
+                
+                // Admin notes
+                notes: p.notes || `Created from Scenario Gaps. Gap: "${g.representative || 'Unknown'}"`,
+                
+                // Template variables
+                templateVariables: Array.isArray(p.templateVariables) ? p.templateVariables : ['name=valued customer'],
+                suggestedPlaceholders: Array.isArray(p.suggestedPlaceholders) ? p.suggestedPlaceholders : [],
+                
+                // Advanced settings
+                followUpMessages: Array.isArray(p.followUpMessages) ? p.followUpMessages : [],
+                cooldownSeconds: typeof p.cooldownSeconds === 'number' ? p.cooldownSeconds : 0,
+                handoffPolicy: p.handoffPolicy || 'low_confidence',
+                actionHooks: Array.isArray(p.actionHooks) ? p.actionHooks : [],
+                entityValidation: p.entityValidation || null,
+                
+                source: 'scenario-gaps',
+                sourceGap: g.representative
+            };
+        }
+        
         function openInGlobalBrain() {
             if (!currentPreview && !currentGap) {
                 showToast('No scenario data available', 'error');
@@ -2938,40 +2999,7 @@
             }
             
             // Build comprehensive scenario object for Global Brain
-            const p = currentPreview || {};
-            const scenarioData = {
-                name: p.name || currentGap?.representative?.substring(0, 50) || 'New Scenario',
-                category: p.category || 'FAQ',
-                status: 'live',  // 🔥 Default to LIVE so admin doesn't forget!
-                scenarioType: p.scenarioType || 'FAQ',
-                behavior: p.behavior || 'friendly_warm',
-                priority: p.priority || 50,
-                triggers: p.triggers || [currentGap?.representative],
-                regexTriggers: p.regexTriggers || [],  // 🔧 Regex patterns for better matching
-                negativeTriggers: p.negativeTriggers || [],
-                quickReplies: p.quickReplies || [p.quickReply || 'I can help with that.'],
-                fullReplies: p.fullReplies || [],
-                // 🎯 Follow-up funnel with smart default based on scenario type
-                followUpFunnel: p.followUpFunnel || getDefaultFollowUpFunnel(p.scenarioType, p.bookingIntent),
-                followUpMode: p.followUpMode || 'NONE',
-                followUpQuestionText: p.followUpQuestionText || null,
-                actionType: p.actionType || 'REPLY_ONLY',
-                bookingIntent: p.bookingIntent || false,
-                entityCapture: p.entityCapture || ['name'],
-                templateVariables: p.templateVariables || ['name=valued customer'],
-                notes: p.notes || `Created from Scenario Gaps. Gap: "${currentGap?.representative}"`,
-                suggestedPlaceholders: p.suggestedPlaceholders || [],
-                
-                // 🎯 ADVANCED SETTINGS (AI-generated)
-                followUpMessages: p.followUpMessages || ['Are you still there, {name}?', 'Just checking in...'],
-                cooldown: p.cooldown || 0,
-                handoffPolicy: p.handoffPolicy || 'low_confidence',
-                actionHooks: p.actionHooks || [],
-                entityValidation: p.entityValidation || null,
-                
-                source: 'scenario-gaps',
-                sourceGap: currentGap?.representative
-            };
+            const scenarioData = buildScenarioPrefill(currentPreview, currentGap);
             
             // Store in sessionStorage for Global Brain to pick up
             sessionStorage.setItem('scenarioPrefill', JSON.stringify(scenarioData));
@@ -2996,55 +3024,56 @@
         // ========================================
         // Count how many settings are populated in the generated scenario
         // Total 33 runtime settings - show how many we've filled
-        function updateHealthCount(preview) {
-            // Settings that Gap Generation fills (based on SCENARIO_SETTINGS_REGISTRY)
+        function updateHealthCount(preview, gap) {
+            const scenarioData = buildScenarioPrefill(preview, gap);
+            
+            // Settings required by the Scenario Form (24 total)
             const settingsToCheck = [
-                // Identity & Lifecycle (filled by gap)
-                { key: 'name', check: () => preview.name },
-                { key: 'status', check: () => preview.status || 'draft' }, // Always has default
-                { key: 'isActive', check: () => preview.isActive !== undefined },
+                { key: 'name', check: () => scenarioData.name && scenarioData.name.trim() },
+                { key: 'category', check: () => scenarioData.category },
+                { key: 'scenarioType', check: () => scenarioData.scenarioType },
+                { key: 'priority', check: () => typeof scenarioData.priority === 'number' },
+                { key: 'minConfidence', check: () => typeof scenarioData.minConfidence === 'number' },
+                { key: 'behavior', check: () => scenarioData.behavior },
+                { key: 'status', check: () => scenarioData.status },
+                { key: 'replyStrategy', check: () => scenarioData.replyStrategy },
                 
-                // Categorization
-                { key: 'categories', check: () => preview.category || preview.categories },
-                { key: 'scenarioType', check: () => preview.scenarioType },
-                { key: 'priority', check: () => preview.priority !== undefined },
-                { key: 'cooldownSeconds', check: () => preview.cooldownSeconds !== undefined },
+                // Matching
+                { key: 'triggers', check: () => Array.isArray(scenarioData.triggers) && scenarioData.triggers.length > 0 },
+                { key: 'regexTriggers', check: () => Array.isArray(scenarioData.regexTriggers) },
+                { key: 'negativeTriggers', check: () => Array.isArray(scenarioData.negativeTriggers) },
                 
-                // Matching - Triggers
-                { key: 'triggers', check: () => preview.triggers && preview.triggers.length > 0 },
-                { key: 'regexTriggers', check: () => preview.regexTriggers && preview.regexTriggers.length > 0 },
-                { key: 'negativeTriggers', check: () => preview.negativeTriggers && preview.negativeTriggers.length > 0 },
-                
-                // Confidence
-                { key: 'minConfidence', check: () => preview.minConfidence !== undefined },
-                
-                // Replies - Core
-                { key: 'quickReplies', check: () => preview.quickReplies && preview.quickReplies.length > 0 },
-                { key: 'fullReplies', check: () => preview.fullReplies && preview.fullReplies.length > 0 },
-                { key: 'quickReplies_noName', check: () => preview.quickReplies_noName && preview.quickReplies_noName.length > 0 },
-                { key: 'fullReplies_noName', check: () => preview.fullReplies_noName && preview.fullReplies_noName.length > 0 },
-                { key: 'replyStrategy', check: () => preview.replyStrategy },
+                // Replies
+                { key: 'quickReplies', check: () => Array.isArray(scenarioData.quickReplies) && scenarioData.quickReplies.length > 0 },
+                { key: 'fullReplies', check: () => Array.isArray(scenarioData.fullReplies) },
+                { key: 'quickReplies_noName', check: () => Array.isArray(scenarioData.quickReplies_noName) },
+                { key: 'fullReplies_noName', check: () => Array.isArray(scenarioData.fullReplies_noName) },
                 
                 // Follow-Up Behavior
-                { key: 'followUpMode', check: () => preview.followUpMode },
-                { key: 'followUpQuestionText', check: () => preview.followUpQuestionText },
-                { key: 'followUpFunnel', check: () => preview.followUpFunnel },
+                { key: 'followUpMode', check: () => scenarioData.followUpMode },
+                { key: 'followUpQuestionText', check: () => {
+                    if (scenarioData.followUpMode === 'ASK_FOLLOWUP_QUESTION' || scenarioData.followUpMode === 'ASK_IF_BOOK') {
+                        return Boolean(scenarioData.followUpQuestionText);
+                    }
+                    return true; // Not required for other modes
+                }},
+                { key: 'followUpFunnel', check: () => scenarioData.followUpFunnel },
                 
                 // Wiring
-                { key: 'actionType', check: () => preview.actionType },
-                { key: 'bookingIntent', check: () => preview.bookingIntent !== undefined },
+                { key: 'actionType', check: () => scenarioData.actionType },
+                { key: 'bookingIntent', check: () => typeof scenarioData.bookingIntent === 'boolean' },
                 
                 // Entity Capture
-                { key: 'entityCapture', check: () => preview.entityCapture && preview.entityCapture.length > 0 },
+                { key: 'entityCapture', check: () => Array.isArray(scenarioData.entityCapture) && scenarioData.entityCapture.length > 0 },
                 
-                // Handoff
-                { key: 'handoffPolicy', check: () => preview.handoffPolicy },
-                
-                // Behavior
-                { key: 'behavior', check: () => preview.behavior }
+                // Advanced Settings
+                { key: 'cooldownSeconds', check: () => typeof scenarioData.cooldownSeconds === 'number' },
+                { key: 'handoffPolicy', check: () => scenarioData.handoffPolicy },
+                { key: 'actionHooks', check: () => Array.isArray(scenarioData.actionHooks) }
             ];
             
-            const filledCount = settingsToCheck.filter(s => s.check()).length;
+            const missing = settingsToCheck.filter(s => !s.check()).map(s => s.key);
+            const filledCount = settingsToCheck.length - missing.length;
             const totalCount = settingsToCheck.length;
             const percentage = Math.round((filledCount / totalCount) * 100);
             
@@ -3054,11 +3083,17 @@
             const runtimeBadge = document.getElementById('health-runtime-badge');
             const progressBar = document.getElementById('health-progress-bar');
             const banner = document.getElementById('health-count-banner');
+            const missingEl = document.getElementById('health-missing');
             
             if (countGenerated) countGenerated.textContent = filledCount;
             if (countTotal) countTotal.textContent = totalCount;
             if (runtimeBadge) runtimeBadge.textContent = percentage + '%';
             if (progressBar) progressBar.style.width = percentage + '%';
+            if (missingEl) {
+                missingEl.textContent = missing.length > 0 
+                    ? `Missing: ${missing.join(', ')}` 
+                    : 'All required fields set';
+            }
             
             // Color coding based on health
             if (percentage >= 90) {

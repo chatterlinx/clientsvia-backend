@@ -35,6 +35,7 @@ const authorizeCompanyAccess = require('../../middleware/authorizeCompanyAccess'
 const BlackBoxRecording = require('../../models/BlackBoxRecording');
 const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+const { BOOKING_PHRASES } = require('../../services/scenarioAudit/constants');
 
 // Services
 const openaiClient = require('../../config/openai');
@@ -451,6 +452,61 @@ function calculateSavings(totalCalls, totalTokens) {
         weeklyCostSaved: displayWeeklyCost,
         monthlyCostSaved: displayMonthlyCost
     };
+}
+
+/**
+ * Normalize scenario output to align with scenarioType
+ */
+function normalizeScenarioForType(scenario) {
+    const normalized = { ...scenario };
+    
+    // Ensure replyStrategy always exists
+    if (!normalized.replyStrategy) {
+        normalized.replyStrategy = 'AUTO';
+    }
+    
+    // Ensure follow-up question exists when required
+    if ((normalized.followUpMode === 'ASK_IF_BOOK' || normalized.followUpMode === 'ASK_FOLLOWUP_QUESTION') &&
+        (!normalized.followUpQuestionText || !String(normalized.followUpQuestionText).trim())) {
+        normalized.followUpQuestionText = normalized.followUpMode === 'ASK_IF_BOOK'
+            ? 'Would you like to schedule an appointment?'
+            : 'What can I help you with today?';
+    }
+    
+    // Small talk should not schedule or book
+    if (normalized.scenarioType === 'SMALL_TALK') {
+        normalized.actionType = 'REPLY_ONLY';
+        normalized.bookingIntent = false;
+        normalized.followUpMode = 'NONE';
+        normalized.followUpQuestionText = null;
+        if (normalized.cooldownSeconds === undefined || normalized.cooldownSeconds === null) {
+            normalized.cooldownSeconds = 30;
+        }
+        
+        normalized.quickReplies = sanitizeSmallTalkReplies(normalized.quickReplies);
+        normalized.fullReplies = sanitizeSmallTalkReplies(normalized.fullReplies);
+    }
+    
+    return normalized;
+}
+
+function sanitizeSmallTalkReplies(replies = []) {
+    const list = Array.isArray(replies) ? replies : [];
+    const filtered = list.filter(r => !containsBookingPhrase(r));
+    
+    if (filtered.length > 0) {
+        return filtered;
+    }
+    
+    return [
+        "Thanks, {name}. How can I help you today?"
+    ];
+}
+
+function containsBookingPhrase(text) {
+    if (!text) return false;
+    const lower = String(text).toLowerCase();
+    return BOOKING_PHRASES.some(phrase => lower.includes(phrase));
 }
 
 /**
@@ -1098,7 +1154,7 @@ Output VALID JSON only. No markdown. No explanations.`
         return {
             success: true,
             isDuplicate: false,
-            scenario: {
+            scenario: normalizeScenarioForType({
                 // Identity
                 name: s.name || gap.representative.substring(0, 50),
                 category: s.category || 'FAQ',
@@ -1108,6 +1164,7 @@ Output VALID JSON only. No markdown. No explanations.`
                 priority: typeof s.priority === 'number' ? s.priority : 50,
                 minConfidence: typeof s.minConfidence === 'number' ? s.minConfidence : 0.6,
                 behavior: s.behavior || 'calm_professional',
+                replyStrategy: s.replyStrategy || 'AUTO',
                 status: 'draft',
                 
                 // Triggers (required)
@@ -1167,7 +1224,7 @@ Output VALID JSON only. No markdown. No explanations.`
                 generatedBy: 'ai',
                 confidence: 0.85,
                 sourceGap: gap.representative
-            },
+            }),
             tokensUsed: response.usage?.total_tokens || 0
         };
     } catch (error) {
@@ -1234,13 +1291,14 @@ function generateFallbackScenario(gap, company) {
     
     return {
         success: true,
-        scenario: {
+        scenario: normalizeScenarioForType({
             name: gap.representative.substring(0, 50),
             category,
             scenarioType,
             priority,
             minConfidence: minConfidenceMap[scenarioType] || 0.6,
             behavior: scenarioType === 'EMERGENCY' ? 'empathetic_reassuring' : 'calm_professional',
+            replyStrategy: 'AUTO',
             status: 'draft',
             triggers: triggers.length > 0 ? triggers : [normalized],
             negativeTriggers: [],
@@ -1262,7 +1320,7 @@ function generateFallbackScenario(gap, company) {
             generatedBy: 'fallback',
             confidence: 0.5,
             sourceGap: gap.representative
-        },
+        }),
         tokensUsed: 0
     };
 }
