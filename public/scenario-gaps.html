@@ -2875,24 +2875,28 @@
                     }
                 }
                 
-                // Regex Triggers (if any)
+                // Regex Triggers (if any) - with null checks
                 const regexSection = document.getElementById('regex-section');
                 const regexEl = document.getElementById('preview-regex');
-                if (preview.regexTriggers && preview.regexTriggers.length > 0) {
-                    regexSection.style.display = 'block';
-                    regexEl.innerHTML = preview.regexTriggers.map(r => escapeHtml(r)).join('<br>');
-                } else {
-                    regexSection.style.display = 'none';
+                if (regexSection) {
+                    if (preview.regexTriggers && preview.regexTriggers.length > 0) {
+                        regexSection.style.display = 'block';
+                        if (regexEl) regexEl.innerHTML = preview.regexTriggers.map(r => escapeHtml(r)).join('<br>');
+                    } else {
+                        regexSection.style.display = 'none';
+                    }
                 }
                 
-                // Follow-Up Funnel (if any)
+                // Follow-Up Funnel (if any) - with null checks
                 const funnelSection = document.getElementById('funnel-section');
                 const funnelEl = document.getElementById('preview-funnel');
-                if (preview.followUpFunnel) {
-                    funnelSection.style.display = 'block';
-                    funnelEl.textContent = preview.followUpFunnel;
-                } else {
-                    funnelSection.style.display = 'none';
+                if (funnelSection) {
+                    if (preview.followUpFunnel) {
+                        funnelSection.style.display = 'block';
+                        if (funnelEl) funnelEl.textContent = preview.followUpFunnel;
+                    } else {
+                        funnelSection.style.display = 'none';
+                    }
                 }
                 
                 // Advanced Settings (with null checks)
@@ -2917,32 +2921,36 @@
                 const handoffEl = document.getElementById('preview-handoff');
                 if (handoffEl) handoffEl.textContent = preview.handoffPolicy || 'low_confidence';
                 
-                // Entity Capture (if any)
+                // Entity Capture (if any) - with null checks
                 const entitySection = document.getElementById('entity-section');
                 const entityEl = document.getElementById('preview-entities');
                 const entities = preview.entityCapture || [];
-                if (entities.length > 0) {
-                    entitySection.style.display = 'block';
-                    entityEl.innerHTML = entities.map(e => 
-                        `<span style="background: var(--accent-purple); color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px;">${escapeHtml(e)}</span>`
-                    ).join('');
-                } else {
-                    entitySection.style.display = 'none';
+                if (entitySection) {
+                    if (entities.length > 0) {
+                        entitySection.style.display = 'block';
+                        if (entityEl) entityEl.innerHTML = entities.map(e => 
+                            `<span style="background: var(--accent-purple); color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px;">${escapeHtml(e)}</span>`
+                        ).join('');
+                    } else {
+                        entitySection.style.display = 'none';
+                    }
                 }
                 
-                // _noName Variants indicator
+                // _noName Variants indicator - with null checks
                 const nonameSection = document.getElementById('noname-section');
                 const nonameEl = document.getElementById('preview-noname');
                 const hasNoNameQuick = preview.quickReplies_noName && preview.quickReplies_noName.length > 0;
                 const hasNoNameFull = preview.fullReplies_noName && preview.fullReplies_noName.length > 0;
-                if (hasNoNameQuick || hasNoNameFull) {
-                    nonameSection.style.display = 'block';
-                    nonameEl.innerHTML = `
-                        <span>✅ quickReplies_noName: ${hasNoNameQuick ? preview.quickReplies_noName.length + ' variants' : '❌ missing'}</span><br>
-                        <span>✅ fullReplies_noName: ${hasNoNameFull ? preview.fullReplies_noName.length + ' variants' : '❌ missing'}</span>
-                    `;
-                } else {
-                    nonameSection.style.display = 'none';
+                if (nonameSection) {
+                    if (hasNoNameQuick || hasNoNameFull) {
+                        nonameSection.style.display = 'block';
+                        if (nonameEl) nonameEl.innerHTML = `
+                            <span>✅ quickReplies_noName: ${hasNoNameQuick ? preview.quickReplies_noName.length + ' variants' : '❌ missing'}</span><br>
+                            <span>✅ fullReplies_noName: ${hasNoNameFull ? preview.fullReplies_noName.length + ' variants' : '❌ missing'}</span>
+                        `;
+                    } else {
+                        nonameSection.style.display = 'none';
+                    }
                 }
                 
                 // 🎯 HEALTH COUNT BANNER - Count populated settings
