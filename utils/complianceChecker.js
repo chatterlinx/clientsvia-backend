@@ -9,25 +9,31 @@
  * 
  * All checks are deterministic (regex/string) - no extra LLM calls needed.
  * 
+ * HARD FAIL RULES:
+ * - {name} placeholder leak → score capped at 40, always fails
+ * - Banned phrase detected → score capped at 50, always fails
+ * 
+ * CLASSIFICATION vs TROUBLESHOOTING:
+ * - Classification: "Is it running but not cooling?" → ALLOWED (symptom/severity)
+ * - Troubleshooting: "Have you tried resetting it?" → NOT ALLOWED (diagnostic step)
+ * 
  * Usage:
  *   const compliance = checkCompliance(reply, {
  *     company,
  *     callerName,
  *     scenarioType,
- *     expectedBookingMomentum: true
+ *     bookingPhase: 'SCHEDULING',  // DISCOVERY|CLASSIFICATION|SCHEDULING|CONFIRMATION
+ *     maxWords: 60
  *   });
  * 
  * Returns:
  *   {
- *     score: 85,           // 0-100 overall compliance
- *     passed: true,        // score >= threshold
- *     checks: {
- *       bannedPhrases: { passed: true, found: [] },
- *       troubleshooting: { passed: true, found: [] },
- *       nameUsage: { passed: true, usedCorrectly: true },
- *       bookingMomentum: { passed: true, found: ['morning', 'afternoon'] }
- *     },
- *     violations: []       // Array of violation strings for logging
+ *     score: 85,
+ *     passed: true,
+ *     hardFail: false,
+ *     hardFailReason: null,
+ *     checks: { ... },
+ *     violations: []
  *   }
  * 
  * ============================================================================
@@ -36,68 +42,204 @@
 const logger = require('./logger');
 
 // ============================================================================
-// DEFAULT TROUBLESHOOTING PATTERNS (these should NOT appear in responses)
+// TROUBLESHOOTING PATTERNS - "Try/fix this" language (NOT ALLOWED)
 // ============================================================================
-// These indicate the AI is trying to diagnose instead of booking/dispatching.
-// Dispatchers don't troubleshoot - they schedule technicians.
+// These indicate the AI is trying to diagnose instead of dispatching.
+// Dispatchers DON'T troubleshoot - they schedule technicians.
+// 
+// IMPORTANT: These are DISTINCT from classification questions.
+// - Troubleshooting = "do something to fix it"
+// - Classification = "describe symptom/severity"
 // ============================================================================
-const DEFAULT_TROUBLESHOOTING_PATTERNS = [
-  // Direct troubleshooting questions
-  /have you (tried|checked|looked at)/i,
-  /did you (try|check|look at)/i,
-  /is it (set|turned|plugged|connected)/i,
-  /can you (try|check|look at|verify)/i,
-  /could you (try|check|look at|verify)/i,
-  /make sure (the|it|your)/i,
-  /try (turning|resetting|unplugging|checking)/i,
+const TROUBLESHOOTING_PATTERNS = [
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TIER 1: Explicit "try this" instructions (high confidence)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /have you tried/i,
+  /did you try/i,
+  /can you try/i,
+  /could you try/i,
+  /try (turning|resetting|unplugging|restarting|rebooting|checking|changing)/i,
+  /try to (turn|reset|unplug|restart|reboot|check|change)/i,
   
-  // Diagnostic questions
-  /what (color|temperature|setting) is/i,
-  /is the .* (on|off|blinking|flashing)/i,
-  /when did you last (change|replace|clean)/i,
-  /have you (changed|replaced|cleaned) the/i,
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TIER 2: "Make sure" / "Check" instructions (medium-high confidence)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /make sure (the|it|your|that)/i,
+  /can you check (the|if|that|whether)/i,
+  /could you check (the|if|that|whether)/i,
+  /please check (the|if|that|whether)/i,
+  /have you checked (the|if|that|whether)/i,
+  /did you check (the|if|that|whether)/i,
   
-  // Tech support language
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TIER 3: Tech support verbs (high confidence)
+  // ═══════════════════════════════════════════════════════════════════════════
   /restart (the|your|it)/i,
   /reboot (the|your|it)/i,
   /reset (the|your|it)/i,
-  /unplug .* and plug/i,
-  /wait .* (seconds|minutes) and/i,
+  /unplug .{0,20} and plug/i,
+  /turn it off and (back )?on/i,
+  /wait .{0,10} (seconds|minutes) and/i,
+  /power cycle/i,
   
-  // Deflection phrases
-  /before we send/i,
-  /before scheduling/i,
-  /let me ask you a few questions/i,
-  /let's troubleshoot/i
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TIER 4: "Before we send" / deflection (high confidence)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /before (we send|scheduling|I schedule|we can send)/i,
+  /let's troubleshoot/i,
+  /let me walk you through/i,
+  /let me help you (fix|diagnose|troubleshoot)/i,
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TIER 5: "When did you last" maintenance questions (medium confidence)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /when did you last (change|replace|clean|service)/i,
+  /have you (changed|replaced|cleaned) the/i,
+  /when was the last time you/i
 ];
 
 // ============================================================================
-// BOOKING MOMENTUM PATTERNS (these SHOULD appear when booking)
+// CLASSIFICATION PATTERNS - Safe symptom/severity questions (ALLOWED)
 // ============================================================================
-// When in booking mode, the response should move toward scheduling.
+// These are LEGITIMATE classification questions that dispatchers ASK.
+// They help determine urgency and dispatch priority - NOT troubleshooting.
+// 
+// If a reply matches these, DO NOT flag it as troubleshooting.
+// ============================================================================
+const CLASSIFICATION_SAFE_PATTERNS = [
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Symptom classification (what's happening)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /is (it|the|your) .{0,30}(running|working|making|leaking|dripping|smoking)/i,
+  /is .{0,20} (completely|totally|not) (dead|broken|working)/i,
+  /is (water|gas|smoke|air) .{0,15}(coming|leaking|visible)/i,
+  /not (cooling|heating|turning on|working)/i,
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Severity/urgency classification (how bad is it)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /is (anyone|someone) in danger/i,
+  /is (it|this|there) an emergency/i,
+  /is (water|gas) actively/i,
+  /how long has/i,
+  /when did (this|it) start/i,
+  /right now/i,
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Location/scope classification (where/what)
+  // ═══════════════════════════════════════════════════════════════════════════
+  /which (room|area|unit|zone|floor)/i,
+  /where (is|are) (the|your)/i,
+  /what type of (system|unit|equipment)/i,
+  /is (it|this) .{0,15}(indoor|outdoor|upstairs|downstairs)/i,
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // State observation (not "change this")
+  // ═══════════════════════════════════════════════════════════════════════════
+  /is the .{0,20} on or off/i,
+  /is it (on|off|running|stopped)/i,
+  /what (is|does) .{0,20} (look|sound|smell) like/i
+];
+
+// ============================================================================
+// BOOKING MOMENTUM PATTERNS (SHOULD appear when in SCHEDULING phase)
+// ============================================================================
+// Only required when bookingPhase is 'SCHEDULING' or 'CONFIRMATION'.
+// NOT required during DISCOVERY or CLASSIFICATION phases.
 // ============================================================================
 const BOOKING_MOMENTUM_PATTERNS = [
   // Time slot language
   /morning|afternoon|evening/i,
-  /today|tomorrow|this week/i,
+  /today|tomorrow|this week|next week/i,
   /\d{1,2}(:\d{2})?\s*(am|pm)/i,
   /available|availability/i,
+  
+  // Scheduling action language
   /schedule|appointment|booking/i,
   /technician|tech|specialist/i,
+  /send (someone|a tech|our)/i,
+  /get (someone|a tech) out/i,
   
   // Confirmation language
   /does .* work for you/i,
   /would .* work/i,
-  /i can (get|have|schedule)/i,
-  /we can (get|have|send)/i,
-  /let me (get|have|schedule)/i
+  /i can (get|have|schedule|send)/i,
+  /we can (get|have|send|schedule)/i,
+  /let me (get|have|schedule|book)/i
 ];
 
 // ============================================================================
-// NAME PLACEHOLDER PATTERNS
+// HARD FAIL RULES
+// ============================================================================
+// These are dealbreakers that cap the score regardless of other checks.
+// ============================================================================
+const HARD_FAIL_RULES = {
+  NAME_PLACEHOLDER_LEAK: {
+    name: 'name_placeholder_leak',
+    maxScore: 40,
+    description: '{name} placeholder in final output - customer-facing cringe'
+  },
+  BANNED_PHRASE: {
+    name: 'banned_phrase',
+    maxScore: 50,
+    description: 'Explicitly banned phrase detected'
+  }
+};
+
+// ============================================================================
+// VERBOSITY THRESHOLDS
+// ============================================================================
+// Dispatchers should be brief. Long replies kill TTS latency.
+// ============================================================================
+const DEFAULT_VERBOSITY_LIMITS = {
+  maxWords: 60,           // Default max words for voice
+  maxWordsBooking: 80,    // Slightly more for booking confirmations
+  maxChars: 350,          // Character fallback
+  idealWords: 25          // Under this is ideal
+};
+
+// ============================================================================
+// NAME PLACEHOLDER PATTERN
 // ============================================================================
 const NAME_PLACEHOLDER_PATTERN = /\{name\}/i;
-const NAME_USAGE_PATTERN = /\b(hi|hello|thanks|thank you),?\s+\w+/i;
+
+/**
+ * Check if a phrase is a classification question (allowed) vs troubleshooting (not allowed)
+ * 
+ * @param {string} phrase - The matched phrase to check
+ * @param {string} fullReply - The full reply for context
+ * @returns {boolean} True if this is a safe classification question
+ */
+function isClassificationSafe(phrase, fullReply) {
+  // Check if the full reply matches any classification-safe patterns
+  for (const safePattern of CLASSIFICATION_SAFE_PATTERNS) {
+    if (safePattern.test(fullReply)) {
+      // Found a classification context - check if the phrase is part of it
+      const match = fullReply.match(safePattern);
+      if (match && phrase.toLowerCase().includes(match[0].toLowerCase().substring(0, 10))) {
+        return true;
+      }
+    }
+  }
+  
+  // Also check if the phrase itself matches safe patterns
+  for (const safePattern of CLASSIFICATION_SAFE_PATTERNS) {
+    if (safePattern.test(phrase)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Count words in a string
+ */
+function countWords(text) {
+  if (!text) return 0;
+  return text.trim().split(/\s+/).filter(w => w.length > 0).length;
+}
 
 /**
  * Main compliance check function
@@ -107,7 +249,8 @@ const NAME_USAGE_PATTERN = /\b(hi|hello|thanks|thank you),?\s+\w+/i;
  * @param {Object} options.company - Company object with aiAgentSettings
  * @param {string|null} options.callerName - Caller's name if known
  * @param {string} options.scenarioType - Type of scenario (BOOKING, FAQ, etc.)
- * @param {boolean} options.expectedBookingMomentum - Whether booking language expected
+ * @param {string} options.bookingPhase - DISCOVERY|CLASSIFICATION|SCHEDULING|CONFIRMATION
+ * @param {number} options.maxWords - Override max words limit
  * @param {Array} options.customTroubleshootingPatterns - Additional patterns to check
  * @returns {Object} Compliance result with score, checks, and violations
  */
@@ -116,7 +259,9 @@ function checkCompliance(reply, options = {}) {
     company = {},
     callerName = null,
     scenarioType = null,
-    expectedBookingMomentum = false,
+    bookingPhase = null,
+    expectedBookingMomentum = false, // Legacy support
+    maxWords = null,
     customTroubleshootingPatterns = []
   } = options;
   
@@ -124,6 +269,8 @@ function checkCompliance(reply, options = {}) {
     return {
       score: 0,
       passed: false,
+      hardFail: true,
+      hardFailReason: 'no_reply',
       checks: {},
       violations: ['No reply to check']
     };
@@ -131,11 +278,48 @@ function checkCompliance(reply, options = {}) {
   
   const checks = {};
   const violations = [];
+  const hardFails = [];
   let totalWeight = 0;
   let weightedScore = 0;
   
   // =========================================================================
-  // CHECK 1: Banned Phrases (weight: 30)
+  // CHECK 1: Name Placeholder Leak (weight: 25, HARD FAIL if detected)
+  // =========================================================================
+  const hasNamePlaceholder = NAME_PLACEHOLDER_PATTERN.test(reply);
+  const hasCallerName = !!callerName && callerName.trim().length > 0;
+  const mentionsName = hasCallerName && reply.toLowerCase().includes(callerName.toLowerCase());
+  
+  let nameUsageCorrect = true;
+  let nameUsageReason = 'correct';
+  
+  if (hasNamePlaceholder) {
+    // CRITICAL HARD FAIL: {name} placeholder should NEVER appear in final output
+    nameUsageCorrect = false;
+    nameUsageReason = 'placeholder_leaked';
+    violations.push('HARD FAIL: Name placeholder {name} leaked into output');
+    hardFails.push(HARD_FAIL_RULES.NAME_PLACEHOLDER_LEAK);
+  } else if (hasCallerName && !mentionsName) {
+    nameUsageReason = 'name_available_not_used';
+  } else if (hasCallerName && mentionsName) {
+    nameUsageReason = 'name_used_correctly';
+  }
+  
+  checks.nameUsage = {
+    passed: nameUsageCorrect,
+    hasCallerName,
+    usedName: mentionsName,
+    reason: nameUsageReason,
+    weight: 25,
+    hardFail: hasNamePlaceholder
+  };
+  
+  totalWeight += 25;
+  if (checks.nameUsage.passed) {
+    weightedScore += 25;
+  }
+  
+  // =========================================================================
+  // CHECK 2: Banned Phrases (weight: 25, HARD FAIL if detected)
   // =========================================================================
   const bannedPhrases = company?.aiAgentSettings?.frontDeskBehavior?.forbiddenPhrases || [];
   const bannedFound = [];
@@ -146,24 +330,29 @@ function checkCompliance(reply, options = {}) {
     }
   }
   
+  const hasBannedPhrase = bannedFound.length > 0;
+  
   checks.bannedPhrases = {
-    passed: bannedFound.length === 0,
+    passed: !hasBannedPhrase,
     found: bannedFound,
-    weight: 30
+    weight: 25,
+    hardFail: hasBannedPhrase
   };
   
-  totalWeight += 30;
+  totalWeight += 25;
   if (checks.bannedPhrases.passed) {
-    weightedScore += 30;
+    weightedScore += 25;
   } else {
-    violations.push(`Banned phrases found: ${bannedFound.join(', ')}`);
+    violations.push(`HARD FAIL: Banned phrases found: ${bannedFound.slice(0, 3).join(', ')}`);
+    hardFails.push(HARD_FAIL_RULES.BANNED_PHRASE);
   }
   
   // =========================================================================
-  // CHECK 2: Troubleshooting Questions (weight: 25)
+  // CHECK 3: Troubleshooting Detection (weight: 20)
+  // With classification-safe carveout
   // =========================================================================
   const allTroubleshootingPatterns = [
-    ...DEFAULT_TROUBLESHOOTING_PATTERNS,
+    ...TROUBLESHOOTING_PATTERNS,
     ...customTroubleshootingPatterns
   ];
   
@@ -171,7 +360,11 @@ function checkCompliance(reply, options = {}) {
   for (const pattern of allTroubleshootingPatterns) {
     const match = reply.match(pattern);
     if (match) {
-      troubleshootingFound.push(match[0]);
+      const matchedPhrase = match[0];
+      // Check if this is actually a classification question (safe)
+      if (!isClassificationSafe(matchedPhrase, reply)) {
+        troubleshootingFound.push(matchedPhrase);
+      }
     }
   }
   
@@ -180,59 +373,56 @@ function checkCompliance(reply, options = {}) {
   
   checks.troubleshooting = {
     passed: uniqueTroubleshooting.length === 0,
-    found: uniqueTroubleshooting.slice(0, 5), // Limit to 5 for logging
-    weight: 25
+    found: uniqueTroubleshooting.slice(0, 5),
+    weight: 20
   };
   
-  totalWeight += 25;
+  totalWeight += 20;
   if (checks.troubleshooting.passed) {
-    weightedScore += 25;
+    weightedScore += 20;
   } else {
     violations.push(`Troubleshooting detected: ${uniqueTroubleshooting.slice(0, 3).join(', ')}`);
   }
   
   // =========================================================================
-  // CHECK 3: Name Usage Correctness (weight: 20)
+  // CHECK 4: Verbosity / Length (weight: 15)
   // =========================================================================
-  const hasCallerName = !!callerName && callerName.trim().length > 0;
-  const hasNamePlaceholder = NAME_PLACEHOLDER_PATTERN.test(reply);
-  const mentionsName = hasCallerName && reply.toLowerCase().includes(callerName.toLowerCase());
+  const wordCount = countWords(reply);
+  const charCount = reply.length;
+  const effectiveMaxWords = maxWords || (bookingPhase === 'CONFIRMATION' 
+    ? DEFAULT_VERBOSITY_LIMITS.maxWordsBooking 
+    : DEFAULT_VERBOSITY_LIMITS.maxWords);
   
-  let nameUsageCorrect = true;
-  let nameUsageReason = 'correct';
+  const isUnderLimit = wordCount <= effectiveMaxWords;
+  const isIdeal = wordCount <= DEFAULT_VERBOSITY_LIMITS.idealWords;
   
-  if (hasNamePlaceholder) {
-    // CRITICAL: {name} placeholder should NEVER appear in final output
-    nameUsageCorrect = false;
-    nameUsageReason = 'placeholder_leaked';
-    violations.push('Name placeholder {name} leaked into output');
-  } else if (!hasCallerName && mentionsName) {
-    // Somehow mentioned a name we don't have (weird edge case)
-    nameUsageCorrect = true; // Not a violation, just odd
-    nameUsageReason = 'name_present_unexpectedly';
-  } else if (hasCallerName && !mentionsName) {
-    // Has name but didn't use it - minor (not always required)
-    nameUsageCorrect = true;
-    nameUsageReason = 'name_available_not_used';
-  }
-  
-  checks.nameUsage = {
-    passed: nameUsageCorrect,
-    hasCallerName,
-    usedName: mentionsName,
-    reason: nameUsageReason,
-    weight: 20
+  checks.verbosity = {
+    passed: isUnderLimit,
+    wordCount,
+    charCount,
+    maxWords: effectiveMaxWords,
+    isIdeal,
+    weight: 15
   };
   
-  totalWeight += 20;
-  if (checks.nameUsage.passed) {
-    weightedScore += 20;
+  totalWeight += 15;
+  if (checks.verbosity.passed) {
+    weightedScore += 15;
+  } else {
+    violations.push(`Too verbose: ${wordCount} words (max ${effectiveMaxWords})`);
   }
   
   // =========================================================================
-  // CHECK 4: Booking Momentum (weight: 25, only when expected)
+  // CHECK 5: Booking Momentum (weight: 15, only in SCHEDULING phase)
   // =========================================================================
-  if (expectedBookingMomentum) {
+  // Only require booking momentum when:
+  // - bookingPhase is SCHEDULING or CONFIRMATION, OR
+  // - Legacy: expectedBookingMomentum is true
+  const requireBookingMomentum = bookingPhase === 'SCHEDULING' 
+    || bookingPhase === 'CONFIRMATION'
+    || expectedBookingMomentum;
+  
+  if (requireBookingMomentum) {
     const bookingFound = [];
     for (const pattern of BOOKING_MOMENTUM_PATTERNS) {
       const match = reply.match(pattern);
@@ -247,33 +437,56 @@ function checkCompliance(reply, options = {}) {
     checks.bookingMomentum = {
       passed: hasBookingMomentum,
       found: uniqueBooking.slice(0, 5),
-      weight: 25
+      bookingPhase,
+      weight: 15
     };
     
-    totalWeight += 25;
+    totalWeight += 15;
     if (checks.bookingMomentum.passed) {
-      weightedScore += 25;
+      weightedScore += 15;
     } else {
-      violations.push('Missing booking momentum (no time/scheduling language)');
+      violations.push(`Missing booking momentum in ${bookingPhase || 'booking'} phase`);
     }
   }
   
   // =========================================================================
-  // CALCULATE FINAL SCORE
+  // CALCULATE FINAL SCORE (with hard fail caps)
   // =========================================================================
-  const score = totalWeight > 0 ? Math.round((weightedScore / totalWeight) * 100) : 0;
-  const passed = score >= 70; // Threshold: 70%
+  let score = totalWeight > 0 ? Math.round((weightedScore / totalWeight) * 100) : 0;
+  
+  // Apply hard fail caps
+  let hardFail = false;
+  let hardFailReason = null;
+  
+  if (hardFails.length > 0) {
+    hardFail = true;
+    // Use the lowest maxScore among hard fails
+    const worstFail = hardFails.reduce((worst, fail) => 
+      fail.maxScore < worst.maxScore ? fail : worst, hardFails[0]);
+    hardFailReason = worstFail.name;
+    
+    // Cap the score
+    if (score > worstFail.maxScore) {
+      score = worstFail.maxScore;
+    }
+  }
+  
+  // Pass threshold is 70%, but hard fails always fail regardless of score
+  const passed = !hardFail && score >= 70;
   
   return {
     score,
     passed,
+    hardFail,
+    hardFailReason,
     checks,
     violations,
     // Metadata for logging
     _meta: {
       totalWeight,
       weightedScore,
-      checksRun: Object.keys(checks).length
+      checksRun: Object.keys(checks).length,
+      hardFailCount: hardFails.length
     }
   };
 }
@@ -297,21 +510,47 @@ function quickBannedCheck(reply, forbiddenPhrases = []) {
 }
 
 /**
- * Quick check for troubleshooting language only
+ * Quick check for troubleshooting language only (with classification carveout)
  */
 function quickTroubleshootingCheck(reply) {
   if (!reply) return { passed: true, found: [] };
   
   const found = [];
-  for (const pattern of DEFAULT_TROUBLESHOOTING_PATTERNS) {
+  for (const pattern of TROUBLESHOOTING_PATTERNS) {
     const match = reply.match(pattern);
     if (match) {
-      found.push(match[0]);
-      if (found.length >= 3) break; // Early exit for performance
+      // Check if it's actually a classification question
+      if (!isClassificationSafe(match[0], reply)) {
+        found.push(match[0]);
+        if (found.length >= 3) break; // Early exit for performance
+      }
     }
   }
   
   return { passed: found.length === 0, found };
+}
+
+/**
+ * Quick check for name placeholder leak (critical)
+ */
+function quickNamePlaceholderCheck(reply) {
+  if (!reply) return { passed: true, leaked: false };
+  const leaked = NAME_PLACEHOLDER_PATTERN.test(reply);
+  return { passed: !leaked, leaked };
+}
+
+/**
+ * Quick verbosity check
+ */
+function quickVerbosityCheck(reply, maxWords = DEFAULT_VERBOSITY_LIMITS.maxWords) {
+  if (!reply) return { passed: true, wordCount: 0 };
+  const wordCount = countWords(reply);
+  return { 
+    passed: wordCount <= maxWords, 
+    wordCount, 
+    maxWords,
+    isIdeal: wordCount <= DEFAULT_VERBOSITY_LIMITS.idealWords
+  };
 }
 
 /**
@@ -323,9 +562,14 @@ function buildComplianceSummary(complianceResult) {
   return {
     score: complianceResult.score,
     passed: complianceResult.passed,
+    hardFail: complianceResult.hardFail || false,
+    hardFailReason: complianceResult.hardFailReason || null,
     bannedHit: !complianceResult.checks.bannedPhrases?.passed,
     troubleshootHit: !complianceResult.checks.troubleshooting?.passed,
     nameCorrect: complianceResult.checks.nameUsage?.passed ?? true,
+    namePlaceholderLeak: complianceResult.checks.nameUsage?.reason === 'placeholder_leaked',
+    verbosityOk: complianceResult.checks.verbosity?.passed ?? true,
+    wordCount: complianceResult.checks.verbosity?.wordCount || null,
     bookingMomentum: complianceResult.checks.bookingMomentum?.passed ?? null,
     violationCount: complianceResult.violations?.length || 0
   };
@@ -335,8 +579,13 @@ module.exports = {
   checkCompliance,
   quickBannedCheck,
   quickTroubleshootingCheck,
+  quickNamePlaceholderCheck,
+  quickVerbosityCheck,
   buildComplianceSummary,
-  // Export patterns for testing/extension
-  DEFAULT_TROUBLESHOOTING_PATTERNS,
-  BOOKING_MOMENTUM_PATTERNS
+  // Export for testing/extension
+  TROUBLESHOOTING_PATTERNS,
+  CLASSIFICATION_SAFE_PATTERNS,
+  BOOKING_MOMENTUM_PATTERNS,
+  HARD_FAIL_RULES,
+  DEFAULT_VERBOSITY_LIMITS
 };

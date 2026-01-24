@@ -10686,26 +10686,64 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             // Deterministic checks on LLM output - NO extra LLM calls needed.
             // This is the "proof" that scenario settings shaped the output.
+            // 
+            // HARD FAIL RULES:
+            // - {name} placeholder leak → score capped at 40
+            // - Banned phrase detected → score capped at 50
             // ═══════════════════════════════════════════════════════════════════
+            
+            // Determine booking phase for momentum requirements
+            // Only require booking momentum in SCHEDULING/CONFIRMATION phases
             const isBookingMode = session.mode === 'booking' || session.conversationState?.mode === 'booking';
+            let bookingPhase = null;
+            if (isBookingMode) {
+                // Determine phase based on what slots we have
+                const hasConsent = session.locks?.consentGiven || session.conversationState?.consentGiven;
+                const hasTimeSlot = currentSlots?.preferredTime || currentSlots?.appointmentTime;
+                const hasAddress = currentSlots?.address || currentSlots?.serviceAddress;
+                
+                if (!hasConsent) {
+                    bookingPhase = 'CLASSIFICATION'; // Still classifying/getting consent
+                } else if (!hasTimeSlot) {
+                    bookingPhase = 'SCHEDULING'; // Scheduling time
+                } else if (!hasAddress) {
+                    bookingPhase = 'SCHEDULING'; // Still need address
+                } else {
+                    bookingPhase = 'CONFIRMATION'; // Confirming details
+                }
+            } else {
+                bookingPhase = 'DISCOVERY'; // Not in booking mode
+            }
+            
             const complianceResult = checkCompliance(llmResult.reply, {
                 company,
                 callerName: llmContext.callerName || currentSlots?.name || null,
                 scenarioType: scenarioRetrieval?.scenarios?.[0]?.scenarioType || null,
-                expectedBookingMomentum: isBookingMode
+                bookingPhase
             });
             
             // Add compliance to execution trace
-            if (!complianceResult.passed) {
+            if (complianceResult.hardFail) {
+                executionTrace.push('compliance_hard_fail');
+                executionTrace.push(`hard_fail_${complianceResult.hardFailReason}`);
+            } else if (!complianceResult.passed) {
                 executionTrace.push('compliance_failed');
-                if (complianceResult.checks.troubleshooting && !complianceResult.checks.troubleshooting.passed) {
-                    executionTrace.push('troubleshooting_detected');
-                }
-                if (complianceResult.checks.bannedPhrases && !complianceResult.checks.bannedPhrases.passed) {
-                    executionTrace.push('banned_phrase_detected');
-                }
             } else {
                 executionTrace.push('compliance_passed');
+            }
+            
+            // Track specific violations
+            if (complianceResult.checks.troubleshooting && !complianceResult.checks.troubleshooting.passed) {
+                executionTrace.push('troubleshooting_detected');
+            }
+            if (complianceResult.checks.bannedPhrases && !complianceResult.checks.bannedPhrases.passed) {
+                executionTrace.push('banned_phrase_detected');
+            }
+            if (complianceResult.checks.verbosity && !complianceResult.checks.verbosity.passed) {
+                executionTrace.push('verbosity_exceeded');
+            }
+            if (complianceResult.checks.nameUsage?.reason === 'placeholder_leaked') {
+                executionTrace.push('name_placeholder_leaked');
             }
             
             // Build compact compliance summary for logging
@@ -10743,14 +10781,19 @@ async function processTurn({
             
             // Warn if compliance failed (for monitoring dashboards)
             if (!complianceResult.passed) {
-                logger.warn('[CONVERSATION ENGINE] ⚠️ LLM compliance check failed', {
+                const logLevel = complianceResult.hardFail ? 'error' : 'warn';
+                logger[logLevel](`[CONVERSATION ENGINE] ${complianceResult.hardFail ? '🚨 HARD FAIL' : '⚠️'} LLM compliance check failed`, {
                     callId: session._id?.toString(),
                     companyId,
                     turn: turnNumber,
                     turnTraceId,
                     scenarioIdMatched: matchedScenarioId,
                     score: complianceResult.score,
-                    violations: complianceResult.violations?.slice(0, 3)
+                    hardFail: complianceResult.hardFail,
+                    hardFailReason: complianceResult.hardFailReason,
+                    bookingPhase,
+                    wordCount: complianceResult.checks.verbosity?.wordCount,
+                    violations: complianceResult.violations?.slice(0, 5)
                 });
             }
             
