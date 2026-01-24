@@ -329,11 +329,12 @@ class LLMDiscoveryEngine {
         const includeQuickReplies = cfg.includeQuickReplies !== false;
         const includeFullReplies = cfg.includeFullReplies !== false;
         const includeTriggers = cfg.includeTriggers === true;
-        const includeRegexTriggers = cfg.includeRegexTriggers === true;
-        const includeNegativeTriggers = cfg.includeNegativeTriggers === true;
+        // V90: Default these to TRUE so LLM gets full scenario context for better matching
+        const includeRegexTriggers = cfg.includeRegexTriggers !== false;
+        const includeNegativeTriggers = cfg.includeNegativeTriggers !== false;
         const includeFollowUp = cfg.includeFollowUp !== false;
         const includeScenarioType = cfg.includeScenarioType !== false;
-        const includeBehavior = cfg.includeBehavior === true;
+        const includeBehavior = cfg.includeBehavior !== false;
         
         const truncate = (s, maxChars) => {
             const str = (s || '').toString();

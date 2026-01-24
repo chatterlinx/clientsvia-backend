@@ -4717,8 +4717,9 @@ can't hold"></textarea>
                                 <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeTriggers" type="checkbox" checked>Triggers</label>
                                 <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeFollowUp" type="checkbox" checked>Follow-up</label>
                                 <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeScenarioType" type="checkbox" checked>Scenario type</label>
-                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeRegexTriggers" type="checkbox">Regex triggers</label>
-                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeNegativeTriggers" type="checkbox">Negative triggers</label>
+                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeRegexTriggers" type="checkbox" checked>Regex triggers</label>
+                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeNegativeTriggers" type="checkbox" checked>Negative triggers</label>
+                                <label style="display:inline-flex; gap:8px; align-items:center; margin-right:14px;"><input id="nlp-llmTool-includeBehavior" type="checkbox" checked>Behavior/Personality</label>
                             </div>
                         </details>
 
@@ -12161,13 +12162,19 @@ Higher = detailed, thorough scenarios (more context)
                 // Behavior - dynamically populated dropdown
                 const behaviorSelect = document.getElementById('scenario-behavior');
                 if (behaviorSelect && p.behavior) {
-                    // Map AI behavior values to dropdown values
+                    // Map AI behavior values to dropdown values (includes all AI-generated behaviors)
                     const behaviorMap = {
                         'friendly_warm': 'friendly_warm',
                         'empathetic_reassuring': 'empathetic_reassuring', 
                         'professional_efficient': 'professional_efficient',
                         'enthusiastic_positive': 'enthusiastic_positive',
-                        'calm_patient': 'calm_patient'
+                        'calm_patient': 'calm_patient',
+                        // AI prompt generates these values - must map them
+                        'calm_professional': 'calm_professional',
+                        'urgent_action_oriented': 'urgent_action_oriented',
+                        'apologetic_solution_focused': 'apologetic_solution_focused',
+                        'firm_clear_boundaries': 'firm_clear_boundaries',
+                        'educational_informative': 'educational_informative'
                     };
                     const mappedBehavior = behaviorMap[p.behavior] || p.behavior;
                     // Try to set immediately, then retry after dropdown populates
@@ -12175,9 +12182,14 @@ Higher = detailed, thorough scenarios (more context)
                         const options = Array.from(behaviorSelect.options).map(o => o.value);
                         if (options.includes(mappedBehavior)) {
                             behaviorSelect.value = mappedBehavior;
+                            console.log('✅ [PREFILL] Behavior set to:', mappedBehavior);
                         } else if (options.length <= 1) {
                             // Dropdown not populated yet, retry
                             setTimeout(trySetBehavior, 200);
+                        } else {
+                            // Options populated but value not found - try setting directly
+                            console.log('⚠️ [PREFILL] Behavior value not found in options, trying direct set:', mappedBehavior);
+                            behaviorSelect.value = mappedBehavior;
                         }
                     };
                     trySetBehavior();
@@ -13887,6 +13899,7 @@ Higher = detailed, thorough scenarios (more context)
                 includeNegativeTriggers: !!document.getElementById('nlp-llmTool-includeNegativeTriggers')?.checked,
                 includeFollowUp: !!document.getElementById('nlp-llmTool-includeFollowUp')?.checked,
                 includeScenarioType: !!document.getElementById('nlp-llmTool-includeScenarioType')?.checked,
+                includeBehavior: !!document.getElementById('nlp-llmTool-includeBehavior')?.checked,
                 maxQuickReplies: parseInt(document.getElementById('nlp-llmTool-maxQuickReplies')?.value, 10) || 2,
                 maxFullReplies: parseInt(document.getElementById('nlp-llmTool-maxFullReplies')?.value, 10) || 2,
                 maxCharsPerReply: parseInt(document.getElementById('nlp-llmTool-maxCharsPerReply')?.value, 10) || 260,
@@ -13917,8 +13930,9 @@ Higher = detailed, thorough scenarios (more context)
             setChk('nlp-llmTool-includeTriggers', c.includeTriggers !== false);
             setChk('nlp-llmTool-includeFollowUp', c.includeFollowUp !== false);
             setChk('nlp-llmTool-includeScenarioType', c.includeScenarioType !== false);
-            setChk('nlp-llmTool-includeRegexTriggers', c.includeRegexTriggers === true);
-            setChk('nlp-llmTool-includeNegativeTriggers', c.includeNegativeTriggers === true);
+            setChk('nlp-llmTool-includeRegexTriggers', c.includeRegexTriggers !== false);  // Default true now
+            setChk('nlp-llmTool-includeNegativeTriggers', c.includeNegativeTriggers !== false);  // Default true now
+            setChk('nlp-llmTool-includeBehavior', c.includeBehavior !== false);  // Default true now
         }
         
         /**
