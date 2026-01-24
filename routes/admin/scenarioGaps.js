@@ -1965,17 +1965,22 @@ router.post('/:companyId/gaps/dismiss', async (req, res) => {
  * 
  * Query params:
  * - mode: 'content' | 'runtime' | 'admin' | 'all' (default: 'all')
+ * - source: 'activePool' | 'templates' | 'company' (default: 'activePool')
+ *   - activePool: What runtime actually reads (best for production truth)
+ *   - templates: Global templates only
+ *   - company: Company-specific overrides only
  * - hours: time window for runtime proof (default: 24)
  */
 router.get('/:companyId/audit', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { mode = 'all', hours = '24' } = req.query;
+        const { mode = 'all', source = 'activePool', hours = '24' } = req.query;
         
-        logger.info(`[UNIFIED AUDIT] Running ${mode} audit for ${companyId}`);
+        logger.info(`[UNIFIED AUDIT] Running ${mode} audit for ${companyId} (source: ${source})`);
         
         const result = await runUnifiedAudit(companyId, {
             mode,
+            scenarioSource: source,
             timeWindowHours: parseInt(hours)
         });
         

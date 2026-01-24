@@ -623,16 +623,108 @@ function runAdminCheck(check, fieldName, value, company) {
 // ════════════════════════════════════════════════════════════════════════════════
 
 async function runUnifiedAudit(companyId, options = {}) {
-    const { mode = 'all', timeWindowHours = 24 } = options;
+    const { mode = 'all', scenarioSource = 'activePool', timeWindowHours = 24 } = options;
     const startTime = Date.now();
     
-    // Load scenarios for content audit
+    // ════════════════════════════════════════════════════════════════════════════
+    // SCENARIO LOADING - Track exactly where we looked
+    // ════════════════════════════════════════════════════════════════════════════
+    // Sources:
+    // - templates: Global templates (what's defined)
+    // - company: Company-specific overrides only
+    // - activePool: What the runtime actually reads (templates + company merged)
+    // ════════════════════════════════════════════════════════════════════════════
+    
+    const sourcesChecked = [];
     let scenarios = [];
+    
     if (mode === 'all' || mode === 'content') {
+        // Load from templates (global scenarios)
         const templates = await GlobalInstantResponseTemplate.find({}).lean();
+        let templateScenarioCount = 0;
+        const templateScenarios = [];
+        
         for (const template of templates) {
             for (const category of (template.categories || [])) {
-                scenarios.push(...(category.scenarios || []));
+                const categoryScenarios = category.scenarios || [];
+                templateScenarioCount += categoryScenarios.length;
+                templateScenarios.push(...categoryScenarios);
+            }
+        }
+        
+        sourcesChecked.push({
+            name: 'globalTemplates',
+            count: templateScenarioCount,
+            templatesFound: templates.length
+        });
+        
+        // Load company-specific scenarios (if any)
+        let companyScenarioCount = 0;
+        try {
+            const company = await Company.findById(companyId).select('scenarios aiCoreScenarios').lean();
+            if (company) {
+                const companyScenarios = company.scenarios || company.aiCoreScenarios || [];
+                companyScenarioCount = companyScenarios.length;
+                sourcesChecked.push({
+                    name: 'companyScenarios',
+                    count: companyScenarioCount
+                });
+            }
+        } catch (e) {
+            sourcesChecked.push({
+                name: 'companyScenarios',
+                count: 0,
+                error: e.message
+            });
+        }
+        
+        // Try to load from ScenarioPoolService (what runtime actually uses)
+        let activePoolCount = 0;
+        try {
+            const ScenarioPoolService = require('../ScenarioPoolService');
+            const pool = await ScenarioPoolService.getScenarioPool(companyId);
+            if (pool && pool.scenarios) {
+                activePoolCount = pool.scenarios.length;
+                sourcesChecked.push({
+                    name: 'activeScenarioPool',
+                    count: activePoolCount,
+                    cacheHit: pool.fromCache || false
+                });
+            }
+        } catch (e) {
+            sourcesChecked.push({
+                name: 'activeScenarioPool',
+                count: 0,
+                error: e.message
+            });
+        }
+        
+        // Choose scenarios based on scenarioSource option
+        if (scenarioSource === 'activePool') {
+            try {
+                const ScenarioPoolService = require('../ScenarioPoolService');
+                const pool = await ScenarioPoolService.getScenarioPool(companyId);
+                scenarios = pool?.scenarios || [];
+            } catch (e) {
+                scenarios = templateScenarios; // Fallback to templates
+            }
+        } else if (scenarioSource === 'templates') {
+            scenarios = templateScenarios;
+        } else if (scenarioSource === 'company') {
+            try {
+                const company = await Company.findById(companyId).select('scenarios aiCoreScenarios').lean();
+                scenarios = company?.scenarios || company?.aiCoreScenarios || [];
+            } catch (e) {
+                scenarios = [];
+            }
+        } else {
+            // Default: use activePool if available, else templates
+            try {
+                const ScenarioPoolService = require('../ScenarioPoolService');
+                const pool = await ScenarioPoolService.getScenarioPool(companyId);
+                scenarios = pool?.scenarios || templateScenarios;
+            } catch (e) {
+                scenarios = templateScenarios;
             }
         }
     }
@@ -644,6 +736,7 @@ async function runUnifiedAudit(companyId, options = {}) {
         generationTimeMs: 0,
         registrySnapshotVersion: 'ownership-v1',
         mode,
+        scenarioSource,
         
         // ════════════════════════════════════════════════════════════════════
         // OVERALL STATUS (one truth for the UI)
@@ -657,12 +750,15 @@ async function runUnifiedAudit(companyId, options = {}) {
         // HARD FACTS (can't lie)
         // ════════════════════════════════════════════════════════════════════
         facts: {
+            scenarioSource,
             scenarioCountFound: scenarios.length,
             scenarioCountLive: scenarios.filter(s => s.status === 'live' && s.isActive !== false).length,
             runtimeFieldsTotal: getRuntimeFields().length,
             adminFieldsTotal: getAdminFields().length,
             contentFieldsTotal: getContentFields().length,
-            timeWindowHours
+            timeWindowHours,
+            // Where we looked (can't lie about this)
+            sourcesChecked
         },
         
         summary: {},
@@ -752,7 +848,7 @@ async function runUnifiedAudit(companyId, options = {}) {
     }
     
     // ════════════════════════════════════════════════════════════════════════
-    // SANITY CHECKS (detect broken audit)
+    // SANITY CHECKS (detect broken audit or data problems)
     // ════════════════════════════════════════════════════════════════════════
     
     // If scenarios exist but content audit emitted 0 checks, that's broken
@@ -765,6 +861,30 @@ async function runUnifiedAudit(companyId, options = {}) {
     if (result.facts.runtimeEventsSampled > 0 && result.facts.runtimeFieldsWithProof === 0) {
         // Don't fail, but note it
         result.overall.warning = 'Runtime events exist but no runtime fields found in them (check logging)';
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // GUARDRAIL: activePool mode with 0 scenarios is RED
+    // ════════════════════════════════════════════════════════════════════════
+    // If we're auditing what runtime actually reads and it's empty, agent has nothing
+    if (scenarioSource === 'activePool' && result.facts.scenarioCountFound === 0) {
+        // Check if templates have scenarios (indicates data routing issue)
+        const templatesSource = sourcesChecked.find(s => s.name === 'globalTemplates');
+        if (templatesSource && templatesSource.count > 0) {
+            result.overall.status = 'RED';
+            result.overall.reason = `AGENT_WILL_HAVE_NOTHING_TO_RUN: activePool=0 but templates=${templatesSource.count} (routing/pool issue)`;
+        } else {
+            result.overall.status = 'GRAY';
+            result.overall.reason = 'NO_SCENARIOS_ANYWHERE: No scenarios in templates or pool';
+        }
+    }
+    
+    // If company scenarios requested but templates exist, just note it
+    if (scenarioSource === 'company' && result.facts.scenarioCountFound === 0) {
+        const templatesSource = sourcesChecked.find(s => s.name === 'globalTemplates');
+        if (templatesSource && templatesSource.count > 0) {
+            result.overall.info = `Company has 0 custom scenarios but ${templatesSource.count} template scenarios available`;
+        }
     }
     
     result.generationTimeMs = Date.now() - startTime;
