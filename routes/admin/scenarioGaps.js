@@ -437,11 +437,19 @@ function calculateSavings(totalCalls, totalTokens) {
     const weeklyCost = (totalCalls * avgTokensPerCall / 1000) * 
         (CONFIG.COST_PER_1K_INPUT_TOKENS + CONFIG.COST_PER_1K_OUTPUT_TOKENS);
     
+    // Show at least $0.01 if there's any cost, otherwise show more precision
+    const displayWeeklyCost = weeklyCost < 0.01 && weeklyCost > 0 
+        ? Math.round(weeklyCost * 1000) / 1000  // Show 3 decimal places for tiny amounts
+        : Math.round(weeklyCost * 100) / 100;
+    const displayMonthlyCost = weeklyCost * 4.3 < 0.01 && weeklyCost > 0
+        ? Math.round(weeklyCost * 4.3 * 1000) / 1000
+        : Math.round(weeklyCost * 4.3 * 100) / 100;
+    
     return {
         weeklyCallsSaved: totalCalls,
         weeklyTokensSaved: totalTokens || totalCalls * CONFIG.AVG_TOKENS_PER_TIER3_CALL,
-        weeklyCostSaved: Math.round(weeklyCost * 100) / 100,
-        monthlyCostSaved: Math.round(weeklyCost * 4.3 * 100) / 100
+        weeklyCostSaved: displayWeeklyCost,
+        monthlyCostSaved: displayMonthlyCost
     };
 }
 

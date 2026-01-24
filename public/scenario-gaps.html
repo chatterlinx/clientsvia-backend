@@ -2651,7 +2651,12 @@
             
             document.getElementById('total-tier3').textContent = summary.totalTier3Calls || 0;
             document.getElementById('unique-gaps').textContent = summary.uniqueGaps || 0;
-            document.getElementById('potential-savings').textContent = `$${summary.potentialSavings?.toFixed(2) || '0.00'}`;
+            // Show more precision for tiny amounts
+            const savings = summary.potentialSavings || 0;
+            const savingsText = savings < 0.01 && savings > 0 
+                ? `$${savings.toFixed(3)}`  // Show 3 decimals for tiny amounts
+                : `$${savings.toFixed(2)}`;
+            document.getElementById('potential-savings').textContent = savingsText;
             document.getElementById('high-priority').textContent = summary.highPriorityCount || 0;
             
             // Update period indicator in header
