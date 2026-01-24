@@ -925,6 +925,169 @@ async function checkServiceTypeResolution(companyId, companyDoc) {
 }
 
 // ============================================================================
+// CALENDAR SCHEDULING RULES CHECK
+// ============================================================================
+// Validates that scheduling rules (hours, lead time, buffer, slot interval)
+// are properly configured per canonicalType. This is WHAT controls time math,
+// NOT the booking prompts.
+// ============================================================================
+
+function checkCalendarSchedulingRules(companyDoc) {
+    const calendarConfig = companyDoc?.googleCalendar || {};
+    const colorMapping = calendarConfig?.eventColors?.colorMapping || [];
+    const globalScheduling = calendarConfig?.scheduling || {};
+    
+    const result = {
+        status: 'UNKNOWN',
+        health: 'GRAY',
+        message: '',
+        globalRules: {},
+        perTypeRules: [],
+        issues: [],
+        summary: {}
+    };
+    
+    // Check if calendar is enabled
+    if (!calendarConfig?.enabled) {
+        result.status = 'CALENDAR_DISABLED';
+        result.message = 'Google Calendar not enabled';
+        return result;
+    }
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // GLOBAL SCHEDULING RULES
+    // ────────────────────────────────────────────────────────────────────────
+    result.globalRules = {
+        exists: Object.keys(globalScheduling).length > 0,
+        slotIntervalMinutes: globalScheduling.slotIntervalMinutes || 60,
+        leadTimeMinutes: globalScheduling.leadTimeMinutes || 60,
+        advanceBookingDays: globalScheduling.advanceBookingDays || 30,
+        bufferMinutes: globalScheduling.bufferMinutes || 0,
+        sameDayAllowed: globalScheduling.sameDayAllowed !== false,
+        businessHours: globalScheduling.businessHours || null,
+        timezone: calendarConfig.timezone || 'America/Los_Angeles'
+    };
+    
+    // Validate global rules
+    if (result.globalRules.slotIntervalMinutes < 15 || result.globalRules.slotIntervalMinutes > 480) {
+        result.issues.push({
+            severity: 'HIGH',
+            code: 'INVALID_SLOT_INTERVAL',
+            message: `Global slot interval ${result.globalRules.slotIntervalMinutes}min is outside valid range (15-480)`,
+            fix: 'Set slot interval between 15 and 480 minutes'
+        });
+    }
+    
+    if (result.globalRules.leadTimeMinutes > 480) {
+        result.issues.push({
+            severity: 'MEDIUM',
+            code: 'EXCESSIVE_LEAD_TIME',
+            message: `Global lead time ${result.globalRules.leadTimeMinutes}min seems excessive (>8 hours)`,
+            fix: 'Consider reducing lead time for faster booking availability'
+        });
+    }
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // PER-TYPE SCHEDULING RULES (from colorMapping)
+    // ────────────────────────────────────────────────────────────────────────
+    const typeRules = [];
+    const coreTypes = ['repair', 'maintenance', 'emergency', 'estimate'];
+    const missingScheduling = [];
+    
+    for (const mapping of colorMapping) {
+        const canonicalType = mapping.canonicalType || mapping.serviceType || 'unknown';
+        const scheduling = mapping.scheduling || {};
+        
+        const rules = {
+            canonicalType,
+            label: mapping.label || canonicalType,
+            colorId: mapping.colorId,
+            hasSchedulingRules: Object.keys(scheduling).length > 0,
+            slotIntervalMinutes: scheduling.slotIntervalMinutes || result.globalRules.slotIntervalMinutes,
+            leadTimeMinutes: scheduling.leadTimeMinutes ?? result.globalRules.leadTimeMinutes,
+            advanceBookingDays: scheduling.advanceBookingDays ?? result.globalRules.advanceBookingDays,
+            sameDayAllowed: scheduling.sameDayAllowed ?? result.globalRules.sameDayAllowed,
+            customHours: scheduling.customHours || null
+        };
+        
+        typeRules.push(rules);
+        
+        // Track types without explicit scheduling rules
+        if (!rules.hasSchedulingRules && coreTypes.includes(canonicalType)) {
+            missingScheduling.push(canonicalType);
+        }
+        
+        // Validate emergency has short lead time
+        if (canonicalType === 'emergency' && rules.leadTimeMinutes > 60) {
+            result.issues.push({
+                severity: 'MEDIUM',
+                code: 'EMERGENCY_LONG_LEAD',
+                message: `Emergency type has ${rules.leadTimeMinutes}min lead time (should be ≤60 for emergencies)`,
+                fix: 'Reduce lead time for emergency to 30-60 minutes'
+            });
+        }
+        
+        // Validate maintenance doesn't allow same-day
+        if (canonicalType === 'maintenance' && rules.sameDayAllowed && rules.advanceBookingDays === 0) {
+            result.issues.push({
+                severity: 'LOW',
+                code: 'MAINTENANCE_SAME_DAY',
+                message: 'Maintenance allows same-day booking (typically scheduled in advance)',
+                fix: 'Consider setting advanceBookingDays > 0 for maintenance to encourage proper scheduling'
+            });
+        }
+    }
+    
+    result.perTypeRules = typeRules;
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // WARNING: Core types without explicit scheduling rules
+    // ────────────────────────────────────────────────────────────────────────
+    if (missingScheduling.length > 0) {
+        result.issues.push({
+            severity: 'LOW',
+            code: 'MISSING_TYPE_SCHEDULING',
+            message: `Core types using global defaults (no custom rules): ${missingScheduling.join(', ')}`,
+            fix: 'Consider adding per-type scheduling rules for different service types'
+        });
+    }
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // SUMMARY
+    // ────────────────────────────────────────────────────────────────────────
+    result.summary = {
+        totalMappings: colorMapping.length,
+        withSchedulingRules: typeRules.filter(t => t.hasSchedulingRules).length,
+        usingDefaults: typeRules.filter(t => !t.hasSchedulingRules).length,
+        emergencyConfigured: typeRules.some(t => t.canonicalType === 'emergency'),
+        maintenanceConfigured: typeRules.some(t => t.canonicalType === 'maintenance')
+    };
+    
+    // ────────────────────────────────────────────────────────────────────────
+    // OVERALL STATUS
+    // ────────────────────────────────────────────────────────────────────────
+    if (result.issues.some(i => i.severity === 'HIGH')) {
+        result.status = 'MISCONFIGURED';
+        result.health = 'RED';
+    } else if (result.issues.some(i => i.severity === 'MEDIUM')) {
+        result.status = 'PARTIAL';
+        result.health = 'YELLOW';
+    } else if (colorMapping.length > 0) {
+        result.status = 'CONFIGURED';
+        result.health = 'GREEN';
+    } else {
+        result.status = 'NO_MAPPINGS';
+        result.health = 'YELLOW';
+    }
+    
+    result.message = result.status === 'CONFIGURED'
+        ? `${result.summary.withSchedulingRules}/${result.summary.totalMappings} types have custom scheduling rules`
+        : result.issues[0]?.message || 'No color mappings configured';
+    
+    return result;
+}
+
+// ============================================================================
 // BOOKING CONTRACT CHECK
 // ============================================================================
 
@@ -1474,6 +1637,9 @@ async function buildWiringReport({
     
     // Service type resolution check (V89)
     specialChecks.serviceTypeResolution = await checkServiceTypeResolution(companyId, companyDoc);
+    
+    // Calendar scheduling rules check - validates hours/lead time/buffer per canonicalType
+    specialChecks.calendarSchedulingRules = checkCalendarSchedulingRules(companyDoc);
     
     // Runtime proof check (V89) - proves features are actually executing
     specialChecks.runtimeProof = await checkRuntimeProof(companyId);
