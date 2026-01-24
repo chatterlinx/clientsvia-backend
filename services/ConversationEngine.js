@@ -9604,11 +9604,13 @@ async function processTurn({
                     const uowMaxUnits = typeof uowConfig.maxUnitsPerCall === 'number' ? uowConfig.maxUnitsPerCall : 3;
 
                     // Finalize booking with configurable outcome (creates BookingRequest record)
+                    // V89: Use ServiceTypeResolver's canonical type as single source of truth
+                    const resolvedServiceType = ServiceTypeResolver.getCanonicalType(session);
                     const finalizationResult = await finalizeBooking(session, company, currentSlots, {
                         channel,
                         callSid: metadata?.callSid || null,
                         callerPhone: callerPhone || null,
-                        serviceType: session.discovery?.serviceType || null
+                        serviceType: resolvedServiceType  // V89: From resolver, not discovery
                     });
 
                     // Persist outcomeMode for KPI trace / audit
