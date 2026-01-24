@@ -30,6 +30,7 @@ const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 const { ALL_SCENARIO_TYPES, isAllowedScenarioType, isUnknownOrBlankScenarioType } = require('../../utils/scenarioTypes');
+const { importContentOnly, getRuntimeFields, getAdminFields } = require('../../services/scenarioAudit/constants');
 
 router.use(authenticateJWT);
 router.use(requireCompanyAccess);
@@ -398,10 +399,27 @@ router.post('/', async (req, res) => {
             templateId,
             categoryId,
             mode = 'preview',
-            scenarios = []
+            scenarios: rawScenarios = []
         } = req.body;
         
-        console.log(`📥 [SCENARIO IMPORT] ${mode.toUpperCase()} for company: ${companyId}, scenarios: ${scenarios.length}`);
+        console.log(`📥 [SCENARIO IMPORT] ${mode.toUpperCase()} for company: ${companyId}, scenarios: ${rawScenarios.length}`);
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // OWNERSHIP GUARD: Strip non-content fields from imported scenarios
+        // ════════════════════════════════════════════════════════════════════════════
+        // Runtime-owned fields (followUpMode, actionType, etc.) are stripped.
+        // These are decided by ConversationEngine at call time, not imported.
+        // ════════════════════════════════════════════════════════════════════════════
+        const strippedFields = new Set();
+        const scenarios = rawScenarios.map(scenario => {
+            const { sanitized, stripped } = importContentOnly(scenario);
+            stripped.forEach(f => strippedFields.add(f));
+            return sanitized;
+        });
+        
+        if (strippedFields.size > 0) {
+            console.log(`🔒 [OWNERSHIP GUARD] Stripped ${strippedFields.size} non-content field types from imported scenarios:`, Array.from(strippedFields));
+        }
         
         if (!scenarios || scenarios.length === 0) {
             return res.status(400).json({

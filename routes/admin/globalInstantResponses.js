@@ -41,6 +41,7 @@ const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const CacheHelper = require('../../utils/cacheHelper');
 const { enhanceTemplate } = require('../../services/globalAIBrainEnhancer');
 const { detectScenarioType, normalizeScenarioType } = require('../../utils/scenarioTypeDetector');
+const { enforceContentOwnership } = require('../../services/scenarioAudit/constants');
 
 // Middleware alias for consistency
 const adminOnly = requireRole('admin');
@@ -1525,8 +1526,27 @@ router.get('/:templateId/categories/:categoryId/scenarios/:scenarioId', async (r
  */
 router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) => {
     const { templateId, categoryId } = req.params;
-    const scenarioData = req.body;
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // OWNERSHIP GUARD: Strip non-content fields from scenario payload
+    // ════════════════════════════════════════════════════════════════════════════
+    // Runtime-owned fields (followUpMode, actionType, etc.) are stripped.
+    // These are decided by ConversationEngine at call time, not stored in scenario.
+    // ════════════════════════════════════════════════════════════════════════════
+    const { sanitized: scenarioData, stripped, warnings } = enforceContentOwnership(req.body, {
+        source: `scenario-create:${templateId}/${categoryId}`,
+        logWarnings: true
+    });
+    
+    if (stripped.length > 0) {
+        logger.warn(`🔒 [OWNERSHIP GUARD] Stripped ${stripped.length} non-content fields from scenario`, {
+            templateId,
+            categoryId,
+            stripped,
+            adminUser
+        });
+    }
 
     try {
         logger.info(`➕ [SCENARIO CREATE] Template: ${templateId}, Category: ${categoryId}`);
@@ -1662,8 +1682,23 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
  */
 router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async (req, res) => {
     const { templateId, categoryId, scenarioId } = req.params;
-    const updates = req.body;
     const adminUser = req.user?.email || req.user?.username || 'Unknown Admin';
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // OWNERSHIP GUARD: Strip non-content fields from update payload
+    // ════════════════════════════════════════════════════════════════════════════
+    const { sanitized: updates, stripped, warnings } = enforceContentOwnership(req.body, {
+        source: `scenario-update:${scenarioId}`,
+        logWarnings: true
+    });
+    
+    if (stripped.length > 0) {
+        logger.warn(`🔒 [OWNERSHIP GUARD] Stripped ${stripped.length} non-content fields from scenario update`, {
+            scenarioId,
+            stripped,
+            adminUser
+        });
+    }
 
     try {
         logger.info(`✏️ [SCENARIO UPDATE] Scenario: ${scenarioId}`);

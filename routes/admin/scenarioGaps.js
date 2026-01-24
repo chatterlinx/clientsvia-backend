@@ -35,7 +35,7 @@ const authorizeCompanyAccess = require('../../middleware/authorizeCompanyAccess'
 const BlackBoxRecording = require('../../models/BlackBoxRecording');
 const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const { BOOKING_PHRASES } = require('../../services/scenarioAudit/constants');
+const { BOOKING_PHRASES, SCENARIO_SETTINGS_REGISTRY, getSettingsCount } = require('../../services/scenarioAudit/constants');
 
 // Services
 const openaiClient = require('../../config/openai');
@@ -2795,6 +2795,75 @@ Return ONLY the fixed text. No quotes, no explanation.`;
             details: error.message,
             scenarioId
         });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// GET /registry - Expose SCENARIO_SETTINGS_REGISTRY (single source of truth)
+// ════════════════════════════════════════════════════════════════════════════════
+// This is the ONLY place ownership counts should come from.
+// All UI, banners, health checks derive from this - no hardcoded values allowed.
+// ════════════════════════════════════════════════════════════════════════════════
+router.get('/:companyId/registry', async (req, res) => {
+    try {
+        const counts = getSettingsCount();
+        
+        // Return the ownership model as the single source of truth
+        res.json({
+            success: true,
+            
+            // ════════════════════════════════════════════════════════════════════
+            // OWNERSHIP MODEL (the constitution)
+            // ════════════════════════════════════════════════════════════════════
+            ownership: {
+                content: {
+                    count: counts.ownership.content,
+                    description: 'WHAT to say - GPT generates these',
+                    settings: counts.ownership.contentSettings.map(s => s.setting)
+                },
+                runtime: {
+                    count: counts.ownership.runtime,
+                    description: 'HOW/WHEN to behave - ConversationEngine decides at call time',
+                    settings: counts.ownership.runtimeOwnedSettings.map(s => s.setting)
+                },
+                admin: {
+                    count: counts.ownership.admin,
+                    description: 'Infrastructure policies - Admin configures',
+                    settings: counts.ownership.adminSettings.map(s => s.setting)
+                },
+                system: {
+                    count: counts.ownership.system,
+                    description: 'Auto-generated - Never touched'
+                }
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // CONTENT FIELDS (what Gap Fill generates)
+            // This is the canonical list - no hardcoded arrays elsewhere
+            // ════════════════════════════════════════════════════════════════════
+            contentFields: counts.ownership.contentSettings.map(s => s.setting),
+            
+            // ════════════════════════════════════════════════════════════════════
+            // RUNTIME FIELDS (what Wiring must prove via blackbox)
+            // ════════════════════════════════════════════════════════════════════
+            runtimeFields: counts.ownership.runtimeOwnedSettings.map(s => s.setting),
+            
+            // ════════════════════════════════════════════════════════════════════
+            // ADMIN FIELDS (what admin configures globally)
+            // ════════════════════════════════════════════════════════════════════
+            adminFields: counts.ownership.adminSettings.map(s => s.setting),
+            
+            // Legacy counts for backward compatibility
+            legacy: {
+                total: counts.total,
+                audited: counts.audited,
+                gapGenerated: counts.gapGenerated,
+                agentUsed: counts.agentUsed
+            }
+        });
+    } catch (error) {
+        logger.error('Failed to get registry', { error: error.message });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

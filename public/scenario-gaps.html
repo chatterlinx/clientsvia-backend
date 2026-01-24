@@ -1233,11 +1233,11 @@
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Response limit</div>
                 </div>
                 
-                <!-- Settings Count -->
+                <!-- Settings Count (derived from registry) -->
                 <div style="background: var(--bg-secondary); padding: 14px; border-radius: 8px; border: 1px solid var(--border-color);">
                     <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Content Settings</div>
-                    <div style="font-size: 15px; font-weight: 600; color: var(--accent-purple);">
-                        <i class="fas fa-list-check" style="margin-right: 6px;"></i>22 fields
+                    <div id="ai-settings-count" style="font-size: 15px; font-weight: 600; color: var(--accent-purple);">
+                        <i class="fas fa-list-check" style="margin-right: 6px;"></i><span id="content-field-count">--</span> fields
                     </div>
                     <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">WHAT to say (not behavior)</div>
                 </div>
@@ -1711,9 +1711,9 @@
                                 <i class="fas fa-check-circle" style="color: #22c55e; font-size: 18px;"></i>
                             </div>
                             <div>
-                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 2px;">AI-Generable Settings</div>
+                                <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 2px;">Content Settings (from Registry)</div>
                                 <div style="font-size: 20px; font-weight: 700; color: #22c55e;">
-                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">22</span>
+                                    <span id="health-count-generated">0</span><span style="color: var(--text-muted);">/</span><span id="health-count-total">--</span>
                                 </div>
                                 <div id="health-missing" style="margin-top: 4px; font-size: 11px; color: var(--text-muted);"></div>
                             </div>
@@ -1904,6 +1904,81 @@
         let selectedDays = 14;
         let lastAuditResult = null;
         let currentReviewScenarioIdx = null;
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // REGISTRY (Single Source of Truth)
+        // ════════════════════════════════════════════════════════════════════════
+        // This is loaded from the backend - NO HARDCODED VALUES ALLOWED
+        // All counts, field lists, and ownership derive from this
+        // ════════════════════════════════════════════════════════════════════════
+        let REGISTRY = null;
+        
+        async function loadRegistry() {
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/registry`);
+                const data = await response.json();
+                if (data.success) {
+                    REGISTRY = data;
+                    console.log('✅ [REGISTRY] Loaded ownership model:', {
+                        content: REGISTRY.ownership.content.count,
+                        runtime: REGISTRY.ownership.runtime.count,
+                        admin: REGISTRY.ownership.admin.count
+                    });
+                    updateUIFromRegistry();
+                } else {
+                    console.error('❌ [REGISTRY] Failed to load:', data.error);
+                }
+            } catch (err) {
+                console.error('❌ [REGISTRY] Network error:', err);
+            }
+        }
+        
+        function updateUIFromRegistry() {
+            if (!REGISTRY) return;
+            
+            // Update all counts from the registry (no hardcoded values)
+            const contentCount = REGISTRY.ownership.content.count;
+            const runtimeCount = REGISTRY.ownership.runtime.count;
+            const adminCount = REGISTRY.ownership.admin.count;
+            
+            // Update the AI Settings Panel count
+            const contentFieldCount = document.getElementById('content-field-count');
+            if (contentFieldCount) {
+                contentFieldCount.textContent = contentCount;
+            }
+            
+            // Update the health count total
+            const healthTotal = document.getElementById('health-count-total');
+            if (healthTotal) {
+                healthTotal.textContent = contentCount;
+            }
+            
+            // Update AI Model badge to show ownership breakdown
+            const modelBadge = document.getElementById('ai-model-badge');
+            if (modelBadge) {
+                modelBadge.title = `Content: ${contentCount} | Runtime: ${runtimeCount} | Admin: ${adminCount}`;
+            }
+            
+            console.log('✅ [REGISTRY] UI updated:', { content: contentCount, runtime: runtimeCount, admin: adminCount });
+        }
+        
+        // Helper to check if a field is content-owned (for validation)
+        function isContentField(fieldName) {
+            if (!REGISTRY) return true; // Default to allowing if registry not loaded
+            return REGISTRY.contentFields.includes(fieldName);
+        }
+        
+        // Helper to check if a field is runtime-owned
+        function isRuntimeField(fieldName) {
+            if (!REGISTRY) return false;
+            return REGISTRY.runtimeFields.includes(fieldName);
+        }
+        
+        // Helper to check if a field is admin-owned
+        function isAdminField(fieldName) {
+            if (!REGISTRY) return false;
+            return REGISTRY.adminFields.includes(fieldName);
+        }
         
         // ========================================
         // TAB SWITCHING
@@ -2638,7 +2713,7 @@
         // ========================================
         // INIT
         // ========================================
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             // Get company ID from URL
             const urlParams = new URLSearchParams(window.location.search);
             companyId = urlParams.get('companyId');
@@ -2647,6 +2722,11 @@
                 showError('No company ID provided');
                 return;
             }
+            
+            // ════════════════════════════════════════════════════════════════════
+            // LOAD REGISTRY FIRST (Single Source of Truth)
+            // ════════════════════════════════════════════════════════════════════
+            await loadRegistry();
             
             // Setup period buttons
             document.querySelectorAll('.period-btn').forEach(btn => {
@@ -3262,9 +3342,10 @@
         function updateHealthCount(preview, gap) {
             const scenarioData = buildScenarioPrefill(preview, gap);
             
-            // 🎯 CONTENT SETTINGS ONLY (22 total)
+            // 🎯 CONTENT SETTINGS ONLY (derived from REGISTRY)
             // These are the settings GPT generates - what the agent SAYS
             // Runtime settings (behavior/timing) are NOT included
+            // Count comes from SCENARIO_SETTINGS_REGISTRY.ownership.content
             const settingsToCheck = [
                 // Identity (5)
                 { key: 'name', label: 'Scenario Name', check: () => scenarioData.name && scenarioData.name.trim(), getValue: () => scenarioData.name },
@@ -3571,7 +3652,7 @@ Follow-up mode, action type, handoff policy, timers, hooks, silence policy
             });
         }
         
-        // Helper to count CONTENT settings only (22 total)
+        // Helper to count CONTENT settings (count derived from REGISTRY)
         function countGeneratedSettings(scenarioData) {
             const checks = [
                 // Identity (5)

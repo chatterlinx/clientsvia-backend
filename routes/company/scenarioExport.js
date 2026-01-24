@@ -40,6 +40,7 @@ const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth
 const { getScopeDisplayInfo, getResolutionOrder, resolveEffectiveScenarios } = require('../../middleware/scopeGuard');
 const logger = require('../../utils/logger');
 const { isAllowedScenarioType, isUnknownOrBlankScenarioType } = require('../../utils/scenarioTypes');
+const { exportContentOnly, getContentFields, getRuntimeFields, getAdminFields } = require('../../services/scenarioAudit/constants');
 
 // ============================================================================
 // SCHEMA MIRROR - List of ALL fields in the scenario schema
@@ -1110,6 +1111,105 @@ router.get('/summary', async (req, res) => {
         
     } catch (error) {
         logger.error('[SCENARIO EXPORT] Summary failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CONTENT-ONLY EXPORT (for copy/paste, gap fill, template creation)
+// ════════════════════════════════════════════════════════════════════════════════
+// This exports ONLY content fields (what scenarios define).
+// Runtime-owned and admin-owned fields are excluded.
+// Use this when you want to copy a scenario to create a new one.
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/company/:companyId/scenario-export/content-only/:scenarioId
+ * 
+ * Export a single scenario with CONTENT FIELDS ONLY.
+ * Runtime/admin fields are stripped - they'll be decided at call time.
+ */
+router.get('/content-only/:scenarioId', async (req, res) => {
+    const { companyId, scenarioId } = req.params;
+    
+    try {
+        logger.info(`📦 [CONTENT EXPORT] Exporting scenario ${scenarioId} for company ${companyId}`);
+        
+        // Find the scenario across all templates
+        const templates = await GlobalInstantResponseTemplate.find({}).lean();
+        let foundScenario = null;
+        
+        for (const template of templates) {
+            for (const category of (template.categories || [])) {
+                const scenario = (category.scenarios || []).find(s => s.scenarioId === scenarioId);
+                if (scenario) {
+                    foundScenario = scenario;
+                    break;
+                }
+            }
+            if (foundScenario) break;
+        }
+        
+        if (!foundScenario) {
+            return res.status(404).json({
+                success: false,
+                error: 'Scenario not found'
+            });
+        }
+        
+        // Export content fields only (strip runtime/admin)
+        const contentExport = exportContentOnly(foundScenario);
+        
+        res.json({
+            success: true,
+            ownership: {
+                model: 'content-only',
+                contentFields: getContentFields().length,
+                runtimeFieldsStripped: getRuntimeFields(),
+                adminFieldsStripped: getAdminFields()
+            },
+            scenario: contentExport,
+            exportedAt: new Date().toISOString(),
+            message: 'Content fields only. Runtime/admin fields will be decided at call time.'
+        });
+        
+    } catch (error) {
+        logger.error('[CONTENT EXPORT] Failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * GET /api/company/:companyId/scenario-export/ownership-model
+ * 
+ * Return the ownership model (what fields belong to whom).
+ * Use this to understand what gets exported/imported.
+ */
+router.get('/ownership-model', async (req, res) => {
+    try {
+        res.json({
+            success: true,
+            ownership: {
+                content: {
+                    description: 'WHAT to say - Scenario defines, GPT generates',
+                    fields: getContentFields()
+                },
+                runtime: {
+                    description: 'HOW/WHEN to behave - ConversationEngine decides at call time',
+                    fields: getRuntimeFields()
+                },
+                admin: {
+                    description: 'Infrastructure policies - Admin configures globally',
+                    fields: getAdminFields()
+                }
+            },
+            rules: {
+                import: 'Only content fields are imported. Runtime/admin fields are stripped.',
+                export: 'Full export includes all fields. Content-only export strips runtime/admin.',
+                save: 'Only content fields are saved to scenarios. Runtime/admin fields are stripped.'
+            }
+        });
+    } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
 });

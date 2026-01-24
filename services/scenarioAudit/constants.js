@@ -904,6 +904,151 @@ function validateSettingImplementation(settingName) {
     };
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// OWNERSHIP ENFORCEMENT (Guards against drift)
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Get list of content fields (what scenarios should define)
+ * @returns {string[]} Array of content field names
+ */
+function getContentFields() {
+    return Object.entries(SCENARIO_SETTINGS_REGISTRY)
+        .filter(([_, v]) => v.ownership === 'content')
+        .map(([k]) => k);
+}
+
+/**
+ * Get list of runtime-owned fields (ConversationEngine decides these)
+ * @returns {string[]} Array of runtime field names
+ */
+function getRuntimeFields() {
+    return Object.entries(SCENARIO_SETTINGS_REGISTRY)
+        .filter(([_, v]) => v.ownership === 'runtime')
+        .map(([k]) => k);
+}
+
+/**
+ * Get list of admin-owned fields (global policies)
+ * @returns {string[]} Array of admin field names
+ */
+function getAdminFields() {
+    return Object.entries(SCENARIO_SETTINGS_REGISTRY)
+        .filter(([_, v]) => v.ownership === 'admin')
+        .map(([k]) => k);
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════
+ * SAVE GUARD: Strip non-content fields from scenario payload
+ * ════════════════════════════════════════════════════════════════════════════════
+ * 
+ * Use this before saving a scenario to ensure only content fields are stored.
+ * Runtime and admin fields are STRIPPED and logged.
+ * 
+ * @param {Object} payload - The scenario data to sanitize
+ * @param {Object} options - { logWarnings: true, source: 'api' }
+ * @returns {{ sanitized: Object, stripped: string[], warnings: string[] }}
+ */
+function enforceContentOwnership(payload, options = {}) {
+    const { logWarnings = true, source = 'unknown' } = options;
+    
+    const contentFields = getContentFields();
+    const runtimeFields = getRuntimeFields();
+    const adminFields = getAdminFields();
+    
+    const sanitized = {};
+    const stripped = [];
+    const warnings = [];
+    
+    // Also allow metadata fields that aren't in the registry
+    const allowedMetaFields = ['scenarioId', 'version', 'createdBy', 'createdAt', 'updatedAt', 'source', 'sourceGap'];
+    
+    for (const [key, value] of Object.entries(payload)) {
+        if (contentFields.includes(key)) {
+            // Content field - keep it
+            sanitized[key] = value;
+        } else if (allowedMetaFields.includes(key)) {
+            // Metadata field - keep it
+            sanitized[key] = value;
+        } else if (runtimeFields.includes(key)) {
+            // Runtime field - STRIP IT
+            stripped.push(key);
+            warnings.push(`⚠️ [OWNERSHIP] Runtime-owned field "${key}" stripped from scenario (Runtime decides this at call time)`);
+        } else if (adminFields.includes(key)) {
+            // Admin field - STRIP IT
+            stripped.push(key);
+            warnings.push(`⚠️ [OWNERSHIP] Admin-owned field "${key}" stripped from scenario (Configure via admin settings)`);
+        } else {
+            // Unknown field - allow but warn
+            sanitized[key] = value;
+            // Don't warn for common fields that might not be in registry
+            if (!['_id', '__v', 'id'].includes(key)) {
+                warnings.push(`⚠️ [OWNERSHIP] Unknown field "${key}" not in registry (allowed but not tracked)`);
+            }
+        }
+    }
+    
+    if (logWarnings && warnings.length > 0) {
+        const logger = require('../../utils/logger');
+        logger.warn(`[OWNERSHIP GUARD] ${source}: Stripped ${stripped.length} non-content fields`, {
+            source,
+            stripped,
+            warnings
+        });
+    }
+    
+    return { sanitized, stripped, warnings };
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════
+ * EXPORT GUARD: Filter scenario for export (content only)
+ * ════════════════════════════════════════════════════════════════════════════════
+ * 
+ * Use this when exporting scenarios to JSON for copy/paste or backup.
+ * Only content fields are included - prevents drift via import.
+ * 
+ * @param {Object} scenario - Full scenario object
+ * @returns {Object} Scenario with only content fields
+ */
+function exportContentOnly(scenario) {
+    const contentFields = getContentFields();
+    const exported = {};
+    
+    // Always include ID for reference
+    if (scenario.scenarioId) exported.scenarioId = scenario.scenarioId;
+    if (scenario._id) exported._id = scenario._id;
+    
+    for (const field of contentFields) {
+        if (scenario[field] !== undefined) {
+            exported[field] = scenario[field];
+        }
+    }
+    
+    // Add export metadata
+    exported._exportedAt = new Date().toISOString();
+    exported._exportVersion = 'ownership-v1';
+    exported._contentFieldsOnly = true;
+    
+    return exported;
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════════
+ * IMPORT GUARD: Validate and sanitize imported scenario
+ * ════════════════════════════════════════════════════════════════════════════════
+ * 
+ * Use this when importing scenarios from JSON.
+ * Strips runtime/admin fields even if present in the imported data.
+ * 
+ * @param {Object} importedData - The imported scenario data
+ * @returns {{ sanitized: Object, stripped: string[], warnings: string[] }}
+ */
+function importContentOnly(importedData) {
+    return enforceContentOwnership(importedData, { source: 'import', logWarnings: true });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -956,5 +1101,13 @@ module.exports = {
     SCENARIO_SETTINGS_REGISTRY,
     getSettingsCount,
     getSettingsByCategory,
-    validateSettingImplementation
+    validateSettingImplementation,
+    
+    // 🔒 OWNERSHIP ENFORCEMENT - Guards against drift
+    getContentFields,
+    getRuntimeFields,
+    getAdminFields,
+    enforceContentOwnership,
+    exportContentOnly,
+    importContentOnly
 };
