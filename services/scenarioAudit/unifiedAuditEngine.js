@@ -682,13 +682,20 @@ async function runUnifiedAudit(companyId, options = {}) {
         let activePoolCount = 0;
         try {
             const ScenarioPoolService = require('../ScenarioPoolService');
-            const pool = await ScenarioPoolService.getScenarioPool(companyId);
-            if (pool && pool.scenarios) {
-                activePoolCount = pool.scenarios.length;
+            const poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            if (poolResult && poolResult.scenarios) {
+                activePoolCount = poolResult.scenarios.length;
                 sourcesChecked.push({
                     name: 'activeScenarioPool',
                     count: activePoolCount,
-                    cacheHit: pool.fromCache || false
+                    templatesUsed: poolResult.templatesUsed?.length || 0,
+                    fromCache: poolResult.fromCache || false
+                });
+            } else if (poolResult?.error) {
+                sourcesChecked.push({
+                    name: 'activeScenarioPool',
+                    count: 0,
+                    error: poolResult.error
                 });
             }
         } catch (e) {
@@ -703,8 +710,8 @@ async function runUnifiedAudit(companyId, options = {}) {
         if (scenarioSource === 'activePool') {
             try {
                 const ScenarioPoolService = require('../ScenarioPoolService');
-                const pool = await ScenarioPoolService.getScenarioPool(companyId);
-                scenarios = pool?.scenarios || [];
+                const poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+                scenarios = poolResult?.scenarios || [];
             } catch (e) {
                 scenarios = templateScenarios; // Fallback to templates
             }
