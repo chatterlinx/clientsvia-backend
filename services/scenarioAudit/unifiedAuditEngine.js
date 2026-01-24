@@ -168,7 +168,7 @@ function runContentCheck(check, fieldName, value, scenario) {
         case 'noBannedPhrases':
             if (Array.isArray(value)) {
                 const banned = value.filter(v => 
-                    ALL_BANNED_PHRASES.some(bp => v.toLowerCase().includes(bp.toLowerCase()))
+                    typeof v === 'string' && ALL_BANNED_PHRASES.some(bp => v.toLowerCase().includes(bp.toLowerCase()))
                 );
                 if (banned.length > 0) {
                     return { status: 'fail', message: `${fieldName} contains banned phrases: ${banned.slice(0, 3).join(', ')}` };
@@ -179,7 +179,7 @@ function runContentCheck(check, fieldName, value, scenario) {
         case 'noGenericTriggers':
             if (Array.isArray(value)) {
                 const generic = value.filter(v => 
-                    GENERIC_TRIGGERS?.some(gt => v.toLowerCase() === gt.toLowerCase())
+                    typeof v === 'string' && GENERIC_TRIGGERS?.some(gt => v.toLowerCase() === gt.toLowerCase())
                 );
                 if (generic.length > 0) {
                     return { status: 'warn', message: `${fieldName} has generic triggers: ${generic.slice(0, 3).join(', ')}` };
@@ -189,7 +189,7 @@ function runContentCheck(check, fieldName, value, scenario) {
             
         case 'hasNamePlaceholder':
             if (Array.isArray(value)) {
-                const withName = value.filter(v => v.includes('{name}'));
+                const withName = value.filter(v => typeof v === 'string' && v.includes('{name}'));
                 if (withName.length === 0) {
                     return { status: 'warn', message: `${fieldName} should include {name} in at least one reply` };
                 }
