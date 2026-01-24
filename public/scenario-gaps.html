@@ -1124,6 +1124,10 @@
                 <button class="period-btn active" data-days="14">14 Days</button>
                 <button class="period-btn" data-days="30">30 Days</button>
             </div>
+            <button class="refresh-btn" onclick="copyPageSummary()" title="Copy summary for discussion">
+                <i class="fas fa-copy"></i>
+                Copy
+            </button>
             <button class="refresh-btn" onclick="loadGaps()">
                 <i class="fas fa-sync-alt"></i>
                 Refresh
@@ -1556,7 +1560,12 @@
         <div class="modal" style="max-width: 600px;">
             <div class="modal-header">
                 <h2><i class="fas fa-magic"></i> AI-Generated Scenario</h2>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="btn btn-ghost" onclick="copyScenarioPreview()" title="Copy scenario for discussion" style="padding: 6px 12px; font-size: 12px;">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
             </div>
             <div class="modal-body">
                 <!-- Loading State -->
@@ -3335,6 +3344,118 @@
         
         function closeCallsModal() {
             document.getElementById('calls-modal').classList.remove('active');
+        }
+        
+        // ========================================
+        // COPY FUNCTIONS - For discussion/debugging
+        // ========================================
+        
+        function copyScenarioPreview() {
+            if (!currentPreview && !currentGap) {
+                showToast('No scenario to copy', 'error');
+                return;
+            }
+            
+            const p = currentPreview || {};
+            const g = currentGap || {};
+            
+            const summary = `## AI-Generated Scenario Preview
+
+### Basic Info
+- **Name:** ${p.name || g.representative?.substring(0, 50) || 'Unknown'}
+- **Type:** ${p.scenarioType || 'FAQ'}
+- **Category:** ${p.category || 'FAQ'}
+- **Priority:** ${p.priority || 50}
+- **Min Confidence:** ${p.minConfidence || 0.6}
+
+### Triggers (${(p.triggers || []).length})
+${(p.triggers || [g.representative]).slice(0, 10).map(t => `- "${t}"`).join('\n')}
+
+### Quick Replies (${(p.quickReplies || []).length})
+${(p.quickReplies || []).slice(0, 3).map((r, i) => `${i + 1}. "${r.substring(0, 100)}${r.length > 100 ? '...' : ''}"`).join('\n') || '(none)'}
+
+### Full Replies (${(p.fullReplies || []).length})
+${(p.fullReplies || []).slice(0, 2).map((r, i) => `${i + 1}. "${r.substring(0, 150)}${r.length > 150 ? '...' : ''}"`).join('\n') || '(none)'}
+
+### Advanced Settings
+- **Cooldown:** ${p.cooldownSeconds || 0}s
+- **Handoff Policy:** ${p.handoffPolicy || 'low_confidence'}
+- **Booking Intent:** ${p.bookingIntent ? 'Yes' : 'No'}
+- **Reply Strategy:** ${p.replyStrategy || 'AUTO'}
+
+### Gap Context
+- **Representative phrase:** "${g.representative || 'N/A'}"
+- **Call count:** ${g.count || g.callIds?.length || 0}
+- **Priority:** ${g.priority || 'MEDIUM'}
+
+---
+*Generated: ${new Date().toISOString()}*`;
+
+            navigator.clipboard.writeText(summary).then(() => {
+                showToast('Scenario copied to clipboard!', 'success');
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                showToast('Failed to copy', 'error');
+            });
+        }
+        
+        function copyPageSummary() {
+            const companyName = document.getElementById('company-name')?.textContent || 'Unknown';
+            const gapsCount = document.getElementById('gaps-count')?.textContent || '0';
+            const tier3Count = document.getElementById('total-tier3')?.textContent || '0';
+            const savings = document.getElementById('potential-savings')?.textContent || '$0';
+            const highPriority = document.getElementById('high-priority')?.textContent || '0';
+            
+            // Get current gaps summary
+            const gapsSummary = currentGaps.slice(0, 10).map((gap, i) => {
+                const priority = gap.priority || 'MEDIUM';
+                const count = gap.count || gap.callIds?.length || 0;
+                const rep = gap.representative?.substring(0, 80) || 'Unknown';
+                return `${i + 1}. [${priority}] "${rep}" (${count} calls)`;
+            }).join('\n');
+            
+            // Get audit summary if available
+            const auditScore = document.getElementById('audit-health-score')?.textContent || 'N/A';
+            const auditTotal = document.getElementById('audit-total')?.textContent || '0';
+            const auditPassing = document.getElementById('audit-passing')?.textContent || '0';
+            const auditErrors = document.getElementById('audit-errors')?.textContent || '0';
+            
+            // Get alignment summary if available
+            const alignAgent = document.getElementById('align-agent')?.textContent || 'N/A';
+            const alignActive = document.getElementById('align-active')?.textContent || 'N/A';
+            
+            const summary = `## Scenario Gaps Summary
+**Company:** ${companyName}
+**Period:** Last ${selectedDays} days
+
+### Overview
+- **Tier 3 Calls:** ${tier3Count}
+- **Unique Gaps:** ${gapsCount}
+- **High Priority:** ${highPriority}
+- **Potential Savings:** ${savings}/week
+
+### Top Gaps
+${gapsSummary || 'No gaps detected'}
+
+### Audit Health
+- **Score:** ${auditScore}
+- **Scenarios:** ${auditPassing}/${auditTotal} passing
+- **Errors:** ${auditErrors}
+
+### System Alignment
+- **Agent Can See:** ${alignAgent} scenarios
+- **Active in Templates:** ${alignActive} scenarios
+
+---
+*Generated: ${new Date().toISOString()}*
+*Page: scenario-gaps.html*`;
+
+            navigator.clipboard.writeText(summary).then(() => {
+                showToast('Summary copied to clipboard!', 'success');
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                showToast('Failed to copy', 'error');
+            });
         }
         
         function showToast(message, type = 'success') {
