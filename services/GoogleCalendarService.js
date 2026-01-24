@@ -508,7 +508,28 @@ async function findAvailableSlots(companyId, {
         // ═══════════════════════════════════════════════════════════════════════════
         const eventColors = company?.googleCalendar?.eventColors || {};
         const colorMapping = eventColors.colorMapping || [];
-        const serviceConfig = colorMapping.find(c => c.serviceType === serviceType) || {};
+        
+        // V89: Flexible service type matching
+        // UI may save "repair_service" but agent detects "repair"
+        // Match if: exact match OR serviceType starts with detected type OR contains it
+        const normalizedServiceType = (serviceType || 'service').toLowerCase().trim();
+        const serviceConfig = colorMapping.find(c => {
+            const configType = (c.serviceType || '').toLowerCase().trim();
+            return configType === normalizedServiceType ||                    // exact: "repair" === "repair"
+                   configType.startsWith(normalizedServiceType + '_') ||      // prefix: "repair_service" starts with "repair_"
+                   configType.startsWith(normalizedServiceType + '-') ||      // prefix: "repair-service" starts with "repair-"
+                   configType.includes('_' + normalizedServiceType) ||        // suffix: "hvac_repair" contains "_repair"
+                   configType.includes('-' + normalizedServiceType) ||        // suffix: "hvac-repair" contains "-repair"
+                   normalizedServiceType.startsWith(configType + '_') ||      // reverse: detected "repair_urgent" matches config "repair"
+                   normalizedServiceType.startsWith(configType + '-');
+        }) || {};
+        
+        if (serviceConfig.serviceType) {
+            logger.debug('[GOOGLE CALENDAR] Service type matched', {
+                detected: serviceType,
+                matched: serviceConfig.serviceType
+            });
+        }
         const serviceScheduling = serviceConfig.scheduling || {};
         
         // Apply per-service-type scheduling rules with fallbacks to global settings
@@ -879,16 +900,27 @@ async function createBookingEvent(companyId, bookingData) {
         let colorId = null;
         const eventColors = gcSettings?.eventColors;
         if (eventColors?.enabled !== false) {
-            const serviceType = (bookingData.serviceType || 'service').toLowerCase();
+            const serviceType = (bookingData.serviceType || 'service').toLowerCase().trim();
             const colorMapping = eventColors?.colorMapping || [];
             
-            // Find color for this service type
-            const matchedColor = colorMapping.find(c => c.serviceType === serviceType);
+            // V89: Flexible service type matching for event colors
+            // UI may save "repair_service" but booking has "repair"
+            const matchedColor = colorMapping.find(c => {
+                const configType = (c.serviceType || '').toLowerCase().trim();
+                return configType === serviceType ||
+                       configType.startsWith(serviceType + '_') ||
+                       configType.startsWith(serviceType + '-') ||
+                       configType.includes('_' + serviceType) ||
+                       configType.includes('-' + serviceType) ||
+                       serviceType.startsWith(configType + '_') ||
+                       serviceType.startsWith(configType + '-');
+            });
             colorId = matchedColor?.colorId || eventColors?.defaultColorId || '7'; // Default: Peacock
             
             logger.debug('[GOOGLE CALENDAR] Event color determined', {
                 companyId,
                 serviceType,
+                matchedConfigType: matchedColor?.serviceType || 'default',
                 colorId,
                 colorLabel: matchedColor?.label || 'Default'
             });
