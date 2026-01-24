@@ -67,6 +67,7 @@ const { detectBookingClarification } = require('../utils/bookingClarification');
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
 const { findFirstMatchingRule, recordRuleFired } = require('../utils/slotMidCallRules');
 const { classifyServiceUrgency } = require('../utils/serviceUrgency');
+const { checkCompliance, buildComplianceSummary } = require('../utils/complianceChecker');
 // PromptResolver REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
 const BlackBoxLogger = require('./BlackBoxLogger');
 
@@ -9767,6 +9768,12 @@ async function processTurn({
             });
             
             // ═══════════════════════════════════════════════════════════════════
+            // 🎯 TURN TRACE ID - Correlation key for matching + execution events
+            // ═══════════════════════════════════════════════════════════════════
+            const turnNumber = session.metrics?.totalTurns || 0;
+            const turnTraceId = `${session._id?.toString()}-t${turnNumber}-${Date.now()}`;
+            
+            // ═══════════════════════════════════════════════════════════════════
             // 🎯 BLACK BOX: MATCHING_PIPELINE - Prove fast lookup is working
             // ═══════════════════════════════════════════════════════════════════
             // This is the critical trace that proves:
@@ -9785,7 +9792,8 @@ async function processTurn({
                     callId: session._id?.toString(),
                     companyId,
                     type: 'MATCHING_PIPELINE',
-                    turn: session.metrics?.totalTurns || 0,
+                    turn: turnNumber,
+                    turnTraceId,  // 🔗 Correlation ID
                     data: {
                         // Fast lookup proof
                         fastLookupAvailable: trace.fastLookupAvailable,
@@ -10673,14 +10681,51 @@ async function processTurn({
             if (llmResult.reply) executionTrace.push('reply_generated');
             if (llmResult.extractedIssue) executionTrace.push('issue_extracted');
             
+            // ═══════════════════════════════════════════════════════════════════
+            // 🎯 COMPLIANCE CHECK - Did LLM follow the rules?
+            // ═══════════════════════════════════════════════════════════════════
+            // Deterministic checks on LLM output - NO extra LLM calls needed.
+            // This is the "proof" that scenario settings shaped the output.
+            // ═══════════════════════════════════════════════════════════════════
+            const isBookingMode = session.mode === 'booking' || session.conversationState?.mode === 'booking';
+            const complianceResult = checkCompliance(llmResult.reply, {
+                company,
+                callerName: llmContext.callerName || currentSlots?.name || null,
+                scenarioType: scenarioRetrieval?.scenarios?.[0]?.scenarioType || null,
+                expectedBookingMomentum: isBookingMode
+            });
+            
+            // Add compliance to execution trace
+            if (!complianceResult.passed) {
+                executionTrace.push('compliance_failed');
+                if (complianceResult.checks.troubleshooting && !complianceResult.checks.troubleshooting.passed) {
+                    executionTrace.push('troubleshooting_detected');
+                }
+                if (complianceResult.checks.bannedPhrases && !complianceResult.checks.bannedPhrases.passed) {
+                    executionTrace.push('banned_phrase_detected');
+                }
+            } else {
+                executionTrace.push('compliance_passed');
+            }
+            
+            // Build compact compliance summary for logging
+            const complianceSummary = buildComplianceSummary(complianceResult);
+            
             // Log truthful execution trace (sample: always for now, downsample later)
+            // Get scenarioId from matching trace for correlation
+            const matchedScenarioId = scenarioRetrieval?.matchingTrace?.scenarioIdMatched 
+                || scenarioRetrieval?.scenarios?.[0]?.scenarioId 
+                || null;
+            
             await BlackBoxLogger.logEvent({
                 callId: session._id?.toString(),
                 companyId,
                 type: 'RESPONSE_EXECUTION',
-                turn: session.metrics?.totalTurns || 0,
+                turn: turnNumber,
+                turnTraceId,  // 🔗 Correlation ID - links to MATCHING_PIPELINE
                 data: {
                     responseSource: 'LLM',
+                    scenarioIdMatched: matchedScenarioId,  // 🔗 Correlation with matched scenario
                     executionTrace,
                     executionTraceCount: executionTrace.length,
                     scenarioCountProvided: llmContext.scenarioKnowledge?.length || 0,
@@ -10688,11 +10733,26 @@ async function processTurn({
                     emotion: llmContext.callerEmotion || 'neutral',
                     llmLatencyMs: aiLatencyMs,
                     tokensUsed: llmResult.tokensUsed || 0,
-                    replyLength: llmResult.reply?.length || 0
+                    replyLength: llmResult.reply?.length || 0,
+                    // 🎯 COMPLIANCE: Did LLM follow the rules?
+                    compliance: complianceSummary
                 }
             }).catch(err => {
                 logger.warn('[CONVERSATION ENGINE] Failed to log RESPONSE_EXECUTION event', { error: err.message });
             });
+            
+            // Warn if compliance failed (for monitoring dashboards)
+            if (!complianceResult.passed) {
+                logger.warn('[CONVERSATION ENGINE] ⚠️ LLM compliance check failed', {
+                    callId: session._id?.toString(),
+                    companyId,
+                    turn: turnNumber,
+                    turnTraceId,
+                    scenarioIdMatched: matchedScenarioId,
+                    score: complianceResult.score,
+                    violations: complianceResult.violations?.slice(0, 3)
+                });
+            }
             
             // Increment discovery question count for fast-path gate
             session.discovery = session.discovery || {};
