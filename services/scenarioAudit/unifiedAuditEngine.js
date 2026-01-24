@@ -45,8 +45,13 @@ async function runContentAudit(companyId, scenarios) {
     const contentFields = getContentFields();
     const checks = [];
     
-    for (const scenario of scenarios) {
-        if (scenario.status !== 'live' || scenario.isActive === false) continue;
+    // Track what we actually audited
+    const allScenarios = scenarios.length;
+    const liveScenarios = scenarios.filter(s => s.status === 'live' && s.isActive !== false);
+    let scenariosAudited = 0;
+    
+    for (const scenario of liveScenarios) {
+        scenariosAudited++;
         
         // Check each content field based on registry audit config
         for (const fieldName of contentFields) {
@@ -61,6 +66,7 @@ async function runContentAudit(companyId, scenarios) {
                 const result = runContentCheck(check, fieldName, fieldValue, scenario);
                 if (result) {
                     checks.push({
+                        layer: 'content',
                         scenarioId: scenario.scenarioId,
                         scenarioName: scenario.name,
                         field: fieldName,
@@ -74,10 +80,24 @@ async function runContentAudit(companyId, scenarios) {
         }
     }
     
+    // Compute status with entities audited count
+    const statusResult = computeAuditStatus(checks, { 
+        entitiesAudited: scenariosAudited,
+        hasData: allScenarios > 0
+    });
+    
     return {
         layer: 'content',
         description: 'Scenario content validation (WHAT to say)',
-        ...computeAuditStatus(checks),
+        ...statusResult,
+        // Hard facts - can't lie
+        facts: {
+            scenarioCountFound: allScenarios,
+            scenarioCountLive: liveScenarios.length,
+            scenarioCountAudited: scenariosAudited,
+            checksEmitted: checks.length,
+            contentFieldsChecked: contentFields.length
+        },
         checks
     };
 }
@@ -252,6 +272,7 @@ async function runRuntimeAudit(companyId, timeWindowHours = 24) {
         .lean();
         
         const hasRuntimeData = events.length > 0;
+        let fieldsWithProof = 0;
         
         // Check each runtime field for proof
         for (const fieldName of runtimeFields) {
@@ -285,6 +306,8 @@ async function runRuntimeAudit(companyId, timeWindowHours = 24) {
                 }
             }
             
+            if (seen) fieldsWithProof++;
+            
             // Check if values are valid
             let valuesValid = true;
             let invalidValue = null;
@@ -307,7 +330,7 @@ async function runRuntimeAudit(companyId, timeWindowHours = 24) {
                 message = `No runtime data in last ${timeWindowHours}h (make test calls to prove)`;
             } else if (!seen) {
                 status = 'warn';
-                message = `${fieldName} not seen in ${events.length} events (may not be logged)`;
+                message = `${fieldName} not seen in ${events.length} events (may not be logged yet)`;
             } else if (!valuesValid) {
                 status = 'fail';
                 message = `${fieldName} has invalid value "${invalidValue}" (allowed: ${allowedValues.join(', ')})`;
@@ -316,6 +339,7 @@ async function runRuntimeAudit(companyId, timeWindowHours = 24) {
             }
             
             checks.push({
+                layer: 'runtime',
                 field: fieldName,
                 proofKey,
                 status,
@@ -330,12 +354,26 @@ async function runRuntimeAudit(companyId, timeWindowHours = 24) {
             });
         }
         
+        // Compute status
+        const statusResult = computeAuditStatus(checks, { 
+            entitiesAudited: runtimeFields.length,
+            hasData: hasRuntimeData
+        });
+        
         return {
             layer: 'runtime',
             description: 'Runtime decisions proof (HOW/WHEN to behave)',
-            ...computeAuditStatus(checks, { hasRuntimeData }),
-            eventCount: events.length,
-            timeWindow: `${timeWindowHours}h`,
+            ...statusResult,
+            // Hard facts - can't lie
+            facts: {
+                runtimeFieldsTotal: runtimeFields.length,
+                runtimeFieldsWithProof: fieldsWithProof,
+                runtimeFieldsUnproven: runtimeFields.length - fieldsWithProof,
+                eventsSampled: events.length,
+                timeWindowHours,
+                oldestEventAt: events.length > 0 ? events[events.length - 1].createdAt : null,
+                newestEventAt: events.length > 0 ? events[0].createdAt : null
+            },
             checks
         };
         
@@ -345,11 +383,16 @@ async function runRuntimeAudit(companyId, timeWindowHours = 24) {
             layer: 'runtime',
             description: 'Runtime decisions proof (HOW/WHEN to behave)',
             status: 'RED',
+            reason: 'QUERY_FAILED',
             pass: 0,
             warn: 0,
             fail: 1,
-            error: error.message,
+            facts: {
+                runtimeFieldsTotal: runtimeFields.length,
+                error: error.message
+            },
             checks: [{
+                layer: 'runtime',
                 field: 'query',
                 status: 'fail',
                 severity: 'critical',
@@ -366,6 +409,8 @@ async function runRuntimeAudit(companyId, timeWindowHours = 24) {
 async function runAdminAudit(companyId) {
     const adminFields = getAdminFields();
     const checks = [];
+    let configuredCount = 0;
+    let missingCount = 0;
     
     try {
         // Load company config
@@ -375,10 +420,16 @@ async function runAdminAudit(companyId) {
                 layer: 'admin',
                 description: 'Admin policy validation (Infrastructure)',
                 status: 'RED',
+                reason: 'COMPANY_NOT_FOUND',
                 pass: 0,
                 warn: 0,
                 fail: 1,
+                facts: {
+                    adminFieldsTotal: adminFields.length,
+                    companyFound: false
+                },
                 checks: [{
+                    layer: 'admin',
                     field: 'company',
                     status: 'fail',
                     severity: 'critical',
@@ -408,8 +459,10 @@ async function runAdminAudit(companyId) {
             if (value === undefined || value === null) {
                 status = 'warn';
                 message = `${fieldName}: not configured (${configKey})`;
+                missingCount++;
             } else {
                 message = `${fieldName}: configured`;
+                configuredCount++;
                 
                 // Run additional checks
                 for (const additionalCheck of additionalChecks) {
@@ -423,6 +476,7 @@ async function runAdminAudit(companyId) {
             }
             
             checks.push({
+                layer: 'admin',
                 field: fieldName,
                 configKey,
                 status,
@@ -439,6 +493,7 @@ async function runAdminAudit(companyId) {
         if (silencePolicy) {
             if (silencePolicy.maxConsecutive > 5) {
                 checks.push({
+                    layer: 'admin',
                     field: 'silencePolicy.maxConsecutive',
                     configKey: 'frontDesk.silencePolicy.maxConsecutive',
                     status: 'warn',
@@ -454,6 +509,7 @@ async function runAdminAudit(companyId) {
             const delay = timedFollowUp.delaySeconds || 50;
             if (delay > 20) {
                 checks.push({
+                    layer: 'admin',
                     field: 'timedFollowUp.delaySeconds',
                     configKey: 'frontDesk.timedFollowUp.delaySeconds',
                     status: 'warn',
@@ -467,6 +523,7 @@ async function runAdminAudit(companyId) {
         const calendarConfig = scheduling?.googleCalendar || scheduling?.calendar;
         if (calendarConfig?.enabled && (!calendarConfig?.colorMapping || calendarConfig.colorMapping.length === 0)) {
             checks.push({
+                layer: 'admin',
                 field: 'calendarColorMapping',
                 configKey: 'scheduling.googleCalendar.colorMapping',
                 status: 'warn',
@@ -475,10 +532,24 @@ async function runAdminAudit(companyId) {
             });
         }
         
+        // Compute status
+        const statusResult = computeAuditStatus(checks, { 
+            entitiesAudited: adminFields.length,
+            hasData: true
+        });
+        
         return {
             layer: 'admin',
             description: 'Admin policy validation (Infrastructure)',
-            ...computeAuditStatus(checks),
+            ...statusResult,
+            // Hard facts - can't lie
+            facts: {
+                adminFieldsTotal: adminFields.length,
+                adminFieldsConfigured: configuredCount,
+                adminFieldsMissing: missingCount,
+                companyFound: true,
+                checksEmitted: checks.length
+            },
             checks
         };
         
@@ -488,11 +559,16 @@ async function runAdminAudit(companyId) {
             layer: 'admin',
             description: 'Admin policy validation (Infrastructure)',
             status: 'RED',
+            reason: 'QUERY_FAILED',
             pass: 0,
             warn: 0,
             fail: 1,
-            error: error.message,
+            facts: {
+                adminFieldsTotal: adminFields.length,
+                error: error.message
+            },
             checks: [{
+                layer: 'admin',
                 field: 'query',
                 status: 'fail',
                 severity: 'critical',
@@ -568,6 +644,27 @@ async function runUnifiedAudit(companyId, options = {}) {
         generationTimeMs: 0,
         registrySnapshotVersion: 'ownership-v1',
         mode,
+        
+        // ════════════════════════════════════════════════════════════════════
+        // OVERALL STATUS (one truth for the UI)
+        // ════════════════════════════════════════════════════════════════════
+        overall: {
+            status: 'GRAY',
+            reason: 'NOT_COMPUTED'
+        },
+        
+        // ════════════════════════════════════════════════════════════════════
+        // HARD FACTS (can't lie)
+        // ════════════════════════════════════════════════════════════════════
+        facts: {
+            scenarioCountFound: scenarios.length,
+            scenarioCountLive: scenarios.filter(s => s.status === 'live' && s.isActive !== false).length,
+            runtimeFieldsTotal: getRuntimeFields().length,
+            adminFieldsTotal: getAdminFields().length,
+            contentFieldsTotal: getContentFields().length,
+            timeWindowHours
+        },
+        
         summary: {},
         contentAudit: null,
         runtimeAudit: null,
@@ -578,47 +675,96 @@ async function runUnifiedAudit(companyId, options = {}) {
         result.contentAudit = await runContentAudit(companyId, scenarios);
         result.summary.content = {
             status: result.contentAudit.status,
+            reason: result.contentAudit.reason,
             pass: result.contentAudit.pass,
             warn: result.contentAudit.warn,
             fail: result.contentAudit.fail
         };
+        // Merge content facts
+        if (result.contentAudit.facts) {
+            result.facts.scenarioCountAudited = result.contentAudit.facts.scenarioCountAudited;
+            result.facts.contentChecksEmitted = result.contentAudit.facts.checksEmitted;
+        }
     }
     
     if (mode === 'all' || mode === 'runtime') {
         result.runtimeAudit = await runRuntimeAudit(companyId, timeWindowHours);
         result.summary.runtime = {
             status: result.runtimeAudit.status,
+            reason: result.runtimeAudit.reason,
             pass: result.runtimeAudit.pass,
             warn: result.runtimeAudit.warn,
             fail: result.runtimeAudit.fail
         };
+        // Merge runtime facts
+        if (result.runtimeAudit.facts) {
+            result.facts.runtimeFieldsWithProof = result.runtimeAudit.facts.runtimeFieldsWithProof;
+            result.facts.runtimeEventsSampled = result.runtimeAudit.facts.eventsSampled;
+        }
     }
     
     if (mode === 'all' || mode === 'admin') {
         result.adminAudit = await runAdminAudit(companyId);
         result.summary.admin = {
             status: result.adminAudit.status,
+            reason: result.adminAudit.reason,
             pass: result.adminAudit.pass,
             warn: result.adminAudit.warn,
             fail: result.adminAudit.fail
         };
+        // Merge admin facts
+        if (result.adminAudit.facts) {
+            result.facts.adminFieldsConfigured = result.adminAudit.facts.adminFieldsConfigured;
+            result.facts.adminFieldsMissing = result.adminAudit.facts.adminFieldsMissing;
+        }
     }
     
-    // Compute overall status using same reducer
+    // ════════════════════════════════════════════════════════════════════════
+    // COMPUTE OVERALL STATUS (same algorithm as individual layers)
+    // ════════════════════════════════════════════════════════════════════════
     const allStatuses = [
         result.contentAudit?.status,
         result.runtimeAudit?.status,
         result.adminAudit?.status
     ].filter(Boolean);
     
+    const allReasons = [
+        result.contentAudit?.reason,
+        result.runtimeAudit?.reason,
+        result.adminAudit?.reason
+    ].filter(Boolean);
+    
     if (allStatuses.includes('RED')) {
-        result.overallStatus = 'RED';
+        result.overall.status = 'RED';
+        result.overall.reason = allReasons.find(r => r?.includes('fail') || r?.includes('BROKEN') || r?.includes('FAILED')) || 'Critical failures detected';
     } else if (allStatuses.includes('YELLOW')) {
-        result.overallStatus = 'YELLOW';
+        result.overall.status = 'YELLOW';
+        result.overall.reason = allReasons.find(r => r?.includes('warn')) || 'Warnings present';
     } else if (allStatuses.includes('GRAY')) {
-        result.overallStatus = 'GRAY';
+        result.overall.status = 'GRAY';
+        result.overall.reason = 'NO_DATA - make test calls to prove runtime';
+    } else if (allStatuses.length > 0) {
+        result.overall.status = 'GREEN';
+        result.overall.reason = 'All checks passed';
     } else {
-        result.overallStatus = 'GREEN';
+        result.overall.status = 'GRAY';
+        result.overall.reason = 'No audits ran';
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // SANITY CHECKS (detect broken audit)
+    // ════════════════════════════════════════════════════════════════════════
+    
+    // If scenarios exist but content audit emitted 0 checks, that's broken
+    if (result.facts.scenarioCountLive > 0 && result.facts.contentChecksEmitted === 0) {
+        result.overall.status = 'RED';
+        result.overall.reason = 'BROKEN_CONTENT_AUDIT: Scenarios exist but no checks emitted';
+    }
+    
+    // If runtime events exist but no fields have proof, that's suspicious
+    if (result.facts.runtimeEventsSampled > 0 && result.facts.runtimeFieldsWithProof === 0) {
+        // Don't fail, but note it
+        result.overall.warning = 'Runtime events exist but no runtime fields found in them (check logging)';
     }
     
     result.generationTimeMs = Date.now() - startTime;

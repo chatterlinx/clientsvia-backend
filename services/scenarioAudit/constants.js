@@ -1027,12 +1027,15 @@ const SEVERITY_ORDER = { critical: 0, high: 1, warn: 2, info: 3 };
 
 /**
  * Compute overall status from a list of check results
+ * 
+ * CRITICAL RULE: 0 checks is NOT GREEN. It's GRAY (NO_DATA) or RED (BROKEN).
+ * 
  * @param {Array} checks - Array of { status: 'pass'|'warn'|'fail', severity: 'critical'|'high'|'warn'|'info' }
- * @param {Object} options - { hasRuntimeData: boolean }
- * @returns {{ status: 'GREEN'|'YELLOW'|'RED'|'GRAY', pass: number, warn: number, fail: number }}
+ * @param {Object} options - { entitiesAudited: number, hasData: boolean }
+ * @returns {{ status: 'GREEN'|'YELLOW'|'RED'|'GRAY', pass: number, warn: number, fail: number, reason: string }}
  */
 function computeAuditStatus(checks, options = {}) {
-    const { hasRuntimeData = true } = options;
+    const { entitiesAudited = 0, hasData = true } = options;
     
     const results = {
         pass: checks.filter(c => c.status === 'pass').length,
@@ -1041,30 +1044,39 @@ function computeAuditStatus(checks, options = {}) {
         total: checks.length
     };
     
-    // No data for runtime = GRAY (unproven, not fail)
-    if (!hasRuntimeData && results.total === 0) {
-        return { status: 'GRAY', ...results };
+    // ════════════════════════════════════════════════════════════════════════════
+    // CRITICAL: 0 checks is NOT GREEN
+    // ════════════════════════════════════════════════════════════════════════════
+    
+    // No data at all = GRAY (unproven)
+    if (!hasData || (results.total === 0 && entitiesAudited === 0)) {
+        return { status: 'GRAY', reason: 'NO_DATA', ...results };
+    }
+    
+    // Entities exist but 0 checks emitted = RED (broken audit engine)
+    if (entitiesAudited > 0 && results.total === 0) {
+        return { status: 'RED', reason: 'BROKEN_AUDIT_ENGINE', ...results };
     }
     
     // Any critical/high fail = RED
     const criticalFails = checks.filter(c => c.status === 'fail' && (c.severity === 'critical' || c.severity === 'high'));
     if (criticalFails.length > 0) {
-        return { status: 'RED', ...results };
+        return { status: 'RED', reason: `${criticalFails.length} critical/high failures`, ...results };
     }
     
     // Any warn-severity fail = YELLOW
     const warnFails = checks.filter(c => c.status === 'fail' && c.severity === 'warn');
     if (warnFails.length > 0) {
-        return { status: 'YELLOW', ...results };
+        return { status: 'YELLOW', reason: `${warnFails.length} warn-level failures`, ...results };
     }
     
     // Any warnings = YELLOW
     if (results.warn > 0) {
-        return { status: 'YELLOW', ...results };
+        return { status: 'YELLOW', reason: `${results.warn} warnings`, ...results };
     }
     
-    // All pass = GREEN
-    return { status: 'GREEN', ...results };
+    // All pass = GREEN (only if we actually checked something)
+    return { status: 'GREEN', reason: `${results.pass} checks passed`, ...results };
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
