@@ -240,6 +240,136 @@ async function checkRedisCache(companyId) {
 }
 
 // ============================================================================
+// TEMPLATE BINDING CHECK (First-Class Contract)
+// ============================================================================
+// This is PREREQUISITE #0 - without proper template binding, the engine has
+// nothing to load. The audit exposed this exact issue: templates exist but
+// activeScenarioPool is 0 because company isn't linked to templates.
+// ============================================================================
+
+async function checkTemplateBinding(companyId, companyDoc) {
+    try {
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        
+        // Get company's template references
+        const templateRefs = companyDoc?.aiAgentSettings?.templateReferences || [];
+        const legacyClonedFrom = companyDoc?.configuration?.clonedFrom;
+        
+        // Count enabled refs
+        const enabledRefs = templateRefs.filter(ref => ref.templateId && ref.enabled !== false);
+        
+        // Count global templates available
+        const globalTemplateCount = await GlobalInstantResponseTemplate.countDocuments({
+            $or: [
+                { status: 'published' },
+                { isPublished: true },
+                { isActive: true }
+            ]
+        });
+        
+        // Validate that bound template IDs actually exist
+        const boundTemplateIds = enabledRefs.map(r => r.templateId?.toString()).filter(Boolean);
+        let validBoundCount = 0;
+        let invalidTemplateIds = [];
+        
+        if (boundTemplateIds.length > 0) {
+            const existingTemplates = await GlobalInstantResponseTemplate.find({
+                _id: { $in: boundTemplateIds }
+            }).select('_id name').lean();
+            
+            const existingIds = new Set(existingTemplates.map(t => t._id.toString()));
+            validBoundCount = boundTemplateIds.filter(id => existingIds.has(id)).length;
+            invalidTemplateIds = boundTemplateIds.filter(id => !existingIds.has(id));
+        }
+        
+        // Build result
+        const result = {
+            status: 'UNKNOWN',
+            health: 'GRAY',
+            message: '',
+            binding: {
+                method: enabledRefs.length > 0 ? 'templateReferences' : 
+                        legacyClonedFrom ? 'legacy_clonedFrom' : 'NONE',
+                totalRefs: templateRefs.length,
+                enabledRefs: enabledRefs.length,
+                validBoundCount,
+                invalidTemplateIds,
+                boundTemplateIds,
+                legacyClonedFrom: legacyClonedFrom || null
+            },
+            globalTemplates: {
+                available: globalTemplateCount
+            },
+            issues: []
+        };
+        
+        // ════════════════════════════════════════════════════════════════════
+        // STATUS DETERMINATION (strict rules)
+        // ════════════════════════════════════════════════════════════════════
+        
+        if (globalTemplateCount === 0) {
+            // No templates in the entire system
+            result.status = 'NO_TEMPLATES_AVAILABLE';
+            result.health = 'RED';
+            result.message = 'No global templates exist in the system';
+            result.issues.push({
+                severity: 'CRITICAL',
+                code: 'NO_TEMPLATES_AVAILABLE',
+                message: 'No global templates exist - create templates first'
+            });
+        } else if (enabledRefs.length === 0 && !legacyClonedFrom) {
+            // Templates exist but none bound
+            result.status = 'TEMPLATE_BINDING_MISSING';
+            result.health = 'RED';
+            result.message = `${globalTemplateCount} templates available but NONE bound to this company`;
+            result.issues.push({
+                severity: 'CRITICAL',
+                code: 'TEMPLATE_BINDING_MISSING',
+                message: 'Templates exist but company has no templateReferences - scenarios will not load',
+                fix: 'Bind at least one global template in Company Profile → Templates'
+            });
+        } else if (invalidTemplateIds.length > 0) {
+            // Bound but some IDs don't exist
+            result.status = 'INVALID_BINDING';
+            result.health = 'RED';
+            result.message = `${invalidTemplateIds.length} bound template(s) don't exist`;
+            result.issues.push({
+                severity: 'HIGH',
+                code: 'INVALID_TEMPLATE_IDS',
+                message: `Template IDs not found: ${invalidTemplateIds.join(', ')}`,
+                fix: 'Remove invalid template references or verify template IDs'
+            });
+        } else if (validBoundCount > 0) {
+            // Properly bound
+            result.status = 'BOUND';
+            result.health = 'GREEN';
+            result.message = `${validBoundCount} template(s) bound and valid`;
+        } else if (legacyClonedFrom) {
+            // Using legacy binding
+            result.status = 'LEGACY_BINDING';
+            result.health = 'YELLOW';
+            result.message = `Using legacy clonedFrom binding: ${legacyClonedFrom}`;
+            result.issues.push({
+                severity: 'MEDIUM',
+                code: 'LEGACY_BINDING',
+                message: 'Using deprecated configuration.clonedFrom - migrate to templateReferences',
+                fix: 'Add templateReferences[] with explicit template binding'
+            });
+        }
+        
+        return result;
+        
+    } catch (error) {
+        logger.error('[WIRING] Template binding check failed', { companyId, error: error.message });
+        return {
+            status: 'ERROR',
+            health: 'RED',
+            error: error.message
+        };
+    }
+}
+
+// ============================================================================
 // SCENARIO POOL CHECK
 // ============================================================================
 
@@ -1327,6 +1457,12 @@ async function buildWiringReport({
         specialChecks.redisCache = await checkRedisCache(companyId);
     }
     
+    // ════════════════════════════════════════════════════════════════════════
+    // TEMPLATE BINDING CHECK (PREREQUISITE #0)
+    // Must come BEFORE scenario pool - if binding is broken, pool will be empty
+    // ════════════════════════════════════════════════════════════════════════
+    specialChecks.templateBinding = await checkTemplateBinding(companyId, companyDoc);
+    
     // Scenario pool check
     specialChecks.scenarioPool = await checkScenarioPool(companyId);
     
@@ -1400,6 +1536,45 @@ async function buildWiringReport({
             status: 'NO_CALL_DATA',
             reasons: ['No BlackBox recordings - cannot prove runtime execution'],
             fix: 'Make test calls to generate runtime proof events'
+        });
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════
+    // TEMPLATE BINDING ISSUES (PREREQUISITE #0 - check this FIRST)
+    // ════════════════════════════════════════════════════════════════════════
+    if (specialChecks.templateBinding.status === 'TEMPLATE_BINDING_MISSING') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'TEMPLATE_BINDING',
+            label: 'Template Binding Missing',
+            status: 'TEMPLATE_BINDING_MISSING',
+            reasons: [
+                'Templates exist in the system but NONE are bound to this company',
+                'Without template binding, the scenario pool will always be empty',
+                'This is why activeScenarioPool shows 0'
+            ],
+            fix: 'Bind at least one global template: Company Profile → AI Agent → Template References'
+        });
+    } else if (specialChecks.templateBinding.status === 'INVALID_BINDING') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'TEMPLATE_BINDING',
+            label: 'Invalid Template Binding',
+            status: 'INVALID_BINDING',
+            reasons: [
+                `Template IDs not found: ${specialChecks.templateBinding.binding.invalidTemplateIds.join(', ')}`,
+                'Bound template references point to non-existent templates'
+            ],
+            fix: 'Remove invalid template references or verify template IDs exist'
+        });
+    } else if (specialChecks.templateBinding.status === 'NO_TEMPLATES_AVAILABLE') {
+        issues.unshift({
+            severity: 'CRITICAL',
+            nodeId: 'TEMPLATE_BINDING',
+            label: 'No Templates Available',
+            status: 'NO_TEMPLATES_AVAILABLE',
+            reasons: ['No global templates exist in the entire system'],
+            fix: 'Create at least one global template via Global AI Brain'
         });
     }
     

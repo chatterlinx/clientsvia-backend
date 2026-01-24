@@ -974,8 +974,259 @@ router.post('/:companyId/patch-json', async (req, res) => {
 });
 
 // ============================================================================
+// POST /api/admin/wiring-status/:companyId/bind-template
+// TEMPLATE BINDING - The single activation switch for scenario content
+// This is PREREQUISITE #0 - without proper binding, the engine has nothing
+// ============================================================================
+router.post('/:companyId/bind-template', async (req, res) => {
+    const startTime = Date.now();
+    const { companyId } = req.params;
+    const { templateId, templateName, priority = 1, enabled = true } = req.body;
+    
+    logger.info('[WIRING API] 🔗 Bind template requested', { companyId, templateId });
+    
+    try {
+        // Validate company exists
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Company not found',
+                companyId 
+            });
+        }
+        
+        // If no templateId provided, find the first available template
+        let targetTemplateId = templateId;
+        let resolvedTemplateName = templateName;
+        
+        if (!targetTemplateId) {
+            const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+            const availableTemplate = await GlobalInstantResponseTemplate.findOne({
+                $or: [
+                    { status: 'published' },
+                    { isPublished: true },
+                    { isActive: true }
+                ]
+            }).select('_id name').lean();
+            
+            if (!availableTemplate) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'NO_TEMPLATES_AVAILABLE',
+                    message: 'No global templates exist in the system - create templates first'
+                });
+            }
+            
+            targetTemplateId = availableTemplate._id.toString();
+            resolvedTemplateName = availableTemplate.name;
+        }
+        
+        // Validate template exists
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        const template = await GlobalInstantResponseTemplate.findById(targetTemplateId).select('_id name').lean();
+        if (!template) {
+            return res.status(404).json({
+                success: false,
+                error: 'TEMPLATE_NOT_FOUND',
+                message: `Template ${targetTemplateId} does not exist`,
+                templateId: targetTemplateId
+            });
+        }
+        
+        resolvedTemplateName = resolvedTemplateName || template.name;
+        
+        // Check if already bound
+        const existingRefs = company.aiAgentSettings?.templateReferences || [];
+        const alreadyBound = existingRefs.some(ref => 
+            ref.templateId?.toString() === targetTemplateId
+        );
+        
+        if (alreadyBound) {
+            return res.json({
+                success: true,
+                status: 'ALREADY_BOUND',
+                message: `Template "${resolvedTemplateName}" is already bound to this company`,
+                companyId,
+                templateId: targetTemplateId,
+                templateName: resolvedTemplateName
+            });
+        }
+        
+        // Build the new reference
+        const newRef = {
+            templateId: targetTemplateId,
+            templateName: resolvedTemplateName,
+            enabled: enabled,
+            priority: priority,
+            addedAt: new Date(),
+            addedBy: req.user?.email || req.user?.name || 'wiring-api'
+        };
+        
+        // Add to templateReferences
+        await Company.updateOne(
+            { _id: companyId },
+            { 
+                $push: { 
+                    'aiAgentSettings.templateReferences': newRef 
+                }
+            }
+        );
+        
+        // Clear Redis cache to force pool rebuild
+        try {
+            const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+            if (isRedisConfigured()) {
+                const redis = await getSharedRedisClient();
+                if (redis) {
+                    await redis.del(`scenario-pool:${companyId}`);
+                    await redis.del(`company:${companyId}`);
+                    logger.info('[WIRING API] ✅ Cache cleared for pool rebuild');
+                }
+            }
+        } catch (cacheErr) {
+            logger.warn('[WIRING API] Cache clear warning:', cacheErr.message);
+        }
+        
+        // Verify the binding worked by checking pool
+        const ScenarioPoolService = require('../../services/ScenarioPoolService');
+        const poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId, { bypassCache: true });
+        
+        const durationMs = Date.now() - startTime;
+        
+        logger.info('[WIRING API] ✅ Template bound successfully', { 
+            companyId, 
+            templateId: targetTemplateId,
+            poolScenarioCount: poolResult.scenarios?.length || 0,
+            durationMs 
+        });
+        
+        return res.json({
+            success: true,
+            status: 'BOUND',
+            message: `Template "${resolvedTemplateName}" bound successfully`,
+            companyId,
+            templateId: targetTemplateId,
+            templateName: resolvedTemplateName,
+            binding: newRef,
+            verification: {
+                poolScenarioCount: poolResult.scenarios?.length || 0,
+                templatesUsed: poolResult.templatesUsed?.length || 0
+            },
+            durationMs,
+            nextSteps: [
+                'Run /audit to verify scenarios are now visible',
+                'Run /wiring-status to confirm TEMPLATE_BINDING_MISSING is resolved',
+                'Make a test call to generate runtime proof'
+            ]
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING API] Bind template error', { error: error.message, stack: error.stack });
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+            durationMs: Date.now() - startTime
+        });
+    }
+});
+
+// ============================================================================
+// DELETE /api/admin/wiring-status/:companyId/unbind-template/:templateId
+// Remove a template binding
+// ============================================================================
+router.delete('/:companyId/unbind-template/:templateId', async (req, res) => {
+    const { companyId, templateId } = req.params;
+    
+    logger.info('[WIRING API] 🔗 Unbind template requested', { companyId, templateId });
+    
+    try {
+        const result = await Company.updateOne(
+            { _id: companyId },
+            { 
+                $pull: { 
+                    'aiAgentSettings.templateReferences': { 
+                        templateId: templateId 
+                    }
+                }
+            }
+        );
+        
+        // Clear cache
+        try {
+            const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
+            if (isRedisConfigured()) {
+                const redis = await getSharedRedisClient();
+                if (redis) {
+                    await redis.del(`scenario-pool:${companyId}`);
+                }
+            }
+        } catch (e) { /* ignore */ }
+        
+        return res.json({
+            success: true,
+            status: 'UNBOUND',
+            message: `Template ${templateId} unbound`,
+            modifiedCount: result.modifiedCount
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING API] Unbind template error', { error: error.message });
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ============================================================================
+// GET /api/admin/wiring-status/:companyId/template-binding
+// Get current template binding status
+// ============================================================================
+router.get('/:companyId/template-binding', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const company = await Company.findById(companyId)
+            .select('companyName aiAgentSettings.templateReferences configuration.clonedFrom')
+            .lean();
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const enabledRefs = templateRefs.filter(r => r.templateId && r.enabled !== false);
+        
+        // Get pool count for verification
+        const ScenarioPoolService = require('../../services/ScenarioPoolService');
+        const poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+        
+        return res.json({
+            companyId,
+            companyName: company.companyName,
+            binding: {
+                method: enabledRefs.length > 0 ? 'templateReferences' : 
+                        company.configuration?.clonedFrom ? 'legacy_clonedFrom' : 'NONE',
+                totalRefs: templateRefs.length,
+                enabledRefs: enabledRefs.length,
+                references: templateRefs
+            },
+            legacyClonedFrom: company.configuration?.clonedFrom || null,
+            verification: {
+                poolScenarioCount: poolResult.scenarios?.length || 0,
+                templatesUsed: poolResult.templatesUsed || []
+            },
+            status: enabledRefs.length > 0 ? 'BOUND' : 
+                    company.configuration?.clonedFrom ? 'LEGACY_BINDING' : 'UNBOUND'
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING API] Get template binding error', { error: error.message });
+        return res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================================================
 // POST /api/admin/wiring-status/:companyId/fix-template-references
-// Quick fix for NO_TEMPLATE_REFERENCES critical issue
+// Quick fix for NO_TEMPLATE_REFERENCES critical issue (legacy endpoint)
 // ============================================================================
 router.post('/:companyId/fix-template-references', async (req, res) => {
     try {

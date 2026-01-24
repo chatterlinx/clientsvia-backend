@@ -871,16 +871,28 @@ async function runUnifiedAudit(companyId, options = {}) {
     }
     
     // ════════════════════════════════════════════════════════════════════════
-    // GUARDRAIL: activePool mode with 0 scenarios is RED
+    // GUARDRAIL: TEMPLATE_BINDING_MISSING (PREREQUISITE #0)
     // ════════════════════════════════════════════════════════════════════════
-    // If we're auditing what runtime actually reads and it's empty, agent has nothing
+    // This is the exact issue the audit exposed: templates exist but pool is 0
+    // because company isn't linked to templates via templateReferences
+    // ════════════════════════════════════════════════════════════════════════
+    
     if (scenarioSource === 'activePool' && result.facts.scenarioCountFound === 0) {
-        // Check if templates have scenarios (indicates data routing issue)
         const templatesSource = sourcesChecked.find(s => s.name === 'globalTemplates');
-        if (templatesSource && templatesSource.count > 0) {
+        const poolSource = sourcesChecked.find(s => s.name === 'activeScenarioPool');
+        
+        if (templatesSource && templatesSource.count > 0 && poolSource && poolSource.count === 0) {
+            // Templates exist but pool is empty - this is TEMPLATE_BINDING_MISSING
             result.overall.status = 'RED';
-            result.overall.reason = `AGENT_WILL_HAVE_NOTHING_TO_RUN: activePool=0 but templates=${templatesSource.count} (routing/pool issue)`;
-        } else {
+            result.overall.reason = 'TEMPLATE_BINDING_MISSING';
+            result.overall.message = `${templatesSource.count} templates exist but none are bound to this company`;
+            result.overall.fix = 'Bind at least one global template in Company Profile → AI Agent → Template References';
+            
+            // Add to facts for transparency
+            result.facts.templateBindingStatus = 'MISSING';
+            result.facts.templatesExist = templatesSource.count;
+            result.facts.templatesBound = 0;
+        } else if (!templatesSource || templatesSource.count === 0) {
             result.overall.status = 'GRAY';
             result.overall.reason = 'NO_SCENARIOS_ANYWHERE: No scenarios in templates or pool';
         }
