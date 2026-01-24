@@ -122,9 +122,13 @@ async function checkEnvironmentReality(companyId) {
         reality.counts.targetCompanyName = targetCompany?.companyName || null;
         
         // Count BlackBox recordings (last 7 days)
+        // Check both startedAt and createdAt since different event types use different fields
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
         reality.counts.blackboxRecordings = await BlackBoxRecording.countDocuments({
-            startedAt: { $gte: weekAgo }
+            $or: [
+                { startedAt: { $gte: weekAgo } },
+                { createdAt: { $gte: weekAgo } }
+            ]
         });
         
         // Determine environment status
