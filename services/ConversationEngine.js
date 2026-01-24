@@ -4997,6 +4997,23 @@ async function processTurn({
             const abortScript = bookingOutcomeScripts.message_taken ||
                 getMissingConfigPrompt('booking_abort', 'bookingOutcome.scripts.message_taken');
 
+            // ═══════════════════════════════════════════════════════════════════
+            // V89: SERVICE TYPE CLARIFICATION HANDLER
+            // If we asked a clarifier question last turn, apply the response
+            // ═══════════════════════════════════════════════════════════════════
+            const ServiceTypeResolver = require('./ServiceTypeResolver');
+            if (ServiceTypeResolver.isPendingClarification(session)) {
+                log('🏷️ SERVICE TYPE: Applying clarification response', {
+                    response: userText?.substring?.(0, 50)
+                });
+                const clarificationResult = ServiceTypeResolver.applyClarification(session, userText);
+                log('🏷️ SERVICE TYPE: Clarification applied', {
+                    canonicalType: clarificationResult.canonicalType,
+                    method: clarificationResult.method
+                });
+                // Continue with normal booking flow - service type is now resolved
+            }
+            
             const nameMeta = session.booking?.meta?.name || {};
             const phoneMeta = session.booking?.meta?.phone || {};
             const addressMeta = session.booking?.meta?.address || {};
@@ -8836,62 +8853,42 @@ async function processTurn({
                         
                         if (calendarEnabled) {
                             // ═══════════════════════════════════════════════════════════════════
-                            // V89: HYBRID SERVICE TYPE DETECTION WITH CONFIDENCE SCORING
-                            // Uses ServiceTypeDetector for smart auto-detection + clarification
+                            // V89: SERVICE TYPE RESOLUTION (Single Source of Truth)
+                            // ServiceTypeResolver is the ONLY authority for service type
                             // ═══════════════════════════════════════════════════════════════════
-                            const ServiceTypeDetector = require('../utils/ServiceTypeDetector');
+                            const ServiceTypeResolver = require('./ServiceTypeResolver');
                             
                             const issueText = session.discovery?.issue || currentSlots.issue || '';
-                            const existingServiceType = session.booking?.serviceType || session.discovery?.serviceType;
                             
-                            const detection = ServiceTypeDetector.detectServiceType(issueText, {
-                                companyConfig: company,
-                                existingServiceType
+                            // Resolve service type (runs once, stores in session.serviceTypeResolution)
+                            const resolution = ServiceTypeResolver.resolve(session, issueText, {
+                                companyKeywords: company?.aiAgentSettings?.serviceTypeClarification?.serviceTypes
                             });
                             
-                            let detectedServiceType = detection.serviceType;
+                            // Get canonical type - this is what everything else uses
+                            const detectedServiceType = ServiceTypeResolver.getCanonicalType(session);
                             
-                            // Store detection metadata for audit trail
-                            session.booking = session.booking || {};
-                            session.booking.serviceTypeDetection = {
-                                type: detectedServiceType,
-                                confidence: detection.confidence,
-                                confidenceScore: detection.confidenceScore,
-                                method: detection.detectionMethod,
-                                needsClarification: detection.needsClarification,
-                                clarifierAsked: false
-                            };
-                            
-                            // V89: If detection needs clarification and we haven't asked yet, 
-                            // ask the clarifier BEFORE proceeding with calendar lookup
-                            if (detection.needsClarification && 
-                                !session.booking.serviceTypeDetection.clarifierAsked &&
-                                detection.clarifierQuestion) {
-                                
-                                // Mark that we're asking the clarifier
-                                session.booking.serviceTypeDetection.clarifierAsked = true;
-                                session.booking.serviceTypeDetection.clarifierType = detection.clarifierType;
-                                session.booking.serviceTypeDetection.pendingClarification = true;
-                                
-                                log('🏷️ SERVICE TYPE: Low confidence, asking clarifier', {
-                                    tentativeType: detectedServiceType,
-                                    confidence: detection.confidence,
-                                    clarifierType: detection.clarifierType
+                            // V89: If needs clarification, ask the clarifier BEFORE calendar lookup
+                            if (resolution.needsClarification && !resolution.alreadyResolved) {
+                                log('🏷️ SERVICE TYPE: Needs clarification', {
+                                    tentativeType: resolution.canonicalType,
+                                    reason: resolution.reason || 'unknown',
+                                    clarifierType: resolution.clarifierType
                                 });
                                 
                                 // Return the clarifier question instead of calendar slots
-                                finalReply = detection.clarifierQuestion;
+                                finalReply = resolution.clarifierQuestion;
                                 nextSlotId = 'serviceType'; // Will capture their response
                                 
                                 // Skip calendar lookup for now - will retry after clarification
                             } else {
-                                // High confidence or already clarified - proceed with calendar
+                                // Resolved - proceed with calendar
                                 log('📅 TIME: Checking real-time availability', { 
                                     dayPart, 
                                     windowPart, 
                                     serviceType: detectedServiceType,
-                                    confidence: detection.confidence,
-                                    method: detection.detectionMethod
+                                    confidence: session.serviceTypeResolution?.confidence,
+                                    method: session.serviceTypeResolution?.method
                                 });
                             
                                 try {
