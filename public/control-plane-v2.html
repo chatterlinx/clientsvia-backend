@@ -5536,11 +5536,23 @@
     }
     
     async function importPlaceholderDefaults() {
+      console.log('[PLACEHOLDERS] Import Defaults button clicked');
+      console.log('[PLACEHOLDERS] currentCompanyId:', currentCompanyId);
+      console.log('[PLACEHOLDERS] authToken present:', !!authToken);
+      
+      if (!currentCompanyId) {
+        console.error('[PLACEHOLDERS] No company ID - cannot import');
+        alert('❌ No company selected');
+        return;
+      }
+      
       if (!confirm('Import defaults will add missing placeholders used by your active template.\n\nIt will NOT overwrite existing values.\n\nContinue?')) {
+        console.log('[PLACEHOLDERS] User cancelled import');
         return;
       }
       
       try {
+        console.log('[PLACEHOLDERS] Calling import-defaults API...');
         const response = await fetch(`/api/admin/placeholders/company/${currentCompanyId}/import-defaults`, {
           method: 'POST',
           headers: {
@@ -5550,12 +5562,17 @@
           body: JSON.stringify({ overwriteExisting: false })
         });
         
+        console.log('[PLACEHOLDERS] Response status:', response.status);
+        
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
+          console.error('[PLACEHOLDERS] Import failed:', err);
           throw new Error(err.error || 'Failed to import');
         }
         
         const result = await response.json();
+        console.log('[PLACEHOLDERS] Import result:', result);
+        
         const addedCount = result.imported?.filter(i => i.action === 'added').length || 0;
         const skippedCount = result.skipped?.length || 0;
         
@@ -5565,6 +5582,7 @@
         await loadPlaceholders();
         
       } catch (error) {
+        console.error('[PLACEHOLDERS] Import error:', error);
         alert('❌ Failed to import defaults: ' + error.message);
       }
     }
