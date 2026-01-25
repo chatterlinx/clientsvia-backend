@@ -4994,29 +4994,59 @@
     }
     
     async function refreshTemplateScan() {
+      console.group('[PLACEHOLDERS] Rescan clicked');
+      console.log('companyId:', currentCompanyId);
+      console.log('authToken present:', !!authToken);
+      
+      if (!currentCompanyId) {
+        console.error('No companyId - cannot rescan');
+        console.groupEnd();
+        return;
+      }
+      
       try {
+        console.log('Calling template-scan endpoint...');
         const scanRes = await fetch(`/api/admin/placeholders/company/${currentCompanyId}/template-scan`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
+        console.log('template-scan status:', scanRes.status);
+        
         if (scanRes.ok) {
           const scanData = await scanRes.json();
+          console.log('template-scan response:', scanData);
           currentTemplateScan = scanData.success ? scanData : null;
+        } else {
+          const err = await scanRes.json().catch(() => ({}));
+          console.error('template-scan error:', err);
+          currentTemplateScan = null;
         }
         
+        console.log('Calling coverage endpoint...');
         const coverageRes = await fetch(`/api/admin/placeholders/company/${currentCompanyId}/coverage`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
         });
+        console.log('coverage status:', coverageRes.status);
+        
         if (coverageRes.ok) {
           const coverageData = await coverageRes.json();
+          console.log('coverage response:', coverageData);
           currentPlaceholderCoverage = coverageData.success ? coverageData : null;
+        } else {
+          const err = await coverageRes.json().catch(() => ({}));
+          console.error('coverage error:', err);
+          currentPlaceholderCoverage = null;
         }
         
+        renderTemplateScanResults();
         renderTemplateScanPanel();
         renderCoverageStrip();
         renderPlaceholderWarnings();
         renderPlaceholdersTable();
+        console.log('Rescan complete');
       } catch (e) {
         console.error('Failed to refresh template scan:', e);
+      } finally {
+        console.groupEnd();
       }
     }
     
