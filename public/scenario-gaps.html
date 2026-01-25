@@ -1747,6 +1747,9 @@
             
             <!-- Blueprint Coverage Summary -->
             <div id="blueprint-summary" style="display: none;">
+                <!-- Mode Banner (populated by JS) -->
+                <div id="blueprint-mode-banner" style="display: none;"></div>
+                
                 <!-- Coverage Stats -->
                 <div class="health-score-card" style="margin-bottom: 24px;">
                     <div class="health-score" id="blueprint-coverage-score">--%</div>
@@ -2681,6 +2684,9 @@
             document.getElementById('blueprint-initial').style.display = 'none';
             document.getElementById('blueprint-summary').style.display = 'block';
             
+            // Store mode for later use
+            window.__blueprintMode = result.mode;
+            
             // Update coverage stats
             document.getElementById('blueprint-coverage-score').textContent = `${result.coverage.percent}%`;
             document.getElementById('blueprint-coverage-score').style.color = 
@@ -2691,6 +2697,34 @@
             document.getElementById('bp-covered').textContent = result.coverage.totalCovered;
             document.getElementById('bp-missing').textContent = result.missingItems.length;
             document.getElementById('bp-required-missing').textContent = result.stats.missingRequired;
+            
+            // Show mode banner
+            const isNewTemplate = result.mode === 'NEW_TEMPLATE';
+            const modeBanner = document.getElementById('blueprint-mode-banner');
+            if (modeBanner) {
+                modeBanner.style.display = 'block';
+                modeBanner.innerHTML = isNewTemplate ? `
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 16px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(99, 102, 241, 0.2)); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; margin-bottom: 20px;">
+                        <i class="fas fa-rocket" style="font-size: 24px; color: #a78bfa;"></i>
+                        <div>
+                            <div style="font-weight: 600; color: #a78bfa;">New Template Mode</div>
+                            <div style="font-size: 13px; color: var(--text-secondary);">
+                                Generate a complete ${result.coverage.totalInBlueprint}-scenario pack to build your template from scratch.
+                            </div>
+                        </div>
+                        <button onclick="generateFullPack()" style="margin-left: auto; padding: 12px 24px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600; font-size: 14px;">
+                            <i class="fas fa-magic"></i> Generate Full Pack
+                        </button>
+                    </div>
+                ` : `
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; margin-bottom: 20px;">
+                        <i class="fas fa-puzzle-piece" style="font-size: 20px; color: #4ade80;"></i>
+                        <div style="font-size: 13px; color: var(--text-secondary);">
+                            <strong style="color: #4ade80;">Filling Gaps Mode</strong> — Select missing scenarios below to generate and add to your existing template.
+                        </div>
+                    </div>
+                `;
+            }
             
             // Render missing items grouped by category
             const listEl = document.getElementById('missing-items-list');
@@ -2783,6 +2817,78 @@
             
             countEl.textContent = selectedBlueprintItems.size;
             btn.disabled = selectedBlueprintItems.size === 0;
+        }
+        
+        async function generateFullPack() {
+            // Generate ALL items from the blueprint (for new template mode)
+            if (!blueprintAssessment?.missingItems?.length) {
+                showToast('No items to generate', 'error');
+                return;
+            }
+            
+            // Select all missing items
+            const allMissingKeys = blueprintAssessment.missingItems.map(i => i.itemKey);
+            
+            // Confirm with user
+            const count = allMissingKeys.length;
+            if (!confirm(`Generate all ${count} scenarios? This may take a few minutes.`)) {
+                return;
+            }
+            
+            const btn = event?.target?.closest('button');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Full Pack...';
+            }
+            
+            const tradeKey = document.getElementById('blueprint-select').value;
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/blueprints/${tradeKey}/generate`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        companyId,
+                        itemKeys: allMissingKeys,
+                        maxCards: 100 // Higher limit for full pack
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Generation failed: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Generation failed');
+                }
+                
+                // Store for export
+                generatedBlueprintCards = result.cards || [];
+                window.__lastGeneratedCards = result.cards || [];
+                window.__lastGeneratorConfig = result.generatorConfig || null;
+                window.__lastValidationReport = result.validation || null;
+                
+                // Show generated cards
+                renderGeneratedCards(generatedBlueprintCards, result.validation);
+                
+                showToast(`Generated ${result.count} scenarios!`, 'success');
+                console.log('✅ [BLUEPRINT] Full pack generated:', result.count, 'cards');
+                
+            } catch (error) {
+                console.error('[BLUEPRINT] Full pack generation error:', error);
+                alert('Failed to generate full pack: ' + error.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-magic"></i> Generate Full Pack';
+                }
+            }
         }
         
         async function generateSelectedCards() {

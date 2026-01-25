@@ -340,11 +340,28 @@ router.get('/:tradeKey/assess', async (req, res) => {
             missingByCategory[cat].push(item);
         }
         
+        // ════════════════════════════════════════════════════════════════════════════════
+        // MODE DETECTION: New Template vs Filling Gaps
+        // ════════════════════════════════════════════════════════════════════════════════
+        // - NEW_TEMPLATE: Template is empty or nearly empty (<10% coverage)
+        //   → Show "Generate Full Pack" button, missing items are EXPECTED
+        // - FILLING_GAPS: Template has substantial coverage (>=10%)
+        //   → Show selective generation, missing items are GAPS to fill
+        // ════════════════════════════════════════════════════════════════════════════════
+        const mode = coveragePercent < 10 ? 'NEW_TEMPLATE' : 'FILLING_GAPS';
+        const isNewTemplate = mode === 'NEW_TEMPLATE';
+        
         res.json({
             success: true,
             blueprintId: spec.blueprintId,
             blueprintName: spec.name,
             blueprintVersion: spec.version,
+            
+            // Mode detection
+            mode,
+            modeDescription: isNewTemplate 
+                ? 'New template detected - generate full scenario pack'
+                : 'Existing template - fill coverage gaps',
             
             // Coverage summary
             coverage: {
@@ -372,11 +389,14 @@ router.get('/:tradeKey/assess', async (req, res) => {
                 byType: getBlueprintStats(spec).byType
             },
             
-            // UI helpers
+            // UI helpers - mode-aware
             canGenerate: assessment.missingItems.length > 0,
-            generateButtonLabel: assessment.missingItems.length > 0
-                ? `Generate ${assessment.missingItems.length} Missing Scenarios`
-                : 'All scenarios covered',
+            canGenerateFullPack: isNewTemplate && assessment.missingItems.length > 0,
+            generateButtonLabel: isNewTemplate
+                ? `Generate Full Pack (${blueprintItems.length} scenarios)`
+                : assessment.missingItems.length > 0
+                    ? `Generate ${assessment.missingItems.length} Missing Scenarios`
+                    : 'All scenarios covered',
             
             source,
             companyId
