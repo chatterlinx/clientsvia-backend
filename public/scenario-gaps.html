@@ -1695,12 +1695,49 @@
                         Assess Coverage
                     </button>
                     <div style="display: flex; gap: 4px;">
-                        <button onclick="copyBlueprintSpec()" style="padding: 10px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Copy Blueprint Spec JSON">
-                            <i class="fas fa-copy"></i> Spec
-                        </button>
-                        <button onclick="copyBlueprintAssess()" style="padding: 10px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Copy Assessment JSON">
-                            <i class="fas fa-clipboard-list"></i> Assess
-                        </button>
+                        <!-- Spec dropdown -->
+                        <div style="position: relative;" class="json-dropdown">
+                            <button onclick="toggleDropdown('spec-dropdown')" style="padding: 10px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Blueprint Spec JSON">
+                                <i class="fas fa-file-code"></i> Spec <i class="fas fa-caret-down" style="margin-left: 4px; font-size: 10px;"></i>
+                            </button>
+                            <div id="spec-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; z-index: 100; min-width: 140px;">
+                                <button onclick="copyBlueprintSpec(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <button onclick="downloadBlueprintSpec(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                                    <i class="fas fa-download"></i> Download
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Assess dropdown -->
+                        <div style="position: relative;" class="json-dropdown">
+                            <button onclick="toggleDropdown('assess-dropdown')" style="padding: 10px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Assessment JSON">
+                                <i class="fas fa-clipboard-list"></i> Assess <i class="fas fa-caret-down" style="margin-left: 4px; font-size: 10px;"></i>
+                            </button>
+                            <div id="assess-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; z-index: 100; min-width: 140px;">
+                                <button onclick="copyBlueprintAssess(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <button onclick="downloadBlueprintAssess(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                                    <i class="fas fa-download"></i> Download
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Results dropdown -->
+                        <div style="position: relative;" class="json-dropdown">
+                            <button onclick="toggleDropdown('results-dropdown')" style="padding: 10px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Full Results JSON">
+                                <i class="fas fa-file-export"></i> Results <i class="fas fa-caret-down" style="margin-left: 4px; font-size: 10px;"></i>
+                            </button>
+                            <div id="results-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; z-index: 100; min-width: 140px;">
+                                <button onclick="copyResultsJson(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
+                                <button onclick="downloadResultsJson(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+                                    <i class="fas fa-download"></i> Download
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Import button -->
                         <button onclick="openImportBlueprintModal()" style="padding: 10px 12px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Import Blueprint JSON">
                             <i class="fas fa-upload"></i> Import
                         </button>
@@ -2975,42 +3012,8 @@
         }
         
         async function copyResultsJson() {
-            // Build comprehensive results export
-            const tradeKey = document.getElementById('blueprint-select').value;
-            
-            const resultsExport = {
-                _format: 'BlueprintResultsExportV1',
-                tradeKey,
-                companyId,
-                generatedAt: new Date().toISOString(),
-                
-                // Blueprint spec (inventory)
-                blueprint: window.__lastBlueprintSpec?.spec || window.__lastBlueprintSpec,
-                
-                // Assessment results
-                assessment: window.__lastBlueprintAssess ? {
-                    coverage: window.__lastBlueprintAssess.coverage,
-                    missingCount: window.__lastBlueprintAssess.missingItems?.length || 0,
-                    coveredCount: window.__lastBlueprintAssess.matchedItems?.length || 0,
-                    weakCoverage: window.__lastBlueprintAssess.weakCoverage,
-                    duplicates: window.__lastBlueprintAssess.duplicates
-                } : null,
-                
-                // Generator config used
-                generatorConfig: window.__lastGeneratorConfig,
-                
-                // Generated cards with validation
-                generatedCards: window.__lastGeneratedCards ? {
-                    count: window.__lastGeneratedCards.length,
-                    cards: window.__lastGeneratedCards.map(c => ({
-                        itemKey: c.itemKey,
-                        scenario: c.scenario,
-                        categoryKey: c.categoryKey
-                    })),
-                    validation: window.__lastValidationReport
-                } : null
-            };
-            
+            const resultsExport = buildResultsExport();
+            if (!resultsExport) return;
             await copyToClipboardWithToast(toPrettyJson(resultsExport), 'Results JSON (full export)');
         }
         
@@ -3031,6 +3034,72 @@
             const tradeKey = document.getElementById('blueprint-select').value;
             downloadJson(window.__lastBlueprintAssess, `blueprint-${tradeKey}-assess.json`);
         }
+        
+        function downloadResultsJson() {
+            const tradeKey = document.getElementById('blueprint-select').value;
+            const resultsExport = buildResultsExport();
+            if (!resultsExport) return;
+            downloadJson(resultsExport, `blueprint-${tradeKey}-results-${Date.now()}.json`);
+        }
+        
+        function buildResultsExport() {
+            if (!window.__lastBlueprintSpec && !window.__lastBlueprintAssess) {
+                showToast('Run "Assess Coverage" first', 'error');
+                return null;
+            }
+            
+            const tradeKey = document.getElementById('blueprint-select').value;
+            
+            return {
+                _format: 'BlueprintResultsExportV1',
+                tradeKey,
+                companyId,
+                generatedAt: new Date().toISOString(),
+                blueprint: window.__lastBlueprintSpec?.spec || window.__lastBlueprintSpec,
+                assessment: window.__lastBlueprintAssess ? {
+                    coverage: window.__lastBlueprintAssess.coverage,
+                    missingCount: window.__lastBlueprintAssess.missingItems?.length || 0,
+                    coveredCount: window.__lastBlueprintAssess.matchedItems?.length || 0,
+                    weakCoverage: window.__lastBlueprintAssess.weakCoverage,
+                    duplicates: window.__lastBlueprintAssess.duplicates
+                } : null,
+                generatorConfig: window.__lastGeneratorConfig,
+                generatedCards: window.__lastGeneratedCards ? {
+                    count: window.__lastGeneratedCards.length,
+                    cards: window.__lastGeneratedCards.map(c => ({
+                        itemKey: c.itemKey,
+                        scenario: c.scenario,
+                        categoryKey: c.categoryKey
+                    })),
+                    validation: window.__lastValidationReport
+                } : null
+            };
+        }
+        
+        // Dropdown toggle functions
+        function toggleDropdown(dropdownId) {
+            const dropdown = document.getElementById(dropdownId);
+            const isVisible = dropdown.style.display !== 'none';
+            
+            // Hide all dropdowns first
+            hideDropdowns();
+            
+            // Toggle this one
+            if (!isVisible) {
+                dropdown.style.display = 'block';
+            }
+        }
+        
+        function hideDropdowns() {
+            document.querySelectorAll('.dropdown-menu').forEach(d => d.style.display = 'none');
+        }
+        
+        // Close dropdowns when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.json-dropdown')) {
+                hideDropdowns();
+            }
+        });
         
         function openImportBlueprintModal() {
             document.getElementById('import-blueprint-modal').classList.add('active');
