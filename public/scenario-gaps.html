@@ -1915,7 +1915,16 @@
         
         async function loadRegistry() {
             try {
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/registry`);
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/registry`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.status === 401) {
+                    console.error('❌ [REGISTRY] Authentication required');
+                    return;
+                }
+                
                 const data = await response.json();
                 if (data.success) {
                     REGISTRY = data;

@@ -1913,28 +1913,26 @@ router.post('/:companyId/gaps/dismiss', async (req, res) => {
     const { representative, reason } = req.body;
     
     try {
-        const company = await Company.findById(companyId);
-        if (!company) {
-            return res.status(404).json({ error: 'Company not found' });
-        }
-        
-        // Store dismissed gaps in company metadata
-        if (!company.metadata) company.metadata = {};
-        if (!company.metadata.dismissedScenarioGaps) company.metadata.dismissedScenarioGaps = [];
-        
-        company.metadata.dismissedScenarioGaps.push({
+        // Use updateOne to avoid full document validation
+        // This prevents failures from unrelated schema issues in the company doc
+        const dismissEntry = {
             representative,
             reason: reason || 'User dismissed',
             dismissedAt: new Date()
-        });
+        };
         
-        // Keep only last 100 dismissed gaps
-        if (company.metadata.dismissedScenarioGaps.length > 100) {
-            company.metadata.dismissedScenarioGaps = company.metadata.dismissedScenarioGaps.slice(-100);
-        }
-        
-        company.markModified('metadata');
-        await company.save();
+        // First, push the new dismissed gap
+        await Company.updateOne(
+            { _id: companyId },
+            { 
+                $push: { 
+                    'metadata.dismissedScenarioGaps': {
+                        $each: [dismissEntry],
+                        $slice: -100  // Keep only last 100
+                    }
+                }
+            }
+        );
         
         res.json({
             success: true,

@@ -348,15 +348,29 @@ const googleCalendarSchema = new mongoose.Schema({
         // Map service types to Google Calendar colors
         // AI determines serviceType from conversation (repair, maintenance, estimate, etc.)
         // V88: Each service type now has its own scheduling rules
+        // V89: canonicalType is now the authoritative field - serviceType kept for backward compatibility
         colorMapping: {
             type: [{
+                // LEGACY: serviceType field - kept for backward compatibility
+                // Can contain any string value from legacy data (e.g., 'repair_service', 'maintenance_call')
                 serviceType: { 
-                    type: String, 
-                    enum: ['service', 'repair', 'emergency', 'maintenance', 'estimate', 'sales', 'consultation', 'installation', 'inspection', 'other'],
-                    required: true
+                    type: String,
+                    trim: true
+                    // V89: Removed enum restriction - legacy data has non-standard values
+                    // Use canonicalType for authoritative mapping
                 },
+                
+                // V89: AUTHORITATIVE - canonicalType is the contract
+                // This is what ServiceTypeResolver outputs and what the engine matches on
+                // Valid values: repair, maintenance, emergency, estimate, sales, consultation, installation, inspection, service, other
+                canonicalType: {
+                    type: String,
+                    enum: ['repair', 'maintenance', 'emergency', 'estimate', 'sales', 'consultation', 'installation', 'inspection', 'service', 'other', 'none'],
+                    default: 'none'
+                },
+                
                 colorId: { type: String, default: '1' }, // Google Calendar colorId (1-11)
-                label: { type: String, trim: true }, // Display label for UI
+                label: { type: String, trim: true }, // Display label for UI (can be anything)
                 description: { type: String, trim: true }, // Optional description
                 
                 // ═══════════════════════════════════════════════════════════════════
