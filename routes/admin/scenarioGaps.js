@@ -2804,12 +2804,45 @@ router.post('/:companyId/audit/fix-scenario', async (req, res) => {
         // Generate fixes for all violations
         const fixes = [];
         let tokensUsed = 0;
+        let skipped = { noField: 0, infoLevel: 0, nonFixable: 0 };
+        
+        // Fields that shouldn't be "fixed" by AI - they're intentional configurations
+        const NON_FIXABLE_FIELDS = [
+            'dynamicVariables',  // Custom placeholders are intentional
+            'entityCapture',     // Admin configures these
+            'entityValidation',  // Admin configures these
+            'actionHooks',       // Admin configures these
+            'ttsOverride',       // Admin configures these
+            'preconditions',     // State machine - admin configures
+            'effects'            // State machine - admin configures
+        ];
         
         for (const violation of (violations || [])) {
             try {
                 // Skip violations without a field
                 if (!violation.field) {
+                    skipped.noField++;
                     logger.info('[AUDIT FIX-SCENARIO] Skipping violation without field');
+                    continue;
+                }
+                
+                // Skip INFO severity - these are informational, not errors
+                if (violation.severity === 'info' || violation.severity === 'INFO') {
+                    skipped.infoLevel++;
+                    logger.info('[AUDIT FIX-SCENARIO] Skipping INFO-level violation', { 
+                        field: violation.field 
+                    });
+                    continue;
+                }
+                
+                // Skip non-fixable fields (admin-owned configurations)
+                const fieldRoot = violation.field.split('.')[0].split('[')[0];
+                if (NON_FIXABLE_FIELDS.includes(fieldRoot)) {
+                    skipped.nonFixable++;
+                    logger.info('[AUDIT FIX-SCENARIO] Skipping non-fixable field', { 
+                        field: violation.field,
+                        fieldRoot 
+                    });
                     continue;
                 }
                 
@@ -2962,13 +2995,21 @@ Return ONLY the fixed text. No quotes, no explanation.`;
             totalViolations: violations?.length || 0,
             fixesGenerated: fixes.length,
             fixesApplied,
+            // Show what was skipped for transparency
+            skipped: {
+                infoLevel: skipped.infoLevel,      // INFO severity = informational, not errors
+                nonFixable: skipped.nonFixable,    // Admin-configured fields (dynamicVariables, etc)
+                noField: skipped.noField           // Missing field path
+            },
             fixes: fixes.map(f => ({
                 field: f.field,
                 oldValue: f.oldValue?.substring(0, 50),
                 newValue: f.newValue?.substring(0, 50)
             })),
             tokensUsed,
-            message: `Applied ${fixesApplied} fixes to scenario`
+            message: fixesApplied > 0 
+                ? `Applied ${fixesApplied} fixes to scenario` 
+                : `No fixable issues found (${skipped.infoLevel} info-only, ${skipped.nonFixable} admin-owned)`
         });
         
     } catch (error) {
