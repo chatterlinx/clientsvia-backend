@@ -931,9 +931,9 @@ function getSettingsCount() {
             future: byPurpose.future.length
         },
         
-        // AI vs Admin breakdown
-        aiGenerates: aiGenerates.map(([k, v]) => ({ setting: k, ...v })),
-        adminConfigures: adminConfigures.map(([k, v]) => ({ setting: k, ...v })),
+        // AI vs Admin breakdown (derived from ownership)
+        aiGenerates: contentSettings.map(([k, v]) => ({ setting: k, ...v })),
+        adminConfigures: adminSettings.map(([k, v]) => ({ setting: k, ...v })),
         
         // ========================================
         // ALIGNMENT STATUS (always perfect now!)
