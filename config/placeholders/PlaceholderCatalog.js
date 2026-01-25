@@ -22,6 +22,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Company Name', 
         type: 'text', 
         category: 'identity',
+        scope: 'company',
         required: true, 
         fallback: 'our company',
         description: 'The company name as it should appear in responses',
@@ -32,6 +33,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Main Phone', 
         type: 'phone', 
         category: 'contact',
+        scope: 'company',
         required: true, 
         fallback: 'our main number',
         description: 'Primary business phone number',
@@ -42,6 +44,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Dispatch Phone', 
         type: 'phone', 
         category: 'contact',
+        scope: 'company',
         required: false, 
         fallback: '',
         description: 'Direct dispatch line (if different from main)',
@@ -52,6 +55,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Emergency Phone', 
         type: 'phone', 
         category: 'contact',
+        scope: 'company',
         required: false, 
         fallback: 'our emergency line',
         description: '24/7 emergency contact number',
@@ -64,6 +68,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Company Address', 
         type: 'address', 
         category: 'location',
+        scope: 'company',
         required: false, 
         fallback: '',
         description: 'Physical business address',
@@ -74,6 +79,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Service Areas', 
         type: 'text', 
         category: 'location',
+        scope: 'company',
         required: false, 
         fallback: 'your area',
         description: 'Cities/regions served',
@@ -84,6 +90,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Business Hours', 
         type: 'text', 
         category: 'hours',
+        scope: 'company',
         required: false, 
         fallback: 'normal business hours',
         description: 'Standard operating hours',
@@ -94,6 +101,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'After Hours Policy', 
         type: 'text', 
         category: 'hours',
+        scope: 'company',
         required: false, 
         fallback: 'We have 24/7 emergency service available',
         description: 'What happens after hours',
@@ -106,6 +114,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Service Call Fee', 
         type: 'money', 
         category: 'pricing',
+        scope: 'company',
         required: false, 
         fallback: 'our standard service fee',
         description: 'Dispatch/diagnostic fee',
@@ -116,6 +125,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Estimate Fee', 
         type: 'text', 
         category: 'pricing',
+        scope: 'company',
         required: false, 
         fallback: 'free estimate',
         description: 'Cost for estimates',
@@ -128,6 +138,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Website URL', 
         type: 'url', 
         category: 'online',
+        scope: 'company',
         required: false, 
         fallback: 'our website',
         description: 'Company website',
@@ -138,6 +149,7 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'Online Booking URL', 
         type: 'url', 
         category: 'online',
+        scope: 'company',
         required: false, 
         fallback: '',
         description: 'Direct booking link',
@@ -150,10 +162,127 @@ const UNIVERSAL_PLACEHOLDERS = [
         label: 'License Number', 
         type: 'text', 
         category: 'credentials',
+        scope: 'company',
         required: false, 
         fallback: '',
         description: 'State/local license',
         example: 'AZ ROC #123456'
+    }
+];
+
+// ════════════════════════════════════════════════════════════════════════════════
+// RUNTIME PLACEHOLDERS (system-filled, NOT editable)
+// ════════════════════════════════════════════════════════════════════════════════
+const RUNTIME_PLACEHOLDERS = [
+    {
+        key: 'callerName',
+        label: 'Caller Name',
+        type: 'text',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Full caller name captured during the session',
+        example: 'John Smith'
+    },
+    {
+        key: 'callerFirstName',
+        label: 'Caller First Name',
+        type: 'text',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Caller first name',
+        example: 'John'
+    },
+    {
+        key: 'callerLastName',
+        label: 'Caller Last Name',
+        type: 'text',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Caller last name',
+        example: 'Smith'
+    },
+    {
+        key: 'callerPhone',
+        label: 'Caller Phone',
+        type: 'phone',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Phone number of the caller',
+        example: '(555) 555-1212'
+    },
+    {
+        key: 'callerEmail',
+        label: 'Caller Email',
+        type: 'text',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Email captured from caller',
+        example: 'john@example.com'
+    },
+    {
+        key: 'serviceAddress',
+        label: 'Service Address',
+        type: 'address',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Service location captured during call',
+        example: '123 Main St'
+    },
+    {
+        key: 'appointmentDate',
+        label: 'Appointment Date',
+        type: 'text',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Scheduled date for appointment',
+        example: 'Monday, Feb 3'
+    },
+    {
+        key: 'appointmentTime',
+        label: 'Appointment Time',
+        type: 'text',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Scheduled time for appointment',
+        example: '2:00 PM'
+    },
+    {
+        key: 'appointmentWindow',
+        label: 'Appointment Window',
+        type: 'text',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Appointment time window',
+        example: '2-4 PM'
+    },
+    {
+        key: 'issueSummary',
+        label: 'Issue Summary',
+        type: 'text',
+        category: 'runtime',
+        scope: 'runtime',
+        required: false,
+        fallback: '',
+        description: 'Brief summary of caller’s issue',
+        example: 'AC not cooling'
     }
 ];
 
@@ -167,6 +296,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'AC Tune-Up Price', 
             type: 'money', 
             category: 'pricing',
+            scope: 'company',
             required: false, 
             fallback: 'our tune-up special',
             description: 'AC maintenance price',
@@ -177,6 +307,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'Furnace Tune-Up Price', 
             type: 'money', 
             category: 'pricing',
+            scope: 'company',
             required: false, 
             fallback: 'our tune-up special',
             description: 'Heating maintenance price',
@@ -187,6 +318,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'Maintenance Plan Price', 
             type: 'money', 
             category: 'pricing',
+            scope: 'company',
             required: false, 
             fallback: 'our membership rate',
             description: 'Annual maintenance plan cost',
@@ -197,6 +329,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'Financing Available', 
             type: 'text', 
             category: 'sales',
+            scope: 'company',
             required: false, 
             fallback: 'We offer financing options',
             description: 'Financing terms/partners',
@@ -207,6 +340,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'Brands Serviced', 
             type: 'text', 
             category: 'info',
+            scope: 'company',
             required: false, 
             fallback: 'all major brands',
             description: 'HVAC brands supported',
@@ -220,6 +354,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'Drain Cleaning Price', 
             type: 'money', 
             category: 'pricing',
+            scope: 'company',
             required: false, 
             fallback: 'our drain cleaning rate',
             description: 'Basic drain clearing cost',
@@ -230,6 +365,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'Water Heater Flush Price', 
             type: 'money', 
             category: 'pricing',
+            scope: 'company',
             required: false, 
             fallback: 'our flush service rate',
             description: 'Water heater maintenance',
@@ -243,6 +379,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'Outlet Install Price', 
             type: 'money', 
             category: 'pricing',
+            scope: 'company',
             required: false, 
             fallback: 'varies by outlet type',
             description: 'Standard outlet installation',
@@ -253,6 +390,7 @@ const TRADE_PLACEHOLDERS = {
             label: 'Panel Upgrade Range', 
             type: 'text', 
             category: 'pricing',
+            scope: 'company',
             required: false, 
             fallback: 'we provide free estimates',
             description: 'Electrical panel upgrade range',
@@ -270,6 +408,10 @@ const PLACEHOLDER_ALIASES = {
     'companyname': 'companyName',
     'company_name': 'companyName',
     'company': 'companyName',
+    
+    // Legacy runtime aliases (do NOT use going forward)
+    'name': 'callerName',
+    'customername': 'callerName',
     
     // Phone aliases
     'phone': 'companyPhone',
@@ -325,7 +467,7 @@ function getCatalog(tradeKey = null) {
         ? TRADE_PLACEHOLDERS[tradeKey.toUpperCase()] 
         : [];
     
-    const allPlaceholders = [...UNIVERSAL_PLACEHOLDERS, ...tradePlaceholders];
+    const allPlaceholders = [...UNIVERSAL_PLACEHOLDERS, ...tradePlaceholders, ...RUNTIME_PLACEHOLDERS];
     
     // Build quick lookup maps
     const byKey = {};
@@ -347,8 +489,9 @@ function getCatalog(tradeKey = null) {
         byKey,
         byCategory,
         aliases: PLACEHOLDER_ALIASES,
-        required: allPlaceholders.filter(p => p.required),
-        optional: allPlaceholders.filter(p => !p.required)
+        required: allPlaceholders.filter(p => p.scope === 'company' && p.required),
+        optional: allPlaceholders.filter(p => p.scope === 'company' && !p.required),
+        runtime: allPlaceholders.filter(p => p.scope === 'runtime')
     };
 }
 
@@ -418,6 +561,7 @@ function getGPTPlaceholderGuide(tradeKey = null) {
 module.exports = {
     UNIVERSAL_PLACEHOLDERS,
     TRADE_PLACEHOLDERS,
+    RUNTIME_PLACEHOLDERS,
     PLACEHOLDER_ALIASES,
     getCatalog,
     resolveAlias,

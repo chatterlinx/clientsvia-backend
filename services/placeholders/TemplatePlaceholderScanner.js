@@ -217,6 +217,7 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
         validTokens: [],
         unknownTokens: [],
         aliasedTokens: [], // Tokens using old names
+        runtimeTokens: [], // Runtime tokens (system-filled)
         
         // For UI "required placeholders" display
         requiredPlaceholders: [],
@@ -226,6 +227,10 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
         keyUsage: scanResult.keyUsage,
         scenarioCount: scanResult.scenarioCount
     };
+    
+    // Track unique canonical keys to prevent duplicates
+    const requiredKeySet = new Set();
+    const optionalKeySet = new Set();
     
     // Analyze each token
     for (const key of scanResult.tokensFound) {
@@ -240,12 +245,25 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
                 analysis.aliasedTokens.push({
                     found: key,
                     canonical: validation.canonicalKey,
-                    recommendation: `Replace {${key}} with {${validation.canonicalKey}}`
+                    recommendation: `Replace {${key}} with {${validation.canonicalKey}}`,
+                    scope: validation.placeholder?.scope || 'company'
                 });
             }
             
             // Categorize by required/optional
             const placeholder = validation.placeholder;
+            if (placeholder?.scope === 'runtime') {
+                analysis.runtimeTokens.push({
+                    key: validation.canonicalKey,
+                    originalKey: key,
+                    label: placeholder.label,
+                    type: placeholder.type,
+                    scope: 'runtime',
+                    usedIn: scanResult.keyUsage[key] || []
+                });
+                continue;
+            }
+
             const item = {
                 key: validation.canonicalKey,
                 originalKey: key,
@@ -259,9 +277,15 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
             };
             
             if (placeholder.required) {
-                analysis.requiredPlaceholders.push(item);
+                if (!requiredKeySet.has(item.key)) {
+                    analysis.requiredPlaceholders.push(item);
+                    requiredKeySet.add(item.key);
+                }
             } else {
-                analysis.optionalPlaceholders.push(item);
+                if (!optionalKeySet.has(item.key)) {
+                    analysis.optionalPlaceholders.push(item);
+                    optionalKeySet.add(item.key);
+                }
             }
         } else {
             analysis.unknownTokens.push({
@@ -283,7 +307,8 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
         unknown: analysis.unknownTokens.length,
         aliased: analysis.aliasedTokens.length,
         required: analysis.requiredPlaceholders.length,
-        optional: analysis.optionalPlaceholders.length
+        optional: analysis.optionalPlaceholders.length,
+        runtime: analysis.runtimeTokens.length
     };
     
     // Warnings

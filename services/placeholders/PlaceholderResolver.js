@@ -29,7 +29,8 @@ function resolvePlaceholders(text, companyValues = {}, options = {}) {
         useAliases = true,
         useFallbacks = true,
         leaveUnknown = true,  // If false, replace unknown with empty string
-        logUnknown = true
+        logUnknown = true,
+        runtimeValues = {}
     } = options;
     
     if (!text || typeof text !== 'string') {
@@ -42,6 +43,12 @@ function resolvePlaceholders(text, companyValues = {}, options = {}) {
     }
     
     const catalog = getCatalog(tradeKey);
+    
+    // Normalize runtime values to lowercase keys for lookup
+    const normalizedRuntime = {};
+    for (const [k, v] of Object.entries(runtimeValues || {})) {
+        normalizedRuntime[k.toLowerCase()] = v;
+    }
     
     // Normalize company values to lowercase keys for lookup
     const normalizedValues = {};
@@ -63,7 +70,20 @@ function resolvePlaceholders(text, companyValues = {}, options = {}) {
         const canonicalKey = useAliases ? resolveAlias(originalKey) : originalKey;
         const normalizedKey = canonicalKey.toLowerCase();
         
-        // Check if we have a value
+        // Check runtime values first (caller/session tokens)
+        const runtimeValue = normalizedRuntime[normalizedKey];
+        if (runtimeValue !== undefined && runtimeValue !== null && runtimeValue !== '') {
+            replacements.push({
+                original: match,
+                key: originalKey,
+                canonicalKey,
+                value: runtimeValue,
+                source: 'runtime'
+            });
+            return runtimeValue;
+        }
+        
+        // Check company values next
         const value = normalizedValues[normalizedKey];
         
         if (value !== undefined && value !== null && value !== '') {
@@ -71,7 +91,8 @@ function resolvePlaceholders(text, companyValues = {}, options = {}) {
                 original: match,
                 key: originalKey,
                 canonicalKey,
-                value
+                value,
+                source: 'company'
             });
             return value;
         }
