@@ -11,7 +11,7 @@
  */
 
 const { getCatalog, resolveAlias, validateKey } = require('../../config/placeholders/PlaceholderCatalog');
-const logger = require('../../lib/logger');
+const logger = require('../../utils/logger');
 
 // Regex to match placeholders: {key}, {{key}}, [key]
 const PLACEHOLDER_REGEX = /\{?\{([a-zA-Z][a-zA-Z0-9_]*)\}?\}?|\[([a-zA-Z][a-zA-Z0-9_]*)\]/g;
