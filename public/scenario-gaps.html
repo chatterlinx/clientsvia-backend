@@ -3043,25 +3043,32 @@
             const card = generatedBlueprintCards[idx];
             if (!card) return;
             
-            // Same flow as openCreateModal - open global brain with prefilled scenario
-            const scenario = card.scenario;
+            // ════════════════════════════════════════════════════════════════════════
+            // USE SAME FLOW AS GAP FILL - Proven "flawless" workflow:
+            // 1. Build full scenario object with buildScenarioPrefill
+            // 2. Store in sessionStorage
+            // 3. Open Global Brain with ?prefill=scenario
+            // 4. User clicks "Add Scenario" → form auto-fills all 22 settings
+            // ════════════════════════════════════════════════════════════════════════
+            const cardScenario = card.scenario;
             
-            // Build URL to open global brain editor
-            const params = new URLSearchParams({
-                prefill: 'true',
-                source: 'blueprint',
-                companyId: companyId,
-                name: scenario.name,
-                scenarioType: scenario.scenarioType,
-                triggers: JSON.stringify(scenario.triggers || []),
-                quickReplies: JSON.stringify(scenario.quickReplies || []),
-                fullReplies: JSON.stringify(scenario.fullReplies || []),
-                bookingIntent: scenario.bookingIntent || false,
-                priority: scenario.priority || 50,
-                minConfidence: scenario.minConfidence || 0.6
-            });
+            // Include itemKey for tracking
+            const previewWithMetadata = {
+                ...cardScenario,
+                itemKey: card.itemKey,
+                source: 'blueprint-builder'
+            };
             
-            window.open(`/admin/global-brain?${params.toString()}`, '_blank');
+            // Convert blueprint card to same format as Gap preview
+            const scenarioData = buildScenarioPrefill(previewWithMetadata, {});
+            
+            // Store in sessionStorage for Global Brain to pick up
+            sessionStorage.setItem('scenarioPrefill', JSON.stringify(scenarioData));
+            
+            // Open Global Brain with prefill flag (same as Gap Fill flow)
+            window.open('/admin-global-instant-responses.html?prefill=scenario', '_blank');
+            
+            showToast('Opening Global Brain with pre-filled data...', 'success');
         }
         
         function clearGeneratedCards() {
@@ -4299,12 +4306,15 @@
                 // Channel restriction
                 channel: p.channel || 'any',
                 
-                // Admin notes
-                notes: p.notes || `Created from Scenario Gaps. Gap: "${g.representative || 'Unknown'}"`,
+                // Admin notes (handle both Gap Fill and Blueprint sources)
+                notes: p.notes || (g.representative 
+                    ? `Created from Scenario Gaps. Gap: "${g.representative}"` 
+                    : `Created from Blueprint Builder`),
                 
                 // Metadata
-                source: 'scenario-gaps',
-                sourceGap: g.representative
+                source: p.source || (g.representative ? 'scenario-gaps' : 'blueprint-builder'),
+                sourceGap: g.representative || null,
+                sourceItemKey: p.itemKey || null
                 
                 // ═══════════════════════════════════════════════════════════════════
                 // RUNTIME-OWNED (NOT included - decided by ConversationEngine):
