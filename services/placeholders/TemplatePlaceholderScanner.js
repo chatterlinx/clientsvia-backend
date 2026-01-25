@@ -131,10 +131,36 @@ function scanTemplate(template) {
         };
     }
     
-    // Scan all scenarios
-    const scenarios = template.scenarios || [];
+    // Collect scenarios from both legacy root and category structures
+    const scenarioEntries = [];
     
-    for (const scenario of scenarios) {
+    // Legacy root-level scenarios (if present)
+    if (Array.isArray(template.scenarios)) {
+        for (const scenario of template.scenarios) {
+            scenarioEntries.push({
+                scenario,
+                categoryName: 'Uncategorized'
+            });
+        }
+    }
+    
+    // Category-based scenarios (current structure)
+    if (Array.isArray(template.categories)) {
+        for (const category of template.categories) {
+            const categoryName = category?.name || category?.categoryName || 'Category';
+            const categoryScenarios = category?.scenarios || [];
+            for (const scenario of categoryScenarios) {
+                scenarioEntries.push({
+                    scenario,
+                    categoryName
+                });
+            }
+        }
+    }
+    
+    // Scan all scenarios
+    for (const entry of scenarioEntries) {
+        const scenario = entry.scenario;
         const scenarioKeys = scanScenario(scenario);
         
         for (const key of scenarioKeys) {
@@ -146,16 +172,21 @@ function scanTemplate(template) {
             }
             keyUsage[key].push({
                 scenarioId: scenario.scenarioId || scenario._id?.toString(),
-                scenarioName: scenario.name
+                scenarioName: scenario.name,
+                categoryName: entry.categoryName
             });
         }
+    }
+    
+    if (scenarioEntries.length === 0) {
+        logger.warn('[PLACEHOLDERS] Template has no scenarios to scan');
     }
     
     return {
         success: true,
         tokensFound: Array.from(allKeys),
         keyUsage,
-        scenarioCount: scenarios.length
+        scenarioCount: scenarioEntries.length
     };
 }
 
