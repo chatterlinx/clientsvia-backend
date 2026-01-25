@@ -1846,7 +1846,7 @@
             <div class="modal-header">
                 <h2><i class="fas fa-clipboard-check"></i> <span id="review-scenario-name">Scenario Review</span></h2>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    <button onclick="copyAuditToClipboard()" style="background: #6366f1; border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;" title="Copy audit data to clipboard">
+                    <button onclick="copyAuditToClipboard(event)" style="background: #6366f1; border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;" title="Copy audit data to clipboard">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                     <button class="modal-close" onclick="closeScenarioReview()">&times;</button>
@@ -2516,7 +2516,7 @@
         // ════════════════════════════════════════════════════════════════════════
         // Copy Audit Data to Clipboard (for verification)
         // ════════════════════════════════════════════════════════════════════════
-        async function copyAuditToClipboard() {
+        async function copyAuditToClipboard(event) {
             if (currentReviewScenarioIdx === null || !window.auditScenarios) {
                 alert('No scenario data to copy');
                 return;
