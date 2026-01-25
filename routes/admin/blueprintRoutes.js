@@ -311,11 +311,38 @@ router.get('/:tradeKey/assess', async (req, res) => {
         }
         
         // Load existing scenarios
-        const scenarios = await loadScenarios(companyId, source);
+        const allScenarios = await loadScenarios(companyId, source);
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // FILTER TO LIVE SCENARIOS ONLY (critical for accurate greenfield detection)
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Don't count: archived, disabled, placeholder, or "Example" scenarios
+        const scenarios = allScenarios.filter(s => {
+            // Must be active
+            if (s.isActive === false || s.status === 'disabled' || s.status === 'archived') {
+                return false;
+            }
+            // Skip obvious placeholders
+            const name = (s.name || '').toLowerCase();
+            if (name.includes('example') || name.includes('placeholder') || name.includes('template header')) {
+                return false;
+            }
+            return true;
+        });
+        
+        logger.info(`[BLUEPRINTS] Scenario count: ${allScenarios.length} total, ${scenarios.length} live (filtered)`);
         
         // Get all blueprint items
         const blueprintItems = getAllBlueprintItems(spec);
         const requiredItems = getRequiredItems(spec);
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // SPEC COUNTS (for production debugging - must match expected)
+        // ════════════════════════════════════════════════════════════════════════════════
+        const specTotalItems = blueprintItems.length;
+        const specRequiredItems = requiredItems.length;
+        
+        logger.info(`[BLUEPRINTS] Spec counts: ${specTotalItems} total, ${specRequiredItems} required`);
         
         // Assess coverage
         const assessment = assessCoverage(blueprintItems, scenarios);
@@ -343,10 +370,11 @@ router.get('/:tradeKey/assess', async (req, res) => {
         // ════════════════════════════════════════════════════════════════════════════════
         // MODE DETECTION: Greenfield vs Filling Gaps
         // ════════════════════════════════════════════════════════════════════════════════
-        // Decision rule: existingScenarios <= 2 → GREENFIELD (allows for placeholder scenarios)
-        // This is DETERMINISTIC based on scenario COUNT, not fuzzy coverage %
+        // Decision rule: existingLiveScenarios <= 2 → GREENFIELD (allows for placeholders)
+        // This is DETERMINISTIC based on LIVE scenario COUNT, not fuzzy coverage %
         // ════════════════════════════════════════════════════════════════════════════════
-        const isGreenfield = scenarios.length <= 2;
+        const existingLiveScenarios = scenarios.length;
+        const isGreenfield = existingLiveScenarios <= 2;
         const mode = isGreenfield ? 'GREENFIELD_FULL_PACK' : 'FILLING_GAPS';
         
         // Count required items for REQUIRED_ONLY option
@@ -396,14 +424,30 @@ router.get('/:tradeKey/assess', async (req, res) => {
                 ? 'Empty template - generate full blueprint pack'
                 : 'Existing template - fill coverage gaps',
             
+            // ════════════════════════════════════════════════════════════════════════════════
+            // SPEC COUNTS (for debugging - these must match expected values)
+            // ════════════════════════════════════════════════════════════════════════════════
+            spec: {
+                totalItems: specTotalItems,
+                requiredItems: specRequiredItems,
+                optionalItems: specTotalItems - specRequiredItems
+            },
+            
+            // Scenario counts (filtered vs raw)
+            scenarioCounts: {
+                total: allScenarios.length,          // Raw count (includes disabled/archived)
+                live: existingLiveScenarios,         // Filtered count (active only)
+                filtered: allScenarios.length - existingLiveScenarios  // How many were excluded
+            },
+            
             // Coverage summary
             coverage: {
                 percent: coveragePercent,
                 requiredCovered: coveredRequired,
                 requiredTotal: totalRequired,
                 totalCovered: assessment.matchedItems.length,
-                totalInBlueprint: blueprintItems.length,
-                existingScenarios: scenarios.length
+                totalInBlueprint: specTotalItems,    // Use spec count
+                existingScenarios: existingLiveScenarios  // Use LIVE count
             },
             
             // Detailed results
@@ -468,7 +512,8 @@ router.post('/:tradeKey/generate', async (req, res) => {
         generationMode,           // REQUIRED: MISSING_ONLY, FULL_PACK, REQUIRED_ONLY, SELECTED
         itemKeys = [],            // Only used when generationMode = SELECTED
         maxCards = 50,            // Limit cards per request (increased for full pack)
-        templateId                // Target template for generated scenarios
+        templateId,               // Target template for generated scenarios
+        force = false             // Required for FULL_PACK on non-empty templates
     } = req.body;
     
     if (!companyId) {
@@ -490,6 +535,17 @@ router.post('/:tradeKey/generate', async (req, res) => {
         });
     }
     
+    // ════════════════════════════════════════════════════════════════════════════════
+    // VALIDATE SELECTED mode has itemKeys
+    // ════════════════════════════════════════════════════════════════════════════════
+    if (effectiveMode === GENERATION_MODES.SELECTED && itemKeys.length === 0) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'itemKeys required when generationMode is SELECTED',
+            hint: 'Provide array of itemKeys to generate'
+        });
+    }
+    
     try {
         // Get blueprint spec
         const spec = BLUEPRINT_REGISTRY[tradeKey];
@@ -506,8 +562,42 @@ router.post('/:tradeKey/generate', async (req, res) => {
             return res.status(404).json({ success: false, error: 'Company not found' });
         }
         
-        // Load existing scenarios
-        const scenarios = await loadScenarios(companyId, 'activePool');
+        // Load existing scenarios (filter to live only for accurate count)
+        const allScenarios = await loadScenarios(companyId, 'activePool');
+        const scenarios = allScenarios.filter(s => {
+            if (s.isActive === false || s.status === 'disabled' || s.status === 'archived') {
+                return false;
+            }
+            const name = (s.name || '').toLowerCase();
+            if (name.includes('example') || name.includes('placeholder') || name.includes('template header')) {
+                return false;
+            }
+            return true;
+        });
+        const existingLiveScenarios = scenarios.length;
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // FULL_PACK GUARDRAIL: Prevent accidental overwrite on non-empty templates
+        // ════════════════════════════════════════════════════════════════════════════════
+        if (effectiveMode === GENERATION_MODES.FULL_PACK && existingLiveScenarios > 2 && !force) {
+            return res.status(400).json({
+                success: false,
+                error: 'FULL_PACK rejected: template is not empty',
+                existingLiveScenarios,
+                hint: 'Use MISSING_ONLY mode, or set force=true to override (dangerous)',
+                recommendation: 'For non-empty templates, use MISSING_ONLY or SELECTED mode'
+            });
+        }
+        
+        if (effectiveMode === GENERATION_MODES.REQUIRED_ONLY && existingLiveScenarios > 2 && !force) {
+            return res.status(400).json({
+                success: false,
+                error: 'REQUIRED_ONLY rejected: template is not empty',
+                existingLiveScenarios,
+                hint: 'Use MISSING_ONLY mode, or set force=true to override (dangerous)',
+                recommendation: 'For non-empty templates, use MISSING_ONLY or SELECTED mode'
+            });
+        }
         
         // Get all blueprint items
         const blueprintItems = getAllBlueprintItems(spec);
@@ -539,15 +629,10 @@ router.post('/:tradeKey/generate', async (req, res) => {
                 break;
                 
             case GENERATION_MODES.SELECTED:
-                // Specific items by key (legacy/manual selection)
-                if (itemKeys.length === 0) {
-                    return res.status(400).json({ 
-                        success: false, 
-                        error: 'itemKeys required when generationMode is SELECTED' 
-                    });
-                }
+                // Specific items by key (manual selection from UI checkboxes)
+                // Note: itemKeys validation already done above
                 itemsToGenerate = blueprintItems.filter(item => itemKeys.includes(item.itemKey));
-                logger.info(`[BLUEPRINTS] SELECTED: generating ${itemsToGenerate.length} selected items`);
+                logger.info(`[BLUEPRINTS] SELECTED: generating ${itemsToGenerate.length} of ${itemKeys.length} requested items`);
                 break;
         }
         
