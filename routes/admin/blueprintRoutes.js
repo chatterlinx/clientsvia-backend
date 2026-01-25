@@ -316,21 +316,33 @@ router.get('/:tradeKey/assess', async (req, res) => {
         // ════════════════════════════════════════════════════════════════════════════════
         // FILTER TO LIVE SCENARIOS ONLY (critical for accurate greenfield detection)
         // ════════════════════════════════════════════════════════════════════════════════
-        // Don't count: archived, disabled, placeholder, or "Example" scenarios
+        // Track WHY scenarios are filtered (for debugging)
+        const filteredReasons = {
+            inactive: 0,
+            disabledOrArchived: 0,
+            nameExampleOrPlaceholder: 0
+        };
+        
         const scenarios = allScenarios.filter(s => {
             // Must be active
-            if (s.isActive === false || s.status === 'disabled' || s.status === 'archived') {
+            if (s.isActive === false) {
+                filteredReasons.inactive++;
+                return false;
+            }
+            if (s.status === 'disabled' || s.status === 'archived') {
+                filteredReasons.disabledOrArchived++;
                 return false;
             }
             // Skip obvious placeholders
             const name = (s.name || '').toLowerCase();
             if (name.includes('example') || name.includes('placeholder') || name.includes('template header')) {
+                filteredReasons.nameExampleOrPlaceholder++;
                 return false;
             }
             return true;
         });
         
-        logger.info(`[BLUEPRINTS] Scenario count: ${allScenarios.length} total, ${scenarios.length} live (filtered)`);
+        logger.info(`[BLUEPRINTS] Scenario count: ${allScenarios.length} total, ${scenarios.length} live. Filtered: inactive=${filteredReasons.inactive}, disabled/archived=${filteredReasons.disabledOrArchived}, placeholder=${filteredReasons.nameExampleOrPlaceholder}`);
         
         // Get all blueprint items
         const blueprintItems = getAllBlueprintItems(spec);
@@ -437,7 +449,8 @@ router.get('/:tradeKey/assess', async (req, res) => {
             scenarioCounts: {
                 total: allScenarios.length,          // Raw count (includes disabled/archived)
                 live: existingLiveScenarios,         // Filtered count (active only)
-                filtered: allScenarios.length - existingLiveScenarios  // How many were excluded
+                filtered: allScenarios.length - existingLiveScenarios,  // How many were excluded
+                filteredReasons                      // WHY each was excluded (for debugging)
             },
             
             // Coverage summary
@@ -456,6 +469,35 @@ router.get('/:tradeKey/assess', async (req, res) => {
             missingByCategory,
             duplicates: assessment.duplicates,
             weakCoverage: assessment.weakCoverage,
+            
+            // ════════════════════════════════════════════════════════════════════════════════
+            // RECOMMENDED GENERATE: Required items that are missing OR have weak coverage (<60%)
+            // This is the actionable list - items that need dedicated scenarios
+            // ════════════════════════════════════════════════════════════════════════════════
+            recommendedGenerate: [
+                // All missing required items
+                ...missingRequiredItems.map(item => ({
+                    itemKey: item.itemKey,
+                    name: item.name,
+                    reason: 'missing',
+                    required: true,
+                    currentCoverage: 0
+                })),
+                // Required items with weak coverage (has match but < 60%)
+                ...assessment.weakCoverage
+                    .filter(w => {
+                        const item = blueprintItems.find(b => b.itemKey === w.itemKey);
+                        return item?.required === true;
+                    })
+                    .map(w => ({
+                        itemKey: w.itemKey,
+                        name: w.name,
+                        reason: 'weak_coverage',
+                        required: true,
+                        currentCoverage: w.coverage,
+                        currentMatch: w.scenarioName
+                    }))
+            ],
             
             // Stats
             stats: {
