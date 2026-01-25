@@ -1709,9 +1709,20 @@ router.post('/:companyId/gaps/create', async (req, res) => {
             template.categories[categoryIndex].scenarios.push(newScenario);
         }
         
-        // Save template
-        template.markModified('categories');
-        await template.save();
+        // ════════════════════════════════════════════════════════════════════════
+        // Save using updateOne to bypass full document validation
+        // This avoids triggering validation on unrelated legacy fields
+        // ════════════════════════════════════════════════════════════════════════
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        await GlobalInstantResponseTemplate.updateOne(
+            { _id: template._id },
+            { 
+                $set: { 
+                    [`categories.${categoryIndex}.scenarios`]: template.categories[categoryIndex].scenarios,
+                    updatedAt: new Date()
+                }
+            }
+        );
         
         // Add suggested placeholders to company if provided
         if (scenarioData.suggestedPlaceholders && scenarioData.suggestedPlaceholders.length > 0) {
@@ -1726,8 +1737,11 @@ router.post('/:companyId/gaps/create', async (req, res) => {
             }
             
             if (placeholdersAdded > 0) {
-                company.placeholders = existingPlaceholders;
-                await company.save();
+                // Use updateOne to bypass validation on unrelated fields
+                await Company.updateOne(
+                    { _id: companyId },
+                    { $set: { placeholders: existingPlaceholders } }
+                );
             }
         }
         
@@ -1851,20 +1865,26 @@ router.post('/:companyId/scenarios/add-triggers', async (req, res) => {
             });
         }
         
-        // Find the category and scenario
+        // Find the category and scenario with indices for targeted update
         let found = false;
         let addedCount = 0;
         let existingTriggers = [];
+        let categoryIndex = -1;
+        let scenarioIndex = -1;
+        let updatedTriggers = [];
         
-        for (const category of (template.categories || [])) {
+        for (let ci = 0; ci < (template.categories || []).length; ci++) {
+            const category = template.categories[ci];
             if (category.name !== categoryName) continue;
             
-            for (const scenario of (category.scenarios || [])) {
+            for (let si = 0; si < (category.scenarios || []).length; si++) {
+                const scenario = category.scenarios[si];
                 const matchById = scenarioId && scenario._id?.toString() === scenarioId;
                 const matchByName = scenario.name === scenarioName;
                 
                 if (matchById || matchByName) {
                     existingTriggers = scenario.triggers || [];
+                    updatedTriggers = [...existingTriggers];
                     
                     // Add new triggers that don't already exist
                     const existingSet = new Set(existingTriggers.map(t => t.toLowerCase()));
@@ -1872,12 +1892,14 @@ router.post('/:companyId/scenarios/add-triggers', async (req, res) => {
                     for (const trigger of (newTriggers || [])) {
                         const normalized = trigger.toLowerCase().trim();
                         if (normalized && !existingSet.has(normalized)) {
-                            scenario.triggers.push(trigger.trim());
+                            updatedTriggers.push(trigger.trim());
                             existingSet.add(normalized);
                             addedCount++;
                         }
                     }
                     
+                    categoryIndex = ci;
+                    scenarioIndex = si;
                     found = true;
                     break;
                 }
@@ -1889,9 +1911,20 @@ router.post('/:companyId/scenarios/add-triggers', async (req, res) => {
             return res.status(404).json({ error: 'Scenario not found in template' });
         }
         
-        // Save template
-        template.markModified('categories');
-        await template.save();
+        // ════════════════════════════════════════════════════════════════════════
+        // Save using updateOne to bypass full document validation
+        // This avoids triggering validation on unrelated legacy fields
+        // ════════════════════════════════════════════════════════════════════════
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        await GlobalInstantResponseTemplate.updateOne(
+            { _id: template._id },
+            { 
+                $set: { 
+                    [`categories.${categoryIndex}.scenarios.${scenarioIndex}.triggers`]: updatedTriggers,
+                    updatedAt: new Date()
+                }
+            }
+        );
         
         logger.info('[SCENARIO GAPS] Triggers added to existing scenario', {
             companyId,
@@ -2648,9 +2681,20 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
             return res.status(404).json({ error: 'Scenario not found' });
         }
         
-        // Save the template
-        template.markModified(`categories.${categoryIndex}.scenarios.${scenarioIndex}`);
-        await template.save();
+        // ════════════════════════════════════════════════════════════════════════
+        // Save using updateOne to bypass full document validation
+        // This avoids triggering validation on unrelated legacy fields
+        // ════════════════════════════════════════════════════════════════════════
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        await GlobalInstantResponseTemplate.updateOne(
+            { _id: template._id },
+            { 
+                $set: { 
+                    [`categories.${categoryIndex}.scenarios.${scenarioIndex}`]: template.categories[categoryIndex].scenarios[scenarioIndex],
+                    updatedAt: new Date()
+                }
+            }
+        );
         
         res.json({
             success: true,
@@ -2886,9 +2930,20 @@ Return ONLY the fixed text. No quotes, no explanation.`;
         targetScenario.lastEditedBy = 'AI Audit Batch Fix';
         targetScenario.lastEditedFromContext = 'AUDIT_FIX_SCENARIO';
         
-        // Save the template
-        template.markModified(`categories.${categoryIndex}.scenarios.${scenarioIndex}`);
-        await template.save();
+        // ════════════════════════════════════════════════════════════════════════
+        // Save using updateOne to bypass full document validation
+        // This avoids triggering validation on unrelated legacy fields
+        // ════════════════════════════════════════════════════════════════════════
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        await GlobalInstantResponseTemplate.updateOne(
+            { _id: template._id },
+            { 
+                $set: { 
+                    [`categories.${categoryIndex}.scenarios.${scenarioIndex}`]: targetScenario,
+                    updatedAt: new Date()
+                }
+            }
+        );
         
         logger.info('[AUDIT FIX-SCENARIO] Batch fix complete', {
             companyId,
