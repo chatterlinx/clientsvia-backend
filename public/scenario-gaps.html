@@ -1147,6 +1147,11 @@
             Template Audit
             <span class="badge" id="health-badge">--</span>
         </button>
+        <button class="sub-tab" data-tab="blueprint" onclick="switchTab('blueprint')">
+            <i class="fas fa-drafting-compass"></i>
+            Blueprint Builder
+            <span class="badge" id="blueprint-badge" style="background: #8b5cf6;">NEW</span>
+        </button>
     </nav>
     
     <!-- Main Content -->
@@ -1320,15 +1325,19 @@
                             <div class="health-stat-value" id="audit-total" style="color: var(--accent-purple);">--</div>
                             <div class="health-stat-label">Scenarios</div>
                         </div>
-                        <div class="health-stat">
+                        <div class="health-stat" title="Scenarios with 0 errors (warnings allowed)">
                             <div class="health-stat-value" id="audit-passing" style="color: var(--accent-green);">--</div>
-                            <div class="health-stat-label">Passing</div>
+                            <div class="health-stat-label">No Errors</div>
                         </div>
-                        <div class="health-stat">
+                        <div class="health-stat" title="Scenarios with 0 errors AND 0 warnings (perfect)">
+                            <div class="health-stat-value" id="audit-perfect" style="color: #22d3ee;">--</div>
+                            <div class="health-stat-label">Perfect</div>
+                        </div>
+                        <div class="health-stat" title="Scenarios with 1+ errors (must fix)">
                             <div class="health-stat-value" id="audit-errors" style="color: var(--accent-red);">--</div>
-                            <div class="health-stat-label">Errors</div>
+                            <div class="health-stat-label">Failing</div>
                         </div>
-                        <div class="health-stat">
+                        <div class="health-stat" title="Total warning count across all scenarios">
                             <div class="health-stat-value" id="audit-warnings" style="color: var(--accent-yellow);">--</div>
                             <div class="health-stat-label">Warnings</div>
                         </div>
@@ -1664,6 +1673,121 @@
                 </p>
             </div>
         </div><!-- END tab-audit -->
+        
+        <!-- TAB 3: Blueprint Builder -->
+        <div class="tab-content" id="tab-blueprint">
+            <div class="audit-header">
+                <div>
+                    <h2 style="margin-bottom: 4px;"><i class="fas fa-drafting-compass"></i> Blueprint Builder</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px;">
+                        Generate scenarios from industry blueprints - mass-create 200+ content-only scenarios
+                    </p>
+                </div>
+                <div class="audit-actions">
+                    <select id="blueprint-select" style="padding: 10px 16px; border-radius: 8px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.1); color: white; font-size: 14px; margin-right: 12px;">
+                        <option value="hvac">🔧 HVAC Blueprint</option>
+                        <option value="plumbing" disabled>🔧 Plumbing (Coming Soon)</option>
+                        <option value="electrical" disabled>⚡ Electrical (Coming Soon)</option>
+                        <option value="accounting" disabled>📊 Accounting (Coming Soon)</option>
+                    </select>
+                    <button class="run-audit-btn" onclick="runBlueprintAssessment()" id="run-blueprint-btn">
+                        <i class="fas fa-chart-pie"></i>
+                        Assess Coverage
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Blueprint Coverage Summary -->
+            <div id="blueprint-summary" style="display: none;">
+                <!-- Coverage Stats -->
+                <div class="health-score-card" style="margin-bottom: 24px;">
+                    <div class="health-score" id="blueprint-coverage-score">--%</div>
+                    <div class="health-label">Blueprint Coverage</div>
+                    <div class="health-stats">
+                        <div class="health-stat">
+                            <div class="health-stat-value" id="bp-total" style="color: var(--accent-purple);">--</div>
+                            <div class="health-stat-label">Total in Blueprint</div>
+                        </div>
+                        <div class="health-stat" title="Scenarios matched to blueprint items">
+                            <div class="health-stat-value" id="bp-covered" style="color: var(--accent-green);">--</div>
+                            <div class="health-stat-label">Covered</div>
+                        </div>
+                        <div class="health-stat" title="Blueprint items without matching scenarios">
+                            <div class="health-stat-value" id="bp-missing" style="color: var(--accent-red);">--</div>
+                            <div class="health-stat-label">Missing</div>
+                        </div>
+                        <div class="health-stat" title="Required items missing">
+                            <div class="health-stat-value" id="bp-required-missing" style="color: var(--accent-yellow);">--</div>
+                            <div class="health-stat-label">Required Missing</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Generate Missing Button -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px;"><i class="fas fa-list-check"></i> Missing Scenarios</h3>
+                        <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+                            Select items to generate scenario cards
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button onclick="selectAllMissing()" style="padding: 8px 16px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;">
+                            <i class="fas fa-check-double"></i> Select All Required
+                        </button>
+                        <button onclick="generateSelectedCards()" id="generate-cards-btn" style="padding: 10px 20px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 14px; font-weight: 600;" disabled>
+                            <i class="fas fa-magic"></i> Generate Selected (<span id="selected-count">0</span>)
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Missing Items List -->
+                <div id="missing-items-list" style="max-height: 500px; overflow-y: auto;">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+            
+            <!-- Generated Cards Review -->
+            <div id="blueprint-cards-review" style="display: none; margin-top: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.3);">
+                    <div>
+                        <h3 style="margin: 0; font-size: 16px; color: #a78bfa;"><i class="fas fa-sparkles"></i> Generated Scenario Cards</h3>
+                        <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+                            Review and load into your template
+                        </p>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button onclick="clearGeneratedCards()" style="padding: 8px 16px; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: var(--text-muted); cursor: pointer; font-size: 13px;">
+                            <i class="fas fa-times"></i> Clear All
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Generated Cards Grid -->
+                <div id="generated-cards-grid" class="gaps-grid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+            
+            <!-- Initial State -->
+            <div id="blueprint-initial" style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+                <i class="fas fa-drafting-compass" style="font-size: 64px; color: #8b5cf6; margin-bottom: 24px; opacity: 0.5;"></i>
+                <h3 style="font-size: 20px; margin-bottom: 12px; color: white;">Blueprint-Based Scenario Generation</h3>
+                <p style="max-width: 500px; margin: 0 auto 24px; line-height: 1.6;">
+                    Select a blueprint and click "Assess Coverage" to compare your template against industry-standard scenario requirements.
+                </p>
+                <div style="background: rgba(139, 92, 246, 0.1); padding: 16px 24px; border-radius: 12px; display: inline-block; text-align: left;">
+                    <div style="font-weight: 600; color: #a78bfa; margin-bottom: 8px;">How it works:</div>
+                    <ol style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 14px; line-height: 1.8;">
+                        <li>Select a blueprint (HVAC, Plumbing, etc.)</li>
+                        <li>Click "Assess Coverage" to see what's missing</li>
+                        <li>Select missing items to generate</li>
+                        <li>Review generated cards</li>
+                        <li>Load into your template with one click</li>
+                    </ol>
+                </div>
+            </div>
+        </div><!-- END tab-blueprint -->
     </main>
     
     <!-- Create Scenario Modal - SIMPLIFIED: Preview + Open Global Brain -->
@@ -1909,6 +2033,11 @@
         let selectedDays = 14;
         let lastAuditResult = null;
         let currentReviewScenarioIdx = null;
+        
+        // Blueprint Builder State
+        let blueprintAssessment = null;
+        let selectedBlueprintItems = new Set();
+        let generatedBlueprintCards = [];
         
         // ════════════════════════════════════════════════════════════════════════
         // REGISTRY (Single Source of Truth)
@@ -2251,10 +2380,17 @@
             badge.style.color = 'white';
             
             // Update stats
+            // ════════════════════════════════════════════════════════════════════════════════
+            // CORRECTED PASSING DEFINITION:
+            //   No Errors = 0 errors (warnings allowed) → scenariosPassing
+            //   Perfect = 0 errors AND 0 warnings → scenariosPerfect
+            //   Failing = 1+ errors → scenariosFailing
+            // ════════════════════════════════════════════════════════════════════════════════
             document.getElementById('audit-total').textContent = result.summary?.totalScenarios || 0;
             document.getElementById('audit-passing').textContent = result.summary?.scenariosPassing || 0;
-            document.getElementById('audit-errors').textContent = result.summary?.scenariosWithErrors || 0;
-            document.getElementById('audit-warnings').textContent = result.summary?.scenariosWithWarnings || 0;
+            document.getElementById('audit-perfect').textContent = result.summary?.scenariosPerfect || 0;
+            document.getElementById('audit-errors').textContent = result.summary?.scenariosFailing || result.summary?.scenariosWithErrors || 0;
+            document.getElementById('audit-warnings').textContent = result.summary?.bySeverity?.warning || result.summary?.scenariosWithWarnings || 0;
             
             // Update rules checked section
             const rulesChecklist = result.rulesChecklist || [];
@@ -2390,6 +2526,305 @@
             return div.innerHTML;
         }
         
+        // ════════════════════════════════════════════════════════════════════════════════
+        // BLUEPRINT BUILDER FUNCTIONS
+        // ════════════════════════════════════════════════════════════════════════════════
+        
+        async function runBlueprintAssessment() {
+            const btn = document.getElementById('run-blueprint-btn');
+            const tradeKey = document.getElementById('blueprint-select').value;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Assessing...';
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/blueprints/${tradeKey}/assess?companyId=${companyId}&source=activePool`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Assessment failed: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Assessment failed');
+                }
+                
+                blueprintAssessment = result;
+                selectedBlueprintItems.clear();
+                
+                // Update UI
+                renderBlueprintAssessment(result);
+                
+                // Update badge
+                const badge = document.getElementById('blueprint-badge');
+                badge.textContent = `${result.coverage.percent}%`;
+                badge.style.background = result.coverage.percent >= 80 ? '#22c55e' : result.coverage.percent >= 50 ? '#f59e0b' : '#ef4444';
+                
+                console.log('✅ [BLUEPRINT] Assessment complete:', result.coverage);
+                
+            } catch (error) {
+                console.error('[BLUEPRINT] Assessment error:', error);
+                alert('Failed to assess blueprint: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-chart-pie"></i> Assess Coverage';
+            }
+        }
+        
+        function renderBlueprintAssessment(result) {
+            // Hide initial state, show summary
+            document.getElementById('blueprint-initial').style.display = 'none';
+            document.getElementById('blueprint-summary').style.display = 'block';
+            
+            // Update coverage stats
+            document.getElementById('blueprint-coverage-score').textContent = `${result.coverage.percent}%`;
+            document.getElementById('blueprint-coverage-score').style.color = 
+                result.coverage.percent >= 80 ? 'var(--accent-green)' : 
+                result.coverage.percent >= 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+            
+            document.getElementById('bp-total').textContent = result.coverage.totalInBlueprint;
+            document.getElementById('bp-covered').textContent = result.coverage.totalCovered;
+            document.getElementById('bp-missing').textContent = result.missingItems.length;
+            document.getElementById('bp-required-missing').textContent = result.stats.missingRequired;
+            
+            // Render missing items grouped by category
+            const listEl = document.getElementById('missing-items-list');
+            
+            if (result.missingItems.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--accent-green);">
+                        <i class="fas fa-check-circle" style="font-size: 48px; margin-bottom: 16px;"></i>
+                        <h3>100% Blueprint Coverage!</h3>
+                        <p style="color: var(--text-muted);">All required scenarios are present in your template.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Group by category
+            const byCategory = result.missingByCategory || {};
+            let html = '';
+            
+            for (const [categoryKey, items] of Object.entries(byCategory)) {
+                const categoryName = items[0]?.categoryName || categoryKey;
+                html += `
+                    <div style="margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 8px;">
+                            <span style="font-weight: 600; color: var(--text-primary);">
+                                ${escapeHtml(categoryName)}
+                            </span>
+                            <span style="font-size: 13px; color: var(--text-muted);">
+                                ${items.length} missing
+                            </span>
+                        </div>
+                        ${items.map(item => `
+                            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 4px; cursor: pointer; border-left: 3px solid ${item.required !== false ? '#f59e0b' : '#6b7280'};">
+                                <input type="checkbox" 
+                                       value="${escapeHtml(item.itemKey)}" 
+                                       onchange="toggleBlueprintItem('${escapeHtml(item.itemKey)}')"
+                                       style="margin-top: 3px; width: 18px; height: 18px; accent-color: #8b5cf6;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 500; color: white; margin-bottom: 4px;">
+                                        ${escapeHtml(item.name)}
+                                        ${item.required !== false ? '<span style="color: #f59e0b; font-size: 11px; margin-left: 8px;">REQUIRED</span>' : ''}
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--text-muted);">
+                                        Type: ${item.scenarioType} | Goal: ${item.replyGoal || 'classify'}
+                                    </div>
+                                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">
+                                        Triggers: ${(item.triggerHints || []).slice(0, 3).map(t => `"${escapeHtml(t)}"`).join(', ')}...
+                                    </div>
+                                </div>
+                            </label>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            listEl.innerHTML = html;
+            updateSelectedCount();
+        }
+        
+        function toggleBlueprintItem(itemKey) {
+            if (selectedBlueprintItems.has(itemKey)) {
+                selectedBlueprintItems.delete(itemKey);
+            } else {
+                selectedBlueprintItems.add(itemKey);
+            }
+            updateSelectedCount();
+        }
+        
+        function selectAllMissing() {
+            if (!blueprintAssessment) return;
+            
+            // Select all required items
+            const required = blueprintAssessment.missingItems.filter(i => i.required !== false);
+            
+            // Clear and re-add
+            selectedBlueprintItems.clear();
+            required.forEach(item => selectedBlueprintItems.add(item.itemKey));
+            
+            // Update checkboxes
+            document.querySelectorAll('#missing-items-list input[type="checkbox"]').forEach(cb => {
+                cb.checked = selectedBlueprintItems.has(cb.value);
+            });
+            
+            updateSelectedCount();
+        }
+        
+        function updateSelectedCount() {
+            const countEl = document.getElementById('selected-count');
+            const btn = document.getElementById('generate-cards-btn');
+            
+            countEl.textContent = selectedBlueprintItems.size;
+            btn.disabled = selectedBlueprintItems.size === 0;
+        }
+        
+        async function generateSelectedCards() {
+            if (selectedBlueprintItems.size === 0) return;
+            
+            const btn = document.getElementById('generate-cards-btn');
+            const tradeKey = document.getElementById('blueprint-select').value;
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/blueprints/${tradeKey}/generate`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        companyId,
+                        itemKeys: Array.from(selectedBlueprintItems),
+                        maxCards: 20
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Generation failed: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Generation failed');
+                }
+                
+                generatedBlueprintCards = result.cards || [];
+                
+                // Show generated cards
+                renderGeneratedCards(generatedBlueprintCards);
+                
+                console.log('✅ [BLUEPRINT] Generated', result.count, 'cards');
+                
+            } catch (error) {
+                console.error('[BLUEPRINT] Generation error:', error);
+                alert('Failed to generate cards: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fas fa-magic"></i> Generate Selected (<span id="selected-count">${selectedBlueprintItems.size}</span>)`;
+            }
+        }
+        
+        function renderGeneratedCards(cards) {
+            if (cards.length === 0) return;
+            
+            document.getElementById('blueprint-cards-review').style.display = 'block';
+            
+            const gridEl = document.getElementById('generated-cards-grid');
+            gridEl.innerHTML = cards.map((card, idx) => `
+                <div class="gap-card" style="border-left: 4px solid #8b5cf6;">
+                    <div class="gap-header">
+                        <span class="gap-representative">${escapeHtml(card.scenario.name)}</span>
+                        <span class="gap-priority ${card.priority === 'high' ? 'high' : card.priority === 'medium' ? 'medium' : 'low'}">
+                            ${card.scenario.scenarioType}
+                        </span>
+                    </div>
+                    <div class="gap-stats">
+                        <span><i class="fas fa-folder"></i> ${escapeHtml(card.categoryName || card.categoryKey)}</span>
+                        <span><i class="fas fa-bolt"></i> ${card.scenario.triggers?.length || 0} triggers</span>
+                        <span><i class="fas fa-comment"></i> ${card.scenario.quickReplies?.length || 0} quick, ${card.scenario.fullReplies?.length || 0} full</span>
+                    </div>
+                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Sample trigger:</div>
+                        <div style="font-size: 13px; color: var(--text-secondary); font-style: italic;">
+                            "${escapeHtml((card.scenario.triggers || [])[0] || 'N/A')}"
+                        </div>
+                    </div>
+                    <div class="gap-actions" style="margin-top: 12px;">
+                        <button class="btn-secondary" onclick="previewBlueprintCard(${idx})">
+                            <i class="fas fa-eye"></i> Preview
+                        </button>
+                        <button class="btn-primary" onclick="loadBlueprintCard(${idx})">
+                            <i class="fas fa-plus"></i> Load into Template
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function previewBlueprintCard(idx) {
+            const card = generatedBlueprintCards[idx];
+            if (!card) return;
+            
+            // Create preview object matching the gap format
+            const preview = card.scenario;
+            currentPreview = preview;
+            
+            // Populate modal fields
+            document.getElementById('preview-name').textContent = preview.name || '(not set)';
+            document.getElementById('preview-type').textContent = preview.scenarioType || '(not set)';
+            document.getElementById('preview-triggers').innerHTML = (preview.triggers || []).slice(0, 5)
+                .map(t => `<span class="trigger-tag">${escapeHtml(t)}</span>`).join('') || '(none)';
+            
+            document.getElementById('preview-quick').innerHTML = (preview.quickReplies || []).slice(0, 2)
+                .map(r => `<li>"${escapeHtml(r)}"</li>`).join('') || '<li>(none)</li>';
+            document.getElementById('preview-full').innerHTML = (preview.fullReplies || []).slice(0, 2)
+                .map(r => `<li>"${escapeHtml(r)}"</li>`).join('') || '<li>(none)</li>';
+            
+            // Show preview modal
+            document.getElementById('create-modal').classList.add('active');
+        }
+        
+        async function loadBlueprintCard(idx) {
+            const card = generatedBlueprintCards[idx];
+            if (!card) return;
+            
+            // Same flow as openCreateModal - open global brain with prefilled scenario
+            const scenario = card.scenario;
+            
+            // Build URL to open global brain editor
+            const params = new URLSearchParams({
+                prefill: 'true',
+                source: 'blueprint',
+                companyId: companyId,
+                name: scenario.name,
+                scenarioType: scenario.scenarioType,
+                triggers: JSON.stringify(scenario.triggers || []),
+                quickReplies: JSON.stringify(scenario.quickReplies || []),
+                fullReplies: JSON.stringify(scenario.fullReplies || []),
+                bookingIntent: scenario.bookingIntent || false,
+                priority: scenario.priority || 50,
+                minConfidence: scenario.minConfidence || 0.6
+            });
+            
+            window.open(`/admin/global-brain?${params.toString()}`, '_blank');
+        }
+        
+        function clearGeneratedCards() {
+            generatedBlueprintCards = [];
+            document.getElementById('blueprint-cards-review').style.display = 'none';
+            document.getElementById('generated-cards-grid').innerHTML = '';
+        }
+        
         // ========================================
         // SCENARIO REVIEW MODAL
         // ========================================
@@ -2425,22 +2860,30 @@
             // Find the matching scenario in raw data if needed
             let rawScenario = fullScenario;
             
+            // ════════════════════════════════════════════════════════════════════════════════
+            // FIELD DEFINITIONS - Only show CONTENT-OWNED fields
+            // Note: followUpMode and actionType are RUNTIME-owned, not content
+            // ════════════════════════════════════════════════════════════════════════════════
             const fields = [
-                { key: 'name', label: 'Name', icon: 'fa-tag' },
-                { key: 'scenarioType', label: 'Type', icon: 'fa-folder' },
-                { key: 'category', label: 'Category', icon: 'fa-list' },
-                { key: 'behavior', label: 'Behavior', icon: 'fa-user' },
-                { key: 'minConfidence', label: 'Min Confidence', icon: 'fa-chart-line' },
-                { key: 'triggers', label: 'Triggers', icon: 'fa-bolt', isArray: true, limit: 5 },
-                { key: 'quickReplies', label: 'Quick Replies', icon: 'fa-comment', isArray: true },
-                { key: 'fullReplies', label: 'Full Replies', icon: 'fa-comments', isArray: true },
-                { key: 'followUpMode', label: 'Follow-Up Mode', icon: 'fa-forward' },
-                { key: 'actionType', label: 'Action Type', icon: 'fa-cog' }
+                { key: 'name', label: 'Name', icon: 'fa-tag', required: true, ownership: 'content' },
+                { key: 'scenarioType', label: 'Type', icon: 'fa-folder', required: true, ownership: 'content' },
+                { key: 'category', label: 'Category', icon: 'fa-list', required: false, ownership: 'content' },
+                { key: 'behavior', label: 'Behavior', icon: 'fa-user', required: false, ownership: 'content' },
+                { key: 'minConfidence', label: 'Min Confidence', icon: 'fa-chart-line', required: false, ownership: 'content' },
+                { key: 'triggers', label: 'Triggers', icon: 'fa-bolt', isArray: true, limit: 5, required: true, ownership: 'content' },
+                { key: 'quickReplies', label: 'Quick Replies', icon: 'fa-comment', isArray: true, required: true, ownership: 'content' },
+                { key: 'fullReplies', label: 'Full Replies', icon: 'fa-comments', isArray: true, required: false, ownership: 'content' }
+                // REMOVED: followUpMode and actionType - these are RUNTIME-owned, not content
             ];
             
             return fields.map(field => {
                 let value = rawScenario[field.key];
                 let displayValue = '';
+                
+                // Determine if value is "present" (for required checks)
+                const isPresent = field.isArray 
+                    ? Array.isArray(value) && value.length > 0
+                    : value !== undefined && value !== null && value !== '';
                 
                 if (field.isArray && Array.isArray(value)) {
                     const items = field.limit ? value.slice(0, field.limit) : value;
@@ -2452,7 +2895,7 @@
                     if (field.limit && value.length > field.limit) {
                         displayValue += `<div style="font-size: 12px; color: #a78bfa; padding: 4px;">+${value.length - field.limit} more</div>`;
                     }
-                } else if (value === undefined || value === null || value === '') {
+                } else if (!isPresent) {
                     displayValue = `<span style="color: #888; font-style: italic;">(not set)</span>`;
                 } else {
                     displayValue = `<span style="color: #fff; font-weight: 500;">${escapeHtml(value?.toString())}</span>`;
@@ -2464,11 +2907,32 @@
                 );
                 const hasIssue = fieldViolations.length > 0;
                 
+                // ════════════════════════════════════════════════════════════════════════════════
+                // STATUS LOGIC (corrected):
+                //   - hasIssue → red border, show issue count
+                //   - required && !isPresent → red border, show ❌ (missing required)
+                //   - isPresent && !hasIssue → green border, show ✓
+                //   - !required && !isPresent && !hasIssue → gray border, show — (optional, not set)
+                // ════════════════════════════════════════════════════════════════════════════════
+                let borderColor = '#22c55e'; // green
+                let statusIcon = '<span style="color: #4ade80;">✓</span>';
+                
+                if (hasIssue) {
+                    borderColor = '#ef4444'; // red
+                    statusIcon = `<span style="color: #f87171;">(${fieldViolations.length} issue${fieldViolations.length > 1 ? 's' : ''})</span>`;
+                } else if (field.required && !isPresent) {
+                    borderColor = '#ef4444'; // red - required but missing
+                    statusIcon = '<span style="color: #f87171;">❌ required</span>';
+                } else if (!isPresent) {
+                    borderColor = '#6b7280'; // gray - optional, not set
+                    statusIcon = '<span style="color: #9ca3af;">—</span>';
+                }
+                
                 return `
-                    <div style="margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 4px solid ${hasIssue ? '#ef4444' : '#22c55e'};">
+                    <div style="margin-bottom: 12px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 4px solid ${borderColor};">
                         <div style="font-size: 13px; color: #c4b5fd; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; font-weight: 600;">
                             <i class="fas ${field.icon}"></i> ${field.label}
-                            ${hasIssue ? `<span style="color: #f87171;">(${fieldViolations.length} issue${fieldViolations.length > 1 ? 's' : ''})</span>` : '<span style="color: #4ade80;">✓</span>'}
+                            ${statusIcon}
                         </div>
                         <div style="font-size: 13px; line-height: 1.5;">
                             ${displayValue}
@@ -2989,8 +3453,13 @@
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-check-circle"></i>
-                        <h3>All Caught Up!</h3>
-                        <p>No significant scenario gaps detected in the last ${selectedDays} days.<br>Your scenarios are handling calls well!</p>
+                        <h3>No Gaps From Calls</h3>
+                        <p>No scenario coverage gaps detected in the last ${selectedDays} days.</p>
+                        <p style="font-size: 13px; color: var(--text-muted); margin-top: 12px;">
+                            <i class="fas fa-info-circle"></i> 
+                            This checks call data for missing scenarios. 
+                            <strong>Quality audit may still show content issues.</strong>
+                        </p>
                     </div>
                 `;
                 return;

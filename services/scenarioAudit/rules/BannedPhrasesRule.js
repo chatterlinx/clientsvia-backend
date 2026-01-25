@@ -30,21 +30,29 @@ class BannedPhrasesRule extends BaseRule {
         this.costType = 'deterministic';
         this.enabledByDefault = true;
         
-        // Organize banned phrases by type for better suggestions
+        // ════════════════════════════════════════════════════════════════════════════════
+        // SEVERITY LEVELS BY PHRASE TYPE:
+        // - Chatbot phrases = ERROR (sounds like AI, breaks persona)
+        // - Help desk phrases = WARNING (style issue, not fatal)
+        // - Troubleshooting phrases = ERROR (wrong role, technician's job)
+        // ════════════════════════════════════════════════════════════════════════════════
         this.phraseCategories = {
             chatbot: {
                 phrases: CHATBOT_PHRASES,
                 label: 'Chatbot language',
+                severity: SEVERITY.ERROR,  // ERROR - breaks dispatcher persona
                 suggestion: 'Remove this phrase entirely - dispatchers don\'t talk like chatbots'
             },
             helpdesk: {
                 phrases: HELPDESK_PHRASES,
                 label: 'Help desk language',
+                severity: SEVERITY.WARNING,  // WARNING - style issue, not fatal
                 suggestion: `Replace with: "${APPROVED_ACKNOWLEDGMENTS.slice(0, 3).join('" or "')}"`
             },
             troubleshooting: {
                 phrases: TROUBLESHOOTING_PHRASES,
                 label: 'Troubleshooting question',
+                severity: SEVERITY.ERROR,  // ERROR - wrong role
                 suggestion: 'Remove - troubleshooting is the technician\'s job, not the dispatcher\'s'
             }
         };
@@ -76,6 +84,10 @@ class BannedPhrasesRule extends BaseRule {
                             ? `${field.name}[${i}]` 
                             : field.name;
                         
+                        // Use category-specific severity (help desk = warning, chatbot/troubleshooting = error)
+                        const originalSeverity = this.severity;
+                        this.severity = categoryData.severity || SEVERITY.ERROR;
+                        
                         violations.push(this.createViolation({
                             field: fieldPath,
                             value: value,
@@ -86,6 +98,9 @@ class BannedPhrasesRule extends BaseRule {
                                 foundPhrase: foundPhrase
                             }
                         }));
+                        
+                        // Restore original severity
+                        this.severity = originalSeverity;
                     }
                 }
             }

@@ -313,12 +313,29 @@ class AuditEngine {
             .slice(0, 5)
             .map(([ruleId, count]) => ({ ruleId, count }));
         
+        // ════════════════════════════════════════════════════════════════════════════════
+        // PASSING DEFINITION (corrected):
+        //   - PASSING = 0 errors (warnings/info allowed)
+        //   - PERFECT = 0 errors AND 0 warnings AND 0 info
+        //   - FAILING = 1+ errors
+        // ════════════════════════════════════════════════════════════════════════════════
+        const scenariosPassing = scenarioResults.filter(r => !r.hasErrors).length;
+        const scenariosPerfect = scenarioResults.filter(r => r.violationCount === 0).length;
+        const scenariosFailing = scenarioResults.filter(r => r.hasErrors).length;
+        const scenariosWarningOnly = scenarioResults.filter(r => !r.hasErrors && r.hasWarnings).length;
+        
         return {
             totalScenarios: scenarioResults.length,
             scenariosWithViolations: scenarioResults.filter(r => r.violationCount > 0).length,
             scenariosWithErrors: scenarioResults.filter(r => r.hasErrors).length,
             scenariosWithWarnings: scenarioResults.filter(r => r.hasWarnings).length,
-            scenariosPassing: scenarioResults.filter(r => r.violationCount === 0).length,
+            // ════════════════════════════════════════════════════════════════════════════════
+            // NEW: Corrected passing = 0 errors (warnings allowed)
+            // ════════════════════════════════════════════════════════════════════════════════
+            scenariosPassing,
+            scenariosPerfect,     // NEW: 0 violations of any kind
+            scenariosFailing,      // NEW: 1+ errors
+            scenariosWarningOnly,  // NEW: warnings but no errors
             totalViolations: allViolations.length,
             byCategory,
             bySeverity,

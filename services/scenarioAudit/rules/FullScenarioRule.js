@@ -44,7 +44,11 @@ const {
     BANNED_BEHAVIORS,
     APPROVED_BEHAVIORS,
     SEVERITY,
-    RULE_CATEGORIES
+    RULE_CATEGORIES,
+    getContentFields,
+    getRuntimeFields,
+    getAdminFields,
+    SCENARIO_SETTINGS_REGISTRY
 } = require('../constants');
 
 class FullScenarioRule extends BaseRule {
@@ -91,59 +95,157 @@ class FullScenarioRule extends BaseRule {
     async check(scenario, context = {}) {
         const violations = [];
         
-        // 1. Status & Lifecycle
+        // ════════════════════════════════════════════════════════════════════════════════
+        // OWNERSHIP ENFORCEMENT: Only audit content-owned fields
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Non-content fields (runtime/admin/system) are NOT scenario-owned.
+        // Report them as INFO if present (legacy data), but don't fail on them.
+        // ════════════════════════════════════════════════════════════════════════════════
+        
+        const strippedFields = this._reportNonContentFields(scenario);
+        violations.push(...strippedFields);
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // CONTENT CHECKS ONLY (ownership === 'content')
+        // ════════════════════════════════════════════════════════════════════════════════
+        
+        // 1. Status & Lifecycle (content)
         violations.push(...this._checkStatus(scenario));
         
-        // 2. Follow-up Configuration
-        violations.push(...this._checkFollowUpConfig(scenario));
+        // 2. Follow-up Configuration - SKIP (runtime/admin owned)
+        // violations.push(...this._checkFollowUpConfig(scenario));
         
-        // 3. Banned phrases in ALL text fields
-        violations.push(...this._checkAllTextFields(scenario));
+        // 3. Banned phrases in CONTENT text fields only
+        violations.push(...this._checkContentTextFields(scenario));
         
-        // 4. Regex Validation
+        // 4. Regex Validation (content)
         violations.push(...this._checkRegexPatterns(scenario));
         
-        // 5. Placeholder Consistency
+        // 5. Placeholder Consistency (content)
         violations.push(...this._checkPlaceholderConsistency(scenario));
         
-        // 6. Negative Triggers
+        // 6. Negative Triggers (content)
         violations.push(...this._checkNegativeTriggers(scenario));
         
-        // 7. Cooldown
-        violations.push(...this._checkCooldown(scenario));
+        // 7. Cooldown - SKIP (admin owned)
+        // violations.push(...this._checkCooldown(scenario));
         
-        // 8. Entity Capture
+        // 8. Entity Capture (content)
         violations.push(...this._checkEntityCapture(scenario));
         
-        // 9. Reply Bundles
-        violations.push(...this._checkReplyBundles(scenario));
+        // 9. Reply Bundles - SKIP (system/future)
+        // violations.push(...this._checkReplyBundles(scenario));
         
-        // 10. Silence Policy
-        violations.push(...this._checkSilencePolicy(scenario));
+        // 10. Silence Policy - SKIP (admin owned)
+        // violations.push(...this._checkSilencePolicy(scenario));
         
-        // 11. Timed Follow-Up (Auto-Prompt)
-        violations.push(...this._checkTimedFollowUp(scenario));
+        // 11. Timed Follow-Up - SKIP (admin owned)
+        // violations.push(...this._checkTimedFollowUp(scenario));
         
-        // 12. Behavior Selection
+        // 12. Behavior Selection (content)
         violations.push(...this._checkBehavior(scenario));
         
-        // 13. Action Hooks
-        violations.push(...this._checkActionHooks(scenario));
+        // 13. Action Hooks - SKIP (admin owned)
+        // violations.push(...this._checkActionHooks(scenario));
         
-        // 14. Channel
+        // 14. Channel (content)
         violations.push(...this._checkChannel(scenario));
         
-        // 15. Min Confidence
+        // 15. Min Confidence (content)
         violations.push(...this._checkMinConfidence(scenario));
         
-        // 16. Entity Validation Rules (regex patterns)
-        violations.push(...this._checkEntityValidation(scenario));
+        // 16. Entity Validation Rules - SKIP (admin owned)
+        // violations.push(...this._checkEntityValidation(scenario));
         
-        // 17. Dynamic Variables
-        violations.push(...this._checkDynamicVariables(scenario));
+        // 17. Dynamic Variables - SKIP (admin owned)
+        // violations.push(...this._checkDynamicVariables(scenario));
         
-        // 18. TTS Override
-        violations.push(...this._checkTTSOverride(scenario));
+        // 18. TTS Override - SKIP (admin owned)
+        // violations.push(...this._checkTTSOverride(scenario));
+        
+        return violations;
+    }
+    
+    /**
+     * ════════════════════════════════════════════════════════════════════════════════
+     * REPORT NON-CONTENT FIELDS (ownership !== 'content')
+     * ════════════════════════════════════════════════════════════════════════════════
+     * 
+     * If scenario contains fields that are NOT content-owned, report as INFO.
+     * This alerts users to legacy data but doesn't fail the audit.
+     */
+    _reportNonContentFields(scenario) {
+        const violations = [];
+        const runtimeFields = getRuntimeFields();
+        const adminFields = getAdminFields();
+        const nonContentFields = [...runtimeFields, ...adminFields];
+        
+        const presentNonContentFields = [];
+        
+        for (const field of nonContentFields) {
+            const value = scenario[field];
+            if (value !== undefined && value !== null) {
+                // Check if it's a non-empty value
+                const isEmpty = Array.isArray(value) ? value.length === 0 
+                    : typeof value === 'object' ? Object.keys(value).length === 0
+                    : false;
+                
+                if (!isEmpty) {
+                    presentNonContentFields.push(field);
+                }
+            }
+        }
+        
+        // Report as single INFO message if any non-content fields present
+        if (presentNonContentFields.length > 0) {
+            const originalSeverity = this.severity;
+            this.severity = SEVERITY.INFO;
+            
+            violations.push(this.createViolation({
+                field: '_nonContentFields',
+                value: presentNonContentFields.join(', '),
+                message: `Legacy non-content fields present (ignored): ${presentNonContentFields.slice(0, 5).join(', ')}${presentNonContentFields.length > 5 ? '...' : ''}`,
+                suggestion: 'These fields are runtime/admin-owned, not scenario content. They will be stripped on save.',
+                meta: { 
+                    checkType: 'ownershipEnforcement',
+                    nonContentFields: presentNonContentFields,
+                    fieldCount: presentNonContentFields.length
+                }
+            }));
+            
+            this.severity = originalSeverity;
+        }
+        
+        return violations;
+    }
+    
+    /**
+     * Check CONTENT-OWNED text fields only for banned phrases
+     */
+    _checkContentTextFields(scenario) {
+        const violations = [];
+        
+        // Only check content-owned text fields (not followUpMessages, timedFollowUp, etc.)
+        const contentTextFields = [
+            { name: 'notes', value: scenario.notes }  // Notes are content-owned (just for admin reference)
+        ];
+        
+        // followUpPrompts is system-owned, skip it
+        // followUpMessages would be runtime-owned, skip it
+        
+        for (const field of contentTextFields) {
+            if (!field.value) continue;
+            const banned = this.containsPhrase(field.value, ALL_BANNED_PHRASES);
+            if (banned) {
+                violations.push(this.createViolation({
+                    field: field.name,
+                    value: field.value,
+                    message: `Contains banned phrase: "${banned}"`,
+                    suggestion: 'Remove banned phrase',
+                    meta: { checkType: 'bannedPhrase', bannedPhrase: banned }
+                }));
+            }
+        }
         
         return violations;
     }
@@ -221,53 +323,8 @@ class FullScenarioRule extends BaseRule {
         return violations;
     }
     
-    /**
-     * Check ALL text fields for banned phrases (not just replies)
-     */
-    _checkAllTextFields(scenario) {
-        const violations = [];
-        
-        // Fields to check that other rules might miss
-        const textFields = [
-            { name: 'followUpFunnel', value: scenario.followUpFunnel },
-            { name: 'notes', value: scenario.notes }  // Notes might accidentally have banned phrases
-        ];
-        
-        // Check follow-up messages array
-        const followUpMessages = scenario.followUpMessages || [];
-        for (let i = 0; i < followUpMessages.length; i++) {
-            textFields.push({
-                name: `followUpMessages[${i}]`,
-                value: followUpMessages[i]
-            });
-        }
-        
-        // Check followUpPrompts array
-        const followUpPrompts = scenario.followUpPrompts || [];
-        for (let i = 0; i < followUpPrompts.length; i++) {
-            const text = typeof followUpPrompts[i] === 'string' ? followUpPrompts[i] : followUpPrompts[i]?.text;
-            textFields.push({
-                name: `followUpPrompts[${i}]`,
-                value: text
-            });
-        }
-        
-        for (const field of textFields) {
-            if (!field.value) continue;
-            const banned = this.containsPhrase(field.value, ALL_BANNED_PHRASES);
-            if (banned) {
-                violations.push(this.createViolation({
-                    field: field.name,
-                    value: field.value,
-                    message: `Contains banned phrase: "${banned}"`,
-                    suggestion: 'Remove banned phrase',
-                    meta: { checkType: 'bannedPhrase', bannedPhrase: banned }
-                }));
-            }
-        }
-        
-        return violations;
-    }
+    // _checkAllTextFields REMOVED - replaced by _checkContentTextFields
+    // Non-content fields (followUpFunnel, followUpMessages, followUpPrompts) are runtime-owned
     
     /**
      * Check regex patterns are valid and reasonable
