@@ -394,6 +394,38 @@ router.get('/:tradeKey/assess', async (req, res) => {
         const missingOptionalItems = assessment.missingItems.filter(i => i.required === false);
         
         // ════════════════════════════════════════════════════════════════════════════════
+        // BUILD RECOMMENDED GENERATE LIST (before actions so we can use its count)
+        // Includes: missing required + required items with weak coverage (<60%)
+        // ════════════════════════════════════════════════════════════════════════════════
+        const weakRequiredItems = assessment.weakCoverage
+            .filter(w => {
+                const item = blueprintItems.find(b => b.itemKey === w.itemKey);
+                return item?.required === true;
+            })
+            .map(w => ({
+                itemKey: w.itemKey,
+                name: w.name,
+                reason: 'weak_coverage',
+                required: true,
+                currentCoverage: w.coverage,
+                currentMatch: w.scenarioName,
+                currentMatchId: w.scenarioId  // For potential PATCH suggestions
+            }));
+        
+        const recommendedGenerateList = [
+            // All missing required items
+            ...missingRequiredItems.map(item => ({
+                itemKey: item.itemKey,
+                name: item.name,
+                reason: 'missing',
+                required: true,
+                currentCoverage: 0
+            })),
+            // Required items with weak coverage
+            ...weakRequiredItems
+        ];
+        
+        // ════════════════════════════════════════════════════════════════════════════════
         // EXPLICIT ACTIONS: No guessing, no accidental floods
         // ════════════════════════════════════════════════════════════════════════════════
         // Each action has: enabled, label, estimatedCards, description
@@ -405,8 +437,19 @@ router.get('/:tradeKey/assess', async (req, res) => {
                 enabled: !isGreenfield && assessment.missingItems.length > 0,
                 label: `Generate ${assessment.missingItems.length} Missing Scenarios`,
                 estimatedCards: assessment.missingItems.length,
-                description: 'Fill gaps in existing template with missing scenarios',
+                description: 'Generate only truly missing blueprint items (no weak coverage)',
                 generationMode: 'MISSING_ONLY'
+            },
+            generateRecommended: {
+                enabled: !isGreenfield && recommendedGenerateList.length > 0,
+                label: `Generate Recommended (${recommendedGenerateList.length})`,
+                estimatedCards: recommendedGenerateList.length,
+                description: 'Missing required + required items with weak coverage (<60%)',
+                generationMode: 'RECOMMENDED',
+                breakdown: {
+                    missingRequired: missingRequiredItems.length,
+                    weakCoverageRequired: weakRequiredItems.length
+                }
             },
             generateFullPack: {
                 enabled: isGreenfield && blueprintItems.length > 0,
@@ -474,30 +517,7 @@ router.get('/:tradeKey/assess', async (req, res) => {
             // RECOMMENDED GENERATE: Required items that are missing OR have weak coverage (<60%)
             // This is the actionable list - items that need dedicated scenarios
             // ════════════════════════════════════════════════════════════════════════════════
-            recommendedGenerate: [
-                // All missing required items
-                ...missingRequiredItems.map(item => ({
-                    itemKey: item.itemKey,
-                    name: item.name,
-                    reason: 'missing',
-                    required: true,
-                    currentCoverage: 0
-                })),
-                // Required items with weak coverage (has match but < 60%)
-                ...assessment.weakCoverage
-                    .filter(w => {
-                        const item = blueprintItems.find(b => b.itemKey === w.itemKey);
-                        return item?.required === true;
-                    })
-                    .map(w => ({
-                        itemKey: w.itemKey,
-                        name: w.name,
-                        reason: 'weak_coverage',
-                        required: true,
-                        currentCoverage: w.coverage,
-                        currentMatch: w.scenarioName
-                    }))
-            ],
+            recommendedGenerate: recommendedGenerateList,
             
             // Stats
             stats: {
@@ -541,10 +561,11 @@ router.get('/:tradeKey/assess', async (req, res) => {
 // GENERATION MODES (explicit, never inferred)
 // ════════════════════════════════════════════════════════════════════════════════
 const GENERATION_MODES = {
-    MISSING_ONLY: 'MISSING_ONLY',      // Fill gaps in existing template
+    MISSING_ONLY: 'MISSING_ONLY',      // Fill gaps - only truly missing items
+    RECOMMENDED: 'RECOMMENDED',        // Missing required + weak coverage required
     FULL_PACK: 'FULL_PACK',            // Generate all blueprint items (greenfield)
     REQUIRED_ONLY: 'REQUIRED_ONLY',    // Generate only required items (minimum viable)
-    SELECTED: 'SELECTED'               // Generate specific itemKeys (legacy compatibility)
+    SELECTED: 'SELECTED'               // Generate specific itemKeys (manual selection)
 };
 
 router.post('/:tradeKey/generate', async (req, res) => {
@@ -665,9 +686,30 @@ router.post('/:tradeKey/generate', async (req, res) => {
                 break;
                 
             case GENERATION_MODES.MISSING_ONLY:
-                // Only missing items (fill gaps)
+                // Only truly missing items (fill gaps - pure)
                 itemsToGenerate = assessment.missingItems;
                 logger.info(`[BLUEPRINTS] MISSING_ONLY: generating ${assessment.missingItems.length} missing items`);
+                break;
+                
+            case GENERATION_MODES.RECOMMENDED:
+                // Missing required + required items with weak coverage (<60%)
+                // This is the "actionable" list for production quality
+                const missingRequired = assessment.missingItems.filter(i => i.required === true);
+                const weakRequired = assessment.weakCoverage
+                    .filter(w => {
+                        const item = blueprintItems.find(b => b.itemKey === w.itemKey);
+                        return item?.required === true;
+                    })
+                    .map(w => blueprintItems.find(b => b.itemKey === w.itemKey))
+                    .filter(Boolean);
+                
+                // Combine and dedupe by itemKey
+                const recommendedItemKeys = new Set([
+                    ...missingRequired.map(i => i.itemKey),
+                    ...weakRequired.map(i => i.itemKey)
+                ]);
+                itemsToGenerate = blueprintItems.filter(i => recommendedItemKeys.has(i.itemKey));
+                logger.info(`[BLUEPRINTS] RECOMMENDED: generating ${itemsToGenerate.length} items (${missingRequired.length} missing + ${weakRequired.length} weak coverage)`);
                 break;
                 
             case GENERATION_MODES.SELECTED:
@@ -722,6 +764,16 @@ router.post('/:tradeKey/generate', async (req, res) => {
         // Validate all generated cards
         const validation = validateAllCards(cards, generatorConfig);
         
+        // Build summary for clear reporting
+        const summary = {
+            requested: originalCount,
+            generated: cards.length,
+            failed: generationErrors.length,
+            truncated: originalCount > maxCards ? originalCount - maxCards : 0,
+            validationPassed: validation.passed,
+            validationWarnings: validation.withWarnings
+        };
+        
         res.json({
             success: true,
             _format: 'BlueprintGenerateResponseV1',
@@ -736,6 +788,9 @@ router.post('/:tradeKey/generate', async (req, res) => {
             maxCards,
             truncated: originalCount > maxCards,
             
+            // Summary (for quick sanity check)
+            summary,
+            
             // Generator config used
             generatorConfig,
             
@@ -749,7 +804,7 @@ router.post('/:tradeKey/generate', async (req, res) => {
             // Generation errors (items that failed to generate)
             generationErrors: generationErrors.length > 0 ? generationErrors : undefined,
             
-            message: `Generated ${cards.length} cards (${validation.passed} passed, ${validation.withWarnings} with warnings)`
+            message: `Generated ${cards.length} of ${originalCount} requested (${summary.failed} failed, ${summary.truncated} truncated)`
         });
         
     } catch (error) {
