@@ -112,8 +112,9 @@ router.get('/company/:companyId/template-scan', async (req, res) => {
         const { companyId } = req.params;
         
         // Get company to find active template
+        // Templates are stored in aiAgentSettings.templateReferences[] array
         const company = await Company.findById(companyId)
-            .select('name trade aiAgentSettings.activeTemplateId')
+            .select('name trade aiAgentSettings.templateReferences')
             .lean();
         
         if (!company) {
@@ -123,7 +124,13 @@ router.get('/company/:companyId/template-scan', async (req, res) => {
             });
         }
         
-        const templateId = company.aiAgentSettings?.activeTemplateId;
+        // Find the primary (enabled, lowest priority number) template
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const activeRef = templateRefs
+            .filter(ref => ref.enabled !== false)
+            .sort((a, b) => (a.priority || 1) - (b.priority || 1))[0];
+        
+        const templateId = activeRef?.templateId;
         
         if (!templateId) {
             return res.json({
@@ -174,7 +181,7 @@ router.get('/company/:companyId/coverage', async (req, res) => {
         
         // Get company
         const company = await Company.findById(companyId)
-            .select('name trade aiAgentSettings.activeTemplateId')
+            .select('name trade aiAgentSettings.templateReferences')
             .lean();
         
         if (!company) {
@@ -194,8 +201,12 @@ router.get('/company/:companyId/coverage', async (req, res) => {
             valuesMap[p.key] = p.value;
         }
         
-        // Get active template
-        const templateId = company.aiAgentSettings?.activeTemplateId;
+        // Get active template (primary enabled template)
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const activeRef = templateRefs
+            .filter(ref => ref.enabled !== false)
+            .sort((a, b) => (a.priority || 1) - (b.priority || 1))[0];
+        const templateId = activeRef?.templateId;
         
         if (!templateId) {
             return res.json({
@@ -255,7 +266,7 @@ router.post('/company/:companyId/import-defaults', async (req, res) => {
         
         // Get company
         const company = await Company.findById(companyId)
-            .select('name trade aiAgentSettings.activeTemplateId')
+            .select('name trade aiAgentSettings.templateReferences')
             .lean();
         
         if (!company) {
@@ -283,8 +294,12 @@ router.post('/company/:companyId/import-defaults', async (req, res) => {
         // Determine which placeholders to import
         let placeholdersToImport = [];
         
-        // Check if company has active template
-        const templateId = company.aiAgentSettings?.activeTemplateId;
+        // Check if company has active template (primary enabled template)
+        const templateRefs = company.aiAgentSettings?.templateReferences || [];
+        const activeRef = templateRefs
+            .filter(ref => ref.enabled !== false)
+            .sort((a, b) => (a.priority || 1) - (b.priority || 1))[0];
+        const templateId = activeRef?.templateId;
         
         if (templateId) {
             // Load template and scan for required placeholders
