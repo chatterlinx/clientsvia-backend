@@ -2087,6 +2087,9 @@
         // Blueprint JSON for copy/export (populated after fetch)
         window.__lastBlueprintSpec = null;
         window.__lastBlueprintAssess = null;
+        window.__lastGeneratorConfig = null;
+        window.__lastGeneratedCards = null;
+        window.__lastValidationReport = null;
         
         // ════════════════════════════════════════════════════════════════════════
         // REGISTRY (Single Source of Truth)
@@ -2779,12 +2782,23 @@
                     throw new Error(result.error || 'Generation failed');
                 }
                 
+                // Store for export
                 generatedBlueprintCards = result.cards || [];
+                window.__lastGeneratedCards = result.cards || [];
+                window.__lastGeneratorConfig = result.generatorConfig || null;
+                window.__lastValidationReport = result.validation || null;
                 
                 // Show generated cards
-                renderGeneratedCards(generatedBlueprintCards);
+                renderGeneratedCards(generatedBlueprintCards, result.validation);
                 
-                console.log('✅ [BLUEPRINT] Generated', result.count, 'cards');
+                // Log validation summary
+                if (result.validation) {
+                    console.log('✅ [BLUEPRINT] Generated', result.count, 'cards');
+                    console.log('   Validation:', result.validation.passed, 'passed,', result.validation.withWarnings, 'with warnings');
+                    if (result.validation.failures?.length > 0) {
+                        console.log('   Failures:', result.validation.failures);
+                    }
+                }
                 
             } catch (error) {
                 console.error('[BLUEPRINT] Generation error:', error);
@@ -2795,20 +2809,46 @@
             }
         }
         
-        function renderGeneratedCards(cards) {
+        function renderGeneratedCards(cards, validation) {
             if (cards.length === 0) return;
             
             document.getElementById('blueprint-cards-review').style.display = 'block';
             
+            // Show validation summary
+            const validationSummary = validation ? `
+                <div style="display: flex; gap: 16px; margin-bottom: 16px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <span style="color: var(--accent-green);"><i class="fas fa-check-circle"></i> ${validation.passed} passed</span>
+                    <span style="color: var(--accent-yellow);"><i class="fas fa-exclamation-triangle"></i> ${validation.withWarnings} warnings</span>
+                    <span style="color: var(--accent-red);"><i class="fas fa-times-circle"></i> ${validation.failed} failed</span>
+                    <button onclick="copyResultsJson()" style="margin-left: auto; padding: 6px 12px; background: #6366f1; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 12px;">
+                        <i class="fas fa-copy"></i> Copy Results JSON
+                    </button>
+                </div>
+            ` : '';
+            
             const gridEl = document.getElementById('generated-cards-grid');
-            gridEl.innerHTML = cards.map((card, idx) => `
-                <div class="gap-card" style="border-left: 4px solid #8b5cf6;">
+            gridEl.innerHTML = validationSummary + cards.map((card, idx) => {
+                // Find validation result for this card
+                const cardValidation = validation?.results?.find(r => r.index === idx);
+                const hasWarnings = cardValidation?.warnings?.length > 0;
+                const hasErrors = cardValidation?.errors?.length > 0;
+                const borderColor = hasErrors ? '#ef4444' : hasWarnings ? '#f59e0b' : '#8b5cf6';
+                
+                return `
+                <div class="gap-card" style="border-left: 4px solid ${borderColor};">
                     <div class="gap-header">
                         <span class="gap-representative">${escapeHtml(card.scenario.name)}</span>
                         <span class="gap-priority ${card.priority === 'high' ? 'high' : card.priority === 'medium' ? 'medium' : 'low'}">
                             ${card.scenario.scenarioType}
                         </span>
                     </div>
+                    ${cardValidation ? `
+                    <div style="margin: 8px 0; font-size: 12px;">
+                        ${cardValidation.passed ? '<span style="color: #4ade80;"><i class="fas fa-check"></i> Passed</span>' : ''}
+                        ${hasWarnings ? `<span style="color: #fbbf24;"><i class="fas fa-exclamation-triangle"></i> ${cardValidation.warnings.length} warnings</span>` : ''}
+                        ${hasErrors ? `<span style="color: #f87171;"><i class="fas fa-times"></i> ${cardValidation.errors.join(', ')}</span>` : ''}
+                    </div>
+                    ` : ''}
                     <div class="gap-stats">
                         <span><i class="fas fa-folder"></i> ${escapeHtml(card.categoryName || card.categoryKey)}</span>
                         <span><i class="fas fa-bolt"></i> ${card.scenario.triggers?.length || 0} triggers</span>
@@ -2829,7 +2869,8 @@
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
         
         function previewBlueprintCard(idx) {
@@ -2931,6 +2972,46 @@
                 return;
             }
             await copyToClipboardWithToast(toPrettyJson(window.__lastBlueprintAssess), 'Assessment JSON');
+        }
+        
+        async function copyResultsJson() {
+            // Build comprehensive results export
+            const tradeKey = document.getElementById('blueprint-select').value;
+            
+            const resultsExport = {
+                _format: 'BlueprintResultsExportV1',
+                tradeKey,
+                companyId,
+                generatedAt: new Date().toISOString(),
+                
+                // Blueprint spec (inventory)
+                blueprint: window.__lastBlueprintSpec?.spec || window.__lastBlueprintSpec,
+                
+                // Assessment results
+                assessment: window.__lastBlueprintAssess ? {
+                    coverage: window.__lastBlueprintAssess.coverage,
+                    missingCount: window.__lastBlueprintAssess.missingItems?.length || 0,
+                    coveredCount: window.__lastBlueprintAssess.matchedItems?.length || 0,
+                    weakCoverage: window.__lastBlueprintAssess.weakCoverage,
+                    duplicates: window.__lastBlueprintAssess.duplicates
+                } : null,
+                
+                // Generator config used
+                generatorConfig: window.__lastGeneratorConfig,
+                
+                // Generated cards with validation
+                generatedCards: window.__lastGeneratedCards ? {
+                    count: window.__lastGeneratedCards.length,
+                    cards: window.__lastGeneratedCards.map(c => ({
+                        itemKey: c.itemKey,
+                        scenario: c.scenario,
+                        categoryKey: c.categoryKey
+                    })),
+                    validation: window.__lastValidationReport
+                } : null
+            };
+            
+            await copyToClipboardWithToast(toPrettyJson(resultsExport), 'Results JSON (full export)');
         }
         
         function downloadBlueprintSpec() {
