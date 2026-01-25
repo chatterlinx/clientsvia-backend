@@ -1757,7 +1757,7 @@
               <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
                 Dynamic tokens resolved at runtime. Use <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">{companyName}</code> in prompts.
               </p>
-          </div>
+            </div>
             <div style="display: flex; gap: 8px;">
               <button onclick="importPlaceholderDefaults()" class="btn btn-secondary" style="font-size: 13px;">
                 <i class="fas fa-download"></i> Import Defaults
@@ -1768,23 +1768,132 @@
             </div>
           </div>
           
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <!-- COVERAGE SUMMARY STRIP -->
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <div id="placeholder-coverage-strip" style="display: none; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; border: 1px solid #0ea5e9;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div id="coverage-required-stats" style="font-size: 13px;">
+                  <span style="font-weight: 600; color: #0369a1;">Required:</span>
+                  <span id="coverage-required-filled" style="color: #16a34a;">0 filled</span> •
+                  <span id="coverage-required-missing" style="color: #dc2626;">0 missing</span>
+                </div>
+                <div id="coverage-optional-stats" style="font-size: 13px;">
+                  <span style="font-weight: 600; color: #0369a1;">Optional:</span>
+                  <span id="coverage-optional-filled" style="color: #16a34a;">0 filled</span> •
+                  <span id="coverage-optional-missing" style="color: #f59e0b;">0 missing</span> •
+                  <span id="coverage-optional-fallback" style="color: #64748b;">0 fallback</span>
+                </div>
+              </div>
+              <div id="coverage-status-badge">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+          
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <!-- WARNINGS BANNER (Unknown / Aliased tokens) -->
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <div id="placeholder-warnings-container" style="display: none; margin-bottom: 16px;">
+            <!-- Unknown tokens warning (red) -->
+            <div id="placeholder-unknown-warning" style="display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;">
+              <div style="display: flex; align-items: flex-start; gap: 10px;">
+                <i class="fas fa-exclamation-triangle" style="color: #dc2626; margin-top: 2px;"></i>
+                <div>
+                  <div style="font-weight: 600; color: #991b1b; font-size: 13px;">Unknown Placeholders Found</div>
+                  <div id="placeholder-unknown-list" style="font-size: 12px; color: #b91c1c; margin-top: 4px;"></div>
+                  <div style="font-size: 11px; color: #7f1d1d; margin-top: 4px;">These won't resolve at runtime. Fix template or add alias mapping.</div>
+                </div>
+              </div>
+            </div>
+            <!-- Aliased tokens warning (yellow) -->
+            <div id="placeholder-aliased-warning" style="display: none; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px;">
+              <div style="display: flex; align-items: flex-start; gap: 10px;">
+                <i class="fas fa-info-circle" style="color: #d97706; margin-top: 2px;"></i>
+                <div>
+                  <div style="font-weight: 600; color: #92400e; font-size: 13px;">Legacy Placeholder Names Detected</div>
+                  <div id="placeholder-aliased-list" style="font-size: 12px; color: #a16207; margin-top: 4px;"></div>
+                  <div style="font-size: 11px; color: #78350f; margin-top: 4px;">Recommend updating template text to canonical keys for consistency.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <!-- TEMPLATE REQUIRED PLACEHOLDERS PANEL -->
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <div id="template-required-panel" style="display: none; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <h4 style="font-size: 15px; font-weight: 600; margin: 0; color: #1e293b;">
+                  <i class="fas fa-clipboard-check" style="color: #0ea5e9; margin-right: 6px;"></i>
+                  Template Required Placeholders
+                </h4>
+                <p id="template-required-subtitle" style="font-size: 12px; color: #64748b; margin-top: 4px;">
+                  Based on active template scan
+                </p>
+              </div>
+              <button onclick="refreshTemplateScan()" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;">
+                <i class="fas fa-sync-alt"></i> Refresh Scan
+              </button>
+            </div>
+            
+            <!-- Required (Blocking) -->
+            <div id="template-required-section" style="margin-bottom: 16px;">
+              <div style="font-size: 12px; font-weight: 600; color: #dc2626; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                <i class="fas fa-exclamation-circle" style="margin-right: 4px;"></i> Required (Blocking)
+              </div>
+              <div id="template-required-list" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+            
+            <!-- Optional (Recommended) -->
+            <div id="template-optional-section">
+              <div style="font-size: 12px; font-weight: 600; color: #f59e0b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                <i class="fas fa-star" style="margin-right: 4px;"></i> Optional (Recommended)
+              </div>
+              <div id="template-optional-list" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+          
+          <!-- No Template Message -->
+          <div id="no-template-message" style="display: none; background: #f1f5f9; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;">
+            <i class="fas fa-info-circle" style="color: #64748b; margin-right: 6px;"></i>
+            <span style="color: #64748b; font-size: 13px;">No active template selected. Select a Global Template to see required placeholders.</span>
+          </div>
+          
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <!-- COMPANY PLACEHOLDERS TABLE -->
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <div style="margin-bottom: 12px;">
+            <h4 style="font-size: 14px; font-weight: 600; margin: 0; color: #475569;">
+              <i class="fas fa-database" style="color: #64748b; margin-right: 6px;"></i>
+              Company Placeholder Values
+            </h4>
+          </div>
+          
           <table id="placeholders-table">
-              <thead>
-                <tr>
-                <th style="width: 30%;">Name (Token)</th>
-                <th style="width: 50%;">Value</th>
-                <th style="width: 20%;">Actions</th>
-                </tr>
-              </thead>
+            <thead>
+              <tr>
+                <th style="width: 25%;">Name (Token)</th>
+                <th style="width: 40%;">Value</th>
+                <th style="width: 20%;">Status</th>
+                <th style="width: 15%;">Actions</th>
+              </tr>
+            </thead>
             <tbody id="placeholders-list">
               <tr>
-                <td colspan="3" style="text-align: center; padding: 40px; color: #94a3b8;">
+                <td colspan="4" style="text-align: center; padding: 40px; color: #94a3b8;">
                   <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
                   Loading placeholders...
                 </td>
               </tr>
-              </tbody>
-            </table>
+            </tbody>
+          </table>
           
           <div style="margin-top: 16px; display: flex; justify-content: flex-end; gap: 12px;">
             <button onclick="resetPlaceholders()" class="btn btn-secondary">
@@ -4700,6 +4809,12 @@
       }
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PLACEHOLDERS V2 - Enhanced with Template Scan & Coverage
+    // ═══════════════════════════════════════════════════════════════════════════
+    let currentTemplateScan = null;
+    let currentPlaceholderCoverage = null;
+    
     async function loadPlaceholders() {
       const tbody = document.getElementById('placeholders-list');
       
@@ -4716,34 +4831,287 @@
           return;
         }
 
-        // Load from CompanyPlaceholders (authoritative source)
-        const response = await fetch(`/api/company/${currentCompanyId}/placeholders`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
+        // Load all placeholder data in parallel
+        const [valuesRes, scanRes, coverageRes] = await Promise.all([
+          fetch(`/api/company/${currentCompanyId}/placeholders`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          }),
+          fetch(`/api/admin/placeholders/company/${currentCompanyId}/template-scan`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          }).catch(() => ({ ok: false })),
+          fetch(`/api/admin/placeholders/company/${currentCompanyId}/coverage`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          }).catch(() => ({ ok: false }))
+        ]);
         
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        if (!valuesRes.ok) {
+          throw new Error(`HTTP ${valuesRes.status}`);
         }
 
-        const data = await response.json();
-        const placeholders = Array.isArray(data.placeholders) ? data.placeholders : [];
+        const valuesData = await valuesRes.json();
+        const placeholders = Array.isArray(valuesData.placeholders) ? valuesData.placeholders : [];
         currentPlaceholders = placeholders.map(p => ({
           key: (p.key || '').toString().toLowerCase(),
           value: (p.value || '').toString(),
           description: p.description || null
         }));
+        
+        // Process template scan
+        if (scanRes.ok) {
+          const scanData = await scanRes.json();
+          currentTemplateScan = scanData.success ? scanData : null;
+        } else {
+          currentTemplateScan = null;
+        }
+        
+        // Process coverage
+        if (coverageRes.ok) {
+          const coverageData = await coverageRes.json();
+          currentPlaceholderCoverage = coverageData.success ? coverageData : null;
+        } else {
+          currentPlaceholderCoverage = null;
+        }
+        
+        // Render everything
+        renderTemplateScanPanel();
+        renderCoverageStrip();
+        renderPlaceholderWarnings();
         renderPlaceholdersTable();
+        
       } catch (error) {
         console.error('Failed to load placeholders:', error);
         tbody.innerHTML = `
           <tr>
-            <td colspan="3" style="text-align: center; padding: 40px; color: #ef4444;">
+            <td colspan="4" style="text-align: center; padding: 40px; color: #ef4444;">
               <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
               Failed to load placeholders: ${error.message}
             </td>
           </tr>
         `;
       }
+    }
+    
+    async function refreshTemplateScan() {
+      try {
+        const scanRes = await fetch(`/api/admin/placeholders/company/${currentCompanyId}/template-scan`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (scanRes.ok) {
+          const scanData = await scanRes.json();
+          currentTemplateScan = scanData.success ? scanData : null;
+        }
+        
+        const coverageRes = await fetch(`/api/admin/placeholders/company/${currentCompanyId}/coverage`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (coverageRes.ok) {
+          const coverageData = await coverageRes.json();
+          currentPlaceholderCoverage = coverageData.success ? coverageData : null;
+        }
+        
+        renderTemplateScanPanel();
+        renderCoverageStrip();
+        renderPlaceholderWarnings();
+        renderPlaceholdersTable();
+      } catch (e) {
+        console.error('Failed to refresh template scan:', e);
+      }
+    }
+    
+    function renderTemplateScanPanel() {
+      const panel = document.getElementById('template-required-panel');
+      const noTemplateMsg = document.getElementById('no-template-message');
+      const subtitle = document.getElementById('template-required-subtitle');
+      const requiredList = document.getElementById('template-required-list');
+      const optionalList = document.getElementById('template-optional-list');
+      const requiredSection = document.getElementById('template-required-section');
+      const optionalSection = document.getElementById('template-optional-section');
+      
+      if (!currentTemplateScan || !currentTemplateScan.hasActiveTemplate) {
+        if (panel) panel.style.display = 'none';
+        if (noTemplateMsg) noTemplateMsg.style.display = 'block';
+        return;
+      }
+      
+      if (noTemplateMsg) noTemplateMsg.style.display = 'none';
+      if (panel) panel.style.display = 'block';
+      
+      const analysis = currentTemplateScan.analysis || {};
+      const required = analysis.requiredPlaceholders || [];
+      const optional = analysis.optionalPlaceholders || [];
+      
+      if (subtitle) {
+        subtitle.textContent = `Template: ${currentTemplateScan.templateName || 'Unknown'} • Trade: ${currentTemplateScan.tradeKey || 'Unknown'}`;
+      }
+      
+      // Build values map for status checking
+      const valuesMap = {};
+      for (const p of currentPlaceholders) {
+        valuesMap[p.key.toLowerCase()] = p.value;
+      }
+      
+      // Render required placeholders
+      if (required.length === 0) {
+        if (requiredSection) requiredSection.style.display = 'none';
+      } else {
+        if (requiredSection) requiredSection.style.display = 'block';
+        if (requiredList) {
+          requiredList.innerHTML = required.map(p => {
+            const value = valuesMap[p.key.toLowerCase()];
+            const status = getPlaceholderStatus(p.key, value, p.fallback, true);
+            return renderTemplateRequiredItem(p, status, value);
+          }).join('');
+        }
+      }
+      
+      // Render optional placeholders
+      if (optional.length === 0) {
+        if (optionalSection) optionalSection.style.display = 'none';
+      } else {
+        if (optionalSection) optionalSection.style.display = 'block';
+        if (optionalList) {
+          optionalList.innerHTML = optional.map(p => {
+            const value = valuesMap[p.key.toLowerCase()];
+            const status = getPlaceholderStatus(p.key, value, p.fallback, false);
+            return renderTemplateRequiredItem(p, status, value);
+          }).join('');
+        }
+      }
+    }
+    
+    function getPlaceholderStatus(key, value, fallback, isRequired) {
+      const hasValue = value !== undefined && value !== null && value !== '';
+      if (hasValue) return { type: 'filled', label: 'Filled', color: '#16a34a', bg: '#dcfce7' };
+      if (fallback) return { type: 'fallback', label: 'Using Fallback', color: '#64748b', bg: '#f1f5f9' };
+      if (isRequired) return { type: 'missing_required', label: 'Missing (Required)', color: '#dc2626', bg: '#fee2e2' };
+      return { type: 'missing_optional', label: 'Not Set', color: '#f59e0b', bg: '#fef3c7' };
+    }
+    
+    function renderTemplateRequiredItem(p, status, value) {
+      const displayValue = value || (p.fallback ? `(fallback: ${p.fallback})` : '—');
+      const valueStyle = value ? 'color: #1e293b;' : 'color: #94a3b8; font-style: italic;';
+      
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">{${p.key}}</code>
+            <span style="font-size: 13px; color: #64748b;">${escapeHtml(p.label || p.key)}</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 12px; ${valueStyle} max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(displayValue)}</span>
+            <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: ${status.bg}; color: ${status.color}; font-weight: 500;">${status.label}</span>
+            <button onclick="scrollToPlaceholder('${p.key}')" style="padding: 4px 8px; border: 1px solid #e2e8f0; background: white; border-radius: 4px; cursor: pointer; font-size: 11px; color: #64748b;">
+              <i class="fas fa-edit"></i> Edit
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    function scrollToPlaceholder(key) {
+      const normalizedKey = key.toLowerCase();
+      const row = document.querySelector(`tr[data-placeholder-key="${normalizedKey}"]`);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.style.background = '#fef3c7';
+        setTimeout(() => { row.style.background = ''; }, 2000);
+        const input = row.querySelector('input');
+        if (input) input.focus();
+      } else {
+        // Key doesn't exist yet - offer to add it
+        if (confirm(`Placeholder {${key}} not found. Add it now?`)) {
+          currentPlaceholders.push({ key: normalizedKey, value: '', description: null });
+          renderPlaceholdersTable();
+          setTimeout(() => scrollToPlaceholder(key), 100);
+        }
+      }
+    }
+    
+    function renderCoverageStrip() {
+      const strip = document.getElementById('placeholder-coverage-strip');
+      const statusBadge = document.getElementById('coverage-status-badge');
+      
+      if (!currentPlaceholderCoverage || !currentPlaceholderCoverage.hasActiveTemplate) {
+        if (strip) strip.style.display = 'none';
+        return;
+      }
+      
+      if (strip) strip.style.display = 'block';
+      
+      const coverage = currentPlaceholderCoverage.coverage || {};
+      const summary = coverage.summary || {};
+      
+      // Update stats
+      const reqFilled = document.getElementById('coverage-required-filled');
+      const reqMissing = document.getElementById('coverage-required-missing');
+      const optFilled = document.getElementById('coverage-optional-filled');
+      const optMissing = document.getElementById('coverage-optional-missing');
+      const optFallback = document.getElementById('coverage-optional-fallback');
+      
+      const filledCount = (coverage.filled || []).length;
+      const missingReqCount = (coverage.missingRequired || []).length;
+      const missingOptCount = (coverage.missing || []).filter(m => !m.required).length;
+      const fallbackCount = (coverage.usingFallback || []).length;
+      
+      if (reqFilled) reqFilled.textContent = `${filledCount - missingOptCount} filled`;
+      if (reqMissing) reqMissing.textContent = `${missingReqCount} missing`;
+      if (optFilled) optFilled.textContent = `${filledCount} filled`;
+      if (optMissing) optMissing.textContent = `${missingOptCount} missing`;
+      if (optFallback) optFallback.textContent = `${fallbackCount} fallback`;
+      
+      // Update status badge
+      if (statusBadge) {
+        if (missingReqCount > 0) {
+          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;"><i class="fas fa-times-circle" style="margin-right: 4px;"></i> Not Ready</span>`;
+        } else {
+          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #dcfce7; color: #16a34a; font-weight: 600;"><i class="fas fa-check-circle" style="margin-right: 4px;"></i> Ready</span>`;
+        }
+      }
+    }
+    
+    function renderPlaceholderWarnings() {
+      const container = document.getElementById('placeholder-warnings-container');
+      const unknownWarning = document.getElementById('placeholder-unknown-warning');
+      const unknownList = document.getElementById('placeholder-unknown-list');
+      const aliasedWarning = document.getElementById('placeholder-aliased-warning');
+      const aliasedList = document.getElementById('placeholder-aliased-list');
+      
+      if (!currentTemplateScan || !currentTemplateScan.analysis) {
+        if (container) container.style.display = 'none';
+        return;
+      }
+      
+      const analysis = currentTemplateScan.analysis;
+      const unknownTokens = analysis.unknownTokens || [];
+      const aliasedTokens = analysis.aliasedTokens || [];
+      
+      let showContainer = false;
+      
+      // Unknown tokens
+      if (unknownTokens.length > 0) {
+        showContainer = true;
+        if (unknownWarning) unknownWarning.style.display = 'block';
+        if (unknownList) {
+          unknownList.innerHTML = unknownTokens.map(t => `<code style="background: #fecaca; padding: 2px 6px; border-radius: 3px; margin-right: 4px;">{${t.key}}</code>`).join('');
+        }
+      } else {
+        if (unknownWarning) unknownWarning.style.display = 'none';
+      }
+      
+      // Aliased tokens
+      if (aliasedTokens.length > 0) {
+        showContainer = true;
+        if (aliasedWarning) aliasedWarning.style.display = 'block';
+        if (aliasedList) {
+          aliasedList.innerHTML = aliasedTokens.map(t => 
+            `<span style="margin-right: 8px;"><code style="background: #fde68a; padding: 2px 6px; border-radius: 3px;">{${t.found}}</code> → <code style="background: #d1fae5; padding: 2px 6px; border-radius: 3px;">{${t.canonical}}</code></span>`
+          ).join('');
+        }
+      } else {
+        if (aliasedWarning) aliasedWarning.style.display = 'none';
+      }
+      
+      if (container) container.style.display = showContainer ? 'block' : 'none';
     }
 
     function renderPlaceholdersTable() {
@@ -4753,7 +5121,7 @@
       if (currentPlaceholders.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="3" style="text-align: center; padding: 40px; color: #94a3b8;">
+            <td colspan="4" style="text-align: center; padding: 40px; color: #94a3b8;">
               <i class="fas fa-tags" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
               No placeholders yet. Click "Add Placeholder" or "Import Defaults".
             </td>
@@ -4761,24 +5129,63 @@
         `;
         return;
       }
+      
+      // Build template requirements lookup
+      const templateRequired = new Set();
+      const templateOptional = new Set();
+      const templateFallbacks = {};
+      
+      if (currentTemplateScan?.analysis) {
+        for (const p of (currentTemplateScan.analysis.requiredPlaceholders || [])) {
+          templateRequired.add(p.key.toLowerCase());
+          if (p.fallback) templateFallbacks[p.key.toLowerCase()] = p.fallback;
+        }
+        for (const p of (currentTemplateScan.analysis.optionalPlaceholders || [])) {
+          templateOptional.add(p.key.toLowerCase());
+          if (p.fallback) templateFallbacks[p.key.toLowerCase()] = p.fallback;
+        }
+      }
 
-      tbody.innerHTML = currentPlaceholders.map(({ key, value }) => `
-        <tr data-placeholder-key="${key}">
-          <td>
-            <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px;">{${key}}</code>
-          </td>
-          <td>
-            <input type="text" value="${escapeHtml(value)}"
-                   onchange="updatePlaceholder('${key}', this.value)"
-                   style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
-          </td>
-          <td>
-            <button onclick="deletePlaceholder('${key}')" style="padding: 6px 12px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px;">
-              <i class="fas fa-trash"></i>
-            </button>
-          </td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = currentPlaceholders.map(({ key, value }) => {
+        const k = key.toLowerCase();
+        const hasValue = value && value.trim();
+        const isRequired = templateRequired.has(k);
+        const isOptional = templateOptional.has(k);
+        const hasFallback = templateFallbacks[k];
+        
+        let statusBadge = '';
+        if (hasValue) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #dcfce7; color: #16a34a;">Filled</span>`;
+        } else if (hasFallback) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Fallback</span>`;
+        } else if (isRequired) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fee2e2; color: #dc2626;">Missing Required</span>`;
+        } else if (isOptional) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fef3c7; color: #f59e0b;">Not Set</span>`;
+        } else {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Custom</span>`;
+        }
+        
+        return `
+          <tr data-placeholder-key="${key}">
+            <td>
+              <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px;">{${key}}</code>
+            </td>
+            <td>
+              <input type="text" value="${escapeHtml(value)}"
+                     onchange="updatePlaceholder('${key}', this.value)"
+                     placeholder="${hasFallback ? `Fallback: ${hasFallback}` : ''}"
+                     style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+            </td>
+            <td>${statusBadge}</td>
+            <td>
+              <button onclick="deletePlaceholder('${key}')" style="padding: 6px 12px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                <i class="fas fa-trash"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
     }
     
     function addPlaceholder() {
@@ -4797,7 +5204,7 @@
       }
       
       currentPlaceholders.push({ key: sanitizedName, value: '', description: null });
-      loadPlaceholders();
+      renderPlaceholdersTable();
     }
     
     function updatePlaceholder(key, value) {
@@ -4805,6 +5212,9 @@
       const idx = currentPlaceholders.findIndex(p => p.key === k);
       if (idx !== -1) {
         currentPlaceholders[idx].value = value;
+        // Update coverage display
+        renderCoverageStrip();
+        renderTemplateScanPanel();
       }
     }
     
@@ -4812,20 +5222,15 @@
       if (confirm(`Delete placeholder {${key}}?`)) {
         const k = (key || '').toString().toLowerCase();
         currentPlaceholders = currentPlaceholders.filter(p => p.key !== k);
-        loadPlaceholders();
+        renderPlaceholdersTable();
+        renderCoverageStrip();
+        renderTemplateScanPanel();
       }
     }
     
     async function savePlaceholders() {
       try {
-        // Validate before sending (backend requires key + value)
-        const invalid = currentPlaceholders.filter(p => !p.key || !p.value || !p.key.trim() || !p.value.trim());
-        if (invalid.length > 0) {
-          const sample = invalid.slice(0, 5).map(p => `{${p.key || 'missing_key'}}`).join(', ');
-          alert(`❌ Please fill in values for all placeholders before saving.\nMissing values: ${sample}${invalid.length > 5 ? '…' : ''}`);
-          return;
-        }
-
+        // Allow empty values now (fallbacks will handle it)
         const response = await fetch(`/api/company/${currentCompanyId}/placeholders`, {
           method: 'PUT',
           headers: {
@@ -4837,6 +5242,8 @@
         
         if (response.ok) {
           alert('✅ Placeholders saved!');
+          // Refresh coverage
+          await refreshTemplateScan();
         } else {
           const err = await response.json().catch(() => ({}));
           throw new Error(err.message || err.error || 'Failed to save');
@@ -4847,32 +5254,43 @@
     }
     
     async function importPlaceholderDefaults() {
-      // Import common defaults (custom placeholders only)
-      // NOTE: {companyName} and {companyPhone} are SYSTEM placeholders; do not duplicate them here.
-      const defaults = [
-        { key: 'companyAddress', value: '', description: 'Company address (if different from service address)' },
-        { key: 'businessHours', value: 'Monday-Friday 8am-5pm', description: 'Business hours' },
-        { key: 'serviceArea', value: '', description: 'Primary service area' },
-        { key: 'emergencyPhone', value: '', description: 'Emergency / after-hours number' },
-        { key: 'websiteUrl', value: '', description: 'Website URL' },
-        { key: 'license', value: '', description: 'License number (if applicable)' }
-      ];
-
-      // Merge without duplicates (existing wins)
-      const existingKeys = new Set(currentPlaceholders.map(p => p.key));
-      for (const d of defaults) {
-        const k = d.key.toLowerCase();
-        if (!existingKeys.has(k)) {
-          currentPlaceholders.push({ ...d, key: k });
-        }
+      if (!confirm('Import defaults will add missing placeholders used by your active template.\n\nIt will NOT overwrite existing values.\n\nContinue?')) {
+        return;
       }
-      loadPlaceholders();
-      alert('✅ Default placeholders imported. Fill in the values and click Save.');
+      
+      try {
+        const response = await fetch(`/api/admin/placeholders/company/${currentCompanyId}/import-defaults`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ overwriteExisting: false })
+        });
+        
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to import');
+        }
+        
+        const result = await response.json();
+        const addedCount = result.imported?.filter(i => i.action === 'added').length || 0;
+        const skippedCount = result.skipped?.length || 0;
+        
+        alert(`✅ Import complete!\n\nAdded: ${addedCount} placeholders\nSkipped: ${skippedCount} (already exist)\n\nFill in the values and click Save.`);
+        
+        // Reload everything
+        await loadPlaceholders();
+        
+      } catch (error) {
+        alert('❌ Failed to import defaults: ' + error.message);
+      }
     }
     
     function resetPlaceholders() {
       if (confirm('Reset all placeholders to defaults? This will clear custom values.')) {
         currentPlaceholders = [];
+        renderPlaceholdersTable();
         importPlaceholderDefaults();
       }
     }
