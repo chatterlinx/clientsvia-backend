@@ -1821,6 +1821,90 @@
           </div>
           
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <!-- CATALOG + TEMPLATE SCAN GRID (side by side) -->
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <div id="placeholder-dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+            
+            <!-- LEFT: Allowed Placeholder Catalog (GPT4-safe) -->
+            <div id="placeholder-catalog-panel" style="background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%); border-radius: 12px; padding: 16px; border: 1px solid #facc15;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h4 style="font-size: 14px; font-weight: 600; margin: 0; color: #854d0e;">
+                    <i class="fas fa-book" style="color: #ca8a04; margin-right: 6px;"></i>
+                    Allowed Placeholder Catalog
+                  </h4>
+                  <p style="font-size: 11px; color: #a16207; margin-top: 2px;">
+                    GPT4 can ONLY use these tokens when generating scenarios
+                  </p>
+                </div>
+                <span id="catalog-token-count" style="font-size: 11px; background: #fef08a; padding: 4px 8px; border-radius: 4px; color: #854d0e; font-weight: 500;">0 tokens</span>
+              </div>
+              
+              <!-- Search -->
+              <input id="catalog-search-input" type="text" placeholder="Search tokens or descriptions..."
+                     oninput="filterCatalogList(this.value)"
+                     style="width: 100%; padding: 8px 12px; border: 1px solid #fde047; border-radius: 6px; font-size: 12px; margin-bottom: 12px; background: white;">
+              
+              <!-- Catalog List -->
+              <div id="catalog-list-container" style="max-height: 280px; overflow-y: auto; background: white; border-radius: 8px; border: 1px solid #fef08a;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                  <thead style="position: sticky; top: 0; background: #fefce8;">
+                    <tr>
+                      <th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #fde047; font-weight: 600; color: #854d0e;">Token</th>
+                      <th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #fde047; font-weight: 600; color: #854d0e;">Label</th>
+                      <th style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #fde047; font-weight: 600; color: #854d0e;">Req</th>
+                    </tr>
+                  </thead>
+                  <tbody id="catalog-list-tbody">
+                    <tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading catalog...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <!-- RIGHT: Template Scan Results -->
+            <div id="template-scan-panel" style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 12px; padding: 16px; border: 1px solid #22c55e;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div>
+                  <h4 style="font-size: 14px; font-weight: 600; margin: 0; color: #166534;">
+                    <i class="fas fa-search" style="color: #16a34a; margin-right: 6px;"></i>
+                    Template Scan Results
+                  </h4>
+                  <p id="template-scan-subtitle" style="font-size: 11px; color: #15803d; margin-top: 2px;">
+                    Tokens actually used in active template
+                  </p>
+                </div>
+                <button onclick="refreshTemplateScan()" style="font-size: 10px; padding: 4px 8px; background: #bbf7d0; border: 1px solid #86efac; border-radius: 4px; cursor: pointer; color: #166534;">
+                  <i class="fas fa-sync-alt"></i> Rescan
+                </button>
+              </div>
+              
+              <!-- Scan Summary Badges -->
+              <div id="scan-summary-badges" style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px;">
+                <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #dcfce7; color: #166534;">Valid: 0</span>
+                <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #fef3c7; color: #92400e;">Aliased: 0</span>
+                <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #fee2e2; color: #991b1b;">Unknown: 0</span>
+              </div>
+              
+              <!-- Scan Results List -->
+              <div id="scan-list-container" style="max-height: 240px; overflow-y: auto; background: white; border-radius: 8px; border: 1px solid #bbf7d0;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                  <thead style="position: sticky; top: 0; background: #f0fdf4;">
+                    <tr>
+                      <th style="text-align: left; padding: 8px 10px; border-bottom: 1px solid #bbf7d0; font-weight: 600; color: #166534;">Token</th>
+                      <th style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #bbf7d0; font-weight: 600; color: #166534;">Status</th>
+                      <th style="text-align: center; padding: 8px 10px; border-bottom: 1px solid #bbf7d0; font-weight: 600; color: #166534;">Used In</th>
+                    </tr>
+                  </thead>
+                  <tbody id="scan-list-tbody">
+                    <tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;"><i class="fas fa-spinner fa-spin"></i> Loading scan...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
           <!-- TEMPLATE REQUIRED PLACEHOLDERS PANEL -->
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
           <div id="template-required-panel" style="display: none; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
@@ -4814,6 +4898,8 @@
     // ═══════════════════════════════════════════════════════════════════════════
     let currentTemplateScan = null;
     let currentPlaceholderCoverage = null;
+    let currentPlaceholderCatalog = null;
+    let catalogFilteredList = null;
     
     async function loadPlaceholders() {
       const tbody = document.getElementById('placeholders-list');
@@ -4831,8 +4917,11 @@
           return;
         }
 
+        // Get company trade for catalog lookup
+        const companyTrade = window.__currentCompanyTrade || 'HVAC';
+        
         // Load all placeholder data in parallel
-        const [valuesRes, scanRes, coverageRes] = await Promise.all([
+        const [valuesRes, scanRes, coverageRes, catalogRes] = await Promise.all([
           fetch(`/api/company/${currentCompanyId}/placeholders`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
           }),
@@ -4840,6 +4929,9 @@
             headers: { 'Authorization': `Bearer ${authToken}` }
           }).catch(() => ({ ok: false })),
           fetch(`/api/admin/placeholders/company/${currentCompanyId}/coverage`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          }).catch(() => ({ ok: false })),
+          fetch(`/api/admin/placeholders/catalog?tradeKey=${encodeURIComponent(companyTrade)}`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
           }).catch(() => ({ ok: false }))
         ]);
@@ -4872,7 +4964,17 @@
           currentPlaceholderCoverage = null;
         }
         
+        // Process catalog
+        if (catalogRes.ok) {
+          const catalogData = await catalogRes.json();
+          currentPlaceholderCatalog = catalogData.success ? catalogData.catalog : null;
+        } else {
+          currentPlaceholderCatalog = null;
+        }
+        
         // Render everything
+        renderPlaceholderCatalog();
+        renderTemplateScanResults();
         renderTemplateScanPanel();
         renderCoverageStrip();
         renderPlaceholderWarnings();
@@ -5067,6 +5169,186 @@
           statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #dcfce7; color: #16a34a; font-weight: 600;"><i class="fas fa-check-circle" style="margin-right: 4px;"></i> Ready</span>`;
         }
       }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CATALOG PANEL - Shows all allowed placeholders (GPT4-safe list)
+    // ═══════════════════════════════════════════════════════════════════════════
+    function renderPlaceholderCatalog() {
+      const tbody = document.getElementById('catalog-list-tbody');
+      const countEl = document.getElementById('catalog-token-count');
+      
+      if (!currentPlaceholderCatalog || !currentPlaceholderCatalog.placeholders) {
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">No catalog loaded</td></tr>`;
+        }
+        if (countEl) countEl.textContent = '0 tokens';
+        return;
+      }
+      
+      const placeholders = currentPlaceholderCatalog.placeholders;
+      catalogFilteredList = placeholders;
+      
+      if (countEl) countEl.textContent = `${placeholders.length} tokens`;
+      
+      renderCatalogRows(placeholders);
+    }
+    
+    function renderCatalogRows(list) {
+      const tbody = document.getElementById('catalog-list-tbody');
+      if (!tbody) return;
+      
+      if (!list || list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">No tokens found</td></tr>`;
+        return;
+      }
+      
+      tbody.innerHTML = list.map(p => {
+        const reqBadge = p.required 
+          ? `<span style="font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #fee2e2; color: #dc2626;">Req</span>`
+          : `<span style="font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #f1f5f9; color: #64748b;">Opt</span>`;
+        
+        return `
+          <tr style="border-bottom: 1px solid #fef9c3;">
+            <td style="padding: 6px 10px; font-family: monospace; font-size: 11px; color: #854d0e;">{${escapeHtml(p.key)}}</td>
+            <td style="padding: 6px 10px; font-size: 11px; color: #78716c;">${escapeHtml(p.label || p.description || '')}</td>
+            <td style="padding: 6px 10px; text-align: center;">${reqBadge}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    function filterCatalogList(query) {
+      if (!currentPlaceholderCatalog || !currentPlaceholderCatalog.placeholders) return;
+      
+      const q = (query || '').toLowerCase().trim();
+      const all = currentPlaceholderCatalog.placeholders;
+      
+      if (!q) {
+        renderCatalogRows(all);
+        return;
+      }
+      
+      const filtered = all.filter(p => {
+        const key = (p.key || '').toLowerCase();
+        const label = (p.label || '').toLowerCase();
+        const desc = (p.description || '').toLowerCase();
+        return key.includes(q) || label.includes(q) || desc.includes(q);
+      });
+      
+      renderCatalogRows(filtered);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SCAN RESULTS PANEL - Shows tokens actually used in active template
+    // ═══════════════════════════════════════════════════════════════════════════
+    function renderTemplateScanResults() {
+      const tbody = document.getElementById('scan-list-tbody');
+      const badges = document.getElementById('scan-summary-badges');
+      const subtitle = document.getElementById('template-scan-subtitle');
+      
+      if (!currentTemplateScan || !currentTemplateScan.hasActiveTemplate) {
+        if (tbody) {
+          tbody.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">No active template</td></tr>`;
+        }
+        if (badges) badges.innerHTML = '';
+        if (subtitle) subtitle.textContent = 'No active template selected';
+        return;
+      }
+      
+      const analysis = currentTemplateScan.analysis || {};
+      const validTokens = analysis.validTokens || [];
+      const unknownTokens = analysis.unknownTokens || [];
+      const aliasedTokens = analysis.aliasedTokens || [];
+      const requiredP = analysis.requiredPlaceholders || [];
+      const optionalP = analysis.optionalPlaceholders || [];
+      
+      if (subtitle) {
+        subtitle.textContent = `Template: ${currentTemplateScan.templateName || 'Unknown'}`;
+      }
+      
+      // Update badges
+      if (badges) {
+        badges.innerHTML = `
+          <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #dcfce7; color: #166534;">Valid: ${validTokens.length}</span>
+          <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #fef3c7; color: #92400e;">Aliased: ${aliasedTokens.length}</span>
+          <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: ${unknownTokens.length ? '#fee2e2' : '#f1f5f9'}; color: ${unknownTokens.length ? '#991b1b' : '#64748b'};">Unknown: ${unknownTokens.length}</span>
+        `;
+      }
+      
+      // Build combined list
+      const rows = [];
+      
+      // Add required placeholders
+      for (const p of requiredP) {
+        rows.push({
+          key: p.key,
+          status: 'required',
+          statusLabel: 'Required',
+          statusBg: '#fee2e2',
+          statusColor: '#dc2626',
+          usedIn: (p.usedIn || []).length
+        });
+      }
+      
+      // Add optional placeholders
+      for (const p of optionalP) {
+        if (!rows.find(r => r.key === p.key)) {
+          rows.push({
+            key: p.key,
+            status: 'optional',
+            statusLabel: 'Optional',
+            statusBg: '#f1f5f9',
+            statusColor: '#64748b',
+            usedIn: (p.usedIn || []).length
+          });
+        }
+      }
+      
+      // Add aliased tokens
+      for (const t of aliasedTokens) {
+        if (!rows.find(r => r.key === t.found)) {
+          rows.push({
+            key: t.found,
+            status: 'aliased',
+            statusLabel: `→ ${t.canonical}`,
+            statusBg: '#fef3c7',
+            statusColor: '#92400e',
+            usedIn: 0
+          });
+        }
+      }
+      
+      // Add unknown tokens
+      for (const t of unknownTokens) {
+        if (!rows.find(r => r.key === t.key)) {
+          rows.push({
+            key: t.key,
+            status: 'unknown',
+            statusLabel: 'INVALID',
+            statusBg: '#fee2e2',
+            statusColor: '#dc2626',
+            usedIn: (t.usedIn || []).length
+          });
+        }
+      }
+      
+      if (!tbody) return;
+      
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">No placeholders found in template</td></tr>`;
+        return;
+      }
+      
+      tbody.innerHTML = rows.map(r => `
+        <tr style="border-bottom: 1px solid #bbf7d0;">
+          <td style="padding: 6px 10px; font-family: monospace; font-size: 11px; color: #166534;">{${escapeHtml(r.key)}}</td>
+          <td style="padding: 6px 10px; text-align: center;">
+            <span style="font-size: 10px; padding: 2px 6px; border-radius: 3px; background: ${r.statusBg}; color: ${r.statusColor};">${escapeHtml(r.statusLabel)}</span>
+          </td>
+          <td style="padding: 6px 10px; text-align: center; font-size: 11px; color: #64748b;">${r.usedIn > 0 ? r.usedIn + ' scenarios' : '—'}</td>
+        </tr>
+      `).join('');
     }
     
     function renderPlaceholderWarnings() {
