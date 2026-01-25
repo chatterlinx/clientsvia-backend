@@ -29,7 +29,7 @@ const {
 
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const Company = require('../../models/Company');
+const Company = require('../../models/v2Company');
 
 // ════════════════════════════════════════════════════════════════════════════════
 // GET PLACEHOLDER CATALOG
