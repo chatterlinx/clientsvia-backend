@@ -341,15 +341,48 @@ router.get('/:tradeKey/assess', async (req, res) => {
         }
         
         // ════════════════════════════════════════════════════════════════════════════════
-        // MODE DETECTION: New Template vs Filling Gaps
+        // MODE DETECTION: Greenfield vs Filling Gaps
         // ════════════════════════════════════════════════════════════════════════════════
-        // - NEW_TEMPLATE: Template is empty or nearly empty (<10% coverage)
-        //   → Show "Generate Full Pack" button, missing items are EXPECTED
-        // - FILLING_GAPS: Template has substantial coverage (>=10%)
-        //   → Show selective generation, missing items are GAPS to fill
+        // Decision rule: existingScenarios <= 2 → GREENFIELD (allows for placeholder scenarios)
+        // This is DETERMINISTIC based on scenario COUNT, not fuzzy coverage %
         // ════════════════════════════════════════════════════════════════════════════════
-        const mode = coveragePercent < 10 ? 'NEW_TEMPLATE' : 'FILLING_GAPS';
-        const isNewTemplate = mode === 'NEW_TEMPLATE';
+        const isGreenfield = scenarios.length <= 2;
+        const mode = isGreenfield ? 'GREENFIELD_FULL_PACK' : 'FILLING_GAPS';
+        
+        // Count required items for REQUIRED_ONLY option
+        const missingRequiredItems = assessment.missingItems.filter(i => i.required === true);
+        const missingOptionalItems = assessment.missingItems.filter(i => i.required === false);
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // EXPLICIT ACTIONS: No guessing, no accidental floods
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Each action has: enabled, label, estimatedCards, description
+        // UI renders buttons ONLY based on actions.*.enabled
+        // Generation API requires explicit generationMode - never inferred
+        // ════════════════════════════════════════════════════════════════════════════════
+        const actions = {
+            generateMissing: {
+                enabled: !isGreenfield && assessment.missingItems.length > 0,
+                label: `Generate ${assessment.missingItems.length} Missing Scenarios`,
+                estimatedCards: assessment.missingItems.length,
+                description: 'Fill gaps in existing template with missing scenarios',
+                generationMode: 'MISSING_ONLY'
+            },
+            generateFullPack: {
+                enabled: isGreenfield && blueprintItems.length > 0,
+                label: `Generate Full Blueprint Pack (${blueprintItems.length})`,
+                estimatedCards: blueprintItems.length,
+                description: 'Generate all blueprint scenarios for empty template',
+                generationMode: 'FULL_PACK'
+            },
+            generateRequiredOnly: {
+                enabled: isGreenfield && requiredItems.length > 0,
+                label: `Generate Required Only (${requiredItems.length})`,
+                estimatedCards: requiredItems.length,
+                description: 'Generate minimum viable template with required scenarios only',
+                generationMode: 'REQUIRED_ONLY'
+            }
+        };
         
         res.json({
             success: true,
@@ -357,10 +390,10 @@ router.get('/:tradeKey/assess', async (req, res) => {
             blueprintName: spec.name,
             blueprintVersion: spec.version,
             
-            // Mode detection
+            // Mode detection (explicit)
             mode,
-            modeDescription: isNewTemplate 
-                ? 'New template detected - generate full scenario pack'
+            modeDescription: isGreenfield 
+                ? 'Empty template - generate full blueprint pack'
                 : 'Existing template - fill coverage gaps',
             
             // Coverage summary
@@ -382,17 +415,23 @@ router.get('/:tradeKey/assess', async (req, res) => {
             
             // Stats
             stats: {
-                missingRequired: requiredItems.filter(item => 
-                    !assessment.matchedItems.some(m => m.itemKey === item.itemKey)
-                ).length,
-                missingOptional: assessment.missingItems.filter(i => i.required === false).length,
+                missingRequired: missingRequiredItems.length,
+                missingOptional: missingOptionalItems.length,
+                totalRequired: requiredItems.length,
+                totalOptional: blueprintItems.length - requiredItems.length,
                 byType: getBlueprintStats(spec).byType
             },
             
-            // UI helpers - mode-aware
+            // ════════════════════════════════════════════════════════════════════════════════
+            // EXPLICIT ACTIONS - UI renders buttons ONLY based on these
+            // Generation API requires explicit generationMode from action.generationMode
+            // ════════════════════════════════════════════════════════════════════════════════
+            actions,
+            
+            // Legacy compatibility (will be deprecated)
             canGenerate: assessment.missingItems.length > 0,
-            canGenerateFullPack: isNewTemplate && assessment.missingItems.length > 0,
-            generateButtonLabel: isNewTemplate
+            canGenerateFullPack: isGreenfield && blueprintItems.length > 0,
+            generateButtonLabel: isGreenfield
                 ? `Generate Full Pack (${blueprintItems.length} scenarios)`
                 : assessment.missingItems.length > 0
                     ? `Generate ${assessment.missingItems.length} Missing Scenarios`
@@ -412,17 +451,43 @@ router.get('/:tradeKey/assess', async (req, res) => {
 // GENERATE MISSING SCENARIO CARDS
 // ════════════════════════════════════════════════════════════════════════════════
 
+// ════════════════════════════════════════════════════════════════════════════════
+// GENERATION MODES (explicit, never inferred)
+// ════════════════════════════════════════════════════════════════════════════════
+const GENERATION_MODES = {
+    MISSING_ONLY: 'MISSING_ONLY',      // Fill gaps in existing template
+    FULL_PACK: 'FULL_PACK',            // Generate all blueprint items (greenfield)
+    REQUIRED_ONLY: 'REQUIRED_ONLY',    // Generate only required items (minimum viable)
+    SELECTED: 'SELECTED'               // Generate specific itemKeys (legacy compatibility)
+};
+
 router.post('/:tradeKey/generate', async (req, res) => {
     const { tradeKey } = req.params;
     const { 
         companyId, 
-        itemKeys = [], // Specific items to generate (empty = all missing)
-        maxCards = 10,  // Limit cards per request
-        templateId     // Target template for generated scenarios
+        generationMode,           // REQUIRED: MISSING_ONLY, FULL_PACK, REQUIRED_ONLY, SELECTED
+        itemKeys = [],            // Only used when generationMode = SELECTED
+        maxCards = 50,            // Limit cards per request (increased for full pack)
+        templateId                // Target template for generated scenarios
     } = req.body;
     
     if (!companyId) {
         return res.status(400).json({ success: false, error: 'companyId required' });
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════════
+    // VALIDATE generationMode - NEVER infer, always require explicit mode
+    // ════════════════════════════════════════════════════════════════════════════════
+    const validModes = Object.values(GENERATION_MODES);
+    const effectiveMode = generationMode || (itemKeys.length > 0 ? 'SELECTED' : null);
+    
+    if (!effectiveMode || !validModes.includes(effectiveMode)) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'generationMode required',
+            validModes,
+            hint: 'Use actions.*.generationMode from assess response'
+        });
     }
     
     try {
@@ -444,19 +509,50 @@ router.post('/:tradeKey/generate', async (req, res) => {
         // Load existing scenarios
         const scenarios = await loadScenarios(companyId, 'activePool');
         
-        // Assess coverage to find missing
+        // Get all blueprint items
         const blueprintItems = getAllBlueprintItems(spec);
+        const requiredItems = getRequiredItems(spec);
         const assessment = assessCoverage(blueprintItems, scenarios);
         
-        // Determine which items to generate
-        let itemsToGenerate = assessment.missingItems;
+        // ════════════════════════════════════════════════════════════════════════════════
+        // DETERMINE ITEMS TO GENERATE (based on explicit generationMode)
+        // ════════════════════════════════════════════════════════════════════════════════
+        let itemsToGenerate = [];
         
-        // Filter by specific keys if provided
-        if (itemKeys.length > 0) {
-            itemsToGenerate = itemsToGenerate.filter(item => itemKeys.includes(item.itemKey));
+        switch (effectiveMode) {
+            case GENERATION_MODES.FULL_PACK:
+                // All blueprint items (for empty templates)
+                itemsToGenerate = blueprintItems;
+                logger.info(`[BLUEPRINTS] FULL_PACK: generating all ${blueprintItems.length} items`);
+                break;
+                
+            case GENERATION_MODES.REQUIRED_ONLY:
+                // Only required items (minimum viable template)
+                itemsToGenerate = requiredItems;
+                logger.info(`[BLUEPRINTS] REQUIRED_ONLY: generating ${requiredItems.length} required items`);
+                break;
+                
+            case GENERATION_MODES.MISSING_ONLY:
+                // Only missing items (fill gaps)
+                itemsToGenerate = assessment.missingItems;
+                logger.info(`[BLUEPRINTS] MISSING_ONLY: generating ${assessment.missingItems.length} missing items`);
+                break;
+                
+            case GENERATION_MODES.SELECTED:
+                // Specific items by key (legacy/manual selection)
+                if (itemKeys.length === 0) {
+                    return res.status(400).json({ 
+                        success: false, 
+                        error: 'itemKeys required when generationMode is SELECTED' 
+                    });
+                }
+                itemsToGenerate = blueprintItems.filter(item => itemKeys.includes(item.itemKey));
+                logger.info(`[BLUEPRINTS] SELECTED: generating ${itemsToGenerate.length} selected items`);
+                break;
         }
         
-        // Limit cards
+        // Limit cards to prevent runaway generation
+        const originalCount = itemsToGenerate.length;
         itemsToGenerate = itemsToGenerate.slice(0, maxCards);
         
         if (itemsToGenerate.length === 0) {
@@ -506,6 +602,12 @@ router.post('/:tradeKey/generate', async (req, res) => {
             companyId,
             templateId,
             generatedAt: new Date().toISOString(),
+            
+            // What was requested (explicit, auditable)
+            generationMode: effectiveMode,
+            requestedCount: originalCount,
+            maxCards,
+            truncated: originalCount > maxCards,
             
             // Generator config used
             generatorConfig,

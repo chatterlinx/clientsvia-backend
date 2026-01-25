@@ -2698,32 +2698,61 @@
             document.getElementById('bp-missing').textContent = result.missingItems.length;
             document.getElementById('bp-required-missing').textContent = result.stats.missingRequired;
             
-            // Show mode banner
-            const isNewTemplate = result.mode === 'NEW_TEMPLATE';
+            // ════════════════════════════════════════════════════════════════════════════════
+            // RENDER MODE BANNER + ACTION BUTTONS (based on explicit actions from backend)
+            // ════════════════════════════════════════════════════════════════════════════════
+            const actions = result.actions || {};
+            const isGreenfield = result.mode === 'GREENFIELD_FULL_PACK';
             const modeBanner = document.getElementById('blueprint-mode-banner');
+            
             if (modeBanner) {
                 modeBanner.style.display = 'block';
-                modeBanner.innerHTML = isNewTemplate ? `
-                    <div style="display: flex; align-items: center; gap: 12px; padding: 16px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(99, 102, 241, 0.2)); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; margin-bottom: 20px;">
-                        <i class="fas fa-rocket" style="font-size: 24px; color: #a78bfa;"></i>
-                        <div>
-                            <div style="font-weight: 600; color: #a78bfa;">New Template Mode</div>
-                            <div style="font-size: 13px; color: var(--text-secondary);">
-                                Generate a complete ${result.coverage.totalInBlueprint}-scenario pack to build your template from scratch.
+                
+                if (isGreenfield) {
+                    // GREENFIELD MODE: Show Full Pack + Required Only buttons
+                    modeBanner.innerHTML = `
+                        <div style="padding: 20px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(99, 102, 241, 0.15)); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 12px; margin-bottom: 20px;">
+                            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                                <i class="fas fa-rocket" style="font-size: 28px; color: #a78bfa;"></i>
+                                <div>
+                                    <div style="font-weight: 700; font-size: 16px; color: #a78bfa;">Greenfield Template</div>
+                                    <div style="font-size: 13px; color: var(--text-secondary);">
+                                        Empty template detected (${result.coverage.existingScenarios} scenarios). Generate a full blueprint pack to get started.
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                ${actions.generateFullPack?.enabled ? `
+                                    <button onclick="generateWithMode('FULL_PACK')" class="btn-primary" style="padding: 12px 24px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600; font-size: 14px;">
+                                        <i class="fas fa-magic"></i> ${actions.generateFullPack.label}
+                                    </button>
+                                ` : ''}
+                                ${actions.generateRequiredOnly?.enabled ? `
+                                    <button onclick="generateWithMode('REQUIRED_ONLY')" style="padding: 12px 24px; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 8px; color: #a78bfa; cursor: pointer; font-weight: 600; font-size: 14px;">
+                                        <i class="fas fa-star"></i> ${actions.generateRequiredOnly.label}
+                                    </button>
+                                ` : ''}
+                            </div>
+                            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
+                                <i class="fas fa-info-circle"></i> 
+                                Full Pack = all ${result.coverage.totalInBlueprint} scenarios. 
+                                Required Only = ${result.stats?.totalRequired || 0} essential scenarios.
                             </div>
                         </div>
-                        <button onclick="generateFullPack()" style="margin-left: auto; padding: 12px 24px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 600; font-size: 14px;">
-                            <i class="fas fa-magic"></i> Generate Full Pack
-                        </button>
-                    </div>
-                ` : `
-                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; margin-bottom: 20px;">
-                        <i class="fas fa-puzzle-piece" style="font-size: 20px; color: #4ade80;"></i>
-                        <div style="font-size: 13px; color: var(--text-secondary);">
-                            <strong style="color: #4ade80;">Filling Gaps Mode</strong> — Select missing scenarios below to generate and add to your existing template.
+                    `;
+                } else {
+                    // FILLING GAPS MODE: Show info banner (no action buttons here)
+                    modeBanner.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; margin-bottom: 20px;">
+                            <i class="fas fa-puzzle-piece" style="font-size: 20px; color: #4ade80;"></i>
+                            <div style="font-size: 13px; color: var(--text-secondary);">
+                                <strong style="color: #4ade80;">Filling Gaps Mode</strong> — 
+                                ${result.coverage.existingScenarios} existing scenarios. 
+                                Select missing items below to generate and add to your template.
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             }
             
             // Render missing items grouped by category
@@ -2819,26 +2848,41 @@
             btn.disabled = selectedBlueprintItems.size === 0;
         }
         
-        async function generateFullPack() {
-            // Generate ALL items from the blueprint (for new template mode)
-            if (!blueprintAssessment?.missingItems?.length) {
-                showToast('No items to generate', 'error');
+        // ════════════════════════════════════════════════════════════════════════════════
+        // EXPLICIT GENERATION MODE (never inferred, always from button click)
+        // Modes: FULL_PACK, REQUIRED_ONLY, MISSING_ONLY, SELECTED
+        // ════════════════════════════════════════════════════════════════════════════════
+        async function generateWithMode(generationMode) {
+            if (!blueprintAssessment) {
+                showToast('Run assessment first', 'error');
                 return;
             }
             
-            // Select all missing items
-            const allMissingKeys = blueprintAssessment.missingItems.map(i => i.itemKey);
+            // Get action details for confirmation
+            const action = blueprintAssessment.actions?.[
+                generationMode === 'FULL_PACK' ? 'generateFullPack' :
+                generationMode === 'REQUIRED_ONLY' ? 'generateRequiredOnly' :
+                'generateMissing'
+            ];
             
-            // Confirm with user
-            const count = allMissingKeys.length;
-            if (!confirm(`Generate all ${count} scenarios? This may take a few minutes.`)) {
+            const estimatedCount = action?.estimatedCards || blueprintAssessment.missingItems?.length || 0;
+            
+            // Confirm with user (explicit, no accidents)
+            const confirmMsg = generationMode === 'FULL_PACK' 
+                ? `Generate ALL ${estimatedCount} scenarios for this empty template? This will create a complete blueprint pack.`
+                : generationMode === 'REQUIRED_ONLY'
+                    ? `Generate ${estimatedCount} REQUIRED scenarios (minimum viable template)?`
+                    : `Generate ${estimatedCount} missing scenarios?`;
+            
+            if (!confirm(confirmMsg)) {
                 return;
             }
             
             const btn = event?.target?.closest('button');
+            const originalHTML = btn?.innerHTML;
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Full Pack...';
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Generating ${generationMode}...`;
             }
             
             const tradeKey = document.getElementById('blueprint-select').value;
@@ -2853,13 +2897,14 @@
                     },
                     body: JSON.stringify({
                         companyId,
-                        itemKeys: allMissingKeys,
-                        maxCards: 100 // Higher limit for full pack
+                        generationMode,  // EXPLICIT mode - never inferred
+                        maxCards: generationMode === 'FULL_PACK' ? 200 : 100
                     })
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`Generation failed: ${response.status}`);
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || `Generation failed: ${response.status}`);
                 }
                 
                 const result = await response.json();
@@ -2877,18 +2922,25 @@
                 // Show generated cards
                 renderGeneratedCards(generatedBlueprintCards, result.validation);
                 
-                showToast(`Generated ${result.count} scenarios!`, 'success');
-                console.log('✅ [BLUEPRINT] Full pack generated:', result.count, 'cards');
+                // Show detailed toast
+                const truncatedMsg = result.truncated ? ` (truncated from ${result.requestedCount})` : '';
+                showToast(`Generated ${result.count} scenarios${truncatedMsg}!`, 'success');
+                console.log(`✅ [BLUEPRINT] ${generationMode}: generated ${result.count} cards`);
                 
             } catch (error) {
-                console.error('[BLUEPRINT] Full pack generation error:', error);
-                alert('Failed to generate full pack: ' + error.message);
+                console.error(`[BLUEPRINT] ${generationMode} generation error:`, error);
+                alert(`Failed to generate (${generationMode}): ${error.message}`);
             } finally {
                 if (btn) {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-magic"></i> Generate Full Pack';
+                    btn.innerHTML = originalHTML;
                 }
             }
+        }
+        
+        // Legacy function (redirects to explicit mode)
+        async function generateFullPack() {
+            generateWithMode('FULL_PACK');
         }
         
         async function generateSelectedCards() {
@@ -2910,8 +2962,9 @@
                     },
                     body: JSON.stringify({
                         companyId,
+                        generationMode: 'SELECTED',  // Explicit mode for manual selection
                         itemKeys: Array.from(selectedBlueprintItems),
-                        maxCards: 20
+                        maxCards: 50
                     })
                 });
                 
