@@ -423,6 +423,39 @@ function clusterPhrases(phrases, similarityThreshold = 0.5) {
 }
 
 /**
+ * Calculate Levenshtein similarity ratio between two strings
+ * @returns {number} Similarity ratio between 0 and 1
+ */
+function levenshteinSimilarity(str1, str2) {
+    const len1 = str1.length;
+    const len2 = str2.length;
+    
+    if (len1 === 0) return len2 === 0 ? 1 : 0;
+    if (len2 === 0) return 0;
+    
+    // Create distance matrix
+    const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(0));
+    
+    for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+    for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+    
+    for (let i = 1; i <= len1; i++) {
+        for (let j = 1; j <= len2; j++) {
+            const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+            matrix[i][j] = Math.min(
+                matrix[i - 1][j] + 1,      // deletion
+                matrix[i][j - 1] + 1,      // insertion
+                matrix[i - 1][j - 1] + cost // substitution
+            );
+        }
+    }
+    
+    const distance = matrix[len1][len2];
+    const maxLen = Math.max(len1, len2);
+    return 1 - (distance / maxLen);
+}
+
+/**
  * Determine gap priority based on call count
  */
 function getPriority(callCount) {
@@ -1395,23 +1428,80 @@ router.get('/:companyId/gaps', async (req, res) => {
         // Cluster similar phrases
         const clusters = clusterPhrases(tier3Phrases, 0.4);
         
-        // Filter by minimum calls and sort by impact
+        // ════════════════════════════════════════════════════════════════════════
+        // FILTER 1: Get dismissed gaps to exclude
+        // ════════════════════════════════════════════════════════════════════════
+        const dismissedGaps = company.metadata?.dismissedScenarioGaps || [];
+        const dismissedPhrases = new Set(
+            dismissedGaps.map(d => d.representative?.toLowerCase().trim()).filter(Boolean)
+        );
+        
+        logger.info('[SCENARIO GAPS] Filtering dismissed', { dismissedCount: dismissedPhrases.size });
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // FILTER 2: Get existing scenario triggers to detect duplicates
+        // ════════════════════════════════════════════════════════════════════════
+        const ScenarioPoolService = require('../../services/ScenarioPoolService');
+        let existingTriggers = new Set();
+        try {
+            const poolResult = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            if (poolResult.scenarios) {
+                for (const scenario of poolResult.scenarios) {
+                    const triggers = scenario.triggers || [];
+                    for (const trigger of triggers) {
+                        if (typeof trigger === 'string') {
+                            existingTriggers.add(trigger.toLowerCase().trim());
+                        }
+                    }
+                }
+            }
+            logger.info('[SCENARIO GAPS] Existing triggers loaded', { triggerCount: existingTriggers.size });
+        } catch (poolErr) {
+            logger.warn('[SCENARIO GAPS] Could not load scenario pool for duplicate detection:', poolErr.message);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // BUILD GAPS with dismissal and duplicate checking
+        // ════════════════════════════════════════════════════════════════════════
         const minCallsInt = parseInt(minCalls) || CONFIG.MIN_CALLS_FOR_GAP;
         const significantGaps = clusters
             .filter(c => c.totalCalls >= minCallsInt)
-            .map((cluster, index) => ({
-                id: `gap_${index}_${Date.now()}`,
-                representative: cluster.representative,
-                examples: cluster.examples.slice(0, CONFIG.MAX_EXAMPLES_PER_GAP).map(e => ({
-                    text: e.text,
-                    timestamp: e.timestamp
-                })),
-                callCount: cluster.totalCalls,
-                totalTokens: cluster.totalTokens,
-                priority: getPriority(cluster.totalCalls),
-                savings: calculateSavings(cluster.totalCalls, cluster.totalTokens),
-                callIds: cluster.callIds.slice(0, 10) // Limit for response size
-            }))
+            .filter(c => {
+                // Skip if dismissed
+                const rep = c.representative?.toLowerCase().trim();
+                if (dismissedPhrases.has(rep)) {
+                    return false;
+                }
+                return true;
+            })
+            .map((cluster, index) => {
+                // Check for duplicate/similar existing triggers
+                const rep = cluster.representative?.toLowerCase().trim() || '';
+                const isDuplicate = existingTriggers.has(rep);
+                const similarTriggers = [...existingTriggers].filter(t => 
+                    t.includes(rep) || rep.includes(t) || 
+                    (rep.length > 10 && t.length > 10 && levenshteinSimilarity(rep, t) > 0.7)
+                ).slice(0, 3);
+                
+                return {
+                    id: `gap_${index}_${Date.now()}`,
+                    representative: cluster.representative,
+                    examples: cluster.examples.slice(0, CONFIG.MAX_EXAMPLES_PER_GAP).map(e => ({
+                        text: e.text,
+                        timestamp: e.timestamp
+                    })),
+                    callCount: cluster.totalCalls,
+                    totalTokens: cluster.totalTokens,
+                    priority: getPriority(cluster.totalCalls),
+                    savings: calculateSavings(cluster.totalCalls, cluster.totalTokens),
+                    callIds: cluster.callIds.slice(0, 10),
+                    // Duplicate detection flags
+                    isDuplicate,
+                    similarTriggers: similarTriggers.length > 0 ? similarTriggers : undefined,
+                    warning: isDuplicate ? 'Exact match exists in scenarios' : 
+                             similarTriggers.length > 0 ? `Similar to existing triggers: ${similarTriggers.join(', ')}` : undefined
+                };
+            })
             .sort((a, b) => b.callCount - a.callCount)
             .slice(0, CONFIG.MAX_GAPS_RETURNED);
         
