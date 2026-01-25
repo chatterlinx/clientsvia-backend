@@ -1845,7 +1845,12 @@
         <div class="modal" style="max-width: 1100px; width: 95%;">
             <div class="modal-header">
                 <h2><i class="fas fa-clipboard-check"></i> <span id="review-scenario-name">Scenario Review</span></h2>
-                <button class="modal-close" onclick="closeScenarioReview()">&times;</button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button onclick="copyAuditToClipboard()" style="background: #6366f1; border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;" title="Copy audit data to clipboard">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                    <button class="modal-close" onclick="closeScenarioReview()">&times;</button>
+                </div>
             </div>
             <div class="modal-body" style="padding: 0; max-height: 70vh; overflow-y: auto;">
                 <!-- Two Column Layout -->
@@ -2506,6 +2511,73 @@
                     `).join('')}
                 </div>
             `).join('');
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // Copy Audit Data to Clipboard (for verification)
+        // ════════════════════════════════════════════════════════════════════════
+        async function copyAuditToClipboard() {
+            if (currentReviewScenarioIdx === null || !window.auditScenarios) {
+                alert('No scenario data to copy');
+                return;
+            }
+            
+            const scenario = window.auditScenarios[currentReviewScenarioIdx];
+            const violations = scenario.violations || [];
+            
+            // Build a clean text representation
+            let text = `=== SCENARIO AUDIT: ${scenario.name || scenario.scenarioName} ===\n`;
+            text += `ID: ${scenario.scenarioId}\n`;
+            text += `Type: ${scenario.scenarioType || 'N/A'}\n`;
+            text += `Category: ${scenario.category || 'N/A'}\n`;
+            text += `Total Issues: ${violations.length}\n`;
+            text += `\n--- VIOLATIONS ---\n\n`;
+            
+            for (const v of violations) {
+                text += `[${v.severity || 'WARN'}] ${v.field}\n`;
+                text += `  Message: ${v.message}\n`;
+                if (v.value) {
+                    const valueStr = typeof v.value === 'string' 
+                        ? v.value.substring(0, 100) 
+                        : JSON.stringify(v.value).substring(0, 100);
+                    text += `  Current: "${valueStr}${valueStr.length >= 100 ? '...' : ''}"\n`;
+                }
+                if (v.suggestion) {
+                    text += `  Suggestion: ${v.suggestion}\n`;
+                }
+                text += `\n`;
+            }
+            
+            text += `\n--- RAW JSON ---\n`;
+            text += JSON.stringify({
+                scenarioId: scenario.scenarioId,
+                name: scenario.name || scenario.scenarioName,
+                scenarioType: scenario.scenarioType,
+                violationCount: violations.length,
+                violations: violations.map(v => ({
+                    field: v.field,
+                    severity: v.severity,
+                    message: v.message,
+                    value: v.value,
+                    suggestion: v.suggestion
+                }))
+            }, null, 2);
+            
+            try {
+                await navigator.clipboard.writeText(text);
+                // Show quick feedback
+                const btn = event.target.closest('button');
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.style.background = '#22c55e';
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.background = '#6366f1';
+                }, 1500);
+            } catch (err) {
+                console.error('Copy failed:', err);
+                alert('Failed to copy. Please try again.');
+            }
         }
         
         function closeScenarioReview() {
