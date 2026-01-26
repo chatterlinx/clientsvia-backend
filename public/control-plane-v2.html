@@ -5013,11 +5013,11 @@
         const companyTrade = window.__currentCompanyTrade || 'HVAC';
         
         // Load all placeholder data in parallel
-        // NEW: Use values-merged endpoint for single-source-of-truth view
-        const [mergedRes, scanRes, coverageRes, catalogRes] = await Promise.all([
+        // Use values-merged endpoint for single-source-of-truth view (with fallback)
+        const [mergedRes, scanRes, coverageRes, catalogRes, legacyRes] = await Promise.all([
           fetch(`/api/admin/placeholders/company/${currentCompanyId}/values-merged`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
-          }),
+          }).catch(() => ({ ok: false })),
           fetch(`/api/admin/placeholders/company/${currentCompanyId}/template-scan`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
           }).catch(() => ({ ok: false })),
@@ -5026,26 +5026,67 @@
           }).catch(() => ({ ok: false })),
           fetch(`/api/admin/placeholders/catalog?tradeKey=${encodeURIComponent(companyTrade)}`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
+          }).catch(() => ({ ok: false })),
+          // Fallback: legacy endpoint in case values-merged fails
+          fetch(`/api/company/${currentCompanyId}/placeholders`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
           }).catch(() => ({ ok: false }))
         ]);
         
-        if (!mergedRes.ok) {
-          throw new Error(`HTTP ${mergedRes.status}`);
+        // Try merged endpoint first, fall back to legacy if it fails
+        if (mergedRes.ok) {
+          const mergedData = await mergedRes.json();
+          if (mergedData.success) {
+            // Store merged rows (includes both existing AND missing tokens)
+            currentMergedPlaceholders = mergedData.rows || [];
+            
+            // Also maintain currentPlaceholders for compatibility (only existing ones)
+            currentPlaceholders = currentMergedPlaceholders
+              .filter(r => r.existsInCompany)
+              .map(r => ({
+                key: r.token.toLowerCase(),
+                value: r.value || '',
+                description: null
+              }));
+            console.log('✅ Loaded merged placeholders:', currentMergedPlaceholders.length, 'rows');
+          } else {
+            console.warn('⚠️ values-merged returned success:false, using fallback');
+            await useLegacyPlaceholders();
+          }
+        } else {
+          console.warn('⚠️ values-merged endpoint failed, using fallback');
+          await useLegacyPlaceholders();
         }
-
-        const mergedData = await mergedRes.json();
         
-        // Store merged rows (includes both existing AND missing tokens)
-        currentMergedPlaceholders = mergedData.rows || [];
-        
-        // Also maintain currentPlaceholders for compatibility (only existing ones)
-        currentPlaceholders = currentMergedPlaceholders
-          .filter(r => r.existsInCompany)
-          .map(r => ({
-            key: r.token.toLowerCase(),
-            value: r.value || '',
-            description: null
-          }));
+        // Helper to load from legacy endpoint
+        async function useLegacyPlaceholders() {
+          if (legacyRes.ok) {
+            const legacyData = await legacyRes.json();
+            const placeholders = Array.isArray(legacyData.placeholders) ? legacyData.placeholders : [];
+            currentPlaceholders = placeholders.map(p => ({
+              key: (p.key || '').toString().toLowerCase(),
+              value: (p.value || '').toString(),
+              description: p.description || null
+            }));
+            // Build merged list from legacy data
+            currentMergedPlaceholders = currentPlaceholders.map(p => ({
+              token: p.key,
+              displayToken: `{${p.key}}`,
+              label: p.key,
+              value: p.value,
+              existsInCompany: true,
+              required: false,
+              optional: false,
+              usedInCount: 0,
+              status: p.value ? 'filled' : 'missing'
+            }));
+            console.log('✅ Loaded legacy placeholders:', currentPlaceholders.length, 'items');
+          } else {
+            currentPlaceholders = [];
+            currentMergedPlaceholders = [];
+            console.error('❌ Both merged and legacy endpoints failed');
+          }
+        }
         
         // Process template scan
         if (scanRes.ok) {
