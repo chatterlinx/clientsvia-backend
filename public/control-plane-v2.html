@@ -6416,6 +6416,7 @@
       // FULL PLACEHOLDER TAB EXPORT (Server + UI Snapshot + Derived State)
       // ═══════════════════════════════════════════════════════════════════════════
       
+      const deferToNextTick = () => new Promise(resolve => setTimeout(resolve, 0));
       const safeClone = (value) => {
         try {
           return JSON.parse(JSON.stringify(value));
@@ -6444,6 +6445,9 @@
       }
       
       const canFetch = !!authToken;
+      
+      // Allow UI paint before heavy work (prevents long click handler violations)
+      await deferToNextTick();
       
       // ─────────────────────────────────────────────────────────────────────────
       // SERVER DATA (fresh)
@@ -6883,6 +6887,7 @@
       
       try {
         const exportData = await getPlaceholderPageJson();
+        await new Promise(resolve => setTimeout(resolve, 0));
         const jsonStr = JSON.stringify(exportData, null, 2);
         
         if (navigator.clipboard?.writeText) {
@@ -6935,6 +6940,7 @@
       
       try {
         const exportData = await getPlaceholderPageJson();
+        await new Promise(resolve => setTimeout(resolve, 0));
         const jsonStr = JSON.stringify(exportData, null, 2);
         
         // Generate filename with company name and timestamp
