@@ -20,6 +20,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
 const logger = require('../utils/logger');
+const { validateScenarioPlaceholders } = require('./placeholders/PlaceholderRegistry');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -259,6 +260,22 @@ class GlobalTemplatePatchService {
             fields: []
         };
 
+        // Validate placeholder governance BEFORE applying updates
+        const tradeKey = this._getTradeKey(template);
+        const candidateScenario = scenarioRef.toObject ? scenarioRef.toObject() : { ...scenarioRef };
+        if (op.set) {
+            for (const [key, value] of Object.entries(op.set)) {
+                if (ALLOWED_SCENARIO_FIELDS.includes(key)) {
+                    candidateScenario[key] = value;
+                }
+            }
+        }
+
+        const placeholderValidation = validateScenarioPlaceholders(candidateScenario, tradeKey);
+        if (!placeholderValidation.valid) {
+            throw new Error(`PLACEHOLDER_INVALID: ${placeholderValidation.message}`);
+        }
+
         // Apply allowed field updates
         if (op.set) {
             for (const [key, value] of Object.entries(op.set)) {
@@ -323,6 +340,12 @@ class GlobalTemplatePatchService {
             } else if (BLOCKED_FIELDS.includes(key)) {
                 throw new Error(`CONTAMINATION_BLOCKED: Field '${key}' cannot be set by client`);
             }
+        }
+
+        const tradeKey = this._getTradeKey(template);
+        const placeholderValidation = validateScenarioPlaceholders(newScenario, tradeKey);
+        if (!placeholderValidation.valid) {
+            throw new Error(`PLACEHOLDER_INVALID: ${placeholderValidation.message}`);
         }
 
         // Add to category
@@ -416,6 +439,12 @@ class GlobalTemplatePatchService {
                 return s + (sc.triggers || []).length;
             }, 0);
         }, 0);
+    }
+
+    _getTradeKey(template) {
+        const raw = template?.industryLabel || template?.templateType || '';
+        const trimmed = String(raw || '').trim();
+        return trimmed ? trimmed.toUpperCase() : null;
     }
 
     _summarizeValue(value) {

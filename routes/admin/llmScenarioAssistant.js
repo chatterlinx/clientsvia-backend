@@ -27,6 +27,7 @@ const {
   buildScenarioArchitectSystemPromptFromSettings,
   getEffectiveModelParams
 } = require('../../config/llmScenarioPrompts');
+const { buildPlaceholderGovernanceBlock } = require('../../services/placeholders/PlaceholderRegistry');
 const GlobalAIBehaviorTemplate = require('../../models/GlobalAIBehaviorTemplate');
 const { CANONICAL_SCENARIO_TYPES } = require('../../utils/scenarioTypes');
 
@@ -378,6 +379,7 @@ router.post('/draft', async (req, res) => {
       conversationLog = [],
       channel = 'voice',
       templateVariables = [],
+      tradeKey = null,
     } = req.body || {};
 
     // Validate required input
@@ -432,6 +434,7 @@ router.post('/draft', async (req, res) => {
 
     // Build system prompt using centralized function (includes base + profile + compliance)
     let systemPrompt = buildScenarioArchitectSystemPromptFromSettings(llmSettings);
+    systemPrompt += `\n\n${buildPlaceholderGovernanceBlock(tradeKey)}`;
 
     // Append the scenario-specific instructions (output format, rules, etc.)
     systemPrompt += `\n\n===== SCENARIO DRAFTING INSTRUCTIONS =====

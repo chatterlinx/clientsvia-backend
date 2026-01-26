@@ -4903,11 +4903,35 @@ technician"></textarea>
                             </label>
                             <textarea id="scenario-dynamic-variables" rows="5" style="width: 100%; padding: 14px 18px; border: 2px solid #e9ecef; border-radius: 10px; font-size: 15px; font-family: 'Courier New', monospace; resize: vertical;" placeholder='One per line in format: key=fallback
 Example:
-name=valued customer
+callerName=valued customer
 technician=our team member
 time=shortly
 location=your location'></textarea>
-                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Placeholders for entity-based personalization (use {name}, {time} in replies)</p>
+                            <p style="margin: 8px 0 0; font-size: 13px; color: #6c757d;">Placeholders for entity-based personalization (use {callerName}, {time} in replies)</p>
+                        </div>
+
+                        <!-- Placeholder Registry (canonical only) -->
+                        <div id="placeholder-registry-panel" style="border: 2px solid #e0e7ff; background: #eef2ff; border-radius: 10px; padding: 16px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <i class="fas fa-shield-alt" style="color: #4338ca;"></i>
+                                <strong style="color: #3730a3;">Placeholder Registry (Canonical Only)</strong>
+                                <span id="placeholder-registry-trade" style="font-size: 12px; color: #6366f1;"></span>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">
+                                    <div style="font-size: 12px; font-weight: 700; color: #1f2937; margin-bottom: 6px;">Company Tokens</div>
+                                    <div id="placeholder-registry-company" style="display: flex; flex-wrap: wrap; gap: 6px; font-family: 'Courier New', monospace; font-size: 12px;"></div>
+                                </div>
+                                <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px;">
+                                    <div style="font-size: 12px; font-weight: 700; color: #1f2937; margin-bottom: 6px;">Runtime Tokens</div>
+                                    <div id="placeholder-registry-runtime" style="display: flex; flex-wrap: wrap; gap: 6px; font-family: 'Courier New', monospace; font-size: 12px;"></div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 10px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 10px;">
+                                <div style="font-size: 12px; font-weight: 700; color: #be123c; margin-bottom: 6px;">Forbidden / Legacy Tokens (Blocked)</div>
+                                <div id="placeholder-registry-forbidden" style="display: flex; flex-wrap: wrap; gap: 6px; font-family: 'Courier New', monospace; font-size: 12px; color: #be123c;"></div>
+                            </div>
+                            <div id="placeholder-registry-warnings" style="margin-top: 10px; display: none;"></div>
                         </div>
 
                         <!-- Entity Validation (JSON) -->
@@ -6660,6 +6684,9 @@ Higher = detailed, thorough scenarios (more context)
         let availableBehaviors = []; // Loaded dynamically from database
         let currentScenarioEditMode = null; // 'add' or 'edit'
         let currentScenarioData = null; // { categoryId, categoryName, scenarioId }
+        let placeholderRegistry = null;
+        let placeholderRegistryTradeKey = null;
+        let placeholderActiveTextarea = null;
 
         // ============================================
         // AUTHENTICATION
@@ -6683,6 +6710,303 @@ Higher = detailed, thorough scenarios (more context)
             } else {
                 console.log(`[TOAST ${type.toUpperCase()}] ${message}`);
             }
+        }
+
+        // ============================================
+        // PLACEHOLDER GOVERNANCE (Registry + Autocomplete)
+        // ============================================
+        function getActiveTradeKey() {
+            const raw = activeTemplate?.industryLabel || activeTemplate?.templateType || '';
+            const trimmed = String(raw || '').trim();
+            return trimmed ? trimmed.toUpperCase() : null;
+        }
+
+        async function loadPlaceholderRegistryForTemplate(tradeKeyOverride = null) {
+            const tradeKey = tradeKeyOverride || getActiveTradeKey();
+            if (placeholderRegistry && placeholderRegistryTradeKey === tradeKey) {
+                renderPlaceholderRegistryPanel();
+                return placeholderRegistry;
+            }
+
+            try {
+                const token = getAuthToken();
+                const url = tradeKey
+                    ? `/api/admin/placeholders/registry?tradeKey=${encodeURIComponent(tradeKey)}`
+                    : `/api/admin/placeholders/registry`;
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Failed to load placeholder registry');
+                }
+
+                placeholderRegistry = data;
+                placeholderRegistryTradeKey = tradeKey || data.tradeKey || null;
+                renderPlaceholderRegistryPanel();
+                refreshPlaceholderGovernanceWarnings();
+                return placeholderRegistry;
+            } catch (error) {
+                console.error('❌ [PLACEHOLDER REGISTRY] Failed to load registry:', error);
+                placeholderRegistry = null;
+                placeholderRegistryTradeKey = null;
+                renderPlaceholderRegistryPanel();
+                return null;
+            }
+        }
+
+        function renderPlaceholderRegistryPanel() {
+            const tradeBadge = document.getElementById('placeholder-registry-trade');
+            const companyEl = document.getElementById('placeholder-registry-company');
+            const runtimeEl = document.getElementById('placeholder-registry-runtime');
+            const forbiddenEl = document.getElementById('placeholder-registry-forbidden');
+
+            if (!companyEl || !runtimeEl || !forbiddenEl) return;
+
+            if (!placeholderRegistry) {
+                if (tradeBadge) tradeBadge.textContent = '';
+                companyEl.innerHTML = '<span style="color:#9ca3af;">Registry not loaded</span>';
+                runtimeEl.innerHTML = '<span style="color:#9ca3af;">Registry not loaded</span>';
+                forbiddenEl.innerHTML = '<span style="color:#9ca3af;">Registry not loaded</span>';
+                return;
+            }
+
+            if (tradeBadge) {
+                tradeBadge.textContent = `Trade: ${placeholderRegistryTradeKey || placeholderRegistry.tradeKey || 'UNIVERSAL'}`;
+            }
+
+            const renderChip = (token, color) => `
+                <span style="background:${color}; border-radius:6px; padding:2px 6px;">{${token}}</span>
+            `;
+
+            companyEl.innerHTML = (placeholderRegistry.companyTokens || [])
+                .map(t => renderChip(t.key, '#e0e7ff'))
+                .join('') || '<span style="color:#9ca3af;">None</span>';
+
+            runtimeEl.innerHTML = (placeholderRegistry.runtimeTokens || [])
+                .map(t => renderChip(t.key, '#dbeafe'))
+                .join('') || '<span style="color:#9ca3af;">None</span>';
+
+            forbiddenEl.innerHTML = (placeholderRegistry.forbiddenTokens || [])
+                .map(t => `<span style="background:#fee2e2; border-radius:6px; padding:2px 6px;">{${t.key}} → {${t.canonical}}</span>`)
+                .join('') || '<span style="color:#9ca3af;">None</span>';
+        }
+
+        function collectScenarioTextFields() {
+            const ids = [
+                'scenario-quick-replies',
+                'scenario-full-replies',
+                'scenario-followup-funnel'
+            ];
+            return ids
+                .map(id => document.getElementById(id))
+                .filter(Boolean)
+                .map(el => el.value || '');
+        }
+
+        function extractPlaceholderTokensFromText(text) {
+            const tokens = new Set();
+            const regex = /\{?\{([a-zA-Z][a-zA-Z0-9_]*)\}?\}?|\[([a-zA-Z][a-zA-Z0-9_]*)\]/g;
+            let match;
+            while ((match = regex.exec(text)) !== null) {
+                const key = match[1] || match[2];
+                if (key) tokens.add(key);
+            }
+            return tokens;
+        }
+
+        function refreshPlaceholderGovernanceWarnings() {
+            const warningEl = document.getElementById('placeholder-registry-warnings');
+            if (!warningEl) return;
+
+            if (!placeholderRegistry) {
+                warningEl.style.display = 'none';
+                warningEl.innerHTML = '';
+                return;
+            }
+
+            const issues = getPlaceholderGovernanceIssues();
+            const forbidden = issues.forbidden;
+            const unknown = issues.unknown;
+
+            if (forbidden.length === 0 && unknown.length === 0) {
+                warningEl.style.display = 'none';
+                warningEl.innerHTML = '';
+                return;
+            }
+
+            const forbiddenHtml = forbidden.map(f => `
+                <li style="margin-bottom:6px;">
+                    <strong>{${f.key}}</strong> → <span style="color:#1d4ed8;">{${f.canonical}}</span>
+                    <button onclick="replaceForbiddenToken('${f.key}', '${f.canonical}')" style="margin-left:8px; background:#ef4444; color:white; border:none; padding:2px 6px; border-radius:6px; font-size:11px; cursor:pointer;">Fix</button>
+                </li>
+            `).join('');
+
+            const unknownHtml = unknown.map(t => `<li style="margin-bottom:6px;"><strong>{${t}}</strong></li>`).join('');
+
+            warningEl.style.display = 'block';
+            warningEl.innerHTML = `
+                <div style="background:#fee2e2; border:1px solid #fecaca; border-radius:8px; padding:10px; color:#991b1b; font-size:12px;">
+                    <div style="font-weight:700; margin-bottom:6px;">Blocked placeholders detected (must fix before saving)</div>
+                    ${forbidden.length ? `<ul style="margin-left:16px;">${forbiddenHtml}</ul>` : ''}
+                    ${unknown.length ? `<div style="margin-top:8px; font-weight:700;">Unknown tokens:</div><ul style="margin-left:16px;">${unknownHtml}</ul>` : ''}
+                </div>
+            `;
+        }
+
+        function getPlaceholderGovernanceIssues() {
+            if (!placeholderRegistry) {
+                return { forbidden: [], unknown: [] };
+            }
+
+            const companyKeys = new Set((placeholderRegistry.companyTokens || []).map(t => t.key.toLowerCase()));
+            const runtimeKeys = new Set((placeholderRegistry.runtimeTokens || []).map(t => t.key.toLowerCase()));
+            const aliasMap = placeholderRegistry.aliasMap || {};
+
+            const tokens = new Set();
+            collectScenarioTextFields().forEach(text => {
+                extractPlaceholderTokensFromText(text).forEach(t => tokens.add(t));
+            });
+
+            const forbidden = [];
+            const unknown = [];
+
+            tokens.forEach(token => {
+                const lower = token.toLowerCase();
+                if (aliasMap[lower]) {
+                    forbidden.push({ key: token, canonical: aliasMap[lower] });
+                    return;
+                }
+                if (!companyKeys.has(lower) && !runtimeKeys.has(lower)) {
+                    unknown.push(token);
+                }
+            });
+
+            return { forbidden, unknown };
+        }
+
+        function replaceForbiddenToken(legacy, canonical) {
+            const ids = ['scenario-quick-replies', 'scenario-full-replies', 'scenario-followup-funnel'];
+            const braceLegacy = new RegExp(`\\{\\s*${escapeRegExp(legacy)}\\s*\\}`, 'gi');
+            const bracketLegacy = new RegExp(`\\[\\s*${escapeRegExp(legacy)}\\s*\\]`, 'gi');
+
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.value = el.value
+                    .replace(braceLegacy, `{${canonical}}`)
+                    .replace(bracketLegacy, `{${canonical}}`);
+            });
+
+            refreshPlaceholderGovernanceWarnings();
+        }
+
+        function escapeRegExp(value) {
+            return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function attachPlaceholderAutocomplete() {
+            const ids = ['scenario-quick-replies', 'scenario-full-replies', 'scenario-followup-funnel'];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+
+                el.addEventListener('input', () => {
+                    updatePlaceholderSuggestions(el);
+                    refreshPlaceholderGovernanceWarnings();
+                });
+
+                el.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape') {
+                        hidePlaceholderSuggestions();
+                    }
+                });
+
+                el.addEventListener('blur', () => {
+                    setTimeout(() => {
+                        if (document.activeElement !== el) {
+                            hidePlaceholderSuggestions();
+                        }
+                    }, 150);
+                });
+            });
+        }
+
+        function updatePlaceholderSuggestions(textarea) {
+            if (!textarea || !placeholderRegistry) return;
+            const cursor = textarea.selectionStart || 0;
+            const before = textarea.value.slice(0, cursor);
+            const match = before.match(/\{([a-zA-Z0-9_]*)$/);
+            if (!match) {
+                hidePlaceholderSuggestions();
+                return;
+            }
+
+            placeholderActiveTextarea = textarea;
+            const query = (match[1] || '').toLowerCase();
+            const matchStart = match.index;
+            const matchEnd = before.length;
+            textarea.dataset.placeholderMatchStart = matchStart;
+            textarea.dataset.placeholderMatchEnd = matchEnd;
+
+            showPlaceholderSuggestions(textarea, query);
+        }
+
+        function showPlaceholderSuggestions(textarea, query) {
+            const panel = document.getElementById('placeholder-suggestion-panel');
+            if (!panel || !placeholderRegistry) return;
+
+            const companyTokens = (placeholderRegistry.companyTokens || [])
+                .map(t => t.key)
+                .filter(k => k.toLowerCase().includes(query));
+            const runtimeTokens = (placeholderRegistry.runtimeTokens || [])
+                .map(t => t.key)
+                .filter(k => k.toLowerCase().includes(query));
+
+            const renderSection = (title, tokens) => {
+                if (!tokens.length) return '';
+                return `
+                    <div style="margin-bottom:8px;">
+                        <div style="font-size:11px; font-weight:700; color:#4b5563; margin-bottom:4px;">${title}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                            ${tokens.map(t => `<button onclick="insertPlaceholderToken('${t}')" style="background:#e0e7ff; border:none; padding:4px 6px; border-radius:6px; font-family:'Courier New', monospace; font-size:12px; cursor:pointer;">{${t}}</button>`).join('')}
+                        </div>
+                    </div>
+                `;
+            };
+
+            panel.innerHTML = `
+                ${renderSection('Company Tokens', companyTokens)}
+                ${renderSection('Runtime Tokens', runtimeTokens)}
+            `;
+
+            const rect = textarea.getBoundingClientRect();
+            panel.style.left = `${Math.min(rect.left, window.innerWidth - 540)}px`;
+            panel.style.top = `${rect.bottom + 6}px`;
+            panel.style.display = 'block';
+        }
+
+        function hidePlaceholderSuggestions() {
+            const panel = document.getElementById('placeholder-suggestion-panel');
+            if (panel) {
+                panel.style.display = 'none';
+            }
+        }
+
+        function insertPlaceholderToken(token) {
+            if (!placeholderActiveTextarea) return;
+            const el = placeholderActiveTextarea;
+            const start = Number(el.dataset.placeholderMatchStart || el.selectionStart || 0);
+            const end = Number(el.dataset.placeholderMatchEnd || el.selectionStart || 0);
+            const before = el.value.slice(0, start);
+            const after = el.value.slice(end);
+            const insert = `{${token}}`;
+            el.value = `${before}${insert}${after}`;
+            const newPos = before.length + insert.length;
+            el.focus();
+            el.setSelectionRange(newPos, newPos);
+            hidePlaceholderSuggestions();
+            refreshPlaceholderGovernanceWarnings();
         }
 
         // ============================================
@@ -6878,6 +7202,7 @@ Higher = detailed, thorough scenarios (more context)
                 activeTemplateId = result.data._id;
                 window.activeTemplateId = result.data._id; // Make available to template-settings-manager.js
                 window.activeTemplate = result.data; // Make available to loadSuggestions()
+                await loadPlaceholderRegistryForTemplate(getActiveTradeKey());
                 updateDashboardStats();
                 renderCategories();
                 return activeTemplate;
@@ -13300,6 +13625,13 @@ Higher = detailed, thorough scenarios (more context)
             }
             
             console.log('🔍 [CHECKPOINT 4] Sending request with token...');
+            const registry = await loadPlaceholderRegistryForTemplate(getActiveTradeKey());
+            const templateVariables = registry
+                ? [
+                    ...(registry.companyTokens || []).map(t => t.key),
+                    ...(registry.runtimeTokens || []).map(t => t.key)
+                ]
+                : [];
             const response = await fetch('/api/admin/scenario-assistant/draft', {
                 method: 'POST',
                 headers: {
@@ -13311,7 +13643,8 @@ Higher = detailed, thorough scenarios (more context)
                     description: aiState.description,
                     conversationLog: aiState.conversationLog,
                     channel: 'voice',
-                    templateVariables: ['companyname', 'phone', 'address', 'website_url', 'office_hours'],
+                    tradeKey: getActiveTradeKey(),
+                    templateVariables,
                 }),
             });
             
@@ -14143,6 +14476,7 @@ Higher = detailed, thorough scenarios (more context)
             if (data.preconditions !== undefined) setFieldValue('scenario-preconditions', typeof data.preconditions === 'object' ? JSON.stringify(data.preconditions, null, 2) : data.preconditions);
             if (data.effects !== undefined) setFieldValue('scenario-effects', typeof data.effects === 'object' ? JSON.stringify(data.effects, null, 2) : data.effects);
             
+            refreshPlaceholderGovernanceWarnings();
             console.log('📥 [IMPORT JSON] Form fields populated!');
         }
         
@@ -14190,6 +14524,13 @@ Higher = detailed, thorough scenarios (more context)
             
             if (!name || !triggers || !quickReplies || !fullReplies) {
                 alert('Please fill all required fields: Scenario Name, Triggers, Quick Replies, Full Replies');
+                return;
+            }
+
+            const placeholderIssues = getPlaceholderGovernanceIssues();
+            if (placeholderIssues.forbidden.length > 0 || placeholderIssues.unknown.length > 0) {
+                showNotification('❌ Scenario contains forbidden or unknown placeholders. Fix them before saving.', 'error');
+                refreshPlaceholderGovernanceWarnings();
                 return;
             }
             
@@ -17194,6 +17535,7 @@ Higher = detailed, thorough scenarios (more context)
                     activeTemplateId = template._id;
                     window.activeTemplateId = template._id; // Make available to template-settings-manager.js
                     window.activeTemplate = template; // Make available to loadSuggestions()
+                    await loadPlaceholderRegistryForTemplate(getActiveTradeKey());
                     
                     console.log('🔍 [SWITCH TEMPLATE] activeTemplate updated:', {
                         id: activeTemplate._id,
@@ -20354,6 +20696,7 @@ ${JSON.stringify(healthData, null, 2)}
         
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🚀 [PAGE INIT] DOMContentLoaded event fired - Global AI Brain Management - Initializing...');
+            attachPlaceholderAutocomplete();
             
             // CHECKPOINT: Verify AI Suggestions section exists in DOM
             const suggestionsSectionCheck = document.getElementById('ai-suggestions-section');
@@ -22375,6 +22718,9 @@ Safety:
             </form>
         </div>
     </div>
+
+    <!-- Placeholder Autocomplete Panel -->
+    <div id="placeholder-suggestion-panel" style="position: fixed; z-index: 10010; display: none; min-width: 320px; max-width: 520px; max-height: 240px; overflow-y: auto; background: #ffffff; border: 2px solid #e5e7eb; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); padding: 10px;"></div>
 
 </body>
 </html>

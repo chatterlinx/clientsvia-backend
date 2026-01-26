@@ -50,6 +50,7 @@ const PlaceholderScanService = require('../../services/PlaceholderScanService');
 const IntelligentPatternDetector = require('../../services/IntelligentPatternDetector');
 const SuggestionKnowledgeBase = require('../../models/SuggestionKnowledgeBase');
 const AdminNotificationService = require('../../services/AdminNotificationService');
+const { validateScenarioPlaceholders } = require('../../services/placeholders/PlaceholderRegistry');
 
 // ============================================================================
 // MIDDLEWARE
@@ -1643,6 +1644,20 @@ router.post('/:templateId/categories/:categoryId/scenarios', async (req, res) =>
             legacyMigrated: false
         };
 
+        // Placeholder governance validation (canonical tokens only)
+        const tradeKey = (template.industryLabel || template.templateType || '').toString().trim().toUpperCase() || null;
+        const placeholderValidation = validateScenarioPlaceholders(newScenario, tradeKey);
+        if (!placeholderValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: placeholderValidation.message,
+                errors: {
+                    forbiddenLegacy: placeholderValidation.forbiddenLegacy,
+                    unknownInvalid: placeholderValidation.unknownInvalid
+                }
+            });
+        }
+
         // Add to category
         category.scenarios.push(newScenario);
 
@@ -1731,6 +1746,24 @@ router.patch('/:templateId/categories/:categoryId/scenarios/:scenarioId', async 
 
         const scenario = category.scenarios[scenarioIndex];
         const changes = [];
+
+        // Placeholder governance validation (canonical tokens only)
+        const tradeKey = (template.industryLabel || template.templateType || '').toString().trim().toUpperCase() || null;
+        const candidateScenario = scenario.toObject ? scenario.toObject() : { ...scenario };
+        Object.entries(updates || {}).forEach(([key, value]) => {
+            candidateScenario[key] = value;
+        });
+        const placeholderValidation = validateScenarioPlaceholders(candidateScenario, tradeKey);
+        if (!placeholderValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: placeholderValidation.message,
+                errors: {
+                    forbiddenLegacy: placeholderValidation.forbiddenLegacy,
+                    unknownInvalid: placeholderValidation.unknownInvalid
+                }
+            });
+        }
 
         // Track what changed
         if (updates.name && updates.name !== scenario.name) {
@@ -2263,7 +2296,7 @@ function buildUniversalTestTemplate(ulid) {
                         dynamicVariables: {
                             '{date}': 'your preferred date',
                             '{time}': 'your preferred time',
-                            '{name}': 'there'
+                            '{callerName}': 'there'
                         },
                         actionHooks: ['offer_scheduling', 'capture_customer_info'],
                         replySelection: 'random',

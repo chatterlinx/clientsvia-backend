@@ -21,6 +21,7 @@ const {
     validateKey,
     getGPTPlaceholderGuide 
 } = require('../../config/placeholders/PlaceholderCatalog');
+const { buildPlaceholderRegistry } = require('../../services/placeholders/PlaceholderRegistry');
 
 const { 
     analyzeTemplatePlaceholders, 
@@ -34,6 +35,25 @@ const Company = require('../../models/v2Company');
 // ════════════════════════════════════════════════════════════════════════════════
 // GET PLACEHOLDER CATALOG
 // ════════════════════════════════════════════════════════════════════════════════
+router.get('/registry', async (req, res) => {
+    try {
+        const { tradeKey } = req.query;
+        const registry = buildPlaceholderRegistry(tradeKey);
+
+        res.json({
+            success: true,
+            tradeKey: registry.tradeKey,
+            companyTokens: registry.companyTokens,
+            runtimeTokens: registry.runtimeTokens,
+            forbiddenTokens: registry.forbiddenTokens,
+            aliasMap: registry.aliasMap
+        });
+    } catch (error) {
+        logger.error('[PLACEHOLDERS] Error getting registry:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 router.get('/catalog', async (req, res) => {
     try {
         const { tradeKey, format = 'full' } = req.query;

@@ -11,7 +11,7 @@
  * ════════════════════════════════════════════════════════════════════════════════
  */
 
-const { getCatalog, resolveAlias, validateKey } = require('../../config/placeholders/PlaceholderCatalog');
+const { getCatalog, resolveAlias } = require('../../config/placeholders/PlaceholderCatalog');
 const logger = require('../../utils/logger');
 
 // Regex to extract placeholder tokens: {key} or {{key}} or [key]
@@ -214,10 +214,16 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
         tokensUsed: [],
         
         // Validation results
-        validTokens: [],
-        unknownTokens: [],
-        aliasedTokens: [], // Tokens using old names
-        runtimeTokens: [], // Runtime tokens (system-filled)
+        validTokens: [],           // Canonical tokens only
+        unknownTokens: [],         // Unknown or invalid tokens
+        aliasedTokens: [],         // Legacy tokens (deprecated) - kept for backward compat
+        runtimeTokens: [],         // Canonical runtime tokens
+
+        // New governance classifications
+        canonicalCompanyTokens: [],
+        canonicalRuntimeTokens: [],
+        forbiddenLegacyTokens: [],
+        unknownInvalidTokens: [],
         
         // For UI "required placeholders" display
         requiredPlaceholders: [],
@@ -233,72 +239,113 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
     const optionalKeySet = new Set();
     const runtimeKeySet = new Set();
     
+    const aliasMap = catalog.aliases || {};
+
     // Analyze each token
     for (const key of scanResult.tokensFound) {
-        const validation = validateKey(key, tradeKey);
-        
         analysis.tokensUsed.push(key);
-        
-        if (validation.valid) {
-            analysis.validTokens.push(key);
-            
-            if (validation.isAlias) {
-                analysis.aliasedTokens.push({
-                    found: key,
-                    canonical: validation.canonicalKey,
-                    recommendation: `Replace {${key}} with {${validation.canonicalKey}}`,
-                    scope: validation.placeholder?.scope || 'company'
-                });
-            }
-            
-            // Categorize by required/optional
-            const placeholder = validation.placeholder;
-            if (placeholder?.scope === 'runtime') {
-                const runtimeKey = validation.canonicalKey;
-                if (!runtimeKeySet.has(runtimeKey)) {
-                    analysis.runtimeTokens.push({
-                        key: validation.canonicalKey,
-                        originalKey: key,
-                        label: placeholder.label,
-                        type: placeholder.type,
-                        scope: 'runtime',
-                        usedIn: scanResult.keyUsage[key] || []
-                    });
-                    runtimeKeySet.add(runtimeKey);
-                }
-                continue;
-            }
+        const normalizedKey = String(key || '').trim();
+        const lowerKey = normalizedKey.toLowerCase();
 
-            const item = {
-                key: validation.canonicalKey,
-                originalKey: key,
-                label: placeholder.label,
-                type: placeholder.type,
-                category: placeholder.category,
-                required: placeholder.required,
-                fallback: placeholder.fallback,
-                example: placeholder.example,
+        // Legacy alias tokens are FORBIDDEN in authoring
+        if (aliasMap[lowerKey]) {
+            const canonical = aliasMap[lowerKey];
+            const legacyInfo = {
+                found: normalizedKey,
+                canonical,
+                recommendation: `Replace {${normalizedKey}} with {${canonical}}`,
+                scope: catalog.byKey[canonical]?.scope || 'company',
                 usedIn: scanResult.keyUsage[key] || []
             };
-            
-            if (placeholder.required) {
-                if (!requiredKeySet.has(item.key)) {
-                    analysis.requiredPlaceholders.push(item);
-                    requiredKeySet.add(item.key);
-                }
-            } else {
-                if (!optionalKeySet.has(item.key)) {
-                    analysis.optionalPlaceholders.push(item);
-                    optionalKeySet.add(item.key);
-                }
+            analysis.aliasedTokens.push(legacyInfo);
+            analysis.forbiddenLegacyTokens.push({
+                key: normalizedKey,
+                canonical,
+                recommendation: legacyInfo.recommendation,
+                scope: legacyInfo.scope,
+                usedIn: legacyInfo.usedIn
+            });
+            continue;
+        }
+
+        const placeholder = catalog.byKey[normalizedKey];
+        if (!placeholder) {
+            let suggestion = 'Add to catalog or replace with valid placeholder';
+            const canonicalMatch = Object.keys(catalog.byKey).find(k => k.toLowerCase() === lowerKey);
+            if (canonicalMatch) {
+                suggestion = `Use {${canonicalMatch}}`;
+            }
+
+            analysis.unknownTokens.push({
+                key: normalizedKey,
+                usedIn: scanResult.keyUsage[key] || [],
+                suggestion
+            });
+            analysis.unknownInvalidTokens.push({
+                key: normalizedKey,
+                usedIn: scanResult.keyUsage[key] || [],
+                suggestion
+            });
+            continue;
+        }
+
+        // Canonical token
+        analysis.validTokens.push(normalizedKey);
+
+        if (placeholder.scope === 'runtime') {
+            if (!runtimeKeySet.has(placeholder.key)) {
+                analysis.runtimeTokens.push({
+                    key: placeholder.key,
+                    originalKey: normalizedKey,
+                    label: placeholder.label,
+                    type: placeholder.type,
+                    scope: 'runtime',
+                    usedIn: scanResult.keyUsage[key] || []
+                });
+                analysis.canonicalRuntimeTokens.push({
+                    key: placeholder.key,
+                    label: placeholder.label,
+                    type: placeholder.type,
+                    category: placeholder.category,
+                    usedIn: scanResult.keyUsage[key] || []
+                });
+                runtimeKeySet.add(placeholder.key);
+            }
+            continue;
+        }
+
+        const item = {
+            key: placeholder.key,
+            originalKey: normalizedKey,
+            label: placeholder.label,
+            type: placeholder.type,
+            category: placeholder.category,
+            required: placeholder.required,
+            fallback: placeholder.fallback,
+            example: placeholder.example,
+            usedIn: scanResult.keyUsage[key] || []
+        };
+
+        if (placeholder.required) {
+            if (!requiredKeySet.has(item.key)) {
+                analysis.requiredPlaceholders.push(item);
+                requiredKeySet.add(item.key);
             }
         } else {
-            analysis.unknownTokens.push({
-                key,
-                usedIn: scanResult.keyUsage[key] || [],
-                suggestion: 'Add to catalog or replace with valid placeholder'
-            });
+            if (!optionalKeySet.has(item.key)) {
+                analysis.optionalPlaceholders.push(item);
+                optionalKeySet.add(item.key);
+            }
         }
+
+        analysis.canonicalCompanyTokens.push({
+            key: placeholder.key,
+            label: placeholder.label,
+            type: placeholder.type,
+            category: placeholder.category,
+            required: placeholder.required,
+            usedIn: scanResult.keyUsage[key] || []
+        });
     }
     
     // Sort by category
@@ -328,12 +375,12 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
         });
     }
     
-    if (analysis.aliasedTokens.length > 0) {
+    if (analysis.forbiddenLegacyTokens.length > 0) {
         analysis.warnings.push({
-            type: 'ALIASED_TOKENS',
-            severity: 'WARNING',
-            message: `Template uses ${analysis.aliasedTokens.length} legacy placeholder name(s) that should be updated`,
-            action: 'Consider updating to canonical names for consistency'
+            type: 'FORBIDDEN_LEGACY_TOKENS',
+            severity: 'ERROR',
+            message: `Template uses ${analysis.forbiddenLegacyTokens.length} forbidden legacy placeholder(s): ${analysis.forbiddenLegacyTokens.map(t => t.key).join(', ')}`,
+            action: 'Replace legacy tokens with canonical names'
         });
     }
     

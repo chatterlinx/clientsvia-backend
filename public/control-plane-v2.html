@@ -6408,151 +6408,464 @@
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // PLACEHOLDER PAGE JSON EXPORT (Server-Backed - NOT DOM Scraping)
+    // PLACEHOLDER PAGE JSON EXPORT (Server + UI Snapshot + Derived State)
     // ═══════════════════════════════════════════════════════════════════════════
     
     async function getPlaceholderPageJson() {
       // ═══════════════════════════════════════════════════════════════════════════
-      // SERVER-BACKED EXPORT
-      // Fetches fresh data from APIs - NOT from DOM or local state
-      // This guarantees the export is always complete and accurate
+      // FULL PLACEHOLDER TAB EXPORT (Server + UI Snapshot + Derived State)
       // ═══════════════════════════════════════════════════════════════════════════
+      
+      const safeClone = (value) => {
+        try {
+          return JSON.parse(JSON.stringify(value));
+        } catch (e) {
+          console.warn('Export clone failed:', e);
+          return null;
+        }
+      };
+      
+      const buildValuesMap = (placeholders) => {
+        const map = {};
+        (placeholders || []).forEach(p => {
+          const key = (p?.key || '').toString().toLowerCase();
+          if (!key) return;
+          map[key] = p?.value;
+        });
+        return map;
+      };
       
       const companyId = currentCompanyId || document.getElementById('company-select')?.value;
       const companyName = document.getElementById('company-select')?.selectedOptions[0]?.text || null;
-      const tradeKey = window.__currentCompanyTrade || 'HVAC';
+      const tradeKey = (currentTradeKey || window.__currentCompanyTrade || 'hvac').toString().toLowerCase();
       
-      // ─────────────────────────────────────────────────────────────────────────
-      // VALIDATION: Hard fail if missing required context
-      // ─────────────────────────────────────────────────────────────────────────
       if (!companyId) {
         throw new Error('Export failed: No company selected. Select a company profile first.');
       }
       
-      if (!authToken) {
-        throw new Error('Export failed: Not authenticated. Please refresh the page.');
-      }
+      const canFetch = !!authToken;
       
       // ─────────────────────────────────────────────────────────────────────────
-      // FETCH ALL DATA FROM SERVER (parallel for speed)
+      // SERVER DATA (fresh)
       // ─────────────────────────────────────────────────────────────────────────
-      console.log('📦 Fetching fresh data from server...');
+      let catalogRes = null;
+      let templateScanRes = null;
+      let coverageRes = null;
+      let mergedRes = null;
       
-      const [catalogRes, templateScanRes, coverageRes, mergedRes] = await Promise.all([
-        // 1. Placeholder Catalog (all allowed company tokens for this trade)
-        fetch(`/api/admin/placeholders/catalog?tradeKey=${encodeURIComponent(tradeKey)}`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        }).catch(e => ({ ok: false, error: e.message })),
-        
-        // 2. Template Scan (what tokens the active template uses)
-        fetch(`/api/admin/placeholders/company/${companyId}/template-scan`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        }).catch(e => ({ ok: false, error: e.message })),
-        
-        // 3. Coverage (filled vs missing analysis)
-        fetch(`/api/admin/placeholders/company/${companyId}/coverage`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        }).catch(e => ({ ok: false, error: e.message })),
-        
-        // 4. Merged Values (single source of truth - existing + missing tokens)
-        fetch(`/api/admin/placeholders/company/${companyId}/values-merged`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        }).catch(e => ({ ok: false, error: e.message }))
-      ]);
-      
-      // ─────────────────────────────────────────────────────────────────────────
-      // PARSE RESPONSES (with error handling)
-      // ─────────────────────────────────────────────────────────────────────────
       let catalog = null;
       let templateScan = null;
       let coverage = null;
       let valuesMerged = null;
       
-      if (catalogRes.ok) {
-        const data = await catalogRes.json();
-        catalog = data.success ? data.catalog : null;
+      const serverFetch = {
+        catalog: null,
+        templateScan: null,
+        coverage: null,
+        valuesMerged: null,
+        skipped: !canFetch,
+        warnings: []
+      };
+      
+      if (canFetch) {
+        console.log('📦 Fetching fresh data from server...');
+        
+        [catalogRes, templateScanRes, coverageRes, mergedRes] = await Promise.all([
+          fetch(`/api/admin/placeholders/catalog?tradeKey=${encodeURIComponent(tradeKey)}`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          }).catch(e => ({ ok: false, error: e.message })),
+          fetch(`/api/admin/placeholders/company/${companyId}/template-scan`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          }).catch(e => ({ ok: false, error: e.message })),
+          fetch(`/api/admin/placeholders/company/${companyId}/coverage`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          }).catch(e => ({ ok: false, error: e.message })),
+          fetch(`/api/admin/placeholders/company/${companyId}/values-merged`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          }).catch(e => ({ ok: false, error: e.message }))
+        ]);
+        
+        const fetchMeta = (res) => ({
+          ok: !!res?.ok,
+          status: typeof res?.status === 'number' ? res.status : null,
+          error: res?.error || null
+        });
+        
+        serverFetch.catalog = fetchMeta(catalogRes);
+        serverFetch.templateScan = fetchMeta(templateScanRes);
+        serverFetch.coverage = fetchMeta(coverageRes);
+        serverFetch.valuesMerged = fetchMeta(mergedRes);
+        
+        if (catalogRes?.ok) {
+          const data = await catalogRes.json().catch(() => null);
+          catalog = data?.success ? data.catalog : null;
+        }
+        
+        if (templateScanRes?.ok) {
+          const data = await templateScanRes.json().catch(() => null);
+          templateScan = data?.success ? data : null;
+        }
+        
+        if (coverageRes?.ok) {
+          const data = await coverageRes.json().catch(() => null);
+          coverage = data?.success ? data : null;
+        }
+        
+        if (mergedRes?.ok) {
+          const data = await mergedRes.json().catch(() => null);
+          valuesMerged = data?.success ? data : null;
+        }
+      } else {
+        serverFetch.warnings.push('No auth token available; export includes UI snapshot only.');
       }
       
-      if (templateScanRes.ok) {
-        const data = await templateScanRes.json();
-        templateScan = data.success ? data : null;
-      }
+      // ─────────────────────────────────────────────────────────────────────────
+      // SOURCE SELECTION FOR DERIVED UI STATE
+      // ─────────────────────────────────────────────────────────────────────────
+      const derivedTemplateScan = templateScan || currentTemplateScan || null;
+      const derivedPlaceholders = Array.isArray(currentPlaceholders) ? currentPlaceholders : [];
+      const derivedMergedRows = (() => {
+        if (Array.isArray(valuesMerged?.rows) && valuesMerged.rows.length) {
+          return valuesMerged.rows;
+        }
+        if (Array.isArray(currentMergedPlaceholders) && currentMergedPlaceholders.length) {
+          return currentMergedPlaceholders;
+        }
+        if (derivedPlaceholders.length) {
+          return derivedPlaceholders.map(p => ({
+            token: p.key,
+            displayToken: `{${p.key}}`,
+            label: p.key,
+            value: p.value || '',
+            existsInCompany: true,
+            requiredByCatalog: false,
+            requiredByTemplate: false,
+            optionalByCatalog: false,
+            usedByTemplate: false,
+            usedInCount: 0,
+            status: p.value ? 'filled' : 'missing',
+            mode: (p.mode || 'LITERAL').toString().trim().toUpperCase(),
+            effectiveMode: (p.mode || 'LITERAL').toString().trim().toUpperCase(),
+            supportsModes: [],
+            defaultMode: 'LITERAL',
+            isSatisfied: !!(p.value && String(p.value).trim())
+          }));
+        }
+        return [];
+      })();
+      const derivedCatalog = catalog || currentPlaceholderCatalog || null;
       
-      if (coverageRes.ok) {
-        const data = await coverageRes.json();
-        coverage = data.success ? data : null;
-      }
+      // ─────────────────────────────────────────────────────────────────────────
+      // DERIVED MODULES (Template TODO, warnings, checklist, etc.)
+      // ─────────────────────────────────────────────────────────────────────────
+      const computeTemplateTodo = ({ mergedRows, templateScan, placeholders }) => {
+        const filledTokens = [];
+        const missingCatalogRequired = [];
+        const missingTemplateRequired = [];
+        const source = mergedRows.length > 0 ? 'values-merged' : 'template-scan';
+        
+        if (mergedRows.length > 0) {
+          for (const row of mergedRows) {
+            if (row.scope && row.scope !== 'company') continue;
+            const hasValue = row.value && String(row.value).trim();
+            const isSatisfied = row.isSatisfied === true || (row.effectiveMode && row.effectiveMode !== 'LITERAL') || !!hasValue;
+            const item = {
+              key: row.token,
+              label: row.label || row.token,
+              requiredByCatalog: !!row.requiredByCatalog,
+              requiredByTemplate: !!row.requiredByTemplate,
+              usedIn: row.usedInCount || 0,
+              value: hasValue ? row.value : null,
+              isSatisfied,
+              existsInCompany: row.existsInCompany
+            };
+            
+            if (isSatisfied) {
+              filledTokens.push(item);
+            } else if (item.requiredByCatalog) {
+              missingCatalogRequired.push(item);
+            } else if (item.requiredByTemplate) {
+              missingTemplateRequired.push(item);
+            }
+          }
+        } else {
+          const analysis = templateScan?.analysis || {};
+          const allCompanyTokens = [
+            ...(analysis.requiredPlaceholders || []),
+            ...(analysis.optionalPlaceholders || [])
+          ];
+          
+          const valuesMap = buildValuesMap(placeholders);
+          
+          for (const token of allCompanyTokens) {
+            const key = token.key.toLowerCase();
+            const value = valuesMap[key];
+            const hasValue = value !== undefined && value !== null && value !== '';
+            const usedCount = (token.usedIn || []).length;
+            
+            const item = {
+              key: token.key,
+              label: token.label || token.key,
+              requiredByCatalog: false,
+              requiredByTemplate: !!token.required,
+              usedIn: usedCount,
+              value: hasValue ? value : null,
+              existsInCompany: Object.prototype.hasOwnProperty.call(valuesMap, key)
+            };
+            
+            if (hasValue) {
+              filledTokens.push(item);
+            } else if (item.requiredByTemplate) {
+              missingTemplateRequired.push(item);
+            }
+          }
+        }
+        
+        const missingTokens = [...missingCatalogRequired, ...missingTemplateRequired];
+        return {
+          source,
+          isReady: missingCatalogRequired.length === 0,
+          counts: {
+            filled: filledTokens.length,
+            missingCatalogRequired: missingCatalogRequired.length,
+            missingTemplateRequired: missingTemplateRequired.length,
+            missingTotal: missingTokens.length
+          },
+          missingCatalogRequired,
+          missingTemplateRequired,
+          missingTokens,
+          filledTokens
+        };
+      };
       
-      if (mergedRes.ok) {
-        const data = await mergedRes.json();
-        valuesMerged = data.success ? data : null;
-      }
+      const computeCompletionChecklist = ({ templateScan, placeholders }) => {
+        if (!templateScan || !templateScan.hasActiveTemplate) {
+          return { hasActiveTemplate: false };
+        }
+        
+        const analysis = templateScan.analysis || {};
+        const required = analysis.requiredPlaceholders || [];
+        const valuesMap = buildValuesMap(placeholders);
+        
+        const missingRequired = required.filter(p => {
+          const key = p.key.toLowerCase();
+          const value = valuesMap[key];
+          return value === undefined || value === null || value === '';
+        }).map(p => ({
+          key: p.key,
+          label: p.label || p.key,
+          usedInCount: (p.usedIn || []).length
+        }));
+        
+        return {
+          hasActiveTemplate: true,
+          missingRequiredCount: missingRequired.length,
+          missingRequired,
+          isReady: missingRequired.length === 0
+        };
+      };
+      
+      const computeTemplateRequiredPanel = ({ templateScan, placeholders }) => {
+        if (!templateScan || !templateScan.hasActiveTemplate) {
+          return { hasActiveTemplate: false };
+        }
+        
+        const analysis = templateScan.analysis || {};
+        const valuesMap = buildValuesMap(placeholders);
+        
+        const mapToken = (p, isRequired) => {
+          const key = p.key.toLowerCase();
+          const value = valuesMap[key];
+          const status = getPlaceholderStatus(p.key, value, p.fallback, isRequired);
+          return {
+            key: p.key,
+            label: p.label || p.key,
+            value: value || null,
+            fallback: p.fallback || null,
+            status
+          };
+        };
+        
+        return {
+          hasActiveTemplate: true,
+          templateName: templateScan.templateName || null,
+          tradeKey: templateScan.tradeKey || null,
+          required: (analysis.requiredPlaceholders || []).map(p => mapToken(p, true)),
+          optional: (analysis.optionalPlaceholders || []).map(p => mapToken(p, false))
+        };
+      };
+      
+      const computeWarnings = (templateScan) => {
+        const analysis = templateScan?.analysis || {};
+        return {
+          unknownTokens: analysis.unknownTokens || [],
+          aliasedTokens: analysis.aliasedTokens || []
+        };
+      };
+      
+      const computeTemplateScanSummary = (templateScan) => {
+        const analysis = templateScan?.analysis || {};
+        return {
+          validCount: (analysis.validTokens || []).length,
+          runtimeCount: (analysis.runtimeTokens || []).length,
+          aliasedCount: (analysis.aliasedTokens || []).length,
+          unknownCount: (analysis.unknownTokens || []).length,
+          requiredCount: (analysis.requiredPlaceholders || []).length,
+          optionalCount: (analysis.optionalPlaceholders || []).length
+        };
+      };
+      
+      const computeCatalogStats = (catalog) => {
+        const placeholders = catalog?.placeholders || [];
+        const companyTokens = placeholders.filter(p => (p.scope || 'company') === 'company');
+        const runtimeTokens = placeholders.filter(p => p.scope === 'runtime');
+        const requiredTokens = placeholders.filter(p => (p.scope || 'company') === 'company' && p.required);
+        const optionalTokens = placeholders.filter(p => (p.scope || 'company') === 'company' && !p.required);
+        
+        return {
+          total: placeholders.length,
+          company: companyTokens.length,
+          runtime: runtimeTokens.length,
+          required: requiredTokens.length,
+          optional: optionalTokens.length,
+          tradeKey: catalog?.tradeKey || tradeKey
+        };
+      };
+      
+      const computePlaceholdersTableRows = (rows) => {
+        return (rows || []).map(row => {
+          const value = row.value || '';
+          const hasValue = value && String(value).trim();
+          const existsInCompany = !!row.existsInCompany;
+          const requiredByCatalog = !!row.requiredByCatalog;
+          const requiredByTemplate = !!row.requiredByTemplate;
+          const optionalByCatalog = !!row.optionalByCatalog;
+          const usedByTemplate = !!row.usedByTemplate || (row.usedInCount || 0) > 0;
+          const usedInCount = row.usedInCount || 0;
+          const supportsModes = Array.isArray(row.supportsModes) ? row.supportsModes : [];
+          const defaultMode = (row.defaultMode || 'LITERAL').toString().trim().toUpperCase();
+          const effectiveMode = (row.effectiveMode || row.mode || defaultMode).toString().trim().toUpperCase();
+          const isConfigured = row.status === 'configured' || effectiveMode !== 'LITERAL';
+          const isSatisfied = row.isSatisfied === true || (effectiveMode !== 'LITERAL') || !!hasValue;
+          
+          let statusType = 'custom';
+          if (requiredByCatalog) statusType = 'catalog_required';
+          else if (requiredByTemplate) statusType = 'template_required';
+          else if (usedByTemplate) statusType = 'template_used';
+          else if (optionalByCatalog) statusType = 'catalog_optional';
+          
+          let sourceLabel = 'missing';
+          if (isConfigured) sourceLabel = 'configured';
+          else if (hasValue) sourceLabel = 'filled';
+          
+          const modeLabel = effectiveMode === 'OFFER_TRANSFER'
+            ? 'transfer_offer'
+            : effectiveMode === 'OFFER_CALLBACK'
+              ? 'callback_offer'
+              : 'literal';
+          
+          return {
+            token: row.token,
+            displayToken: row.displayToken || `{${row.token}}`,
+            label: row.label || row.token,
+            value,
+            existsInCompany,
+            requiredByCatalog,
+            requiredByTemplate,
+            optionalByCatalog,
+            usedByTemplate,
+            usedInCount,
+            supportsModes,
+            effectiveMode,
+            modeLabel,
+            isConfigured,
+            isSatisfied,
+            statusType,
+            sourceLabel
+          };
+        });
+      };
       
       // ─────────────────────────────────────────────────────────────────────────
       // EXTRACT RUNTIME TOKENS FROM CATALOG
       // ─────────────────────────────────────────────────────────────────────────
       let runtimeTokens = null;
-      if (catalog?.runtime) {
-        runtimeTokens = catalog.runtime;
-      } else if (catalog?.placeholders) {
-        runtimeTokens = catalog.placeholders.filter(p => p.scope === 'runtime');
+      if (derivedCatalog?.runtime) {
+        runtimeTokens = derivedCatalog.runtime;
+      } else if (derivedCatalog?.placeholders) {
+        runtimeTokens = derivedCatalog.placeholders.filter(p => p.scope === 'runtime');
       }
       
       // ─────────────────────────────────────────────────────────────────────────
-      // BUILD EXPORT OBJECT (all from API responses, no DOM scraping)
+      // BUILD EXPORT OBJECT
       // ─────────────────────────────────────────────────────────────────────────
       const exportData = {
         _exportedAt: new Date().toISOString(),
-        _exportedFrom: 'Control Plane V2 - Placeholders Tab (Server-Backed Export)',
-        _version: '3.0',
-        _note: 'All data fetched fresh from server APIs - not from DOM state',
+        _exportedFrom: 'Control Plane V2 - Placeholders Tab',
+        _version: '4.0',
+        _note: 'Includes server data, UI snapshot, and derived panel state',
         
-        // Company context
         company: {
           id: companyId,
           name: companyName,
           trade: tradeKey
         },
         
-        // Template info
-        template: templateScan ? {
-          id: templateScan.templateId,
-          name: templateScan.templateName,
-          hasActiveTemplate: templateScan.hasActiveTemplate
+        template: derivedTemplateScan ? {
+          id: derivedTemplateScan.templateId || null,
+          name: derivedTemplateScan.templateName || null,
+          hasActiveTemplate: !!derivedTemplateScan.hasActiveTemplate
         } : null,
         
-        // MERGED VALUES (Single Source of Truth)
-        // This shows ALL tokens: existing + missing required + missing optional
-        valuesMerged: valuesMerged?.rows || [],
-        valuesMergedSummary: valuesMerged?.summary || null,
-        
-        // Template scan analysis
-        templateScan: templateScan?.analysis || null,
-        
-        // Coverage analysis
-        coverage: coverage?.coverage || null,
-        canPublish: coverage?.canPublish || false,
-        
-        // Full catalog (all company-scoped tokens for this trade)
-        placeholderCatalog: {
-          required: catalog?.required || [],
-          optional: catalog?.optional || [],
-          tradeKey: catalog?.tradeKey || tradeKey
+        server: {
+          fetch: serverFetch,
+          catalog: safeClone(catalog),
+          templateScan: safeClone(templateScan),
+          coverage: safeClone(coverage),
+          valuesMerged: safeClone(valuesMerged)
         },
         
-        // Runtime tokens (system-filled during calls)
-        runtimeTokens: runtimeTokens || [],
+        uiSnapshot: {
+          currentTradeKey: currentTradeKey || null,
+          currentPlaceholders: safeClone(currentPlaceholders) || [],
+          currentMergedPlaceholders: safeClone(currentMergedPlaceholders) || [],
+          currentMergedSummary: safeClone(currentMergedSummary),
+          currentTemplateScan: safeClone(currentTemplateScan),
+          currentPlaceholderCoverage: safeClone(currentPlaceholderCoverage),
+          currentPlaceholderCatalog: safeClone(currentPlaceholderCatalog)
+        },
         
-        // Aliases (legacy name mappings)
-        aliases: catalog?.aliases || {}
+        derived: {
+          templateScanSummary: computeTemplateScanSummary(derivedTemplateScan),
+          catalogStats: computeCatalogStats(derivedCatalog),
+          warnings: computeWarnings(derivedTemplateScan),
+          templateTodo: computeTemplateTodo({
+            mergedRows: derivedMergedRows,
+            templateScan: derivedTemplateScan,
+            placeholders: derivedPlaceholders
+          }),
+          completionChecklist: computeCompletionChecklist({
+            templateScan: derivedTemplateScan,
+            placeholders: derivedPlaceholders
+          }),
+          templateRequiredPanel: computeTemplateRequiredPanel({
+            templateScan: derivedTemplateScan,
+            placeholders: derivedPlaceholders
+          }),
+          placeholdersTable: {
+            rowCount: derivedMergedRows.length,
+            rows: computePlaceholdersTableRows(derivedMergedRows)
+          }
+        },
+        
+        runtimeTokens: safeClone(runtimeTokens || [])
       };
       
       console.log('✅ Export data ready:', {
         company: exportData.company.id,
         trade: exportData.company.trade,
-        mergedRowsCount: exportData.valuesMerged.length,
-        catalogRequired: exportData.placeholderCatalog.required.length,
-        catalogOptional: exportData.placeholderCatalog.optional.length,
+        mergedRowsCount: exportData.derived.placeholdersTable.rowCount,
+        catalogTotal: exportData.derived.catalogStats.total,
         runtimeTokens: exportData.runtimeTokens.length
       });
       
@@ -6560,40 +6873,65 @@
     }
     
     async function copyPlaceholderPageJson(btn) {
-      const originalHtml = btn.innerHTML;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-      btn.disabled = true;
+      const hasBtn = !!btn && typeof btn.innerHTML === 'string';
+      const originalHtml = hasBtn ? btn.innerHTML : null;
+      
+      if (hasBtn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        btn.disabled = true;
+      }
       
       try {
         const exportData = await getPlaceholderPageJson();
         const jsonStr = JSON.stringify(exportData, null, 2);
         
-        await navigator.clipboard.writeText(jsonStr);
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(jsonStr);
+        } else if (typeof copy === 'function') {
+          copy(jsonStr);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = jsonStr;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          const ok = document.execCommand('copy');
+          document.body.removeChild(ta);
+          if (!ok) throw new Error('Clipboard write failed');
+        }
         
-        // Show success feedback
-        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-        btn.style.background = '#dcfce7';
-        btn.style.color = '#166534';
-        setTimeout(() => {
-          btn.innerHTML = originalHtml;
-          btn.style.background = '';
-          btn.style.color = '';
-          btn.disabled = false;
-        }, 2000);
+        if (hasBtn) {
+          btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+          btn.style.background = '#dcfce7';
+          btn.style.color = '#166534';
+          setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.disabled = false;
+          }, 2000);
+        }
+        
         console.log('✅ Placeholder tab JSON copied to clipboard');
-        
       } catch (e) {
         console.error('Failed to export JSON:', e);
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
+        if (hasBtn) {
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+        }
         alert(e.message || 'Failed to export JSON');
       }
     }
     
     async function downloadPlaceholderPageJson(btn) {
-      const originalHtml = btn.innerHTML;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-      btn.disabled = true;
+      const hasBtn = !!btn && typeof btn.innerHTML === 'string';
+      const originalHtml = hasBtn ? btn.innerHTML : null;
+      
+      if (hasBtn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        btn.disabled = true;
+      }
       
       try {
         const exportData = await getPlaceholderPageJson();
@@ -6616,22 +6954,25 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        // Show success feedback
-        btn.innerHTML = '<i class="fas fa-check"></i> Downloaded!';
-        btn.style.background = '#dcfce7';
-        btn.style.color = '#166534';
-        setTimeout(() => {
-          btn.innerHTML = originalHtml;
-          btn.style.background = '';
-          btn.style.color = '';
-          btn.disabled = false;
-        }, 2000);
+        if (hasBtn) {
+          btn.innerHTML = '<i class="fas fa-check"></i> Downloaded!';
+          btn.style.background = '#dcfce7';
+          btn.style.color = '#166534';
+          setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.disabled = false;
+          }, 2000);
+        }
         console.log('✅ Placeholder tab JSON downloaded:', filename);
         
       } catch (e) {
         console.error('Failed to download JSON:', e);
-        btn.innerHTML = originalHtml;
-        btn.disabled = false;
+        if (hasBtn) {
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+        }
         alert(e.message || 'Failed to download JSON');
       }
     }

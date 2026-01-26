@@ -30,6 +30,7 @@ function resolvePlaceholders(text, companyValues = {}, options = {}) {
         useFallbacks = true,
         leaveUnknown = true,  // If false, replace unknown with empty string
         logUnknown = true,
+        logLegacyTokens = true,
         runtimeValues = {}
     } = options;
     
@@ -59,6 +60,7 @@ function resolvePlaceholders(text, companyValues = {}, options = {}) {
     const replacements = [];
     const unknownTokens = [];
     const fallbacksUsed = [];
+    const legacyTokensUsed = [];
     
     // Replace all placeholders
     const resolvedText = text.replace(PLACEHOLDER_REGEX, (match, braceKey, bracketKey) => {
@@ -68,6 +70,15 @@ function resolvePlaceholders(text, companyValues = {}, options = {}) {
         
         // Resolve through alias if enabled
         const canonicalKey = useAliases ? resolveAlias(originalKey) : originalKey;
+        if (useAliases && canonicalKey !== originalKey) {
+            legacyTokensUsed.push({
+                key: originalKey,
+                canonicalKey
+            });
+            if (logLegacyTokens) {
+                logger.warn(`[PLACEHOLDER] Legacy token used: ${originalKey} → ${canonicalKey}`);
+            }
+        }
         const normalizedKey = canonicalKey.toLowerCase();
         
         // Check runtime values first (caller/session tokens)
@@ -143,7 +154,8 @@ function resolvePlaceholders(text, companyValues = {}, options = {}) {
         resolvedText,
         replacements,
         unknownTokens,
-        fallbacksUsed
+        fallbacksUsed,
+        legacyTokensUsed
     };
 }
 
@@ -161,6 +173,7 @@ function resolveScenarioPlaceholders(scenario, companyValues, options = {}) {
     const allReplacements = [];
     const allUnknown = [];
     const allFallbacks = [];
+    const allLegacy = [];
     
     // Helper to resolve text and track
     const resolveField = (text) => {
@@ -168,6 +181,9 @@ function resolveScenarioPlaceholders(scenario, companyValues, options = {}) {
         allReplacements.push(...result.replacements);
         allUnknown.push(...result.unknownTokens);
         allFallbacks.push(...result.fallbacksUsed);
+        if (Array.isArray(result.legacyTokensUsed)) {
+            allLegacy.push(...result.legacyTokensUsed);
+        }
         return result.resolvedText;
     };
     
@@ -210,7 +226,8 @@ function resolveScenarioPlaceholders(scenario, companyValues, options = {}) {
     resolved._placeholderResolution = {
         replacements: allReplacements.length,
         unknownTokens: allUnknown,
-        fallbacksUsed: allFallbacks
+        fallbacksUsed: allFallbacks,
+        legacyTokensUsed: allLegacy
     };
     
     return resolved;

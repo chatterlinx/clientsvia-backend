@@ -38,6 +38,7 @@ const GlobalInstantResponseTemplate = require('../../models/GlobalInstantRespons
 
 // Services
 const { enforceContentOwnership, getContentFields } = require('../../services/scenarioAudit/constants');
+const { buildPlaceholderGovernanceBlock, validateScenarioPlaceholders } = require('../../services/placeholders/PlaceholderRegistry');
 
 // LLM for generation (lazy-loaded)
 const OpenAI = require('openai');
@@ -967,7 +968,8 @@ async function generateScenarioCard(item, spec, company, config = DEFAULT_GENERA
     const constraints = config.constraints || {};
     
     // Build system prompt with constraints
-    const systemPrompt = `You are a scenario generator for a dispatcher AI system.
+    const governanceBlock = buildPlaceholderGovernanceBlock(spec.tradeKey || company?.trade || null);
+    const systemPromptRaw = `You are a scenario generator for a dispatcher AI system.
 
 CRITICAL RULES:
 1. Generate ONLY content fields - no runtime or admin fields
@@ -984,6 +986,8 @@ CRITICAL RULES:
 12. Generate at least ${constraints.minFullReplies || 3} fullReplies
 
 Output JSON only - no markdown, no explanation.`;
+
+    const systemPrompt = `${systemPromptRaw.replace(/\{name\}/g, '{callerName}')}\n\n${governanceBlock}`;
     
     // Build prompt for GPT
     const prompt = buildGenerationPrompt(item, spec, company, constraints);
@@ -1048,13 +1052,18 @@ Output JSON only - no markdown, no explanation.`;
         // Add _noName variants if not present
         if (sanitized.quickReplies && !sanitized.quickReplies_noName) {
             sanitized.quickReplies_noName = sanitized.quickReplies.map(r => 
-                r.replace(/\{name\}/gi, '').replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim()
+                r.replace(/\{callerName\}/gi, '').replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim()
             );
         }
         if (sanitized.fullReplies && !sanitized.fullReplies_noName) {
             sanitized.fullReplies_noName = sanitized.fullReplies.map(r => 
-                r.replace(/\{name\}/gi, '').replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim()
+                r.replace(/\{callerName\}/gi, '').replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim()
             );
+        }
+
+        const placeholderValidation = validateScenarioPlaceholders(sanitized, spec.tradeKey || company?.trade || null);
+        if (!placeholderValidation.valid) {
+            throw new Error(`PLACEHOLDER_INVALID: ${placeholderValidation.message}`);
         }
         
         // Build card format (same as Gap cards)
@@ -1102,7 +1111,7 @@ function buildGenerationPrompt(item, spec, company, constraints = {}) {
     const maxQuickWords = constraints.maxQuickReplyWords || 25;
     const maxFullWords = constraints.maxFullReplyWords || 35;
     
-    return `Generate a scenario for: "${item.name}"
+    const promptRaw = `Generate a scenario for: "${item.name}"
 
 BLUEPRINT CONTEXT:
 - Trade: ${spec.tradeKey.toUpperCase()}
@@ -1148,6 +1157,8 @@ Reply goal "${item.replyGoal}":
 - "close": end conversation gracefully
 
 Output only valid JSON.`;
+
+    return promptRaw.replace(/\{name\}/g, '{callerName}');
 }
 
 module.exports = router;

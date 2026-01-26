@@ -42,6 +42,7 @@ const { runUnifiedAudit } = require('../../services/scenarioAudit/unifiedAuditEn
 const openaiClient = require('../../config/openai');
 const logger = require('../../utils/logger');
 const { AuditEngine, getAvailableRules } = require('../../services/scenarioAudit');
+const { buildPlaceholderGovernanceBlock, validateScenarioPlaceholders } = require('../../services/placeholders/PlaceholderRegistry');
 
 // ============================================================================
 // MIDDLEWARE - All routes require authentication
@@ -673,8 +674,9 @@ ${toneExamples.map(s => `• "${s.name}" - Trigger: "${s.trigger}" → Reply: "$
     const examples = cleanedExamples.map(e => `- "${e}"`).join('\n');
     
     const tradeName = tradeType.toUpperCase() || 'SERVICE';
+    const governanceBlock = buildPlaceholderGovernanceBlock(tradeType);
     
-    const prompt = `You are creating scenarios for an EXPERIENCED ${tradeName} SERVICE DISPATCHER.
+    const promptRaw = `You are creating scenarios for an EXPERIENCED ${tradeName} SERVICE DISPATCHER.
 
 ═══════════════════════════════════════════════════════════════════════════════
 🎯 WHO YOU ARE (THIS IS CRITICAL)
@@ -1081,6 +1083,8 @@ entityValidation: JSON validation rules for captured entities
 - email: {"pattern": "@", "prompt": "What's your email address?"}
 - Only include if scenario captures these entities`;
 
+    const prompt = `${promptRaw.replace(/\{name\}/g, '{callerName}')}\n\n${governanceBlock}`;
+
     try {
         const response = await openai.chat.completions.create({
             model: 'gpt-4o',  // 🚀 Using GPT-4o for highest quality scenario generation
@@ -1168,10 +1172,7 @@ Output VALID JSON only. No markdown. No explanations.`
         }
         
         // Build comprehensive scenario object
-        return {
-            success: true,
-            isDuplicate: false,
-            scenario: normalizeScenarioForType({
+        const scenario = normalizeScenarioForType({
                 // Identity
                 name: s.name || gap.representative.substring(0, 50),
                 category: s.category || 'FAQ',
@@ -1188,13 +1189,13 @@ Output VALID JSON only. No markdown. No explanations.`
                 triggers: Array.isArray(s.triggers) ? s.triggers : [gap.representative],
                 negativeTriggers: Array.isArray(s.negativeTriggers) ? s.negativeTriggers : [],
                 
-                // Replies WITH {name} placeholder (primary)
+                // Replies WITH {callerName} placeholder (primary)
                 quickReplies: Array.isArray(s.quickReplies) ? s.quickReplies : 
                     (s.quickReply ? [s.quickReply] : ['I can help with that.']),
                 fullReplies: Array.isArray(s.fullReplies) ? s.fullReplies : 
                     (s.fullReply ? [s.fullReply] : []),
                 
-                // Replies WITHOUT {name} placeholder (fallback when name not available)
+                // Replies WITHOUT {callerName} placeholder (fallback when name not available)
                 quickReplies_noName: Array.isArray(s.quickReplies_noName) ? s.quickReplies_noName : null,
                 fullReplies_noName: Array.isArray(s.fullReplies_noName) ? s.fullReplies_noName : null,
                 
@@ -1241,7 +1242,17 @@ Output VALID JSON only. No markdown. No explanations.`
                 generatedBy: 'ai',
                 confidence: 0.85,
                 sourceGap: gap.representative
-            }),
+            });
+
+        const placeholderValidation = validateScenarioPlaceholders(scenario, tradeType);
+        if (!placeholderValidation.valid) {
+            throw new Error(`PLACEHOLDER_INVALID: ${placeholderValidation.message}`);
+        }
+
+        return {
+            success: true,
+            isDuplicate: false,
+            scenario,
             tokensUsed: response.usage?.total_tokens || 0
         };
     } catch (error) {
@@ -1596,8 +1607,16 @@ router.get('/:companyId/gaps/preview', async (req, res) => {
         });
         
     } catch (error) {
+        const isPlaceholderError = (error.message || '').startsWith('PLACEHOLDER_INVALID:');
+        const cleanedMessage = isPlaceholderError
+            ? error.message.replace('PLACEHOLDER_INVALID:', '').trim()
+            : error.message;
+
         logger.error('[SCENARIO GAPS] Error generating preview', { error: error.message });
-        res.status(500).json({ error: 'Failed to generate scenario preview', details: error.message });
+        res.status(isPlaceholderError ? 400 : 500).json({
+            error: isPlaceholderError ? 'Invalid placeholders in generated scenario' : 'Failed to generate scenario preview',
+            details: cleanedMessage
+        });
     }
 });
 
@@ -1702,6 +1721,19 @@ router.post('/:companyId/gaps/create', async (req, res) => {
                 generatedBy: scenarioData.generatedBy || 'ai'
             }
         };
+
+        const placeholderValidation = validateScenarioPlaceholders(newScenario, company.trade);
+        if (!placeholderValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid placeholders in generated scenario',
+                message: placeholderValidation.message,
+                errors: {
+                    forbiddenLegacy: placeholderValidation.forbiddenLegacy,
+                    unknownInvalid: placeholderValidation.unknownInvalid
+                }
+            });
+        }
         
         // Add scenario to category
         const categoryIndex = template.categories.findIndex(c => c.name === categoryDoc.name);
@@ -1766,8 +1798,16 @@ router.post('/:companyId/gaps/create', async (req, res) => {
         });
         
     } catch (error) {
+        const isPlaceholderError = (error.message || '').startsWith('PLACEHOLDER_INVALID:');
+        const cleanedMessage = isPlaceholderError
+            ? error.message.replace('PLACEHOLDER_INVALID:', '').trim()
+            : error.message;
+
         logger.error('[SCENARIO GAPS] Error creating scenario', { error: error.message, companyId });
-        res.status(500).json({ error: 'Failed to create scenario', details: error.message });
+        res.status(isPlaceholderError ? 400 : 500).json({
+            error: isPlaceholderError ? 'Invalid placeholders in generated scenario' : 'Failed to create scenario',
+            details: cleanedMessage
+        });
     }
 });
 

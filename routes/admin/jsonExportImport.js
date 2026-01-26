@@ -34,6 +34,7 @@ const CompanyCategoryOverride = require('../../models/CompanyCategoryOverride');
 const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const DynamicFlow = require('../../models/DynamicFlow');
+const { validateScenarioPlaceholders } = require('../../services/placeholders/PlaceholderRegistry');
 
 // ============================================================================
 // SCHEMA VERSION - Increment when export format changes
@@ -838,6 +839,7 @@ async function applyPatch(patch, userId) {
         if (patch.patchType === 'template') {
             const template = await GlobalInstantResponseTemplate.findById(patch.targetId);
             if (!template) throw new Error('Template not found');
+            const tradeKey = (template.industryLabel || template.templateType || '').toString().trim().toUpperCase() || null;
             
             for (const op of (patch.operations || [])) {
                 try {
@@ -848,6 +850,10 @@ async function applyPatch(patch, userId) {
                     else if (op.op === 'create' && op.path === 'scenario') {
                         const cat = template.categories.find(c => c.id === op.categoryId);
                         if (cat) {
+                            const validation = validateScenarioPlaceholders(op.value, tradeKey);
+                            if (!validation.valid) {
+                                throw new Error(`PLACEHOLDER_INVALID: ${validation.message}`);
+                            }
                             cat.scenarios.push(op.value);
                             results.created.push({ type: 'scenario', id: op.value.id });
                         }
@@ -857,6 +863,14 @@ async function applyPatch(patch, userId) {
                         if (cat) {
                             const scenarioIdx = cat.scenarios.findIndex(s => s.id === op.scenarioId);
                             if (scenarioIdx !== -1) {
+                                const candidate = {
+                                    ...cat.scenarios[scenarioIdx],
+                                    ...op.value
+                                };
+                                const validation = validateScenarioPlaceholders(candidate, tradeKey);
+                                if (!validation.valid) {
+                                    throw new Error(`PLACEHOLDER_INVALID: ${validation.message}`);
+                                }
                                 Object.assign(cat.scenarios[scenarioIdx], op.value);
                                 results.updated.push({ type: 'scenario', id: op.scenarioId });
                             }
