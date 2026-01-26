@@ -2010,10 +2010,10 @@
               Company Placeholder Values
             </h4>
             <div style="display: flex; gap: 8px;">
-              <button onclick="copyPlaceholderPageJson()" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Copy all placeholder data as JSON">
+              <button onclick="copyPlaceholderPageJson(this)" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Copy all placeholder data as JSON">
                 <i class="fas fa-copy"></i> Copy JSON
               </button>
-              <button onclick="downloadPlaceholderPageJson()" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Download all placeholder data as JSON file">
+              <button onclick="downloadPlaceholderPageJson(this)" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Download all placeholder data as JSON file">
                 <i class="fas fa-download"></i> Download JSON
               </button>
             </div>
@@ -5871,11 +5871,17 @@
     // ═══════════════════════════════════════════════════════════════════════════
     
     function getPlaceholderPageJson() {
-      // Collect all placeholder-related state from the page
+      // ═══════════════════════════════════════════════════════════════════════════
+      // COMPREHENSIVE PLACEHOLDER TAB EXPORT
+      // Collects ALL state from placeholders tab including catalog, scan, warnings
+      // ═══════════════════════════════════════════════════════════════════════════
+      
       const companyId = document.getElementById('company-select')?.value || null;
       const companyName = document.getElementById('company-select')?.selectedOptions[0]?.text || null;
       
-      // Get template scan data from the DOM
+      // ─────────────────────────────────────────────────────────────────────────
+      // 1. TEMPLATE SCAN SUMMARY (from badges)
+      // ─────────────────────────────────────────────────────────────────────────
       const scanBadges = document.getElementById('scan-summary-badges');
       let scanSummary = null;
       if (scanBadges) {
@@ -5887,7 +5893,9 @@
         };
       }
       
-      // Get template scan results from table
+      // ─────────────────────────────────────────────────────────────────────────
+      // 2. TEMPLATE SCAN RESULTS TABLE
+      // ─────────────────────────────────────────────────────────────────────────
       const scanResults = [];
       const scanTbody = document.getElementById('scan-list-tbody');
       if (scanTbody) {
@@ -5903,7 +5911,9 @@
         });
       }
       
-      // Get coverage strip data
+      // ─────────────────────────────────────────────────────────────────────────
+      // 3. COVERAGE STRIP
+      // ─────────────────────────────────────────────────────────────────────────
       const coverageStrip = document.getElementById('coverage-strip');
       let coverageData = null;
       if (coverageStrip) {
@@ -5913,7 +5923,9 @@
         };
       }
       
-      // Get completion checklist data
+      // ─────────────────────────────────────────────────────────────────────────
+      // 4. COMPLETION CHECKLIST
+      // ─────────────────────────────────────────────────────────────────────────
       const checklistContainer = document.getElementById('completion-checklist');
       let completionChecklist = [];
       if (checklistContainer) {
@@ -5923,13 +5935,12 @@
         });
       }
       
-      // Get required placeholders panel data
+      // ─────────────────────────────────────────────────────────────────────────
+      // 5. TEMPLATE REQUIRED/OPTIONAL PANELS
+      // ─────────────────────────────────────────────────────────────────────────
       const requiredList = document.getElementById('template-required-list');
       const optionalList = document.getElementById('template-optional-list');
-      const templateRequired = {
-        required: [],
-        optional: []
-      };
+      const templateRequired = { required: [], optional: [] };
       if (requiredList) {
         requiredList.querySelectorAll('div').forEach(item => {
           templateRequired.required.push(item.textContent?.trim() || '');
@@ -5941,10 +5952,67 @@
         });
       }
       
-      // Build the complete export object
+      // ─────────────────────────────────────────────────────────────────────────
+      // 6. PLACEHOLDER WARNINGS PANEL (Legacy names, unknown tokens, etc.)
+      // ─────────────────────────────────────────────────────────────────────────
+      const warningsPanel = document.getElementById('placeholder-warnings');
+      let warningsData = null;
+      if (warningsPanel && warningsPanel.style.display !== 'none') {
+        warningsData = {
+          visible: true,
+          html: warningsPanel.innerHTML,
+          text: warningsPanel.textContent?.trim() || ''
+        };
+      }
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // 7. COMPANY PLACEHOLDERS TABLE (current state in memory)
+      // ─────────────────────────────────────────────────────────────────────────
+      const placeholdersTableData = [];
+      const placeholdersTbody = document.getElementById('placeholders-list');
+      if (placeholdersTbody) {
+        placeholdersTbody.querySelectorAll('tr').forEach(row => {
+          const cells = row.querySelectorAll('td');
+          if (cells.length >= 5) {
+            placeholdersTableData.push({
+              token: cells[0]?.textContent?.trim() || '',
+              value: cells[1]?.querySelector('input')?.value || cells[1]?.textContent?.trim() || '',
+              usedIn: cells[2]?.textContent?.trim() || '',
+              status: cells[3]?.textContent?.trim() || '',
+              source: cells[4]?.textContent?.trim() || ''
+            });
+          }
+        });
+      }
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // 8. GLOBAL WINDOW STATE (all loaded data)
+      // ─────────────────────────────────────────────────────────────────────────
+      const windowState = {
+        // Placeholder-specific
+        __placeholderCatalog: window.__placeholderCatalog || null,
+        __runtimeTokens: window.__runtimeTokens || null,
+        __templateScanResults: window.__templateScanResults || null,
+        __currentCompanyTrade: window.__currentCompanyTrade || null,
+        
+        // Template state
+        __activeTemplateId: window.__activeTemplateId || null,
+        __activeTemplateName: window.__activeTemplateName || null,
+        
+        // Preset draft (if any)
+        __presetDraft: window.__presetDraft || null,
+        
+        // Current placeholders array (in-memory)
+        currentPlaceholders: typeof currentPlaceholders !== 'undefined' ? currentPlaceholders : null
+      };
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // 9. BUILD COMPLETE EXPORT OBJECT
+      // ─────────────────────────────────────────────────────────────────────────
       const exportData = {
         _exportedAt: new Date().toISOString(),
-        _exportedFrom: 'Control Plane V2 - Placeholders Tab',
+        _exportedFrom: 'Control Plane V2 - Placeholders Tab (Full Export)',
+        _version: '2.0',
         
         company: {
           id: companyId,
@@ -5952,15 +6020,22 @@
           trade: window.__currentCompanyTrade || null
         },
         
-        companyPlaceholders: currentPlaceholders.map(p => ({
-          key: p.key,
-          value: p.value,
-          description: p.description || null
-        })),
+        // In-memory placeholders array
+        companyPlaceholders: typeof currentPlaceholders !== 'undefined' 
+          ? currentPlaceholders.map(p => ({
+              key: p.key,
+              value: p.value,
+              description: p.description || null
+            }))
+          : [],
+        
+        // DOM table state (what's rendered)
+        placeholdersTableRendered: placeholdersTableData,
         
         templateScan: {
           summary: scanSummary,
-          results: scanResults
+          results: scanResults,
+          rawData: window.__templateScanResults || null
         },
         
         templateRequired: templateRequired,
@@ -5969,24 +6044,28 @@
         
         completionChecklist: completionChecklist,
         
-        // Include catalog data if available
+        warnings: warningsData,
+        
+        // Full catalog with all token definitions
         placeholderCatalog: window.__placeholderCatalog || null,
         
-        // Include runtime tokens if available
-        runtimeTokens: window.__runtimeTokens || null
+        // Runtime tokens (system-filled, non-editable)
+        runtimeTokens: window.__runtimeTokens || null,
+        
+        // All window state for debugging
+        windowState: windowState
       };
       
       return exportData;
     }
     
-    function copyPlaceholderPageJson() {
+    function copyPlaceholderPageJson(btn) {
       try {
         const exportData = getPlaceholderPageJson();
         const jsonStr = JSON.stringify(exportData, null, 2);
         
         navigator.clipboard.writeText(jsonStr).then(() => {
           // Show success feedback
-          const btn = event.target.closest('button');
           const originalHtml = btn.innerHTML;
           btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
           btn.style.background = '#dcfce7';
@@ -5996,9 +6075,13 @@
             btn.style.background = '';
             btn.style.color = '';
           }, 2000);
+          console.log('✅ Placeholder tab JSON copied to clipboard');
         }).catch(err => {
           console.error('Clipboard write failed:', err);
-          alert('Failed to copy to clipboard. Check console for details.');
+          // Fallback: show in console
+          console.log('📋 Copy failed, JSON logged below:');
+          console.log(jsonStr);
+          alert('Clipboard failed. JSON logged to console (F12).');
         });
       } catch (e) {
         console.error('Failed to generate JSON:', e);
@@ -6006,7 +6089,7 @@
       }
     }
     
-    function downloadPlaceholderPageJson() {
+    function downloadPlaceholderPageJson(btn) {
       try {
         const exportData = getPlaceholderPageJson();
         const jsonStr = JSON.stringify(exportData, null, 2);
@@ -6029,7 +6112,6 @@
         URL.revokeObjectURL(url);
         
         // Show success feedback
-        const btn = event.target.closest('button');
         const originalHtml = btn.innerHTML;
         btn.innerHTML = '<i class="fas fa-check"></i> Downloaded!';
         btn.style.background = '#dcfce7';
@@ -6039,6 +6121,7 @@
           btn.style.background = '';
           btn.style.color = '';
         }, 2000);
+        console.log('✅ Placeholder tab JSON downloaded:', filename);
       } catch (e) {
         console.error('Failed to download JSON:', e);
         alert('Failed to download JSON: ' + e.message);
