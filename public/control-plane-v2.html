@@ -4979,6 +4979,9 @@
     let currentPlaceholderCatalog = null;
     let catalogFilteredList = null;
     
+    // Store merged placeholder rows (includes both existing AND missing tokens)
+    let currentMergedPlaceholders = [];
+    
     async function loadPlaceholders() {
       const tbody = document.getElementById('placeholders-list');
       
@@ -4991,6 +4994,17 @@
             value: (p.value || '').toString(),
             description: p.description || null
           }));
+          currentMergedPlaceholders = currentPlaceholders.map(p => ({
+            token: p.key,
+            displayToken: `{${p.key}}`,
+            label: p.key,
+            value: p.value,
+            existsInCompany: true,
+            required: false,
+            optional: false,
+            usedInCount: 0,
+            status: p.value ? 'filled' : 'missing'
+          }));
           renderPlaceholdersTable();
           return;
         }
@@ -4999,8 +5013,9 @@
         const companyTrade = window.__currentCompanyTrade || 'HVAC';
         
         // Load all placeholder data in parallel
-        const [valuesRes, scanRes, coverageRes, catalogRes] = await Promise.all([
-          fetch(`/api/company/${currentCompanyId}/placeholders`, {
+        // NEW: Use values-merged endpoint for single-source-of-truth view
+        const [mergedRes, scanRes, coverageRes, catalogRes] = await Promise.all([
+          fetch(`/api/admin/placeholders/company/${currentCompanyId}/values-merged`, {
             headers: { 'Authorization': `Bearer ${authToken}` }
           }),
           fetch(`/api/admin/placeholders/company/${currentCompanyId}/template-scan`, {
@@ -5014,17 +5029,23 @@
           }).catch(() => ({ ok: false }))
         ]);
         
-        if (!valuesRes.ok) {
-          throw new Error(`HTTP ${valuesRes.status}`);
+        if (!mergedRes.ok) {
+          throw new Error(`HTTP ${mergedRes.status}`);
         }
 
-        const valuesData = await valuesRes.json();
-        const placeholders = Array.isArray(valuesData.placeholders) ? valuesData.placeholders : [];
-        currentPlaceholders = placeholders.map(p => ({
-          key: (p.key || '').toString().toLowerCase(),
-          value: (p.value || '').toString(),
-          description: p.description || null
-        }));
+        const mergedData = await mergedRes.json();
+        
+        // Store merged rows (includes both existing AND missing tokens)
+        currentMergedPlaceholders = mergedData.rows || [];
+        
+        // Also maintain currentPlaceholders for compatibility (only existing ones)
+        currentPlaceholders = currentMergedPlaceholders
+          .filter(r => r.existsInCompany)
+          .map(r => ({
+            key: r.token.toLowerCase(),
+            value: r.value || '',
+            description: null
+          }));
         
         // Process template scan
         if (scanRes.ok) {
@@ -5268,40 +5289,66 @@
       
       panel.style.display = 'block';
       
-      const analysis = currentTemplateScan.analysis || {};
-      const allCompanyTokens = [
-        ...(analysis.requiredPlaceholders || []),
-        ...(analysis.optionalPlaceholders || [])
-      ];
+      // Use merged placeholder data if available (single source of truth)
+      // This includes BOTH existing company values AND missing required tokens
+      let filledTokens = [];
+      let missingTokens = [];
       
-      // Build value map from current company placeholders
-      const valuesMap = {};
-      for (const p of currentPlaceholders) {
-        valuesMap[p.key.toLowerCase()] = p.value;
-      }
-      
-      // Classify all tokens: filled vs missing
-      const filledTokens = [];
-      const missingTokens = [];
-      
-      for (const token of allCompanyTokens) {
-        const key = token.key.toLowerCase();
-        const value = valuesMap[key];
-        const hasValue = value !== undefined && value !== null && value !== '';
-        const usedCount = (token.usedIn || []).length;
+      if (currentMergedPlaceholders.length > 0) {
+        // Use merged data - it already has existsInCompany, required, status
+        for (const row of currentMergedPlaceholders) {
+          // Only include tokens that are required or optional (used by template)
+          if (!row.required && !row.optional) continue;
+          
+          const hasValue = row.value && String(row.value).trim();
+          const item = {
+            key: row.token,
+            label: row.label || row.token,
+            required: row.required,
+            usedIn: row.usedInCount || 0,
+            value: hasValue ? row.value : null,
+            existsInCompany: row.existsInCompany
+          };
+          
+          if (hasValue) {
+            filledTokens.push(item);
+          } else {
+            missingTokens.push(item);
+          }
+        }
+      } else {
+        // Fallback to old method (template scan + currentPlaceholders)
+        const analysis = currentTemplateScan.analysis || {};
+        const allCompanyTokens = [
+          ...(analysis.requiredPlaceholders || []),
+          ...(analysis.optionalPlaceholders || [])
+        ];
         
-        const item = {
-          key: token.key,
-          label: token.label || token.key,
-          required: token.required,
-          usedIn: usedCount,
-          value: hasValue ? value : null
-        };
+        const valuesMap = {};
+        for (const p of currentPlaceholders) {
+          valuesMap[p.key.toLowerCase()] = p.value;
+        }
         
-        if (hasValue) {
-          filledTokens.push(item);
-        } else {
-          missingTokens.push(item);
+        for (const token of allCompanyTokens) {
+          const key = token.key.toLowerCase();
+          const value = valuesMap[key];
+          const hasValue = value !== undefined && value !== null && value !== '';
+          const usedCount = (token.usedIn || []).length;
+          
+          const item = {
+            key: token.key,
+            label: token.label || token.key,
+            required: token.required,
+            usedIn: usedCount,
+            value: hasValue ? value : null,
+            existsInCompany: valuesMap.hasOwnProperty(key)
+          };
+          
+          if (hasValue) {
+            filledTokens.push(item);
+          } else {
+            missingTokens.push(item);
+          }
         }
       }
       
@@ -5766,7 +5813,22 @@
       const tbody = document.getElementById('placeholders-list');
       if (!tbody) return;
 
-      if (currentPlaceholders.length === 0) {
+      // Use merged data (includes both existing AND missing tokens)
+      const rows = currentMergedPlaceholders.length > 0 
+        ? currentMergedPlaceholders 
+        : currentPlaceholders.map(p => ({
+            token: p.key,
+            displayToken: `{${p.key}}`,
+            label: p.key,
+            value: p.value || '',
+            existsInCompany: true,
+            required: false,
+            optional: false,
+            usedInCount: 0,
+            status: p.value ? 'filled' : 'missing'
+          }));
+
+      if (rows.length === 0) {
         tbody.innerHTML = `
           <tr>
             <td colspan="6" style="text-align: center; padding: 40px; color: #94a3b8;">
@@ -5777,78 +5839,144 @@
         `;
         return;
       }
-      
-      // Build template requirements lookup + usage map
-      // NO FALLBACK LOGIC - Company values are the single source of truth
-      const templateRequired = new Set();
-      const templateOptional = new Set();
-      const usageMap = {};
-      
-      if (currentTemplateScan?.analysis) {
-        for (const p of (currentTemplateScan.analysis.requiredPlaceholders || [])) {
-          templateRequired.add(p.key.toLowerCase());
-          usageMap[p.key.toLowerCase()] = (p.usedIn || []).length;
-        }
-        for (const p of (currentTemplateScan.analysis.optionalPlaceholders || [])) {
-          templateOptional.add(p.key.toLowerCase());
-          usageMap[p.key.toLowerCase()] = (p.usedIn || []).length;
-        }
-      }
 
-      tbody.innerHTML = currentPlaceholders.map(({ key, value }) => {
-        const k = key.toLowerCase();
-        const hasValue = value && value.trim();
-        const isRequired = templateRequired.has(k);
-        const isOptional = templateOptional.has(k);
+      tbody.innerHTML = rows.map(row => {
+        const key = row.token;
+        const value = row.value || '';
+        const hasValue = value && String(value).trim();
+        const existsInCompany = row.existsInCompany;
+        const isRequired = row.required;
+        const isOptional = row.optional;
+        const usedInCount = row.usedInCount || 0;
         
-        // STRICT MODE: Only two states - Filled or Missing
-        // No fallback consideration - company value is the only truth
+        // ════════════════════════════════════════════════════════════════════════
+        // STATUS BADGE: Shows requirement level
+        // ════════════════════════════════════════════════════════════════════════
         let statusBadge = '';
-        let sourceLabel = '';
-        
-        if (hasValue) {
-          // Has company value = Filled
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #dcfce7; color: #16a34a;">Filled</span>`;
-          sourceLabel = `<span style="font-size: 11px; color: #16a34a;"><i class="fas fa-check-circle" style="margin-right: 3px;"></i>Filled</span>`;
-        } else if (isRequired) {
-          // Required but missing = critical
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fee2e2; color: #dc2626;">Required</span>`;
-          sourceLabel = `<span style="font-size: 11px; color: #dc2626;"><i class="fas fa-exclamation-circle" style="margin-right: 3px;"></i>Missing</span>`;
+        if (isRequired) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#fee2e2'}; color: ${hasValue ? '#16a34a' : '#dc2626'};">Required</span>`;
         } else if (isOptional) {
-          // Optional but missing
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fef3c7; color: #f59e0b;">Optional</span>`;
-          sourceLabel = `<span style="font-size: 11px; color: #f59e0b;"><i class="fas fa-minus-circle" style="margin-right: 3px;"></i>Missing</span>`;
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#fef3c7'}; color: ${hasValue ? '#16a34a' : '#f59e0b'};">Optional</span>`;
         } else {
-          // Custom placeholder (not in template)
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Custom</span>`;
-          sourceLabel = hasValue 
-            ? `<span style="font-size: 11px; color: #16a34a;"><i class="fas fa-check-circle" style="margin-right: 3px;"></i>Filled</span>`
-            : `<span style="font-size: 11px; color: #64748b;"><i class="fas fa-minus-circle" style="margin-right: 3px;"></i>Empty</span>`;
         }
         
-        const usedInCount = usageMap[k] || 0;
+        // ════════════════════════════════════════════════════════════════════════
+        // SOURCE LABEL: Filled or Missing (single source of truth)
+        // ════════════════════════════════════════════════════════════════════════
+        let sourceLabel = '';
+        if (hasValue) {
+          sourceLabel = `<span style="font-size: 11px; color: #16a34a;"><i class="fas fa-check-circle" style="margin-right: 3px;"></i>Filled</span>`;
+        } else {
+          sourceLabel = `<span style="font-size: 11px; color: #dc2626;"><i class="fas fa-exclamation-circle" style="margin-right: 3px;"></i>Missing</span>`;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // ACTION BUTTONS: Create (for missing) or Delete (for existing)
+        // ════════════════════════════════════════════════════════════════════════
+        let actionButtons = '';
+        if (!existsInCompany) {
+          // Token doesn't exist in company yet - show CREATE button
+          actionButtons = `
+            <button onclick="createPlaceholderInline('${escapeHtml(key)}')" 
+                    style="padding: 6px 12px; border: none; background: #4f46e5; color: white; border-radius: 6px; cursor: pointer; font-size: 12px;">
+              <i class="fas fa-plus"></i> Create
+            </button>
+          `;
+        } else {
+          // Token exists - show DELETE button
+          actionButtons = `
+            <button onclick="deletePlaceholder('${escapeHtml(key)}')" 
+                    style="padding: 6px 12px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px;">
+              <i class="fas fa-trash"></i>
+            </button>
+          `;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════
+        // VALUE INPUT: Editable if exists, disabled with Create button if not
+        // ════════════════════════════════════════════════════════════════════════
+        let valueCell = '';
+        if (existsInCompany) {
+          valueCell = `
+            <input type="text" value="${escapeHtml(value)}"
+                   onchange="updatePlaceholder('${escapeHtml(key)}', this.value)"
+                   placeholder="Enter value..."
+                   style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
+          `;
+        } else {
+          // Not created yet - show inline create input
+          valueCell = `
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <input type="text" id="create-input-${escapeHtml(key)}"
+                     placeholder="Enter value and click Create..."
+                     style="flex: 1; padding: 8px 12px; border: 1px solid #fde68a; border-radius: 6px; font-size: 14px; background: #fffbeb;">
+            </div>
+          `;
+        }
+        
+        // Row background for missing required tokens
+        const rowBg = (!existsInCompany && isRequired) ? 'background: #fef2f2;' : '';
+        
         return `
-          <tr data-placeholder-key="${key}">
+          <tr data-placeholder-key="${escapeHtml(key)}" style="${rowBg}">
             <td>
-              <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px;">{${key}}</code>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px;">{${escapeHtml(key)}}</code>
+                <span style="font-size: 10px; color: #94a3b8;">${escapeHtml(row.label || key)}</span>
+              </div>
             </td>
-            <td>
-              <input type="text" value="${escapeHtml(value)}"
-                     onchange="updatePlaceholder('${key}', this.value)"
-                     placeholder="Enter value..."
-                     style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
-            </td>
+            <td>${valueCell}</td>
             <td style="font-size: 11px; color: #64748b; text-align: center;">${usedInCount > 0 ? usedInCount + ' scenarios' : '—'}</td>
             <td>${statusBadge}</td>
             <td>${sourceLabel}</td>
-            <td>
-              <button onclick="deletePlaceholder('${key}')" style="padding: 6px 12px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px;">
-                <i class="fas fa-trash"></i>
-              </button>
-            </td>
+            <td>${actionButtons}</td>
           </tr>
         `;
       }).join('');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CREATE PLACEHOLDER INLINE (for missing tokens)
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function createPlaceholderInline(key) {
+      const input = document.getElementById(`create-input-${key}`);
+      const value = input?.value?.trim() || '';
+      
+      // Add to currentPlaceholders
+      const normalizedKey = key.toLowerCase();
+      const existingIdx = currentPlaceholders.findIndex(p => p.key === normalizedKey);
+      
+      if (existingIdx >= 0) {
+        currentPlaceholders[existingIdx].value = value;
+      } else {
+        currentPlaceholders.push({ key: normalizedKey, value, description: null });
+      }
+      
+      // Update merged list to reflect creation
+      const mergedIdx = currentMergedPlaceholders.findIndex(r => r.token.toLowerCase() === normalizedKey);
+      if (mergedIdx >= 0) {
+        currentMergedPlaceholders[mergedIdx].existsInCompany = true;
+        currentMergedPlaceholders[mergedIdx].value = value;
+        currentMergedPlaceholders[mergedIdx].status = value ? 'filled' : 'missing';
+      }
+      
+      // Re-render
+      renderPlaceholdersTable();
+      renderTemplateTodoPanel();
+      
+      // Focus the new input
+      setTimeout(() => {
+        const row = document.querySelector(`tr[data-placeholder-key="${normalizedKey}"]`);
+        if (row) {
+          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const newInput = row.querySelector('input');
+          if (newInput) newInput.focus();
+        }
+      }, 100);
+      
+      // Show save reminder
+      console.log(`✅ Created placeholder {${key}}. Remember to click "Save Changes"!`);
     }
     
     function isRuntimeTokenKey(key) {
