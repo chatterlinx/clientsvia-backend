@@ -6138,231 +6138,195 @@
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // PLACEHOLDER PAGE JSON EXPORT (Copy + Download)
+    // PLACEHOLDER PAGE JSON EXPORT (Server-Backed - NOT DOM Scraping)
     // ═══════════════════════════════════════════════════════════════════════════
     
-    function getPlaceholderPageJson() {
+    async function getPlaceholderPageJson() {
       // ═══════════════════════════════════════════════════════════════════════════
-      // COMPREHENSIVE PLACEHOLDER TAB EXPORT
-      // Collects ALL state from placeholders tab including catalog, scan, warnings
+      // SERVER-BACKED EXPORT
+      // Fetches fresh data from APIs - NOT from DOM or local state
+      // This guarantees the export is always complete and accurate
       // ═══════════════════════════════════════════════════════════════════════════
       
-      const companyId = document.getElementById('company-select')?.value || null;
+      const companyId = currentCompanyId || document.getElementById('company-select')?.value;
       const companyName = document.getElementById('company-select')?.selectedOptions[0]?.text || null;
+      const tradeKey = window.__currentCompanyTrade || 'HVAC';
       
       // ─────────────────────────────────────────────────────────────────────────
-      // 1. TEMPLATE SCAN SUMMARY (from badges)
+      // VALIDATION: Hard fail if missing required context
       // ─────────────────────────────────────────────────────────────────────────
-      const scanBadges = document.getElementById('scan-summary-badges');
-      let scanSummary = null;
-      if (scanBadges) {
-        const spans = scanBadges.querySelectorAll('span');
-        scanSummary = {
-          valid: parseInt(spans[0]?.textContent?.match(/\d+/)?.[0] || '0'),
-          aliased: parseInt(spans[1]?.textContent?.match(/\d+/)?.[0] || '0'),
-          unknown: parseInt(spans[2]?.textContent?.match(/\d+/)?.[0] || '0')
-        };
+      if (!companyId) {
+        throw new Error('Export failed: No company selected. Select a company profile first.');
+      }
+      
+      if (!authToken) {
+        throw new Error('Export failed: Not authenticated. Please refresh the page.');
       }
       
       // ─────────────────────────────────────────────────────────────────────────
-      // 2. TEMPLATE SCAN RESULTS TABLE
+      // FETCH ALL DATA FROM SERVER (parallel for speed)
       // ─────────────────────────────────────────────────────────────────────────
-      const scanResults = [];
-      const scanTbody = document.getElementById('scan-list-tbody');
-      if (scanTbody) {
-        scanTbody.querySelectorAll('tr').forEach(row => {
-          const cells = row.querySelectorAll('td');
-          if (cells.length >= 3) {
-            scanResults.push({
-              token: cells[0]?.textContent?.trim() || '',
-              status: cells[1]?.textContent?.trim() || '',
-              usedIn: cells[2]?.textContent?.trim() || ''
-            });
-          }
-        });
-      }
+      console.log('📦 Fetching fresh data from server...');
       
-      // ─────────────────────────────────────────────────────────────────────────
-      // 3. COVERAGE STRIP
-      // ─────────────────────────────────────────────────────────────────────────
-      const coverageStrip = document.getElementById('coverage-strip');
-      let coverageData = null;
-      if (coverageStrip) {
-        coverageData = {
-          text: coverageStrip.textContent?.trim() || '',
-          visible: coverageStrip.style.display !== 'none'
-        };
-      }
-      
-      // ─────────────────────────────────────────────────────────────────────────
-      // 4. COMPLETION CHECKLIST
-      // ─────────────────────────────────────────────────────────────────────────
-      const checklistContainer = document.getElementById('completion-checklist');
-      let completionChecklist = [];
-      if (checklistContainer) {
-        checklistContainer.querySelectorAll('.checklist-item, div[style*="flex"]').forEach(item => {
-          const text = item.textContent?.trim();
-          if (text) completionChecklist.push(text);
-        });
-      }
-      
-      // ─────────────────────────────────────────────────────────────────────────
-      // 5. TEMPLATE REQUIRED/OPTIONAL PANELS
-      // ─────────────────────────────────────────────────────────────────────────
-      const requiredList = document.getElementById('template-required-list');
-      const optionalList = document.getElementById('template-optional-list');
-      const templateRequired = { required: [], optional: [] };
-      if (requiredList) {
-        requiredList.querySelectorAll('div').forEach(item => {
-          templateRequired.required.push(item.textContent?.trim() || '');
-        });
-      }
-      if (optionalList) {
-        optionalList.querySelectorAll('div').forEach(item => {
-          templateRequired.optional.push(item.textContent?.trim() || '');
-        });
-      }
-      
-      // ─────────────────────────────────────────────────────────────────────────
-      // 6. PLACEHOLDER WARNINGS PANEL (Legacy names, unknown tokens, etc.)
-      // ─────────────────────────────────────────────────────────────────────────
-      const warningsPanel = document.getElementById('placeholder-warnings');
-      let warningsData = null;
-      if (warningsPanel && warningsPanel.style.display !== 'none') {
-        warningsData = {
-          visible: true,
-          html: warningsPanel.innerHTML,
-          text: warningsPanel.textContent?.trim() || ''
-        };
-      }
-      
-      // ─────────────────────────────────────────────────────────────────────────
-      // 7. COMPANY PLACEHOLDERS TABLE (current state in memory)
-      // ─────────────────────────────────────────────────────────────────────────
-      const placeholdersTableData = [];
-      const placeholdersTbody = document.getElementById('placeholders-list');
-      if (placeholdersTbody) {
-        placeholdersTbody.querySelectorAll('tr').forEach(row => {
-          const cells = row.querySelectorAll('td');
-          if (cells.length >= 5) {
-            placeholdersTableData.push({
-              token: cells[0]?.textContent?.trim() || '',
-              value: cells[1]?.querySelector('input')?.value || cells[1]?.textContent?.trim() || '',
-              usedIn: cells[2]?.textContent?.trim() || '',
-              status: cells[3]?.textContent?.trim() || '',
-              source: cells[4]?.textContent?.trim() || ''
-            });
-          }
-        });
-      }
-      
-      // ─────────────────────────────────────────────────────────────────────────
-      // 8. GLOBAL WINDOW STATE (all loaded data)
-      // ─────────────────────────────────────────────────────────────────────────
-      const windowState = {
-        // Placeholder-specific
-        __placeholderCatalog: window.__placeholderCatalog || null,
-        __runtimeTokens: window.__runtimeTokens || null,
-        __templateScanResults: window.__templateScanResults || null,
-        __currentCompanyTrade: window.__currentCompanyTrade || null,
+      const [catalogRes, templateScanRes, coverageRes, mergedRes] = await Promise.all([
+        // 1. Placeholder Catalog (all allowed company tokens for this trade)
+        fetch(`/api/admin/placeholders/catalog?tradeKey=${encodeURIComponent(tradeKey)}`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        }).catch(e => ({ ok: false, error: e.message })),
         
-        // Template state
-        __activeTemplateId: window.__activeTemplateId || null,
-        __activeTemplateName: window.__activeTemplateName || null,
+        // 2. Template Scan (what tokens the active template uses)
+        fetch(`/api/admin/placeholders/company/${companyId}/template-scan`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        }).catch(e => ({ ok: false, error: e.message })),
         
-        // Preset draft (if any)
-        __presetDraft: window.__presetDraft || null,
+        // 3. Coverage (filled vs missing analysis)
+        fetch(`/api/admin/placeholders/company/${companyId}/coverage`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        }).catch(e => ({ ok: false, error: e.message })),
         
-        // Current placeholders array (in-memory)
-        currentPlaceholders: typeof currentPlaceholders !== 'undefined' ? currentPlaceholders : null
-      };
+        // 4. Merged Values (single source of truth - existing + missing tokens)
+        fetch(`/api/admin/placeholders/company/${companyId}/values-merged`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        }).catch(e => ({ ok: false, error: e.message }))
+      ]);
       
       // ─────────────────────────────────────────────────────────────────────────
-      // 9. BUILD COMPLETE EXPORT OBJECT
+      // PARSE RESPONSES (with error handling)
+      // ─────────────────────────────────────────────────────────────────────────
+      let catalog = null;
+      let templateScan = null;
+      let coverage = null;
+      let valuesMerged = null;
+      
+      if (catalogRes.ok) {
+        const data = await catalogRes.json();
+        catalog = data.success ? data.catalog : null;
+      }
+      
+      if (templateScanRes.ok) {
+        const data = await templateScanRes.json();
+        templateScan = data.success ? data : null;
+      }
+      
+      if (coverageRes.ok) {
+        const data = await coverageRes.json();
+        coverage = data.success ? data : null;
+      }
+      
+      if (mergedRes.ok) {
+        const data = await mergedRes.json();
+        valuesMerged = data.success ? data : null;
+      }
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // EXTRACT RUNTIME TOKENS FROM CATALOG
+      // ─────────────────────────────────────────────────────────────────────────
+      let runtimeTokens = null;
+      if (catalog?.runtime) {
+        runtimeTokens = catalog.runtime;
+      } else if (catalog?.placeholders) {
+        runtimeTokens = catalog.placeholders.filter(p => p.scope === 'runtime');
+      }
+      
+      // ─────────────────────────────────────────────────────────────────────────
+      // BUILD EXPORT OBJECT (all from API responses, no DOM scraping)
       // ─────────────────────────────────────────────────────────────────────────
       const exportData = {
         _exportedAt: new Date().toISOString(),
-        _exportedFrom: 'Control Plane V2 - Placeholders Tab (Full Export)',
-        _version: '2.0',
+        _exportedFrom: 'Control Plane V2 - Placeholders Tab (Server-Backed Export)',
+        _version: '3.0',
+        _note: 'All data fetched fresh from server APIs - not from DOM state',
         
+        // Company context
         company: {
           id: companyId,
           name: companyName,
-          trade: window.__currentCompanyTrade || null
+          trade: tradeKey
         },
         
-        // In-memory placeholders array
-        companyPlaceholders: typeof currentPlaceholders !== 'undefined' 
-          ? currentPlaceholders.map(p => ({
-              key: p.key,
-              value: p.value,
-              description: p.description || null
-            }))
-          : [],
+        // Template info
+        template: templateScan ? {
+          id: templateScan.templateId,
+          name: templateScan.templateName,
+          hasActiveTemplate: templateScan.hasActiveTemplate
+        } : null,
         
-        // DOM table state (what's rendered)
-        placeholdersTableRendered: placeholdersTableData,
+        // MERGED VALUES (Single Source of Truth)
+        // This shows ALL tokens: existing + missing required + missing optional
+        valuesMerged: valuesMerged?.rows || [],
+        valuesMergedSummary: valuesMerged?.summary || null,
         
-        templateScan: {
-          summary: scanSummary,
-          results: scanResults,
-          rawData: window.__templateScanResults || null
+        // Template scan analysis
+        templateScan: templateScan?.analysis || null,
+        
+        // Coverage analysis
+        coverage: coverage?.coverage || null,
+        canPublish: coverage?.canPublish || false,
+        
+        // Full catalog (all company-scoped tokens for this trade)
+        placeholderCatalog: {
+          required: catalog?.required || [],
+          optional: catalog?.optional || [],
+          tradeKey: catalog?.tradeKey || tradeKey
         },
         
-        templateRequired: templateRequired,
+        // Runtime tokens (system-filled during calls)
+        runtimeTokens: runtimeTokens || [],
         
-        coverage: coverageData,
-        
-        completionChecklist: completionChecklist,
-        
-        warnings: warningsData,
-        
-        // Full catalog with all token definitions
-        placeholderCatalog: window.__placeholderCatalog || null,
-        
-        // Runtime tokens (system-filled, non-editable)
-        runtimeTokens: window.__runtimeTokens || null,
-        
-        // All window state for debugging
-        windowState: windowState
+        // Aliases (legacy name mappings)
+        aliases: catalog?.aliases || {}
       };
+      
+      console.log('✅ Export data ready:', {
+        company: exportData.company.id,
+        trade: exportData.company.trade,
+        mergedRowsCount: exportData.valuesMerged.length,
+        catalogRequired: exportData.placeholderCatalog.required.length,
+        catalogOptional: exportData.placeholderCatalog.optional.length,
+        runtimeTokens: exportData.runtimeTokens.length
+      });
       
       return exportData;
     }
     
-    function copyPlaceholderPageJson(btn) {
+    async function copyPlaceholderPageJson(btn) {
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+      btn.disabled = true;
+      
       try {
-        const exportData = getPlaceholderPageJson();
+        const exportData = await getPlaceholderPageJson();
         const jsonStr = JSON.stringify(exportData, null, 2);
         
-        navigator.clipboard.writeText(jsonStr).then(() => {
-          // Show success feedback
-          const originalHtml = btn.innerHTML;
-          btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-          btn.style.background = '#dcfce7';
-          btn.style.color = '#166534';
-          setTimeout(() => {
-            btn.innerHTML = originalHtml;
-            btn.style.background = '';
-            btn.style.color = '';
-          }, 2000);
-          console.log('✅ Placeholder tab JSON copied to clipboard');
-        }).catch(err => {
-          console.error('Clipboard write failed:', err);
-          // Fallback: show in console
-          console.log('📋 Copy failed, JSON logged below:');
-          console.log(jsonStr);
-          alert('Clipboard failed. JSON logged to console (F12).');
-        });
+        await navigator.clipboard.writeText(jsonStr);
+        
+        // Show success feedback
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        btn.style.background = '#dcfce7';
+        btn.style.color = '#166534';
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+          btn.style.background = '';
+          btn.style.color = '';
+          btn.disabled = false;
+        }, 2000);
+        console.log('✅ Placeholder tab JSON copied to clipboard');
+        
       } catch (e) {
-        console.error('Failed to generate JSON:', e);
-        alert('Failed to generate JSON: ' + e.message);
+        console.error('Failed to export JSON:', e);
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        alert(e.message || 'Failed to export JSON');
       }
     }
     
-    function downloadPlaceholderPageJson(btn) {
+    async function downloadPlaceholderPageJson(btn) {
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+      btn.disabled = true;
+      
       try {
-        const exportData = getPlaceholderPageJson();
+        const exportData = await getPlaceholderPageJson();
         const jsonStr = JSON.stringify(exportData, null, 2);
         
         // Generate filename with company name and timestamp
@@ -6383,7 +6347,6 @@
         URL.revokeObjectURL(url);
         
         // Show success feedback
-        const originalHtml = btn.innerHTML;
         btn.innerHTML = '<i class="fas fa-check"></i> Downloaded!';
         btn.style.background = '#dcfce7';
         btn.style.color = '#166534';
@@ -6391,11 +6354,15 @@
           btn.innerHTML = originalHtml;
           btn.style.background = '';
           btn.style.color = '';
+          btn.disabled = false;
         }, 2000);
         console.log('✅ Placeholder tab JSON downloaded:', filename);
+        
       } catch (e) {
         console.error('Failed to download JSON:', e);
-        alert('Failed to download JSON: ' + e.message);
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        alert(e.message || 'Failed to download JSON');
       }
     }
     
