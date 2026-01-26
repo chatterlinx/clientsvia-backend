@@ -5937,46 +5937,54 @@
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // CREATE PLACEHOLDER INLINE (for missing tokens)
+    // CREATE PLACEHOLDER (writes to Mongo immediately via API)
     // ═══════════════════════════════════════════════════════════════════════════
     async function createPlaceholderInline(key) {
       const input = document.getElementById(`create-input-${key}`);
       const value = input?.value?.trim() || '';
       
-      // Add to currentPlaceholders
       const normalizedKey = key.toLowerCase();
-      const existingIdx = currentPlaceholders.findIndex(p => p.key === normalizedKey);
       
-      if (existingIdx >= 0) {
-        currentPlaceholders[existingIdx].value = value;
-      } else {
-        currentPlaceholders.push({ key: normalizedKey, value, description: null });
-      }
-      
-      // Update merged list to reflect creation
-      const mergedIdx = currentMergedPlaceholders.findIndex(r => r.token.toLowerCase() === normalizedKey);
-      if (mergedIdx >= 0) {
-        currentMergedPlaceholders[mergedIdx].existsInCompany = true;
-        currentMergedPlaceholders[mergedIdx].value = value;
-        currentMergedPlaceholders[mergedIdx].status = value ? 'filled' : 'missing';
-      }
-      
-      // Re-render
-      renderPlaceholdersTable();
-      renderTemplateTodoPanel();
-      
-      // Focus the new input
-      setTimeout(() => {
-        const row = document.querySelector(`tr[data-placeholder-key="${normalizedKey}"]`);
-        if (row) {
-          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          const newInput = row.querySelector('input');
-          if (newInput) newInput.focus();
+      try {
+        // Call API to persist to Mongo immediately
+        const response = await fetch(`/api/company/${currentCompanyId}/placeholders/${encodeURIComponent(normalizedKey)}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ value, description: null })
+        });
+        
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `HTTP ${response.status}`);
         }
-      }, 100);
-      
-      // Show save reminder
-      console.log(`✅ Created placeholder {${key}}. Remember to click "Save Changes"!`);
+        
+        console.log(`✅ Created placeholder {${key}} in database`);
+        
+        // Reload the full merged list from server (single source of truth)
+        await loadPlaceholders();
+        
+        // Focus the newly created input
+        setTimeout(() => {
+          const row = document.querySelector(`tr[data-placeholder-key="${normalizedKey}"]`);
+          if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const newInput = row.querySelector('input');
+            if (newInput) {
+              newInput.focus();
+              // Highlight to show success
+              row.style.background = '#dcfce7';
+              setTimeout(() => { row.style.background = ''; }, 2000);
+            }
+          }
+        }, 100);
+        
+      } catch (error) {
+        console.error('Failed to create placeholder:', error);
+        alert(`Failed to create placeholder: ${error.message}`);
+      }
     }
     
     function isRuntimeTokenKey(key) {
