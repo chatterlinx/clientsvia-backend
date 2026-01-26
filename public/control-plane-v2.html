@@ -1821,38 +1821,22 @@
           </div>
           
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
-          <!-- COMPLETION CHECKLIST -->
+          <!-- TEMPLATE TODO (Missing Required Company Tokens) -->
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
           <div id="completion-checklist-panel" style="display: none; background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #c7d2fe;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
               <div>
                 <h4 style="font-size: 14px; font-weight: 600; margin: 0; color: #1e293b;">
                   <i class="fas fa-list-check" style="color: #4f46e5; margin-right: 6px;"></i>
-                  Completion Checklist
+                  Template TODO (Missing Required)
                 </h4>
                 <p style="font-size: 11px; color: #64748b; margin-top: 2px;">
-                  Required placeholders must be filled to mark template ready
+                  Fill these required company tokens to mark the template ready
                 </p>
               </div>
               <div id="completion-status-badge"></div>
             </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <!-- Required -->
-              <div>
-                <div style="font-size: 12px; font-weight: 600; color: #dc2626; margin-bottom: 8px;">
-                  REQUIRED (BLOCKING)
-                </div>
-                <div id="completion-required-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
-              </div>
-              <!-- Optional -->
-              <div>
-                <div style="font-size: 12px; font-weight: 600; color: #f59e0b; margin-bottom: 8px;">
-                  OPTIONAL (RECOMMENDED)
-                </div>
-                <div id="completion-optional-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
-              </div>
-            </div>
+            <div id="completion-required-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
           </div>
           
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
@@ -5264,14 +5248,9 @@
       if (optFallback) optFallback.textContent = `${fallbackCount} fallback`;
       
       // Update status badge
-      const unknownCount = currentTemplateScan?.analysis?.unknownTokens?.length || 0;
       if (statusBadge) {
-        if (missingRequired > 0 || unknownCount > 0) {
-          const reasons = [
-            missingRequired > 0 ? `${missingRequired} missing` : null,
-            unknownCount > 0 ? `${unknownCount} unknown` : null
-          ].filter(Boolean).join(' • ');
-          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;"><i class="fas fa-times-circle" style="margin-right: 4px;"></i> Not Ready${reasons ? ` • ${reasons}` : ''}</span>`;
+        if (missingRequired > 0) {
+          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;"><i class="fas fa-times-circle" style="margin-right: 4px;"></i> Not Ready • ${missingRequired} missing</span>`;
         } else {
           statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #dcfce7; color: #16a34a; font-weight: 600;"><i class="fas fa-check-circle" style="margin-right: 4px;"></i> Ready</span>`;
         }
@@ -5284,7 +5263,6 @@
     function renderCompletionChecklist() {
       const panel = document.getElementById('completion-checklist-panel');
       const requiredList = document.getElementById('completion-required-list');
-      const optionalList = document.getElementById('completion-optional-list');
       const statusBadge = document.getElementById('completion-status-badge');
       
       if (!panel || !requiredList || !optionalList || !currentTemplateScan || !currentTemplateScan.hasActiveTemplate) {
@@ -5296,7 +5274,6 @@
       
       const analysis = currentTemplateScan.analysis || {};
       const required = analysis.requiredPlaceholders || [];
-      const optional = analysis.optionalPlaceholders || [];
       
       // Build value map
       const valuesMap = {};
@@ -5310,92 +5287,69 @@
       
       let missingRequiredCount = 0;
       
-      // Required list
-      const requiredItems = required.map(p => {
+      // Required list (ONLY missing company tokens)
+      const missingRequiredItems = required.filter(p => {
         const key = p.key.toLowerCase();
         const value = valuesMap[key];
         const hasValue = value !== undefined && value !== null && value !== '';
-        const hasFallback = !!p.fallback;
-        let status = '';
-        let source = '';
-        
-        if (hasValue) {
-          status = statusBadgeHtml('FILLED', '#dcfce7', '#16a34a');
-          source = 'Company';
-        } else if (hasFallback) {
-          status = statusBadgeHtml('FALLBACK', '#f1f5f9', '#64748b');
-          source = 'Catalog';
-        } else {
-          status = statusBadgeHtml('MISSING', '#fee2e2', '#dc2626');
-          source = 'Missing';
-          missingRequiredCount += 1;
-        }
+        return !hasValue;
+      });
+      
+      const requiredItems = missingRequiredItems.map(p => {
+        const key = p.key.toLowerCase();
+        missingRequiredCount += 1;
+        const usedCount = (p.usedIn || []).length;
         
         return `
           <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 240px;">
               <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 11px;">{${p.key}}</code>
               <span style="font-size: 12px; color: #64748b;">${escapeHtml(p.label || p.key)}</span>
+              <span style="font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #f1f5f9; color: #64748b;">${usedCount} uses</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 11px; color: #64748b;">${source}</span>
-              ${status}
+            <div style="display: flex; align-items: center; gap: 8px; flex: 1; justify-content: flex-end;">
+              <input id="todo-input-${p.key}" type="text" placeholder="Enter value for {${p.key}}"
+                     style="width: 220px; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;">
+              <button onclick="saveTodoPlaceholder('${p.key}')" style="padding: 6px 10px; border: 1px solid #4f46e5; background: #4f46e5; color: white; border-radius: 6px; cursor: pointer; font-size: 11px;">
+                Save
+              </button>
             </div>
           </div>
         `;
       });
       
-      requiredList.innerHTML = requiredItems.length ? requiredItems.join('') : '<div style="font-size: 12px; color: #64748b;">No required placeholders</div>';
-      
-      // Optional list
-      const optionalItems = optional.map(p => {
-        const key = p.key.toLowerCase();
-        const value = valuesMap[key];
-        const hasValue = value !== undefined && value !== null && value !== '';
-        const hasFallback = !!p.fallback;
-        let status = '';
-        let source = '';
-        
-        if (hasValue) {
-          status = statusBadgeHtml('FILLED', '#dcfce7', '#16a34a');
-          source = 'Company';
-        } else if (hasFallback) {
-          status = statusBadgeHtml('FALLBACK', '#f1f5f9', '#64748b');
-          source = 'Catalog';
-        } else {
-          status = statusBadgeHtml('MISSING', '#fef3c7', '#f59e0b');
-          source = 'Missing';
-        }
-        
-        return `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 11px;">{${p.key}}</code>
-              <span style="font-size: 12px; color: #64748b;">${escapeHtml(p.label || p.key)}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 11px; color: #64748b;">${source}</span>
-              ${status}
-            </div>
-          </div>
-        `;
-      });
-      
-      optionalList.innerHTML = optionalItems.length ? optionalItems.join('') : '<div style="font-size: 12px; color: #64748b;">No optional placeholders</div>';
+      requiredList.innerHTML = requiredItems.length 
+        ? requiredItems.join('') 
+        : '<div style="font-size: 12px; color: #16a34a;">✅ All required placeholders are filled.</div>';
       
       // Status badge
-      const unknownCount = currentTemplateScan?.analysis?.unknownTokens?.length || 0;
       if (statusBadge) {
-        if (missingRequiredCount > 0 || unknownCount > 0) {
-          const reasons = [
-            missingRequiredCount > 0 ? `${missingRequiredCount} missing` : null,
-            unknownCount > 0 ? `${unknownCount} unknown` : null
-          ].filter(Boolean).join(' • ');
-          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;">Not Ready${reasons ? ` • ${reasons}` : ''}</span>`;
+        if (missingRequiredCount > 0) {
+          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;">Not Ready • ${missingRequiredCount} missing</span>`;
         } else {
           statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #dcfce7; color: #16a34a; font-weight: 600;">Ready</span>`;
         }
       }
+    }
+
+    async function saveTodoPlaceholder(key) {
+      const input = document.getElementById(`todo-input-${key}`);
+      if (!input) return;
+      const value = (input.value || '').trim();
+      if (!value) {
+        alert(`Please enter a value for {${key}}`);
+        return;
+      }
+      
+      const normalizedKey = key.toLowerCase();
+      const idx = currentPlaceholders.findIndex(p => p.key === normalizedKey);
+      if (idx >= 0) {
+        currentPlaceholders[idx].value = value;
+      } else {
+        currentPlaceholders.push({ key: normalizedKey, value, description: null });
+      }
+      
+      await savePlaceholders();
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
