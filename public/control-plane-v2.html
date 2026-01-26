@@ -2004,11 +2004,19 @@
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
           <!-- COMPANY PLACEHOLDERS TABLE -->
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
-          <div style="margin-bottom: 12px;">
+          <div style="margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
             <h4 style="font-size: 14px; font-weight: 600; margin: 0; color: #475569;">
               <i class="fas fa-database" style="color: #64748b; margin-right: 6px;"></i>
               Company Placeholder Values
             </h4>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="copyPlaceholderPageJson()" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Copy all placeholder data as JSON">
+                <i class="fas fa-copy"></i> Copy JSON
+              </button>
+              <button onclick="downloadPlaceholderPageJson()" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Download all placeholder data as JSON file">
+                <i class="fas fa-download"></i> Download JSON
+              </button>
+            </div>
           </div>
           
           <table id="placeholders-table">
@@ -5855,6 +5863,185 @@
         currentPlaceholders = [];
         renderPlaceholdersTable();
         importPlaceholderDefaults();
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PLACEHOLDER PAGE JSON EXPORT (Copy + Download)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    function getPlaceholderPageJson() {
+      // Collect all placeholder-related state from the page
+      const companyId = document.getElementById('company-select')?.value || null;
+      const companyName = document.getElementById('company-select')?.selectedOptions[0]?.text || null;
+      
+      // Get template scan data from the DOM
+      const scanBadges = document.getElementById('scan-summary-badges');
+      let scanSummary = null;
+      if (scanBadges) {
+        const spans = scanBadges.querySelectorAll('span');
+        scanSummary = {
+          valid: parseInt(spans[0]?.textContent?.match(/\d+/)?.[0] || '0'),
+          aliased: parseInt(spans[1]?.textContent?.match(/\d+/)?.[0] || '0'),
+          unknown: parseInt(spans[2]?.textContent?.match(/\d+/)?.[0] || '0')
+        };
+      }
+      
+      // Get template scan results from table
+      const scanResults = [];
+      const scanTbody = document.getElementById('scan-list-tbody');
+      if (scanTbody) {
+        scanTbody.querySelectorAll('tr').forEach(row => {
+          const cells = row.querySelectorAll('td');
+          if (cells.length >= 3) {
+            scanResults.push({
+              token: cells[0]?.textContent?.trim() || '',
+              status: cells[1]?.textContent?.trim() || '',
+              usedIn: cells[2]?.textContent?.trim() || ''
+            });
+          }
+        });
+      }
+      
+      // Get coverage strip data
+      const coverageStrip = document.getElementById('coverage-strip');
+      let coverageData = null;
+      if (coverageStrip) {
+        coverageData = {
+          text: coverageStrip.textContent?.trim() || '',
+          visible: coverageStrip.style.display !== 'none'
+        };
+      }
+      
+      // Get completion checklist data
+      const checklistContainer = document.getElementById('completion-checklist');
+      let completionChecklist = [];
+      if (checklistContainer) {
+        checklistContainer.querySelectorAll('.checklist-item, div[style*="flex"]').forEach(item => {
+          const text = item.textContent?.trim();
+          if (text) completionChecklist.push(text);
+        });
+      }
+      
+      // Get required placeholders panel data
+      const requiredList = document.getElementById('template-required-list');
+      const optionalList = document.getElementById('template-optional-list');
+      const templateRequired = {
+        required: [],
+        optional: []
+      };
+      if (requiredList) {
+        requiredList.querySelectorAll('div').forEach(item => {
+          templateRequired.required.push(item.textContent?.trim() || '');
+        });
+      }
+      if (optionalList) {
+        optionalList.querySelectorAll('div').forEach(item => {
+          templateRequired.optional.push(item.textContent?.trim() || '');
+        });
+      }
+      
+      // Build the complete export object
+      const exportData = {
+        _exportedAt: new Date().toISOString(),
+        _exportedFrom: 'Control Plane V2 - Placeholders Tab',
+        
+        company: {
+          id: companyId,
+          name: companyName,
+          trade: window.__currentCompanyTrade || null
+        },
+        
+        companyPlaceholders: currentPlaceholders.map(p => ({
+          key: p.key,
+          value: p.value,
+          description: p.description || null
+        })),
+        
+        templateScan: {
+          summary: scanSummary,
+          results: scanResults
+        },
+        
+        templateRequired: templateRequired,
+        
+        coverage: coverageData,
+        
+        completionChecklist: completionChecklist,
+        
+        // Include catalog data if available
+        placeholderCatalog: window.__placeholderCatalog || null,
+        
+        // Include runtime tokens if available
+        runtimeTokens: window.__runtimeTokens || null
+      };
+      
+      return exportData;
+    }
+    
+    function copyPlaceholderPageJson() {
+      try {
+        const exportData = getPlaceholderPageJson();
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        
+        navigator.clipboard.writeText(jsonStr).then(() => {
+          // Show success feedback
+          const btn = event.target.closest('button');
+          const originalHtml = btn.innerHTML;
+          btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+          btn.style.background = '#dcfce7';
+          btn.style.color = '#166534';
+          setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.style.background = '';
+            btn.style.color = '';
+          }, 2000);
+        }).catch(err => {
+          console.error('Clipboard write failed:', err);
+          alert('Failed to copy to clipboard. Check console for details.');
+        });
+      } catch (e) {
+        console.error('Failed to generate JSON:', e);
+        alert('Failed to generate JSON: ' + e.message);
+      }
+    }
+    
+    function downloadPlaceholderPageJson() {
+      try {
+        const exportData = getPlaceholderPageJson();
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        
+        // Generate filename with company name and timestamp
+        const companyName = exportData.company?.name || 'unknown';
+        const safeName = companyName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+        const filename = `placeholders_${safeName}_${timestamp}.json`;
+        
+        // Create download
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Show success feedback
+        const btn = event.target.closest('button');
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> Downloaded!';
+        btn.style.background = '#dcfce7';
+        btn.style.color = '#166534';
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+          btn.style.background = '';
+          btn.style.color = '';
+        }, 2000);
+      } catch (e) {
+        console.error('Failed to download JSON:', e);
+        alert('Failed to download JSON: ' + e.message);
       }
     }
     
