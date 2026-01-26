@@ -115,8 +115,8 @@ const UNIVERSAL_PLACEHOLDERS = [
         type: 'money', 
         category: 'pricing',
         scope: 'company',
-        required: false, 
-        fallback: 'our standard service fee',
+        required: true, 
+        fallback: '',
         description: 'Dispatch/diagnostic fee',
         example: '$89'
     },
@@ -297,8 +297,8 @@ const TRADE_PLACEHOLDERS = {
             type: 'money', 
             category: 'pricing',
             scope: 'company',
-            required: false, 
-            fallback: 'our tune-up special',
+            required: true, 
+            fallback: '',
             description: 'AC maintenance price',
             example: '$89'
         },
@@ -308,8 +308,8 @@ const TRADE_PLACEHOLDERS = {
             type: 'money', 
             category: 'pricing',
             scope: 'company',
-            required: false, 
-            fallback: 'our tune-up special',
+            required: true, 
+            fallback: '',
             description: 'Heating maintenance price',
             example: '$89'
         },
@@ -319,8 +319,8 @@ const TRADE_PLACEHOLDERS = {
             type: 'money', 
             category: 'pricing',
             scope: 'company',
-            required: false, 
-            fallback: 'our membership rate',
+            required: true, 
+            fallback: '',
             description: 'Annual maintenance plan cost',
             example: '$199/year'
         },
@@ -355,8 +355,8 @@ const TRADE_PLACEHOLDERS = {
             type: 'money', 
             category: 'pricing',
             scope: 'company',
-            required: false, 
-            fallback: 'our drain cleaning rate',
+            required: true, 
+            fallback: '',
             description: 'Basic drain clearing cost',
             example: '$149'
         },
@@ -366,8 +366,8 @@ const TRADE_PLACEHOLDERS = {
             type: 'money', 
             category: 'pricing',
             scope: 'company',
-            required: false, 
-            fallback: 'our flush service rate',
+            required: true, 
+            fallback: '',
             description: 'Water heater maintenance',
             example: '$99'
         }
@@ -380,8 +380,8 @@ const TRADE_PLACEHOLDERS = {
             type: 'money', 
             category: 'pricing',
             scope: 'company',
-            required: false, 
-            fallback: 'varies by outlet type',
+            required: true, 
+            fallback: '',
             description: 'Standard outlet installation',
             example: 'Starting at $150'
         },

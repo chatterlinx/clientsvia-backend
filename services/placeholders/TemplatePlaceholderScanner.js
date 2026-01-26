@@ -231,6 +231,7 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
     // Track unique canonical keys to prevent duplicates
     const requiredKeySet = new Set();
     const optionalKeySet = new Set();
+    const runtimeKeySet = new Set();
     
     // Analyze each token
     for (const key of scanResult.tokensFound) {
@@ -253,14 +254,18 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
             // Categorize by required/optional
             const placeholder = validation.placeholder;
             if (placeholder?.scope === 'runtime') {
-                analysis.runtimeTokens.push({
-                    key: validation.canonicalKey,
-                    originalKey: key,
-                    label: placeholder.label,
-                    type: placeholder.type,
-                    scope: 'runtime',
-                    usedIn: scanResult.keyUsage[key] || []
-                });
+                const runtimeKey = validation.canonicalKey;
+                if (!runtimeKeySet.has(runtimeKey)) {
+                    analysis.runtimeTokens.push({
+                        key: validation.canonicalKey,
+                        originalKey: key,
+                        label: placeholder.label,
+                        type: placeholder.type,
+                        scope: 'runtime',
+                        usedIn: scanResult.keyUsage[key] || []
+                    });
+                    runtimeKeySet.add(runtimeKey);
+                }
                 continue;
             }
 

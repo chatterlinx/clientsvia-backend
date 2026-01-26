@@ -1821,6 +1821,41 @@
           </div>
           
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <!-- COMPLETION CHECKLIST -->
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+          <div id="completion-checklist-panel" style="display: none; background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%); border-radius: 12px; padding: 16px; margin-bottom: 16px; border: 1px solid #c7d2fe;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <div>
+                <h4 style="font-size: 14px; font-weight: 600; margin: 0; color: #1e293b;">
+                  <i class="fas fa-list-check" style="color: #4f46e5; margin-right: 6px;"></i>
+                  Completion Checklist
+                </h4>
+                <p style="font-size: 11px; color: #64748b; margin-top: 2px;">
+                  Required placeholders must be filled to mark template ready
+                </p>
+              </div>
+              <div id="completion-status-badge"></div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <!-- Required -->
+              <div>
+                <div style="font-size: 12px; font-weight: 600; color: #dc2626; margin-bottom: 8px;">
+                  REQUIRED (BLOCKING)
+                </div>
+                <div id="completion-required-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+              </div>
+              <!-- Optional -->
+              <div>
+                <div style="font-size: 12px; font-weight: 600; color: #f59e0b; margin-bottom: 8px;">
+                  OPTIONAL (RECOMMENDED)
+                </div>
+                <div id="completion-optional-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- ════════════════════════════════════════════════════════════════════════════════ -->
           <!-- CATALOG + TEMPLATE SCAN GRID (side by side) -->
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
           <div id="placeholder-dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
@@ -1995,15 +2030,16 @@
           <table id="placeholders-table">
             <thead>
               <tr>
-                <th style="width: 25%;">Name (Token)</th>
-                <th style="width: 40%;">Value</th>
-                <th style="width: 20%;">Status</th>
-                <th style="width: 15%;">Actions</th>
+                <th style="width: 22%;">Name (Token)</th>
+                <th style="width: 38%;">Value</th>
+                <th style="width: 16%;">Status</th>
+                <th style="width: 14%;">Source</th>
+                <th style="width: 10%;">Actions</th>
               </tr>
             </thead>
             <tbody id="placeholders-list">
               <tr>
-                <td colspan="4" style="text-align: center; padding: 40px; color: #94a3b8;">
+                <td colspan="5" style="text-align: center; padding: 40px; color: #94a3b8;">
                   <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
                   Loading placeholders...
                 </td>
@@ -5009,6 +5045,7 @@
         renderTemplateScanResults();
         renderTemplateScanPanel();
         renderCoverageStrip();
+        renderCompletionChecklist();
         renderPlaceholderWarnings();
         renderPlaceholdersTable();
         
@@ -5072,6 +5109,7 @@
         renderTemplateScanResults();
         renderTemplateScanPanel();
         renderCoverageStrip();
+        renderCompletionChecklist();
         renderPlaceholderWarnings();
         renderPlaceholdersTable();
         console.log('Rescan complete');
@@ -5226,11 +5264,136 @@
       if (optFallback) optFallback.textContent = `${fallbackCount} fallback`;
       
       // Update status badge
+      const unknownCount = currentTemplateScan?.analysis?.unknownTokens?.length || 0;
       if (statusBadge) {
-        if (missingRequired > 0) {
-          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;"><i class="fas fa-times-circle" style="margin-right: 4px;"></i> Not Ready</span>`;
+        if (missingRequired > 0 || unknownCount > 0) {
+          const reasons = [
+            missingRequired > 0 ? `${missingRequired} missing` : null,
+            unknownCount > 0 ? `${unknownCount} unknown` : null
+          ].filter(Boolean).join(' • ');
+          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;"><i class="fas fa-times-circle" style="margin-right: 4px;"></i> Not Ready${reasons ? ` • ${reasons}` : ''}</span>`;
         } else {
           statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #dcfce7; color: #16a34a; font-weight: 600;"><i class="fas fa-check-circle" style="margin-right: 4px;"></i> Ready</span>`;
+        }
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // COMPLETION CHECKLIST (Required + Optional with status)
+    // ═══════════════════════════════════════════════════════════════════════════
+    function renderCompletionChecklist() {
+      const panel = document.getElementById('completion-checklist-panel');
+      const requiredList = document.getElementById('completion-required-list');
+      const optionalList = document.getElementById('completion-optional-list');
+      const statusBadge = document.getElementById('completion-status-badge');
+      
+      if (!panel || !requiredList || !optionalList || !currentTemplateScan || !currentTemplateScan.hasActiveTemplate) {
+        if (panel) panel.style.display = 'none';
+        return;
+      }
+      
+      panel.style.display = 'block';
+      
+      const analysis = currentTemplateScan.analysis || {};
+      const required = analysis.requiredPlaceholders || [];
+      const optional = analysis.optionalPlaceholders || [];
+      
+      // Build value map
+      const valuesMap = {};
+      for (const p of currentPlaceholders) {
+        valuesMap[p.key.toLowerCase()] = p.value;
+      }
+      
+      // Helper for status badge
+      const statusBadgeHtml = (label, bg, color) =>
+        `<span style="font-size: 10px; padding: 2px 6px; border-radius: 3px; background: ${bg}; color: ${color}; font-weight: 600;">${label}</span>`;
+      
+      let missingRequiredCount = 0;
+      
+      // Required list
+      const requiredItems = required.map(p => {
+        const key = p.key.toLowerCase();
+        const value = valuesMap[key];
+        const hasValue = value !== undefined && value !== null && value !== '';
+        const hasFallback = !!p.fallback;
+        let status = '';
+        let source = '';
+        
+        if (hasValue) {
+          status = statusBadgeHtml('FILLED', '#dcfce7', '#16a34a');
+          source = 'Company';
+        } else if (hasFallback) {
+          status = statusBadgeHtml('FALLBACK', '#f1f5f9', '#64748b');
+          source = 'Catalog';
+        } else {
+          status = statusBadgeHtml('MISSING', '#fee2e2', '#dc2626');
+          source = 'Missing';
+          missingRequiredCount += 1;
+        }
+        
+        return `
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 11px;">{${p.key}}</code>
+              <span style="font-size: 12px; color: #64748b;">${escapeHtml(p.label || p.key)}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; color: #64748b;">${source}</span>
+              ${status}
+            </div>
+          </div>
+        `;
+      });
+      
+      requiredList.innerHTML = requiredItems.length ? requiredItems.join('') : '<div style="font-size: 12px; color: #64748b;">No required placeholders</div>';
+      
+      // Optional list
+      const optionalItems = optional.map(p => {
+        const key = p.key.toLowerCase();
+        const value = valuesMap[key];
+        const hasValue = value !== undefined && value !== null && value !== '';
+        const hasFallback = !!p.fallback;
+        let status = '';
+        let source = '';
+        
+        if (hasValue) {
+          status = statusBadgeHtml('FILLED', '#dcfce7', '#16a34a');
+          source = 'Company';
+        } else if (hasFallback) {
+          status = statusBadgeHtml('FALLBACK', '#f1f5f9', '#64748b');
+          source = 'Catalog';
+        } else {
+          status = statusBadgeHtml('MISSING', '#fef3c7', '#f59e0b');
+          source = 'Missing';
+        }
+        
+        return `
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: white; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 11px;">{${p.key}}</code>
+              <span style="font-size: 12px; color: #64748b;">${escapeHtml(p.label || p.key)}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; color: #64748b;">${source}</span>
+              ${status}
+            </div>
+          </div>
+        `;
+      });
+      
+      optionalList.innerHTML = optionalItems.length ? optionalItems.join('') : '<div style="font-size: 12px; color: #64748b;">No optional placeholders</div>';
+      
+      // Status badge
+      const unknownCount = currentTemplateScan?.analysis?.unknownTokens?.length || 0;
+      if (statusBadge) {
+        if (missingRequiredCount > 0 || unknownCount > 0) {
+          const reasons = [
+            missingRequiredCount > 0 ? `${missingRequiredCount} missing` : null,
+            unknownCount > 0 ? `${unknownCount} unknown` : null
+          ].filter(Boolean).join(' • ');
+          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;">Not Ready${reasons ? ` • ${reasons}` : ''}</span>`;
+        } else {
+          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #dcfce7; color: #16a34a; font-weight: 600;">Ready</span>`;
         }
       }
     }
@@ -5511,7 +5674,7 @@
       if (currentPlaceholders.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="4" style="text-align: center; padding: 40px; color: #94a3b8;">
+            <td colspan="5" style="text-align: center; padding: 40px; color: #94a3b8;">
               <i class="fas fa-tags" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
               No placeholders yet. Click "Add Placeholder" or "Import Defaults".
             </td>
@@ -5544,16 +5707,22 @@
         const hasFallback = templateFallbacks[k];
         
         let statusBadge = '';
+        let sourceLabel = '';
         if (hasValue) {
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #dcfce7; color: #16a34a;">Filled</span>`;
+          sourceLabel = `<span style="font-size: 11px; color: #16a34a;">Company</span>`;
         } else if (hasFallback) {
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Fallback</span>`;
+          sourceLabel = `<span style="font-size: 11px; color: #64748b;">Catalog</span>`;
         } else if (isRequired) {
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fee2e2; color: #dc2626;">Missing Required</span>`;
+          sourceLabel = `<span style="font-size: 11px; color: #dc2626;">Missing</span>`;
         } else if (isOptional) {
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fef3c7; color: #f59e0b;">Not Set</span>`;
+          sourceLabel = `<span style="font-size: 11px; color: #f59e0b;">Missing</span>`;
         } else {
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Custom</span>`;
+          sourceLabel = `<span style="font-size: 11px; color: #64748b;">Company</span>`;
         }
         
         return `
@@ -5568,6 +5737,7 @@
                      style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
             </td>
             <td>${statusBadge}</td>
+            <td>${sourceLabel}</td>
             <td>
               <button onclick="deletePlaceholder('${key}')" style="padding: 6px 12px; border: none; background: #fee2e2; color: #dc2626; border-radius: 6px; cursor: pointer; font-size: 12px;">
                 <i class="fas fa-trash"></i>
