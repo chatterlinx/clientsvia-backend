@@ -342,6 +342,15 @@ function analyzeTemplatePlaceholders(template, tradeKey = null) {
 
 /**
  * Check company's placeholder values against template requirements
+ * 
+ * ════════════════════════════════════════════════════════════════════════════════
+ * STRICT MODE: Company Placeholder Values = Single Source of Truth
+ * ════════════════════════════════════════════════════════════════════════════════
+ * 
+ * If a company value is missing, it's MISSING. Period.
+ * No fallback consideration in readiness calculation.
+ * Catalog fallbacks only exist as runtime safety net, not for UI/validation.
+ * 
  * @param {Object} companyPlaceholders - Company's placeholder values (Map or Object)
  * @param {Object} templateAnalysis - Result from analyzeTemplatePlaceholders
  * @returns {Object} Coverage report
@@ -358,10 +367,9 @@ function checkPlaceholderCoverage(companyPlaceholders, templateAnalysis) {
     }
     
     const coverage = {
-        filled: [],
-        missing: [],
-        missingRequired: [],
-        usingFallback: []
+        filled: [],           // Has company value
+        missing: [],          // No company value (regardless of catalog fallback)
+        missingRequired: []   // Missing AND required = blocks readiness
     };
     
     // Check all placeholders used by template
@@ -375,31 +383,30 @@ function checkPlaceholderCoverage(companyPlaceholders, templateAnalysis) {
         const normalizedKey = key.toLowerCase();
         const value = normalizedValues[normalizedKey];
         
+        // STRICT: Only company values count as "filled"
         const hasValue = value !== undefined && value !== null && value !== '';
         
         if (hasValue) {
             coverage.filled.push({
                 key,
                 value,
-                required: placeholder.required
-            });
-        } else if (placeholder.fallback) {
-            coverage.usingFallback.push({
-                key,
-                fallback: placeholder.fallback,
-                required: placeholder.required
+                required: placeholder.required,
+                usedIn: placeholder.usedIn || []
             });
         } else {
+            // MISSING = no company value (fallback doesn't change this)
             coverage.missing.push({
                 key,
                 label: placeholder.label,
-                required: placeholder.required
+                required: placeholder.required,
+                usedIn: placeholder.usedIn || []
             });
             
             if (placeholder.required) {
                 coverage.missingRequired.push({
                     key,
-                    label: placeholder.label
+                    label: placeholder.label,
+                    usedIn: placeholder.usedIn || []
                 });
             }
         }
@@ -410,12 +417,12 @@ function checkPlaceholderCoverage(companyPlaceholders, templateAnalysis) {
         filled: coverage.filled.length,
         missing: coverage.missing.length,
         missingRequired: coverage.missingRequired.length,
-        usingFallback: coverage.usingFallback.length,
         coveragePercent: allPlaceholders.length > 0 
             ? Math.round((coverage.filled.length / allPlaceholders.length) * 100) 
             : 100
     };
     
+    // READY = all required tokens have company values
     coverage.canPublish = coverage.missingRequired.length === 0;
     
     return coverage;

@@ -1769,26 +1769,43 @@
           </div>
           
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
-          <!-- COVERAGE SUMMARY STRIP -->
+          <!-- TEMPLATE TODO PANEL (Single Source of Truth) -->
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
-          <div id="placeholder-coverage-strip" style="display: none; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; border: 1px solid #0ea5e9;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-              <div style="display: flex; align-items: center; gap: 16px;">
-                <div id="coverage-required-stats" style="font-size: 13px;">
-                  <span style="font-weight: 600; color: #0369a1;">Required:</span>
-                  <span id="coverage-required-filled" style="color: #16a34a;">0 filled</span> •
-                  <span id="coverage-required-missing" style="color: #dc2626;">0 missing</span>
+          <div id="template-todo-panel" style="display: none; margin-bottom: 16px;">
+            <!-- Ready/Not Ready Banner -->
+            <div id="template-todo-banner" style="border-radius: 12px; padding: 16px 20px; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div id="template-todo-icon" style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;"></div>
+                  <div>
+                    <div id="template-todo-title" style="font-size: 15px; font-weight: 600;"></div>
+                    <div id="template-todo-subtitle" style="font-size: 12px; opacity: 0.8;"></div>
+                  </div>
                 </div>
-                <div id="coverage-optional-stats" style="font-size: 13px;">
-                  <span style="font-weight: 600; color: #0369a1;">Optional:</span>
-                  <span id="coverage-optional-filled" style="color: #16a34a;">0 filled</span> •
-                  <span id="coverage-optional-missing" style="color: #f59e0b;">0 missing</span> •
-                  <span id="coverage-optional-fallback" style="color: #64748b;">0 fallback</span>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div id="template-todo-stats" style="text-align: right; font-size: 12px;"></div>
+                  <button onclick="toggleEngineeringPanels()" class="btn btn-secondary" style="font-size: 10px; padding: 4px 8px;" title="Show/hide advanced panels">
+                    <i class="fas fa-cog"></i>
+                  </button>
                 </div>
               </div>
-              <div id="coverage-status-badge">
-                <!-- Populated dynamically -->
-              </div>
+            </div>
+            
+            <!-- Simple TODO List (only missing company tokens) -->
+            <div id="template-todo-list-container" style="display: none; background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead style="background: #f8fafc;">
+                  <tr>
+                    <th style="text-align: left; padding: 10px 16px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0;">Token</th>
+                    <th style="text-align: center; padding: 10px 16px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; width: 100px;">Status</th>
+                    <th style="text-align: center; padding: 10px 16px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; width: 100px;">Used In</th>
+                    <th style="text-align: center; padding: 10px 16px; font-weight: 600; color: #475569; border-bottom: 1px solid #e2e8f0; width: 80px;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="template-todo-list">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
             </div>
           </div>
           
@@ -1840,9 +1857,9 @@
           </div>
           
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
-          <!-- CATALOG + TEMPLATE SCAN GRID (side by side) -->
+          <!-- ENGINEERING PANELS (hidden by default - toggle via cog button) -->
           <!-- ════════════════════════════════════════════════════════════════════════════════ -->
-          <div id="placeholder-dashboard-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <div id="placeholder-dashboard-grid" style="display: none; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
             
             <!-- LEFT COLUMN: Catalogs (Company + Runtime) -->
             <div style="display: flex; flex-direction: column; gap: 12px;">
@@ -5222,47 +5239,162 @@
       }
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TEMPLATE TODO PANEL (Clean Architecture - Single Source of Truth)
+    // ═══════════════════════════════════════════════════════════════════════════
+    
     function renderCoverageStrip() {
-      const strip = document.getElementById('placeholder-coverage-strip');
-      const statusBadge = document.getElementById('coverage-status-badge');
+      // Legacy function - now delegates to Template TODO panel
+      renderTemplateTodoPanel();
+    }
+    
+    function renderTemplateTodoPanel() {
+      const panel = document.getElementById('template-todo-panel');
+      const banner = document.getElementById('template-todo-banner');
+      const icon = document.getElementById('template-todo-icon');
+      const title = document.getElementById('template-todo-title');
+      const subtitle = document.getElementById('template-todo-subtitle');
+      const stats = document.getElementById('template-todo-stats');
+      const listContainer = document.getElementById('template-todo-list-container');
+      const listBody = document.getElementById('template-todo-list');
       
-      if (!currentPlaceholderCoverage || !currentPlaceholderCoverage.hasActiveTemplate) {
-        if (strip) strip.style.display = 'none';
+      if (!panel) return;
+      
+      // Check if we have template data
+      if (!currentTemplateScan || !currentTemplateScan.hasActiveTemplate) {
+        panel.style.display = 'none';
         return;
       }
       
-      if (strip) strip.style.display = 'block';
+      panel.style.display = 'block';
       
-      const coverage = currentPlaceholderCoverage.coverage || {};
-      const summary = coverage.summary || {};
+      const analysis = currentTemplateScan.analysis || {};
+      const allCompanyTokens = [
+        ...(analysis.requiredPlaceholders || []),
+        ...(analysis.optionalPlaceholders || [])
+      ];
       
-      // Compute accurate counts
-      const filledRequired = (coverage.filled || []).filter(p => p.required).length;
-      const filledOptional = (coverage.filled || []).filter(p => !p.required).length;
-      const missingRequired = (coverage.missingRequired || []).length;
-      const missingOptional = (coverage.missing || []).filter(m => !m.required).length;
-      const fallbackCount = (coverage.usingFallback || []).length;
+      // Build value map from current company placeholders
+      const valuesMap = {};
+      for (const p of currentPlaceholders) {
+        valuesMap[p.key.toLowerCase()] = p.value;
+      }
       
-      // Update stats
-      const reqFilled = document.getElementById('coverage-required-filled');
-      const reqMissing = document.getElementById('coverage-required-missing');
-      const optFilled = document.getElementById('coverage-optional-filled');
-      const optMissing = document.getElementById('coverage-optional-missing');
-      const optFallback = document.getElementById('coverage-optional-fallback');
+      // Classify all tokens: filled vs missing
+      const filledTokens = [];
+      const missingTokens = [];
       
-      if (reqFilled) reqFilled.textContent = `${filledRequired} filled`;
-      if (reqMissing) reqMissing.textContent = `${missingRequired} missing`;
-      if (optFilled) optFilled.textContent = `${filledOptional} filled`;
-      if (optMissing) optMissing.textContent = `${missingOptional} missing`;
-      if (optFallback) optFallback.textContent = `${fallbackCount} fallback`;
-      
-      // Update status badge
-      if (statusBadge) {
-        if (missingRequired > 0) {
-          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #fee2e2; color: #dc2626; font-weight: 600;"><i class="fas fa-times-circle" style="margin-right: 4px;"></i> Not Ready • ${missingRequired} missing</span>`;
+      for (const token of allCompanyTokens) {
+        const key = token.key.toLowerCase();
+        const value = valuesMap[key];
+        const hasValue = value !== undefined && value !== null && value !== '';
+        const usedCount = (token.usedIn || []).length;
+        
+        const item = {
+          key: token.key,
+          label: token.label || token.key,
+          required: token.required,
+          usedIn: usedCount,
+          value: hasValue ? value : null
+        };
+        
+        if (hasValue) {
+          filledTokens.push(item);
         } else {
-          statusBadge.innerHTML = `<span style="font-size: 12px; padding: 4px 12px; border-radius: 6px; background: #dcfce7; color: #16a34a; font-weight: 600;"><i class="fas fa-check-circle" style="margin-right: 4px;"></i> Ready</span>`;
+          missingTokens.push(item);
         }
+      }
+      
+      // Count required missing
+      const missingRequired = missingTokens.filter(t => t.required).length;
+      const missingOptional = missingTokens.filter(t => !t.required).length;
+      const isReady = missingRequired === 0;
+      
+      // Update banner appearance
+      if (isReady) {
+        banner.style.background = 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)';
+        banner.style.border = '1px solid #22c55e';
+        icon.innerHTML = '<i class="fas fa-check-circle" style="color: #16a34a;"></i>';
+        icon.style.background = '#bbf7d0';
+        title.textContent = 'Template Ready';
+        title.style.color = '#166534';
+        subtitle.textContent = `All ${filledTokens.length} company tokens filled`;
+        subtitle.style.color = '#15803d';
+      } else {
+        banner.style.background = 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)';
+        banner.style.border = '1px solid #f87171';
+        icon.innerHTML = '<i class="fas fa-exclamation-circle" style="color: #dc2626;"></i>';
+        icon.style.background = '#fee2e2';
+        title.textContent = 'Template Not Ready';
+        title.style.color = '#991b1b';
+        subtitle.textContent = `Fill ${missingRequired} required token${missingRequired !== 1 ? 's' : ''} below`;
+        subtitle.style.color = '#b91c1c';
+      }
+      
+      // Stats (compact)
+      stats.innerHTML = `
+        <div style="color: #16a34a;"><strong>${filledTokens.length}</strong> filled</div>
+        <div style="color: ${missingRequired > 0 ? '#dc2626' : '#64748b'};"><strong>${missingTokens.length}</strong> missing</div>
+      `;
+      
+      // Show TODO list only if there are missing tokens
+      if (missingTokens.length > 0) {
+        listContainer.style.display = 'block';
+        
+        // Sort: required first, then by usedIn count
+        missingTokens.sort((a, b) => {
+          if (a.required !== b.required) return b.required ? 1 : -1;
+          return b.usedIn - a.usedIn;
+        });
+        
+        listBody.innerHTML = missingTokens.map(token => `
+          <tr data-todo-key="${token.key.toLowerCase()}">
+            <td style="padding: 10px 16px; border-bottom: 1px solid #f1f5f9;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <code style="background: #f1f5f9; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: monospace;">{${token.key}}</code>
+                <span style="color: #64748b; font-size: 12px;">${escapeHtml(token.label)}</span>
+                ${token.required ? '<span style="font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #fee2e2; color: #dc2626; font-weight: 600;">REQUIRED</span>' : '<span style="font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #f1f5f9; color: #64748b;">optional</span>'}
+              </div>
+            </td>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #f1f5f9; text-align: center;">
+              <span style="font-size: 11px; padding: 3px 8px; border-radius: 4px; background: #fee2e2; color: #dc2626;">Missing</span>
+            </td>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #f1f5f9; text-align: center;">
+              <span style="font-size: 11px; color: #64748b;">${token.usedIn} scenario${token.usedIn !== 1 ? 's' : ''}</span>
+            </td>
+            <td style="padding: 10px 16px; border-bottom: 1px solid #f1f5f9; text-align: center;">
+              <button onclick="scrollToPlaceholder('${token.key}')" style="font-size: 10px; padding: 4px 10px; background: #4f46e5; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Fill
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        listContainer.style.display = 'none';
+      }
+    }
+    
+    function toggleEngineeringPanels() {
+      const grid = document.getElementById('placeholder-dashboard-grid');
+      const completionPanel = document.getElementById('completion-checklist-panel');
+      const templateRequiredPanel = document.getElementById('template-required-panel');
+      
+      if (!grid) return;
+      
+      const isHidden = grid.style.display === 'none';
+      
+      if (isHidden) {
+        // Show engineering panels
+        grid.style.display = 'grid';
+        if (completionPanel) completionPanel.style.display = 'block';
+        if (templateRequiredPanel && currentTemplateScan?.hasActiveTemplate) {
+          templateRequiredPanel.style.display = 'block';
+        }
+      } else {
+        // Hide engineering panels
+        grid.style.display = 'none';
+        if (completionPanel) completionPanel.style.display = 'none';
+        if (templateRequiredPanel) templateRequiredPanel.style.display = 'none';
       }
     }
     
@@ -5647,20 +5779,18 @@
       }
       
       // Build template requirements lookup + usage map
+      // NO FALLBACK LOGIC - Company values are the single source of truth
       const templateRequired = new Set();
       const templateOptional = new Set();
-      const templateFallbacks = {};
       const usageMap = {};
       
       if (currentTemplateScan?.analysis) {
         for (const p of (currentTemplateScan.analysis.requiredPlaceholders || [])) {
           templateRequired.add(p.key.toLowerCase());
-          if (p.fallback) templateFallbacks[p.key.toLowerCase()] = p.fallback;
           usageMap[p.key.toLowerCase()] = (p.usedIn || []).length;
         }
         for (const p of (currentTemplateScan.analysis.optionalPlaceholders || [])) {
           templateOptional.add(p.key.toLowerCase());
-          if (p.fallback) templateFallbacks[p.key.toLowerCase()] = p.fallback;
           usageMap[p.key.toLowerCase()] = (p.usedIn || []).length;
         }
       }
@@ -5670,25 +5800,30 @@
         const hasValue = value && value.trim();
         const isRequired = templateRequired.has(k);
         const isOptional = templateOptional.has(k);
-        const hasFallback = templateFallbacks[k];
         
+        // STRICT MODE: Only two states - Filled or Missing
+        // No fallback consideration - company value is the only truth
         let statusBadge = '';
         let sourceLabel = '';
+        
         if (hasValue) {
+          // Has company value = Filled
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #dcfce7; color: #16a34a;">Filled</span>`;
-          sourceLabel = `<span style="font-size: 11px; color: #16a34a;">Company</span>`;
-        } else if (hasFallback) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Fallback</span>`;
-          sourceLabel = `<span style="font-size: 11px; color: #64748b;">Catalog</span>`;
+          sourceLabel = `<span style="font-size: 11px; color: #16a34a;"><i class="fas fa-check-circle" style="margin-right: 3px;"></i>Filled</span>`;
         } else if (isRequired) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fee2e2; color: #dc2626;">Missing Required</span>`;
-          sourceLabel = `<span style="font-size: 11px; color: #dc2626;">Missing</span>`;
+          // Required but missing = critical
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fee2e2; color: #dc2626;">Required</span>`;
+          sourceLabel = `<span style="font-size: 11px; color: #dc2626;"><i class="fas fa-exclamation-circle" style="margin-right: 3px;"></i>Missing</span>`;
         } else if (isOptional) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fef3c7; color: #f59e0b;">Not Set</span>`;
-          sourceLabel = `<span style="font-size: 11px; color: #f59e0b;">Missing</span>`;
+          // Optional but missing
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #fef3c7; color: #f59e0b;">Optional</span>`;
+          sourceLabel = `<span style="font-size: 11px; color: #f59e0b;"><i class="fas fa-minus-circle" style="margin-right: 3px;"></i>Missing</span>`;
         } else {
+          // Custom placeholder (not in template)
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Custom</span>`;
-          sourceLabel = `<span style="font-size: 11px; color: #64748b;">Company</span>`;
+          sourceLabel = hasValue 
+            ? `<span style="font-size: 11px; color: #16a34a;"><i class="fas fa-check-circle" style="margin-right: 3px;"></i>Filled</span>`
+            : `<span style="font-size: 11px; color: #64748b;"><i class="fas fa-minus-circle" style="margin-right: 3px;"></i>Empty</span>`;
         }
         
         const usedInCount = usageMap[k] || 0;
@@ -5700,7 +5835,7 @@
             <td>
               <input type="text" value="${escapeHtml(value)}"
                      onchange="updatePlaceholder('${key}', this.value)"
-                     placeholder="${hasFallback ? `Fallback: ${hasFallback}` : ''}"
+                     placeholder="Enter value..."
                      style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
             </td>
             <td style="font-size: 11px; color: #64748b; text-align: center;">${usedInCount > 0 ? usedInCount + ' scenarios' : '—'}</td>
