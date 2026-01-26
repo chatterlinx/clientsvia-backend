@@ -4979,8 +4979,9 @@
     let currentPlaceholderCatalog = null;
     let catalogFilteredList = null;
     
-    // Store merged placeholder rows (includes both existing AND missing tokens)
+    // Store merged placeholder rows (includes catalog + template + company values)
     let currentMergedPlaceholders = [];
+    let currentMergedSummary = null;
     
     async function loadPlaceholders() {
       const tbody = document.getElementById('placeholders-list');
@@ -5037,8 +5038,9 @@
         if (mergedRes.ok) {
           const mergedData = await mergedRes.json();
           if (mergedData.success) {
-            // Store merged rows (includes both existing AND missing tokens)
+            // Store merged rows + summary
             currentMergedPlaceholders = mergedData.rows || [];
+            currentMergedSummary = mergedData.summary || null;
             
             // Also maintain currentPlaceholders for compatibility (only existing ones)
             currentPlaceholders = currentMergedPlaceholders
@@ -5075,15 +5077,19 @@
               label: p.key,
               value: p.value,
               existsInCompany: true,
-              required: false,
-              optional: false,
+              requiredByCatalog: false,
+              requiredByTemplate: false,
+              optionalByCatalog: false,
+              usedByTemplate: false,
               usedInCount: 0,
               status: p.value ? 'filled' : 'missing'
             }));
+            currentMergedSummary = null;
             console.log('✅ Loaded legacy placeholders:', currentPlaceholders.length, 'items');
           } else {
             currentPlaceholders = [];
             currentMergedPlaceholders = [];
+            currentMergedSummary = null;
             console.error('❌ Both merged and legacy endpoints failed');
           }
         }
@@ -5322,30 +5328,30 @@
       
       if (!panel) return;
       
-      // Check if we have template data
-      if (!currentTemplateScan || !currentTemplateScan.hasActiveTemplate) {
+      // Show panel if we have merged data (catalog-first) OR active template
+      if (currentMergedPlaceholders.length === 0 && (!currentTemplateScan || !currentTemplateScan.hasActiveTemplate)) {
         panel.style.display = 'none';
         return;
       }
       
       panel.style.display = 'block';
       
-      // Use merged placeholder data if available (single source of truth)
-      // This includes BOTH existing company values AND missing required tokens
+      // Use merged placeholder data if available (catalog-first single source of truth)
       let filledTokens = [];
-      let missingTokens = [];
+      let missingCatalogRequired = [];
+      let missingTemplateRequired = [];
       
       if (currentMergedPlaceholders.length > 0) {
-        // Use merged data - it already has existsInCompany, required, status
         for (const row of currentMergedPlaceholders) {
-          // Only include tokens that are required or optional (used by template)
-          if (!row.required && !row.optional) continue;
+          // Only consider company tokens
+          if (row.scope && row.scope !== 'company') continue;
           
           const hasValue = row.value && String(row.value).trim();
           const item = {
             key: row.token,
             label: row.label || row.token,
-            required: row.required,
+            requiredByCatalog: !!row.requiredByCatalog,
+            requiredByTemplate: !!row.requiredByTemplate,
             usedIn: row.usedInCount || 0,
             value: hasValue ? row.value : null,
             existsInCompany: row.existsInCompany
@@ -5353,12 +5359,14 @@
           
           if (hasValue) {
             filledTokens.push(item);
-          } else {
-            missingTokens.push(item);
+          } else if (item.requiredByCatalog) {
+            missingCatalogRequired.push(item);
+          } else if (item.requiredByTemplate) {
+            missingTemplateRequired.push(item);
           }
         }
       } else {
-        // Fallback to old method (template scan + currentPlaceholders)
+        // Fallback to template scan + currentPlaceholders (no catalog context)
         const analysis = currentTemplateScan.analysis || {};
         const allCompanyTokens = [
           ...(analysis.requiredPlaceholders || []),
@@ -5379,7 +5387,8 @@
           const item = {
             key: token.key,
             label: token.label || token.key,
-            required: token.required,
+            requiredByCatalog: false,
+            requiredByTemplate: !!token.required,
             usedIn: usedCount,
             value: hasValue ? value : null,
             existsInCompany: valuesMap.hasOwnProperty(key)
@@ -5387,16 +5396,17 @@
           
           if (hasValue) {
             filledTokens.push(item);
-          } else {
-            missingTokens.push(item);
+          } else if (item.requiredByTemplate) {
+            missingTemplateRequired.push(item);
           }
         }
       }
       
-      // Count required missing
-      const missingRequired = missingTokens.filter(t => t.required).length;
-      const missingOptional = missingTokens.filter(t => !t.required).length;
-      const isReady = missingRequired === 0;
+      const missingRequiredCount = missingCatalogRequired.length;
+      const missingTemplateRequiredCount = missingTemplateRequired.length;
+      const isReady = missingRequiredCount === 0;
+      
+      const missingTokens = [...missingCatalogRequired, ...missingTemplateRequired];
       
       // Update banner appearance
       if (isReady) {
@@ -5404,34 +5414,39 @@
         banner.style.border = '1px solid #22c55e';
         icon.innerHTML = '<i class="fas fa-check-circle" style="color: #16a34a;"></i>';
         icon.style.background = '#bbf7d0';
-        title.textContent = 'Template Ready';
+        title.textContent = 'Company Ready';
         title.style.color = '#166534';
-        subtitle.textContent = `All ${filledTokens.length} company tokens filled`;
+        subtitle.textContent = missingTemplateRequiredCount > 0
+          ? `Catalog required filled • ${missingTemplateRequiredCount} template-required still missing`
+          : `All catalog-required company tokens filled`;
         subtitle.style.color = '#15803d';
       } else {
         banner.style.background = 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)';
         banner.style.border = '1px solid #f87171';
         icon.innerHTML = '<i class="fas fa-exclamation-circle" style="color: #dc2626;"></i>';
         icon.style.background = '#fee2e2';
-        title.textContent = 'Template Not Ready';
+        title.textContent = 'Company Not Ready';
         title.style.color = '#991b1b';
-        subtitle.textContent = `Fill ${missingRequired} required token${missingRequired !== 1 ? 's' : ''} below`;
+        subtitle.textContent = missingTemplateRequiredCount > 0
+          ? `Fill ${missingRequiredCount} catalog-required token${missingRequiredCount !== 1 ? 's' : ''} • ${missingTemplateRequiredCount} template-required also missing`
+          : `Fill ${missingRequiredCount} catalog-required token${missingRequiredCount !== 1 ? 's' : ''} below`;
         subtitle.style.color = '#b91c1c';
       }
       
       // Stats (compact)
       stats.innerHTML = `
         <div style="color: #16a34a;"><strong>${filledTokens.length}</strong> filled</div>
-        <div style="color: ${missingRequired > 0 ? '#dc2626' : '#64748b'};"><strong>${missingTokens.length}</strong> missing</div>
+        <div style="color: ${missingRequiredCount > 0 ? '#dc2626' : '#64748b'};"><strong>${missingTokens.length}</strong> missing</div>
       `;
       
       // Show TODO list only if there are missing tokens
       if (missingTokens.length > 0) {
         listContainer.style.display = 'block';
         
-        // Sort: required first, then by usedIn count
+        // Sort: catalog-required first, then template-required, then by usedIn count
         missingTokens.sort((a, b) => {
-          if (a.required !== b.required) return b.required ? 1 : -1;
+          if (a.requiredByCatalog !== b.requiredByCatalog) return b.requiredByCatalog ? 1 : -1;
+          if (a.requiredByTemplate !== b.requiredByTemplate) return b.requiredByTemplate ? 1 : -1;
           return b.usedIn - a.usedIn;
         });
         
@@ -5441,7 +5456,13 @@
               <div style="display: flex; align-items: center; gap: 8px;">
                 <code style="background: #f1f5f9; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-family: monospace;">{${token.key}}</code>
                 <span style="color: #64748b; font-size: 12px;">${escapeHtml(token.label)}</span>
-                ${token.required ? '<span style="font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #fee2e2; color: #dc2626; font-weight: 600;">REQUIRED</span>' : '<span style="font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #f1f5f9; color: #64748b;">optional</span>'}
+                ${token.requiredByCatalog 
+                  ? '<span style="font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #fee2e2; color: #dc2626; font-weight: 600;">CATALOG REQUIRED</span>'
+                  : (token.requiredByTemplate
+                    ? '<span style="font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #e0e7ff; color: #4338ca; font-weight: 600;">TEMPLATE REQUIRED</span>'
+                    : '<span style="font-size: 9px; padding: 2px 6px; border-radius: 3px; background: #f1f5f9; color: #64748b;">optional</span>'
+                  )
+                }
               </div>
             </td>
             <td style="padding: 10px 16px; border-bottom: 1px solid #f1f5f9; text-align: center;">
@@ -5886,18 +5907,24 @@
         const value = row.value || '';
         const hasValue = value && String(value).trim();
         const existsInCompany = row.existsInCompany;
-        const isRequired = row.required;
-        const isOptional = row.optional;
+        const requiredByCatalog = !!row.requiredByCatalog;
+        const requiredByTemplate = !!row.requiredByTemplate;
+        const optionalByCatalog = !!row.optionalByCatalog;
+        const usedByTemplate = !!row.usedByTemplate || (row.usedInCount || 0) > 0;
         const usedInCount = row.usedInCount || 0;
         
         // ════════════════════════════════════════════════════════════════════════
-        // STATUS BADGE: Shows requirement level
+        // STATUS BADGE: Shows requirement level (Catalog + Template flags)
         // ════════════════════════════════════════════════════════════════════════
         let statusBadge = '';
-        if (isRequired) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#fee2e2'}; color: ${hasValue ? '#16a34a' : '#dc2626'};">Required</span>`;
-        } else if (isOptional) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#fef3c7'}; color: ${hasValue ? '#16a34a' : '#f59e0b'};">Optional</span>`;
+        if (requiredByCatalog) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#fee2e2'}; color: ${hasValue ? '#16a34a' : '#dc2626'};">Catalog Required</span>`;
+        } else if (requiredByTemplate) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#e0e7ff'}; color: ${hasValue ? '#16a34a' : '#4338ca'};">Template Required</span>`;
+        } else if (usedByTemplate) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#fef3c7'}; color: ${hasValue ? '#16a34a' : '#f59e0b'};">Template Used</span>`;
+        } else if (optionalByCatalog) {
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#f1f5f9'}; color: ${hasValue ? '#16a34a' : '#64748b'};">Catalog Optional</span>`;
         } else {
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Custom</span>`;
         }
@@ -5956,8 +5983,8 @@
           `;
         }
         
-        // Row background for missing required tokens
-        const rowBg = (!existsInCompany && isRequired) ? 'background: #fef2f2;' : '';
+        // Row background for missing catalog-required tokens
+        const rowBg = (!existsInCompany && requiredByCatalog) ? 'background: #fef2f2;' : '';
         
         return `
           <tr data-placeholder-key="${escapeHtml(key)}" style="${rowBg}">

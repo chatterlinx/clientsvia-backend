@@ -394,16 +394,18 @@ router.post('/company/:companyId/import-defaults', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════════
-// GET MERGED PLACEHOLDER VALUES (Single Source of Truth)
+// GET MERGED PLACEHOLDER VALUES (Catalog-First + Canonical Keys)
 // ════════════════════════════════════════════════════════════════════════════════
 // 
-// Returns a merged list showing:
-// 1) Existing company values (from Mongo)
-// 2) Missing required tokens (from template scan - not yet created)
-// 3) Missing optional tokens (from template scan - not yet created)
+// Builds the "one truth" table by merging THREE sources:
+// 1) Catalog (company-scope tokens for this trade)  [base set]
+// 2) Template scan usage (usedInCount + requiredByTemplate)
+// 3) Company stored values (Mongo)                  [values only]
 //
-// This is the "single source of truth" view that shows EVERYTHING the admin needs
-// to see and fill, with "Create" buttons for missing tokens.
+// Rules:
+// - Output keys are ALWAYS canonical (aliases resolved)
+// - Catalog required tokens are ALWAYS included, even if template doesn't use them
+// - Runtime tokens NEVER appear in this table
 // ════════════════════════════════════════════════════════════════════════════════
 router.get('/company/:companyId/values-merged', async (req, res) => {
     try {
@@ -423,35 +425,47 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
         
         const tradeKey = company.trade || 'HVAC';
         
-        // Get company placeholders from Mongo
-        const placeholderDoc = await CompanyPlaceholders.findOne({ companyId }).lean();
-        const companyPlaceholders = placeholderDoc?.placeholders || [];
+        // Helpers: normalize + canonicalize
+        const normalizeToken = (token) => {
+            if (!token) return '';
+            return String(token).trim().replace(/^\{+/, '').replace(/\}+$/, '');
+        };
         
-        // Build map of existing company values (normalized keys)
-        const companyMap = new Map();
-        for (const p of companyPlaceholders) {
-            companyMap.set(p.key.toLowerCase(), {
-                key: p.key,
-                value: p.value || '',
-                description: p.description || null
-            });
-        }
+        const canonicalizeToken = (token) => {
+            const cleaned = normalizeToken(token);
+            if (!cleaned) return '';
+            const canonical = resolveAlias(cleaned) || cleaned;
+            return canonical;
+        };
         
-        // Get catalog for metadata
+        // ───────────────────────────────────────────────────────────────────────
+        // 1) CATALOG (base set - company tokens only)
+        // ───────────────────────────────────────────────────────────────────────
         const catalog = getCatalog(tradeKey);
-        const catalogMap = new Map();
-        for (const p of catalog.placeholders) {
-            if (p.scope === 'company') {
-                catalogMap.set(p.key.toLowerCase(), p);
+        const catalogCompanyTokens = (catalog.placeholders || []).filter(p => p.scope === 'company');
+        
+        const catalogMap = new Map(); // canonicalLower -> catalog entry
+        const catalogRequiredSet = new Set();
+        const catalogOptionalSet = new Set();
+        
+        for (const p of catalogCompanyTokens) {
+            const canonicalKey = p.key;
+            const canonicalLower = canonicalKey.toLowerCase();
+            catalogMap.set(canonicalLower, p);
+            if (p.required) {
+                catalogRequiredSet.add(canonicalLower);
+            } else {
+                catalogOptionalSet.add(canonicalLower);
             }
         }
         
-        // Get template scan results
+        // ───────────────────────────────────────────────────────────────────────
+        // 2) TEMPLATE SCAN (usage + required by template)
+        // ───────────────────────────────────────────────────────────────────────
         let templateScan = null;
         let templateName = null;
         let hasActiveTemplate = false;
         
-        // Check for active template
         const templateRefs = company.aiAgentSettings?.templateReferences || [];
         const activeRef = templateRefs
             .filter(ref => ref.enabled !== false)
@@ -467,111 +481,181 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
             }
         }
         
-        // Build required/optional sets from template scan
-        const requiredKeys = new Set();
-        const optionalKeys = new Set();
-        const usageMap = {};
-        const labelMap = {};
+        const requiredByTemplateSet = new Set(); // canonicalLower
+        const usedByTemplateSet = new Set();     // canonicalLower
+        const usageMap = {};                     // canonicalLower -> count
+        const labelMap = {};                     // canonicalLower -> label
         
         if (templateScan) {
             for (const p of (templateScan.requiredPlaceholders || [])) {
-                requiredKeys.add(p.key.toLowerCase());
-                usageMap[p.key.toLowerCase()] = (p.usedIn || []).length;
-                labelMap[p.key.toLowerCase()] = p.label;
+                const canonical = canonicalizeToken(p.key);
+                const canonicalLower = canonical.toLowerCase();
+                requiredByTemplateSet.add(canonicalLower);
+                usedByTemplateSet.add(canonicalLower);
+                usageMap[canonicalLower] = (p.usedIn || []).length;
+                labelMap[canonicalLower] = p.label;
             }
             for (const p of (templateScan.optionalPlaceholders || [])) {
-                optionalKeys.add(p.key.toLowerCase());
-                usageMap[p.key.toLowerCase()] = (p.usedIn || []).length;
-                labelMap[p.key.toLowerCase()] = p.label;
+                const canonical = canonicalizeToken(p.key);
+                const canonicalLower = canonical.toLowerCase();
+                usedByTemplateSet.add(canonicalLower);
+                usageMap[canonicalLower] = (p.usedIn || []).length;
+                labelMap[canonicalLower] = p.label;
             }
         }
         
-        // Build merged rows
-        const rows = [];
-        const processedKeys = new Set();
+        // ───────────────────────────────────────────────────────────────────────
+        // 3) COMPANY VALUES (Mongo - canonicalized)
+        // ───────────────────────────────────────────────────────────────────────
+        const placeholderDoc = await CompanyPlaceholders.findOne({ companyId }).lean();
+        const companyPlaceholders = placeholderDoc?.placeholders || [];
         
-        // 1) Add ALL existing company values first
-        for (const [normalizedKey, companyData] of companyMap) {
-            processedKeys.add(normalizedKey);
+        const companyMap = new Map(); // canonicalLower -> { key, value, description, originalKeys }
+        
+        for (const p of companyPlaceholders) {
+            const canonicalKey = canonicalizeToken(p.key);
+            const canonicalLower = canonicalKey.toLowerCase();
             
-            const meta = catalogMap.get(normalizedKey) || {};
-            const isRequired = requiredKeys.has(normalizedKey);
-            const isOptional = optionalKeys.has(normalizedKey);
+            const value = p.value || '';
+            const existing = companyMap.get(canonicalLower);
+            
+            if (!existing) {
+                companyMap.set(canonicalLower, {
+                    key: canonicalKey,
+                    value,
+                    description: p.description || null,
+                    originalKeys: [p.key]
+                });
+            } else {
+                // Merge duplicate/legacy keys: prefer non-empty value
+                const hasValue = value && String(value).trim();
+                const existingHasValue = existing.value && String(existing.value).trim();
+                if (!existingHasValue && hasValue) {
+                    existing.value = value;
+                }
+                existing.originalKeys.push(p.key);
+            }
+        }
+        
+        // ───────────────────────────────────────────────────────────────────────
+        // 4) BUILD MERGED ROWS (Catalog-first)
+        // ───────────────────────────────────────────────────────────────────────
+        const rowsByKey = new Map(); // canonicalLower -> row
+        
+        // 4a) Start from catalog (company tokens only)
+        for (const p of catalogCompanyTokens) {
+            const canonicalKey = p.key;
+            const canonicalLower = canonicalKey.toLowerCase();
+            
+            rowsByKey.set(canonicalLower, {
+                token: canonicalKey,
+                displayToken: `{${canonicalKey}}`,
+                label: p.label || canonicalKey,
+                scope: 'company',
+                category: p.category || null,
+                requiredByCatalog: !!p.required,
+                optionalByCatalog: !p.required,
+                requiredByTemplate: false,
+                usedByTemplate: false,
+                usedInCount: 0,
+                existsInCompany: false,
+                value: '',
+                status: 'missing'
+            });
+        }
+        
+        // 4b) Overlay template usage
+        const applyTemplateUsage = (canonicalLower, isRequiredByTemplate) => {
+            const row = rowsByKey.get(canonicalLower);
+            if (row) {
+                row.usedByTemplate = true;
+                if (isRequiredByTemplate) row.requiredByTemplate = true;
+                row.usedInCount = usageMap[canonicalLower] || row.usedInCount || 0;
+                if (!row.label && labelMap[canonicalLower]) {
+                    row.label = labelMap[canonicalLower];
+                }
+            } else {
+                // Template token not in catalog (unknown) - still surface for clarity
+                const canonicalKey = canonicalLower;
+                rowsByKey.set(canonicalLower, {
+                    token: canonicalKey,
+                    displayToken: `{${canonicalKey}}`,
+                    label: labelMap[canonicalLower] || canonicalKey,
+                    scope: 'company',
+                    category: 'unknown',
+                    requiredByCatalog: false,
+                    optionalByCatalog: false,
+                    requiredByTemplate: !!isRequiredByTemplate,
+                    usedByTemplate: true,
+                    usedInCount: usageMap[canonicalLower] || 0,
+                    existsInCompany: false,
+                    value: '',
+                    status: 'missing'
+                });
+            }
+        };
+        
+        for (const keyLower of requiredByTemplateSet) {
+            applyTemplateUsage(keyLower, true);
+        }
+        for (const keyLower of usedByTemplateSet) {
+            applyTemplateUsage(keyLower, false);
+        }
+        
+        // 4c) Overlay company values (Mongo)
+        for (const [canonicalLower, companyData] of companyMap.entries()) {
+            const row = rowsByKey.get(canonicalLower);
             const hasValue = companyData.value && String(companyData.value).trim();
             
-            rows.push({
-                token: companyData.key,
-                displayToken: `{${companyData.key}}`,
-                label: labelMap[normalizedKey] || meta.label || companyData.key,
-                value: companyData.value || '',
-                existsInCompany: true,
-                required: isRequired,
-                optional: isOptional,
-                usedInCount: usageMap[normalizedKey] || 0,
-                status: hasValue ? 'filled' : 'missing',
-                category: meta.category || 'custom'
-            });
+            if (row) {
+                row.existsInCompany = true;
+                row.value = companyData.value || '';
+                row.status = hasValue ? 'filled' : 'missing';
+                if (!row.label && companyData.description) {
+                    row.label = companyData.description;
+                }
+            } else {
+                // Company token not in catalog or template (custom)
+                rowsByKey.set(canonicalLower, {
+                    token: companyData.key,
+                    displayToken: `{${companyData.key}}`,
+                    label: companyData.description || companyData.key,
+                    scope: 'company',
+                    category: 'custom',
+                    requiredByCatalog: false,
+                    optionalByCatalog: false,
+                    requiredByTemplate: requiredByTemplateSet.has(canonicalLower),
+                    usedByTemplate: usedByTemplateSet.has(canonicalLower),
+                    usedInCount: usageMap[canonicalLower] || 0,
+                    existsInCompany: true,
+                    value: companyData.value || '',
+                    status: hasValue ? 'filled' : 'missing'
+                });
+            }
         }
         
-        // 2) Add missing REQUIRED tokens (from template scan, not yet in company)
-        for (const key of requiredKeys) {
-            if (processedKeys.has(key)) continue;
-            processedKeys.add(key);
-            
-            const meta = catalogMap.get(key) || {};
-            const originalKey = meta.key || key;
-            
-            rows.push({
-                token: originalKey,
-                displayToken: `{${originalKey}}`,
-                label: labelMap[key] || meta.label || originalKey,
-                value: '',
-                existsInCompany: false,
-                required: true,
-                optional: false,
-                usedInCount: usageMap[key] || 0,
-                status: 'missing',
-                category: meta.category || 'unknown'
-            });
-        }
+        // ───────────────────────────────────────────────────────────────────────
+        // 5) FINAL ROWS + SUMMARY
+        // ───────────────────────────────────────────────────────────────────────
+        const rows = Array.from(rowsByKey.values());
         
-        // 3) Add missing OPTIONAL tokens (from template scan, not yet in company)
-        for (const key of optionalKeys) {
-            if (processedKeys.has(key)) continue;
-            processedKeys.add(key);
-            
-            const meta = catalogMap.get(key) || {};
-            const originalKey = meta.key || key;
-            
-            rows.push({
-                token: originalKey,
-                displayToken: `{${originalKey}}`,
-                label: labelMap[key] || meta.label || originalKey,
-                value: '',
-                existsInCompany: false,
-                required: false,
-                optional: true,
-                usedInCount: usageMap[key] || 0,
-                status: 'missing',
-                category: meta.category || 'unknown'
-            });
-        }
-        
-        // Sort: missing required first, then missing optional, then filled
+        // Sort: missing catalog-required first, then missing template-required, then others
         rows.sort((a, b) => {
-            // Missing required at top
-            if (a.required && a.status === 'missing' && !(b.required && b.status === 'missing')) return -1;
-            if (b.required && b.status === 'missing' && !(a.required && a.status === 'missing')) return 1;
-            // Missing optional next
-            if (a.status === 'missing' && b.status !== 'missing') return -1;
-            if (b.status === 'missing' && a.status !== 'missing') return 1;
-            // Then by usedInCount
+            const score = (r) => {
+                let s = 0;
+                if (r.requiredByCatalog) s += 100;
+                else if (r.requiredByTemplate) s += 50;
+                if (r.status === 'missing') s += 20;
+                return s;
+            };
+            const diff = score(b) - score(a);
+            if (diff !== 0) return diff;
             return (b.usedInCount || 0) - (a.usedInCount || 0);
         });
         
-        // Compute summary
-        const missingRequired = rows.filter(r => r.required && r.status === 'missing').length;
-        const missingOptional = rows.filter(r => r.optional && r.status === 'missing').length;
+        const missingRequiredByCatalog = rows.filter(r => r.requiredByCatalog && r.status === 'missing').length;
+        const missingRequiredByTemplate = rows.filter(r => r.requiredByTemplate && r.status === 'missing').length;
+        const missingTotal = rows.filter(r => r.status === 'missing').length;
         const filledCount = rows.filter(r => r.status === 'filled').length;
         
         res.json({
@@ -585,9 +669,16 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
             summary: {
                 total: rows.length,
                 filled: filledCount,
-                missingRequired,
-                missingOptional,
-                isReady: missingRequired === 0
+                missing: missingTotal,
+                missingRequiredByCatalog,
+                missingRequiredByTemplate,
+                isReady: missingRequiredByCatalog === 0
+            },
+            meta: {
+                aliases: catalog.aliases || {},
+                templateWarnings: templateScan?.warnings || [],
+                unknownTokens: templateScan?.unknownTokens || [],
+                aliasedTokens: templateScan?.aliasedTokens || []
             }
         });
         
