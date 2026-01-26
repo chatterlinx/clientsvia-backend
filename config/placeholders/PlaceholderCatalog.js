@@ -61,6 +61,17 @@ const UNIVERSAL_PLACEHOLDERS = [
         description: '24/7 emergency contact number',
         example: '(555) 123-4569'
     },
+    {
+        key: 'companyEmail',
+        label: 'Company Email',
+        type: 'email',
+        category: 'contact',
+        scope: 'company',
+        required: false,
+        fallback: '',
+        description: 'Primary company email address',
+        example: 'info@penguinair.com'
+    },
     
     // Location & Service
     { 
@@ -428,6 +439,7 @@ const PLACEHOLDER_ALIASES = {
     'serviceareas': 'serviceAreas',
     'service_areas': 'serviceAreas',
     'service_area': 'serviceAreas',
+    'servicearea': 'serviceAreas',
     
     // Hours aliases
     'businesshours': 'businessHours',
@@ -450,7 +462,12 @@ const PLACEHOLDER_ALIASES = {
     // License aliases
     'licensenumber': 'licenseNumber',
     'license_number': 'licenseNumber',
-    'license': 'licenseNumber'
+    'license': 'licenseNumber',
+    
+    // Email aliases
+    'email': 'companyEmail',
+    'companyemail': 'companyEmail',
+    'company_email': 'companyEmail'
 };
 
 // ════════════════════════════════════════════════════════════════════════════════

@@ -2027,6 +2027,9 @@
               Company Placeholder Values
             </h4>
             <div style="display: flex; gap: 8px;">
+              <button onclick="normalizePlaceholderKeys(this)" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Normalize legacy keys to canonical tokens">
+                <i class="fas fa-broom"></i> Normalize Keys
+              </button>
               <button onclick="copyPlaceholderPageJson(this)" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Copy all placeholder data as JSON">
                 <i class="fas fa-copy"></i> Copy JSON
               </button>
@@ -6052,6 +6055,70 @@
       } catch (error) {
         console.error('Failed to create placeholder:', error);
         alert(`Failed to create placeholder: ${error.message}`);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NORMALIZE PLACEHOLDER KEYS (legacy → canonical)
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function normalizePlaceholderKeys(btn) {
+      if (!currentCompanyId) {
+        alert('No company selected. Please select a company first.');
+        return;
+      }
+      
+      const confirmed = confirm(
+        'Normalize Keys will:\n' +
+        '1) Convert legacy keys to canonical keys\n' +
+        '2) Merge duplicates\n' +
+        '3) Remove legacy keys\n\n' +
+        'This is safe but irreversible. Continue?'
+      );
+      
+      if (!confirmed) return;
+      
+      const originalHtml = btn?.innerHTML;
+      if (btn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Normalizing...';
+        btn.disabled = true;
+      }
+      
+      try {
+        const res = await fetch(`/api/admin/placeholders/company/${currentCompanyId}/normalize`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ preferCanonical: true })
+        });
+        
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+        
+        const conflicts = data.conflicts || [];
+        const conflictMsg = conflicts.length > 0
+          ? `\nConflicts detected: ${conflicts.length} (see console)`
+          : '';
+        
+        alert(`✅ Normalized ${data.migratedCount || 0} legacy keys.\nFinal placeholders: ${data.finalCount || 0}.${conflictMsg}`);
+        
+        if (conflicts.length > 0) {
+          console.warn('[PLACEHOLDERS] Normalize conflicts:', conflicts);
+        }
+        
+        await loadPlaceholders();
+        
+      } catch (error) {
+        console.error('Failed to normalize placeholders:', error);
+        alert(`Failed to normalize placeholders: ${error.message}`);
+      } finally {
+        if (btn) {
+          btn.innerHTML = originalHtml;
+          btn.disabled = false;
+        }
       }
     }
     

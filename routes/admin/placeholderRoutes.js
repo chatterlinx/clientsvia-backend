@@ -689,6 +689,154 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════════
+// NORMALIZE COMPANY PLACEHOLDER KEYS (legacy → canonical)
+// ════════════════════════════════════════════════════════════════════════════════
+// 
+// - Converts legacy/alias keys to canonical keys
+// - Merges duplicates
+// - Removes legacy keys after migration
+// - Optionally prefers canonical key values on conflict
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/company/:companyId/normalize', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { preferCanonical = true } = req.body || {};
+        
+        const company = await Company.findById(companyId)
+            .select('name trade')
+            .lean();
+        
+        if (!company) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Company not found' 
+            });
+        }
+        
+        const tradeKey = company.trade || 'HVAC';
+        const catalog = getCatalog(tradeKey);
+        
+        const doc = await CompanyPlaceholders.findOne({ companyId });
+        if (!doc) {
+            return res.json({
+                success: true,
+                message: 'No placeholders to normalize',
+                migratedCount: 0,
+                deletedCount: 0,
+                finalCount: 0,
+                conflicts: []
+            });
+        }
+        
+        const normalizeToken = (token) => {
+            if (!token) return '';
+            return String(token).trim().replace(/^\{+/, '').replace(/\}+$/, '');
+        };
+        
+        const canonicalizeToken = (token) => {
+            const cleaned = normalizeToken(token);
+            if (!cleaned) return '';
+            const canonical = resolveAlias(cleaned) || cleaned;
+            return canonical;
+        };
+        
+        const mergedMap = new Map(); // canonicalLower -> merged data
+        const migrated = [];
+        const conflicts = [];
+        let legacyCount = 0;
+        
+        for (const p of (doc.placeholders || [])) {
+            const canonicalKey = canonicalizeToken(p.key);
+            const canonicalLower = canonicalKey.toLowerCase();
+            const originalLower = (p.key || '').toLowerCase();
+            const isAlias = canonicalLower !== originalLower;
+            
+            if (isAlias) {
+                legacyCount += 1;
+                migrated.push({ from: p.key, to: canonicalKey });
+            }
+            
+            const value = p.value || '';
+            const hasValue = value && String(value).trim();
+            const isCanonicalSource = originalLower === canonicalLower;
+            
+            if (!mergedMap.has(canonicalLower)) {
+                mergedMap.set(canonicalLower, {
+                    key: canonicalLower, // stored lowercase (schema lowercases anyway)
+                    canonicalKey,
+                    value,
+                    description: p.description || null,
+                    hasCanonicalSource: isCanonicalSource,
+                    originalKeys: [p.key]
+                });
+                continue;
+            }
+            
+            const existing = mergedMap.get(canonicalLower);
+            const existingHasValue = existing.value && String(existing.value).trim();
+            
+            // Merge logic: prefer canonical if configured, otherwise keep first non-empty
+            if (!existingHasValue && hasValue) {
+                existing.value = value;
+                if (!existing.description && p.description) {
+                    existing.description = p.description;
+                }
+                existing.hasCanonicalSource = existing.hasCanonicalSource || isCanonicalSource;
+            } else if (existingHasValue && hasValue && String(existing.value).trim() !== String(value).trim()) {
+                conflicts.push({
+                    key: canonicalKey,
+                    keptValue: existing.value,
+                    incomingValue: value,
+                    keptFrom: existing.originalKeys[0],
+                    incomingFrom: p.key
+                });
+                
+                // If preferCanonical and incoming is canonical source, override
+                if (preferCanonical && isCanonicalSource && !existing.hasCanonicalSource) {
+                    existing.value = value;
+                    existing.hasCanonicalSource = true;
+                }
+            }
+            
+            existing.originalKeys.push(p.key);
+        }
+        
+        // Build normalized placeholders array
+        const normalizedPlaceholders = Array.from(mergedMap.values()).map(entry => ({
+            key: entry.key,
+            value: entry.value || '',
+            description: entry.description || null,
+            isSystem: false
+        }));
+        
+        const originalCount = doc.placeholders.length;
+        const finalCount = normalizedPlaceholders.length;
+        const deletedCount = originalCount - finalCount;
+        
+        // Save normalized placeholders
+        doc.placeholders = normalizedPlaceholders;
+        doc.lastUpdatedBy = req.user?.email || req.user?.username || 'System';
+        await doc.save();
+        
+        res.json({
+            success: true,
+            message: `Normalized ${legacyCount} legacy key(s)`,
+            companyId,
+            companyName: company.name,
+            tradeKey,
+            migratedCount: legacyCount,
+            deletedCount,
+            finalCount,
+            conflicts
+        });
+        
+    } catch (error) {
+        logger.error('[PLACEHOLDERS] Error normalizing placeholders:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
 // VALIDATE A PLACEHOLDER KEY
 // ════════════════════════════════════════════════════════════════════════════════
 router.get('/validate/:key', async (req, res) => {

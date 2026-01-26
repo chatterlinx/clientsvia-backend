@@ -35,7 +35,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const logger = require('../../utils/logger.js');
-const { validateKey } = require('../../config/placeholders/PlaceholderCatalog');
+const { validateKey, resolveAlias } = require('../../config/placeholders/PlaceholderCatalog');
 
 // Models
 const CompanyScenarioOverride = require('../../models/CompanyScenarioOverride');
@@ -430,7 +430,8 @@ router.put('/placeholders', async (req, res) => {
             });
         }
         
-        // Validate structure + block runtime-scoped tokens
+        // Validate structure + normalize keys + block runtime-scoped tokens
+        const normalizedPlaceholders = [];
         for (const p of placeholders) {
             if (!p.key || p.value === undefined || p.value === null) {
                 return res.status(400).json({
@@ -439,7 +440,8 @@ router.put('/placeholders', async (req, res) => {
                 });
             }
             
-            const validation = validateKey(p.key);
+            const canonicalKey = resolveAlias(p.key);
+            const validation = validateKey(canonicalKey);
             if (validation.valid && validation.placeholder?.scope === 'runtime') {
                 return res.status(400).json({
                     success: false,
@@ -447,19 +449,25 @@ router.put('/placeholders', async (req, res) => {
                     hint: 'Runtime tokens are filled during calls (callerName, callerPhone, etc.)'
                 });
             }
+            
+            normalizedPlaceholders.push({
+                key: canonicalKey,
+                value: p.value,
+                description: p.description || null
+            });
         }
         
         const username = req.user?.email || req.user?.username || 'Unknown';
         
-        const doc = await CompanyPlaceholders.setAllPlaceholders(companyId, placeholders, username);
+        const doc = await CompanyPlaceholders.setAllPlaceholders(companyId, normalizedPlaceholders, username);
         
         await invalidateCaches(companyId);
         
-        logger.info(`📝 [PLACEHOLDERS] Updated ${placeholders.length} placeholders for ${companyId}`);
+        logger.info(`📝 [PLACEHOLDERS] Updated ${normalizedPlaceholders.length} placeholders for ${companyId}`);
         
         res.json({
             success: true,
-            message: `Updated ${placeholders.length} placeholders`,
+            message: `Updated ${normalizedPlaceholders.length} placeholders`,
             placeholders: doc.placeholders
         });
     } catch (error) {
@@ -493,7 +501,8 @@ router.post('/placeholders/:key', async (req, res) => {
             });
         }
         
-        const validation = validateKey(key);
+        const canonicalKey = resolveAlias(key);
+        const validation = validateKey(canonicalKey);
         if (validation.valid && validation.placeholder?.scope === 'runtime') {
             return res.status(400).json({
                 success: false,
@@ -504,7 +513,7 @@ router.post('/placeholders/:key', async (req, res) => {
         
         const username = req.user?.email || req.user?.username || 'Unknown';
         
-        const doc = await CompanyPlaceholders.setPlaceholder(companyId, key, value, {
+        const doc = await CompanyPlaceholders.setPlaceholder(companyId, canonicalKey, value, {
             description,
             updatedBy: username
         });
