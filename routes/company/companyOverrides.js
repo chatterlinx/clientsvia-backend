@@ -35,6 +35,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const logger = require('../../utils/logger.js');
+const { validateKey } = require('../../config/placeholders/PlaceholderCatalog');
 
 // Models
 const CompanyScenarioOverride = require('../../models/CompanyScenarioOverride');
@@ -429,12 +430,21 @@ router.put('/placeholders', async (req, res) => {
             });
         }
         
-        // Validate structure
+        // Validate structure + block runtime-scoped tokens
         for (const p of placeholders) {
-            if (!p.key || !p.value) {
+            if (!p.key || p.value === undefined || p.value === null) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Each placeholder must have key and value'
+                    error: 'Each placeholder must have key and value (value can be empty string)'
+                });
+            }
+            
+            const validation = validateKey(p.key);
+            if (validation.valid && validation.placeholder?.scope === 'runtime') {
+                return res.status(400).json({
+                    success: false,
+                    error: `Token "${p.key}" is runtime-scoped and cannot be set as a company placeholder`,
+                    hint: 'Runtime tokens are filled during calls (callerName, callerPhone, etc.)'
                 });
             }
         }
@@ -476,10 +486,19 @@ router.post('/placeholders/:key', async (req, res) => {
     const { value, description } = req.body;
     
     try {
-        if (!value) {
+        if (value === undefined || value === null) {
             return res.status(400).json({
                 success: false,
-                error: 'value is required'
+                error: 'value is required (can be empty string)'
+            });
+        }
+        
+        const validation = validateKey(key);
+        if (validation.valid && validation.placeholder?.scope === 'runtime') {
+            return res.status(400).json({
+                success: false,
+                error: `Token "${key}" is runtime-scoped and cannot be set as a company placeholder`,
+                hint: 'Runtime tokens are filled during calls (callerName, callerPhone, etc.)'
             });
         }
         

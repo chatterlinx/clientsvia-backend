@@ -2014,16 +2014,17 @@
           <table id="placeholders-table">
             <thead>
               <tr>
-                <th style="width: 22%;">Name (Token)</th>
-                <th style="width: 38%;">Value</th>
-                <th style="width: 16%;">Status</th>
-                <th style="width: 14%;">Source</th>
-                <th style="width: 10%;">Actions</th>
+                <th style="width: 20%;">Name (Token)</th>
+                <th style="width: 34%;">Value</th>
+                <th style="width: 12%;">Used In</th>
+                <th style="width: 14%;">Status</th>
+                <th style="width: 12%;">Source</th>
+                <th style="width: 8%;">Actions</th>
               </tr>
             </thead>
             <tbody id="placeholders-list">
               <tr>
-                <td colspan="5" style="text-align: center; padding: 40px; color: #94a3b8;">
+                <td colspan="6" style="text-align: center; padding: 40px; color: #94a3b8;">
                   <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px; display: block;"></i>
                   Loading placeholders...
                 </td>
@@ -5265,7 +5266,7 @@
       const requiredList = document.getElementById('completion-required-list');
       const statusBadge = document.getElementById('completion-status-badge');
       
-      if (!panel || !requiredList || !optionalList || !currentTemplateScan || !currentTemplateScan.hasActiveTemplate) {
+      if (!panel || !requiredList || !currentTemplateScan || !currentTemplateScan.hasActiveTemplate) {
         if (panel) panel.style.display = 'none';
         return;
       }
@@ -5628,7 +5629,7 @@
       if (currentPlaceholders.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="5" style="text-align: center; padding: 40px; color: #94a3b8;">
+            <td colspan="6" style="text-align: center; padding: 40px; color: #94a3b8;">
               <i class="fas fa-tags" style="font-size: 32px; margin-bottom: 12px; display: block;"></i>
               No placeholders yet. Click "Add Placeholder" or "Import Defaults".
             </td>
@@ -5637,19 +5638,22 @@
         return;
       }
       
-      // Build template requirements lookup
+      // Build template requirements lookup + usage map
       const templateRequired = new Set();
       const templateOptional = new Set();
       const templateFallbacks = {};
+      const usageMap = {};
       
       if (currentTemplateScan?.analysis) {
         for (const p of (currentTemplateScan.analysis.requiredPlaceholders || [])) {
           templateRequired.add(p.key.toLowerCase());
           if (p.fallback) templateFallbacks[p.key.toLowerCase()] = p.fallback;
+          usageMap[p.key.toLowerCase()] = (p.usedIn || []).length;
         }
         for (const p of (currentTemplateScan.analysis.optionalPlaceholders || [])) {
           templateOptional.add(p.key.toLowerCase());
           if (p.fallback) templateFallbacks[p.key.toLowerCase()] = p.fallback;
+          usageMap[p.key.toLowerCase()] = (p.usedIn || []).length;
         }
       }
 
@@ -5679,6 +5683,7 @@
           sourceLabel = `<span style="font-size: 11px; color: #64748b;">Company</span>`;
         }
         
+        const usedInCount = usageMap[k] || 0;
         return `
           <tr data-placeholder-key="${key}">
             <td>
@@ -5690,6 +5695,7 @@
                      placeholder="${hasFallback ? `Fallback: ${hasFallback}` : ''}"
                      style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
             </td>
+            <td style="font-size: 11px; color: #64748b; text-align: center;">${usedInCount > 0 ? usedInCount + ' scenarios' : '—'}</td>
             <td>${statusBadge}</td>
             <td>${sourceLabel}</td>
             <td>
@@ -5702,6 +5708,19 @@
       }).join('');
     }
     
+    function isRuntimeTokenKey(key) {
+      if (!currentPlaceholderCatalog) return false;
+      const normalized = (key || '').toString().toLowerCase();
+      const aliases = currentPlaceholderCatalog.aliases || {};
+      const canonical = (aliases[normalized] || normalized).toLowerCase();
+      
+      const runtimeList = currentPlaceholderCatalog.runtime
+        || (currentPlaceholderCatalog.placeholders || []).filter(p => p.scope === 'runtime');
+      const runtimeKeys = new Set(runtimeList.map(p => (p.key || '').toLowerCase()));
+      
+      return runtimeKeys.has(normalized) || runtimeKeys.has(canonical);
+    }
+    
     function addPlaceholder() {
       const name = prompt('Enter placeholder name (no spaces, e.g., "companyName"):');
       if (!name) return;
@@ -5709,6 +5728,11 @@
       const sanitizedName = name.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
       if (!sanitizedName) {
         alert('Invalid placeholder name');
+        return;
+      }
+      
+      if (isRuntimeTokenKey(sanitizedName)) {
+        alert(`❌ {${sanitizedName}} is a runtime token and cannot be set as a company placeholder.`);
         return;
       }
       
@@ -5744,6 +5768,13 @@
     
     async function savePlaceholders() {
       try {
+        const runtimeConflicts = currentPlaceholders.filter(p => isRuntimeTokenKey(p.key));
+        if (runtimeConflicts.length > 0) {
+          const sample = runtimeConflicts.slice(0, 5).map(p => `{${p.key}}`).join(', ');
+          alert(`❌ Runtime tokens cannot be saved as company placeholders: ${sample}`);
+          return;
+        }
+        
         // Allow empty values now (fallbacks will handle it)
         const response = await fetch(`/api/company/${currentCompanyId}/placeholders`, {
           method: 'PUT',
