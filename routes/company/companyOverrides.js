@@ -433,10 +433,10 @@ router.put('/placeholders', async (req, res) => {
         // Validate structure + normalize keys + block runtime-scoped tokens
         const normalizedPlaceholders = [];
         for (const p of placeholders) {
-            if (!p.key || p.value === undefined || p.value === null) {
+            if (!p.key) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Each placeholder must have key and value (value can be empty string)'
+                    error: 'Each placeholder must have key'
                 });
             }
             
@@ -450,10 +450,22 @@ router.put('/placeholders', async (req, res) => {
                 });
             }
             
+            const mode = (p.mode || 'LITERAL').toString().trim().toUpperCase();
+            const supportsModes = validation.placeholder?.supportsModes || ['LITERAL'];
+            if (!supportsModes.includes(mode)) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Mode "${mode}" is not supported for token "${canonicalKey}"`,
+                    hint: `Supported modes: ${supportsModes.join(', ')}`
+                });
+            }
+            
             normalizedPlaceholders.push({
                 key: canonicalKey,
-                value: p.value,
-                description: p.description || null
+                value: p.value === undefined || p.value === null ? '' : p.value,
+                description: p.description || null,
+                mode,
+                meta: p.meta && typeof p.meta === 'object' ? p.meta : null
             });
         }
         
@@ -491,16 +503,9 @@ router.put('/placeholders', async (req, res) => {
  */
 router.post('/placeholders/:key', async (req, res) => {
     const { companyId, key } = req.params;
-    const { value, description } = req.body;
+        const { value, description, mode = 'LITERAL', meta = null } = req.body;
     
     try {
-        if (value === undefined || value === null) {
-            return res.status(400).json({
-                success: false,
-                error: 'value is required (can be empty string)'
-            });
-        }
-        
         const canonicalKey = resolveAlias(key);
         const validation = validateKey(canonicalKey);
         if (validation.valid && validation.placeholder?.scope === 'runtime') {
@@ -511,11 +516,23 @@ router.post('/placeholders/:key', async (req, res) => {
             });
         }
         
+        const normalizedMode = (mode || 'LITERAL').toString().trim().toUpperCase();
+        const supportsModes = validation.placeholder?.supportsModes || ['LITERAL'];
+        if (!supportsModes.includes(normalizedMode)) {
+            return res.status(400).json({
+                success: false,
+                error: `Mode "${normalizedMode}" is not supported for token "${canonicalKey}"`,
+                hint: `Supported modes: ${supportsModes.join(', ')}`
+            });
+        }
+        
         const username = req.user?.email || req.user?.username || 'Unknown';
         
-        const doc = await CompanyPlaceholders.setPlaceholder(companyId, canonicalKey, value, {
+        const doc = await CompanyPlaceholders.setPlaceholder(companyId, canonicalKey, value ?? '', {
             description,
-            updatedBy: username
+            updatedBy: username,
+            mode: normalizedMode,
+            meta: meta && typeof meta === 'object' ? meta : null
         });
         
         await invalidateCaches(companyId);

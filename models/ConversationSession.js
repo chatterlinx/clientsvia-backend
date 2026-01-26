@@ -369,6 +369,18 @@ const conversationSessionSchema = new Schema({
         askedSlots: { type: Schema.Types.Mixed, default: {} }, // { name: true, phone: true } - track what we've asked
         flowAcked: { type: Schema.Types.Mixed, default: {} }   // { flowKey: true } - ACK_ONCE guard
     },
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PRICING POLICY STATE (Transfer/Callback offers)
+    // ════════════════════════════════════════════════════════════════════════
+    pricingPolicy: {
+        transferOfferPending: { type: Boolean, default: false },
+        offerToken: { type: String, default: null, trim: true },
+        offerMode: { type: String, default: null, trim: true },
+        offeredAt: { type: Date, default: null },
+        lastDecision: { type: String, default: null, trim: true },
+        lastDecisionAt: { type: Date, default: null }
+    },
     
     // ════════════════════════════════════════════════════════════════════════════
     // 🆕 PHASE 1: ROLLING MEMORY (Prevents "I'm sorry to hear that" loop)

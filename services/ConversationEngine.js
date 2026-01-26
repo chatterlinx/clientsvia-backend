@@ -49,6 +49,7 @@ const AddressValidationService = require('./AddressValidationService');
 const DynamicFlowEngine = require('./DynamicFlowEngine');
 const GoogleCalendarService = require('./GoogleCalendarService');
 const SMSNotificationService = require('./SMSNotificationService');
+const PricingPolicyResponder = require('./pricing/PricingPolicyResponder');
 const logger = require('../utils/logger');
 const { parseSpellingVariantPrompt, parseSpellingVariantResponse } = require('../utils/nameSpellingVariant');
 const { extractName: extractNameDeterministic, isTradeContextSentence } = require('../utils/nameExtraction');
@@ -3446,6 +3447,15 @@ async function processTurn({
             lastUserIntent: null,
             lastUserNeed: null,
             acknowledgedClaims: []
+        };
+
+        session.pricingPolicy = session.pricingPolicy || {
+            transferOfferPending: false,
+            offerToken: null,
+            offerMode: null,
+            offeredAt: null,
+            lastDecision: null,
+            lastDecisionAt: null
         };
         
         if (sessionWasReused) {
@@ -11098,6 +11108,47 @@ async function processTurn({
             tokensUsed: aiResult?.tokensUsed || 0,
             mode: aiResult?.conversationMode || 'unknown'
         });
+
+        // ═══════════════════════════════════════════════════════════════════
+        // PRICING POLICY: transfer/callback guardrails + placeholder rendering
+        // ═══════════════════════════════════════════════════════════════════
+        if (aiResult?.reply) {
+            const pricingPolicyResult = await PricingPolicyResponder.applyPricingPolicy({
+                replyText: aiResult.reply,
+                companyId,
+                company,
+                session,
+                userText,
+                tradeKey: normalizeTradeKey(company.trade || company.tradeType || '')
+            });
+
+            if (pricingPolicyResult?.replyText) {
+                aiResult.reply = pricingPolicyResult.replyText;
+            }
+
+            if (pricingPolicyResult?.pricingState) {
+                session.pricingPolicy = {
+                    ...(session.pricingPolicy || {}),
+                    ...pricingPolicyResult.pricingState
+                };
+                session.markModified('pricingPolicy');
+            }
+
+            if (pricingPolicyResult?.requiresTransfer) {
+                aiResult.debug = aiResult.debug || {};
+                aiResult.debug.requiresTransfer = true;
+                aiResult.debug.transferReason = 'pricing_policy_transfer';
+            }
+
+            if (pricingPolicyResult?.policyEvent) {
+                aiResult.debug = aiResult.debug || {};
+                aiResult.debug.pricingPolicy = {
+                    event: pricingPolicyResult.policyEvent,
+                    tokenKey: pricingPolicyResult.tokenKey || null,
+                    mode: pricingPolicyResult.policyMode || null
+                };
+            }
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 9: Process AI response

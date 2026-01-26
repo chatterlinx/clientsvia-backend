@@ -47,6 +47,28 @@ const PlaceholderSchema = new Schema({
         maxlength: 1000
     },
     
+    // Pricing behavior mode (backward compatible)
+    // LITERAL = show value, OFFER_TRANSFER = offer transfer (consent required),
+    // OFFER_CALLBACK = offer callback/message (no transfer)
+    mode: {
+        type: String,
+        default: 'LITERAL',
+        trim: true,
+        uppercase: true
+    },
+    
+    // Optional metadata for pricing policy modes
+    meta: {
+        advisorQueue: {
+            type: String,
+            default: null
+        },
+        callbackPrompt: {
+            type: String,
+            default: null
+        }
+    },
+    
     // Optional description for admin UI
     description: {
         type: String,
@@ -115,6 +137,28 @@ CompanyPlaceholdersSchema.statics.getPlaceholdersMap = async function(companyId)
 };
 
 /**
+ * Get placeholders with mode/meta as a Map for policy logic
+ */
+CompanyPlaceholdersSchema.statics.getPlaceholdersDetailedMap = async function(companyId) {
+    const doc = await this.findOne({ companyId }).lean();
+    const map = new Map();
+
+    if (doc?.placeholders) {
+        for (const p of doc.placeholders) {
+            map.set(p.key.toLowerCase(), {
+                key: p.key,
+                value: p.value,
+                mode: (p.mode || 'LITERAL').toString().trim().toUpperCase(),
+                meta: p.meta && typeof p.meta === 'object' ? p.meta : null,
+                description: p.description || null
+            });
+        }
+    }
+
+    return map;
+};
+
+/**
  * Get or create placeholders document for a company
  */
 CompanyPlaceholdersSchema.statics.getOrCreate = async function(companyId) {
@@ -143,8 +187,9 @@ CompanyPlaceholdersSchema.statics.getPlaceholdersList = async function(companyId
  * Set a single placeholder
  */
 CompanyPlaceholdersSchema.statics.setPlaceholder = async function(companyId, key, value, options = {}) {
-    const { description, isSystem = false, updatedBy } = options;
+    const { description, isSystem = false, updatedBy, mode = 'LITERAL', meta = null } = options;
     const normalizedKey = key.toLowerCase().trim();
+    const normalizedMode = (mode || 'LITERAL').toString().trim().toUpperCase();
     
     // Find or create document
     let doc = await this.findOne({ companyId });
@@ -161,13 +206,24 @@ CompanyPlaceholdersSchema.statics.setPlaceholder = async function(companyId, key
         if (description !== undefined) {
             doc.placeholders[existingIndex].description = description;
         }
+        if (normalizedMode) {
+            doc.placeholders[existingIndex].mode = normalizedMode;
+        }
+        if (meta && typeof meta === 'object') {
+            doc.placeholders[existingIndex].meta = {
+                ...(doc.placeholders[existingIndex].meta || {}),
+                ...meta
+            };
+        }
     } else {
         // Add new
         doc.placeholders.push({
             key: normalizedKey,
             value,
             description: description || null,
-            isSystem
+            isSystem,
+            mode: normalizedMode,
+            meta: meta && typeof meta === 'object' ? meta : null
         });
     }
     
@@ -201,7 +257,9 @@ CompanyPlaceholdersSchema.statics.setAllPlaceholders = async function(companyId,
         key: p.key.toLowerCase().trim(),
         value: p.value,
         description: p.description || null,
-        isSystem: p.isSystem || false
+        isSystem: p.isSystem || false,
+        mode: (p.mode || 'LITERAL').toString().trim().toUpperCase(),
+        meta: p.meta && typeof p.meta === 'object' ? p.meta : null
     }));
     
     return this.findOneAndUpdate(

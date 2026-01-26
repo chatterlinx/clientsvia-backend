@@ -15,6 +15,16 @@
 // ════════════════════════════════════════════════════════════════════════════════
 // UNIVERSAL PLACEHOLDERS (all trades)
 // ════════════════════════════════════════════════════════════════════════════════
+const PRICING_POLICY_SCRIPTS = {
+    transferOffer:
+        'Pricing can vary based on the system and what we find. Would you like me to connect you with a service advisor to go over pricing?',
+    transferConfirm: 'Perfect, transferring you now.',
+    transferDecline:
+        'No problem. I can have a service advisor call you back with pricing, or I can help you schedule service. What would you prefer?',
+    callbackOffer:
+        'Pricing can vary depending on the system. I can have a service advisor call you back with accurate pricing. What\'s the best number to reach you?'
+};
+
 const UNIVERSAL_PLACEHOLDERS = [
     // Company Identity
     { 
@@ -128,6 +138,9 @@ const UNIVERSAL_PLACEHOLDERS = [
         scope: 'company',
         required: true, 
         fallback: '',
+        supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+        policyScripts: PRICING_POLICY_SCRIPTS,
+        defaultMode: 'LITERAL',
         description: 'Dispatch/diagnostic fee',
         example: '$89'
     },
@@ -139,6 +152,9 @@ const UNIVERSAL_PLACEHOLDERS = [
         scope: 'company',
         required: false, 
         fallback: 'free estimate',
+        supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+        policyScripts: PRICING_POLICY_SCRIPTS,
+        defaultMode: 'LITERAL',
         description: 'Cost for estimates',
         example: 'Free for new system quotes'
     },
@@ -310,6 +326,9 @@ const TRADE_PLACEHOLDERS = {
             scope: 'company',
             required: true, 
             fallback: '',
+            supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+            policyScripts: PRICING_POLICY_SCRIPTS,
+            defaultMode: 'LITERAL',
             description: 'AC maintenance price',
             example: '$89'
         },
@@ -321,6 +340,9 @@ const TRADE_PLACEHOLDERS = {
             scope: 'company',
             required: true, 
             fallback: '',
+            supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+            policyScripts: PRICING_POLICY_SCRIPTS,
+            defaultMode: 'LITERAL',
             description: 'Heating maintenance price',
             example: '$89'
         },
@@ -332,6 +354,9 @@ const TRADE_PLACEHOLDERS = {
             scope: 'company',
             required: true, 
             fallback: '',
+            supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+            policyScripts: PRICING_POLICY_SCRIPTS,
+            defaultMode: 'LITERAL',
             description: 'Annual maintenance plan cost',
             example: '$199/year'
         },
@@ -368,6 +393,9 @@ const TRADE_PLACEHOLDERS = {
             scope: 'company',
             required: true, 
             fallback: '',
+            supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+            policyScripts: PRICING_POLICY_SCRIPTS,
+            defaultMode: 'LITERAL',
             description: 'Basic drain clearing cost',
             example: '$149'
         },
@@ -379,6 +407,9 @@ const TRADE_PLACEHOLDERS = {
             scope: 'company',
             required: true, 
             fallback: '',
+            supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+            policyScripts: PRICING_POLICY_SCRIPTS,
+            defaultMode: 'LITERAL',
             description: 'Water heater maintenance',
             example: '$99'
         }
@@ -393,6 +424,9 @@ const TRADE_PLACEHOLDERS = {
             scope: 'company',
             required: true, 
             fallback: '',
+            supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+            policyScripts: PRICING_POLICY_SCRIPTS,
+            defaultMode: 'LITERAL',
             description: 'Standard outlet installation',
             example: 'Starting at $150'
         },
@@ -404,6 +438,9 @@ const TRADE_PLACEHOLDERS = {
             scope: 'company',
             required: false, 
             fallback: 'we provide free estimates',
+            supportsModes: ['LITERAL', 'OFFER_TRANSFER', 'OFFER_CALLBACK'],
+            policyScripts: PRICING_POLICY_SCRIPTS,
+            defaultMode: 'LITERAL',
             description: 'Electrical panel upgrade range',
             example: '$1,500-$3,500 depending on amperage'
         }

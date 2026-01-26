@@ -4996,7 +4996,9 @@
           currentPlaceholders = draftPlaceholders.map(p => ({
             key: (p.key || '').toString().toLowerCase(),
             value: (p.value || '').toString(),
-            description: p.description || null
+            description: p.description || null,
+            mode: (p.mode || 'LITERAL').toString().trim().toUpperCase(),
+            meta: p.meta || null
           }));
           currentMergedPlaceholders = currentPlaceholders.map(p => ({
             token: p.key,
@@ -5004,10 +5006,16 @@
             label: p.key,
             value: p.value,
             existsInCompany: true,
-            required: false,
-            optional: false,
+            requiredByCatalog: false,
+            requiredByTemplate: false,
+            optionalByCatalog: false,
             usedInCount: 0,
-            status: p.value ? 'filled' : 'missing'
+            status: p.value ? 'filled' : 'missing',
+            mode: p.mode || 'LITERAL',
+            effectiveMode: p.mode || 'LITERAL',
+            supportsModes: [],
+            defaultMode: 'LITERAL',
+            isSatisfied: p.value ? true : false
           }));
           renderPlaceholdersTable();
           return;
@@ -5051,7 +5059,9 @@
               .map(r => ({
                 key: r.token.toLowerCase(),
                 value: r.value || '',
-                description: null
+                description: null,
+                mode: (r.mode || r.effectiveMode || 'LITERAL').toString().trim().toUpperCase(),
+                meta: r.meta || null
               }));
             console.log('✅ Loaded merged placeholders:', currentMergedPlaceholders.length, 'rows');
           } else {
@@ -5071,7 +5081,9 @@
             currentPlaceholders = placeholders.map(p => ({
               key: (p.key || '').toString().toLowerCase(),
               value: (p.value || '').toString(),
-              description: p.description || null
+              description: p.description || null,
+              mode: (p.mode || 'LITERAL').toString().trim().toUpperCase(),
+              meta: p.meta || null
             }));
             // Build merged list from legacy data
             currentMergedPlaceholders = currentPlaceholders.map(p => ({
@@ -5085,7 +5097,12 @@
               optionalByCatalog: false,
               usedByTemplate: false,
               usedInCount: 0,
-              status: p.value ? 'filled' : 'missing'
+              status: p.value ? 'filled' : 'missing',
+              mode: p.mode || 'LITERAL',
+              effectiveMode: p.mode || 'LITERAL',
+              supportsModes: [],
+              defaultMode: 'LITERAL',
+              isSatisfied: p.value ? true : false
             }));
             currentMergedSummary = null;
             console.log('✅ Loaded legacy placeholders:', currentPlaceholders.length, 'items');
@@ -5350,6 +5367,7 @@
           if (row.scope && row.scope !== 'company') continue;
           
           const hasValue = row.value && String(row.value).trim();
+          const isSatisfied = row.isSatisfied === true || (row.effectiveMode && row.effectiveMode !== 'LITERAL') || !!hasValue;
           const item = {
             key: row.token,
             label: row.label || row.token,
@@ -5357,10 +5375,11 @@
             requiredByTemplate: !!row.requiredByTemplate,
             usedIn: row.usedInCount || 0,
             value: hasValue ? row.value : null,
+            isSatisfied,
             existsInCompany: row.existsInCompany
           };
           
-          if (hasValue) {
+          if (isSatisfied) {
             filledTokens.push(item);
           } else if (item.requiredByCatalog) {
             missingCatalogRequired.push(item);
@@ -5907,6 +5926,7 @@
 
       tbody.innerHTML = rows.map(row => {
         const key = row.token;
+        const safeKeyId = key.replace(/[^a-zA-Z0-9_-]/g, '_');
         const value = row.value || '';
         const hasValue = value && String(value).trim();
         const existsInCompany = row.existsInCompany;
@@ -5915,19 +5935,30 @@
         const optionalByCatalog = !!row.optionalByCatalog;
         const usedByTemplate = !!row.usedByTemplate || (row.usedInCount || 0) > 0;
         const usedInCount = row.usedInCount || 0;
+        const supportsModes = Array.isArray(row.supportsModes) ? row.supportsModes : [];
+        const defaultMode = (row.defaultMode || 'LITERAL').toString().trim().toUpperCase();
+        const effectiveMode = (row.effectiveMode || row.mode || defaultMode).toString().trim().toUpperCase();
+        const isConfigured = row.status === 'configured' || effectiveMode !== 'LITERAL';
+        const isSatisfied = row.isSatisfied === true || (effectiveMode !== 'LITERAL') || !!hasValue;
+        
+        const modeLabel = effectiveMode === 'OFFER_TRANSFER'
+          ? 'Transfer Offer'
+          : effectiveMode === 'OFFER_CALLBACK'
+            ? 'Callback Offer'
+            : 'Price';
         
         // ════════════════════════════════════════════════════════════════════════
         // STATUS BADGE: Shows requirement level (Catalog + Template flags)
         // ════════════════════════════════════════════════════════════════════════
         let statusBadge = '';
         if (requiredByCatalog) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#fee2e2'}; color: ${hasValue ? '#16a34a' : '#dc2626'};">Catalog Required</span>`;
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${isSatisfied ? '#dcfce7' : '#fee2e2'}; color: ${isSatisfied ? '#16a34a' : '#dc2626'};">Catalog Required</span>`;
         } else if (requiredByTemplate) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#e0e7ff'}; color: ${hasValue ? '#16a34a' : '#4338ca'};">Template Required</span>`;
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${isSatisfied ? '#dcfce7' : '#e0e7ff'}; color: ${isSatisfied ? '#16a34a' : '#4338ca'};">Template Required</span>`;
         } else if (usedByTemplate) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#fef3c7'}; color: ${hasValue ? '#16a34a' : '#f59e0b'};">Template Used</span>`;
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${isSatisfied ? '#dcfce7' : '#fef3c7'}; color: ${isSatisfied ? '#16a34a' : '#f59e0b'};">Template Used</span>`;
         } else if (optionalByCatalog) {
-          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${hasValue ? '#dcfce7' : '#f1f5f9'}; color: ${hasValue ? '#16a34a' : '#64748b'};">Catalog Optional</span>`;
+          statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: ${isSatisfied ? '#dcfce7' : '#f1f5f9'}; color: ${isSatisfied ? '#16a34a' : '#64748b'};">Catalog Optional</span>`;
         } else {
           statusBadge = `<span style="font-size: 11px; padding: 2px 8px; border-radius: 4px; background: #f1f5f9; color: #64748b;">Custom</span>`;
         }
@@ -5936,7 +5967,9 @@
         // SOURCE LABEL: Filled or Missing (single source of truth)
         // ════════════════════════════════════════════════════════════════════════
         let sourceLabel = '';
-        if (hasValue) {
+        if (isConfigured) {
+          sourceLabel = `<span style="font-size: 11px; color: #4338ca;"><i class="fas fa-shield-alt" style="margin-right: 3px;"></i>Configured</span>`;
+        } else if (hasValue) {
           sourceLabel = `<span style="font-size: 11px; color: #16a34a;"><i class="fas fa-check-circle" style="margin-right: 3px;"></i>Filled</span>`;
         } else {
           sourceLabel = `<span style="font-size: 11px; color: #dc2626;"><i class="fas fa-exclamation-circle" style="margin-right: 3px;"></i>Missing</span>`;
@@ -5968,7 +6001,47 @@
         // VALUE INPUT: Editable if exists, disabled with Create button if not
         // ════════════════════════════════════════════════════════════════════════
         let valueCell = '';
-        if (existsInCompany) {
+        const modeSelect = supportsModes.length > 0 ? `
+          <select id="mode-select-${safeKeyId}" onchange="updatePlaceholderMode('${escapeHtml(key)}', this.value)"
+                  style="width: 100%; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px; background: white;">
+            ${supportsModes.map(m => {
+              const label = m === 'OFFER_TRANSFER' ? 'Hide Price → Offer Transfer' :
+                            m === 'OFFER_CALLBACK' ? 'Hide Price → Offer Callback' :
+                            'Show Price (Literal)';
+              const selected = m === effectiveMode ? 'selected' : '';
+              return `<option value="${m}" ${selected}>${label}</option>`;
+            }).join('')}
+          </select>
+        ` : '';
+        
+        const modeChip = supportsModes.length > 0 ? `
+          <span style="font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #eef2ff; color: #4338ca; font-weight: 600;">
+            ${modeLabel}
+          </span>
+        ` : '';
+        
+        const modeHelper = effectiveMode === 'OFFER_TRANSFER'
+          ? 'Agent will ask permission before transferring.'
+          : effectiveMode === 'OFFER_CALLBACK'
+            ? 'Agent will offer callback and collect details.'
+            : '';
+        
+        if (supportsModes.length > 0) {
+          const inputHtml = effectiveMode === 'LITERAL'
+            ? `<input type="text" value="${escapeHtml(value)}"
+                      onchange="updatePlaceholder('${escapeHtml(key)}', this.value)"
+                      placeholder="Enter price..."
+                      style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">`
+            : `<div style="font-size: 12px; color: #64748b; padding: 6px 0;">${modeHelper}</div>`;
+          
+          valueCell = `
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              ${modeSelect}
+              ${inputHtml}
+              ${modeChip}
+            </div>
+          `;
+        } else if (existsInCompany) {
           valueCell = `
             <input type="text" value="${escapeHtml(value)}"
                    onchange="updatePlaceholder('${escapeHtml(key)}', this.value)"
@@ -5976,10 +6049,9 @@
                    style="width: 100%; padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px;">
           `;
         } else {
-          // Not created yet - show inline create input
           valueCell = `
             <div style="display: flex; gap: 8px; align-items: center;">
-              <input type="text" id="create-input-${escapeHtml(key)}"
+              <input type="text" id="create-input-${safeKeyId}"
                      placeholder="Enter value and click Create..."
                      style="flex: 1; padding: 8px 12px; border: 1px solid #fde68a; border-radius: 6px; font-size: 14px; background: #fffbeb;">
             </div>
@@ -5987,7 +6059,7 @@
         }
         
         // Row background for missing catalog-required tokens
-        const rowBg = (!existsInCompany && requiredByCatalog) ? 'background: #fef2f2;' : '';
+        const rowBg = (!existsInCompany && requiredByCatalog && !isSatisfied) ? 'background: #fef2f2;' : '';
         
         return `
           <tr data-placeholder-key="${escapeHtml(key)}" style="${rowBg}">
@@ -6011,8 +6083,11 @@
     // CREATE PLACEHOLDER (writes to Mongo immediately via API)
     // ═══════════════════════════════════════════════════════════════════════════
     async function createPlaceholderInline(key) {
-      const input = document.getElementById(`create-input-${key}`);
+      const safeKeyId = key.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const input = document.getElementById(`create-input-${safeKeyId}`);
+      const modeSelect = document.getElementById(`mode-select-${safeKeyId}`);
       const value = input?.value?.trim() || '';
+      const mode = (modeSelect?.value || 'LITERAL').toString().trim().toUpperCase();
       
       const normalizedKey = key.toLowerCase();
       
@@ -6024,7 +6099,7 @@
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ value, description: null })
+          body: JSON.stringify({ value, description: null, mode, meta: null })
         });
         
         if (!response.ok) {
@@ -6164,10 +6239,62 @@
       const idx = currentPlaceholders.findIndex(p => p.key === k);
       if (idx !== -1) {
         currentPlaceholders[idx].value = value;
-        // Update coverage display
-        renderCoverageStrip();
-        renderTemplateScanPanel();
       }
+      
+      // Update merged rows for immediate UI feedback
+      const rowIdx = currentMergedPlaceholders.findIndex(r => (r.token || '').toLowerCase() === k);
+      if (rowIdx !== -1) {
+        const row = currentMergedPlaceholders[rowIdx];
+        row.value = value;
+        const effectiveMode = (row.effectiveMode || row.mode || row.defaultMode || 'LITERAL').toString().trim().toUpperCase();
+        const hasValue = value && String(value).trim();
+        if (effectiveMode !== 'LITERAL') {
+          row.status = 'configured';
+          row.isSatisfied = true;
+        } else {
+          row.status = hasValue ? 'filled' : 'missing';
+          row.isSatisfied = !!hasValue;
+        }
+      }
+      
+      // Update coverage display
+      renderCoverageStrip();
+      renderTemplateScanPanel();
+    }
+    
+    function updatePlaceholderMode(key, mode) {
+      const k = (key || '').toString().toLowerCase();
+      const normalizedMode = (mode || 'LITERAL').toString().trim().toUpperCase();
+      
+      const idx = currentPlaceholders.findIndex(p => p.key === k);
+      if (idx !== -1) {
+        currentPlaceholders[idx].mode = normalizedMode;
+      }
+      
+      const rowIdx = currentMergedPlaceholders.findIndex(r => (r.token || '').toLowerCase() === k);
+      if (rowIdx !== -1) {
+        const row = currentMergedPlaceholders[rowIdx];
+        row.mode = normalizedMode;
+        const supportsModes = Array.isArray(row.supportsModes) ? row.supportsModes : [];
+        const defaultMode = (row.defaultMode || 'LITERAL').toString().trim().toUpperCase();
+        const effectiveMode = supportsModes.length > 0 && supportsModes.includes(normalizedMode)
+          ? normalizedMode
+          : defaultMode;
+        row.effectiveMode = effectiveMode;
+        
+        const hasValue = row.value && String(row.value).trim();
+        if (effectiveMode !== 'LITERAL') {
+          row.status = 'configured';
+          row.isSatisfied = true;
+        } else {
+          row.status = hasValue ? 'filled' : 'missing';
+          row.isSatisfied = !!hasValue;
+        }
+      }
+      
+      renderPlaceholdersTable();
+      renderCoverageStrip();
+      renderTemplateScanPanel();
     }
     
     function deletePlaceholder(key) {
@@ -6190,13 +6317,21 @@
         }
         
         // Allow empty values now (fallbacks will handle it)
+        const payload = currentPlaceholders.map(p => ({
+          key: p.key,
+          value: p.value === undefined || p.value === null ? '' : p.value,
+          description: p.description || null,
+          mode: (p.mode || 'LITERAL').toString().trim().toUpperCase(),
+          meta: p.meta && typeof p.meta === 'object' ? p.meta : null
+        }));
+        
         const response = await fetch(`/api/company/${currentCompanyId}/placeholders`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ placeholders: currentPlaceholders })
+          body: JSON.stringify({ placeholders: payload })
         });
         
         if (response.ok) {

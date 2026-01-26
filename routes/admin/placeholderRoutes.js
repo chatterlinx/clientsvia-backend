@@ -510,19 +510,31 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
         const placeholderDoc = await CompanyPlaceholders.findOne({ companyId }).lean();
         const companyPlaceholders = placeholderDoc?.placeholders || [];
         
-        const companyMap = new Map(); // canonicalLower -> { key, value, description, originalKeys }
+        const normalizeMode = (mode, defaultMode = 'LITERAL', supportsModes = []) => {
+            const normalized = (mode || defaultMode || 'LITERAL').toString().trim().toUpperCase();
+            if (supportsModes.length > 0 && !supportsModes.includes(normalized)) {
+                return (defaultMode || 'LITERAL').toString().trim().toUpperCase();
+            }
+            return normalized;
+        };
+        
+        const companyMap = new Map(); // canonicalLower -> { key, value, mode, meta, description, originalKeys }
         
         for (const p of companyPlaceholders) {
             const canonicalKey = canonicalizeToken(p.key);
             const canonicalLower = canonicalKey.toLowerCase();
             
             const value = p.value || '';
+            const mode = p.mode || 'LITERAL';
+            const meta = p.meta && typeof p.meta === 'object' ? p.meta : null;
             const existing = companyMap.get(canonicalLower);
             
             if (!existing) {
                 companyMap.set(canonicalLower, {
                     key: canonicalKey,
                     value,
+                    mode,
+                    meta,
                     description: p.description || null,
                     originalKeys: [p.key]
                 });
@@ -532,6 +544,12 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
                 const existingHasValue = existing.value && String(existing.value).trim();
                 if (!existingHasValue && hasValue) {
                     existing.value = value;
+                }
+                if (!existing.mode && mode) {
+                    existing.mode = mode;
+                }
+                if (!existing.meta && meta) {
+                    existing.meta = meta;
                 }
                 existing.originalKeys.push(p.key);
             }
@@ -546,6 +564,8 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
         for (const p of catalogCompanyTokens) {
             const canonicalKey = p.key;
             const canonicalLower = canonicalKey.toLowerCase();
+            const supportsModes = Array.isArray(p.supportsModes) ? p.supportsModes : [];
+            const defaultMode = (p.defaultMode || 'LITERAL').toString().trim().toUpperCase();
             
             rowsByKey.set(canonicalLower, {
                 token: canonicalKey,
@@ -560,6 +580,12 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
                 usedInCount: 0,
                 existsInCompany: false,
                 value: '',
+                mode: null,
+                meta: null,
+                supportsModes,
+                defaultMode,
+                effectiveMode: defaultMode,
+                isSatisfied: false,
                 status: 'missing'
             });
         }
@@ -590,6 +616,12 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
                     usedInCount: usageMap[canonicalLower] || 0,
                     existsInCompany: false,
                     value: '',
+                    mode: null,
+                    meta: null,
+                    supportsModes: [],
+                    defaultMode: 'LITERAL',
+                    effectiveMode: 'LITERAL',
+                    isSatisfied: false,
                     status: 'missing'
                 });
             }
@@ -610,12 +642,28 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
             if (row) {
                 row.existsInCompany = true;
                 row.value = companyData.value || '';
-                row.status = hasValue ? 'filled' : 'missing';
+                row.mode = companyData.mode || row.mode || row.defaultMode || 'LITERAL';
+                row.meta = companyData.meta || row.meta || null;
+                
+                const supportsModes = row.supportsModes || [];
+                const effectiveMode = normalizeMode(row.mode, row.defaultMode, supportsModes);
+                row.effectiveMode = effectiveMode;
+                
+                if (effectiveMode !== 'LITERAL') {
+                    row.status = 'configured';
+                    row.isSatisfied = true;
+                } else {
+                    row.status = hasValue ? 'filled' : 'missing';
+                    row.isSatisfied = !!hasValue;
+                }
+                
                 if (!row.label && companyData.description) {
                     row.label = companyData.description;
                 }
             } else {
                 // Company token not in catalog or template (custom)
+                const effectiveMode = normalizeMode(companyData.mode || 'LITERAL', 'LITERAL', []);
+                const isSatisfied = effectiveMode !== 'LITERAL' || !!hasValue;
                 rowsByKey.set(canonicalLower, {
                     token: companyData.key,
                     displayToken: `{${companyData.key}}`,
@@ -629,7 +677,13 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
                     usedInCount: usageMap[canonicalLower] || 0,
                     existsInCompany: true,
                     value: companyData.value || '',
-                    status: hasValue ? 'filled' : 'missing'
+                    mode: companyData.mode || 'LITERAL',
+                    meta: companyData.meta || null,
+                    supportsModes: [],
+                    defaultMode: 'LITERAL',
+                    effectiveMode,
+                    isSatisfied,
+                    status: isSatisfied ? (effectiveMode !== 'LITERAL' ? 'configured' : 'filled') : 'missing'
                 });
             }
         }
@@ -653,10 +707,10 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
             return (b.usedInCount || 0) - (a.usedInCount || 0);
         });
         
-        const missingRequiredByCatalog = rows.filter(r => r.requiredByCatalog && r.status === 'missing').length;
-        const missingRequiredByTemplate = rows.filter(r => r.requiredByTemplate && r.status === 'missing').length;
-        const missingTotal = rows.filter(r => r.status === 'missing').length;
-        const filledCount = rows.filter(r => r.status === 'filled').length;
+        const missingRequiredByCatalog = rows.filter(r => r.requiredByCatalog && r.isSatisfied === false).length;
+        const missingRequiredByTemplate = rows.filter(r => r.requiredByTemplate && r.isSatisfied === false).length;
+        const missingTotal = rows.filter(r => r.isSatisfied === false).length;
+        const filledCount = rows.filter(r => r.isSatisfied === true).length;
         
         res.json({
             success: true,
@@ -757,6 +811,8 @@ router.post('/company/:companyId/normalize', async (req, res) => {
             }
             
             const value = p.value || '';
+            const mode = (p.mode || 'LITERAL').toString().trim().toUpperCase();
+            const meta = p.meta && typeof p.meta === 'object' ? p.meta : null;
             const hasValue = value && String(value).trim();
             const isCanonicalSource = originalLower === canonicalLower;
             
@@ -766,6 +822,8 @@ router.post('/company/:companyId/normalize', async (req, res) => {
                     canonicalKey,
                     value,
                     description: p.description || null,
+                    mode,
+                    meta,
                     hasCanonicalSource: isCanonicalSource,
                     originalKeys: [p.key]
                 });
@@ -782,6 +840,12 @@ router.post('/company/:companyId/normalize', async (req, res) => {
                     existing.description = p.description;
                 }
                 existing.hasCanonicalSource = existing.hasCanonicalSource || isCanonicalSource;
+                if (mode && (!existing.mode || existing.mode === 'LITERAL')) {
+                    existing.mode = mode;
+                }
+                if (meta && !existing.meta) {
+                    existing.meta = meta;
+                }
             } else if (existingHasValue && hasValue && String(existing.value).trim() !== String(value).trim()) {
                 conflicts.push({
                     key: canonicalKey,
@@ -795,6 +859,8 @@ router.post('/company/:companyId/normalize', async (req, res) => {
                 if (preferCanonical && isCanonicalSource && !existing.hasCanonicalSource) {
                     existing.value = value;
                     existing.hasCanonicalSource = true;
+                    existing.mode = mode || existing.mode;
+                    existing.meta = meta || existing.meta;
                 }
             }
             
@@ -806,7 +872,9 @@ router.post('/company/:companyId/normalize', async (req, res) => {
             key: entry.key,
             value: entry.value || '',
             description: entry.description || null,
-            isSystem: false
+            isSystem: false,
+            mode: entry.mode || 'LITERAL',
+            meta: entry.meta || null
         }));
         
         const originalCount = doc.placeholders.length;
