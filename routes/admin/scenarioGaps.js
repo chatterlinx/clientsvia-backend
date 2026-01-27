@@ -3450,6 +3450,286 @@ ${governanceBlock}`;
 });
 
 // ════════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/audit/generate-fix
+// 
+// Generate fixes for ALL violations in a scenario WITHOUT saving
+// Returns the fixed scenario object for preview in Global Brain
+// This mirrors Gap Fill's "Open in Global Brain" flow for Template Audit
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/:companyId/audit/generate-fix', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenarioId, violations } = req.body;
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get the template
+        const { template, error } = await getCompanyTemplate(company, {
+            populateCategories: true
+        });
+        
+        if (error) {
+            return res.status(400).json({ error: error.message });
+        }
+        
+        // Find the scenario
+        let targetScenario = null;
+        let categoryIndex = -1;
+        let scenarioIndex = -1;
+        let categoryData = null;
+        const searchId = scenarioId?.toString();
+        
+        logger.info('[AUDIT GENERATE-FIX] Searching for scenario', { searchId });
+        
+        for (let ci = 0; ci < (template.categories || []).length; ci++) {
+            const category = template.categories[ci];
+            for (let si = 0; si < (category.scenarios || []).length; si++) {
+                const scenario = category.scenarios[si];
+                const sId = scenario.scenarioId?.toString();
+                const sObjId = scenario._id?.toString();
+                
+                if (sId === searchId || sObjId === searchId) {
+                    targetScenario = scenario;
+                    categoryIndex = ci;
+                    scenarioIndex = si;
+                    categoryData = category;
+                    logger.info('[AUDIT GENERATE-FIX] Found scenario', { 
+                        name: scenario.name,
+                        categoryIndex: ci,
+                        scenarioIndex: si,
+                        categoryId: category.id || category._id
+                    });
+                    break;
+                }
+            }
+            if (targetScenario) break;
+        }
+        
+        if (!targetScenario) {
+            logger.error('[AUDIT GENERATE-FIX] Scenario not found', { searchId });
+            return res.status(404).json({ error: 'Scenario not found', searchId });
+        }
+        
+        logger.info('[AUDIT GENERATE-FIX] Generating fixes (no save)', {
+            companyId,
+            scenarioId,
+            scenarioName: targetScenario.name,
+            violationCount: violations?.length || 0
+        });
+        
+        // Create a DEEP COPY of the scenario to apply fixes to (don't modify original)
+        const fixedScenario = JSON.parse(JSON.stringify(targetScenario));
+        
+        // Build scenario context for GPT
+        const scenarioContext = {
+            name: targetScenario.name,
+            scenarioType: targetScenario.scenarioType || 'FAQ',
+            category: targetScenario.categories?.[0] || categoryData?.name || 'General',
+            behavior: targetScenario.behavior || 'calm_professional',
+            triggers: (targetScenario.triggers || []).slice(0, 10),
+            quickReplies: targetScenario.quickReplies || [],
+            fullReplies: targetScenario.fullReplies || []
+        };
+        
+        // Generate fixes for all violations
+        const fixes = [];
+        let tokensUsed = 0;
+        let skipped = { noField: 0, infoLevel: 0, nonFixable: 0 };
+        
+        // Fields that shouldn't be "fixed" by AI
+        const NON_FIXABLE_FIELDS = [
+            'dynamicVariables', 'entityCapture', 'entityValidation',
+            'actionHooks', 'ttsOverride', 'preconditions', 'effects',
+            '_nonContentFields' // Info-only field about legacy fields
+        ];
+        
+        for (const violation of (violations || [])) {
+            try {
+                // Skip violations without a field
+                if (!violation.field) {
+                    skipped.noField++;
+                    continue;
+                }
+                
+                // Skip INFO severity - these are informational, not errors
+                if (violation.severity === 'info' || violation.severity === 'INFO') {
+                    skipped.infoLevel++;
+                    continue;
+                }
+                
+                // Skip non-fixable fields
+                const fieldRoot = violation.field.split('.')[0].split('[')[0];
+                if (NON_FIXABLE_FIELDS.includes(fieldRoot)) {
+                    skipped.nonFixable++;
+                    continue;
+                }
+                
+                // Get current value for this field
+                const fieldPath = violation.field.replace(/\[(\d+)\]/g, '.$1').split('.');
+                let currentValue = targetScenario;
+                for (const key of fieldPath) {
+                    if (currentValue === undefined || currentValue === null) break;
+                    currentValue = currentValue[key];
+                }
+                
+                // Handle non-text fields
+                if (typeof currentValue !== 'string') {
+                    if (violation.value && typeof violation.value === 'string') {
+                        currentValue = violation.value;
+                    } else {
+                        continue;
+                    }
+                }
+                
+                const valueToFix = currentValue || violation.value;
+                if (!valueToFix || typeof valueToFix !== 'string') {
+                    continue;
+                }
+                
+                // Generate fix using GPT-4o
+                const tradeKey = company.trade || template.templateType || null;
+                const governanceBlock = buildPlaceholderGovernanceBlock(tradeKey);
+                
+                const fixPrompt = `Fix this dispatcher scenario text that has a violation.
+
+SCENARIO CONTEXT:
+- Name: ${scenarioContext.name}
+- Type: ${scenarioContext.scenarioType}
+- Purpose: ${scenarioContext.triggers.slice(0, 3).join(', ')}
+
+CURRENT VALUE: "${valueToFix}"
+VIOLATION: ${violation.message}
+SUGGESTION: ${violation.suggestion || 'Fix the issue'}
+
+RULES:
+- Keep under 20 words for quick replies, 25 for full replies
+- Use {callerName} placeholder appropriately (do NOT invent placeholders)
+- Sound like an experienced dispatcher (calm, professional)
+- Never use: "Got it", "No problem", "happy to help", "let me help"
+- Approved: "I understand.", "Alright.", "Okay.", "Thanks, {callerName}."
+
+Return ONLY the fixed text. No quotes, no explanation.
+
+${governanceBlock}`;
+
+                const response = await openaiClient.chat.completions.create({
+                    model: 'gpt-4o',
+                    messages: [
+                        { role: 'system', content: 'Return only the corrected text. No quotes or explanation.' },
+                        { role: 'user', content: fixPrompt }
+                    ],
+                    max_tokens: 150,
+                    temperature: 0.3
+                });
+                
+                const suggestedFix = response.choices[0]?.message?.content?.trim();
+                tokensUsed += response.usage?.total_tokens || 0;
+                
+                if (suggestedFix && suggestedFix !== valueToFix) {
+                    fixes.push({
+                        field: violation.field,
+                        oldValue: valueToFix,
+                        newValue: suggestedFix,
+                        ruleId: violation.ruleId,
+                        message: violation.message,
+                        severity: violation.severity
+                    });
+                    
+                    // Apply fix to the COPY (not saving to DB)
+                    const fixFieldPath = violation.field.replace(/\[(\d+)\]/g, '.$1').split('.');
+                    let target = fixedScenario;
+                    for (let i = 0; i < fixFieldPath.length - 1; i++) {
+                        target = target[fixFieldPath[i]];
+                    }
+                    const lastKey = fixFieldPath[fixFieldPath.length - 1];
+                    if (target && lastKey !== undefined) {
+                        target[lastKey] = suggestedFix;
+                    }
+                }
+                
+            } catch (fixError) {
+                logger.error('[AUDIT GENERATE-FIX] Error generating fix', {
+                    field: violation.field,
+                    error: fixError.message
+                });
+            }
+        }
+        
+        // Add metadata for Global Brain prefill
+        fixedScenario._auditFix = {
+            fixedAt: new Date().toISOString(),
+            fixedBy: 'Template Audit AI',
+            fixCount: fixes.length,
+            originalViolations: violations?.length || 0
+        };
+        
+        logger.info('[AUDIT GENERATE-FIX] Fixes generated (NOT saved)', {
+            companyId,
+            scenarioId,
+            scenarioName: targetScenario.name,
+            fixesGenerated: fixes.length,
+            tokensUsed
+        });
+        
+        res.json({
+            success: true,
+            // The fixed scenario object (ready for Global Brain prefill)
+            fixedScenario,
+            // Original scenario for comparison
+            originalScenario: targetScenario,
+            // Template/category info for Global Brain navigation
+            navigation: {
+                templateId: template._id?.toString(),
+                templateName: template.name,
+                categoryId: categoryData?.id || categoryData?._id?.toString(),
+                categoryIndex,
+                categoryName: categoryData?.name,
+                scenarioIndex,
+                scenarioId: targetScenario.scenarioId || targetScenario._id?.toString()
+            },
+            // Fix details
+            fixes: fixes.map(f => ({
+                field: f.field,
+                oldValue: f.oldValue,
+                newValue: f.newValue,
+                severity: f.severity,
+                message: f.message
+            })),
+            // Stats
+            stats: {
+                totalViolations: violations?.length || 0,
+                fixesGenerated: fixes.length,
+                skipped: {
+                    infoLevel: skipped.infoLevel,
+                    nonFixable: skipped.nonFixable,
+                    noField: skipped.noField
+                },
+                tokensUsed
+            },
+            message: fixes.length > 0 
+                ? `Generated ${fixes.length} fixes - open in Global Brain to review and save`
+                : `No fixable issues found (${skipped.infoLevel} info-only, ${skipped.nonFixable} admin-owned)`
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT GENERATE-FIX] Error', { 
+            companyId, 
+            scenarioId,
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ 
+            error: 'Failed to generate fixes', 
+            details: error.message,
+            scenarioId
+        });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
 // GET /registry - Expose SCENARIO_SETTINGS_REGISTRY (single source of truth)
 // ════════════════════════════════════════════════════════════════════════════════
 // This is the ONLY place ownership counts should come from.

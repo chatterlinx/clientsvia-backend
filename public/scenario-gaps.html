@@ -2240,6 +2240,16 @@
                     <button class="btn btn-secondary" onclick="skipScenarioReview()">
                         <i class="fas fa-forward"></i> Skip
                     </button>
+                    <!-- ════════════════════════════════════════════════════════════════════════
+                         REVIEW & FIX IN GLOBAL BRAIN (mirrors Gap Fill flow)
+                         - Generates fixes via GPT-4 WITHOUT saving
+                         - Opens Global Brain with prefilled fixed scenario
+                         - Admin reviews and manually saves
+                         ════════════════════════════════════════════════════════════════════════ -->
+                    <button class="btn btn-large" onclick="reviewAndFixInGlobalBrain()" id="review-in-gb-btn"
+                        style="background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); border: none;">
+                        <i class="fas fa-external-link-alt"></i> Review & Fix in Global Brain
+                    </button>
                     <button class="btn btn-primary btn-large" onclick="approveAndFixScenario()" id="approve-fix-btn">
                         <i class="fas fa-magic"></i> Approve & Auto-Fix All
                     </button>
@@ -3784,6 +3794,194 @@
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-magic"></i> Approve & Auto-Fix All';
             }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // REVIEW & FIX IN GLOBAL BRAIN
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Mirrors the Gap Fill flow: Generate fixes → Build prefill → Open Global Brain
+        // Admin reviews the fixed scenario in the edit form and manually saves
+        // NO AUTO-SAVE - Admin has full control over what gets saved
+        // ════════════════════════════════════════════════════════════════════════════════
+        async function reviewAndFixInGlobalBrain() {
+            const scenario = window.auditScenarios[currentReviewScenarioIdx];
+            if (!scenario) {
+                showToast('No scenario selected', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('review-in-gb-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating fixes...';
+            
+            try {
+                // ════════════════════════════════════════════════════════════════════
+                // STEP 1: Generate fixes WITHOUT saving (mirrors Gap Fill approach)
+                // ════════════════════════════════════════════════════════════════════
+                console.log('📋 [AUDIT→GB] Generating fixes for scenario:', scenario.name);
+                
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/generate-fix`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scenarioId: scenario.scenarioId,
+                        violations: scenario.violations
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to generate fixes');
+                }
+                
+                console.log('✅ [AUDIT→GB] Fixes generated:', {
+                    fixCount: result.fixes?.length || 0,
+                    navigation: result.navigation
+                });
+                
+                // ════════════════════════════════════════════════════════════════════
+                // STEP 2: Build prefill data for Global Brain edit form
+                // ════════════════════════════════════════════════════════════════════
+                const prefillData = buildEditScenarioPrefill(result.fixedScenario, result.navigation, result.fixes);
+                
+                // ════════════════════════════════════════════════════════════════════
+                // STEP 3: Store in sessionStorage (same pattern as Gap Fill)
+                // ════════════════════════════════════════════════════════════════════
+                sessionStorage.setItem('scenarioEditPrefill', JSON.stringify(prefillData));
+                
+                console.log('📦 [AUDIT→GB] Prefill data stored in sessionStorage');
+                
+                // ════════════════════════════════════════════════════════════════════
+                // STEP 4: Close modal and open Global Brain with edit prefill flag
+                // ════════════════════════════════════════════════════════════════════
+                closeScenarioReview();
+                
+                const gbUrl = `/admin-global-instant-responses.html?prefill=edit-scenario&templateId=${result.navigation.templateId}&categoryId=${result.navigation.categoryId}&scenarioId=${result.navigation.scenarioId}`;
+                window.open(gbUrl, '_blank');
+                
+                showToast(`Opening Global Brain with ${result.fixes?.length || 0} fixes applied - review and save!`, 'success');
+                
+            } catch (error) {
+                console.error('❌ [AUDIT→GB] Error:', error);
+                showToast('Failed to generate fixes: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-external-link-alt"></i> Review & Fix in Global Brain';
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // BUILD EDIT SCENARIO PREFILL
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Builds prefill data for EDITING an existing scenario (not creating new)
+        // Includes fixed content + navigation info + fix metadata
+        // ════════════════════════════════════════════════════════════════════════════════
+        function buildEditScenarioPrefill(fixedScenario, navigation, fixes) {
+            const s = fixedScenario || {};
+            
+            // ════════════════════════════════════════════════════════════════════════════════
+            // EDIT PREFILL STRUCTURE (different from Gap Fill's create prefill)
+            // - mode: 'edit' (vs 'create' for Gap Fill)
+            // - Contains scenarioId for update (not insert)
+            // - Contains navigation for Global Brain to find the right scenario
+            // - Contains fix metadata for transparency
+            // ════════════════════════════════════════════════════════════════════════════════
+            return {
+                mode: 'edit',  // Critical: tells Global Brain this is an EDIT, not ADD
+                
+                // Navigation (how to find the scenario in Global Brain)
+                navigation: {
+                    templateId: navigation.templateId,
+                    templateName: navigation.templateName,
+                    categoryId: navigation.categoryId,
+                    categoryIndex: navigation.categoryIndex,
+                    categoryName: navigation.categoryName,
+                    scenarioIndex: navigation.scenarioIndex,
+                    scenarioId: navigation.scenarioId
+                },
+                
+                // ════════════════════════════════════════════════════════════════════
+                // CONTENT FIELDS (the fixed values to prefill)
+                // Same structure as Gap Fill's buildScenarioPrefill()
+                // ════════════════════════════════════════════════════════════════════
+                scenario: {
+                    // Identity
+                    name: s.name || '',
+                    status: s.status || 'live',
+                    category: s.categories?.[0] || navigation.categoryName || '',
+                    categories: Array.isArray(s.categories) ? s.categories : [],
+                    scenarioType: s.scenarioType || 'FAQ',
+                    isActive: s.isActive !== false,
+                    
+                    // Personality
+                    behavior: s.behavior || 'calm_professional',
+                    
+                    // Priority & Confidence
+                    priority: typeof s.priority === 'number' ? s.priority : 0,
+                    minConfidence: typeof s.minConfidence === 'number' ? s.minConfidence : 0.6,
+                    contextWeight: typeof s.contextWeight === 'number' ? s.contextWeight : 0.7,
+                    
+                    // Triggers
+                    triggers: Array.isArray(s.triggers) ? s.triggers : [],
+                    regexTriggers: Array.isArray(s.regexTriggers) ? s.regexTriggers : [],
+                    negativeTriggers: Array.isArray(s.negativeTriggers) ? s.negativeTriggers : [],
+                    exampleUserPhrases: Array.isArray(s.exampleUserPhrases) ? s.exampleUserPhrases : [],
+                    negativeUserPhrases: Array.isArray(s.negativeUserPhrases) ? s.negativeUserPhrases : [],
+                    
+                    // Replies (THE MAIN FIELDS THAT GET FIXED)
+                    quickReplies: Array.isArray(s.quickReplies) ? s.quickReplies : [],
+                    fullReplies: Array.isArray(s.fullReplies) ? s.fullReplies : [],
+                    quickReplies_noName: Array.isArray(s.quickReplies_noName) ? s.quickReplies_noName : [],
+                    fullReplies_noName: Array.isArray(s.fullReplies_noName) ? s.fullReplies_noName : [],
+                    replyStrategy: s.replyStrategy || 'AUTO',
+                    replySelection: s.replySelection || 'random',
+                    
+                    // Intent & Entities
+                    bookingIntent: s.bookingIntent === true,
+                    entityCapture: Array.isArray(s.entityCapture) ? s.entityCapture : [],
+                    
+                    // Channel & Language
+                    channel: s.channel || 'any',
+                    language: s.language || 'auto',
+                    
+                    // Follow-up (runtime-owned, but included for completeness)
+                    followUpMode: s.followUpMode || 'NONE',
+                    followUpFunnel: s.followUpFunnel || '',
+                    followUpQuestionText: s.followUpQuestionText || '',
+                    
+                    // Advanced
+                    notes: s.notes || '',
+                    handoffPolicy: s.handoffPolicy || 'low_confidence',
+                    cooldownSeconds: s.cooldownSeconds || 0,
+                    dynamicVariables: s.dynamicVariables || {},
+                    entityValidation: s.entityValidation || {},
+                    timedFollowUp: s.timedFollowUp || {},
+                    silencePolicy: s.silencePolicy || {},
+                    ttsOverride: s.ttsOverride || {},
+                    preconditions: s.preconditions || {},
+                    effects: s.effects || {}
+                },
+                
+                // ════════════════════════════════════════════════════════════════════
+                // FIX METADATA (for transparency and audit trail)
+                // ════════════════════════════════════════════════════════════════════
+                auditFix: {
+                    source: 'template-audit',
+                    fixedAt: new Date().toISOString(),
+                    fixCount: fixes?.length || 0,
+                    fixes: (fixes || []).map(f => ({
+                        field: f.field,
+                        oldValue: f.oldValue,
+                        newValue: f.newValue,
+                        severity: f.severity,
+                        message: f.message
+                    }))
+                }
+            };
         }
         
         // ========================================

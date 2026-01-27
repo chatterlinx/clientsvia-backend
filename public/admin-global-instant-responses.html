@@ -20786,6 +20786,44 @@ ${JSON.stringify(healthData, null, 2)}
                 }
             }
             
+            // ════════════════════════════════════════════════════════════════════════
+            // 🎯 EDIT SCENARIO PREFILL: Coming from Template Audit with fixed data
+            // ════════════════════════════════════════════════════════════════════════
+            // This mirrors Gap Fill's flow but for EDITING existing scenarios
+            // - Loads the specified template
+            // - Navigates to the category
+            // - Opens the edit modal with the fixed scenario data
+            // ════════════════════════════════════════════════════════════════════════
+            if (urlParams.get('prefill') === 'edit-scenario') {
+                console.log('📋 [EDIT-PREFILL] Detected edit-scenario prefill from Template Audit');
+                try {
+                    const prefillData = sessionStorage.getItem('scenarioEditPrefill');
+                    if (prefillData) {
+                        const editData = JSON.parse(prefillData);
+                        console.log('📋 [EDIT-PREFILL] Loaded edit prefill data:', editData);
+                        
+                        // Store for the auto-open logic
+                        window.scenarioEditPrefillData = editData;
+                        
+                        // Clean up sessionStorage
+                        sessionStorage.removeItem('scenarioEditPrefill');
+                        
+                        // Show banner indicating this is an edit with fixes
+                        showEditPrefillBanner(editData);
+                        
+                        // Auto-load template and open edit modal
+                        // Use setTimeout to ensure page is fully loaded
+                        setTimeout(() => {
+                            initializeEditScenarioPrefill(editData);
+                        }, 500);
+                        
+                        console.log('✅ [EDIT-PREFILL] Edit prefill data loaded - will auto-open edit modal');
+                    }
+                } catch (e) {
+                    console.error('❌ [EDIT-PREFILL] Failed to parse edit prefill data:', e);
+                }
+            }
+            
             console.log('✅ [PAGE INIT] Page initialization complete (both Template and Company modes loaded)');
         });
         
@@ -20853,6 +20891,358 @@ ${JSON.stringify(healthData, null, 2)}
             const banner = document.getElementById('prefill-banner');
             if (banner) banner.remove();
             window.scenarioPrefillData = null;
+        }
+
+        // ════════════════════════════════════════════════════════════════════════
+        // 🎯 EDIT SCENARIO PREFILL: Auto-open edit modal from Template Audit
+        // ════════════════════════════════════════════════════════════════════════
+        
+        function showEditPrefillBanner(editData) {
+            const nav = editData.navigation || {};
+            const fixCount = editData.auditFix?.fixCount || 0;
+            
+            let banner = document.getElementById('edit-prefill-banner');
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'edit-prefill-banner';
+                banner.style.cssText = `
+                    position: fixed;
+                    top: 80px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                    color: white;
+                    padding: 16px 24px;
+                    border-radius: 12px;
+                    box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4);
+                    z-index: 10000;
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                    max-width: 700px;
+                    animation: slideDown 0.3s ease-out;
+                `;
+                banner.innerHTML = `
+                    <i class="fas fa-wrench" style="font-size: 24px;"></i>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 16px;">
+                            🔧 Template Audit Fix: "${editData.scenario?.name || 'Scenario'}"
+                        </div>
+                        <div style="font-size: 13px; opacity: 0.9; margin-top: 4px;">
+                            ${fixCount} fix${fixCount !== 1 ? 'es' : ''} applied. Loading template and opening edit form...
+                        </div>
+                    </div>
+                    <button onclick="closeEditPrefillBanner()" style="
+                        background: rgba(255,255,255,0.2);
+                        border: none;
+                        color: white;
+                        width: 28px;
+                        height: 28px;
+                        border-radius: 50%;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">×</button>
+                `;
+                document.body.appendChild(banner);
+            }
+        }
+        
+        function closeEditPrefillBanner() {
+            const banner = document.getElementById('edit-prefill-banner');
+            if (banner) banner.remove();
+            window.scenarioEditPrefillData = null;
+        }
+        
+        /**
+         * Initialize edit scenario prefill from Template Audit
+         * - Loads the correct template
+         * - Finds the scenario
+         * - Opens the edit modal with prefilled (fixed) data
+         */
+        async function initializeEditScenarioPrefill(editData) {
+            const nav = editData.navigation || {};
+            
+            console.log('🔧 [EDIT-PREFILL] Initializing edit scenario prefill...', nav);
+            
+            try {
+                // ════════════════════════════════════════════════════════════════════
+                // STEP 1: Load the correct template
+                // ════════════════════════════════════════════════════════════════════
+                const templateId = nav.templateId;
+                if (!templateId) {
+                    throw new Error('Template ID not provided in prefill data');
+                }
+                
+                console.log('📋 [EDIT-PREFILL] Loading template:', templateId);
+                
+                // Use existing loadTemplate function if available
+                if (typeof loadTemplateById === 'function') {
+                    await loadTemplateById(templateId);
+                } else if (typeof selectTemplate === 'function') {
+                    await selectTemplate(templateId);
+                } else {
+                    // Fallback: Direct fetch and set
+                    const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    });
+                    if (!response.ok) throw new Error('Failed to load template');
+                    const templateData = await response.json();
+                    activeTemplate = templateData.data || templateData;
+                    activeTemplateId = templateId;
+                    console.log('✅ [EDIT-PREFILL] Template loaded via fallback');
+                }
+                
+                // Wait for template to be fully loaded
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // ════════════════════════════════════════════════════════════════════
+                // STEP 2: Find the category and scenario indices
+                // ════════════════════════════════════════════════════════════════════
+                let categoryIndex = nav.categoryIndex;
+                let scenarioIndex = nav.scenarioIndex;
+                const scenarioId = nav.scenarioId;
+                
+                // Verify or find the indices
+                if (!activeTemplate || !activeTemplate.categories) {
+                    throw new Error('Template not loaded or has no categories');
+                }
+                
+                // If we have a scenarioId, verify/find the correct indices
+                if (scenarioId) {
+                    let found = false;
+                    for (let ci = 0; ci < activeTemplate.categories.length; ci++) {
+                        const cat = activeTemplate.categories[ci];
+                        for (let si = 0; si < (cat.scenarios || []).length; si++) {
+                            const sc = cat.scenarios[si];
+                            if (sc.scenarioId === scenarioId || sc._id?.toString() === scenarioId) {
+                                categoryIndex = ci;
+                                scenarioIndex = si;
+                                found = true;
+                                console.log('✅ [EDIT-PREFILL] Found scenario at', { categoryIndex, scenarioIndex });
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                    
+                    if (!found) {
+                        throw new Error(`Scenario ${scenarioId} not found in template`);
+                    }
+                }
+                
+                // ════════════════════════════════════════════════════════════════════
+                // STEP 3: Store the fixed scenario data for the edit form
+                // ════════════════════════════════════════════════════════════════════
+                window.scenarioEditPrefillScenario = editData.scenario;
+                window.scenarioEditPrefillFixes = editData.auditFix?.fixes || [];
+                
+                console.log('🔧 [EDIT-PREFILL] Opening edit scenario modal...', {
+                    categoryIndex,
+                    scenarioIndex,
+                    fixCount: window.scenarioEditPrefillFixes.length
+                });
+                
+                // ════════════════════════════════════════════════════════════════════
+                // STEP 4: Open the edit scenario modal
+                // ════════════════════════════════════════════════════════════════════
+                if (typeof editScenario === 'function') {
+                    await editScenario(categoryIndex, scenarioIndex);
+                    
+                    // Give the modal time to initialize
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                    
+                    // ════════════════════════════════════════════════════════════════
+                    // STEP 5: Override form fields with the FIXED values
+                    // ════════════════════════════════════════════════════════════════
+                    applyEditScenarioPrefill(editData.scenario, editData.auditFix);
+                    
+                    // Update banner to indicate ready
+                    const banner = document.getElementById('edit-prefill-banner');
+                    if (banner) {
+                        const fixCount = editData.auditFix?.fixCount || 0;
+                        banner.querySelector('div > div:last-child').innerHTML = `
+                            ${fixCount} fix${fixCount !== 1 ? 'es' : ''} applied. <strong>Review the changes and click Save.</strong>
+                        `;
+                    }
+                    
+                    console.log('✅ [EDIT-PREFILL] Edit modal opened with fixed data');
+                    
+                } else {
+                    throw new Error('editScenario function not available');
+                }
+                
+            } catch (error) {
+                console.error('❌ [EDIT-PREFILL] Error:', error);
+                
+                // Update banner to show error
+                const banner = document.getElementById('edit-prefill-banner');
+                if (banner) {
+                    banner.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+                    banner.querySelector('div > div:last-child').innerHTML = `
+                        Error: ${error.message}. Please navigate to the scenario manually.
+                    `;
+                }
+                
+                if (typeof showToast === 'function') {
+                    showToast('error', 'Failed to open scenario: ' + error.message);
+                }
+            }
+        }
+        
+        /**
+         * Apply the fixed scenario data to the edit form
+         * This overrides the form fields with the AI-fixed values
+         */
+        function applyEditScenarioPrefill(scenarioData, auditFix) {
+            if (!scenarioData) {
+                console.warn('⚠️ [EDIT-PREFILL] No scenario data to apply');
+                return;
+            }
+            
+            console.log('🔧 [EDIT-PREFILL] Applying fixed scenario data to form...');
+            
+            const s = scenarioData;
+            const fixes = auditFix?.fixes || [];
+            
+            // Helper: Convert array to newline-separated string
+            const arrayToLines = (arr) => {
+                if (!arr) return '';
+                if (Array.isArray(arr)) return arr.join('\n');
+                return String(arr);
+            };
+            
+            try {
+                // ════════════════════════════════════════════════════════════════════
+                // BASIC INFO TAB
+                // ════════════════════════════════════════════════════════════════════
+                const nameInput = document.getElementById('scenario-name');
+                if (nameInput && s.name) nameInput.value = s.name;
+                
+                const statusSelect = document.getElementById('scenario-status');
+                if (statusSelect && s.status) statusSelect.value = s.status;
+                
+                const priorityInput = document.getElementById('scenario-priority');
+                if (priorityInput && typeof s.priority === 'number') priorityInput.value = s.priority;
+                
+                const typeSelect = document.getElementById('scenario-type');
+                if (typeSelect && s.scenarioType) typeSelect.value = s.scenarioType;
+                
+                // Behavior dropdown (may need retry for dynamic population)
+                const behaviorSelect = document.getElementById('scenario-behavior');
+                if (behaviorSelect && s.behavior) {
+                    const targetBehavior = s.behavior.toLowerCase().trim();
+                    const trySetBehavior = (retries = 0) => {
+                        const options = Array.from(behaviorSelect.options);
+                        if (options.length <= 1 && retries < 10) {
+                            setTimeout(() => trySetBehavior(retries + 1), 200);
+                            return;
+                        }
+                        let matchedOption = options.find(o => o.value.toLowerCase() === targetBehavior);
+                        if (!matchedOption) {
+                            matchedOption = options.find(o => o.value.toLowerCase().includes(targetBehavior));
+                        }
+                        if (matchedOption) {
+                            behaviorSelect.value = matchedOption.value;
+                        }
+                    };
+                    trySetBehavior();
+                }
+                
+                // ════════════════════════════════════════════════════════════════════
+                // TRIGGERS (these might have been fixed)
+                // ════════════════════════════════════════════════════════════════════
+                const triggersInput = document.getElementById('scenario-triggers');
+                if (triggersInput) triggersInput.value = arrayToLines(s.triggers);
+                
+                const negTriggersInput = document.getElementById('scenario-negative-triggers');
+                if (negTriggersInput) negTriggersInput.value = arrayToLines(s.negativeTriggers);
+                
+                const regexTriggersInput = document.getElementById('scenario-regex-triggers');
+                if (regexTriggersInput) regexTriggersInput.value = arrayToLines(s.regexTriggers);
+                
+                // ════════════════════════════════════════════════════════════════════
+                // REPLIES (THE MAIN FIXED FIELDS)
+                // ════════════════════════════════════════════════════════════════════
+                const quickRepliesInput = document.getElementById('scenario-quick-replies');
+                if (quickRepliesInput) {
+                    quickRepliesInput.value = arrayToLines(s.quickReplies);
+                    // Highlight if this field was fixed
+                    if (fixes.some(f => f.field.startsWith('quickReplies'))) {
+                        quickRepliesInput.style.borderColor = '#10b981';
+                        quickRepliesInput.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.2)';
+                    }
+                }
+                
+                const fullRepliesInput = document.getElementById('scenario-full-replies');
+                if (fullRepliesInput) {
+                    fullRepliesInput.value = arrayToLines(s.fullReplies);
+                    // Highlight if this field was fixed
+                    if (fixes.some(f => f.field.startsWith('fullReplies'))) {
+                        fullRepliesInput.style.borderColor = '#10b981';
+                        fullRepliesInput.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.2)';
+                    }
+                }
+                
+                // ════════════════════════════════════════════════════════════════════
+                // OTHER FIELDS
+                // ════════════════════════════════════════════════════════════════════
+                const channelSelect = document.getElementById('scenario-channel');
+                if (channelSelect && s.channel) channelSelect.value = s.channel;
+                
+                const languageSelect = document.getElementById('scenario-language');
+                if (languageSelect && s.language) languageSelect.value = s.language;
+                
+                const contextWeightInput = document.getElementById('scenario-context-weight');
+                if (contextWeightInput && typeof s.contextWeight === 'number') {
+                    contextWeightInput.value = s.contextWeight;
+                    // Update display
+                    const confidenceValue = document.getElementById('confidence-value');
+                    if (confidenceValue) {
+                        confidenceValue.textContent = Math.round(s.contextWeight * 100) + '%';
+                    }
+                }
+                
+                const followupModeSelect = document.getElementById('scenario-followup-mode');
+                if (followupModeSelect && s.followUpMode) followupModeSelect.value = s.followUpMode;
+                
+                const followupFunnelInput = document.getElementById('scenario-followup-funnel');
+                if (followupFunnelInput && s.followUpFunnel) followupFunnelInput.value = s.followUpFunnel;
+                
+                const followupQuestionInput = document.getElementById('scenario-followup-question');
+                if (followupQuestionInput && s.followUpQuestionText) followupQuestionInput.value = s.followUpQuestionText;
+                
+                const entityCaptureInput = document.getElementById('scenario-entity-capture');
+                if (entityCaptureInput) entityCaptureInput.value = arrayToLines(s.entityCapture);
+                
+                const replyStrategySelect = document.getElementById('scenario-reply-strategy');
+                if (replyStrategySelect && s.replyStrategy) replyStrategySelect.value = s.replyStrategy;
+                
+                const replySelectionSelect = document.getElementById('scenario-reply-selection');
+                if (replySelectionSelect && s.replySelection) replySelectionSelect.value = s.replySelection;
+                
+                const handoffPolicySelect = document.getElementById('scenario-handoff-policy');
+                if (handoffPolicySelect && s.handoffPolicy) handoffPolicySelect.value = s.handoffPolicy;
+                
+                const cooldownInput = document.getElementById('scenario-cooldown');
+                if (cooldownInput && typeof s.cooldownSeconds === 'number') cooldownInput.value = s.cooldownSeconds;
+                
+                // ════════════════════════════════════════════════════════════════════
+                // SHOW FIX SUMMARY IN TOAST
+                // ════════════════════════════════════════════════════════════════════
+                if (fixes.length > 0 && typeof showToast === 'function') {
+                    const fixedFields = [...new Set(fixes.map(f => f.field.split('[')[0]))];
+                    showToast('success', `Form updated with ${fixes.length} fix${fixes.length !== 1 ? 'es' : ''} in: ${fixedFields.join(', ')}. Review and save!`);
+                }
+                
+                console.log('✅ [EDIT-PREFILL] Fixed scenario data applied to form');
+                
+            } catch (error) {
+                console.error('❌ [EDIT-PREFILL] Error applying prefill data:', error);
+            }
+            
+            // Clear the prefill data (one-time use)
+            window.scenarioEditPrefillScenario = null;
+            window.scenarioEditPrefillFixes = null;
         }
 
 
