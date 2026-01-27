@@ -1,9 +1,7 @@
 /**
  * WiringRule - Checks scenario wiring (actions, flows, transfers)
  * 
- * Validates that scenarios are properly "wired" to DO something:
- * - actionType matches required fields (flowId, transferTarget, etc.)
- * - followUpMode matches required fields
+ * Validates content-owned wiring intent:
  * - bookingIntent set correctly for booking scenarios
  * 
  * This is a DETERMINISTIC rule (no LLM cost).
@@ -25,7 +23,7 @@ class WiringRule extends BaseRule {
         super();
         this.id = 'wiring';
         this.name = 'Wiring Validation';
-        this.description = 'Ensures scenarios are properly connected to actions, flows, and transfers';
+        this.description = 'Ensures bookingIntent aligns with scenario type (content-only)';
         this.severity = SEVERITY.ERROR;
         this.category = RULE_CATEGORIES.WIRING;
         this.costType = 'deterministic';
@@ -170,20 +168,8 @@ class WiringRule extends BaseRule {
      */
     _checkBookingIntent(scenario) {
         const violations = [];
-        const actionType = scenario.actionType || 'REPLY_ONLY';
         const scenarioType = scenario.scenarioType || 'UNKNOWN';
         const bookingIntent = scenario.bookingIntent;
-        
-        // REQUIRE_BOOKING should have bookingIntent=true
-        if (actionType === 'REQUIRE_BOOKING' && bookingIntent !== true) {
-            violations.push(this.createViolation({
-                field: 'bookingIntent',
-                value: bookingIntent,
-                message: 'actionType="REQUIRE_BOOKING" should have bookingIntent=true',
-                suggestion: 'Set bookingIntent to true for booking scenarios',
-                meta: { actionType, expected: true }
-            }));
-        }
         
         // BOOKING scenarioType should typically have bookingIntent=true
         if (scenarioType === 'BOOKING' && bookingIntent !== true) {

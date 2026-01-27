@@ -726,15 +726,15 @@ quickReplies (5-7 variations) - DISPATCHER STYLE:
 • Sound like you've handled this 10,000 times
 • Move toward understanding the problem
 • MUST have 5-7 variations so AI never sounds like a robot!
-• Vary the acknowledgment: "I understand." / "Alright." / "Okay." / "Thanks, {name}."
+• Vary the acknowledgment: "I understand." / "Alright." / "Okay." / "Thanks, {callerName}."
 • Vary the question phrasing while asking the same thing
 
 fullReplies (4-5 variations) - STILL DISPATCHER STYLE:
 • Slightly more context but STILL under 25 words
 • Never paragraphs, never fluffy
 • MUST have 4-5 variations for natural conversation
-• MUST include {name} in EACH reply (runtime will strip if unknown)
-• Vary the acknowledgment: "Thanks, {name}." / "Alright, {name}." / "Okay, {name}."
+• MUST include {callerName} in EACH reply (runtime will strip if unknown)
+• Vary the acknowledgment: "Thanks, {callerName}." / "Alright, {callerName}." / "Okay, {callerName}."
 • Vary the booking language: "Morning or afternoon?" / "What day works?" / "When would you like us out?"
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -779,7 +779,7 @@ QUICK REPLIES (classification questions):
 ✅ Good: "Is the thermostat screen on or blank?"
 
 FULL REPLIES (booking momentum - use after classification):
-❌ Bad: "I understand, {name}. Is the unit making any unusual noises?"
+❌ Bad: "I understand, {callerName}. Is the unit making any unusual noises?"
 ✅ Good: "Alright. That's helpful. We'll get a technician out. Morning or afternoon?"
 
 ❌ Bad: "Have you checked if the thermostat is set correctly?"
@@ -791,11 +791,11 @@ Caller: "The screen is blank."
 
 RETURNING CUSTOMER:
 ❌ Bad: "Great to hear from you again! How wonderful to have you back!"
-✅ Good: "Good to hear from you, {name}. What's going on with the system today?"
+✅ Good: "Good to hear from you, {callerName}. What's going on with the system today?"
 
 GREETING:
-❌ Bad: "Hi {name}! Thanks so much for reaching out to us today!"
-✅ Good: "Hi {name}. What's going on?"
+❌ Bad: "Hi {callerName}! Thanks so much for reaching out to us today!"
+✅ Good: "Hi {callerName}. What's going on?"
 
 ═══════════════════════════════════════════════════════════════════════════════
 👤 PERSONALIZATION RULES (CRITICAL - Recognition ≠ Warmth)
@@ -804,9 +804,9 @@ A real receptionist acknowledges NAME and LOYALTY — then pivots to purpose.
 This is NOT warmth. This is RECOGNITION + RESPECT.
 
 PLACEHOLDER RULES:
-• Only use {name} as a placeholder for caller's name
-• Do NOT invent names - only use {name} as placeholder
-• Runtime will replace {name} with actual name or remove it gracefully
+• Only use {callerName} as a placeholder for caller's name
+• Do NOT invent names - only use {callerName} as placeholder
+• Runtime will replace {callerName} with actual name or remove it gracefully
 
 NAME ACKNOWLEDGMENT (when caller provides name):
 • Acknowledge the name ONCE in the next response
@@ -814,9 +814,9 @@ NAME ACKNOWLEDGMENT (when caller provides name):
 • Then immediately pivot to classify or book
 
 APPROVED NAME ACKNOWLEDGMENTS (use these exactly):
-• "Thanks, {name}."
-• "Appreciate it, {name}."
-• "Good to hear from you, {name}."
+• "Thanks, {callerName}."
+• "Appreciate it, {callerName}."
+• "Good to hear from you, {callerName}."
 
 LOYALTY ACKNOWLEDGMENT (when caller mentions returning/long-time customer):
 • Acknowledge loyalty ONCE, briefly
@@ -824,15 +824,15 @@ LOYALTY ACKNOWLEDGMENT (when caller mentions returning/long-time customer):
 • Then pivot to the reason for their call
 
 APPROVED LOYALTY ACKNOWLEDGMENTS:
-• "We appreciate you, {name}."
-• "Thanks for being a long-time customer, {name}."
-• "Glad to have you back, {name}."
-• "Good to hear from you again, {name}."
+• "We appreciate you, {callerName}."
+• "Thanks for being a long-time customer, {callerName}."
+• "Glad to have you back, {callerName}."
+• "Good to hear from you again, {callerName}."
 
 COMBINED EXAMPLE (name + loyalty + pivot):
 Caller: "My name is Mark. I'm a long-time customer and I'm having AC issues."
 ❌ Bad: "Alright. What's going on with your system?"
-✅ Good: "Thanks, {name} — we appreciate you being a long-time customer. What's going on with the AC today?"
+✅ Good: "Thanks, {callerName} — we appreciate you being a long-time customer. What's going on with the AC today?"
 
 THE THREE MICRO-ACKNOWLEDGMENTS (in order):
 1. Name acknowledgment (once, immediately after capture)
@@ -841,7 +841,7 @@ THE THREE MICRO-ACKNOWLEDGMENTS (in order):
 
 TWO-VARIANT REPLIES (provide BOTH for flexibility):
 For scenarios where name may or may not be available:
-• WITH NAME: "Thanks, {name}. What's going on with the AC today?"
+• WITH NAME: "Thanks, {callerName}. What's going on with the AC today?"
 • WITHOUT NAME: "Thanks. What's going on with the AC today?"
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -897,8 +897,8 @@ OUTPUT FORMAT (JSON only, no markdown):
 ═══════════════════════════════════════════════════════════════════════════════
 {
     "name": "Short descriptive name (3-5 words)",
-    "status": "live",
-    "category": "Scheduling|Pricing|Hours|Service Area|Emergency|FAQ|Warranty|Billing|General",
+    "status": "draft",
+    "categories": ["Scheduling|Pricing|Hours|Service Area|Emergency|FAQ|Warranty|Billing|General"],
     
     "scenarioType": "FAQ|BOOKING|EMERGENCY|TROUBLESHOOT|BILLING|TRANSFER|SMALL_TALK",
     "priority": 0,
@@ -927,12 +927,12 @@ OUTPUT FORMAT (JSON only, no markdown):
     "negativeTriggers": ["phrases that look similar but mean something DIFFERENT"],
     
     "quickReplies": [
-        "Thanks, {name}. Is the unit running but not cooling, or not turning on?",
+        "Thanks, {callerName}. Is the unit running but not cooling, or not turning on?",
         "I understand. Is the unit running but not cooling, or not turning on?",
         "Alright. Is air coming out of the vents?",
-        "Okay, {name}. Is the system blowing warm air or nothing at all?",
+        "Okay, {callerName}. Is the system blowing warm air or nothing at all?",
         "Got the picture. Is it running but not cooling, or completely off?",
-        "Appreciate it, {name}. Is the thermostat showing anything?"
+        "Appreciate it, {callerName}. Is the thermostat showing anything?"
     ],
     
     "quickReplies_noName": [
@@ -945,11 +945,11 @@ OUTPUT FORMAT (JSON only, no markdown):
     ],
     
     "fullReplies": [
-        "Thanks, {name}. We'll get a technician out. Morning or afternoon?",
-        "Alright, {name}. We'll get a technician out. Morning or afternoon?",
-        "I understand, {name}. Let's get you on the schedule. What day works best?",
-        "Okay, {name}. We can have someone out today or tomorrow. Which works better?",
-        "Sounds good, {name}. When would you like us to come by?"
+        "Thanks, {callerName}. We'll get a technician out. Morning or afternoon?",
+        "Alright, {callerName}. We'll get a technician out. Morning or afternoon?",
+        "I understand, {callerName}. Let's get you on the schedule. What day works best?",
+        "Okay, {callerName}. We can have someone out today or tomorrow. Which works better?",
+        "Sounds good, {callerName}. When would you like us to come by?"
     ],
     
     "fullReplies_noName": [
@@ -983,21 +983,21 @@ ENTITY CAPTURE GUIDE (what to extract from caller speech):
 - urgency: Emergency indicators
 
 PERSONALIZATION GUIDE (name + loyalty recognition):
-1. ALWAYS include {name} in EVERY quickReply and EVERY fullReply
+1. ALWAYS include {callerName} in EVERY quickReply and EVERY fullReply
 2. ALWAYS provide matching _noName variants (same count, same order)
 3. Name acknowledgment = recognition, NOT warmth
 4. Loyalty acknowledgment = respect for returning customers
 5. Three micro-acknowledgments in order: Name → Loyalty → Purpose
 6. Keep all acknowledgments under 10 words
 7. Approved patterns:
-   - "Thanks, {name}." / "Thanks."
-   - "Appreciate it, {name}." / "Appreciate it."
-   - "Alright, {name}." / "Alright."
-   - "Okay, {name}." / "Okay."
-   - "Good to hear from you, {name}." / "Good to hear from you."
+   - "Thanks, {callerName}." / "Thanks."
+   - "Appreciate it, {callerName}." / "Appreciate it."
+   - "Alright, {callerName}." / "Alright."
+   - "Okay, {callerName}." / "Okay."
+   - "Good to hear from you, {callerName}." / "Good to hear from you."
 8. For returning/long-time customer scenarios:
-   - "We appreciate you, {name}."
-   - "Thanks for being a long-time customer, {name}."
+   - "We appreciate you, {callerName}."
+   - "Thanks for being a long-time customer, {callerName}."
 9. CRITICAL: fullReplies count MUST equal fullReplies_noName count (both 4-5)
 10. CRITICAL: quickReplies count MUST equal quickReplies_noName count (both 5-7)
 

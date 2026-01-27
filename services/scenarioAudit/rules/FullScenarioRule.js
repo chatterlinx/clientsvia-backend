@@ -1,38 +1,31 @@
 /**
  * FullScenarioRule - Comprehensive scenario validation
  * 
- * This rule checks EVERYTHING that the other rules might miss:
+ * This rule checks content-only fields that other rules might miss:
  * 
- * STATUS & LIFECYCLE:
- *   - Status is 'live' (not draft/archived)
+ * STATUS & LIFECYCLE (content):
+ *   - Status is valid
  *   - isActive is true
  * 
- * FOLLOW-UP CONFIGURATION:
- *   - followUpQuestionText exists when followUpMode = ASK_FOLLOWUP_QUESTION
- *   - transferTarget exists when followUpMode = TRANSFER
- *   - followUpMessages don't contain banned phrases
- *   - silencePolicy.finalWarning doesn't contain banned phrases
- * 
- * REGEX VALIDATION:
+ * REGEX VALIDATION (content):
  *   - All regexTriggers compile without errors
  *   - Regex patterns have reasonable complexity
  * 
- * PLACEHOLDER CONSISTENCY:
- *   - All placeholders are from approved list
+ * PLACEHOLDER CONSISTENCY (content):
  *   - Placeholders are consistent across replies
  * 
- * NEGATIVE TRIGGERS:
+ * NEGATIVE TRIGGERS (content):
  *   - negativeTriggers don't overlap with triggers
  * 
- * COOLDOWN:
- *   - cooldownSeconds is reasonable (0-300)
- * 
- * ENTITY CAPTURE:
+ * ENTITY CAPTURE (content):
  *   - entityCapture fields are valid known entities
  * 
- * REPLY BUNDLES:
- *   - replyBundles.short has at least 2 variants
- *   - replyBundles.long has at least 2 variants
+ * BEHAVIOR & CHANNEL (content):
+ *   - behavior is allowed (not chatty)
+ *   - channel is valid
+ * 
+ * OWNERSHIP NOTE:
+ *   - Runtime/admin fields are reported as INFO only (not failed)
  * 
  * This is a DETERMINISTIC rule (no LLM cost).
  */

@@ -89,21 +89,6 @@ class ResponseLengthRule extends BaseRule {
             }
         }
         
-        // Check follow-up messages
-        const followUpMessages = scenario.followUpMessages || [];
-        for (let i = 0; i < followUpMessages.length; i++) {
-            const wordCount = this.countWords(followUpMessages[i]);
-            if (wordCount > RESPONSE_LIMITS.quickReply.maxWords) {
-                violations.push(this.createViolation({
-                    field: `followUpMessages[${i}]`,
-                    value: followUpMessages[i],
-                    message: `Follow-up message is ${wordCount} words (max ${RESPONSE_LIMITS.quickReply.maxWords})`,
-                    suggestion: 'Keep follow-ups short and direct',
-                    meta: { wordCount, limit: RESPONSE_LIMITS.quickReply.maxWords }
-                }));
-            }
-        }
-        
         return violations;
     }
 }

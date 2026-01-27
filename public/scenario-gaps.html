@@ -1304,7 +1304,7 @@
                 <div>
                     <h2 style="margin-bottom: 4px;">Template Health Check</h2>
                     <p style="color: var(--text-secondary); font-size: 14px;">
-                        Audit all scenarios against dispatcher personality rules
+                        Audit scenario content against dispatcher rules (ownership-aware)
                     </p>
                 </div>
                 <div class="audit-actions">
@@ -1495,7 +1495,7 @@
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span id="align-audit-icon" style="font-size: 16px;">⏳</span>
                             <div>
-                                <div style="font-size: 13px; font-weight: 600; color: #fff;">Audit (GPT-4)</div>
+                                <div style="font-size: 13px; font-weight: 600; color: #fff;">Audit Engine</div>
                                 <div style="font-size: 11px; color: var(--text-muted);" id="align-audit-count">-- scenarios</div>
                             </div>
                         </div>
@@ -1515,7 +1515,7 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                     <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;">
                         <i class="fas fa-list-check" style="color: var(--accent-purple);"></i>
-                        What GPT-4 Audit Checks (9 Rules, 40+ Validations)
+                        What the Audit Engine Checks (9 Rules, Content-Only)
                     </h3>
                     <button onclick="toggleChecklist()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 13px;">
                         <i class="fas fa-chevron-down" id="checklist-toggle-icon"></i>
@@ -1546,11 +1546,9 @@
                             <i class="fas fa-plug"></i> Wiring
                         </div>
                         <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>actionType is valid</li>
-                            <li>flowId exists if START_FLOW</li>
-                            <li>transferTarget exists if TRANSFER</li>
-                            <li>bookingIntent matches type</li>
-                            <li>followUpMode is valid</li>
+                            <li>bookingIntent is boolean</li>
+                            <li>bookingIntent true for BOOKING/EMERGENCY</li>
+                            <li>bookingIntent false for FAQ/BILLING/SMALL_TALK</li>
                         </ul>
                     </div>
                     
@@ -1600,9 +1598,8 @@
                             <i class="fas fa-ruler"></i> Response Length
                         </div>
                         <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>quickReplies ≤ 20 words</li>
-                            <li>fullReplies ≤ 25 words</li>
-                            <li>followUpMessages ≤ 20 words</li>
+                            <li>quickReplies / _noName ≤ 20 words</li>
+                            <li>fullReplies / _noName ≤ 25 words</li>
                         </ul>
                     </div>
                     
@@ -1638,26 +1635,18 @@
                     <!-- Rule 9: Full Scenario -->
                     <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
                         <div style="font-weight: 600; color: var(--accent-pink); margin-bottom: 8px;">
-                            <i class="fas fa-cogs"></i> Full Scenario Check (18 sub-checks)
+                            <i class="fas fa-cogs"></i> Content Integrity (content-only)
                         </div>
                         <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>status = "live", isActive = true</li>
-                            <li>followUpQuestionText when needed</li>
-                            <li>followUpMessages[] no banned phrases</li>
-                            <li>silencePolicy validated</li>
+                            <li>status is valid, isActive is true</li>
+                            <li>regexTriggers compile cleanly</li>
+                            <li>placeholder consistency (no legacy/unknown)</li>
                             <li>negativeTriggers don't conflict</li>
-                            <li>cooldownSeconds 0-300</li>
                             <li>entityCapture[] valid types</li>
-                            <li>replyBundles have variety</li>
-                            <li>Regex has word boundaries</li>
-                            <li><strong>timedFollowUp.messages[]</strong> no chatbot</li>
-                            <li><strong>behavior</strong> not "Friendly & Warm"</li>
-                            <li><strong>actionHooks[]</strong> valid format</li>
-                            <li><strong>channel</strong> is valid</li>
-                            <li><strong>minConfidence</strong> per scenarioType</li>
-                            <li><strong>entityValidation</strong> regex valid</li>
-                            <li><strong>dynamicVariables</strong> valid</li>
-                            <li><strong>ttsOverride</strong> reasonable</li>
+                            <li>behavior is allowed (no "Friendly & Warm")</li>
+                            <li>channel is valid</li>
+                            <li>minConfidence within range</li>
+                            <li>non-content fields reported as INFO</li>
                         </ul>
                     </div>
                 </div>

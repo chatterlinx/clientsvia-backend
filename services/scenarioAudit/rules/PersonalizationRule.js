@@ -208,9 +208,7 @@ class PersonalizationRule extends BaseRule {
             ...(scenario.quickReplies || []),
             ...(scenario.fullReplies || []),
             ...(scenario.quickReplies_noName || []),
-            ...(scenario.fullReplies_noName || []),
-            ...(scenario.followUpMessages || []),
-            scenario.followUpQuestionText || ''
+            ...(scenario.fullReplies_noName || [])
         ];
         return texts.filter(Boolean).join(' ');
     }

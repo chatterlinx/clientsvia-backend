@@ -8,7 +8,7 @@
  * Rules are automatically available to the AuditEngine.
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
- * RULE COVERAGE (all scenario fields audited)
+ * RULE COVERAGE (content fields audited)
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * TONE RULES:
@@ -25,7 +25,7 @@
  *   TriggersRule - Count, length, generic, regex validity, variety
  * 
  * WIRING RULES:
- *   WiringRule - actionType, flowId, transferTarget, bookingIntent
+ *   WiringRule - bookingIntent alignment (content-only)
  * 
  * COMPLETENESS RULES:
  *   CompletenessRule - Required fields, scenarioType, behavior

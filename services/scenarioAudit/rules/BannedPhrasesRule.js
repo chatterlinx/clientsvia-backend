@@ -66,9 +66,7 @@ class BannedPhrasesRule extends BaseRule {
             { name: 'quickReplies', values: scenario.quickReplies || [] },
             { name: 'fullReplies', values: scenario.fullReplies || [] },
             { name: 'quickReplies_noName', values: scenario.quickReplies_noName || [] },
-            { name: 'fullReplies_noName', values: scenario.fullReplies_noName || [] },
-            { name: 'followUpMessages', values: scenario.followUpMessages || [] },
-            { name: 'followUpQuestionText', values: scenario.followUpQuestionText ? [scenario.followUpQuestionText] : [] }
+            { name: 'fullReplies_noName', values: scenario.fullReplies_noName || [] }
         ];
         
         for (const field of fieldsToCheck) {
