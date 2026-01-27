@@ -6201,14 +6201,14 @@
         if (btn) {
           if (alreadyClean) {
             btn.innerHTML = '<i class="fas fa-check"></i> Already normalized';
-            btn.disabled = true;
-            setTimeout(() => {
-              btn.innerHTML = originalHtml;
-              btn.disabled = false;
-            }, 5000);
+            btn.disabled = false;
+            btn.title = 'Already normalized (click to recheck)';
+            btn.dataset.normalizeStatus = 'clean';
           } else {
             btn.innerHTML = originalHtml;
             btn.disabled = false;
+            btn.title = 'Normalize legacy keys to canonical tokens';
+            btn.dataset.normalizeStatus = 'dirty';
           }
         }
       }
