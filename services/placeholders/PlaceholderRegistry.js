@@ -91,48 +91,66 @@ function validatePlaceholderTokens(tokens = [], tradeKey = null) {
     const companyKeys = new Set(registry.companyTokens.map(t => t.key.toLowerCase()));
     const runtimeKeys = new Set(registry.runtimeTokens.map(t => t.key.toLowerCase()));
 
-    const forbiddenLegacy = [];
-    const unknownInvalid = [];
+    // ════════════════════════════════════════════════════════════════════════════════
+    // LENIENT VALIDATION (V2)
+    // ════════════════════════════════════════════════════════════════════════════════
+    // Accept ANY placeholder that can be resolved to a known token:
+    // - Direct match (case-insensitive): {companyName}, {COMPANYNAME}, {CompanyName}
+    // - Alias match: {name} -> callerName, {company} -> companyName
+    // - Double braces: {{companyName}} -> normalized to companyName
+    //
+    // Runtime will normalize all placeholders to canonical form.
+    // Only reject truly unknown placeholders that can't be resolved.
+    // ════════════════════════════════════════════════════════════════════════════════
+    
+    const acceptedAliases = [];  // Aliases that will be normalized at runtime (not errors)
+    const unknownInvalid = [];   // Truly unknown placeholders
 
     for (const raw of tokens) {
         const cleaned = normalizeToken(raw);
         if (!cleaned) continue;
         const lower = cleaned.toLowerCase();
 
+        // Check 1: Direct match to company or runtime token (case-insensitive)
+        if (companyKeys.has(lower) || runtimeKeys.has(lower)) {
+            continue; // Valid
+        }
+
+        // Check 2: Known alias - ACCEPT (will be normalized at runtime)
         if (aliasMap[lower]) {
             const canonical = aliasMap[lower];
-            forbiddenLegacy.push({
+            acceptedAliases.push({
                 key: cleaned,
                 canonical,
-                recommendation: `Use {${canonical}}`,
-                scope: registry.companyTokens.find(t => t.key === canonical)?.scope
-                    || registry.runtimeTokens.find(t => t.key === canonical)?.scope
-                    || 'unknown'
+                note: `Will be normalized to {${canonical}} at runtime`
             });
-            continue;
+            continue; // Valid - will be normalized
         }
 
-        if (companyKeys.has(lower) || runtimeKeys.has(lower)) {
-            continue;
+        // Check 3: Try to find any close match (fuzzy)
+        // Check if it's a case variation of a known token
+        const exactCaseMatch = registry.companyTokens.find(t => t.key === cleaned)
+            || registry.runtimeTokens.find(t => t.key === cleaned);
+        if (exactCaseMatch) {
+            continue; // Valid - exact case match
         }
 
-        let suggestion = 'Add to catalog or replace with valid placeholder';
-        const canonicalMatch = registry.companyTokens.find(t => t.key.toLowerCase() === lower)
-            || registry.runtimeTokens.find(t => t.key.toLowerCase() === lower);
-        if (canonicalMatch) {
-            suggestion = `Use {${canonicalMatch.key}}`;
-        }
-
+        // Truly unknown - this is an error
+        let suggestion = 'Unknown placeholder. Check spelling or add to catalog.';
         unknownInvalid.push({
             key: cleaned,
             suggestion
         });
     }
 
+    // Only fail on truly unknown placeholders
+    // Aliases are OK - they'll be normalized at runtime
     return {
-        valid: forbiddenLegacy.length === 0 && unknownInvalid.length === 0,
-        forbiddenLegacy,
-        unknownInvalid
+        valid: unknownInvalid.length === 0,
+        acceptedAliases,  // Info only - these are valid but will be normalized
+        unknownInvalid,
+        // Keep forbiddenLegacy empty for backward compatibility - we're now lenient
+        forbiddenLegacy: []
     };
 }
 
@@ -143,22 +161,28 @@ function validateScenarioPlaceholders(scenario, tradeKey = null) {
 
     let message = null;
     if (!validation.valid) {
-        const firstForbidden = validation.forbiddenLegacy[0];
         const firstUnknown = validation.unknownInvalid[0];
 
-        if (firstForbidden) {
-            message = `Invalid placeholder "{${firstForbidden.key}}". ${firstForbidden.recommendation || 'Use canonical tokens only.'} This template can only use canonical tokens from registry.`;
-        } else if (firstUnknown) {
-            message = `Invalid placeholder "{${firstUnknown.key}}". ${firstUnknown.suggestion || 'Use canonical tokens only.'} This template can only use canonical tokens from registry.`;
+        if (firstUnknown) {
+            message = `Unknown placeholder "{${firstUnknown.key}}". ${firstUnknown.suggestion}`;
         } else {
-            message = 'Invalid placeholders detected. This template can only use canonical tokens from registry.';
+            message = 'Unknown placeholders detected. Check spelling or add to catalog.';
         }
     }
 
+    // ════════════════════════════════════════════════════════════════════════════════
+    // LENIENT RESPONSE
+    // ════════════════════════════════════════════════════════════════════════════════
+    // - valid: true if all placeholders can be resolved (direct or via alias)
+    // - acceptedAliases: placeholders that will be normalized at runtime (info only)
+    // - unknownInvalid: truly unknown placeholders (errors)
+    // - forbiddenLegacy: empty (we're lenient now - aliases are accepted)
+    // ════════════════════════════════════════════════════════════════════════════════
     return {
         valid: validation.valid,
         message,
-        forbiddenLegacy: validation.forbiddenLegacy,
+        acceptedAliases: validation.acceptedAliases || [],
+        forbiddenLegacy: [],  // No longer blocking on legacy aliases
         unknownInvalid: validation.unknownInvalid,
         tokens
     };
