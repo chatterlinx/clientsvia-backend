@@ -2027,7 +2027,7 @@
               Company Placeholder Values
             </h4>
             <div style="display: flex; gap: 8px;">
-              <button onclick="normalizePlaceholderKeys(this)" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Normalize legacy keys to canonical tokens">
+              <button id="btnNormalizeKeys" onclick="normalizePlaceholderKeys(this)" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Normalize legacy keys to canonical tokens">
                 <i class="fas fa-broom"></i> Normalize Keys
               </button>
               <button onclick="copyPlaceholderPageJson(this)" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;" title="Copy all placeholder data as JSON">
@@ -4990,6 +4990,9 @@
       const tbody = document.getElementById('placeholders-list');
       
       try {
+        // Normalize status health check (non-blocking)
+        checkNormalizeStatus({ silent: true }).catch(() => {});
+
         // Preset Draft overlay (UI-only): if loaded, show draft values without writing DB.
         const draftPlaceholders = window.__presetDraft?.payload?.placeholders;
         if (Array.isArray(draftPlaceholders) && draftPlaceholders.length > 0) {
@@ -6152,7 +6155,10 @@
       
       if (!confirmed) return;
       
-      const originalHtml = btn?.innerHTML;
+      const originalHtml = btn?.dataset?.originalHtml || btn?.innerHTML;
+      if (btn && !btn.dataset.originalHtml) {
+        btn.dataset.originalHtml = originalHtml;
+      }
       let alreadyClean = false;
       if (btn) {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Normalizing...';
@@ -6175,16 +6181,16 @@
         }
         
         const conflicts = data.conflicts || [];
-        const migratedCount = Number(data.migratedCount || 0);
+        const legacyCount = Number(data.legacyCount ?? data.migratedCount ?? 0);
         const finalCount = Number(data.finalCount || 0);
-        alreadyClean = migratedCount === 0;
+        alreadyClean = legacyCount === 0;
         const conflictMsg = conflicts.length > 0
           ? `\nConflicts detected: ${conflicts.length} (see console)`
           : '';
 
         const baseMessage = alreadyClean
           ? `✅ Already normalized. No legacy keys found.\nFinal placeholders: ${finalCount}.`
-          : `✅ Normalized ${migratedCount} legacy key(s).\nFinal placeholders: ${finalCount}.`;
+          : `✅ Normalized ${legacyCount} legacy key(s).\nFinal placeholders: ${finalCount}.`;
 
         alert(`${baseMessage}${conflictMsg}`);
         
@@ -6199,17 +6205,57 @@
         alert(`Failed to normalize placeholders: ${error.message}`);
       } finally {
         if (btn) {
-          if (alreadyClean) {
-            btn.innerHTML = '<i class="fas fa-check"></i> Already normalized';
-            btn.disabled = false;
-            btn.title = 'Already normalized (click to recheck)';
-            btn.dataset.normalizeStatus = 'clean';
-          } else {
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
-            btn.title = 'Normalize legacy keys to canonical tokens';
-            btn.dataset.normalizeStatus = 'dirty';
-          }
+          setNormalizeButtonState({
+            isClean: alreadyClean,
+            legacyCount: alreadyClean ? 0 : 1
+          });
+        }
+      }
+    }
+
+    function setNormalizeButtonState({ isClean, legacyCount }) {
+      const btn = document.getElementById('btnNormalizeKeys');
+      if (!btn) return;
+      if (!btn.dataset.originalHtml) {
+        btn.dataset.originalHtml = btn.innerHTML;
+      }
+      if (isClean) {
+        btn.innerHTML = '<i class="fas fa-check"></i> Already normalized';
+        btn.title = 'Already normalized (click to recheck)';
+        btn.dataset.normalizeStatus = 'clean';
+      } else {
+        btn.innerHTML = btn.dataset.originalHtml;
+        btn.title = legacyCount > 0
+          ? `Normalize legacy keys (${legacyCount} found)`
+          : 'Normalize legacy keys to canonical tokens';
+        btn.dataset.normalizeStatus = 'dirty';
+      }
+      btn.disabled = false;
+    }
+
+    async function checkNormalizeStatus({ silent = true } = {}) {
+      if (!currentCompanyId) return;
+      try {
+        const res = await fetch(`/api/admin/placeholders/company/${currentCompanyId}/normalize`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ preferCanonical: true, dryRun: true })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || `HTTP ${res.status}`);
+        }
+        const legacyCount = Number(data.legacyCount ?? data.migratedCount ?? 0);
+        setNormalizeButtonState({
+          isClean: legacyCount === 0,
+          legacyCount
+        });
+      } catch (error) {
+        if (!silent) {
+          alert(`Failed to check normalize status: ${error.message}`);
         }
       }
     }

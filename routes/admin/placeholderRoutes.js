@@ -774,7 +774,8 @@ router.get('/company/:companyId/values-merged', async (req, res) => {
 router.post('/company/:companyId/normalize', async (req, res) => {
     try {
         const { companyId } = req.params;
-        const { preferCanonical = true } = req.body || {};
+        const { preferCanonical = true, dryRun = false } = req.body || {};
+        const isDryRun = dryRun === true || dryRun === 'true' || dryRun === 1 || dryRun === '1';
         
         const company = await Company.findById(companyId)
             .select('name trade')
@@ -794,7 +795,9 @@ router.post('/company/:companyId/normalize', async (req, res) => {
         if (!doc) {
             return res.json({
                 success: true,
+                dryRun: isDryRun,
                 message: 'No placeholders to normalize',
+                legacyCount: 0,
                 migratedCount: 0,
                 deletedCount: 0,
                 finalCount: 0,
@@ -901,6 +904,22 @@ router.post('/company/:companyId/normalize', async (req, res) => {
         const finalCount = normalizedPlaceholders.length;
         const deletedCount = originalCount - finalCount;
         
+        if (isDryRun) {
+            return res.json({
+                success: true,
+                dryRun: true,
+                message: legacyCount === 0 ? 'Already normalized' : `Detected ${legacyCount} legacy key(s)`,
+                companyId,
+                companyName: company.name,
+                tradeKey,
+                legacyCount,
+                migratedCount: legacyCount,
+                deletedCount,
+                finalCount,
+                conflicts
+            });
+        }
+
         // Save normalized placeholders
         doc.placeholders = normalizedPlaceholders;
         doc.lastUpdatedBy = req.user?.email || req.user?.username || 'System';
@@ -912,6 +931,7 @@ router.post('/company/:companyId/normalize', async (req, res) => {
             companyId,
             companyName: company.name,
             tradeKey,
+            legacyCount,
             migratedCount: legacyCount,
             deletedCount,
             finalCount,
