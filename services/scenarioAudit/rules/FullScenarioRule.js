@@ -387,8 +387,7 @@ class FullScenarioRule extends BaseRule {
             ...(scenario.quickReplies || []),
             ...(scenario.fullReplies || []),
             ...(scenario.quickReplies_noName || []),
-            ...(scenario.fullReplies_noName || []),
-            ...(scenario.followUpMessages || [])
+            ...(scenario.fullReplies_noName || [])
         ];
         
         const foundPlaceholders = new Set();
@@ -401,30 +400,17 @@ class FullScenarioRule extends BaseRule {
             for (const ph of placeholders) {
                 foundPlaceholders.add(ph.toLowerCase());
                 
-                // Check if placeholder is allowed
-                const isAllowed = ALLOWED_PLACEHOLDERS.some(
-                    allowed => allowed.toLowerCase() === ph.toLowerCase()
-                );
-                
-                if (!isAllowed) {
-                    violations.push(this.createViolation({
-                        field: 'replies',
-                        value: ph,
-                        message: `Unknown placeholder: ${ph}`,
-                        suggestion: `Use approved placeholders: ${ALLOWED_PLACEHOLDERS.join(', ')}`,
-                        meta: { checkType: 'placeholder', placeholder: ph }
-                    }));
-                }
+                // Placeholder validation happens in PersonalizationRule (catalog-governed)
             }
         }
         
-        // Check for inconsistent {name} vs {firstName}
-        if (foundPlaceholders.has('{name}') && foundPlaceholders.has('{firstname}')) {
+        // Check for inconsistent {callerName} vs {callerFirstName}
+        if (foundPlaceholders.has('{callername}') && foundPlaceholders.has('{callerfirstname}')) {
             violations.push(this.createViolation({
                 field: 'replies',
                 value: 'mixed',
-                message: 'Inconsistent placeholder usage: both {name} and {firstName} used',
-                suggestion: 'Use {name} consistently throughout',
+                message: 'Inconsistent placeholder usage: both {callerName} and {callerFirstName} used',
+                suggestion: 'Use one name token consistently throughout',
                 meta: { checkType: 'placeholder' }
             }));
         }

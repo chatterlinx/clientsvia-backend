@@ -275,32 +275,32 @@ class CompletenessRule extends BaseRule {
             }));
         }
         
-        // Check _noName variants exist if main replies use {name}
+        // Check _noName variants exist if main replies use {callerName}
         const hasNamePlaceholder = [...quickReplies, ...fullReplies].some(r => {
             const text = typeof r === 'string' ? r : r?.text;
-            return text && text.includes('{name}');
+            return text && text.includes('{callerName}');
         });
         
         if (hasNamePlaceholder) {
             const quickNoName = scenario.quickReplies_noName || [];
             const fullNoName = scenario.fullReplies_noName || [];
             
-            if (quickNoName.length === 0 && quickReplies.some(r => (typeof r === 'string' ? r : r?.text)?.includes('{name}'))) {
+            if (quickNoName.length === 0 && quickReplies.some(r => (typeof r === 'string' ? r : r?.text)?.includes('{callerName}'))) {
                 violations.push(this.createViolation({
                     field: 'quickReplies_noName',
                     value: null,
-                    message: 'Missing _noName variants for quick replies that use {name}',
-                    suggestion: 'Add quickReplies_noName array with versions that don\'t use {name}',
+                    message: 'Missing _noName variants for quick replies that use {callerName}',
+                    suggestion: 'Add quickReplies_noName array with versions that don\'t use {callerName}',
                     meta: { reason: 'fallback when caller name unknown' }
                 }));
             }
             
-            if (fullNoName.length === 0 && fullReplies.some(r => (typeof r === 'string' ? r : r?.text)?.includes('{name}'))) {
+            if (fullNoName.length === 0 && fullReplies.some(r => (typeof r === 'string' ? r : r?.text)?.includes('{callerName}'))) {
                 violations.push(this.createViolation({
                     field: 'fullReplies_noName',
                     value: null,
-                    message: 'Missing _noName variants for full replies that use {name}',
-                    suggestion: 'Add fullReplies_noName array with versions that don\'t use {name}',
+                    message: 'Missing _noName variants for full replies that use {callerName}',
+                    suggestion: 'Add fullReplies_noName array with versions that don\'t use {callerName}',
                     meta: { reason: 'fallback when caller name unknown' }
                 }));
             }

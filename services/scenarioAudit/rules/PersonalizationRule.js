@@ -2,8 +2,8 @@
  * PersonalizationRule - Checks for proper name/placeholder usage
  * 
  * Rules:
- * 1. Scenarios should include {name} in at least one reply
- * 2. If {name} is used, _noName variants should exist
+ * 1. Scenarios should include {callerName} in at least one reply
+ * 2. If {callerName} is used, _noName variants should exist
  * 3. Only approved placeholders should be used
  * 4. No deprecated placeholders ({firstName}, {customerName}, etc.)
  * 
@@ -12,24 +12,24 @@
 
 const BaseRule = require('./BaseRule');
 const {
-    ALLOWED_PLACEHOLDERS,
     DEPRECATED_PLACEHOLDERS,
     SEVERITY,
     RULE_CATEGORIES
 } = require('../constants');
+const { validateScenarioPlaceholders } = require('../../placeholders/PlaceholderRegistry');
 
 class PersonalizationRule extends BaseRule {
     constructor() {
         super();
         this.id = 'personalization';
         this.name = 'Personalization Check';
-        this.description = 'Ensures proper use of {name} placeholder and personalization variants';
+        this.description = 'Ensures proper use of {callerName} placeholder and personalization variants';
         this.severity = SEVERITY.WARNING;
         this.category = RULE_CATEGORIES.PERSONALIZATION;
         this.costType = 'deterministic';
         this.enabledByDefault = true;
         
-        // Scenario types that MUST have {name} acknowledgment
+        // Scenario types that MUST have {callerName} acknowledgment
         this.nameRequiredTypes = [
             'SMALL_TALK',
             'GREETING'
@@ -49,13 +49,13 @@ class PersonalizationRule extends BaseRule {
         // 1. Check for deprecated placeholders
         violations.push(...this._checkDeprecatedPlaceholders(scenario));
         
-        // 2. Check for unknown placeholders
-        violations.push(...this._checkUnknownPlaceholders(scenario));
+        // 2. Check for unknown/legacy placeholders (catalog-governed)
+        violations.push(...this._checkUnknownPlaceholders(scenario, context));
         
-        // 3. Check if {name} is used but _noName variants are missing
+        // 3. Check if {callerName} is used but _noName variants are missing
         violations.push(...this._checkNoNameVariants(scenario));
         
-        // 4. Check if scenario type requires {name} but doesn't have it
+        // 4. Check if scenario type requires {callerName} but doesn't have it
         violations.push(...this._checkNameRequired(scenario));
         
         return violations;
@@ -70,11 +70,14 @@ class PersonalizationRule extends BaseRule {
         
         for (const placeholder of DEPRECATED_PLACEHOLDERS) {
             if (allText.includes(placeholder)) {
+                const suggestion = placeholder === '{firstName}'
+                    ? 'Replace with {callerFirstName}'
+                    : 'Replace with {callerName}';
                 violations.push(this.createViolation({
                     field: 'replies',
                     value: placeholder,
                     message: `Uses deprecated placeholder: ${placeholder}`,
-                    suggestion: `Replace ${placeholder} with {name} for consistency`,
+                    suggestion,
                     meta: { deprecatedPlaceholder: placeholder }
                 }));
             }
@@ -86,41 +89,50 @@ class PersonalizationRule extends BaseRule {
     /**
      * Check for unknown/unsupported placeholders
      */
-    _checkUnknownPlaceholders(scenario) {
+    _checkUnknownPlaceholders(scenario, context = {}) {
         const violations = [];
-        const allText = this._getAllReplyText(scenario);
-        const foundPlaceholders = this.extractPlaceholders(allText);
-        
-        for (const placeholder of foundPlaceholders) {
-            const isAllowed = ALLOWED_PLACEHOLDERS.some(
-                allowed => allowed.toLowerCase() === placeholder.toLowerCase()
-            );
-            const isDeprecated = DEPRECATED_PLACEHOLDERS.some(
-                dep => dep.toLowerCase() === placeholder.toLowerCase()
-            );
-            
-            if (!isAllowed && !isDeprecated) {
-                violations.push(this.createViolation({
-                    field: 'replies',
-                    value: placeholder,
-                    message: `Unknown placeholder: ${placeholder}`,
-                    suggestion: `Allowed placeholders: ${ALLOWED_PLACEHOLDERS.join(', ')}`,
-                    meta: { unknownPlaceholder: placeholder }
-                }));
-            }
+        const tradeKey = context?.tradeKey || context?.template?.tradeKey || context?.company?.trade || null;
+        const validation = validateScenarioPlaceholders(scenario, tradeKey);
+        const forbidden = validation.forbiddenLegacy || [];
+        const unknown = validation.unknownInvalid || [];
+
+        for (const item of forbidden) {
+            const originalSeverity = this.severity;
+            this.severity = SEVERITY.ERROR;
+            violations.push(this.createViolation({
+                field: 'replies',
+                value: `{${item.key}}`,
+                message: `Legacy placeholder is forbidden: {${item.key}}`,
+                suggestion: item.recommendation || `Use {${item.canonical}}`,
+                meta: { checkType: 'placeholder_legacy', canonical: item.canonical }
+            }));
+            this.severity = originalSeverity;
+        }
+
+        for (const item of unknown) {
+            const originalSeverity = this.severity;
+            this.severity = SEVERITY.ERROR;
+            violations.push(this.createViolation({
+                field: 'replies',
+                value: `{${item.key}}`,
+                message: `Unknown placeholder: {${item.key}}`,
+                suggestion: item.suggestion || 'Use catalog-approved placeholders only',
+                meta: { checkType: 'placeholder_unknown' }
+            }));
+            this.severity = originalSeverity;
         }
         
         return violations;
     }
     
     /**
-     * Check if {name} is used but _noName variants are missing
+     * Check if {callerName} is used but _noName variants are missing
      */
     _checkNoNameVariants(scenario) {
         const violations = [];
         
         // Check quickReplies
-        const quickRepliesHasName = this._hasNamePlaceholder(scenario.quickReplies);
+        const quickRepliesHasName = this._hasCallerNamePlaceholder(scenario.quickReplies);
         const hasQuickRepliesNoName = Array.isArray(scenario.quickReplies_noName) && 
                                        scenario.quickReplies_noName.length > 0;
         
@@ -128,14 +140,14 @@ class PersonalizationRule extends BaseRule {
             violations.push(this.createViolation({
                 field: 'quickReplies_noName',
                 value: null,
-                message: 'quickReplies uses {name} but quickReplies_noName is missing',
+                message: 'quickReplies uses {callerName} but quickReplies_noName is missing',
                 suggestion: 'Add quickReplies_noName variants for when caller name is unknown',
                 meta: { missingVariant: 'quickReplies_noName' }
             }));
         }
         
         // Check fullReplies
-        const fullRepliesHasName = this._hasNamePlaceholder(scenario.fullReplies);
+        const fullRepliesHasName = this._hasCallerNamePlaceholder(scenario.fullReplies);
         const hasFullRepliesNoName = Array.isArray(scenario.fullReplies_noName) && 
                                       scenario.fullReplies_noName.length > 0;
         
@@ -143,7 +155,7 @@ class PersonalizationRule extends BaseRule {
             violations.push(this.createViolation({
                 field: 'fullReplies_noName',
                 value: null,
-                message: 'fullReplies uses {name} but fullReplies_noName is missing',
+                message: 'fullReplies uses {callerName} but fullReplies_noName is missing',
                 suggestion: 'Add fullReplies_noName variants for when caller name is unknown',
                 meta: { missingVariant: 'fullReplies_noName' }
             }));
@@ -153,7 +165,7 @@ class PersonalizationRule extends BaseRule {
     }
     
     /**
-     * Check if scenario type requires {name} but doesn't have it
+     * Check if scenario type requires {callerName} but doesn't have it
      */
     _checkNameRequired(scenario) {
         const violations = [];
@@ -167,16 +179,16 @@ class PersonalizationRule extends BaseRule {
         
         if (!isNameExpected) return violations;
         
-        // Check if ANY reply has {name}
-        const hasName = this._hasNamePlaceholder(scenario.quickReplies) ||
-                        this._hasNamePlaceholder(scenario.fullReplies);
+        // Check if ANY reply has {callerName}
+        const hasName = this._hasCallerNamePlaceholder(scenario.quickReplies) ||
+                        this._hasCallerNamePlaceholder(scenario.fullReplies);
         
         if (!hasName) {
             violations.push(this.createViolation({
                 field: 'replies',
                 value: scenario.scenarioType || scenario.category,
                 message: `${scenarioType || category} scenario should acknowledge caller by name`,
-                suggestion: 'Add at least one reply with {name} placeholder: "Thanks, {name}. What\'s going on?"',
+                suggestion: 'Add at least one reply with {callerName} placeholder: "Thanks, {callerName}. What\'s going on?"',
                 meta: { 
                     scenarioType,
                     category,
@@ -204,11 +216,11 @@ class PersonalizationRule extends BaseRule {
     }
     
     /**
-     * Check if any text in array contains {name} placeholder
+     * Check if any text in array contains {callerName} placeholder
      */
-    _hasNamePlaceholder(replies) {
+    _hasCallerNamePlaceholder(replies) {
         if (!Array.isArray(replies)) return false;
-        return replies.some(reply => reply && reply.toLowerCase().includes('{name}'));
+        return replies.some(reply => reply && reply.toLowerCase().includes('{callername}'));
     }
 }
 

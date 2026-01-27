@@ -189,21 +189,21 @@ function runContentCheck(check, fieldName, value, scenario) {
             
         case 'hasNamePlaceholder':
             if (Array.isArray(value)) {
-                const withName = value.filter(v => typeof v === 'string' && v.includes('{name}'));
+                const withName = value.filter(v => typeof v === 'string' && v.includes('{callerName}'));
                 if (withName.length === 0) {
-                    return { status: 'warn', message: `${fieldName} should include {name} in at least one reply` };
+                    return { status: 'warn', message: `${fieldName} should include {callerName} in at least one reply` };
                 }
             }
-            return { status: 'pass', message: `${fieldName} has {name} placeholder` };
+            return { status: 'pass', message: `${fieldName} has {callerName} placeholder` };
             
         case 'noNamePlaceholder':
             if (Array.isArray(value)) {
-                const withName = value.filter(v => v.includes('{name}'));
+                const withName = value.filter(v => v.includes('{callerName}'));
                 if (withName.length > 0) {
-                    return { status: 'fail', message: `${fieldName} should NOT include {name} (this is _noName variant)` };
+                    return { status: 'fail', message: `${fieldName} should NOT include {callerName} (this is _noName variant)` };
                 }
             }
-            return { status: 'pass', message: `${fieldName} no {name} (correct)` };
+            return { status: 'pass', message: `${fieldName} no {callerName} (correct)` };
             
         case 'matchesQuickRepliesCount':
             const qrCount = scenario.quickReplies?.length || 0;

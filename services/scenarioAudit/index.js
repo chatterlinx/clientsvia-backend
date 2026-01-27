@@ -34,7 +34,7 @@
  *     - BannedPhrasesRule: Chatbot/helpdesk/troubleshooting language
  *   
  *   PERSONALIZATION:
- *     - PersonalizationRule: {name} placeholder, _noName variants
+ *     - PersonalizationRule: {callerName} placeholder, _noName variants
  *   
  *   STRUCTURE:
  *     - ResponseLengthRule: Word count limits

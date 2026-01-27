@@ -15,6 +15,7 @@ const {
     FOLLOW_UP_MODES,
     ACTION_TYPE_REQUIREMENTS,
     FOLLOW_UP_MODE_REQUIREMENTS,
+    SCENARIO_SETTINGS_REGISTRY,
     SEVERITY,
     RULE_CATEGORIES
 } = require('../constants');
@@ -33,23 +34,27 @@ class WiringRule extends BaseRule {
     
     async check(scenario, context = {}) {
         const violations = [];
-        
-        // 1. Validate action type
-        violations.push(...this._checkActionType(scenario));
-        
-        // 2. Validate action type requirements
-        violations.push(...this._checkActionTypeRequirements(scenario));
-        
-        // 3. Validate follow-up mode
-        violations.push(...this._checkFollowUpMode(scenario));
-        
-        // 4. Validate follow-up mode requirements
-        violations.push(...this._checkFollowUpModeRequirements(scenario));
-        
-        // 5. Check booking intent consistency
-        violations.push(...this._checkBookingIntent(scenario));
+
+        // Only audit content-owned wiring fields (ownership model)
+        if (this._isContentOwned('actionType')) {
+            violations.push(...this._checkActionType(scenario));
+            violations.push(...this._checkActionTypeRequirements(scenario));
+        }
+
+        if (this._isContentOwned('followUpMode')) {
+            violations.push(...this._checkFollowUpMode(scenario));
+            violations.push(...this._checkFollowUpModeRequirements(scenario));
+        }
+
+        if (this._isContentOwned('bookingIntent')) {
+            violations.push(...this._checkBookingIntent(scenario));
+        }
         
         return violations;
+    }
+
+    _isContentOwned(fieldName) {
+        return SCENARIO_SETTINGS_REGISTRY[fieldName]?.ownership === 'content';
     }
     
     /**

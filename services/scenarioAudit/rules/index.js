@@ -15,7 +15,7 @@
  *   BannedPhrasesRule - Chatbot/helpdesk/troubleshooting language
  * 
  * PERSONALIZATION RULES:
- *   PersonalizationRule - {name} placeholder usage, _noName variants
+ *   PersonalizationRule - {callerName} placeholder usage, _noName variants
  * 
  * STRUCTURE RULES:
  *   ResponseLengthRule - Word count limits
@@ -58,7 +58,7 @@ const FullScenarioRule = require('./FullScenarioRule');
  * 2. Wiring (broken connections)
  * 3. Tone (banned phrases)
  * 4. Structure (booking in quick replies)
- * 5. Personalization ({name} usage)
+ * 5. Personalization ({callerName} usage)
  * 6. Response length (word counts)
  * 7. Triggers (quality/coverage)
  * 8. Priority (ranges/confidence)

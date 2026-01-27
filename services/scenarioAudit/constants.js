@@ -144,19 +144,19 @@ const APPROVED_ACKNOWLEDGMENTS = [
  * Approved name acknowledgments
  */
 const APPROVED_NAME_ACKNOWLEDGMENTS = [
-    'thanks, {name}',
-    'appreciate it, {name}',
-    'good to hear from you, {name}'
+    'thanks, {callerName}',
+    'appreciate it, {callerName}',
+    'good to hear from you, {callerName}'
 ];
 
 /**
  * Approved loyalty acknowledgments
  */
 const APPROVED_LOYALTY_ACKNOWLEDGMENTS = [
-    'we appreciate you, {name}',
-    'thanks for being a long-time customer, {name}',
-    'glad to have you back, {name}',
-    'good to hear from you again, {name}'
+    'we appreciate you, {callerName}',
+    'thanks for being a long-time customer, {callerName}',
+    'glad to have you back, {callerName}',
+    'good to hear from you again, {callerName}'
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -190,24 +190,31 @@ const RESPONSE_LIMITS = {
  * Allowed placeholders in scenarios
  */
 const ALLOWED_PLACEHOLDERS = [
-    '{name}',
+    '{callerName}',
+    '{callerFirstName}',
+    '{callerLastName}',
+    '{callerPhone}',
+    '{callerEmail}',
+    '{serviceAddress}',
+    '{appointmentDate}',
+    '{appointmentTime}',
+    '{appointmentWindow}',
+    '{issueSummary}',
     '{companyName}',
-    '{technician}',
-    '{time}',
-    '{date}',
-    '{phone}',
-    '{address}',
-    '{serviceType}'
+    '{companyPhone}',
+    '{dispatchPhone}',
+    '{companyAddress}',
+    '{serviceCallFee}'
 ];
 
 /**
  * Placeholder that should NOT be used (inconsistent naming)
  */
 const DEPRECATED_PLACEHOLDERS = [
-    '{firstName}',   // Use {name} instead
+    '{firstName}',   // Use {callerFirstName} instead
     '{lastName}',    // Not typically needed
-    '{customer}',    // Use {name} instead
-    '{customerName}' // Use {name} instead
+    '{customer}',    // Use {callerName} instead
+    '{customerName}' // Use {callerName} instead
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -587,11 +594,11 @@ const SCENARIO_SETTINGS_REGISTRY = {
         audit: { contentChecks: ['array', 'minLength:3', 'noBannedPhrases', 'hasNamePlaceholder'], severity: 'high' }
     },
     quickReplies_noName: { 
-        ownership: 'content', purpose: 'runtime', description: 'Quick replies without {name} for unknown callers',
+        ownership: 'content', purpose: 'runtime', description: 'Quick replies without {callerName} for unknown callers',
         audit: { contentChecks: ['array', 'matchesQuickRepliesCount', 'noNamePlaceholder'], severity: 'high' }
     },
     fullReplies_noName: { 
-        ownership: 'content', purpose: 'runtime', description: 'Full replies without {name} for unknown callers',
+        ownership: 'content', purpose: 'runtime', description: 'Full replies without {callerName} for unknown callers',
         audit: { contentChecks: ['array', 'matchesFullRepliesCount', 'noNamePlaceholder'], severity: 'high' }
     },
     replyStrategy: { 
