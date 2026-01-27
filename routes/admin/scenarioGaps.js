@@ -35,7 +35,7 @@ const authorizeCompanyAccess = require('../../middleware/authorizeCompanyAccess'
 const BlackBoxRecording = require('../../models/BlackBoxRecording');
 const Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const { BOOKING_PHRASES, SCENARIO_SETTINGS_REGISTRY, getSettingsCount } = require('../../services/scenarioAudit/constants');
+const { BOOKING_PHRASES, SCENARIO_SETTINGS_REGISTRY, getSettingsCount, enforceContentOwnership } = require('../../services/scenarioAudit/constants');
 const { runUnifiedAudit } = require('../../services/scenarioAudit/unifiedAuditEngine');
 
 // Services
@@ -500,23 +500,9 @@ function normalizeScenarioForType(scenario) {
         normalized.replyStrategy = 'AUTO';
     }
     
-    // Ensure follow-up question exists when required
-    if ((normalized.followUpMode === 'ASK_IF_BOOK' || normalized.followUpMode === 'ASK_FOLLOWUP_QUESTION') &&
-        (!normalized.followUpQuestionText || !String(normalized.followUpQuestionText).trim())) {
-        normalized.followUpQuestionText = normalized.followUpMode === 'ASK_IF_BOOK'
-            ? 'Would you like to schedule an appointment?'
-            : 'What can I help you with today?';
-    }
-    
     // Small talk should not schedule or book
     if (normalized.scenarioType === 'SMALL_TALK') {
-        normalized.actionType = 'REPLY_ONLY';
         normalized.bookingIntent = false;
-        normalized.followUpMode = 'NONE';
-        normalized.followUpQuestionText = null;
-        if (normalized.cooldownSeconds === undefined || normalized.cooldownSeconds === null) {
-            normalized.cooldownSeconds = 30;
-        }
         
         normalized.quickReplies = sanitizeSmallTalkReplies(normalized.quickReplies);
         normalized.fullReplies = sanitizeSmallTalkReplies(normalized.fullReplies);
@@ -534,7 +520,7 @@ function sanitizeSmallTalkReplies(replies = []) {
     }
     
     return [
-        "Thanks, {name}. How can I help you today?"
+        "Thanks, {callerName}. How can I help you today?"
     ];
 }
 
@@ -1015,11 +1001,10 @@ PERSONALIZATION GUIDE (name + loyalty recognition):
 9. CRITICAL: fullReplies count MUST equal fullReplies_noName count (both 4-5)
 10. CRITICAL: quickReplies count MUST equal quickReplies_noName count (both 5-7)
 
-TEMPLATE VARIABLES GUIDE (fallbacks for {placeholders}):
-- Format: key=fallback value
-- Example: name=valued customer (if we don't have their name yet)
-- Example: technician=our team member (if tech name not specified)
-- Example: time=shortly (if no specific time mentioned)
+PLACEHOLDER GOVERNANCE:
+- Use ONLY placeholders listed in the governance block below
+- Do NOT invent new tokens
+- If a needed token isn't listed, request a new catalog entry
 
 BEHAVIOR GUIDE (for service dispatch):
 - calm_professional: DEFAULT for all service calls - calm, in control, experienced
@@ -1048,40 +1033,11 @@ MIN CONFIDENCE GUIDE (how certain AI must be to use this scenario):
 - SMALL_TALK: 0.4-0.6 (lower = greetings match easily)
 - TRANSFER: 0.7-0.85 (high = be sure before transferring)
 
-FOLLOW-UP MODE GUIDE (what agent says NEXT, not timer):
-- NONE: DEFAULT - Just answer, let conversation flow naturally (use for FAQ, BILLING, SMALL_TALK)
-- ASK_IF_BOOK: ONLY for booking-eligible scenarios (BOOKING, EMERGENCY, TROUBLESHOOT with repair intent)
-- ASK_FOLLOWUP_QUESTION: Rarely needed - only for complex multi-step flows
-
-CRITICAL RULE: Only set followUpMode=ASK_IF_BOOK when bookingIntent=true.
-Otherwise you get pushy behavior like asking to schedule after a billing question.
-
-⚠️ DO NOT GENERATE: followUpMessages, timedFollowUp, silencePolicy
-These are ADMIN-ONLY settings for silence recovery timers (global policy, not per-scenario).
-
-ADVANCED SETTINGS (AI can generate):
-
-cooldown: Seconds before scenario can fire again (spam prevention)
-- Most scenarios: 0 (no cooldown)
-- Greeting/small talk: 30-60 seconds
-- Emergency: 0 (always allow)
-
-handoffPolicy: When to transfer to human
-- "low_confidence": Only when AI is unsure (DEFAULT for most)
-- "always": Always offer human option (billing, complaints)
-- "never": AI handles fully (simple FAQ, greetings)
-
-actionHooks: System actions to trigger (comma-separated)
-- offer_scheduling: Proactively offer to book
-- escalate_to_human: Flag for manager review
-- log_complaint: Record as complaint
-- send_confirmation: Send SMS confirmation
-- check_availability: Query calendar
-
-entityValidation: JSON validation rules for captured entities
-- phone: {"pattern": "^[0-9]{10}$", "prompt": "Could you give me a 10-digit number?"}
-- email: {"pattern": "@", "prompt": "What's your email address?"}
-- Only include if scenario captures these entities`;
+RUNTIME/ADMIN FIELDS (DO NOT GENERATE):
+- followUpMode, followUpQuestionText, actionType, handoffPolicy
+- cooldownSeconds, actionHooks, entityValidation, dynamicVariables
+- timedFollowUp, silencePolicy, followUpMessages
+These are runtime/admin policies and will be stripped.`;
 
     const prompt = `${promptRaw.replace(/\{name\}/g, '{callerName}')}\n\n${governanceBlock}`;
 
@@ -1171,80 +1127,59 @@ Output VALID JSON only. No markdown. No explanations.`
             };
         }
         
-        // Build comprehensive scenario object
-        const scenario = normalizeScenarioForType({
-                // Identity
-                name: s.name || gap.representative.substring(0, 50),
-                category: s.category || 'FAQ',
-                
-                // Classification
-                scenarioType: s.scenarioType || 'FAQ',
-                priority: typeof s.priority === 'number' ? s.priority : 50,
-                minConfidence: typeof s.minConfidence === 'number' ? s.minConfidence : 0.6,
-                behavior: s.behavior || 'calm_professional',
-                replyStrategy: s.replyStrategy || 'AUTO',
-                status: 'draft',
-                
-                // Triggers (required)
-                triggers: Array.isArray(s.triggers) ? s.triggers : [gap.representative],
-                negativeTriggers: Array.isArray(s.negativeTriggers) ? s.negativeTriggers : [],
-                
-                // Replies WITH {callerName} placeholder (primary)
-                quickReplies: Array.isArray(s.quickReplies) ? s.quickReplies : 
-                    (s.quickReply ? [s.quickReply] : ['I can help with that.']),
-                fullReplies: Array.isArray(s.fullReplies) ? s.fullReplies : 
-                    (s.fullReply ? [s.fullReply] : []),
-                
-                // Replies WITHOUT {callerName} placeholder (fallback when name not available)
-                quickReplies_noName: Array.isArray(s.quickReplies_noName) ? s.quickReplies_noName : null,
-                fullReplies_noName: Array.isArray(s.fullReplies_noName) ? s.fullReplies_noName : null,
-                
-                // Follow-up behavior
-                followUpMode: s.followUpMode || 'NONE',
-                followUpQuestionText: s.followUpQuestionText || null,
-                
-                // Wiring/Actions
-                actionType: s.actionType || 'REPLY_ONLY',
-                bookingIntent: s.bookingIntent === true,
-                
-                // Entity extraction
-                entityCapture: Array.isArray(s.entityCapture) ? 
-                    s.entityCapture.filter(e => e && e !== 'none') : [],
-                
-                // Admin notes
-                notes: s.notes || `Auto-generated from Scenario Gaps. Detected ${gap.totalCalls} similar calls.`,
-                
-                // Placeholders for company values
-                suggestedPlaceholders: Array.isArray(s.suggestedPlaceholders) ? s.suggestedPlaceholders : [],
-                
-                // Advanced settings (if provided by GPT)
-                cooldownSeconds: typeof s.cooldownSeconds === 'number' ? s.cooldownSeconds : 0,
-                followUpMessages: Array.isArray(s.followUpMessages) ? s.followUpMessages : null,
-                actionHooks: Array.isArray(s.actionHooks) ? s.actionHooks : 
-                    (typeof s.actionHooks === 'string' ? s.actionHooks.split(',').map(h => h.trim()) : []),
-                handoffPolicy: s.handoffPolicy || 'low_confidence',
-                
-                // Regex triggers (if provided)
-                regexTriggers: Array.isArray(s.regexTriggers) ? s.regexTriggers : [],
-                
-                // Template variables (if provided) - convert array to object
-                dynamicVariables: Array.isArray(s.templateVariables) 
-                    ? s.templateVariables.reduce((acc, v) => {
-                        if (typeof v === 'string' && v.includes('=')) {
-                            const [key, ...rest] = v.split('=');
-                            acc[key.trim()] = rest.join('=').trim();
-                        }
-                        return acc;
-                    }, {})
-                    : (s.dynamicVariables || null),
-                
-                // Metadata
-                generatedBy: 'ai',
-                confidence: 0.85,
-                sourceGap: gap.representative
-            });
+        const categoryValue = s.category || s.categories?.[0] || 'FAQ';
+        const suggestedPlaceholders = Array.isArray(s.suggestedPlaceholders) ? s.suggestedPlaceholders : [];
 
-        const placeholderValidation = validateScenarioPlaceholders(scenario, tradeType);
+        // Build content-only scenario object (22 fields)
+        const scenario = normalizeScenarioForType({
+            // Identity
+            name: s.name || gap.representative.substring(0, 50),
+            status: 'draft',
+            isActive: true,
+            categories: Array.isArray(s.categories) ? s.categories : [categoryValue],
+
+            // Classification
+            scenarioType: s.scenarioType || 'FAQ',
+            priority: typeof s.priority === 'number' ? s.priority : 50,
+            minConfidence: typeof s.minConfidence === 'number' ? s.minConfidence : 0.6,
+            behavior: s.behavior || 'calm_professional',
+            replyStrategy: s.replyStrategy || 'AUTO',
+            bookingIntent: s.bookingIntent === true,
+
+            // Triggers (required)
+            triggers: Array.isArray(s.triggers) ? s.triggers : [gap.representative],
+            regexTriggers: Array.isArray(s.regexTriggers) ? s.regexTriggers : [],
+            negativeTriggers: Array.isArray(s.negativeTriggers) ? s.negativeTriggers : [],
+            exampleUserPhrases: Array.isArray(s.exampleUserPhrases) ? s.exampleUserPhrases : [],
+            negativeUserPhrases: Array.isArray(s.negativeUserPhrases) ? s.negativeUserPhrases : [],
+
+            // Replies WITH {callerName} placeholder (primary)
+            quickReplies: Array.isArray(s.quickReplies) ? s.quickReplies :
+                (s.quickReply ? [s.quickReply] : ['I can help with that.']),
+            fullReplies: Array.isArray(s.fullReplies) ? s.fullReplies :
+                (s.fullReply ? [s.fullReply] : []),
+
+            // Replies WITHOUT {callerName} placeholder (fallback when name not available)
+            quickReplies_noName: Array.isArray(s.quickReplies_noName) ? s.quickReplies_noName : null,
+            fullReplies_noName: Array.isArray(s.fullReplies_noName) ? s.fullReplies_noName : null,
+
+            // Entity extraction
+            entityCapture: Array.isArray(s.entityCapture) ?
+                s.entityCapture.filter(e => e && e !== 'none') : [],
+
+            // Optional channel restriction
+            channel: s.channel || 'voice',
+
+            // Admin notes
+            notes: s.notes || `Auto-generated from Scenario Gaps. Detected ${gap.totalCalls} similar calls.`
+        });
+
+        const { sanitized } = enforceContentOwnership(scenario, {
+            source: 'scenario-gaps',
+            logWarnings: false
+        });
+
+        const placeholderValidation = validateScenarioPlaceholders(sanitized, tradeType);
         if (!placeholderValidation.valid) {
             throw new Error(`PLACEHOLDER_INVALID: ${placeholderValidation.message}`);
         }
@@ -1252,7 +1187,9 @@ Output VALID JSON only. No markdown. No explanations.`
         return {
             success: true,
             isDuplicate: false,
-            scenario,
+            scenario: sanitized,
+            category: categoryValue,
+            suggestedPlaceholders,
             tokensUsed: response.usage?.total_tokens || 0
         };
     } catch (error) {
@@ -1271,7 +1208,6 @@ function generateFallbackScenario(gap, company) {
     let category = 'FAQ';
     let scenarioType = 'FAQ';
     let priority = 50;
-    let followUpMode = 'NONE';
     
     if (/price|cost|how much|rate|fee|charge/.test(normalized)) {
         category = 'Pricing';
@@ -1297,7 +1233,6 @@ function generateFallbackScenario(gap, company) {
         category = 'Scheduling';
         scenarioType = 'BOOKING';
         priority = 75;
-        followUpMode = 'ASK_IF_BOOK';
     }
     
     // Generate triggers from examples
@@ -1317,38 +1252,39 @@ function generateFallbackScenario(gap, company) {
         'TRANSFER': 0.75
     };
     
+    const scenario = normalizeScenarioForType({
+        name: gap.representative.substring(0, 50),
+        status: 'draft',
+        isActive: true,
+        categories: [category],
+        scenarioType,
+        priority,
+        minConfidence: minConfidenceMap[scenarioType] || 0.6,
+        behavior: scenarioType === 'EMERGENCY' ? 'empathetic_reassuring' : 'calm_professional',
+        replyStrategy: 'AUTO',
+        triggers: triggers.length > 0 ? triggers : [normalized],
+        negativeTriggers: [],
+        regexTriggers: [],
+        quickReplies: ['I can help you with that. Let me get more information to assist you.'],
+        fullReplies: [],
+        quickReplies_noName: null,
+        fullReplies_noName: null,
+        bookingIntent: scenarioType === 'BOOKING',
+        entityCapture: [],
+        channel: 'voice',
+        notes: `Auto-generated fallback. Detected ${gap.totalCalls} similar calls.`
+    });
+
+    const { sanitized } = enforceContentOwnership(scenario, {
+        source: 'scenario-gaps-fallback',
+        logWarnings: false
+    });
+
     return {
         success: true,
-        scenario: normalizeScenarioForType({
-            name: gap.representative.substring(0, 50),
-            category,
-            scenarioType,
-            priority,
-            minConfidence: minConfidenceMap[scenarioType] || 0.6,
-            behavior: scenarioType === 'EMERGENCY' ? 'empathetic_reassuring' : 'calm_professional',
-            replyStrategy: 'AUTO',
-            status: 'draft',
-            triggers: triggers.length > 0 ? triggers : [normalized],
-            negativeTriggers: [],
-            regexTriggers: [],
-            quickReplies: ['I can help you with that. Let me get more information to assist you.'],
-            fullReplies: [],
-            quickReplies_noName: null,
-            fullReplies_noName: null,
-            followUpMode,
-            followUpQuestionText: followUpMode === 'ASK_IF_BOOK' ? 'Would you like to schedule an appointment?' : null,
-            actionType: scenarioType === 'BOOKING' ? 'REQUIRE_BOOKING' : 'REPLY_ONLY',
-            bookingIntent: scenarioType === 'BOOKING',
-            entityCapture: [],
-            cooldownSeconds: scenarioType === 'SMALL_TALK' ? 30 : 0,
-            handoffPolicy: scenarioType === 'BILLING' ? 'always' : 'low_confidence',
-            actionHooks: [],
-            notes: `Auto-generated fallback. Detected ${gap.totalCalls} similar calls.`,
-            suggestedPlaceholders: [],
-            generatedBy: 'fallback',
-            confidence: 0.5,
-            sourceGap: gap.representative
-        }),
+        scenario: sanitized,
+        category,
+        suggestedPlaceholders: [],
         tokensUsed: 0
     };
 }
@@ -1603,6 +1539,7 @@ router.get('/:companyId/gaps/preview', async (req, res) => {
             success: true,
             isDuplicate: false,
             preview: result.scenario,
+            suggestedPlaceholders: result.suggestedPlaceholders || [],
             tokensUsed: result.tokensUsed
         });
         
@@ -1662,6 +1599,8 @@ router.post('/:companyId/gaps/create', async (req, res) => {
         
         // Generate or use provided scenario data
         let scenarioData;
+        let scenarioCategory;
+        let suggestedPlaceholders = [];
         
         if (name && triggers && quickReply) {
             // User provided custom data
@@ -1683,18 +1622,24 @@ router.post('/:companyId/gaps/create', async (req, res) => {
             
             const result = await generateScenarioFromGap(gap, company);
             scenarioData = result.scenario;
+            scenarioCategory = result.category || scenarioData?.categories?.[0] || 'FAQ';
+            suggestedPlaceholders = result.suggestedPlaceholders || [];
+        }
+
+        if (!scenarioCategory) {
+            scenarioCategory = scenarioData?.category || scenarioData?.categories?.[0] || 'FAQ';
         }
         
         // Find or create the category
-        let categoryDoc = template.categories.find(c => 
-            c.name.toLowerCase() === scenarioData.category.toLowerCase()
+        let categoryDoc = template.categories.find(c =>
+            c.name.toLowerCase() === scenarioCategory.toLowerCase()
         );
         
         if (!categoryDoc) {
             // Create new category
             categoryDoc = {
-                name: scenarioData.category,
-                description: `Auto-created category for ${scenarioData.category} scenarios`,
+                name: scenarioCategory,
+                description: `Auto-created category for ${scenarioCategory} scenarios`,
                 scenarios: [],
                 createdAt: new Date()
             };
@@ -1757,11 +1702,11 @@ router.post('/:companyId/gaps/create', async (req, res) => {
         );
         
         // Add suggested placeholders to company if provided
-        if (scenarioData.suggestedPlaceholders && scenarioData.suggestedPlaceholders.length > 0) {
+        if (suggestedPlaceholders && suggestedPlaceholders.length > 0) {
             const existingPlaceholders = company.placeholders || {};
             let placeholdersAdded = 0;
             
-            for (const ph of scenarioData.suggestedPlaceholders) {
+            for (const ph of suggestedPlaceholders) {
                 if (!existingPlaceholders[ph.key]) {
                     existingPlaceholders[ph.key] = ph.exampleValue || `[Set ${ph.key}]`;
                     placeholdersAdded++;
@@ -1794,7 +1739,7 @@ router.post('/:companyId/gaps/create', async (req, res) => {
                 quickReply: newScenario.quickReplies[0]
             },
             templateId: template._id.toString(),
-            suggestedPlaceholders: scenarioData.suggestedPlaceholders || []
+            suggestedPlaceholders
         });
         
     } catch (error) {
@@ -2519,6 +2464,9 @@ router.post('/:companyId/audit/fix', async (req, res) => {
             priority: scenario.priority
         };
         
+        const tradeKey = company.trade || template.templateType || null;
+        const governanceBlock = buildPlaceholderGovernanceBlock(tradeKey);
+
         // Generate fix using GPT-4 with FULL context
         const fixPrompt = `You are fixing a dispatcher AI scenario that has a violation.
 
@@ -2561,7 +2509,8 @@ WHO YOU ARE:
 RESPONSE STRUCTURE:
 - Quick replies: Acknowledge briefly + ONE classification question (under 20 words)
 - Full replies: Move toward booking (under 25 words)
-- Use {name} placeholder to personalize when appropriate
+- Use {callerName} placeholder to personalize when appropriate
+- Do NOT invent placeholders
 
 BANNED PHRASES (never use):
 - "Got it", "No problem", "Absolutely", "Of course" (help desk)
@@ -2573,7 +2522,7 @@ APPROVED ACKNOWLEDGMENTS:
 - "I understand."
 - "Alright."
 - "Okay."
-- "Thanks, {name}."
+- "Thanks, {callerName}."
 
 ═══════════════════════════════════════════════════════════════════════════════
 YOUR TASK
@@ -2586,7 +2535,9 @@ Make sure the fix:
 4. Is consistent with the other replies in this scenario
 
 RETURN ONLY the fixed text, nothing else. No quotes, no explanation.
-Just the corrected value that should replace the current one.`;
+Just the corrected value that should replace the current one.
+
+${governanceBlock}`;
         
         logger.info('[AUDIT FIX] Generating fix with full context', {
             companyId,
@@ -2916,6 +2867,9 @@ router.post('/:companyId/audit/fix-scenario', async (req, res) => {
                 }
                 
                 // Generate fix using GPT-4o
+                const tradeKey = company.trade || template.templateType || null;
+                const governanceBlock = buildPlaceholderGovernanceBlock(tradeKey);
+
                 const fixPrompt = `Fix this dispatcher scenario text that has a violation.
 
 SCENARIO CONTEXT:
@@ -2929,12 +2883,14 @@ SUGGESTION: ${violation.suggestion || 'Fix the issue'}
 
 RULES:
 - Keep under 20 words for quick replies, 25 for full replies
-- Use {name} placeholder appropriately
+- Use {callerName} placeholder appropriately (do NOT invent placeholders)
 - Sound like an experienced dispatcher (calm, professional)
 - Never use: "Got it", "No problem", "happy to help", "let me help"
-- Approved: "I understand.", "Alright.", "Okay.", "Thanks, {name}."
+- Approved: "I understand.", "Alright.", "Okay.", "Thanks, {callerName}."
 
-Return ONLY the fixed text. No quotes, no explanation.`;
+Return ONLY the fixed text. No quotes, no explanation.
+
+${governanceBlock}`;
 
                 const response = await openaiClient.chat.completions.create({
                     model: 'gpt-4o',
