@@ -2677,34 +2677,76 @@
         }
         
         // ════════════════════════════════════════════════════════════════════════════════
-        // DEEP AUDIT (GPT-4 POWERED)
+        // DEEP AUDIT (GPT-4 POWERED) WITH REAL-TIME PROGRESS
         // Comprehensive AI review that catches nuanced issues rules miss
+        // Uses Server-Sent Events for live progress updates
         // ════════════════════════════════════════════════════════════════════════════════
         async function runDeepAudit() {
             const btn = document.getElementById('run-deep-audit-btn');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing with GPT-4...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
             
             // Hide regular results, show deep audit view
             document.getElementById('audit-results').style.display = 'none';
             document.getElementById('audit-empty').style.display = 'none';
             document.getElementById('deep-audit-results').style.display = 'block';
+            
+            // Show progress UI
             document.getElementById('deep-audit-list').innerHTML = `
-                <div style="text-align: center; padding: 40px; color: var(--text-muted);">
-                    <i class="fas fa-brain fa-3x" style="color: #8b5cf6; margin-bottom: 16px; animation: pulse 2s infinite;"></i>
-                    <h3>GPT-4 is analyzing each scenario...</h3>
-                    <p>This may take 1-2 minutes for a full template.</p>
+                <div id="deep-audit-progress" style="text-align: center; padding: 40px;">
+                    <i class="fas fa-brain fa-3x" style="color: #8b5cf6; margin-bottom: 16px;"></i>
+                    <h3 id="progress-title">Starting GPT-4 deep audit...</h3>
+                    
+                    <!-- Progress bar -->
+                    <div style="max-width: 400px; margin: 20px auto;">
+                        <div style="background: rgba(139, 92, 246, 0.2); border-radius: 10px; height: 20px; overflow: hidden;">
+                            <div id="progress-bar" style="
+                                background: linear-gradient(90deg, #8b5cf6 0%, #ec4899 100%);
+                                height: 100%;
+                                width: 0%;
+                                transition: width 0.3s ease;
+                                border-radius: 10px;
+                            "></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 13px; color: var(--text-muted);">
+                            <span id="progress-count">0 / 0</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Current scenario being processed -->
+                    <div id="progress-current" style="
+                        margin-top: 20px;
+                        padding: 12px 20px;
+                        background: rgba(139, 92, 246, 0.1);
+                        border-radius: 8px;
+                        font-size: 13px;
+                        color: #a78bfa;
+                        display: none;
+                    ">
+                        <i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>
+                        <span id="progress-scenario-name">Processing...</span>
+                    </div>
+                    
+                    <!-- Recent results feed -->
+                    <div id="progress-feed" style="
+                        margin-top: 20px;
+                        max-height: 200px;
+                        overflow-y: auto;
+                        text-align: left;
+                    "></div>
                 </div>
             `;
             
             try {
+                // Use fetch with streaming
                 const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ maxScenarios: 100 })
+                    body: JSON.stringify({ maxScenarios: 100, stream: true })
                 });
                 
                 if (!response.ok) {
@@ -2712,8 +2754,32 @@
                     throw new Error(error.error || 'Deep audit failed');
                 }
                 
-                const result = await response.json();
-                displayDeepAuditResults(result);
+                // Read the stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    
+                    // Process complete SSE messages
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                handleDeepAuditProgress(data);
+                            } catch (e) {
+                                console.warn('Failed to parse SSE data:', line);
+                            }
+                        }
+                    }
+                }
                 
             } catch (error) {
                 console.error('Deep audit error:', error);
@@ -2728,6 +2794,81 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-brain"></i> Deep Audit (AI)';
+            }
+        }
+        
+        function handleDeepAuditProgress(data) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressCount = document.getElementById('progress-count');
+            const progressPercent = document.getElementById('progress-percent');
+            const progressTitle = document.getElementById('progress-title');
+            const progressCurrent = document.getElementById('progress-current');
+            const progressScenarioName = document.getElementById('progress-scenario-name');
+            const progressFeed = document.getElementById('progress-feed');
+            const btn = document.getElementById('run-deep-audit-btn');
+            
+            switch (data.type) {
+                case 'start':
+                    progressTitle.textContent = `Analyzing ${data.total} scenarios with GPT-4...`;
+                    progressCount.textContent = `0 / ${data.total}`;
+                    progressCurrent.style.display = 'block';
+                    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> 0/${data.total}`;
+                    break;
+                    
+                case 'progress':
+                    // Update progress bar
+                    progressBar.style.width = `${data.percent}%`;
+                    progressCount.textContent = `${data.current} / ${data.total}`;
+                    progressPercent.textContent = `${data.percent}%`;
+                    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${data.current}/${data.total}`;
+                    
+                    // Update current scenario
+                    if (data.scenario) {
+                        progressScenarioName.textContent = `${data.scenario.name}`;
+                        
+                        // Add to feed
+                        const scoreColor = data.scenario.score >= 9 ? '#10b981' : 
+                                          data.scenario.score >= 7 ? '#22c55e' : 
+                                          data.scenario.score >= 5 ? '#f59e0b' : '#ef4444';
+                        
+                        const feedItem = document.createElement('div');
+                        feedItem.style.cssText = `
+                            display: flex;
+                            justify-content: space-between;
+                            padding: 6px 12px;
+                            margin: 4px 0;
+                            background: rgba(255,255,255,0.03);
+                            border-radius: 6px;
+                            font-size: 12px;
+                        `;
+                        feedItem.innerHTML = `
+                            <span style="color: var(--text-muted);">${data.scenario.name}</span>
+                            <span style="color: ${scoreColor}; font-weight: 600;">${data.scenario.score}/10</span>
+                        `;
+                        progressFeed.insertBefore(feedItem, progressFeed.firstChild);
+                        
+                        // Keep only last 10 items visible
+                        while (progressFeed.children.length > 10) {
+                            progressFeed.removeChild(progressFeed.lastChild);
+                        }
+                    }
+                    break;
+                    
+                case 'complete':
+                    progressTitle.textContent = 'Deep Audit Complete!';
+                    progressCurrent.style.display = 'none';
+                    
+                    // Display final results after a brief pause
+                    setTimeout(() => {
+                        displayDeepAuditResults(data);
+                    }, 500);
+                    break;
+                    
+                case 'error':
+                    progressTitle.textContent = 'Error';
+                    progressTitle.style.color = '#ef4444';
+                    progressScenarioName.textContent = data.message;
+                    break;
             }
         }
         

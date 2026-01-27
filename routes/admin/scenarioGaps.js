@@ -2744,15 +2744,39 @@ router.post('/:companyId/audit/run', async (req, res) => {
 // - Classification questions that don't help classify
 // 
 // Cost: ~$0.02-0.05 per scenario (use on-demand, not automated)
+// 
+// Supports streaming progress via SSE when stream=true query param is set
 // ════════════════════════════════════════════════════════════════════════════════
 router.post('/:companyId/audit/deep', async (req, res) => {
     const { companyId } = req.params;
-    const { scenarioIds, category, maxScenarios = 50 } = req.body;
+    const { scenarioIds, category, maxScenarios = 50, stream = false } = req.body;
+    
+    // Set up SSE if streaming requested
+    const isStreaming = stream === true || stream === 'true';
+    if (isStreaming) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+    }
+    
+    // Helper to send SSE events
+    const sendProgress = (data) => {
+        if (isStreaming) {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+        }
+    };
     
     try {
         const company = await Company.findById(companyId);
         if (!company) {
-            return res.status(404).json({ error: 'Company not found' });
+            if (isStreaming) {
+                sendProgress({ type: 'error', message: 'Company not found' });
+                res.end();
+            } else {
+                res.status(404).json({ error: 'Company not found' });
+            }
+            return;
         }
         
         const { template, error } = await getCompanyTemplate(company, {
@@ -2760,7 +2784,13 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         });
         
         if (error) {
-            return res.status(400).json({ error: error.message });
+            if (isStreaming) {
+                sendProgress({ type: 'error', message: error.message });
+                res.end();
+            } else {
+                res.status(400).json({ error: error.message });
+            }
+            return;
         }
         
         const tradeType = template.templateType?.toLowerCase() || 'general';
@@ -2791,17 +2821,28 @@ router.post('/:companyId/audit/deep', async (req, res) => {
             scenariosToAudit = scenariosToAudit.slice(0, maxScenarios);
         }
         
+        const totalCount = scenariosToAudit.length;
+        
         logger.info('[DEEP AUDIT] Starting GPT-4 deep audit', {
             companyId,
             templateId: template._id,
-            scenarioCount: scenariosToAudit.length,
-            tradeType
+            scenarioCount: totalCount,
+            tradeType,
+            streaming: isStreaming
+        });
+        
+        // Send initial progress
+        sendProgress({ 
+            type: 'start', 
+            total: totalCount,
+            message: `Starting deep audit of ${totalCount} scenarios...`
         });
         
         const results = [];
         let totalTokens = 0;
         let perfect = 0;
         let needsWork = 0;
+        let processed = 0;
         
         for (const scenario of scenariosToAudit) {
             try {
@@ -2885,13 +2926,30 @@ Return JSON only:
                 if (auditResult.score >= 9) perfect++;
                 else if (auditResult.score < 7) needsWork++;
                 
-                results.push({
+                const resultEntry = {
                     scenarioId: scenario.scenarioId || scenario._id?.toString(),
                     name: scenario.name,
                     scenarioType: scenario.scenarioType,
                     category: scenario.categoryName,
                     categoryId: scenario.categoryId,
                     ...auditResult
+                };
+                
+                results.push(resultEntry);
+                processed++;
+                
+                // Send progress update
+                sendProgress({
+                    type: 'progress',
+                    current: processed,
+                    total: totalCount,
+                    percent: Math.round((processed / totalCount) * 100),
+                    scenario: {
+                        name: scenario.name,
+                        score: auditResult.score,
+                        verdict: auditResult.verdict
+                    },
+                    message: `${processed}/${totalCount}: "${scenario.name}" → ${auditResult.score}/10`
                 });
                 
             } catch (scenarioError) {
@@ -2899,6 +2957,9 @@ Return JSON only:
                     scenarioId: scenario.scenarioId,
                     error: scenarioError.message
                 });
+                
+                processed++;
+                
                 results.push({
                     scenarioId: scenario.scenarioId || scenario._id?.toString(),
                     name: scenario.name,
@@ -2908,6 +2969,16 @@ Return JSON only:
                     issues: [{ field: 'general', issue: scenarioError.message, suggestion: 'Review manually' }],
                     strengths: [],
                     rewriteNeeded: true
+                });
+                
+                // Send error progress
+                sendProgress({
+                    type: 'progress',
+                    current: processed,
+                    total: totalCount,
+                    percent: Math.round((processed / totalCount) * 100),
+                    scenario: { name: scenario.name, score: 0, verdict: 'ERROR' },
+                    message: `${processed}/${totalCount}: "${scenario.name}" → Error`
                 });
             }
         }
@@ -2931,13 +3002,24 @@ Return JSON only:
             ...summary
         });
         
-        res.json({
+        const finalResult = {
             success: true,
             auditType: 'deep',
             poweredBy: 'GPT-4o',
             summary,
             scenarios: results.sort((a, b) => (a.score || 0) - (b.score || 0)) // Worst first
-        });
+        };
+        
+        if (isStreaming) {
+            // Send final complete event
+            sendProgress({
+                type: 'complete',
+                ...finalResult
+            });
+            res.end();
+        } else {
+            res.json(finalResult);
+        }
         
     } catch (error) {
         logger.error('[DEEP AUDIT] Error', {
@@ -2945,10 +3027,16 @@ Return JSON only:
             error: error.message,
             stack: error.stack
         });
-        res.status(500).json({
-            error: 'Deep audit failed',
-            details: error.message
-        });
+        
+        if (isStreaming) {
+            sendProgress({ type: 'error', message: error.message });
+            res.end();
+        } else {
+            res.status(500).json({
+                error: 'Deep audit failed',
+                details: error.message
+            });
+        }
     }
 });
 
