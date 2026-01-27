@@ -1465,10 +1465,16 @@
                         Audit scenario content against dispatcher rules (ownership-aware)
                     </p>
                 </div>
-                <div class="audit-actions">
+                <div class="audit-actions" style="display: flex; gap: 12px;">
                     <button class="run-audit-btn" onclick="runAudit()" id="run-audit-btn">
                         <i class="fas fa-play"></i>
                         Run Audit
+                    </button>
+                    <button class="run-audit-btn" onclick="runDeepAudit()" id="run-deep-audit-btn"
+                        style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);"
+                        title="GPT-4 powered comprehensive review - catches nuanced issues rules miss">
+                        <i class="fas fa-brain"></i>
+                        Deep Audit (AI)
                     </button>
                 </div>
             </div>
@@ -1814,10 +1820,59 @@
             <div id="audit-empty" class="audit-empty">
                 <i class="fas fa-clipboard-check"></i>
                 <h3>Ready to Audit</h3>
-                <p>Click "Run Audit" to check all 73 scenarios against these 9 rules.</p>
+                <p>Click "Run Audit" to check all scenarios against deterministic rules (free, instant).</p>
                 <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px;">
-                    Zero LLM cost - all checks are deterministic.
+                    Or use <strong>Deep Audit (AI)</strong> for GPT-4 powered comprehensive review.
                 </p>
+            </div>
+            
+            <!-- Deep Audit Results (separate view) -->
+            <div id="deep-audit-results" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #8b5cf6;">
+                        <i class="fas fa-brain"></i> Deep Audit Results (GPT-4)
+                    </h3>
+                    <button class="btn" onclick="hideDeepAuditResults()" style="padding: 8px 16px;">
+                        <i class="fas fa-arrow-left"></i> Back to Rules Audit
+                    </button>
+                </div>
+                
+                <!-- Deep Audit Summary -->
+                <div id="deep-audit-summary" style="
+                    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+                    border: 1px solid rgba(139, 92, 246, 0.3);
+                    border-radius: 12px;
+                    padding: 20px;
+                    margin-bottom: 20px;
+                    display: grid;
+                    grid-template-columns: repeat(5, 1fr);
+                    gap: 16px;
+                    text-align: center;
+                ">
+                    <div>
+                        <div id="deep-avg-score" style="font-size: 32px; font-weight: bold; color: #8b5cf6;">-</div>
+                        <div style="color: var(--text-muted); font-size: 12px;">Avg Score</div>
+                    </div>
+                    <div>
+                        <div id="deep-total" style="font-size: 24px; font-weight: bold; color: white;">-</div>
+                        <div style="color: var(--text-muted); font-size: 12px;">Reviewed</div>
+                    </div>
+                    <div>
+                        <div id="deep-perfect" style="font-size: 24px; font-weight: bold; color: #10b981;">-</div>
+                        <div style="color: var(--text-muted); font-size: 12px;">Perfect (9-10)</div>
+                    </div>
+                    <div>
+                        <div id="deep-needs-work" style="font-size: 24px; font-weight: bold; color: #f59e0b;">-</div>
+                        <div style="color: var(--text-muted); font-size: 12px;">Needs Work</div>
+                    </div>
+                    <div>
+                        <div id="deep-cost" style="font-size: 18px; font-weight: bold; color: var(--text-muted);">-</div>
+                        <div style="color: var(--text-muted); font-size: 12px;">API Cost</div>
+                    </div>
+                </div>
+                
+                <!-- Deep Audit Scenario List -->
+                <div id="deep-audit-list" style="display: flex; flex-direction: column; gap: 12px;"></div>
             </div>
         </div><!-- END tab-audit -->
         
@@ -2619,6 +2674,154 @@
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-play"></i> Run Audit';
             }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // DEEP AUDIT (GPT-4 POWERED)
+        // Comprehensive AI review that catches nuanced issues rules miss
+        // ════════════════════════════════════════════════════════════════════════════════
+        async function runDeepAudit() {
+            const btn = document.getElementById('run-deep-audit-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Analyzing with GPT-4...';
+            
+            // Hide regular results, show deep audit view
+            document.getElementById('audit-results').style.display = 'none';
+            document.getElementById('audit-empty').style.display = 'none';
+            document.getElementById('deep-audit-results').style.display = 'block';
+            document.getElementById('deep-audit-list').innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                    <i class="fas fa-brain fa-3x" style="color: #8b5cf6; margin-bottom: 16px; animation: pulse 2s infinite;"></i>
+                    <h3>GPT-4 is analyzing each scenario...</h3>
+                    <p>This may take 1-2 minutes for a full template.</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ maxScenarios: 100 })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Deep audit failed');
+                }
+                
+                const result = await response.json();
+                displayDeepAuditResults(result);
+                
+            } catch (error) {
+                console.error('Deep audit error:', error);
+                showToast('Deep audit failed: ' + error.message, 'error');
+                document.getElementById('deep-audit-list').innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ef4444;">
+                        <i class="fas fa-exclamation-triangle fa-2x" style="margin-bottom: 12px;"></i>
+                        <h3>Deep Audit Failed</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-brain"></i> Deep Audit (AI)';
+            }
+        }
+        
+        function displayDeepAuditResults(result) {
+            const { summary, scenarios } = result;
+            
+            // Update summary
+            document.getElementById('deep-avg-score').textContent = summary.averageScore || '-';
+            document.getElementById('deep-total').textContent = summary.totalScenarios || 0;
+            document.getElementById('deep-perfect').textContent = summary.perfect || 0;
+            document.getElementById('deep-needs-work').textContent = summary.needsWork || 0;
+            document.getElementById('deep-cost').textContent = summary.estimatedCost || '$0';
+            
+            // Color the avg score
+            const avgScoreEl = document.getElementById('deep-avg-score');
+            const avgScore = summary.averageScore || 0;
+            if (avgScore >= 9) avgScoreEl.style.color = '#10b981';
+            else if (avgScore >= 7) avgScoreEl.style.color = '#22c55e';
+            else if (avgScore >= 5) avgScoreEl.style.color = '#f59e0b';
+            else avgScoreEl.style.color = '#ef4444';
+            
+            // Build scenario cards
+            const listEl = document.getElementById('deep-audit-list');
+            
+            if (!scenarios || scenarios.length === 0) {
+                listEl.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-muted);">No scenarios audited</div>';
+                return;
+            }
+            
+            listEl.innerHTML = scenarios.map(s => {
+                const scoreColor = s.score >= 9 ? '#10b981' : s.score >= 7 ? '#22c55e' : s.score >= 5 ? '#f59e0b' : '#ef4444';
+                const verdictBg = s.verdict === 'PERFECT' ? 'rgba(16, 185, 129, 0.2)' : 
+                                  s.verdict === 'GOOD' ? 'rgba(34, 197, 94, 0.2)' :
+                                  s.verdict === 'NEEDS_WORK' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+                
+                const issuesHtml = (s.issues || []).map(issue => `
+                    <div style="background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; padding: 8px 12px; margin: 4px 0; border-radius: 0 6px 6px 0;">
+                        <div style="font-size: 12px; color: #ef4444; font-weight: 600;">${issue.field || 'general'}</div>
+                        <div style="font-size: 13px; color: #fca5a5;">${issue.issue}</div>
+                        <div style="font-size: 12px; color: #10b981; margin-top: 4px;">💡 ${issue.suggestion}</div>
+                    </div>
+                `).join('');
+                
+                const strengthsHtml = (s.strengths || []).map(str => `
+                    <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 4px;">✓ ${str}</span>
+                `).join('');
+                
+                return `
+                    <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; ${s.rewriteNeeded ? 'border-left: 4px solid #ef4444;' : ''}">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div>
+                                <h4 style="margin: 0; color: white;">${s.name}</h4>
+                                <span style="font-size: 12px; color: var(--text-muted);">${s.category} • ${s.scenarioType || 'FAQ'}</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <span style="background: ${verdictBg}; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">${s.verdict}</span>
+                                <div style="font-size: 28px; font-weight: bold; color: ${scoreColor};">${s.score}/10</div>
+                            </div>
+                        </div>
+                        
+                        ${strengthsHtml ? `<div style="margin-bottom: 12px;">${strengthsHtml}</div>` : ''}
+                        
+                        ${issuesHtml || '<div style="color: #10b981; font-size: 13px;">✨ No issues found</div>'}
+                        
+                        ${s.rewriteNeeded ? `
+                            <div style="margin-top: 12px; display: flex; gap: 8px;">
+                                <button class="btn" onclick="openDeepAuditFix('${s.scenarioId}', '${s.categoryId}')" 
+                                    style="background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); border: none; padding: 8px 16px;">
+                                    <i class="fas fa-magic"></i> Fix in Global Brain
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function hideDeepAuditResults() {
+            document.getElementById('deep-audit-results').style.display = 'none';
+            // Show regular audit results if we have them
+            if (lastAuditResult) {
+                document.getElementById('audit-results').style.display = 'block';
+            } else {
+                document.getElementById('audit-empty').style.display = 'block';
+            }
+        }
+        
+        function openDeepAuditFix(scenarioId, categoryId) {
+            // Store company ID for return navigation
+            localStorage.setItem('lastAuditCompanyId', companyId);
+            
+            // Open Global Brain to this scenario
+            const gbUrl = `/admin-global-instant-responses.html?editScenario=${scenarioId}&categoryId=${categoryId}`;
+            window.open(gbUrl, '_blank');
         }
         
         function toggleRulesChecked() {

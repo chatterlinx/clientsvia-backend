@@ -2731,6 +2731,227 @@ router.post('/:companyId/audit/run', async (req, res) => {
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// POST /:companyId/audit/deep
+// 
+// GPT-4 POWERED DEEP AUDIT - Comprehensive AI review of scenarios
+// This catches nuanced issues that deterministic rules miss:
+// - Awkward phrasing
+// - Tone inconsistencies  
+// - Responses that technically pass but sound robotic
+// - Missing warmth where needed
+// - Verbose responses even if under word limit
+// - Classification questions that don't help classify
+// 
+// Cost: ~$0.02-0.05 per scenario (use on-demand, not automated)
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/:companyId/audit/deep', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenarioIds, category, maxScenarios = 50 } = req.body;
+    
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        const { template, error } = await getCompanyTemplate(company, {
+            populateCategories: true
+        });
+        
+        if (error) {
+            return res.status(400).json({ error: error.message });
+        }
+        
+        const tradeType = template.templateType?.toLowerCase() || 'general';
+        
+        // Collect scenarios to audit
+        let scenariosToAudit = [];
+        for (const cat of (template.categories || [])) {
+            if (category && cat.id !== category && cat._id?.toString() !== category) {
+                continue;
+            }
+            for (const scenario of (cat.scenarios || [])) {
+                if (scenarioIds && scenarioIds.length > 0) {
+                    if (!scenarioIds.includes(scenario.scenarioId) && 
+                        !scenarioIds.includes(scenario._id?.toString())) {
+                        continue;
+                    }
+                }
+                scenariosToAudit.push({
+                    ...scenario,
+                    categoryName: cat.name,
+                    categoryId: cat.id || cat._id?.toString()
+                });
+            }
+        }
+        
+        // Limit to prevent runaway costs
+        if (scenariosToAudit.length > maxScenarios) {
+            scenariosToAudit = scenariosToAudit.slice(0, maxScenarios);
+        }
+        
+        logger.info('[DEEP AUDIT] Starting GPT-4 deep audit', {
+            companyId,
+            templateId: template._id,
+            scenarioCount: scenariosToAudit.length,
+            tradeType
+        });
+        
+        const results = [];
+        let totalTokens = 0;
+        let perfect = 0;
+        let needsWork = 0;
+        
+        for (const scenario of scenariosToAudit) {
+            try {
+                const auditPrompt = `You are a SENIOR QA AUDITOR reviewing AI dispatcher scenarios for a ${tradeType.toUpperCase()} service company.
+
+SCENARIO TO AUDIT:
+Name: ${scenario.name}
+Type: ${scenario.scenarioType || 'FAQ'}
+Category: ${scenario.categoryName}
+Triggers: ${(scenario.triggers || []).slice(0, 5).join(', ')}
+
+Quick Replies (short responses):
+${(scenario.quickReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
+
+Full Replies (detailed responses):
+${(scenario.fullReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
+
+DISPATCHER PERSONA STANDARDS:
+- Sounds like a SEASONED dispatcher who handles 50+ calls/day
+- Calm, confident, experienced - never surprised
+- Friendly but NOT chatty - no fluff, no filler  
+- Every sentence moves toward DIAGNOSIS or BOOKING
+- Empathy in 3 words max: "I understand." "Alright." "Okay."
+- Quick replies: Under 15 words, ONE diagnostic question
+- Full replies: Under 25 words, moves toward booking
+
+AUTOMATIC FAILURES:
+- Chatbot phrases: "wonderful to hear", "we're here to help", "thank you for reaching out"
+- Help desk phrases: "absolutely", "definitely", "of course", "certainly", "no problem"
+- Troubleshooting: "have you tried", "have you checked" (technician's job, not dispatcher)
+- Stacked acknowledgments: "I understand. Alright. Let's..." (pick ONE)
+- Vague questions: "tell me more", "can you describe"
+
+RATE THIS SCENARIO 1-10:
+10 = Perfect dispatcher. Would hire this person.
+8-9 = Good, minor tweaks possible
+6-7 = Acceptable but noticeably imperfect
+4-5 = Needs work, sounds like chatbot/help desk
+1-3 = Fails completely, would confuse callers
+
+Return JSON only:
+{
+  "score": <1-10>,
+  "verdict": "<PERFECT|GOOD|NEEDS_WORK|FAILS>",
+  "issues": [
+    { "field": "<quickReplies[0]|fullReplies[1]|general>", "issue": "<specific problem>", "suggestion": "<how to fix>" }
+  ],
+  "strengths": ["<what's good about this scenario>"],
+  "rewriteNeeded": <true|false>
+}`;
+
+                const response = await openaiClient.chat.completions.create({
+                    model: 'gpt-4o',
+                    messages: [
+                        { 
+                            role: 'system', 
+                            content: 'You are a strict QA auditor. Be critical but fair. Return valid JSON only.' 
+                        },
+                        { role: 'user', content: auditPrompt }
+                    ],
+                    max_tokens: 500,
+                    temperature: 0.2,
+                    response_format: { type: 'json_object' }
+                });
+                
+                totalTokens += response.usage?.total_tokens || 0;
+                
+                let auditResult;
+                try {
+                    auditResult = JSON.parse(response.choices[0]?.message?.content || '{}');
+                } catch (parseErr) {
+                    auditResult = { 
+                        score: 5, 
+                        verdict: 'PARSE_ERROR', 
+                        issues: [{ field: 'general', issue: 'Could not parse GPT response', suggestion: 'Review manually' }],
+                        strengths: [],
+                        rewriteNeeded: true
+                    };
+                }
+                
+                if (auditResult.score >= 9) perfect++;
+                else if (auditResult.score < 7) needsWork++;
+                
+                results.push({
+                    scenarioId: scenario.scenarioId || scenario._id?.toString(),
+                    name: scenario.name,
+                    scenarioType: scenario.scenarioType,
+                    category: scenario.categoryName,
+                    categoryId: scenario.categoryId,
+                    ...auditResult
+                });
+                
+            } catch (scenarioError) {
+                logger.error('[DEEP AUDIT] Error auditing scenario', {
+                    scenarioId: scenario.scenarioId,
+                    error: scenarioError.message
+                });
+                results.push({
+                    scenarioId: scenario.scenarioId || scenario._id?.toString(),
+                    name: scenario.name,
+                    category: scenario.categoryName,
+                    score: 0,
+                    verdict: 'ERROR',
+                    issues: [{ field: 'general', issue: scenarioError.message, suggestion: 'Review manually' }],
+                    strengths: [],
+                    rewriteNeeded: true
+                });
+            }
+        }
+        
+        // Calculate summary
+        const avgScore = results.length > 0 
+            ? (results.reduce((sum, r) => sum + (r.score || 0), 0) / results.length).toFixed(1)
+            : 0;
+        
+        const summary = {
+            totalScenarios: results.length,
+            averageScore: parseFloat(avgScore),
+            perfect: perfect,
+            needsWork: needsWork,
+            tokensUsed: totalTokens,
+            estimatedCost: `$${(totalTokens * 0.00001).toFixed(4)}`
+        };
+        
+        logger.info('[DEEP AUDIT] Completed', {
+            companyId,
+            ...summary
+        });
+        
+        res.json({
+            success: true,
+            auditType: 'deep',
+            poweredBy: 'GPT-4o',
+            summary,
+            scenarios: results.sort((a, b) => (a.score || 0) - (b.score || 0)) // Worst first
+        });
+        
+    } catch (error) {
+        logger.error('[DEEP AUDIT] Error', {
+            companyId,
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({
+            error: 'Deep audit failed',
+            details: error.message
+        });
+    }
+});
+
 /**
  * POST /:companyId/audit/scenario
  * 
