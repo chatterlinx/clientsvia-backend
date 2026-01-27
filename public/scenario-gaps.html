@@ -3814,6 +3814,32 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating fixes...';
             
+            // ════════════════════════════════════════════════════════════════════════
+            // OPEN WINDOW IMMEDIATELY (before async) to avoid popup blocker
+            // ════════════════════════════════════════════════════════════════════════
+            // Browser popup blockers allow popups from direct user clicks.
+            // If we wait for async fetch, the popup is blocked.
+            // Solution: Open blank window now, update URL after fetch completes.
+            // ════════════════════════════════════════════════════════════════════════
+            const loadingHtml = `
+                <html>
+                <head><title>Loading Template Audit Fix...</title></head>
+                <body style="background: #1a1a2e; color: white; font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 48px; animation: spin 1s linear infinite;">⚙️</div>
+                        <h2 style="margin-top: 20px;">Generating fixes...</h2>
+                        <p style="color: #888;">Please wait while AI fixes are being generated</p>
+                    </div>
+                    <style>@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }</style>
+                </body>
+                </html>
+            `;
+            const newWindow = window.open('about:blank', '_blank');
+            if (newWindow) {
+                newWindow.document.write(loadingHtml);
+                newWindow.document.close();
+            }
+            
             try {
                 // ════════════════════════════════════════════════════════════════════
                 // STEP 1: Generate fixes WITHOUT saving (mirrors Gap Fill approach)
@@ -3857,20 +3883,21 @@
                 console.log('📦 [AUDIT→GB] Prefill data stored in localStorage');
                 
                 // ════════════════════════════════════════════════════════════════════
-                // STEP 4: Open Global Brain with edit prefill flag
+                // STEP 4: Navigate the already-opened window to Global Brain
                 // ════════════════════════════════════════════════════════════════════
                 const gbUrl = `/admin-global-instant-responses.html?prefill=edit-scenario&templateId=${result.navigation.templateId}&categoryId=${result.navigation.categoryId}&scenarioId=${result.navigation.scenarioId}`;
                 
-                console.log('🚀 [AUDIT→GB] Opening Global Brain:', gbUrl);
+                console.log('🚀 [AUDIT→GB] Navigating to Global Brain:', gbUrl);
                 
-                const newWindow = window.open(gbUrl, '_blank');
-                
-                // Check if popup was blocked
-                if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-                    // Popup was blocked - show manual link
-                    showToast('Popup blocked! Click the link below to open Global Brain.', 'error');
+                if (newWindow && !newWindow.closed) {
+                    // Navigate the pre-opened window to Global Brain
+                    newWindow.location.href = gbUrl;
+                    closeScenarioReview();
+                    showToast(`Opening Global Brain with ${result.fixes?.length || 0} fixes applied - review and save!`, 'success');
+                } else {
+                    // Window was closed or blocked - show manual link
+                    showToast('Window was closed. Click the link below to open Global Brain.', 'error');
                     
-                    // Show a clickable link in the modal instead
                     const linkContainer = document.createElement('div');
                     linkContainer.id = 'gb-manual-link';
                     linkContainer.style.cssText = `
@@ -3891,9 +3918,9 @@
                         <div style="color: #f87171; font-size: 24px; margin-bottom: 16px;">
                             <i class="fas fa-exclamation-triangle"></i>
                         </div>
-                        <h3 style="color: white; margin-bottom: 12px;">Popup Blocked</h3>
+                        <h3 style="color: white; margin-bottom: 12px;">Window Closed</h3>
                         <p style="color: #a0a0b0; margin-bottom: 20px; font-size: 14px;">
-                            Your browser blocked the popup. Click the button below to open Global Brain manually.
+                            Click the button below to open Global Brain.
                             <br><br>
                             <strong style="color: #10b981;">${result.fixes?.length || 0} fixes are ready!</strong>
                         </p>
@@ -3926,16 +3953,16 @@
                         </button>
                     `;
                     document.body.appendChild(linkContainer);
-                    
-                } else {
-                    // Popup opened successfully
-                    closeScenarioReview();
-                    showToast(`Opening Global Brain with ${result.fixes?.length || 0} fixes applied - review and save!`, 'success');
                 }
                 
             } catch (error) {
                 console.error('❌ [AUDIT→GB] Error:', error);
                 showToast('Failed to generate fixes: ' + error.message, 'error');
+                
+                // Close the pre-opened window on error
+                if (newWindow && !newWindow.closed) {
+                    newWindow.close();
+                }
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-external-link-alt"></i> Review & Fix in Global Brain';
