@@ -3629,24 +3629,78 @@ ${governanceBlock}`;
                 tokensUsed += response.usage?.total_tokens || 0;
                 
                 if (suggestedFix && suggestedFix !== valueToFix) {
-                    fixes.push({
-                        field: violation.field,
-                        oldValue: valueToFix,
-                        newValue: suggestedFix,
-                        ruleId: violation.ruleId,
-                        message: violation.message,
-                        severity: violation.severity
-                    });
+                    // ════════════════════════════════════════════════════════════════════
+                    // APPLY FIX: Handle both specific paths (quickReplies[0]) and 
+                    // generic fields (replies) by searching for the exact value
+                    // ════════════════════════════════════════════════════════════════════
+                    let actualFieldPath = violation.field;
+                    let fixApplied = false;
                     
-                    // Apply fix to the COPY (not saving to DB)
-                    const fixFieldPath = violation.field.replace(/\[(\d+)\]/g, '.$1').split('.');
-                    let target = fixedScenario;
-                    for (let i = 0; i < fixFieldPath.length - 1; i++) {
-                        target = target[fixFieldPath[i]];
+                    // If field is generic "replies", find the actual location of the value
+                    if (violation.field === 'replies' || violation.field === 'reply') {
+                        // Search in quickReplies
+                        const qrIndex = (fixedScenario.quickReplies || []).findIndex(r => r === valueToFix || r?.includes(valueToFix));
+                        if (qrIndex !== -1) {
+                            fixedScenario.quickReplies[qrIndex] = suggestedFix;
+                            actualFieldPath = `quickReplies[${qrIndex}]`;
+                            fixApplied = true;
+                            logger.info('[AUDIT GENERATE-FIX] Fixed quickReplies[' + qrIndex + ']');
+                        }
+                        
+                        // Search in fullReplies
+                        const frIndex = (fixedScenario.fullReplies || []).findIndex(r => r === valueToFix || r?.includes(valueToFix));
+                        if (frIndex !== -1) {
+                            fixedScenario.fullReplies[frIndex] = suggestedFix;
+                            actualFieldPath = fixApplied ? actualFieldPath + `, fullReplies[${frIndex}]` : `fullReplies[${frIndex}]`;
+                            fixApplied = true;
+                            logger.info('[AUDIT GENERATE-FIX] Fixed fullReplies[' + frIndex + ']');
+                        }
+                        
+                        // Also check _noName variants
+                        const qrNoNameIndex = (fixedScenario.quickReplies_noName || []).findIndex(r => r === valueToFix || r?.includes(valueToFix));
+                        if (qrNoNameIndex !== -1) {
+                            fixedScenario.quickReplies_noName[qrNoNameIndex] = suggestedFix;
+                            fixApplied = true;
+                        }
+                        
+                        const frNoNameIndex = (fixedScenario.fullReplies_noName || []).findIndex(r => r === valueToFix || r?.includes(valueToFix));
+                        if (frNoNameIndex !== -1) {
+                            fixedScenario.fullReplies_noName[frNoNameIndex] = suggestedFix;
+                            fixApplied = true;
+                        }
+                    } else {
+                        // Specific field path - use standard logic
+                        const fixFieldPath = violation.field.replace(/\[(\d+)\]/g, '.$1').split('.');
+                        let target = fixedScenario;
+                        for (let i = 0; i < fixFieldPath.length - 1; i++) {
+                            target = target[fixFieldPath[i]];
+                        }
+                        const lastKey = fixFieldPath[fixFieldPath.length - 1];
+                        if (target && lastKey !== undefined) {
+                            target[lastKey] = suggestedFix;
+                            fixApplied = true;
+                        }
                     }
-                    const lastKey = fixFieldPath[fixFieldPath.length - 1];
-                    if (target && lastKey !== undefined) {
-                        target[lastKey] = suggestedFix;
+                    
+                    if (fixApplied) {
+                        fixes.push({
+                            field: actualFieldPath,
+                            oldValue: valueToFix,
+                            newValue: suggestedFix,
+                            ruleId: violation.ruleId,
+                            message: violation.message,
+                            severity: violation.severity
+                        });
+                        logger.info('[AUDIT GENERATE-FIX] Fix applied', {
+                            field: actualFieldPath,
+                            oldValue: valueToFix?.substring(0, 30),
+                            newValue: suggestedFix?.substring(0, 30)
+                        });
+                    } else {
+                        logger.warn('[AUDIT GENERATE-FIX] Could not find location for fix', {
+                            field: violation.field,
+                            valueToFix: valueToFix?.substring(0, 50)
+                        });
                     }
                 }
                 
