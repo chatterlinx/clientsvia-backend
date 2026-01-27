@@ -20796,8 +20796,14 @@ ${JSON.stringify(healthData, null, 2)}
             // ════════════════════════════════════════════════════════════════════════
             if (urlParams.get('prefill') === 'edit-scenario') {
                 console.log('📋 [EDIT-PREFILL] Detected edit-scenario prefill from Template Audit');
+                
+                // Show immediate loading indicator
+                showEditPrefillLoadingOverlay();
+                
                 try {
                     const prefillData = sessionStorage.getItem('scenarioEditPrefill');
+                    console.log('📋 [EDIT-PREFILL] SessionStorage data exists:', !!prefillData);
+                    
                     if (prefillData) {
                         const editData = JSON.parse(prefillData);
                         console.log('📋 [EDIT-PREFILL] Loaded edit prefill data:', editData);
@@ -20812,15 +20818,21 @@ ${JSON.stringify(healthData, null, 2)}
                         showEditPrefillBanner(editData);
                         
                         // Auto-load template and open edit modal
-                        // Use setTimeout to ensure page is fully loaded
+                        // Use longer timeout to ensure page is fully loaded
                         setTimeout(() => {
                             initializeEditScenarioPrefill(editData);
-                        }, 500);
+                        }, 1000);
                         
-                        console.log('✅ [EDIT-PREFILL] Edit prefill data loaded - will auto-open edit modal');
+                        console.log('✅ [EDIT-PREFILL] Edit prefill data loaded - will auto-open edit modal in 1s');
+                    } else {
+                        console.error('❌ [EDIT-PREFILL] No prefill data in sessionStorage');
+                        hideEditPrefillLoadingOverlay();
+                        showEditPrefillError('No prefill data found. The data may have been lost. Please try again from Template Audit.');
                     }
                 } catch (e) {
                     console.error('❌ [EDIT-PREFILL] Failed to parse edit prefill data:', e);
+                    hideEditPrefillLoadingOverlay();
+                    showEditPrefillError('Failed to load prefill data: ' + e.message);
                 }
             }
             
@@ -20897,6 +20909,116 @@ ${JSON.stringify(healthData, null, 2)}
         // 🎯 EDIT SCENARIO PREFILL: Auto-open edit modal from Template Audit
         // ════════════════════════════════════════════════════════════════════════
         
+        // ════════════════════════════════════════════════════════════════════════
+        // EDIT PREFILL LOADING OVERLAY
+        // ════════════════════════════════════════════════════════════════════════
+        function showEditPrefillLoadingOverlay() {
+            let overlay = document.getElementById('edit-prefill-loading');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'edit-prefill-loading';
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: rgba(0, 0, 0, 0.8);
+                    z-index: 50000;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                `;
+                overlay.innerHTML = `
+                    <div style="
+                        background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+                        border: 2px solid #10b981;
+                        border-radius: 20px;
+                        padding: 48px;
+                        text-align: center;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                    ">
+                        <div style="font-size: 48px; margin-bottom: 24px; animation: spin 1s linear infinite;">
+                            <i class="fas fa-cog"></i>
+                        </div>
+                        <h2 style="margin-bottom: 12px; font-size: 24px;">Loading Template Audit Fix</h2>
+                        <p style="color: #a0a0b0; font-size: 16px;" id="edit-prefill-loading-status">
+                            Loading template and preparing scenario...
+                        </p>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+                
+                // Add spin animation if not already present
+                if (!document.getElementById('spin-animation-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'spin-animation-style';
+                    style.textContent = `
+                        @keyframes spin {
+                            from { transform: rotate(0deg); }
+                            to { transform: rotate(360deg); }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+            }
+        }
+        
+        function updateEditPrefillLoadingStatus(message) {
+            const statusEl = document.getElementById('edit-prefill-loading-status');
+            if (statusEl) statusEl.textContent = message;
+        }
+        
+        function hideEditPrefillLoadingOverlay() {
+            const overlay = document.getElementById('edit-prefill-loading');
+            if (overlay) overlay.remove();
+        }
+        
+        function showEditPrefillError(message) {
+            let errorDiv = document.getElementById('edit-prefill-error');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.id = 'edit-prefill-error';
+                errorDiv.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+                    border: 2px solid #ef4444;
+                    border-radius: 16px;
+                    padding: 32px;
+                    z-index: 50001;
+                    text-align: center;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                    max-width: 500px;
+                    color: white;
+                `;
+                document.body.appendChild(errorDiv);
+            }
+            errorDiv.innerHTML = `
+                <div style="color: #f87171; font-size: 48px; margin-bottom: 16px;">
+                    <i class="fas fa-exclamation-circle"></i>
+                </div>
+                <h3 style="margin-bottom: 12px; font-size: 20px;">Template Audit Fix Error</h3>
+                <p style="color: #a0a0b0; margin-bottom: 24px; font-size: 14px;">${message}</p>
+                <button onclick="document.getElementById('edit-prefill-error').remove(); hideEditPrefillLoadingOverlay();" 
+                        style="
+                            background: #ef4444;
+                            color: white;
+                            border: none;
+                            padding: 12px 24px;
+                            border-radius: 8px;
+                            cursor: pointer;
+                            font-weight: 600;
+                        ">
+                    Close
+                </button>
+            `;
+        }
+
         function showEditPrefillBanner(editData) {
             const nav = editData.navigation || {};
             const fixCount = editData.auditFix?.fixCount || 0;
@@ -20973,6 +21095,7 @@ ${JSON.stringify(healthData, null, 2)}
                     throw new Error('Template ID not provided in prefill data');
                 }
                 
+                updateEditPrefillLoadingStatus('Loading template: ' + (nav.templateName || templateId) + '...');
                 console.log('📋 [EDIT-PREFILL] Loading template:', templateId);
                 
                 // Use existing loadTemplate function if available
@@ -20982,6 +21105,7 @@ ${JSON.stringify(healthData, null, 2)}
                     await selectTemplate(templateId);
                 } else {
                     // Fallback: Direct fetch and set
+                    updateEditPrefillLoadingStatus('Fetching template data...');
                     const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
                         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                     });
@@ -20991,6 +21115,8 @@ ${JSON.stringify(healthData, null, 2)}
                     activeTemplateId = templateId;
                     console.log('✅ [EDIT-PREFILL] Template loaded via fallback');
                 }
+                
+                updateEditPrefillLoadingStatus('Template loaded. Finding scenario...');
                 
                 // Wait for template to be fully loaded
                 await new Promise(resolve => setTimeout(resolve, 300));
@@ -21036,6 +21162,8 @@ ${JSON.stringify(healthData, null, 2)}
                 window.scenarioEditPrefillScenario = editData.scenario;
                 window.scenarioEditPrefillFixes = editData.auditFix?.fixes || [];
                 
+                updateEditPrefillLoadingStatus('Found scenario. Opening edit form...');
+                
                 console.log('🔧 [EDIT-PREFILL] Opening edit scenario modal...', {
                     categoryIndex,
                     scenarioIndex,
@@ -21049,12 +21177,17 @@ ${JSON.stringify(healthData, null, 2)}
                     await editScenario(categoryIndex, scenarioIndex);
                     
                     // Give the modal time to initialize
-                    await new Promise(resolve => setTimeout(resolve, 200));
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    updateEditPrefillLoadingStatus('Applying fixes to form...');
                     
                     // ════════════════════════════════════════════════════════════════
                     // STEP 5: Override form fields with the FIXED values
                     // ════════════════════════════════════════════════════════════════
                     applyEditScenarioPrefill(editData.scenario, editData.auditFix);
+                    
+                    // Hide loading overlay - we're done!
+                    hideEditPrefillLoadingOverlay();
                     
                     // Update banner to indicate ready
                     const banner = document.getElementById('edit-prefill-banner');
@@ -21073,6 +21206,12 @@ ${JSON.stringify(healthData, null, 2)}
                 
             } catch (error) {
                 console.error('❌ [EDIT-PREFILL] Error:', error);
+                
+                // Hide loading overlay
+                hideEditPrefillLoadingOverlay();
+                
+                // Show error modal
+                showEditPrefillError(error.message);
                 
                 // Update banner to show error
                 const banner = document.getElementById('edit-prefill-banner');

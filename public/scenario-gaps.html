@@ -3856,14 +3856,81 @@
                 console.log('📦 [AUDIT→GB] Prefill data stored in sessionStorage');
                 
                 // ════════════════════════════════════════════════════════════════════
-                // STEP 4: Close modal and open Global Brain with edit prefill flag
+                // STEP 4: Open Global Brain with edit prefill flag
                 // ════════════════════════════════════════════════════════════════════
-                closeScenarioReview();
-                
                 const gbUrl = `/admin-global-instant-responses.html?prefill=edit-scenario&templateId=${result.navigation.templateId}&categoryId=${result.navigation.categoryId}&scenarioId=${result.navigation.scenarioId}`;
-                window.open(gbUrl, '_blank');
                 
-                showToast(`Opening Global Brain with ${result.fixes?.length || 0} fixes applied - review and save!`, 'success');
+                console.log('🚀 [AUDIT→GB] Opening Global Brain:', gbUrl);
+                
+                const newWindow = window.open(gbUrl, '_blank');
+                
+                // Check if popup was blocked
+                if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                    // Popup was blocked - show manual link
+                    showToast('Popup blocked! Click the link below to open Global Brain.', 'error');
+                    
+                    // Show a clickable link in the modal instead
+                    const linkContainer = document.createElement('div');
+                    linkContainer.id = 'gb-manual-link';
+                    linkContainer.style.cssText = `
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+                        border: 2px solid #8b5cf6;
+                        border-radius: 16px;
+                        padding: 32px;
+                        z-index: 20000;
+                        text-align: center;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                        max-width: 500px;
+                    `;
+                    linkContainer.innerHTML = `
+                        <div style="color: #f87171; font-size: 24px; margin-bottom: 16px;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <h3 style="color: white; margin-bottom: 12px;">Popup Blocked</h3>
+                        <p style="color: #a0a0b0; margin-bottom: 20px; font-size: 14px;">
+                            Your browser blocked the popup. Click the button below to open Global Brain manually.
+                            <br><br>
+                            <strong style="color: #10b981;">${result.fixes?.length || 0} fixes are ready!</strong>
+                        </p>
+                        <a href="${gbUrl}" target="_blank" 
+                           onclick="document.getElementById('gb-manual-link').remove();"
+                           style="
+                               display: inline-block;
+                               background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+                               color: white;
+                               padding: 14px 28px;
+                               border-radius: 10px;
+                               text-decoration: none;
+                               font-weight: 600;
+                               font-size: 16px;
+                           ">
+                            <i class="fas fa-external-link-alt"></i> Open Global Brain
+                        </a>
+                        <button onclick="document.getElementById('gb-manual-link').remove();" 
+                                style="
+                                    display: block;
+                                    margin: 16px auto 0;
+                                    background: transparent;
+                                    border: 1px solid #666;
+                                    color: #888;
+                                    padding: 8px 16px;
+                                    border-radius: 6px;
+                                    cursor: pointer;
+                                ">
+                            Cancel
+                        </button>
+                    `;
+                    document.body.appendChild(linkContainer);
+                    
+                } else {
+                    // Popup opened successfully
+                    closeScenarioReview();
+                    showToast(`Opening Global Brain with ${result.fixes?.length || 0} fixes applied - review and save!`, 'success');
+                }
                 
             } catch (error) {
                 console.error('❌ [AUDIT→GB] Error:', error);
