@@ -595,7 +595,8 @@ function buildManualValidation(scenario, tradeKey) {
     return {
         valid: errors.length === 0,
         errors,
-        warnings
+        warnings,
+        tokensUsed: placeholderValidation.tokens || []
     };
 }
 
@@ -661,7 +662,8 @@ async function generateScenarioFromGap(gap, company, options = {}) {
         };
     }
     
-    const tradeType = template.templateType?.toLowerCase() || 'general';
+    const overrideTradeKey = sanitizeOverrideValue(options.tradeKeyOverride).toLowerCase();
+    const tradeType = overrideTradeKey || template.templateType?.toLowerCase() || 'general';
     const templateId = template._id?.toString();
     
     // Build full scenario list for duplicate detection + tone examples
@@ -1653,17 +1655,60 @@ router.get('/:companyId/gaps/preview', async (req, res) => {
 });
 
 /**
- * POST /:companyId/gaps/manual/preview
+ * GET /:companyId/manual/meta
  *
- * Manual Scenario Builder preview (content-only)
- * Body: { question: string, category?: string, scenarioType?: string }
+ * Returns manual builder options (trade + categories)
  */
-router.post('/:companyId/gaps/manual/preview', async (req, res) => {
+router.get('/:companyId/manual/meta', async (req, res) => {
     const { companyId } = req.params;
-    const { question, category, scenarioType } = req.body || {};
 
-    if (!question || !String(question).trim()) {
-        return res.status(400).json({ error: 'Question is required' });
+    try {
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const trades = [];
+        const primaryTrade = company.trade ? company.trade.toLowerCase() : null;
+
+        const configTrades = company.aiAgentSettings?.callFlowEngine?.trades || [];
+        if (Array.isArray(configTrades) && configTrades.length > 0) {
+            configTrades.forEach(t => {
+                if (t?.enabled === false) return;
+                trades.push({
+                    key: String(t.key || '').toLowerCase(),
+                    label: t.label || t.key
+                });
+            });
+        }
+
+        if (trades.length === 0 && primaryTrade) {
+            trades.push({ key: primaryTrade, label: company.trade });
+        }
+
+        res.json({
+            success: true,
+            primaryTrade,
+            trades
+        });
+    } catch (error) {
+        logger.error('[SCENARIO GAPS] Manual meta error', { error: error.message, companyId });
+        res.status(500).json({ error: 'Failed to load manual options' });
+    }
+});
+
+/**
+ * POST /:companyId/manual/generate
+ *
+ * Manual Scenario Builder (generate)
+ * Body: { userPrompt: string, tradeKey?: string, category?: string, scenarioType?: string }
+ */
+router.post('/:companyId/manual/generate', async (req, res) => {
+    const { companyId } = req.params;
+    const { userPrompt, tradeKey, category, scenarioType } = req.body || {};
+
+    if (!userPrompt || !String(userPrompt).trim()) {
+        return res.status(400).json({ error: 'userPrompt is required' });
     }
 
     try {
@@ -1672,7 +1717,7 @@ router.post('/:companyId/gaps/manual/preview', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
 
-        const text = String(question).trim();
+        const text = String(userPrompt).trim();
         const gap = {
             representative: text,
             examples: [{ text }],
@@ -1680,6 +1725,7 @@ router.post('/:companyId/gaps/manual/preview', async (req, res) => {
         };
 
         const result = await generateScenarioFromGap(gap, company, {
+            tradeKeyOverride: tradeKey,
             categoryOverride: category,
             scenarioTypeOverride: scenarioType
         });
@@ -1705,14 +1751,99 @@ router.post('/:companyId/gaps/manual/preview', async (req, res) => {
             });
         }
 
-        const tradeKey = result.tradeType || company.trade || 'general';
-        const validation = buildManualValidation(result.scenario, tradeKey);
+        const validationTrade = tradeKey || result.tradeType || company.trade || 'general';
+        const validation = buildManualValidation(result.scenario, validationTrade);
+        const fieldsGenerated = Object.keys(result.scenario || {});
+
+        return res.json({
+            success: true,
+            isDuplicate: false,
+            generatedScenario: result.scenario,
+            validation: {
+                ...validation,
+                fieldsGenerated
+            }
+        });
+    } catch (error) {
+        const isPlaceholderError = (error.message || '').startsWith('PLACEHOLDER_INVALID:');
+        const cleanedMessage = isPlaceholderError
+            ? error.message.replace('PLACEHOLDER_INVALID:', '').trim()
+            : error.message;
+
+        logger.error('[SCENARIO GAPS] Manual generate error', { error: error.message, companyId });
+        res.status(isPlaceholderError ? 400 : 500).json({
+            error: isPlaceholderError ? 'Invalid placeholders in generated scenario' : 'Failed to generate scenario',
+            details: cleanedMessage
+        });
+    }
+});
+
+/**
+ * POST /:companyId/gaps/manual/preview
+ *
+ * Manual Scenario Builder preview (content-only)
+ * Body: { question: string, category?: string, scenarioType?: string }
+ */
+router.post('/:companyId/gaps/manual/preview', async (req, res) => {
+    const { companyId } = req.params;
+    const { question, category, scenarioType, tradeKey } = req.body || {};
+
+    if (!question || !String(question).trim()) {
+        return res.status(400).json({ error: 'Question is required' });
+    }
+
+    try {
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const text = String(question).trim();
+        const gap = {
+            representative: text,
+            examples: [{ text }],
+            totalCalls: 1
+        };
+
+        const result = await generateScenarioFromGap(gap, company, {
+            tradeKeyOverride: tradeKey,
+            categoryOverride: category,
+            scenarioTypeOverride: scenarioType
+        });
+
+        if (result.error) {
+            return res.status(400).json({
+                success: false,
+                error: result.error,
+                message: result.message
+            });
+        }
+
+        if (result.isDuplicate) {
+            return res.json({
+                success: true,
+                isDuplicate: true,
+                duplicateScenarioId: result.duplicateScenarioId,
+                duplicateScenarioName: result.duplicateScenarioName,
+                duplicateCategory: result.duplicateCategory,
+                recommendedAction: result.recommendedAction,
+                explanation: result.explanation,
+                detectionMethod: result.detectionMethod
+            });
+        }
+
+        const validationTrade = tradeKey || result.tradeType || company.trade || 'general';
+        const validation = buildManualValidation(result.scenario, validationTrade);
+        const fieldsGenerated = Object.keys(result.scenario || {});
 
         return res.json({
             success: true,
             isDuplicate: false,
             preview: result.scenario,
-            validation
+            validation: {
+                ...validation,
+                fieldsGenerated
+            }
         });
     } catch (error) {
         const isPlaceholderError = (error.message || '').startsWith('PLACEHOLDER_INVALID:');
@@ -1734,9 +1865,9 @@ router.post('/:companyId/gaps/manual/preview', async (req, res) => {
  * Save Manual Scenario Builder draft (content-only)
  * Body: { scenario: object, allowWarnings?: boolean }
  */
-router.post('/:companyId/gaps/manual/save', async (req, res) => {
+async function handleManualSave(req, res) {
     const { companyId } = req.params;
-    const { scenario, allowWarnings = false } = req.body || {};
+    const { scenario, allowWarnings = false, tradeKey } = req.body || {};
 
     if (!scenario) {
         return res.status(400).json({ error: 'Scenario object is required' });
@@ -1781,8 +1912,8 @@ router.post('/:companyId/gaps/manual/save', async (req, res) => {
             logWarnings: false
         });
 
-        const tradeKey = template.templateType?.toLowerCase() || company.trade || 'general';
-        const validation = buildManualValidation(sanitized, tradeKey);
+        const validationTrade = tradeKey || template.templateType?.toLowerCase() || company.trade || 'general';
+        const validation = buildManualValidation(sanitized, validationTrade);
 
         if (!validation.valid) {
             return res.status(400).json({
@@ -1829,7 +1960,7 @@ router.post('/:companyId/gaps/manual/save', async (req, res) => {
             }
         );
 
-        res.json({
+        return res.json({
             success: true,
             scenarioId,
             category: scenarioCategory,
@@ -1837,11 +1968,19 @@ router.post('/:companyId/gaps/manual/save', async (req, res) => {
         });
     } catch (error) {
         logger.error('[SCENARIO GAPS] Manual save error', { error: error.message, companyId });
-        res.status(500).json({
+        return res.status(500).json({
             error: 'Failed to save manual scenario',
             details: error.message
         });
     }
+}
+
+router.post('/:companyId/manual/save', async (req, res) => {
+    return handleManualSave(req, res);
+});
+
+router.post('/:companyId/gaps/manual/save', async (req, res) => {
+    return handleManualSave(req, res);
 });
 
 /**

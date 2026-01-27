@@ -1115,6 +1115,18 @@
             margin: 0 0 6px 0;
         }
 
+        .manual-builder summary {
+            list-style: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .manual-builder summary::-webkit-details-marker {
+            display: none;
+        }
+
         .manual-builder textarea {
             width: 100%;
             min-height: 90px;
@@ -1239,8 +1251,8 @@
         <!-- TAB 1: Gap Fill (existing content) -->
         <div class="tab-content active" id="tab-gaps">
             <!-- Manual Scenario Builder -->
-            <div class="manual-builder">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <details class="manual-builder" id="manual-builder" open>
+                <summary>
                     <div style="font-size: 20px;">🧩</div>
                     <div>
                         <h3 style="color: var(--text-primary);">Manual Scenario Builder</h3>
@@ -1248,48 +1260,61 @@
                             Proactively generate draft scenarios without waiting for gaps
                         </div>
                     </div>
-                </div>
-                <label for="manual-question" style="font-size: 12px; color: var(--text-muted);">What did the caller ask?</label>
-                <textarea id="manual-question" placeholder="Example: How much is an AC tune-up?"></textarea>
+                    <div style="margin-left: auto; color: var(--text-muted); font-size: 12px;">Click to collapse</div>
+                </summary>
 
-                <div class="manual-row">
-                    <div>
-                        <label for="manual-category" style="font-size: 12px; color: var(--text-muted);">Category (optional)</label>
-                        <select id="manual-category"></select>
-                    </div>
-                    <div>
-                        <label for="manual-type" style="font-size: 12px; color: var(--text-muted);">Scenario Type (optional)</label>
-                        <select id="manual-type">
-                            <option value="">Auto (let AI choose)</option>
-                            <option value="FAQ">FAQ</option>
-                            <option value="BOOKING">BOOKING</option>
-                            <option value="EMERGENCY">EMERGENCY</option>
-                            <option value="TROUBLESHOOT">TROUBLESHOOT</option>
-                            <option value="BILLING">BILLING</option>
-                            <option value="TRANSFER">TRANSFER</option>
-                            <option value="SMALL_TALK">SMALL_TALK</option>
-                        </select>
-                    </div>
-                </div>
+                <div style="margin-top: 12px;">
+                    <label for="manual-question" style="font-size: 12px; color: var(--text-muted);">What did the caller ask?</label>
+                    <textarea id="manual-question" placeholder="Example: How much is an AC tune-up?"></textarea>
 
-                <div class="manual-actions">
-                    <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
-                        <input type="checkbox" id="manual-allow-warnings" />
-                        Allow warnings
-                    </label>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                        <button class="btn btn-primary" id="manual-generate-btn" onclick="generateManualScenario()">
-                            <i class="fas fa-wand-magic-sparkles"></i> Generate Draft Scenario
-                        </button>
-                        <button class="btn btn-secondary" id="manual-save-btn" onclick="saveManualScenario()" disabled>
-                            <i class="fas fa-save"></i> Save Draft
-                        </button>
+                    <div class="manual-row">
+                        <div id="manual-trade-row" style="display: none;">
+                            <label for="manual-trade" style="font-size: 12px; color: var(--text-muted);">Trade (optional)</label>
+                            <select id="manual-trade"></select>
+                        </div>
+                        <div>
+                            <label for="manual-category" style="font-size: 12px; color: var(--text-muted);">Category (optional)</label>
+                            <select id="manual-category"></select>
+                        </div>
+                        <div>
+                            <label for="manual-type" style="font-size: 12px; color: var(--text-muted);">Scenario Type (optional)</label>
+                            <select id="manual-type">
+                                <option value="">Auto (let AI choose)</option>
+                                <option value="FAQ">FAQ</option>
+                                <option value="BOOKING">BOOKING</option>
+                                <option value="EMERGENCY">EMERGENCY</option>
+                                <option value="TROUBLESHOOT">TROUBLESHOOT</option>
+                                <option value="BILLING">BILLING</option>
+                                <option value="TRANSFER">TRANSFER</option>
+                                <option value="SMALL_TALK">SMALL_TALK</option>
+                                <option value="AFTER_HOURS">AFTER_HOURS</option>
+                                <option value="MAINTENANCE">MAINTENANCE</option>
+                            </select>
+                        </div>
                     </div>
-                </div>
 
-                <div id="manual-preview" class="manual-preview" style="display: none;"></div>
-                <div id="manual-validation" class="manual-validation" style="display: none;"></div>
-            </div>
+                    <div class="manual-actions">
+                        <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                            <input type="checkbox" id="manual-allow-warnings" />
+                            Allow warnings
+                        </label>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" id="manual-generate-btn" onclick="generateManualScenario()">
+                                <i class="fas fa-wand-magic-sparkles"></i> Generate Scenario
+                            </button>
+                            <button class="btn btn-secondary" id="manual-copy-btn" onclick="copyManualScenarioJson()" disabled>
+                                <i class="fas fa-copy"></i> Copy JSON
+                            </button>
+                            <button class="btn btn-secondary" id="manual-save-btn" onclick="saveManualScenario()" disabled>
+                                <i class="fas fa-save"></i> Save as New Scenario
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="manual-preview" class="manual-preview" style="display: none;"></div>
+                    <div id="manual-validation" class="manual-validation" style="display: none;"></div>
+                </div>
+            </details>
 
             <!-- Summary Cards -->
             <div class="summary-grid" id="summary-grid">
@@ -3937,6 +3962,7 @@
             });
             
             loadGaps();
+            loadManualTrades();
             loadManualCategories();
 
             const allowWarningsEl = document.getElementById('manual-allow-warnings');
@@ -3998,6 +4024,40 @@
         // ========================================
         let manualPreview = null;
         let manualValidation = null;
+
+        async function loadManualTrades() {
+            try {
+                const token = getAuthToken();
+                if (!token) return;
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/manual/meta`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (!data.success) return;
+
+                const tradeRow = document.getElementById('manual-trade-row');
+                const tradeSelect = document.getElementById('manual-trade');
+                if (!tradeRow || !tradeSelect) return;
+
+                const trades = Array.isArray(data.trades) ? data.trades : [];
+                if (trades.length === 0) {
+                    tradeRow.style.display = 'none';
+                    tradeSelect.innerHTML = '<option value="">Default</option>';
+                    return;
+                }
+
+                tradeRow.style.display = trades.length > 1 ? 'block' : 'none';
+                tradeSelect.innerHTML = trades.map((t, idx) => {
+                    const key = t.key || '';
+                    const label = t.label || t.key || 'Trade';
+                    const selected = data.primaryTrade && data.primaryTrade.toLowerCase() === key.toLowerCase();
+                    return `<option value="${escapeHtml(key)}"${selected ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading manual trades:', error);
+            }
+        }
 
         async function loadManualCategories() {
             try {
@@ -4101,29 +4161,47 @@
                 </div>`
                 : `<div style="color: var(--text-muted); font-size: 12px;">No warnings</div>`;
 
+            const tokensUsed = Array.isArray(validation.tokensUsed) && validation.tokensUsed.length > 0
+                ? validation.tokensUsed.map(t => `<code>${escapeHtml(t)}</code>`).join(', ')
+                : 'None';
+            const fieldsGenerated = Array.isArray(validation.fieldsGenerated) && validation.fieldsGenerated.length > 0
+                ? validation.fieldsGenerated.map(f => `<code>${escapeHtml(f)}</code>`).join(', ')
+                : 'None';
+
+            const metaHtml = `
+                <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+                    <div><strong>Tokens used:</strong> ${tokensUsed}</div>
+                    <div><strong>Fields generated:</strong> ${fieldsGenerated}</div>
+                </div>
+            `;
+
             validationEl.style.display = 'block';
-            validationEl.innerHTML = `${statusLine}${errorHtml}${warningHtml}`;
+            validationEl.innerHTML = `${statusLine}${errorHtml}${warningHtml}${metaHtml}`;
         }
 
         function updateManualSaveState() {
             const saveBtn = document.getElementById('manual-save-btn');
+            const copyBtn = document.getElementById('manual-copy-btn');
             const allowWarnings = document.getElementById('manual-allow-warnings')?.checked;
             if (!saveBtn) return;
 
             if (!manualPreview || !manualValidation) {
                 saveBtn.disabled = true;
+                if (copyBtn) copyBtn.disabled = true;
                 return;
             }
 
             const hasErrors = (manualValidation.errors || []).length > 0;
             const hasWarnings = (manualValidation.warnings || []).length > 0;
             saveBtn.disabled = hasErrors || (!allowWarnings && hasWarnings);
+            if (copyBtn) copyBtn.disabled = false;
         }
 
         async function generateManualScenario() {
             const questionEl = document.getElementById('manual-question');
             const categoryEl = document.getElementById('manual-category');
             const typeEl = document.getElementById('manual-type');
+            const tradeEl = document.getElementById('manual-trade');
             const btn = document.getElementById('manual-generate-btn');
 
             const question = (questionEl?.value || '').trim();
@@ -4136,14 +4214,15 @@
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
                 const token = getAuthToken();
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/manual/preview`, {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/manual/generate`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        question,
+                        userPrompt: question,
+                        tradeKey: tradeEl?.value || null,
                         category: categoryEl?.value || null,
                         scenarioType: typeEl?.value || null
                     })
@@ -4166,7 +4245,7 @@
                     return;
                 }
 
-                manualPreview = data.preview;
+                manualPreview = data.generatedScenario || data.preview;
                 manualValidation = data.validation;
                 renderManualPreview(manualPreview);
                 renderManualValidation(manualValidation);
@@ -4189,12 +4268,13 @@
             const allowWarnings = document.getElementById('manual-allow-warnings')?.checked;
             const btn = document.getElementById('manual-save-btn');
             const questionEl = document.getElementById('manual-question');
+            const tradeEl = document.getElementById('manual-trade');
 
             try {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
                 const token = getAuthToken();
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/manual/save`, {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/manual/save`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -4202,7 +4282,8 @@
                     },
                     body: JSON.stringify({
                         scenario: manualPreview,
-                        allowWarnings: !!allowWarnings
+                        allowWarnings: !!allowWarnings,
+                        tradeKey: tradeEl?.value || null
                     })
                 });
 
@@ -4227,6 +4308,21 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-save"></i> Save Draft';
+            }
+        }
+
+        async function copyManualScenarioJson() {
+            if (!manualPreview) {
+                showToast('Generate a draft first', 'error');
+                return;
+            }
+            try {
+                const text = JSON.stringify(manualPreview, null, 2);
+                await navigator.clipboard.writeText(text);
+                showToast('Scenario JSON copied', 'success');
+            } catch (err) {
+                console.error('Copy failed:', err);
+                showToast('Copy failed', 'error');
             }
         }
         
