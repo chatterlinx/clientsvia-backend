@@ -20801,8 +20801,16 @@ ${JSON.stringify(healthData, null, 2)}
                 showEditPrefillLoadingOverlay();
                 
                 try {
-                    const prefillData = sessionStorage.getItem('scenarioEditPrefill');
-                    console.log('📋 [EDIT-PREFILL] SessionStorage data exists:', !!prefillData);
+                    // Try localStorage first (more reliable for cross-tab), fall back to sessionStorage
+                    let prefillData = localStorage.getItem('scenarioEditPrefill');
+                    let storageType = 'localStorage';
+                    
+                    if (!prefillData) {
+                        prefillData = sessionStorage.getItem('scenarioEditPrefill');
+                        storageType = 'sessionStorage';
+                    }
+                    
+                    console.log('📋 [EDIT-PREFILL] Prefill data exists:', !!prefillData, 'from:', storageType);
                     
                     if (prefillData) {
                         const editData = JSON.parse(prefillData);
@@ -20811,7 +20819,8 @@ ${JSON.stringify(healthData, null, 2)}
                         // Store for the auto-open logic
                         window.scenarioEditPrefillData = editData;
                         
-                        // Clean up sessionStorage
+                        // Clean up storage (both to be safe)
+                        localStorage.removeItem('scenarioEditPrefill');
                         sessionStorage.removeItem('scenarioEditPrefill');
                         
                         // Show banner indicating this is an edit with fixes
@@ -20825,7 +20834,7 @@ ${JSON.stringify(healthData, null, 2)}
                         
                         console.log('✅ [EDIT-PREFILL] Edit prefill data loaded - will auto-open edit modal in 1s');
                     } else {
-                        console.error('❌ [EDIT-PREFILL] No prefill data in sessionStorage');
+                        console.error('❌ [EDIT-PREFILL] No prefill data in localStorage or sessionStorage');
                         hideEditPrefillLoadingOverlay();
                         showEditPrefillError('No prefill data found. The data may have been lost. Please try again from Template Audit.');
                     }

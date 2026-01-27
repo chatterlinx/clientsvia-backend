@@ -3849,11 +3849,12 @@
                 const prefillData = buildEditScenarioPrefill(result.fixedScenario, result.navigation, result.fixes);
                 
                 // ════════════════════════════════════════════════════════════════════
-                // STEP 3: Store in sessionStorage (same pattern as Gap Fill)
+                // STEP 3: Store in localStorage (more reliable for cross-tab sharing)
                 // ════════════════════════════════════════════════════════════════════
-                sessionStorage.setItem('scenarioEditPrefill', JSON.stringify(prefillData));
+                // Using localStorage instead of sessionStorage for better cross-tab reliability
+                localStorage.setItem('scenarioEditPrefill', JSON.stringify(prefillData));
                 
-                console.log('📦 [AUDIT→GB] Prefill data stored in sessionStorage');
+                console.log('📦 [AUDIT→GB] Prefill data stored in localStorage');
                 
                 // ════════════════════════════════════════════════════════════════════
                 // STEP 4: Open Global Brain with edit prefill flag
