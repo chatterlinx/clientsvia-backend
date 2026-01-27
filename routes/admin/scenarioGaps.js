@@ -2737,15 +2737,55 @@ router.post('/:companyId/audit/run', async (req, res) => {
  * Audit a single scenario (for inline validation)
  * 
  * Body:
- * - scenario: object - the scenario to audit
+ * - scenario: object - the scenario to audit (if provided directly)
+ * - scenarioId: string - ID of scenario to look up and audit
  * - rules: string[] (optional) - specific rule IDs to run
  */
 router.post('/:companyId/audit/scenario', async (req, res) => {
     const { companyId } = req.params;
-    const { scenario, rules: ruleIds } = req.body;
+    const { scenario: providedScenario, scenarioId, rules: ruleIds } = req.body;
+    
+    let scenario = providedScenario;
+    
+    // If scenarioId provided instead of scenario object, look it up
+    if (!scenario && scenarioId) {
+        try {
+            const company = await Company.findById(companyId);
+            if (!company) {
+                return res.status(404).json({ error: 'Company not found' });
+            }
+            
+            // Search through all templates for this scenario
+            const templates = await GlobalInstantResponse.find({
+                company: companyId,
+                status: { $in: ['active', 'draft'] }
+            });
+            
+            for (const template of templates) {
+                for (const category of (template.categories || [])) {
+                    const found = (category.scenarios || []).find(s => s.scenarioId === scenarioId);
+                    if (found) {
+                        scenario = found;
+                        break;
+                    }
+                }
+                if (scenario) break;
+            }
+            
+            if (!scenario) {
+                return res.status(404).json({ error: `Scenario ${scenarioId} not found` });
+            }
+            
+            logger.info('[AUDIT] Found scenario by ID', { scenarioId, name: scenario.name });
+            
+        } catch (lookupError) {
+            logger.error('[AUDIT] Error looking up scenario', { scenarioId, error: lookupError.message });
+            return res.status(500).json({ error: 'Failed to look up scenario', details: lookupError.message });
+        }
+    }
     
     if (!scenario) {
-        return res.status(400).json({ error: 'Scenario object is required' });
+        return res.status(400).json({ error: 'Scenario object or scenarioId is required' });
     }
     
     try {
@@ -2756,6 +2796,8 @@ router.post('/:companyId/audit/scenario', async (req, res) => {
         
         res.json({
             success: true,
+            scenarioId: scenario.scenarioId,
+            scenarioName: scenario.name,
             ...result
         });
         

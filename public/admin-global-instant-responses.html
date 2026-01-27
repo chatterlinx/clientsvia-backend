@@ -21241,21 +21241,28 @@ ${JSON.stringify(healthData, null, 2)}
             }
             
             try {
-                // Get company ID from URL or template
-                const urlParams = new URLSearchParams(window.location.search);
-                const templateId = urlParams.get('templateId') || activeTemplateId;
+                // ════════════════════════════════════════════════════════════════════
+                // Get company ID - check localStorage first (stored when starting fix)
+                // ════════════════════════════════════════════════════════════════════
+                let companyId = localStorage.getItem('lastAuditCompanyId');
                 
-                // Find company ID - we need to fetch it
-                const templateResponse = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-                });
-                const templateData = await templateResponse.json();
-                const template = templateData.data || templateData;
-                
-                // Try to get companyId from various sources
-                let companyId = template.companyId || template.company;
                 if (!companyId) {
-                    // Fall back to the company selector
+                    // Fall back: try to get from template
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const templateId = urlParams.get('templateId') || activeTemplateId;
+                    
+                    if (templateId) {
+                        const templateResponse = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                        });
+                        const templateData = await templateResponse.json();
+                        const template = templateData.data || templateData;
+                        companyId = template.companyId || template.company;
+                    }
+                }
+                
+                if (!companyId) {
+                    // Last resort: check company selector
                     const companySelect = document.getElementById('company-selector') || document.getElementById('test-company-select');
                     companyId = companySelect?.value;
                 }
@@ -21263,6 +21270,8 @@ ${JSON.stringify(healthData, null, 2)}
                 if (!companyId) {
                     throw new Error('Could not determine company ID for verification');
                 }
+                
+                console.log('🔍 [VERIFY] Using company ID:', companyId);
                 
                 // Call the audit endpoint for just this scenario
                 const auditResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/scenario`, {
