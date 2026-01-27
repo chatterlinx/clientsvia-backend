@@ -3338,6 +3338,9 @@ router.post('/:companyId/audit/fix-scenario', async (req, res) => {
                 const tradeKey = company.trade || template.templateType || null;
                 const governanceBlock = buildPlaceholderGovernanceBlock(tradeKey);
 
+                // ════════════════════════════════════════════════════════════════════
+                // COMPREHENSIVE FIX PROMPT - Includes ALL banned phrases from audit rules
+                // ════════════════════════════════════════════════════════════════════
                 const fixPrompt = `Fix this dispatcher scenario text that has a violation.
 
 SCENARIO CONTEXT:
@@ -3353,8 +3356,13 @@ RULES:
 - Keep under 20 words for quick replies, 25 for full replies
 - Use {callerName} placeholder appropriately (do NOT invent placeholders)
 - Sound like an experienced dispatcher (calm, professional)
-- Never use: "Got it", "No problem", "happy to help", "let me help"
-- Approved: "I understand.", "Alright.", "Okay.", "Thanks, {callerName}."
+
+BANNED PHRASES (NEVER USE - these break dispatcher persona):
+Chatbot: "wonderful to hear", "great to have you", "we're here to help", "let's sort this out", "i apologize for the inconvenience", "i'm sorry to hear", "thank you for reaching out", "how can i assist", "i'd be happy to help", "is there anything else", "thank you for your patience", "let me help you with that", "i'm here to assist", "thanks for contacting us"
+Help desk: "got it", "no problem", "absolutely", "of course", "certainly", "definitely", "sure thing", "you bet", "my pleasure", "happy to help"
+Troubleshooting: "have you checked", "have you tried", "have you noticed", "did you try", "can you check"
+
+APPROVED ONLY: "I understand.", "Alright.", "Okay.", "Thanks, {callerName}."
 
 Return ONLY the fixed text. No quotes, no explanation.
 
@@ -3631,10 +3639,14 @@ router.post('/:companyId/audit/generate-fix', async (req, res) => {
                     continue;
                 }
                 
-                // Generate fix using GPT-4o
+                // Generate fix using GPT-4o (for generate-fix preview endpoint)
                 const tradeKey = company.trade || template.templateType || null;
                 const governanceBlock = buildPlaceholderGovernanceBlock(tradeKey);
                 
+                // ════════════════════════════════════════════════════════════════════
+                // COMPREHENSIVE FIX PROMPT - Includes ALL banned phrases from audit rules
+                // This ensures GPT-4 generates fixes that will actually pass the audit
+                // ════════════════════════════════════════════════════════════════════
                 const fixPrompt = `Fix this dispatcher scenario text that has a violation.
 
 SCENARIO CONTEXT:
@@ -3650,8 +3662,13 @@ RULES:
 - Keep under 20 words for quick replies, 25 for full replies
 - Use {callerName} placeholder appropriately (do NOT invent placeholders)
 - Sound like an experienced dispatcher (calm, professional)
-- Never use: "Got it", "No problem", "happy to help", "let me help"
-- Approved: "I understand.", "Alright.", "Okay.", "Thanks, {callerName}."
+
+BANNED PHRASES (NEVER USE - these break dispatcher persona):
+Chatbot: "wonderful to hear", "great to have you", "we're here to help", "let's sort this out", "i apologize for the inconvenience", "i'm sorry to hear", "thank you for reaching out", "how can i assist", "i'd be happy to help", "is there anything else", "thank you for your patience", "let me help you with that", "i'm here to assist", "thanks for contacting us"
+Help desk: "got it", "no problem", "absolutely", "of course", "certainly", "definitely", "sure thing", "you bet", "my pleasure", "happy to help"
+Troubleshooting: "have you checked", "have you tried", "have you noticed", "did you try", "can you check"
+
+APPROVED ONLY: "I understand.", "Alright.", "Okay.", "Thanks, {callerName}."
 
 Return ONLY the fixed text. No quotes, no explanation.
 
