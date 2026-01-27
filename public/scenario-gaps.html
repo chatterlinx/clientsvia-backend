@@ -1250,35 +1250,101 @@
     <main class="main-content">
         <!-- TAB 1: Gap Fill (existing content) -->
         <div class="tab-content active" id="tab-gaps">
-            <!-- Manual Scenario Builder -->
-            <details class="manual-builder" id="manual-builder" open>
-                <summary>
-                    <div style="font-size: 20px;">🧩</div>
+            <!-- ════════════════════════════════════════════════════════════════════════════════
+                 ADD NEW SCENARIO (Manual Scenario Builder)
+                 Proactively create scenarios via GPT-4 without waiting for gaps
+                 ════════════════════════════════════════════════════════════════════════════════ -->
+            <div class="manual-builder" id="manual-builder" style="
+                background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%);
+                border: 1px solid rgba(16, 185, 129, 0.3);
+                border-radius: 16px;
+                padding: 24px;
+                margin-bottom: 24px;
+            ">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                    <div style="
+                        width: 48px;
+                        height: 48px;
+                        background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+                        border-radius: 12px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 24px;
+                    ">➕</div>
                     <div>
-                        <h3 style="color: var(--text-primary);">Manual Scenario Builder</h3>
-                        <div style="font-size: 12px; color: var(--text-muted);">
-                            Proactively generate draft scenarios without waiting for gaps
+                        <h3 style="color: var(--text-primary); margin: 0; font-size: 18px;">Add New Scenario</h3>
+                        <div style="font-size: 13px; color: var(--text-muted);">
+                            GPT-4 generates a complete scenario from your description
                         </div>
                     </div>
-                    <div style="margin-left: auto; color: var(--text-muted); font-size: 12px;">Click to collapse</div>
-                </summary>
+                    <div id="manual-template-info" style="
+                        margin-left: auto;
+                        background: rgba(0,0,0,0.2);
+                        padding: 8px 16px;
+                        border-radius: 8px;
+                        font-size: 12px;
+                        color: var(--text-muted);
+                    ">
+                        <span id="manual-template-name">Loading template...</span>
+                        <span id="manual-category-count" style="color: #10b981; margin-left: 8px;"></span>
+                    </div>
+                </div>
 
-                <div style="margin-top: 12px;">
-                    <label for="manual-question" style="font-size: 12px; color: var(--text-muted);">What did the caller ask?</label>
-                    <textarea id="manual-question" placeholder="Example: How much is an AC tune-up?"></textarea>
-
-                    <div class="manual-row">
-                        <div id="manual-trade-row" style="display: none;">
-                            <label for="manual-trade" style="font-size: 12px; color: var(--text-muted);">Trade (optional)</label>
-                            <select id="manual-trade"></select>
-                        </div>
+                <!-- Input Section -->
+                <div style="display: grid; gap: 16px;">
+                    <!-- Question Input -->
+                    <div>
+                        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
+                            What did the caller ask? <span style="color: #ef4444;">*</span>
+                        </label>
+                        <textarea id="manual-question" placeholder="Example: How much is an AC tune-up?" style="
+                            width: 100%;
+                            min-height: 80px;
+                            padding: 12px;
+                            border: 1px solid var(--border-color);
+                            border-radius: 8px;
+                            background: var(--card-bg);
+                            color: var(--text-primary);
+                            font-size: 14px;
+                            resize: vertical;
+                        "></textarea>
+                    </div>
+                    
+                    <!-- Options Row -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px;">
+                        <!-- Category Dropdown -->
                         <div>
-                            <label for="manual-category" style="font-size: 12px; color: var(--text-muted);">Category (optional)</label>
-                            <select id="manual-category"></select>
+                            <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
+                                Category
+                            </label>
+                            <select id="manual-category" style="
+                                width: 100%;
+                                padding: 10px 12px;
+                                border: 1px solid var(--border-color);
+                                border-radius: 8px;
+                                background: var(--card-bg);
+                                color: var(--text-primary);
+                                font-size: 13px;
+                            ">
+                                <option value="">Auto (let AI choose)</option>
+                            </select>
                         </div>
+                        
+                        <!-- Scenario Type -->
                         <div>
-                            <label for="manual-type" style="font-size: 12px; color: var(--text-muted);">Scenario Type (optional)</label>
-                            <select id="manual-type">
+                            <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
+                                Scenario Type
+                            </label>
+                            <select id="manual-type" style="
+                                width: 100%;
+                                padding: 10px 12px;
+                                border: 1px solid var(--border-color);
+                                border-radius: 8px;
+                                background: var(--card-bg);
+                                color: var(--text-primary);
+                                font-size: 13px;
+                            ">
                                 <option value="">Auto (let AI choose)</option>
                                 <option value="FAQ">FAQ</option>
                                 <option value="BOOKING">BOOKING</option>
@@ -1291,30 +1357,49 @@
                                 <option value="MAINTENANCE">MAINTENANCE</option>
                             </select>
                         </div>
+                        
+                        <!-- Trade (hidden by default) -->
+                        <div id="manual-trade-row" style="display: none;">
+                            <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
+                                Trade
+                            </label>
+                            <select id="manual-trade" style="
+                                width: 100%;
+                                padding: 10px 12px;
+                                border: 1px solid var(--border-color);
+                                border-radius: 8px;
+                                background: var(--card-bg);
+                                color: var(--text-primary);
+                                font-size: 13px;
+                            "></select>
+                        </div>
                     </div>
-
-                    <div class="manual-actions">
-                        <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
-                            <input type="checkbox" id="manual-allow-warnings" />
-                            Allow warnings
+                    
+                    <!-- Action Buttons -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 8px;">
+                        <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="manual-allow-warnings" style="width: 16px; height: 16px;" />
+                            Allow saving with warnings
                         </label>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button class="btn btn-primary" id="manual-generate-btn" onclick="generateManualScenario()">
-                                <i class="fas fa-wand-magic-sparkles"></i> Generate Scenario
-                            </button>
-                            <button class="btn btn-secondary" id="manual-copy-btn" onclick="copyManualScenarioJson()" disabled>
-                                <i class="fas fa-copy"></i> Copy JSON
-                            </button>
-                            <button class="btn btn-secondary" id="manual-save-btn" onclick="saveManualScenario()" disabled>
-                                <i class="fas fa-save"></i> Save as New Scenario
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn" id="manual-generate-btn" onclick="generateManualScenario()" style="
+                                background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+                                border: none;
+                                padding: 12px 24px;
+                                font-weight: 600;
+                            ">
+                                <i class="fas fa-wand-magic-sparkles"></i> Generate with GPT-4
                             </button>
                         </div>
                     </div>
-
-                    <div id="manual-preview" class="manual-preview" style="display: none;"></div>
-                    <div id="manual-validation" class="manual-validation" style="display: none;"></div>
                 </div>
-            </details>
+                
+                <!-- Generated Scenario Preview (hidden until generated) -->
+                <div id="manual-result" style="display: none; margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 24px;">
+                    <!-- Will be populated by JS -->
+                </div>
+            </div>
 
             <!-- Summary Cards -->
             <div class="summary-grid" id="summary-grid">
@@ -4749,25 +4834,65 @@
             }
         }
 
+        // Store template data for reuse
+        let manualBuilderTemplateData = null;
+        
         async function loadManualCategories() {
+            const templateNameEl = document.getElementById('manual-template-name');
+            const categoryCountEl = document.getElementById('manual-category-count');
+            const select = document.getElementById('manual-category');
+            
             try {
                 const token = getAuthToken();
-                if (!token) return;
+                if (!token) {
+                    if (templateNameEl) templateNameEl.textContent = 'Not logged in';
+                    return;
+                }
+                
                 const response = await fetch(`/api/admin/scenario-gaps/${companyId}/scenarios`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!response.ok) return;
+                
+                if (!response.ok) {
+                    const errData = await response.json();
+                    console.error('Failed to load categories:', errData);
+                    if (templateNameEl) templateNameEl.textContent = errData.message || 'Template error';
+                    return;
+                }
+                
                 const data = await response.json();
+                manualBuilderTemplateData = data;
+                
+                // Update template info display
+                if (templateNameEl) {
+                    templateNameEl.innerHTML = `
+                        <i class="fas fa-file-alt" style="margin-right: 6px;"></i>
+                        ${escapeHtml(data.templateName || 'Template')}
+                    `;
+                }
+                
+                // Get unique categories
                 const categories = Array.isArray(data.categories) && data.categories.length > 0
                     ? data.categories
-                    : ['General'];
-                const select = document.getElementById('manual-category');
+                    : [];
+                
+                if (categoryCountEl) {
+                    categoryCountEl.textContent = `${categories.length} categories`;
+                }
+                
+                // Populate dropdown
                 if (!select) return;
-                select.innerHTML = categories.map((c, idx) =>
-                    `<option value="${escapeHtml(c)}"${idx === 0 ? ' selected' : ''}>${escapeHtml(c)}</option>`
-                ).join('');
+                
+                select.innerHTML = `
+                    <option value="">Auto (let AI choose)</option>
+                    ${categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
+                `;
+                
+                console.log(`[Manual Builder] Loaded ${categories.length} categories from template "${data.templateName}"`);
+                
             } catch (error) {
                 console.error('Error loading manual categories:', error);
+                if (templateNameEl) templateNameEl.textContent = 'Error loading template';
             }
         }
 
@@ -4893,6 +5018,7 @@
             const typeEl = document.getElementById('manual-type');
             const tradeEl = document.getElementById('manual-trade');
             const btn = document.getElementById('manual-generate-btn');
+            const resultDiv = document.getElementById('manual-result');
 
             const question = (questionEl?.value || '').trim();
             if (!question) {
@@ -4903,6 +5029,19 @@
             try {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+                
+                // Show loading state
+                if (resultDiv) {
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <i class="fas fa-brain fa-3x" style="color: #10b981; margin-bottom: 16px; animation: pulse 2s infinite;"></i>
+                            <h3 style="color: white; margin-bottom: 8px;">GPT-4 is creating your scenario...</h3>
+                            <p style="color: var(--text-muted); font-size: 13px;">Generating triggers, replies, and validation</p>
+                        </div>
+                    `;
+                }
+                
                 const token = getAuthToken();
                 const response = await fetch(`/api/admin/scenario-gaps/${companyId}/manual/generate`, {
                     method: 'POST',
@@ -4925,28 +5064,236 @@
 
                 if (data.isDuplicate) {
                     manualPreview = null;
-                    manualValidation = {
-                        errors: [{ message: `Duplicate detected: ${data.duplicateScenarioName || 'Existing scenario'}` }],
-                        warnings: []
-                    };
-                    renderManualPreview(null);
-                    renderManualValidation(manualValidation);
-                    updateManualSaveState();
+                    manualValidation = null;
+                    if (resultDiv) {
+                        resultDiv.innerHTML = `
+                            <div style="
+                                background: rgba(245, 158, 11, 0.1);
+                                border: 1px solid #f59e0b;
+                                border-radius: 12px;
+                                padding: 20px;
+                                text-align: center;
+                            ">
+                                <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+                                <h3 style="color: #f59e0b; margin-bottom: 8px;">Duplicate Detected</h3>
+                                <p style="color: var(--text-muted); margin-bottom: 16px;">
+                                    This appears to match: <strong style="color: white;">${escapeHtml(data.duplicateScenarioName || 'Unknown')}</strong>
+                                </p>
+                                <p style="color: var(--text-muted); font-size: 13px;">
+                                    ${escapeHtml(data.explanation || 'Consider adding triggers to the existing scenario instead.')}
+                                </p>
+                            </div>
+                        `;
+                    }
                     return;
                 }
 
                 manualPreview = data.generatedScenario || data.preview;
                 manualValidation = data.validation;
-                renderManualPreview(manualPreview);
-                renderManualValidation(manualValidation);
-                updateManualSaveState();
+                renderManualResult(manualPreview, manualValidation);
+                
             } catch (error) {
                 console.error('Manual generate error:', error);
                 showToast(error.message || 'Failed to generate draft', 'error');
+                if (resultDiv) {
+                    resultDiv.innerHTML = `
+                        <div style="
+                            background: rgba(239, 68, 68, 0.1);
+                            border: 1px solid #ef4444;
+                            border-radius: 12px;
+                            padding: 20px;
+                            text-align: center;
+                        ">
+                            <div style="font-size: 48px; margin-bottom: 12px;">❌</div>
+                            <h3 style="color: #ef4444; margin-bottom: 8px;">Generation Failed</h3>
+                            <p style="color: var(--text-muted);">${escapeHtml(error.message)}</p>
+                        </div>
+                    `;
+                }
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate Draft Scenario';
+                btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate with GPT-4';
             }
+        }
+        
+        function renderManualResult(scenario, validation) {
+            const resultDiv = document.getElementById('manual-result');
+            if (!resultDiv || !scenario) return;
+            
+            const hasErrors = validation?.errors?.length > 0;
+            const hasWarnings = validation?.warnings?.length > 0;
+            
+            const triggers = (scenario.triggers || []).slice(0, 8);
+            const quickReplies = scenario.quickReplies || [];
+            const fullReplies = scenario.fullReplies || [];
+            
+            resultDiv.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #10b981;">
+                        <i class="fas fa-check-circle"></i> Scenario Generated
+                    </h3>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="copyManualScenarioJson()" style="padding: 8px 16px;">
+                            <i class="fas fa-copy"></i> Copy JSON
+                        </button>
+                        <button class="btn" onclick="openManualInGlobalBrain()" style="
+                            background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+                            border: none;
+                            padding: 8px 20px;
+                        ">
+                            <i class="fas fa-external-link-alt"></i> Open in Global Brain
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Scenario Card -->
+                <div style="
+                    background: var(--card-bg);
+                    border: 1px solid var(--border-color);
+                    border-radius: 12px;
+                    padding: 20px;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
+                        <div>
+                            <h4 style="margin: 0 0 8px 0; color: white; font-size: 18px;">
+                                ${escapeHtml(scenario.name || 'Untitled')}
+                            </h4>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
+                                    ${escapeHtml(scenario.categories?.[0] || scenario.category || 'General')}
+                                </span>
+                                <span style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
+                                    ${escapeHtml(scenario.scenarioType || 'FAQ')}
+                                </span>
+                                ${scenario.bookingIntent ? `
+                                    <span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
+                                        Booking Intent
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Triggers -->
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
+                            TRIGGERS (${scenario.triggers?.length || 0})
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${triggers.map(t => `
+                                <span style="
+                                    background: rgba(139, 92, 246, 0.2);
+                                    color: #a78bfa;
+                                    padding: 4px 10px;
+                                    border-radius: 6px;
+                                    font-size: 12px;
+                                ">${escapeHtml(t)}</span>
+                            `).join('')}
+                            ${scenario.triggers?.length > 8 ? `<span style="color: var(--text-muted); font-size: 12px;">+${scenario.triggers.length - 8} more</span>` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Replies Grid -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
+                                QUICK REPLIES (${quickReplies.length})
+                            </div>
+                            ${quickReplies.slice(0, 3).map(r => `
+                                <div style="
+                                    background: rgba(16, 185, 129, 0.15);
+                                    border-left: 3px solid #10b981;
+                                    padding: 10px 12px;
+                                    margin-bottom: 8px;
+                                    border-radius: 0 8px 8px 0;
+                                    font-size: 13px;
+                                    color: #a7f3d0;
+                                ">${escapeHtml(r)}</div>
+                            `).join('')}
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
+                                FULL REPLIES (${fullReplies.length})
+                            </div>
+                            ${fullReplies.slice(0, 3).map(r => `
+                                <div style="
+                                    background: rgba(59, 130, 246, 0.15);
+                                    border-left: 3px solid #3b82f6;
+                                    padding: 10px 12px;
+                                    margin-bottom: 8px;
+                                    border-radius: 0 8px 8px 0;
+                                    font-size: 13px;
+                                    color: #93c5fd;
+                                ">${escapeHtml(r)}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Validation -->
+                ${(hasErrors || hasWarnings) ? `
+                    <div style="margin-top: 16px;">
+                        ${hasErrors ? `
+                            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                                <div style="color: #ef4444; font-weight: 600; margin-bottom: 8px;">
+                                    <i class="fas fa-times-circle"></i> Errors (${validation.errors.length})
+                                </div>
+                                ${validation.errors.map(e => `<div style="color: #fca5a5; font-size: 13px; margin-left: 20px;">• ${escapeHtml(e.message || e)}</div>`).join('')}
+                            </div>
+                        ` : ''}
+                        ${hasWarnings ? `
+                            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 12px;">
+                                <div style="color: #f59e0b; font-weight: 600; margin-bottom: 8px;">
+                                    <i class="fas fa-exclamation-triangle"></i> Warnings (${validation.warnings.length})
+                                </div>
+                                ${validation.warnings.map(w => `<div style="color: #fcd34d; font-size: 13px; margin-left: 20px;">• ${escapeHtml(w.message || w)}</div>`).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : `
+                    <div style="margin-top: 16px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 12px; text-align: center;">
+                        <span style="color: #10b981;">
+                            <i class="fas fa-check-circle"></i> All validations passed
+                        </span>
+                    </div>
+                `}
+            `;
+        }
+        
+        function openManualInGlobalBrain() {
+            if (!manualPreview) {
+                showToast('No scenario generated yet', 'error');
+                return;
+            }
+            
+            // Build prefill data for Global Brain
+            const prefillData = {
+                mode: 'create',
+                scenario: {
+                    name: manualPreview.name || '',
+                    status: 'draft',
+                    category: manualPreview.categories?.[0] || manualPreview.category || '',
+                    categories: manualPreview.categories || [],
+                    scenarioType: manualPreview.scenarioType || 'FAQ',
+                    bookingIntent: manualPreview.bookingIntent || false,
+                    triggers: manualPreview.triggers || [],
+                    quickReplies: manualPreview.quickReplies || [],
+                    fullReplies: manualPreview.fullReplies || [],
+                    quickReplies_noName: manualPreview.quickReplies_noName || [],
+                    fullReplies_noName: manualPreview.fullReplies_noName || [],
+                    behavior: manualPreview.behavior || '',
+                    notes: `Created from Gap Fill. Question: "${document.getElementById('manual-question')?.value || ''}"`,
+                    source: 'gap-fill-manual'
+                },
+                templateId: manualBuilderTemplateData?.templateId || null
+            };
+            
+            // Store in localStorage
+            localStorage.setItem('scenarioPrefill', JSON.stringify(prefillData));
+            
+            // Open Global Brain
+            window.open('/admin-global-instant-responses.html?prefill=scenario', '_blank');
+            showToast('Opening Global Brain with scenario...', 'success');
         }
 
         async function saveManualScenario() {
