@@ -20861,14 +20861,193 @@ ${JSON.stringify(healthData, null, 2)}
                         showEditPrefillError('No prefill data found. The data may have been lost. Please try again from Template Audit.');
                     }
                 } catch (e) {
-                    console.error('❌ [EDIT-PREFILL] Failed to parse edit prefill data:', e);
+                    console.error('❌ [EDIT-PREFILL] Failed to parse prefill data:', e);
                     hideEditPrefillLoadingOverlay();
                     showEditPrefillError('Failed to load prefill data: ' + e.message);
                 }
             }
             
-            console.log('✅ [PAGE INIT] Page initialization complete (both Template and Company modes loaded)');
-        });
+            // ════════════════════════════════════════════════════════════════════════
+            // 🎯 DEEP AUDIT DIRECT EDIT: Coming from Deep Audit "Fix in Global Brain"
+            // ════════════════════════════════════════════════════════════════════════
+            // URL: ?editScenario=<scenarioId>&categoryId=<categoryId>
+            // - Finds the scenario in the company's template
+            // - Opens the edit modal directly
+            // ════════════════════════════════════════════════════════════════════════
+            const editScenarioId = urlParams.get('editScenario');
+            if (editScenarioId) {
+                console.log('🔧 [DEEP-AUDIT-EDIT] Direct edit requested for scenario:', editScenarioId);
+                
+                // Show loading overlay
+                showDeepAuditEditOverlay();
+                
+                // Wait for page to load then find and edit the scenario
+                setTimeout(async () => {
+                    await initializeDeepAuditEdit(editScenarioId, urlParams.get('categoryId'));
+                }, 1500);
+            }
+            
+        } catch (e) {
+            console.error('❌ Initialization error (suppressed):', e);
+        }
+    });
+    
+    // ════════════════════════════════════════════════════════════════════════════════
+    // DEEP AUDIT DIRECT EDIT FUNCTIONS
+    // ════════════════════════════════════════════════════════════════════════════════
+    
+    function showDeepAuditEditOverlay() {
+        // Remove existing if any
+        const existing = document.getElementById('deep-audit-edit-overlay');
+        if (existing) existing.remove();
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'deep-audit-edit-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 50000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        `;
+        overlay.innerHTML = `
+            <div style="font-size: 64px; margin-bottom: 20px;">🔍</div>
+            <h2 style="color: white; margin-bottom: 12px;">Loading Scenario...</h2>
+            <p id="deep-audit-edit-status" style="color: #a0a0b0;">Finding scenario in template</p>
+            <div style="margin-top: 20px; width: 200px; height: 4px; background: #333; border-radius: 2px; overflow: hidden;">
+                <div style="width: 30%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #ec4899); animation: loading 1s ease-in-out infinite;"></div>
+            </div>
+            <style>
+                @keyframes loading {
+                    0% { transform: translateX(-100%); }
+                    100% { transform: translateX(400%); }
+                }
+            </style>
+        `;
+        document.body.appendChild(overlay);
+    }
+    
+    function hideDeepAuditEditOverlay() {
+        const overlay = document.getElementById('deep-audit-edit-overlay');
+        if (overlay) overlay.remove();
+    }
+    
+    function updateDeepAuditEditStatus(message) {
+        const status = document.getElementById('deep-audit-edit-status');
+        if (status) status.textContent = message;
+    }
+    
+    async function initializeDeepAuditEdit(scenarioId, categoryIdHint) {
+        try {
+            updateDeepAuditEditStatus('Loading company templates...');
+            
+            // Get company ID from localStorage (stored by Deep Audit)
+            const companyId = localStorage.getItem('lastAuditCompanyId');
+            if (!companyId) {
+                throw new Error('No company ID found. Please return to Deep Audit and try again.');
+            }
+            
+            // Fetch the company's template
+            updateDeepAuditEditStatus('Fetching template...');
+            
+            const templatesResponse = await fetch(`/api/admin/global-instant-responses?companyId=${companyId}`, {
+                headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+            });
+            
+            if (!templatesResponse.ok) {
+                throw new Error('Failed to fetch templates');
+            }
+            
+            const templatesData = await templatesResponse.json();
+            const templates = templatesData.data || templatesData.templates || templatesData;
+            
+            if (!templates || templates.length === 0) {
+                throw new Error('No templates found for this company');
+            }
+            
+            // Find the scenario in the templates
+            updateDeepAuditEditStatus('Searching for scenario...');
+            
+            let foundTemplate = null;
+            let foundCategory = null;
+            let foundScenario = null;
+            let foundCategoryIndex = -1;
+            let foundScenarioIndex = -1;
+            
+            for (const template of templates) {
+                for (let ci = 0; ci < (template.categories || []).length; ci++) {
+                    const category = template.categories[ci];
+                    for (let si = 0; si < (category.scenarios || []).length; si++) {
+                        const scenario = category.scenarios[si];
+                        const sId = scenario.scenarioId || scenario._id?.toString();
+                        if (sId === scenarioId) {
+                            foundTemplate = template;
+                            foundCategory = category;
+                            foundScenario = scenario;
+                            foundCategoryIndex = ci;
+                            foundScenarioIndex = si;
+                            break;
+                        }
+                    }
+                    if (foundScenario) break;
+                }
+                if (foundScenario) break;
+            }
+            
+            if (!foundScenario) {
+                throw new Error(`Scenario ${scenarioId} not found in any template`);
+            }
+            
+            console.log('🔧 [DEEP-AUDIT-EDIT] Found scenario:', {
+                template: foundTemplate.name,
+                category: foundCategory.name,
+                scenario: foundScenario.name
+            });
+            
+            updateDeepAuditEditStatus(`Found: "${foundScenario.name}" - Loading template...`);
+            
+            // Load the template in Global Brain
+            await switchDashboardTemplate(foundTemplate._id);
+            
+            updateDeepAuditEditStatus('Opening edit modal...');
+            
+            // Wait for template to load, then open edit modal
+            setTimeout(() => {
+                // Store the scenario data for edit
+                window.currentCategoryIndex = foundCategoryIndex;
+                window.currentScenarioIndex = foundScenarioIndex;
+                
+                // Open edit modal
+                editScenario(foundCategoryIndex, foundScenarioIndex);
+                
+                // Hide overlay
+                hideDeepAuditEditOverlay();
+                
+                // Show info banner
+                showNotification(`Editing "${foundScenario.name}" from Deep Audit`, 'info');
+                
+                // Clean URL params
+                const newUrl = window.location.pathname;
+                window.history.replaceState({}, '', newUrl);
+                
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ [DEEP-AUDIT-EDIT] Error:', error);
+            hideDeepAuditEditOverlay();
+            showNotification('Failed to load scenario: ' + error.message, 'error');
+            
+            // Clean URL params
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+        }
+    }
         
         // ════════════════════════════════════════════════════════════════════════
         // 🎯 SCENARIO PREFILL BANNER & AUTO-FILL SYSTEM
