@@ -43,10 +43,17 @@ function normalizeMode(mode, defaultMode = 'LITERAL', supportsModes = []) {
     return normalized;
 }
 
-function getPolicyScripts({ catalogEntry, placeholderEntry }) {
-    const base = (catalogEntry && typeof catalogEntry === 'object' && catalogEntry.policyScripts)
+function getPolicyScripts({ catalog, catalogEntry, placeholderEntry }) {
+    const catalogDefaults = (catalog && typeof catalog === 'object' && catalog.policyScripts?.pricing)
+        ? catalog.policyScripts.pricing
+        : {};
+    const entryScripts = (catalogEntry && typeof catalogEntry === 'object' && catalogEntry.policyScripts)
         ? catalogEntry.policyScripts
         : {};
+    const base = {
+        ...catalogDefaults,
+        ...entryScripts
+    };
 
     const scripts = {
         transferOffer: base.transferOffer || '',
@@ -55,9 +62,9 @@ function getPolicyScripts({ catalogEntry, placeholderEntry }) {
         callbackOffer: base.callbackOffer || ''
     };
 
-    const metaPrompt = placeholderEntry?.meta?.callbackPrompt;
-    if (metaPrompt && String(metaPrompt).trim()) {
-        scripts.callbackOffer = String(metaPrompt).trim();
+    const metaCallback = placeholderEntry?.meta?.callbackOffer || placeholderEntry?.meta?.callbackPrompt;
+    if (metaCallback && String(metaCallback).trim()) {
+        scripts.callbackOffer = String(metaCallback).trim();
     }
 
     return scripts;
@@ -131,7 +138,7 @@ async function applyPricingPolicy({
 
         const offerToken = canonicalizeKey(session?.pricingPolicy?.offerToken || '');
         const catalogEntry = offerToken ? catalog.byKey[offerToken] : null;
-        const scripts = getPolicyScripts({ catalogEntry, placeholderEntry: null });
+        const scripts = getPolicyScripts({ catalog, catalogEntry, placeholderEntry: null });
 
         if (consent.decision === 'accept') {
             if (!scripts.transferConfirm) {
@@ -222,6 +229,7 @@ async function applyPricingPolicy({
 
     if (policyTarget) {
         const scripts = getPolicyScripts({
+            catalog,
             catalogEntry: policyTarget.catalogEntry,
             placeholderEntry: policyTarget.entry
         });

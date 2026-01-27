@@ -8,11 +8,11 @@
  * ARCHITECTURE:
  * - Simple 2-column structure: Name | Value
  * - Per companyId (multi-tenant safe)
- * - Used for template rendering: {companyname}, {phone}, {license}, etc.
+ * - Used for template rendering: {companyName}, {companyPhone}, {licenseNumber}, etc.
  * - NO nesting, NO logic, NO scripting
  * 
  * USAGE IN REPLIES:
- * "Thank you for calling {companyname}! Our technicians are licensed: {license}"
+ * "Thank you for calling {companyName}! Our technicians are licensed: {licenseNumber}"
  * → "Thank you for calling Penguin Air! Our technicians are licensed: #ROC123456"
  * 
  * RENDERING RULES:
@@ -60,6 +60,10 @@ const PlaceholderSchema = new Schema({
     // Optional metadata for pricing policy modes
     meta: {
         advisorQueue: {
+            type: String,
+            default: null
+        },
+        callbackOffer: {
             type: String,
             default: null
         },

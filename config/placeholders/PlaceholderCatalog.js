@@ -539,6 +539,9 @@ function getCatalog(tradeKey = null) {
     return {
         tradeKey: tradeKey || 'UNIVERSAL',
         version: '1.0.0',
+        policyScripts: {
+            pricing: PRICING_POLICY_SCRIPTS
+        },
         placeholders: allPlaceholders,
         byKey,
         byCategory,
@@ -613,6 +616,7 @@ function getGPTPlaceholderGuide(tradeKey = null) {
 }
 
 module.exports = {
+    PRICING_POLICY_SCRIPTS,
     UNIVERSAL_PLACEHOLDERS,
     TRADE_PLACEHOLDERS,
     RUNTIME_PLACEHOLDERS,
