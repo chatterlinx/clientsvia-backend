@@ -14650,13 +14650,35 @@ Higher = detailed, thorough scenarios (more context)
                 const result = await response.json();
                 console.log('✅ [SAVE SCENARIO] Success:', result);
                 
-                showNotification(`✅ Scenario "${name}" ${status === 'live' ? 'published' : 'saved as draft'} successfully!`, 'success');
+                // ════════════════════════════════════════════════════════════════════════
+                // CHECK: Was this a Template Audit fix? Show post-save options if so
+                // ════════════════════════════════════════════════════════════════════════
+                const urlParams = new URLSearchParams(window.location.search);
+                const wasAuditFix = urlParams.get('prefill') === 'edit-scenario';
+                const auditScenarioId = urlParams.get('scenarioId');
                 
-                // Close modal
-                closeScenarioModal();
-                
-                // Refresh the active template to show new/updated scenario
-                await switchDashboardTemplate(activeTemplateId);
+                if (wasAuditFix && auditScenarioId) {
+                    console.log('🔧 [AUDIT FIX] Scenario saved from Template Audit, showing post-save options');
+                    
+                    // Close the edit modal first
+                    closeScenarioModal();
+                    
+                    // Remove the banner
+                    closeEditPrefillBanner();
+                    
+                    // Show post-save modal with options
+                    showAuditFixPostSaveModal(name, auditScenarioId);
+                    
+                } else {
+                    // Normal save flow
+                    showNotification(`✅ Scenario "${name}" ${status === 'live' ? 'published' : 'saved as draft'} successfully!`, 'success');
+                    
+                    // Close modal
+                    closeScenarioModal();
+                    
+                    // Refresh the active template to show new/updated scenario
+                    await switchDashboardTemplate(activeTemplateId);
+                }
                 
             } catch (error) {
                 console.error('❌ [SAVE SCENARIO] Error:', error);
@@ -21082,6 +21104,297 @@ ${JSON.stringify(healthData, null, 2)}
             const banner = document.getElementById('edit-prefill-banner');
             if (banner) banner.remove();
             window.scenarioEditPrefillData = null;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // POST-SAVE MODAL FOR TEMPLATE AUDIT FIXES
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Shows options after saving a scenario that came from Template Audit:
+        // - Verify Fix: Re-run audit to confirm 0 violations
+        // - Done & Next: Return to audit page and mark this as fixed
+        // - Stay Here: Continue working in Global Brain
+        // ════════════════════════════════════════════════════════════════════════════════
+        
+        function showAuditFixPostSaveModal(scenarioName, scenarioId) {
+            // Remove any existing modal
+            const existingModal = document.getElementById('audit-fix-post-save-modal');
+            if (existingModal) existingModal.remove();
+            
+            const modal = document.createElement('div');
+            modal.id = 'audit-fix-post-save-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.85);
+                z-index: 60000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            `;
+            
+            modal.innerHTML = `
+                <div style="
+                    background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+                    border: 2px solid #10b981;
+                    border-radius: 20px;
+                    padding: 40px;
+                    max-width: 500px;
+                    text-align: center;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                ">
+                    <div style="font-size: 64px; margin-bottom: 20px;">✅</div>
+                    <h2 style="color: white; margin-bottom: 12px; font-size: 24px;">Scenario Saved!</h2>
+                    <p style="color: #10b981; font-size: 18px; margin-bottom: 24px; font-weight: 600;">
+                        "${scenarioName}"
+                    </p>
+                    <p style="color: #a0a0b0; margin-bottom: 32px; font-size: 14px;">
+                        What would you like to do next?
+                    </p>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <!-- Verify Fix Button -->
+                        <button onclick="verifyAuditFix('${scenarioId}')" style="
+                            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+                            color: white;
+                            border: none;
+                            padding: 16px 24px;
+                            border-radius: 12px;
+                            font-size: 16px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 10px;
+                        ">
+                            <i class="fas fa-check-double"></i>
+                            Verify Fix (Re-audit this scenario)
+                        </button>
+                        
+                        <!-- Done & Next Button -->
+                        <button onclick="doneAndReturnToAudit('${scenarioId}')" style="
+                            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                            color: white;
+                            border: none;
+                            padding: 16px 24px;
+                            border-radius: 12px;
+                            font-size: 16px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 10px;
+                        ">
+                            <i class="fas fa-arrow-right"></i>
+                            Done & Next (Return to Audit)
+                        </button>
+                        
+                        <!-- Stay Here Button -->
+                        <button onclick="closeAuditFixPostSaveModal()" style="
+                            background: transparent;
+                            color: #888;
+                            border: 1px solid #444;
+                            padding: 14px 24px;
+                            border-radius: 12px;
+                            font-size: 14px;
+                            cursor: pointer;
+                        ">
+                            Stay Here (Continue in Global Brain)
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+        
+        function closeAuditFixPostSaveModal() {
+            const modal = document.getElementById('audit-fix-post-save-modal');
+            if (modal) modal.remove();
+            
+            // Clear URL params so refresh doesn't re-trigger prefill
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, '', newUrl);
+            
+            // Refresh the template view
+            if (activeTemplateId) {
+                switchDashboardTemplate(activeTemplateId);
+            }
+        }
+        
+        async function verifyAuditFix(scenarioId) {
+            const modal = document.getElementById('audit-fix-post-save-modal');
+            const content = modal?.querySelector('div > div');
+            
+            if (content) {
+                content.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 20px; animation: spin 1s linear infinite;">
+                        <i class="fas fa-sync"></i>
+                    </div>
+                    <h2 style="color: white; margin-bottom: 12px;">Verifying Fix...</h2>
+                    <p style="color: #a0a0b0;">Re-running audit on this scenario</p>
+                `;
+            }
+            
+            try {
+                // Get company ID from URL or template
+                const urlParams = new URLSearchParams(window.location.search);
+                const templateId = urlParams.get('templateId') || activeTemplateId;
+                
+                // Find company ID - we need to fetch it
+                const templateResponse = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const templateData = await templateResponse.json();
+                const template = templateData.data || templateData;
+                
+                // Try to get companyId from various sources
+                let companyId = template.companyId || template.company;
+                if (!companyId) {
+                    // Fall back to the company selector
+                    const companySelect = document.getElementById('company-selector') || document.getElementById('test-company-select');
+                    companyId = companySelect?.value;
+                }
+                
+                if (!companyId) {
+                    throw new Error('Could not determine company ID for verification');
+                }
+                
+                // Call the audit endpoint for just this scenario
+                const auditResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/scenario`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ scenarioId })
+                });
+                
+                const auditResult = await auditResponse.json();
+                
+                // Show result
+                const violations = auditResult.violations || [];
+                const errorCount = violations.filter(v => v.severity === 'error').length;
+                const warningCount = violations.filter(v => v.severity === 'warning').length;
+                const infoCount = violations.filter(v => v.severity === 'info').length;
+                
+                const isPerfect = violations.length === 0;
+                const isGood = errorCount === 0;
+                
+                let statusIcon, statusColor, statusText, statusDesc;
+                if (isPerfect) {
+                    statusIcon = '🎉';
+                    statusColor = '#10b981';
+                    statusText = 'Perfect! 10/10';
+                    statusDesc = 'No violations found. This scenario is clean!';
+                } else if (isGood) {
+                    statusIcon = '✅';
+                    statusColor = '#22c55e';
+                    statusText = 'Good! No Errors';
+                    statusDesc = `${warningCount} warning${warningCount !== 1 ? 's' : ''}, ${infoCount} info`;
+                } else {
+                    statusIcon = '⚠️';
+                    statusColor = '#f59e0b';
+                    statusText = 'Needs More Work';
+                    statusDesc = `${errorCount} error${errorCount !== 1 ? 's' : ''}, ${warningCount} warning${warningCount !== 1 ? 's' : ''}`;
+                }
+                
+                if (content) {
+                    content.innerHTML = `
+                        <div style="font-size: 64px; margin-bottom: 20px;">${statusIcon}</div>
+                        <h2 style="color: ${statusColor}; margin-bottom: 12px; font-size: 28px;">${statusText}</h2>
+                        <p style="color: #a0a0b0; margin-bottom: 32px; font-size: 14px;">${statusDesc}</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <button onclick="doneAndReturnToAudit('${scenarioId}')" style="
+                                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                color: white;
+                                border: none;
+                                padding: 16px 24px;
+                                border-radius: 12px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                            ">
+                                <i class="fas fa-arrow-right"></i> Done & Next
+                            </button>
+                            <button onclick="closeAuditFixPostSaveModal()" style="
+                                background: transparent;
+                                color: #888;
+                                border: 1px solid #444;
+                                padding: 12px 24px;
+                                border-radius: 10px;
+                                cursor: pointer;
+                            ">
+                                Stay Here
+                            </button>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Verification error:', error);
+                if (content) {
+                    content.innerHTML = `
+                        <div style="font-size: 64px; margin-bottom: 20px;">❌</div>
+                        <h2 style="color: #ef4444; margin-bottom: 12px;">Verification Failed</h2>
+                        <p style="color: #a0a0b0; margin-bottom: 32px;">${error.message}</p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <button onclick="doneAndReturnToAudit('${scenarioId}')" style="
+                                background: #10b981;
+                                color: white;
+                                border: none;
+                                padding: 14px 24px;
+                                border-radius: 10px;
+                                cursor: pointer;
+                            ">
+                                Return to Audit Anyway
+                            </button>
+                            <button onclick="closeAuditFixPostSaveModal()" style="
+                                background: transparent;
+                                color: #888;
+                                border: 1px solid #444;
+                                padding: 12px 24px;
+                                border-radius: 10px;
+                                cursor: pointer;
+                            ">
+                                Stay Here
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+        }
+        
+        function doneAndReturnToAudit(scenarioId) {
+            // Store the fixed scenario ID so audit page can remove it from the list
+            const fixedScenarios = JSON.parse(localStorage.getItem('auditFixedScenarios') || '[]');
+            if (!fixedScenarios.includes(scenarioId)) {
+                fixedScenarios.push(scenarioId);
+                localStorage.setItem('auditFixedScenarios', JSON.stringify(fixedScenarios));
+            }
+            
+            // Get the company ID from URL params to return to the right audit page
+            const urlParams = new URLSearchParams(window.location.search);
+            const templateId = urlParams.get('templateId');
+            
+            // Close the modal
+            closeAuditFixPostSaveModal();
+            
+            // Navigate back to the audit page
+            // Try to find the original company ID from the opener or localStorage
+            const companyId = localStorage.getItem('lastAuditCompanyId');
+            if (companyId) {
+                window.location.href = `/scenario-gaps.html?companyId=${companyId}&tab=audit`;
+            } else {
+                // Fallback - just go to scenario gaps
+                window.location.href = '/scenario-gaps.html';
+            }
         }
         
         /**

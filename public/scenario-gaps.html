@@ -2556,9 +2556,34 @@
         
         // Load registry when audit tab opens
         document.addEventListener('DOMContentLoaded', () => {
-            // Check if we're on audit tab
             const urlParams = new URLSearchParams(window.location.search);
+            
+            // ════════════════════════════════════════════════════════════════════════
+            // CHECK: Auto-switch to audit tab if returning from Global Brain fix
+            // ════════════════════════════════════════════════════════════════════════
             if (urlParams.get('tab') === 'audit') {
+                console.log('🔧 [AUDIT] Auto-switching to audit tab');
+                
+                // Click the audit tab
+                setTimeout(() => {
+                    const auditTab = document.querySelector('[onclick*="showTab"][onclick*="audit"]');
+                    if (auditTab) {
+                        auditTab.click();
+                    }
+                    
+                    // Check if we have fixed scenarios to process
+                    const fixedScenarios = JSON.parse(localStorage.getItem('auditFixedScenarios') || '[]');
+                    if (fixedScenarios.length > 0) {
+                        console.log('🔧 [AUDIT] Found fixed scenarios, auto-running audit');
+                        // Auto-run audit to refresh the list
+                        setTimeout(() => {
+                            if (typeof runAudit === 'function') {
+                                runAudit();
+                            }
+                        }, 500);
+                    }
+                }, 300);
+                
                 loadSettingsRegistry();
                 loadScenarioPoolAlignment();
             }
@@ -2612,6 +2637,34 @@
         }
         
         function displayAuditResults(result) {
+            // ════════════════════════════════════════════════════════════════════════
+            // CHECK: Remove any scenarios that were fixed in Global Brain
+            // ════════════════════════════════════════════════════════════════════════
+            const fixedScenarios = JSON.parse(localStorage.getItem('auditFixedScenarios') || '[]');
+            if (fixedScenarios.length > 0 && result.scenarios) {
+                const originalCount = result.scenarios.length;
+                result.scenarios = result.scenarios.filter(s => !fixedScenarios.includes(s.scenarioId));
+                const removedCount = originalCount - result.scenarios.length;
+                
+                if (removedCount > 0) {
+                    console.log(`🔧 [AUDIT] Removed ${removedCount} fixed scenarios from list`);
+                    showToast(`${removedCount} scenario${removedCount !== 1 ? 's' : ''} fixed and removed from list!`, 'success');
+                    
+                    // Update summary counts
+                    if (result.summary) {
+                        result.summary.totalScenarios = Math.max(0, (result.summary.totalScenarios || 0) - removedCount);
+                        result.summary.scenariosFailing = Math.max(0, (result.summary.scenariosFailing || 0) - removedCount);
+                    }
+                    
+                    // Clear the fixed scenarios list
+                    localStorage.removeItem('auditFixedScenarios');
+                }
+            }
+            
+            // Store for reference
+            window.fullAuditResult = result;
+            window.auditScenarios = result.scenarios?.filter(s => s.violations?.length > 0) || [];
+            
             // Show results, hide empty state
             document.getElementById('audit-empty').style.display = 'none';
             document.getElementById('audit-results').style.display = 'block';
@@ -3879,6 +3932,9 @@
                 // ════════════════════════════════════════════════════════════════════
                 // Using localStorage instead of sessionStorage for better cross-tab reliability
                 localStorage.setItem('scenarioEditPrefill', JSON.stringify(prefillData));
+                
+                // Also store company ID so Global Brain can return to the right audit page
+                localStorage.setItem('lastAuditCompanyId', companyId);
                 
                 console.log('📦 [AUDIT→GB] Prefill data stored in localStorage');
                 
