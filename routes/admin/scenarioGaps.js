@@ -26,6 +26,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
 // Authentication & Authorization
 const { authenticateJWT } = require('../../middleware/auth');
@@ -524,6 +525,80 @@ function sanitizeSmallTalkReplies(replies = []) {
     ];
 }
 
+function extractReplyText(reply) {
+    return typeof reply === 'string' ? reply : reply?.text;
+}
+
+function buildManualValidation(scenario, tradeKey) {
+    const errors = [];
+    const warnings = [];
+
+    const placeholderValidation = validateScenarioPlaceholders(scenario, tradeKey);
+    if (!placeholderValidation.valid) {
+        const legacy = placeholderValidation.forbiddenLegacy || [];
+        const unknown = placeholderValidation.unknownInvalid || [];
+
+        if (legacy.length > 0) {
+            errors.push({
+                type: 'forbidden_legacy',
+                message: `Legacy placeholders detected: ${legacy.map(l => l.key).join(', ')}`
+            });
+        }
+
+        if (unknown.length > 0) {
+            errors.push({
+                type: 'unknown_placeholder',
+                message: `Unknown placeholders detected: ${unknown.map(u => u.key).join(', ')}`
+            });
+        }
+
+        if (errors.length === 0) {
+            errors.push({
+                type: 'invalid_placeholder',
+                message: placeholderValidation.message || 'Invalid placeholders detected'
+            });
+        }
+    }
+
+    const noNameReplies = [
+        ...(scenario.quickReplies_noName || []),
+        ...(scenario.fullReplies_noName || [])
+    ];
+    const hasCallerNameInNoName = noNameReplies.some(r => {
+        const text = extractReplyText(r);
+        return text && text.toLowerCase().includes('{callername}');
+    });
+
+    if (hasCallerNameInNoName) {
+        errors.push({
+            type: 'noname_contains_callername',
+            message: '_noName replies contain {callerName}'
+        });
+    }
+
+    const mainReplies = [
+        ...(scenario.quickReplies || []),
+        ...(scenario.fullReplies || [])
+    ];
+    const hasCallerName = mainReplies.some(r => {
+        const text = extractReplyText(r);
+        return text && text.toLowerCase().includes('{callername}');
+    });
+
+    if (!hasCallerName) {
+        warnings.push({
+            type: 'missing_callername',
+            message: 'No {callerName} found in replies'
+        });
+    }
+
+    return {
+        valid: errors.length === 0,
+        errors,
+        warnings
+    };
+}
+
 function containsBookingPhrase(text) {
     if (!text) return false;
     const lower = String(text).toLowerCase();
@@ -555,7 +630,16 @@ function cleanCallerText(text) {
  * 2. Run DETERMINISTIC duplicate check first (fast, cheap)
  * 3. If no deterministic match, call LLM for generation/secondary duplicate check
  */
-async function generateScenarioFromGap(gap, company) {
+function sanitizeOverrideValue(value, maxLength = 80) {
+    if (!value) return '';
+    return String(value)
+        .replace(/\s+/g, ' ')
+        .replace(/[\r\n]+/g, ' ')
+        .trim()
+        .slice(0, maxLength);
+}
+
+async function generateScenarioFromGap(gap, company, options = {}) {
     const openai = openaiClient;
     if (!openai) {
         logger.warn('[SCENARIO GAPS] OpenAI client not available, using fallback generation');
@@ -661,6 +745,8 @@ ${toneExamples.map(s => `• "${s.name}" - Trigger: "${s.trigger}" → Reply: "$
     
     const tradeName = tradeType.toUpperCase() || 'SERVICE';
     const governanceBlock = buildPlaceholderGovernanceBlock(tradeType);
+    const categoryOverride = sanitizeOverrideValue(options.categoryOverride);
+    const scenarioTypeOverride = sanitizeOverrideValue(options.scenarioTypeOverride);
     
     const promptRaw = `You are creating scenarios for an EXPERIENCED ${tradeName} SERVICE DISPATCHER.
 
@@ -693,6 +779,9 @@ ${existingScenariosList}
 ${toneExamplesList}
 CALLER PHRASES (asked ${gap.totalCalls} times - this is the GAP to fill):
 ${examples}
+
+${categoryOverride ? `CATEGORY OVERRIDE: Use categories=["${categoryOverride}"]` : ''}
+${scenarioTypeOverride ? `SCENARIO TYPE OVERRIDE: Use scenarioType="${scenarioTypeOverride}"` : ''}
 
 ═══════════════════════════════════════════════════════════════════════════════
 THE GOLDEN FORMULA: ACKNOWLEDGE → NARROW → BOOK
@@ -1123,14 +1212,17 @@ Output VALID JSON only. No markdown. No explanations.`
                 explanation: s.explanation || `LLM detected this gap matches existing scenario "${resolvedName}"`,
                 detectionMethod: 'llm',
                 resolutionMethod: resolvedScenario ? 'server_matched' : 'gpt_only',
-                tokensUsed: response.usage?.total_tokens || 0
+                tokensUsed: response.usage?.total_tokens || 0,
+                tradeType
             };
         }
         
-        const categoryValue = s.category || s.categories?.[0] || 'FAQ';
         const suggestedPlaceholders = Array.isArray(s.suggestedPlaceholders) ? s.suggestedPlaceholders : [];
 
         // Build content-only scenario object (22 fields)
+        const resolvedScenarioType = scenarioTypeOverride || s.scenarioType || 'FAQ';
+        const categoryValue = categoryOverride || s.category || s.categories?.[0] || 'FAQ';
+
         const scenario = normalizeScenarioForType({
             // Identity
             name: s.name || gap.representative.substring(0, 50),
@@ -1139,7 +1231,7 @@ Output VALID JSON only. No markdown. No explanations.`
             categories: Array.isArray(s.categories) ? s.categories : [categoryValue],
 
             // Classification
-            scenarioType: s.scenarioType || 'FAQ',
+            scenarioType: resolvedScenarioType,
             priority: typeof s.priority === 'number' ? s.priority : 50,
             minConfidence: typeof s.minConfidence === 'number' ? s.minConfidence : 0.6,
             behavior: s.behavior || 'calm_professional',
@@ -1174,7 +1266,7 @@ Output VALID JSON only. No markdown. No explanations.`
             notes: s.notes || `Auto-generated from Scenario Gaps. Detected ${gap.totalCalls} similar calls.`
         });
 
-        const { sanitized } = enforceContentOwnership(scenario, {
+    const { sanitized } = enforceContentOwnership(scenario, {
             source: 'scenario-gaps',
             logWarnings: false
         });
@@ -1190,7 +1282,8 @@ Output VALID JSON only. No markdown. No explanations.`
             scenario: sanitized,
             category: categoryValue,
             suggestedPlaceholders,
-            tokensUsed: response.usage?.total_tokens || 0
+            tokensUsed: response.usage?.total_tokens || 0,
+            tradeType
         };
     } catch (error) {
         logger.error('[SCENARIO GAPS] LLM generation failed', { error: error.message });
@@ -1202,6 +1295,7 @@ Output VALID JSON only. No markdown. No explanations.`
  * Fallback scenario generation (no LLM) - Comprehensive format
  */
 function generateFallbackScenario(gap, company) {
+    const tradeType = (company?.trade || 'general').toLowerCase();
     const normalized = normalizeText(gap.representative);
     
     // Extract potential category and type from keywords
@@ -1285,7 +1379,8 @@ function generateFallbackScenario(gap, company) {
         scenario: sanitized,
         category,
         suggestedPlaceholders: [],
-        tokensUsed: 0
+        tokensUsed: 0,
+        tradeType
     };
 }
 
@@ -1553,6 +1648,198 @@ router.get('/:companyId/gaps/preview', async (req, res) => {
         res.status(isPlaceholderError ? 400 : 500).json({
             error: isPlaceholderError ? 'Invalid placeholders in generated scenario' : 'Failed to generate scenario preview',
             details: cleanedMessage
+        });
+    }
+});
+
+/**
+ * POST /:companyId/gaps/manual/preview
+ *
+ * Manual Scenario Builder preview (content-only)
+ * Body: { question: string, category?: string, scenarioType?: string }
+ */
+router.post('/:companyId/gaps/manual/preview', async (req, res) => {
+    const { companyId } = req.params;
+    const { question, category, scenarioType } = req.body || {};
+
+    if (!question || !String(question).trim()) {
+        return res.status(400).json({ error: 'Question is required' });
+    }
+
+    try {
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const text = String(question).trim();
+        const gap = {
+            representative: text,
+            examples: [{ text }],
+            totalCalls: 1
+        };
+
+        const result = await generateScenarioFromGap(gap, company, {
+            categoryOverride: category,
+            scenarioTypeOverride: scenarioType
+        });
+
+        if (result.error) {
+            return res.status(400).json({
+                success: false,
+                error: result.error,
+                message: result.message
+            });
+        }
+
+        if (result.isDuplicate) {
+            return res.json({
+                success: true,
+                isDuplicate: true,
+                duplicateScenarioId: result.duplicateScenarioId,
+                duplicateScenarioName: result.duplicateScenarioName,
+                duplicateCategory: result.duplicateCategory,
+                recommendedAction: result.recommendedAction,
+                explanation: result.explanation,
+                detectionMethod: result.detectionMethod
+            });
+        }
+
+        const tradeKey = result.tradeType || company.trade || 'general';
+        const validation = buildManualValidation(result.scenario, tradeKey);
+
+        return res.json({
+            success: true,
+            isDuplicate: false,
+            preview: result.scenario,
+            validation
+        });
+    } catch (error) {
+        const isPlaceholderError = (error.message || '').startsWith('PLACEHOLDER_INVALID:');
+        const cleanedMessage = isPlaceholderError
+            ? error.message.replace('PLACEHOLDER_INVALID:', '').trim()
+            : error.message;
+
+        logger.error('[SCENARIO GAPS] Manual preview error', { error: error.message, companyId });
+        res.status(isPlaceholderError ? 400 : 500).json({
+            error: isPlaceholderError ? 'Invalid placeholders in generated scenario' : 'Failed to generate scenario preview',
+            details: cleanedMessage
+        });
+    }
+});
+
+/**
+ * POST /:companyId/gaps/manual/save
+ *
+ * Save Manual Scenario Builder draft (content-only)
+ * Body: { scenario: object, allowWarnings?: boolean }
+ */
+router.post('/:companyId/gaps/manual/save', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenario, allowWarnings = false } = req.body || {};
+
+    if (!scenario) {
+        return res.status(400).json({ error: 'Scenario object is required' });
+    }
+
+    try {
+        const company = await Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+
+        const { template, error: templateError } = await getCompanyTemplate(company, { lean: false });
+        if (templateError) {
+            return res.status(400).json({
+                success: false,
+                error: templateError.code,
+                message: templateError.message,
+                fix: templateError.fix
+            });
+        }
+
+        const scenarioCategory = scenario.categories?.[0] || scenario.category || 'General';
+
+        const scenarioId = scenario.scenarioId || `scenario-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
+        const baseScenario = {
+            ...scenario,
+            scenarioId,
+            status: 'draft',
+            isActive: true,
+            categories: [scenarioCategory],
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            createdBy: 'manual-scenario-builder',
+            source: 'manual-scenario-builder',
+            sourceGap: null
+        };
+        delete baseScenario.category;
+
+        const { sanitized } = enforceContentOwnership(baseScenario, {
+            source: 'manual-scenario-builder',
+            logWarnings: false
+        });
+
+        const tradeKey = template.templateType?.toLowerCase() || company.trade || 'general';
+        const validation = buildManualValidation(sanitized, tradeKey);
+
+        if (!validation.valid) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid placeholders in scenario',
+                validation
+            });
+        }
+
+        if (!allowWarnings && validation.warnings?.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Scenario has warnings',
+                validation
+            });
+        }
+
+        // Find or create the category
+        let categoryDoc = template.categories.find(c =>
+            c.name.toLowerCase() === scenarioCategory.toLowerCase()
+        );
+
+        if (!categoryDoc) {
+            categoryDoc = {
+                name: scenarioCategory,
+                description: `Auto-created category for ${scenarioCategory} scenarios`,
+                scenarios: [],
+                createdAt: new Date()
+            };
+            template.categories.push(categoryDoc);
+        }
+
+        const categoryIndex = template.categories.findIndex(c => c.name === categoryDoc.name);
+        template.categories[categoryIndex].scenarios.push(sanitized);
+
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        await GlobalInstantResponseTemplate.updateOne(
+            { _id: template._id },
+            {
+                $set: {
+                    [`categories.${categoryIndex}.scenarios`]: template.categories[categoryIndex].scenarios,
+                    updatedAt: new Date()
+                }
+            }
+        );
+
+        res.json({
+            success: true,
+            scenarioId,
+            category: scenarioCategory,
+            message: 'Draft scenario saved'
+        });
+    } catch (error) {
+        logger.error('[SCENARIO GAPS] Manual save error', { error: error.message, companyId });
+        res.status(500).json({
+            error: 'Failed to save manual scenario',
+            details: error.message
         });
     }
 });

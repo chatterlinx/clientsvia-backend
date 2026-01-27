@@ -1102,6 +1102,86 @@
             color: var(--text-primary);
             margin-bottom: 8px;
         }
+
+        .manual-builder {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .manual-builder h3 {
+            margin: 0 0 6px 0;
+        }
+
+        .manual-builder textarea {
+            width: 100%;
+            min-height: 90px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            color: var(--text-primary);
+            resize: vertical;
+        }
+
+        .manual-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .manual-row select {
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 10px;
+            color: var(--text-primary);
+        }
+
+        .manual-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .manual-actions .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 10px 16px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .manual-actions .btn-primary {
+            background: var(--accent-purple);
+            color: #fff;
+        }
+
+        .manual-actions .btn-secondary {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+        }
+
+        .manual-actions .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .manual-preview,
+        .manual-validation {
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-tertiary);
+        }
     </style>
 </head>
 <body>
@@ -1158,6 +1238,59 @@
     <main class="main-content">
         <!-- TAB 1: Gap Fill (existing content) -->
         <div class="tab-content active" id="tab-gaps">
+            <!-- Manual Scenario Builder -->
+            <div class="manual-builder">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <div style="font-size: 20px;">🧩</div>
+                    <div>
+                        <h3 style="color: var(--text-primary);">Manual Scenario Builder</h3>
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            Proactively generate draft scenarios without waiting for gaps
+                        </div>
+                    </div>
+                </div>
+                <label for="manual-question" style="font-size: 12px; color: var(--text-muted);">What did the caller ask?</label>
+                <textarea id="manual-question" placeholder="Example: How much is an AC tune-up?"></textarea>
+
+                <div class="manual-row">
+                    <div>
+                        <label for="manual-category" style="font-size: 12px; color: var(--text-muted);">Category (optional)</label>
+                        <select id="manual-category"></select>
+                    </div>
+                    <div>
+                        <label for="manual-type" style="font-size: 12px; color: var(--text-muted);">Scenario Type (optional)</label>
+                        <select id="manual-type">
+                            <option value="">Auto (let AI choose)</option>
+                            <option value="FAQ">FAQ</option>
+                            <option value="BOOKING">BOOKING</option>
+                            <option value="EMERGENCY">EMERGENCY</option>
+                            <option value="TROUBLESHOOT">TROUBLESHOOT</option>
+                            <option value="BILLING">BILLING</option>
+                            <option value="TRANSFER">TRANSFER</option>
+                            <option value="SMALL_TALK">SMALL_TALK</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="manual-actions">
+                    <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                        <input type="checkbox" id="manual-allow-warnings" />
+                        Allow warnings
+                    </label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-primary" id="manual-generate-btn" onclick="generateManualScenario()">
+                            <i class="fas fa-wand-magic-sparkles"></i> Generate Draft Scenario
+                        </button>
+                        <button class="btn btn-secondary" id="manual-save-btn" onclick="saveManualScenario()" disabled>
+                            <i class="fas fa-save"></i> Save Draft
+                        </button>
+                    </div>
+                </div>
+
+                <div id="manual-preview" class="manual-preview" style="display: none;"></div>
+                <div id="manual-validation" class="manual-validation" style="display: none;"></div>
+            </div>
+
             <!-- Summary Cards -->
             <div class="summary-grid" id="summary-grid">
             <div class="summary-card">
@@ -3804,6 +3937,12 @@
             });
             
             loadGaps();
+            loadManualCategories();
+
+            const allowWarningsEl = document.getElementById('manual-allow-warnings');
+            if (allowWarningsEl) {
+                allowWarningsEl.addEventListener('change', updateManualSaveState);
+            }
         });
         
         // ========================================
@@ -3851,6 +3990,215 @@
             } catch (error) {
                 console.error('Error loading gaps:', error);
                 showError('Failed to load scenario gaps');
+            }
+        }
+
+        // ========================================
+        // MANUAL SCENARIO BUILDER
+        // ========================================
+        let manualPreview = null;
+        let manualValidation = null;
+
+        async function loadManualCategories() {
+            try {
+                const token = getAuthToken();
+                if (!token) return;
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/scenarios`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                const categories = Array.isArray(data.categories) && data.categories.length > 0
+                    ? data.categories
+                    : ['General'];
+                const select = document.getElementById('manual-category');
+                if (!select) return;
+                select.innerHTML = categories.map((c, idx) =>
+                    `<option value="${escapeHtml(c)}"${idx === 0 ? ' selected' : ''}>${escapeHtml(c)}</option>`
+                ).join('');
+            } catch (error) {
+                console.error('Error loading manual categories:', error);
+            }
+        }
+
+        function renderManualPreview(scenario) {
+            const previewEl = document.getElementById('manual-preview');
+            if (!previewEl) return;
+            if (!scenario) {
+                previewEl.style.display = 'none';
+                previewEl.innerHTML = '';
+                return;
+            }
+            const category = scenario.categories?.[0] || scenario.category || 'FAQ';
+            const quickCount = (scenario.quickReplies || []).length;
+            const fullCount = (scenario.fullReplies || []).length;
+            previewEl.style.display = 'block';
+            previewEl.innerHTML = `
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Draft Preview</div>
+                <div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(scenario.name || 'Untitled')}</div>
+                <div style="font-size: 12px; color: var(--text-muted);">
+                    ${escapeHtml(category)} • ${escapeHtml(scenario.scenarioType || 'FAQ')}
+                    • ${quickCount} quick • ${fullCount} full
+                </div>
+            `;
+        }
+
+        function renderManualValidation(validation) {
+            const validationEl = document.getElementById('manual-validation');
+            if (!validationEl) return;
+            if (!validation) {
+                validationEl.style.display = 'none';
+                validationEl.innerHTML = '';
+                return;
+            }
+
+            const errors = validation.errors || [];
+            const warnings = validation.warnings || [];
+
+            const errorHtml = errors.length > 0
+                ? `<div style="margin-bottom: 8px; color: #f87171;">
+                    <strong>Errors</strong>
+                    <ul style="margin: 6px 0 0 16px;">
+                        ${errors.map(e => `<li>${escapeHtml(e.message)}</li>`).join('')}
+                    </ul>
+                </div>`
+                : `<div style="color: #22c55e; font-weight: 600;">No errors ✅</div>`;
+
+            const warningHtml = warnings.length > 0
+                ? `<div style="color: #fbbf24;">
+                    <strong>Warnings</strong>
+                    <ul style="margin: 6px 0 0 16px;">
+                        ${warnings.map(w => `<li>${escapeHtml(w.message)}</li>`).join('')}
+                    </ul>
+                </div>`
+                : '';
+
+            validationEl.style.display = 'block';
+            validationEl.innerHTML = `${errorHtml}${warningHtml}`;
+        }
+
+        function updateManualSaveState() {
+            const saveBtn = document.getElementById('manual-save-btn');
+            const allowWarnings = document.getElementById('manual-allow-warnings')?.checked;
+            if (!saveBtn) return;
+
+            if (!manualPreview || !manualValidation) {
+                saveBtn.disabled = true;
+                return;
+            }
+
+            const hasErrors = (manualValidation.errors || []).length > 0;
+            const hasWarnings = (manualValidation.warnings || []).length > 0;
+            saveBtn.disabled = hasErrors || (!allowWarnings && hasWarnings);
+        }
+
+        async function generateManualScenario() {
+            const questionEl = document.getElementById('manual-question');
+            const categoryEl = document.getElementById('manual-category');
+            const typeEl = document.getElementById('manual-type');
+            const btn = document.getElementById('manual-generate-btn');
+
+            const question = (questionEl?.value || '').trim();
+            if (!question) {
+                showToast('Please enter what the caller asked', 'error');
+                return;
+            }
+
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/manual/preview`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question,
+                        category: categoryEl?.value || null,
+                        scenarioType: typeEl?.value || null
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok || data.error) {
+                    throw new Error(data.details || data.error || 'Failed to generate scenario');
+                }
+
+                if (data.isDuplicate) {
+                    manualPreview = null;
+                    manualValidation = {
+                        errors: [{ message: `Duplicate detected: ${data.duplicateScenarioName || 'Existing scenario'}` }],
+                        warnings: []
+                    };
+                    renderManualPreview(null);
+                    renderManualValidation(manualValidation);
+                    updateManualSaveState();
+                    return;
+                }
+
+                manualPreview = data.preview;
+                manualValidation = data.validation;
+                renderManualPreview(manualPreview);
+                renderManualValidation(manualValidation);
+                updateManualSaveState();
+            } catch (error) {
+                console.error('Manual generate error:', error);
+                showToast(error.message || 'Failed to generate draft', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate Draft Scenario';
+            }
+        }
+
+        async function saveManualScenario() {
+            if (!manualPreview || !manualValidation) {
+                showToast('Generate a draft first', 'error');
+                return;
+            }
+
+            const allowWarnings = document.getElementById('manual-allow-warnings')?.checked;
+            const btn = document.getElementById('manual-save-btn');
+            const questionEl = document.getElementById('manual-question');
+
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps/manual/save`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scenario: manualPreview,
+                        allowWarnings: !!allowWarnings
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok || data.error) {
+                    manualValidation = data.validation || manualValidation;
+                    renderManualValidation(manualValidation);
+                    updateManualSaveState();
+                    throw new Error(data.error || 'Failed to save draft');
+                }
+
+                showToast('Draft scenario saved', 'success');
+                manualPreview = null;
+                manualValidation = null;
+                renderManualPreview(null);
+                renderManualValidation(null);
+                updateManualSaveState();
+                if (questionEl) questionEl.value = '';
+            } catch (error) {
+                console.error('Manual save error:', error);
+                showToast(error.message || 'Failed to save draft', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Draft';
             }
         }
         
@@ -4288,7 +4636,7 @@
         // RUNTIME CONTRACT: Scenarios define WHAT to say, not HOW/WHEN to behave
         // ════════════════════════════════════════════════════════════════════════
         // CONTENT (Scenario owns - GPT generates):
-        //   name, status, category, scenarioType, behavior, priority, minConfidence
+        //   name, status, categories, scenarioType, behavior, priority, minConfidence
         //   triggers, regexTriggers, negativeTriggers, exampleUserPhrases
         //   quickReplies, fullReplies, _noName variants
         //   bookingIntent (flag), entityCapture, channel, notes
@@ -4303,6 +4651,7 @@
         function buildScenarioPrefill(preview = {}, gap = {}) {
             const p = preview || {};
             const g = gap || {};
+            const categoryValue = p.category || (Array.isArray(p.categories) ? p.categories[0] : 'FAQ');
             
             // ═══════════════════════════════════════════════════════════════════
             // CONTENT ONLY - What the agent says when this scenario matches
@@ -4310,8 +4659,9 @@
             return {
                 // Identity
                 name: p.name || g.representative?.substring(0, 50) || 'New Scenario',
-                status: 'live',
-                category: p.category || 'FAQ',
+                status: 'draft',
+                category: categoryValue,
+                categories: Array.isArray(p.categories) ? p.categories : [categoryValue],
                 scenarioType: p.scenarioType || 'FAQ',
                 isActive: true,
                 
