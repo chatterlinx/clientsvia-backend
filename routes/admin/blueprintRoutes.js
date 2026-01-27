@@ -179,6 +179,24 @@ function validateGeneratedCard(card, config = DEFAULT_GENERATOR_CONFIG) {
             warnings.push('Missing fullReplies_noName variants');
         }
     }
+
+    // 7b. {callerName} usage and _noName correctness
+    const allReplies = [
+        ...(scenario.quickReplies || []),
+        ...(scenario.fullReplies || [])
+    ].filter(Boolean);
+    const noNameReplies = [
+        ...(scenario.quickReplies_noName || []),
+        ...(scenario.fullReplies_noName || [])
+    ].filter(Boolean);
+    const hasCallerName = allReplies.some(r => String(r).toLowerCase().includes('{callername}'));
+    if (!hasCallerName) {
+        warnings.push('Missing {callerName} in replies (add to at least one reply)');
+    }
+    const noNameHasCallerName = noNameReplies.filter(r => String(r).toLowerCase().includes('{callername}'));
+    if (noNameHasCallerName.length > 0) {
+        errors.push(`_noName replies must not include {callerName} (${noNameHasCallerName.length} found)`);
+    }
     
     // 8. Content-only field check
     const contentFields = getContentFields();
@@ -188,6 +206,13 @@ function validateGeneratedCard(card, config = DEFAULT_GENERATOR_CONFIG) {
     );
     if (extraFields.length > 0) {
         warnings.push(`Non-content fields present: ${extraFields.join(', ')}`);
+    }
+
+    // 9. Placeholder governance (catalog-driven)
+    const tradeKey = config.tradeKey || null;
+    const placeholderValidation = validateScenarioPlaceholders(scenario, tradeKey);
+    if (!placeholderValidation.valid) {
+        errors.push(placeholderValidation.message || 'Invalid placeholders detected');
     }
     
     return {
@@ -763,7 +788,7 @@ router.post('/:tradeKey/generate', async (req, res) => {
         }
         
         // Validate all generated cards
-        const validation = validateAllCards(cards, generatorConfig);
+        const validation = validateAllCards(cards, { ...generatorConfig, tradeKey: spec.tradeKey || tradeKey });
         
         // Build summary for clear reporting
         const summary = {
@@ -979,7 +1004,7 @@ CRITICAL RULES:
 5. NO helpdesk phrases (definitely, absolutely, of course, sure thing, no problem)
 6. quickReplies = ONE classifying question (max ${constraints.maxQuickReplyWords || 25} words)
 7. fullReplies = progress toward booking (max ${constraints.maxFullReplyWords || 35} words)
-8. Include {name} placeholder in at least 3 replies
+8. Include {callerName} placeholder in at least 3 replies
 9. Triggers must be realistic phrases customers say
 10. Generate at least ${constraints.minTriggers || 8} triggers
 11. Generate at least ${constraints.minQuickReplies || 3} quickReplies
@@ -1137,9 +1162,9 @@ REQUIREMENTS:
 2. "negativeTriggers": Array of 3-5 phrases that should NOT match
 3. "quickReplies": Array of 5 short replies (ONE question each, max ${maxQuickWords} words)
 4. "fullReplies": Array of 5 longer replies (max ${maxFullWords} words)
-5. "quickReplies_noName": Same as quickReplies but without {name}
-6. "fullReplies_noName": Same as fullReplies but without {name}
-7. Include {name} in at least 3 replies
+5. "quickReplies_noName": Same as quickReplies but without {callerName}
+6. "fullReplies_noName": Same as fullReplies but without {callerName}
+7. Include {callerName} in at least 3 replies
 8. "exampleUserPhrases": Array of 12-18 example customer phrases
 9. "behavior": "calm_professional"
 10. "bookingIntent": ${item.bookingIntent ? 'true' : 'false'}
