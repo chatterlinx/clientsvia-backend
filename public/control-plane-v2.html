@@ -6153,6 +6153,7 @@
       if (!confirmed) return;
       
       const originalHtml = btn?.innerHTML;
+      let alreadyClean = false;
       if (btn) {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Normalizing...';
         btn.disabled = true;
@@ -6174,11 +6175,18 @@
         }
         
         const conflicts = data.conflicts || [];
+        const migratedCount = Number(data.migratedCount || 0);
+        const finalCount = Number(data.finalCount || 0);
+        alreadyClean = migratedCount === 0;
         const conflictMsg = conflicts.length > 0
           ? `\nConflicts detected: ${conflicts.length} (see console)`
           : '';
-        
-        alert(`✅ Normalized ${data.migratedCount || 0} legacy keys.\nFinal placeholders: ${data.finalCount || 0}.${conflictMsg}`);
+
+        const baseMessage = alreadyClean
+          ? `✅ Already normalized. No legacy keys found.\nFinal placeholders: ${finalCount}.`
+          : `✅ Normalized ${migratedCount} legacy key(s).\nFinal placeholders: ${finalCount}.`;
+
+        alert(`${baseMessage}${conflictMsg}`);
         
         if (conflicts.length > 0) {
           console.warn('[PLACEHOLDERS] Normalize conflicts:', conflicts);
@@ -6191,8 +6199,17 @@
         alert(`Failed to normalize placeholders: ${error.message}`);
       } finally {
         if (btn) {
-          btn.innerHTML = originalHtml;
-          btn.disabled = false;
+          if (alreadyClean) {
+            btn.innerHTML = '<i class="fas fa-check"></i> Already normalized';
+            btn.disabled = true;
+            setTimeout(() => {
+              btn.innerHTML = originalHtml;
+              btn.disabled = false;
+            }, 5000);
+          } else {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+          }
         }
       }
     }
