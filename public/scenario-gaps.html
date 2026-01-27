@@ -4029,16 +4029,41 @@
                 previewEl.innerHTML = '';
                 return;
             }
+
             const category = scenario.categories?.[0] || scenario.category || 'FAQ';
-            const quickCount = (scenario.quickReplies || []).length;
-            const fullCount = (scenario.fullReplies || []).length;
+            const scenarioType = scenario.scenarioType || 'FAQ';
+            const bookingIntent = scenario.bookingIntent ? '✅ Yes' : '❌ No';
+            const triggers = (scenario.triggers || []).slice(0, 5);
+            const quickReplies = (scenario.quickReplies || []).slice(0, 3);
+            const fullReplies = (scenario.fullReplies || []).slice(0, 3);
+            const quickNoNameCount = (scenario.quickReplies_noName || []).length;
+            const fullNoNameCount = (scenario.fullReplies_noName || []).length;
+
             previewEl.style.display = 'block';
             previewEl.innerHTML = `
-                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">Draft Preview</div>
-                <div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(scenario.name || 'Untitled')}</div>
-                <div style="font-size: 12px; color: var(--text-muted);">
-                    ${escapeHtml(category)} • ${escapeHtml(scenario.scenarioType || 'FAQ')}
-                    • ${quickCount} quick • ${fullCount} full
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">Draft Preview</div>
+                <div style="font-weight: 700; margin-bottom: 6px;">${escapeHtml(scenario.name || 'Untitled')}</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+                    ${escapeHtml(category)} • ${escapeHtml(scenarioType)} • BookingIntent: ${bookingIntent}
+                </div>
+                <div style="display: grid; gap: 10px;">
+                    <div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Triggers</div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                            ${triggers.length ? triggers.map(t => `<span class="trigger-tag">${escapeHtml(t)}</span>`).join('') : '<span style="color: var(--text-muted); font-size: 12px;">No triggers</span>'}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Quick Replies (sample)</div>
+                        ${quickReplies.length ? quickReplies.map(r => `<div class="preview-reply" style="background: #10b981; color: white; padding: 8px 10px; border-radius: 8px; font-size: 12px; margin-bottom: 6px;">${escapeHtml(r)}</div>`).join('') : '<div style="color: var(--text-muted); font-size: 12px;">No quick replies</div>'}
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Full Replies (sample)</div>
+                        ${fullReplies.length ? fullReplies.map(r => `<div class="preview-reply" style="background: #3b82f6; color: white; padding: 8px 10px; border-radius: 8px; font-size: 12px; margin-bottom: 6px;">${escapeHtml(r)}</div>`).join('') : '<div style="color: var(--text-muted); font-size: 12px;">No full replies</div>'}
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-muted);">
+                        _noName variants: quick ${quickNoNameCount || 0}, full ${fullNoNameCount || 0}
+                    </div>
                 </div>
             `;
         }
@@ -4054,6 +4079,9 @@
 
             const errors = validation.errors || [];
             const warnings = validation.warnings || [];
+            const statusLine = errors.length === 0
+                ? `<div style="color: #22c55e; font-weight: 600; margin-bottom: 6px;">Validation passed (warnings allowed) ✅</div>`
+                : `<div style="color: #f87171; font-weight: 600; margin-bottom: 6px;">Validation failed (errors) ❌</div>`;
 
             const errorHtml = errors.length > 0
                 ? `<div style="margin-bottom: 8px; color: #f87171;">
@@ -4062,7 +4090,7 @@
                         ${errors.map(e => `<li>${escapeHtml(e.message)}</li>`).join('')}
                     </ul>
                 </div>`
-                : `<div style="color: #22c55e; font-weight: 600;">No errors ✅</div>`;
+                : '';
 
             const warningHtml = warnings.length > 0
                 ? `<div style="color: #fbbf24;">
@@ -4071,10 +4099,10 @@
                         ${warnings.map(w => `<li>${escapeHtml(w.message)}</li>`).join('')}
                     </ul>
                 </div>`
-                : '';
+                : `<div style="color: var(--text-muted); font-size: 12px;">No warnings</div>`;
 
             validationEl.style.display = 'block';
-            validationEl.innerHTML = `${errorHtml}${warningHtml}`;
+            validationEl.innerHTML = `${statusLine}${errorHtml}${warningHtml}`;
         }
 
         function updateManualSaveState() {
