@@ -1885,9 +1885,8 @@ router.post('/:companyId/generate-local', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        // Load the custom template
-        const Template = require('../../models/Template');
-        const customTemplate = await Template.findById(templateId).lean();
+        // Load the custom template (need the actual model for updates)
+        const customTemplate = await GlobalInstantResponseTemplate.findById(templateId);
         if (!customTemplate) {
             return res.status(404).json({ error: 'Custom template not found' });
         }
@@ -1905,12 +1904,17 @@ router.post('/:companyId/generate-local', async (req, res) => {
         // Build GPT-4 prompt with custom service context
         const promptText = String(question).trim();
         
+        // Ask GPT-4 to also suggest a category if we need to create one
+        const existingCategories = (customTemplate.categories || []).map(c => c.name).join(', ') || 'None yet';
+        
         const systemPrompt = `You are an expert AI scenario builder for a business phone answering service.
 
 SERVICE CONTEXT (What this company offers):
 ${serviceContext}
 
 COMPANY: ${company.name}
+
+EXISTING CATEGORIES IN TEMPLATE: ${existingCategories}
 
 Your task is to generate a complete scenario configuration based on a caller question. The scenario should help an AI dispatcher handle calls about the services described above.
 
@@ -1924,6 +1928,7 @@ DISPATCHER PERSONA:
 Generate a JSON object with these fields:
 {
   "name": "Short descriptive name (2-5 words)",
+  "suggestedCategory": "Best category name for this scenario (use existing if appropriate, or suggest new)",
   "scenarioType": "${scenarioType || 'One of: FAQ, Booking, Emergency, Transfer, Objection'}",
   "priority": "normal, high, or critical",
   "triggers": ["array of 8-12 trigger phrases callers might say"],
@@ -1943,11 +1948,12 @@ Important:
 - Triggers should be natural phrases a caller might say
 - Quick replies are for simple acknowledgments
 - Full replies use placeholders: {{company_name}}, {{service_area}}, {{phone_number}}
-- Match the tone to a professional service dispatcher`;
+- Match the tone to a professional service dispatcher
+- For suggestedCategory: use an existing category if it fits, otherwise suggest a clear, descriptive name`;
 
         const userMessage = `Generate a scenario for this caller question: "${promptText}"
 
-${targetCategory ? `Category hint: ${targetCategory.name}` : 'Choose the most appropriate category based on the service context.'}`;
+${targetCategory ? `Use this category: ${targetCategory.name}` : 'Suggest the best category based on the service context.'}`;
 
         // Call GPT-4
         const openaiClient = getOpenAIClient();
@@ -1977,14 +1983,56 @@ ${targetCategory ? `Category hint: ${targetCategory.name}` : 'Choose the most ap
         scenario.source = 'company-local-builder';
         scenario.sourceQuestion = promptText;
         
-        // If no category specified, try to find or create one
-        if (!targetCategoryId && customTemplate.categories?.length > 0) {
-            // Use the first category as default, or create a "General" category
-            const generalCat = customTemplate.categories.find(c => 
-                c.name?.toLowerCase().includes('general') || c.name?.toLowerCase().includes('other')
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // AUTO-CREATE CATEGORY IF NEEDED
+        // This is safe because it's a company-local template, not global
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const suggestedCategoryName = scenario.suggestedCategory || 'Custom Services';
+        delete scenario.suggestedCategory; // Remove from scenario object before saving
+        
+        let categoryName = suggestedCategoryName;
+        let categoryCreated = false;
+        
+        if (!targetCategoryId) {
+            // Check if suggested category already exists
+            const existingCat = (customTemplate.categories || []).find(c => 
+                c.name?.toLowerCase() === suggestedCategoryName.toLowerCase()
             );
-            targetCategoryId = generalCat?.id || generalCat?._id?.toString() || 
-                              customTemplate.categories[0]?.id || customTemplate.categories[0]?._id?.toString();
+            
+            if (existingCat) {
+                targetCategoryId = existingCat.id || existingCat._id?.toString();
+                categoryName = existingCat.name;
+                logger.info('[GENERATE LOCAL] Using existing category', { categoryName: existingCat.name });
+            } else {
+                // Auto-create the category
+                const newCategoryId = `cat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const newCategory = {
+                    id: newCategoryId,
+                    name: suggestedCategoryName,
+                    description: `Auto-created for ${company.name} local scenarios`,
+                    icon: '📋',
+                    scenarios: [],
+                    createdAt: new Date()
+                };
+                
+                // Add to template
+                if (!customTemplate.categories) {
+                    customTemplate.categories = [];
+                }
+                customTemplate.categories.push(newCategory);
+                await customTemplate.save();
+                
+                targetCategoryId = newCategoryId;
+                categoryName = suggestedCategoryName;
+                categoryCreated = true;
+                logger.info('[GENERATE LOCAL] Auto-created category', { 
+                    categoryName: suggestedCategoryName, 
+                    categoryId: newCategoryId,
+                    templateId 
+                });
+            }
+        } else if (targetCategory) {
+            categoryName = targetCategory.name;
         }
         
         // Basic validation
@@ -2013,6 +2061,8 @@ ${targetCategory ? `Category hint: ${targetCategory.name}` : 'Choose the most ap
             success: true,
             scenario,
             categoryId: targetCategoryId,
+            categoryName,
+            categoryCreated,
             validation,
             tokensUsed: completion.usage?.total_tokens || 0
         });
