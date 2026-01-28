@@ -2011,7 +2011,7 @@
                     <h3 style="display: flex; align-items: center; gap: 10px; margin: 0; color: #fff; font-size: 18px;">
                         <i class="fas fa-plug" style="color: #22c55e;"></i>
                         Agent Wiring Status
-                        <span style="background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;">18/22 Active</span>
+                        <span style="background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;" id="wiring-active-count">18/22 Active</span>
                     </h3>
                     <button onclick="toggleWiringStatus()" style="background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 6px;">
                         <i class="fas fa-chevron-down" id="wiring-toggle-icon"></i> Details
@@ -2022,7 +2022,15 @@
                 <div style="display: flex; gap: 16px; margin-bottom: 16px;">
                     <div style="flex: 1; background: rgba(34, 197, 94, 0.15); border-radius: 8px; padding: 12px; text-align: center;">
                         <div style="font-size: 24px; font-weight: 700; color: #4ade80;">18</div>
-                        <div style="font-size: 12px; color: #86efac;">Fully Wired</div>
+                        <div style="font-size: 12px; color: #86efac;">Scenario Fields</div>
+                    </div>
+                    <div style="flex: 1; background: rgba(16, 185, 129, 0.15); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: 700; color: #34d399;" id="wiring-services-count">--</div>
+                        <div style="font-size: 12px; color: #6ee7b7;">Services Enabled</div>
+                    </div>
+                    <div style="flex: 1; background: rgba(245, 158, 11, 0.15); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: 700; color: #fbbf24;" id="wiring-local-count">--</div>
+                        <div style="font-size: 12px; color: #fcd34d;">Company Local</div>
                     </div>
                     <div style="flex: 1; background: rgba(148, 163, 184, 0.15); border-radius: 8px; padding: 12px; text-align: center;">
                         <div style="font-size: 24px; font-weight: 700; color: #94a3b8;">4</div>
@@ -2032,11 +2040,36 @@
                 
                 <!-- Expandable details -->
                 <div id="wiring-status-details" style="display: none;">
+                    
+                    <!-- Service-Aware Architecture (NEW) -->
+                    <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                        <div style="font-weight: 600; color: #34d399; margin-bottom: 12px; font-size: 14px;">
+                            <i class="fas fa-layer-group"></i> Service-Aware Architecture
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                            <div style="background: rgba(139, 92, 246, 0.15); border-radius: 8px; padding: 12px;">
+                                <div style="font-size: 12px; color: #a78bfa; font-weight: 600; margin-bottom: 4px;">Main Template</div>
+                                <div style="font-size: 11px; color: #e2e8f0;">Scenarios from enabled service categories only</div>
+                            </div>
+                            <div style="background: rgba(245, 158, 11, 0.15); border-radius: 8px; padding: 12px;">
+                                <div style="font-size: 12px; color: #fbbf24; font-weight: 600; margin-bottom: 4px;">Company Local</div>
+                                <div style="font-size: 11px; color: #e2e8f0;">Custom scenarios for this company (merged)</div>
+                            </div>
+                            <div style="background: rgba(239, 68, 68, 0.15); border-radius: 8px; padding: 12px;">
+                                <div style="font-size: 12px; color: #f87171; font-weight: 600; margin-bottom: 4px;">Disabled Services</div>
+                                <div style="font-size: 11px; color: #e2e8f0;">Deterministic decline (no LLM cost)</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; font-size: 11px; color: #6ee7b7;">
+                            <i class="fas fa-info-circle"></i> ServiceIntentDetector runs <strong>before</strong> scenario matching. If caller asks about disabled service → instant decline, no hallucination.
+                        </div>
+                    </div>
+                    
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                         <!-- Wired settings -->
                         <div style="background: rgba(34, 197, 94, 0.1); border-radius: 12px; padding: 16px; border-left: 4px solid #22c55e;">
                             <div style="font-weight: 600; color: #4ade80; margin-bottom: 12px; font-size: 14px;">
-                                <i class="fas fa-check-circle"></i> Active at Runtime
+                                <i class="fas fa-check-circle"></i> Scenario Fields (Active)
                             </div>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; color: #e2e8f0;">
                                 <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> triggers</div>
@@ -2077,21 +2110,28 @@
                         </div>
                     </div>
                     
-                    <!-- Call flow -->
+                    <!-- Call flow (UPDATED) -->
                     <div style="margin-top: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 12px; padding: 16px;">
                         <div style="font-weight: 600; color: #a78bfa; margin-bottom: 10px; font-size: 13px;">
-                            <i class="fas fa-route"></i> Runtime Call Flow
+                            <i class="fas fa-route"></i> Runtime Call Flow (Service-Aware)
                         </div>
-                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px;">
                             <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">v2AIAgentRuntime</span>
                             <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
                             <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">AIBrain3tierllm</span>
                             <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
                             <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">IntelligentRouter</span>
                             <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
+                            <span style="background: rgba(16, 185, 129, 0.4); color: #6ee7b7; padding: 4px 8px; border-radius: 4px; border: 1px solid #10b981;" title="NEW: Checks if caller intent matches disabled service">
+                                <i class="fas fa-shield-alt"></i> ServiceIntentDetector
+                            </span>
+                            <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
                             <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">HybridScenarioSelector</span>
                             <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
                             <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">ResponseEngine</span>
+                        </div>
+                        <div style="margin-top: 10px; font-size: 11px; color: #94a3b8;">
+                            <strong style="color: #6ee7b7;">ServiceIntentDetector</strong>: If disabled service detected → deterministic decline (no LLM), else → continue to scenario matching
                         </div>
                     </div>
                 </div>
@@ -3335,6 +3375,27 @@
             document.getElementById('services-enabled-count').textContent = config.enabledServiceKeys.length;
             document.getElementById('services-disabled-count').textContent = config.disabledServiceKeys.length;
             document.getElementById('services-custom-count').textContent = config.summary?.withOverrides || 0;
+            
+            // Also update the Wiring Status panel (Template Audit tab)
+            updateWiringServiceCounts(config.enabledServiceKeys.length);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════════
+        // UPDATE WIRING STATUS PANEL
+        // Called when services config loads or when company local template changes
+        // ════════════════════════════════════════════════════════════════════════════════════
+        function updateWiringServiceCounts(enabledServices) {
+            const servicesEl = document.getElementById('wiring-services-count');
+            if (servicesEl) {
+                servicesEl.textContent = enabledServices ?? '--';
+            }
+        }
+        
+        function updateWiringLocalCount(localCount) {
+            const localEl = document.getElementById('wiring-local-count');
+            if (localEl) {
+                localEl.textContent = localCount ?? '--';
+            }
         }
         
         function toggleService(serviceKey, enabled) {
@@ -3837,6 +3898,9 @@
                     });
                 });
             });
+            
+            // Update Wiring Status panel count
+            updateWiringLocalCount(scenarios.length);
             
             if (scenarios.length === 0) {
                 listEl.innerHTML = `
@@ -6664,12 +6728,67 @@
             loadGaps();
             loadManualTrades();
             loadManualCategories();
+            
+            // Load wiring stats for Template Audit tab
+            loadWiringStats();
 
             const allowWarningsEl = document.getElementById('manual-allow-warnings');
             if (allowWarningsEl) {
                 allowWarningsEl.addEventListener('change', updateManualSaveState);
             }
         });
+        
+        // ════════════════════════════════════════════════════════════════════════════════════
+        // WIRING STATS - Load service counts for the Agent Wiring Status panel
+        // ════════════════════════════════════════════════════════════════════════════════════
+        async function loadWiringStats() {
+            try {
+                // Load services config to get enabled/disabled count
+                const servicesResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/services-config`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (servicesResponse.ok) {
+                    const config = await servicesResponse.json();
+                    updateWiringServiceCounts(config.enabledServiceKeys?.length || 0);
+                }
+                
+                // Load company config to get Company Local count
+                const companyResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/local-config`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (companyResponse.ok) {
+                    const companyConfig = await companyResponse.json();
+                    const customTemplateId = companyConfig.customTemplateId;
+                    
+                    if (customTemplateId) {
+                        // Fetch the custom template to count scenarios
+                        const templatesResponse = await fetch('/api/admin/global-instant-responses', {
+                            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                        });
+                        
+                        if (templatesResponse.ok) {
+                            const result = await templatesResponse.json();
+                            const templates = result.data || result;
+                            const customTemplate = templates.find(t => t._id === customTemplateId);
+                            
+                            if (customTemplate) {
+                                let scenarioCount = 0;
+                                (customTemplate.categories || []).forEach(cat => {
+                                    scenarioCount += (cat.scenarios || []).length;
+                                });
+                                updateWiringLocalCount(scenarioCount);
+                            }
+                        }
+                    } else {
+                        updateWiringLocalCount(0);
+                    }
+                }
+            } catch (error) {
+                console.warn('[WIRING STATS] Failed to load:', error);
+            }
+        }
         
         // ========================================
         // API CALLS
