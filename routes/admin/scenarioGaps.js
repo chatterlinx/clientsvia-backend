@@ -2853,8 +2853,34 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         let perfect = 0;
         let needsWork = 0;
         let processed = 0;
+        let consecutiveErrors = 0;
+        const MAX_CONSECUTIVE_ERRORS = 5;
+        
+        // Keepalive interval to prevent connection timeout
+        let keepaliveInterval;
+        if (isStreaming) {
+            keepaliveInterval = setInterval(() => {
+                try {
+                    res.write(`: keepalive\n\n`);
+                    if (res.flush) res.flush();
+                } catch (e) {
+                    // Connection closed
+                    clearInterval(keepaliveInterval);
+                }
+            }, 15000); // Every 15 seconds
+        }
         
         for (const scenario of scenariosToAudit) {
+            // Check if we've hit too many consecutive errors (likely API issue)
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                logger.error('[DEEP AUDIT] Too many consecutive errors, stopping', { consecutiveErrors });
+                sendProgress({
+                    type: 'error',
+                    message: `Stopped after ${consecutiveErrors} consecutive errors. Processed ${processed}/${totalCount} scenarios.`
+                });
+                break;
+            }
+            
             try {
                 const auditPrompt = `You are a SENIOR QA AUDITOR reviewing AI dispatcher scenarios for a ${tradeType.toUpperCase()} service company.
 
@@ -2904,7 +2930,12 @@ Return JSON only:
   "rewriteNeeded": <true|false>
 }`;
 
-                const response = await openaiClient.chat.completions.create({
+                // Add timeout wrapper for OpenAI call (30 second timeout)
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('OpenAI request timeout (30s)')), 30000)
+                );
+                
+                const apiPromise = openaiClient.chat.completions.create({
                     model: 'gpt-4o',
                     messages: [
                         { 
@@ -2917,6 +2948,11 @@ Return JSON only:
                     temperature: 0.2,
                     response_format: { type: 'json_object' }
                 });
+                
+                const response = await Promise.race([apiPromise, timeoutPromise]);
+                
+                // Reset consecutive errors on success
+                consecutiveErrors = 0;
                 
                 totalTokens += response.usage?.total_tokens || 0;
                 
@@ -2963,9 +2999,12 @@ Return JSON only:
                 });
                 
             } catch (scenarioError) {
+                consecutiveErrors++;
+                
                 logger.error('[DEEP AUDIT] Error auditing scenario', {
                     scenarioId: scenario.scenarioId,
-                    error: scenarioError.message
+                    error: scenarioError.message,
+                    consecutiveErrors
                 });
                 
                 processed++;
@@ -3019,6 +3058,11 @@ Return JSON only:
             summary,
             scenarios: results.sort((a, b) => (a.score || 0) - (b.score || 0)) // Worst first
         };
+        
+        // Clean up keepalive interval
+        if (keepaliveInterval) {
+            clearInterval(keepaliveInterval);
+        }
         
         if (isStreaming) {
             // Send final complete event
