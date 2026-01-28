@@ -21411,9 +21411,9 @@ ${JSON.stringify(healthData, null, 2)}
                 // Show info banner
                 showNotification(`Editing "${foundScenario.name}" from Deep Audit`, 'info');
                 
-                // Clean URL params
-                const newUrl = window.location.pathname;
-                window.history.replaceState({}, '', newUrl);
+                // DON'T clean URL params yet - we need them for the post-save modal
+                // The params will be cleaned after the post-save modal is shown or dismissed
+                // (was cleaning here but that broke the post-save popup detection)
                 
             }, 500);
             
