@@ -240,6 +240,90 @@ class AuditEngine {
     }
     
     /**
+     * Audit a pre-built array of scenarios (service-aware audit)
+     * Used when scenarios come from multiple sources (template + company local)
+     * 
+     * @param {Array} scenarios - Array of scenario objects with categoryName attached
+     * @param {Object} template - Template for context (trade type, etc.)
+     * @param {Object} options - Audit options
+     * @returns {Object} Audit report
+     */
+    async auditScenarios(scenarios, template, options = {}) {
+        const startTime = Date.now();
+        
+        this.logger.info(`[AUDIT] Starting audit of ${scenarios.length} pre-built scenarios`);
+        
+        // Track per-rule statistics
+        const ruleStats = {};
+        for (const rule of this.rules) {
+            ruleStats[rule.id] = {
+                ruleId: rule.id,
+                ruleName: rule.name,
+                category: rule.category,
+                severity: rule.severity,
+                description: rule.description,
+                checksRun: 0,
+                violationsFound: 0,
+                scenariosPassed: 0,
+                scenariosFailed: 0,
+                avgProcessingMs: 0,
+                totalProcessingMs: 0
+            };
+        }
+        
+        // Run audit on each scenario
+        const results = [];
+        for (const scenario of scenarios) {
+            const result = await this.auditScenario(scenario, options);
+            
+            // Preserve source metadata
+            result.source = scenario.source;
+            result.categoryName = scenario.categoryName || scenario._categoryName;
+            result.categoryId = scenario.categoryId;
+            
+            // Track rule-level stats
+            for (const violation of (result.violations || [])) {
+                const stat = ruleStats[violation.ruleId];
+                if (stat) {
+                    stat.violationsFound++;
+                }
+            }
+            
+            // Track pass/fail per rule
+            const failedRuleIds = new Set((result.violations || []).map(v => v.ruleId));
+            for (const ruleId of Object.keys(ruleStats)) {
+                ruleStats[ruleId].checksRun++;
+                if (failedRuleIds.has(ruleId)) {
+                    ruleStats[ruleId].scenariosFailed++;
+                } else {
+                    ruleStats[ruleId].scenariosPassed++;
+                }
+            }
+            
+            results.push(result);
+        }
+        
+        // Build comprehensive report
+        const summary = this._buildSummary(results);
+        
+        const report = {
+            templateType: template?.templateType || 'unknown',
+            summary,
+            ruleStats: Object.values(ruleStats),
+            scenarios: results,
+            duration: Date.now() - startTime
+        };
+        
+        this.logger.info(`[AUDIT] Completed pre-built scenarios audit in ${report.duration}ms`, {
+            total: scenarios.length,
+            violations: summary.totalViolations,
+            healthScore: summary.healthScore
+        });
+        
+        return report;
+    }
+    
+    /**
      * Quick health check - returns true if template has no errors
      */
     async isTemplateHealthy(template) {

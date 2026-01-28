@@ -3386,9 +3386,133 @@ router.get('/:companyId/audit/settings-registry', async (req, res) => {
 });
 
 /**
+ * Build service-aware audit scope
+ * 
+ * Returns scenarios bucketed by:
+ * - enabled: Template scenarios from enabled service categories (AUDIT THESE)
+ * - disabled: Template scenarios from disabled service categories (EXCLUDE, LABEL)
+ * - companyLocal: Company Local template scenarios (AUDIT THESE)
+ * 
+ * This matches runtime truth: Template + Company Overlay + Service Toggles
+ */
+async function buildServiceAwareAuditScope(company) {
+    const companyId = company._id?.toString();
+    const companyServices = company.aiAgentSettings?.services || {};
+    const customTemplateId = company.aiAgentSettings?.customTemplateId;
+    
+    // Get main template
+    const { template, error } = await getCompanyTemplate(company, { populateCategories: true });
+    if (error) {
+        return { error };
+    }
+    
+    // Build enabled/disabled service keys set
+    const disabledServiceKeys = new Set();
+    const disabledCategoryIds = new Set();
+    
+    for (const category of (template.categories || [])) {
+        if (!category.isToggleable || !category.serviceKey) continue;
+        
+        // Check if service is disabled
+        const override = companyServices[category.serviceKey];
+        const isEnabled = override?.enabled !== undefined 
+            ? override.enabled 
+            : (category.defaultEnabled !== false);
+        
+        if (!isEnabled) {
+            disabledServiceKeys.add(category.serviceKey);
+            disabledCategoryIds.add(category.id || category._id?.toString());
+        }
+    }
+    
+    // Bucket template scenarios
+    const enabledScenarios = [];
+    const disabledScenarios = [];
+    
+    for (const category of (template.categories || [])) {
+        const categoryId = category.id || category._id?.toString();
+        const isDisabled = disabledCategoryIds.has(categoryId);
+        
+        for (const scenario of (category.scenarios || [])) {
+            const scenarioData = {
+                ...scenario,
+                scenarioId: scenario.scenarioId || scenario._id?.toString(),
+                categoryId: categoryId,
+                categoryName: category.name,
+                categoryIcon: category.icon,
+                serviceKey: category.serviceKey,
+                source: 'main_template'
+            };
+            
+            if (isDisabled) {
+                scenarioData.excludeReason = 'service_disabled';
+                scenarioData.excludeLabel = `Service disabled: ${category.name}`;
+                disabledScenarios.push(scenarioData);
+            } else {
+                enabledScenarios.push(scenarioData);
+            }
+        }
+    }
+    
+    // Get Company Local scenarios (if custom template assigned)
+    const companyLocalScenarios = [];
+    let customTemplate = null;
+    
+    if (customTemplateId) {
+        customTemplate = await GlobalInstantResponseTemplate.findById(customTemplateId).lean();
+        
+        if (customTemplate) {
+            for (const category of (customTemplate.categories || [])) {
+                for (const scenario of (category.scenarios || [])) {
+                    companyLocalScenarios.push({
+                        ...scenario,
+                        scenarioId: scenario.scenarioId || scenario._id?.toString(),
+                        categoryId: category.id || category._id?.toString(),
+                        categoryName: category.name,
+                        categoryIcon: category.icon,
+                        source: 'company_local',
+                        customTemplateId: customTemplateId,
+                        customTemplateName: customTemplate.name
+                    });
+                }
+            }
+        }
+    }
+    
+    logger.info('[AUDIT SCOPE] Built service-aware scope', {
+        companyId,
+        templateName: template.name,
+        enabled: enabledScenarios.length,
+        disabled: disabledScenarios.length,
+        companyLocal: companyLocalScenarios.length,
+        disabledServices: Array.from(disabledServiceKeys)
+    });
+    
+    return {
+        template,
+        customTemplate,
+        scope: {
+            enabled: enabledScenarios,
+            disabled: disabledScenarios,
+            companyLocal: companyLocalScenarios
+        },
+        stats: {
+            enabledCount: enabledScenarios.length,
+            disabledCount: disabledScenarios.length,
+            companyLocalCount: companyLocalScenarios.length,
+            totalAuditable: enabledScenarios.length + companyLocalScenarios.length,
+            disabledServices: Array.from(disabledServiceKeys)
+        }
+    };
+}
+
+/**
  * POST /:companyId/audit/run
  * 
- * Run full audit on company's template
+ * Run full audit on company's ACTUAL runtime brain:
+ * - Template scenarios (filtered by enabled services)
+ * - Company Local scenarios
+ * - Disabled services labeled but not audited
  * 
  * Body:
  * - rules: string[] (optional) - specific rule IDs to run
@@ -3404,43 +3528,62 @@ router.post('/:companyId/audit/run', async (req, res) => {
             return res.status(404).json({ error: 'Company not found' });
         }
         
-        // Get company's template
-        const { template, error } = await getCompanyTemplate(company, { 
-            populateCategories: true 
+        // Build service-aware audit scope
+        const auditScope = await buildServiceAwareAuditScope(company);
+        
+        if (auditScope.error) {
+            return res.status(400).json({
+                error: auditScope.error.message,
+                code: auditScope.error.code,
+                fix: auditScope.error.fix
+            });
+        }
+        
+        const { template, scope, stats } = auditScope;
+        
+        // Combine enabled + company local for audit
+        let scenariosToAudit = [...scope.enabled, ...scope.companyLocal];
+        
+        // Filter by category if specified
+        if (category) {
+            scenariosToAudit = scenariosToAudit.filter(s => 
+                s.categoryId === category || s.categoryName === category
+            );
+        }
+        
+        // Run audit on the filtered scenarios
+        const engine = new AuditEngine({ logger });
+        const report = await engine.auditScenarios(scenariosToAudit, template, {
+            rules: ruleIds
         });
         
-        if (error) {
-            return res.status(400).json({
-                error: error.message,
-                code: error.code,
-                fix: error.fix
-            });
+        // Add source labels to results
+        if (report.scenarios) {
+            for (const result of report.scenarios) {
+                const original = scenariosToAudit.find(s => 
+                    s.scenarioId === result.scenarioId
+                );
+                if (original) {
+                    result.source = original.source;
+                    result.customTemplateName = original.customTemplateName;
+                }
+            }
         }
         
-        // Run audit
-        const engine = new AuditEngine({ logger });
-        let report;
+        // Build bucketed summary
+        const templateResults = (report.scenarios || []).filter(s => s.source === 'main_template');
+        const companyLocalResults = (report.scenarios || []).filter(s => s.source === 'company_local');
         
-        if (category) {
-            // Audit specific category
-            report = await engine.auditCategory(template, category, {
-                rules: ruleIds
-            });
-        } else {
-            // Audit entire template
-            report = await engine.auditTemplate(template, {
-                rules: ruleIds
-            });
-        }
-        
-        logger.info('[AUDIT] Completed audit', {
+        logger.info('[AUDIT] Completed service-aware audit', {
             companyId,
             templateId: template._id,
             templateType: template.templateType,
-            totalScenarios: report.summary?.totalScenarios || report.scenarios?.length,
+            enabled: stats.enabledCount,
+            disabled: stats.disabledCount,
+            companyLocal: stats.companyLocalCount,
+            audited: scenariosToAudit.length,
             violations: report.summary?.totalViolations,
-            healthScore: report.summary?.healthScore,
-            duration: report.duration
+            healthScore: report.summary?.healthScore
         });
         
         res.json({
@@ -3448,6 +3591,49 @@ router.post('/:companyId/audit/run', async (req, res) => {
             companyId,
             templateId: template._id,
             templateType: template.templateType,
+            customTemplateId: auditScope.customTemplate?._id,
+            customTemplateName: auditScope.customTemplate?.name,
+            
+            // Service-aware scope info
+            auditScope: {
+                enabled: stats.enabledCount,
+                disabled: stats.disabledCount,
+                companyLocal: stats.companyLocalCount,
+                totalAuditable: stats.totalAuditable,
+                disabledServices: stats.disabledServices
+            },
+            
+            // Excluded scenarios (for display, not audited)
+            excludedScenarios: scope.disabled.map(s => ({
+                scenarioId: s.scenarioId,
+                name: s.name,
+                categoryName: s.categoryName,
+                excludeReason: s.excludeReason,
+                excludeLabel: s.excludeLabel
+            })),
+            
+            // Bucketed results
+            buckets: {
+                mainTemplate: {
+                    count: templateResults.length,
+                    passing: templateResults.filter(s => !s.violations?.length).length,
+                    failing: templateResults.filter(s => s.violations?.length > 0).length,
+                    scenarios: templateResults
+                },
+                companyLocal: {
+                    count: companyLocalResults.length,
+                    passing: companyLocalResults.filter(s => !s.violations?.length).length,
+                    failing: companyLocalResults.filter(s => s.violations?.length > 0).length,
+                    scenarios: companyLocalResults
+                },
+                disabled: {
+                    count: scope.disabled.length,
+                    services: stats.disabledServices,
+                    message: `${scope.disabled.length} scenarios excluded (service disabled)`
+                }
+            },
+            
+            // Full report for backward compatibility
             ...report
         });
         
@@ -3524,41 +3710,40 @@ router.post('/:companyId/audit/deep', async (req, res) => {
             return;
         }
         
-        const { template, error } = await getCompanyTemplate(company, {
-            populateCategories: true
-        });
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // USE SERVICE-AWARE AUDIT SCOPE
+        // Matches runtime truth: Template + Company Local + Service Toggles
+        // ═══════════════════════════════════════════════════════════════════════════════
+        const auditScope = await buildServiceAwareAuditScope(company);
         
-        if (error) {
+        if (auditScope.error) {
             if (isStreaming) {
-                sendProgress({ type: 'error', message: error.message });
+                sendProgress({ type: 'error', message: auditScope.error.message });
                 res.end();
             } else {
-                res.status(400).json({ error: error.message });
+                res.status(400).json({ error: auditScope.error.message });
             }
             return;
         }
         
+        const { template, scope, stats } = auditScope;
         const tradeType = template.templateType?.toLowerCase() || 'general';
         
-        // Collect scenarios to audit
-        let scenariosToAudit = [];
-        for (const cat of (template.categories || [])) {
-            if (category && cat.id !== category && cat._id?.toString() !== category) {
-                continue;
-            }
-            for (const scenario of (cat.scenarios || [])) {
-                if (scenarioIds && scenarioIds.length > 0) {
-                    if (!scenarioIds.includes(scenario.scenarioId) && 
-                        !scenarioIds.includes(scenario._id?.toString())) {
-                        continue;
-                    }
-                }
-                scenariosToAudit.push({
-                    ...scenario,
-                    categoryName: cat.name,
-                    categoryId: cat.id || cat._id?.toString()
-                });
-            }
+        // Combine enabled + company local for audit (same as Template Audit)
+        let scenariosToAudit = [...scope.enabled, ...scope.companyLocal];
+        
+        // Filter by category if specified
+        if (category) {
+            scenariosToAudit = scenariosToAudit.filter(s => 
+                s.categoryId === category || s.categoryName === category
+            );
+        }
+        
+        // Filter by specific scenario IDs if provided
+        if (scenarioIds && scenarioIds.length > 0) {
+            scenariosToAudit = scenariosToAudit.filter(s => 
+                scenarioIds.includes(s.scenarioId) || scenarioIds.includes(s._id?.toString())
+            );
         }
         
         // Limit to prevent runaway costs
@@ -3572,19 +3757,23 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         // LIST ONLY MODE: Return just the scenario IDs for batch processing
         // ═══════════════════════════════════════════════════════════════════════════════
         if (listOnly) {
-            logger.info('[DEEP AUDIT] List-only mode - returning scenario IDs', {
+            logger.info('[DEEP AUDIT] List-only mode - returning service-aware scenario IDs', {
                 companyId,
                 templateId: template._id,
+                enabled: stats.enabledCount,
+                disabled: stats.disabledCount,
+                companyLocal: stats.companyLocalCount,
                 scenarioCount: totalCount
             });
             
-            // Build scenario metadata for service-aware filtering on frontend
+            // Build scenario metadata for filtering
             const scenarioMetadata = {};
             for (const s of scenariosToAudit) {
                 const id = s.scenarioId || s._id?.toString();
                 scenarioMetadata[id] = {
                     categoryId: s.categoryId,
-                    categoryName: s.categoryName
+                    categoryName: s.categoryName,
+                    source: s.source
                 };
             }
             
@@ -3592,10 +3781,28 @@ router.post('/:companyId/audit/deep', async (req, res) => {
                 success: true,
                 listOnly: true,
                 templateId: template._id?.toString(),
+                customTemplateId: auditScope.customTemplate?._id?.toString(),
                 scenarioIds: scenariosToAudit.map(s => s.scenarioId || s._id?.toString()),
-                scenarioMetadata, // For service-aware filtering
+                scenarioMetadata,
                 totalCount: totalCount,
-                tradeType: tradeType
+                tradeType: tradeType,
+                
+                // Service-aware scope info
+                auditScope: {
+                    enabled: stats.enabledCount,
+                    disabled: stats.disabledCount,
+                    companyLocal: stats.companyLocalCount,
+                    totalAuditable: stats.totalAuditable,
+                    disabledServices: stats.disabledServices
+                },
+                
+                // Excluded scenarios list
+                excludedScenarios: scope.disabled.map(s => ({
+                    scenarioId: s.scenarioId,
+                    name: s.name,
+                    categoryName: s.categoryName,
+                    excludeReason: s.excludeReason
+                }))
             });
         }
         
