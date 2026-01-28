@@ -2749,7 +2749,7 @@ router.post('/:companyId/audit/run', async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════════
 router.post('/:companyId/audit/deep', async (req, res) => {
     const { companyId } = req.params;
-    const { scenarioIds, category, maxScenarios = 50, stream = false } = req.body;
+    const { scenarioIds, category, maxScenarios = 50, stream = false, listOnly = false, templateId: providedTemplateId } = req.body;
     
     // Set up SSE if streaming requested
     const isStreaming = stream === true || stream === 'true';
@@ -2834,6 +2834,26 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         }
         
         const totalCount = scenariosToAudit.length;
+        
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // LIST ONLY MODE: Return just the scenario IDs for batch processing
+        // ═══════════════════════════════════════════════════════════════════════════════
+        if (listOnly) {
+            logger.info('[DEEP AUDIT] List-only mode - returning scenario IDs', {
+                companyId,
+                templateId: template._id,
+                scenarioCount: totalCount
+            });
+            
+            return res.json({
+                success: true,
+                listOnly: true,
+                templateId: template._id?.toString(),
+                scenarioIds: scenariosToAudit.map(s => s.scenarioId || s._id?.toString()),
+                totalCount: totalCount,
+                tradeType: tradeType
+            });
+        }
         
         logger.info('[DEEP AUDIT] Starting GPT-4 deep audit', {
             companyId,

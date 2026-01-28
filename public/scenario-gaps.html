@@ -2862,25 +2862,29 @@
         }
         
         // ════════════════════════════════════════════════════════════════════════════════
-        // DEEP AUDIT (GPT-4 POWERED) WITH REAL-TIME PROGRESS
-        // Comprehensive AI review that catches nuanced issues rules miss
-        // Uses Server-Sent Events for live progress updates
+        // DEEP AUDIT (GPT-4 POWERED) - BATCH-BASED APPROACH
+        // Uses multiple short requests instead of one long SSE connection
+        // More resilient to proxy timeouts and connection drops
         // ════════════════════════════════════════════════════════════════════════════════
+        const BATCH_SIZE = 5; // Process 5 scenarios per request
+        let deepAuditCancelled = false;
+        
         async function runDeepAudit() {
             const btn = document.getElementById('run-deep-audit-btn');
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+            deepAuditCancelled = false;
             
             // Hide regular results, show deep audit view
             document.getElementById('audit-results').style.display = 'none';
             document.getElementById('audit-empty').style.display = 'none';
             document.getElementById('deep-audit-results').style.display = 'block';
             
-            // Show progress UI
+            // Show progress UI with cancel button
             document.getElementById('deep-audit-list').innerHTML = `
                 <div id="deep-audit-progress" style="text-align: center; padding: 40px;">
                     <i class="fas fa-brain fa-3x" style="color: #8b5cf6; margin-bottom: 16px;"></i>
-                    <h3 id="progress-title">Starting GPT-4 deep audit...</h3>
+                    <h3 id="progress-title">Loading scenarios...</h3>
                     
                     <!-- Progress bar -->
                     <div style="max-width: 400px; margin: 20px auto;">
@@ -2898,6 +2902,20 @@
                             <span id="progress-percent">0%</span>
                         </div>
                     </div>
+                    
+                    <!-- Cancel button -->
+                    <button onclick="cancelDeepAudit()" id="cancel-deep-audit-btn" style="
+                        margin-top: 16px;
+                        background: rgba(239, 68, 68, 0.2);
+                        border: 1px solid rgba(239, 68, 68, 0.3);
+                        color: #f87171;
+                        padding: 8px 20px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 13px;
+                    ">
+                        <i class="fas fa-stop"></i> Cancel
+                    </button>
                     
                     <!-- Current scenario being processed -->
                     <div id="progress-current" style="
@@ -2924,110 +2942,197 @@
             `;
             
             try {
-                console.log('🚀 [DEEP AUDIT] Starting request to:', `/api/admin/scenario-gaps/${companyId}/audit/deep`);
+                console.log('🚀 [DEEP AUDIT] Starting batch-based audit...');
                 
-                // Use fetch with streaming
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
+                // STEP 1: Get list of scenarios to audit (non-streaming request)
+                const listResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ maxScenarios: 100, stream: true })
+                    body: JSON.stringify({ maxScenarios: 100, stream: false, listOnly: true })
                 });
                 
-                console.log('📡 [DEEP AUDIT] Response status:', response.status, 'Content-Type:', response.headers.get('content-type'));
-                
-                if (!response.ok) {
-                    // For SSE streams, we can't use .json() - read as text instead
-                    const contentType = response.headers.get('content-type') || '';
-                    if (contentType.includes('text/event-stream')) {
-                        throw new Error(`Server error: ${response.status} ${response.statusText}`);
-                    }
-                    const error = await response.json();
-                    throw new Error(error.error || 'Deep audit failed');
+                if (!listResponse.ok) {
+                    const error = await listResponse.json();
+                    throw new Error(error.error || 'Failed to get scenario list');
                 }
                 
-                // Read the stream
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-                let eventCount = 0;
+                const listData = await listResponse.json();
+                const scenarioIds = listData.scenarioIds || [];
+                const templateId = listData.templateId;
+                const totalCount = scenarioIds.length;
                 
-                console.log('📥 [DEEP AUDIT] Starting to read SSE stream...');
+                console.log(`📋 [DEEP AUDIT] Got ${totalCount} scenarios to audit`);
                 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) {
-                        console.log('✅ [DEEP AUDIT] Stream complete. Total events received:', eventCount);
+                if (totalCount === 0) {
+                    throw new Error('No scenarios found to audit');
+                }
+                
+                // Update UI with total count
+                document.getElementById('progress-title').textContent = `Analyzing ${totalCount} scenarios with GPT-4...`;
+                document.getElementById('progress-count').textContent = `0 / ${totalCount}`;
+                document.getElementById('progress-current').style.display = 'block';
+                
+                // STEP 2: Process in batches
+                const allResults = [];
+                let processed = 0;
+                let totalTokens = 0;
+                let perfect = 0;
+                let needsWork = 0;
+                
+                // Split into batches
+                const batches = [];
+                for (let i = 0; i < scenarioIds.length; i += BATCH_SIZE) {
+                    batches.push(scenarioIds.slice(i, i + BATCH_SIZE));
+                }
+                
+                console.log(`📦 [DEEP AUDIT] Processing ${batches.length} batches of up to ${BATCH_SIZE} scenarios each`);
+                
+                for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+                    // Check if cancelled
+                    if (deepAuditCancelled) {
+                        console.log('🛑 [DEEP AUDIT] Cancelled by user');
                         break;
                     }
                     
-                    buffer += decoder.decode(value, { stream: true });
+                    const batch = batches[batchIndex];
+                    const batchStart = batchIndex * BATCH_SIZE + 1;
                     
-                    // Process complete SSE messages
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                    console.log(`📦 [DEEP AUDIT] Processing batch ${batchIndex + 1}/${batches.length} (scenarios ${batchStart}-${batchStart + batch.length - 1})`);
                     
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                eventCount++;
-                                console.log(`📨 [DEEP AUDIT] Event #${eventCount}:`, data.type, data.current || '', data.total || '');
-                                handleDeepAuditProgress(data);
-                            } catch (e) {
-                                console.warn('Failed to parse SSE data:', line);
-                            }
+                    try {
+                        // Process this batch
+                        const batchResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${getAuthToken()}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ 
+                                scenarioIds: batch, 
+                                stream: false,
+                                templateId: templateId
+                            })
+                        });
+                        
+                        if (!batchResponse.ok) {
+                            console.error(`Batch ${batchIndex + 1} failed, continuing...`);
+                            processed += batch.length;
+                            continue;
                         }
+                        
+                        const batchData = await batchResponse.json();
+                        const batchResults = batchData.scenarios || [];
+                        
+                        // Process each result
+                        for (const result of batchResults) {
+                            processed++;
+                            allResults.push(result);
+                            
+                            if (result.score >= 9) perfect++;
+                            else if (result.score < 7) needsWork++;
+                            
+                            totalTokens += batchData.summary?.tokensUsed / batchResults.length || 0;
+                            
+                            // Update progress UI
+                            const percent = Math.round((processed / totalCount) * 100);
+                            document.getElementById('progress-bar').style.width = `${percent}%`;
+                            document.getElementById('progress-count').textContent = `${processed} / ${totalCount}`;
+                            document.getElementById('progress-percent').textContent = `${percent}%`;
+                            document.getElementById('progress-scenario-name').textContent = result.name || 'Processing...';
+                            
+                            // Add to feed
+                            const scoreColor = result.score >= 9 ? '#10b981' : 
+                                              result.score >= 7 ? '#22c55e' : 
+                                              result.score >= 5 ? '#f59e0b' : '#ef4444';
+                            
+                            const feedItem = document.createElement('div');
+                            feedItem.style.cssText = `display: flex; justify-content: space-between; padding: 6px 12px; margin: 4px 0; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 13px;`;
+                            feedItem.innerHTML = `
+                                <span style="color: #e2e8f0;">${escapeHtml(result.name || 'Unknown')}</span>
+                                <span style="color: ${scoreColor}; font-weight: 600;">${result.score}/10</span>
+                            `;
+                            document.getElementById('progress-feed').appendChild(feedItem);
+                            
+                            // Update button
+                            document.getElementById('run-deep-audit-btn').innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${processed}/${totalCount}`;
+                        }
+                        
+                    } catch (batchError) {
+                        console.error(`Batch ${batchIndex + 1} error:`, batchError);
+                        processed += batch.length;
                     }
+                    
+                    // Small delay between batches to avoid rate limiting
+                    if (batchIndex < batches.length - 1 && !deepAuditCancelled) {
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                }
+                
+                // STEP 3: Show final results
+                const avgScore = allResults.length > 0 
+                    ? (allResults.reduce((sum, r) => sum + (r.score || 0), 0) / allResults.length).toFixed(1)
+                    : 0;
+                
+                const finalResult = {
+                    success: true,
+                    auditType: 'deep',
+                    poweredBy: 'GPT-4o',
+                    summary: {
+                        totalScenarios: allResults.length,
+                        averageScore: parseFloat(avgScore),
+                        perfect: perfect,
+                        needsWork: needsWork,
+                        tokensUsed: Math.round(totalTokens),
+                        estimatedCost: `$${(totalTokens * 0.00001).toFixed(4)}`
+                    },
+                    scenarios: allResults.sort((a, b) => (a.score || 0) - (b.score || 0))
+                };
+                
+                // Store results for "Fix in Global Brain" button
+                lastDeepAuditResults = finalResult;
+                
+                if (deepAuditCancelled) {
+                    document.getElementById('progress-title').innerHTML = `
+                        <span style="color: #f59e0b;">⏹️ Audit Cancelled</span><br>
+                        <span style="font-size: 14px; color: #888;">Processed ${allResults.length} scenarios before cancellation</span>
+                    `;
+                    if (allResults.length > 0) {
+                        setTimeout(() => displayDeepAuditResults(finalResult), 500);
+                    }
+                } else {
+                    console.log('✅ [DEEP AUDIT] Complete!', finalResult.summary);
+                    displayDeepAuditResults(finalResult);
                 }
                 
             } catch (error) {
                 console.error('Deep audit error:', error);
-                
-                // Check if we have partial results to show
-                const progressFeed = document.getElementById('progress-feed');
-                const feedItems = progressFeed ? progressFeed.children.length : 0;
-                
-                if (feedItems > 0) {
-                    // We got some results before disconnection - show them
-                    showToast(`Connection lost after ${feedItems} scenarios. Partial results shown.`, 'warning');
-                    document.getElementById('progress-title').innerHTML = `
-                        <span style="color: #f59e0b;">⚠️ Connection Lost</span><br>
-                        <span style="font-size: 14px; color: #888;">Showing ${feedItems} scenarios processed before disconnect</span>
-                    `;
-                    document.getElementById('progress-current').innerHTML = `
-                        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 12px;">
-                            <button onclick="runDeepAudit()" style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); border: none; color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
-                                <i class="fas fa-redo"></i> Retry Full Audit
-                            </button>
-                        </div>
-                    `;
-                    document.getElementById('progress-current').style.display = 'block';
-                    document.getElementById('progress-current').style.background = 'rgba(245, 158, 11, 0.1)';
-                } else {
-                    // No results at all
-                    document.getElementById('deep-audit-list').innerHTML = `
-                        <div style="text-align: center; padding: 40px;">
-                            <i class="fas fa-exclamation-triangle fa-2x" style="color: #ef4444; margin-bottom: 12px;"></i>
-                            <h3 style="color: #ef4444;">Deep Audit Failed</h3>
-                            <p style="color: #888; margin-bottom: 20px;">${error.message}</p>
-                            <p style="color: #666; font-size: 13px; margin-bottom: 20px;">
-                                This may be a network timeout. Try again - the audit will resume.
-                            </p>
-                            <button onclick="runDeepAudit()" style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); border: none; color: white; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px;">
-                                <i class="fas fa-redo"></i> Retry Deep Audit
-                            </button>
-                        </div>
-                    `;
-                }
+                document.getElementById('deep-audit-list').innerHTML = `
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-exclamation-triangle fa-2x" style="color: #ef4444; margin-bottom: 12px;"></i>
+                        <h3 style="color: #ef4444;">Deep Audit Failed</h3>
+                        <p style="color: #888; margin-bottom: 20px;">${escapeHtml(error.message)}</p>
+                        <button onclick="runDeepAudit()" style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); border: none; color: white; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                            <i class="fas fa-redo"></i> Retry Deep Audit
+                        </button>
+                    </div>
+                `;
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-brain"></i> Deep Audit (AI)';
             }
         }
         
+        function cancelDeepAudit() {
+            deepAuditCancelled = true;
+            document.getElementById('cancel-deep-audit-btn').disabled = true;
+            document.getElementById('cancel-deep-audit-btn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
+            document.getElementById('progress-title').textContent = 'Cancelling after current batch...';
+        }
+        
+        // Legacy handler - no longer used but kept for compatibility
         function handleDeepAuditProgress(data) {
             const progressBar = document.getElementById('progress-bar');
             const progressCount = document.getElementById('progress-count');
