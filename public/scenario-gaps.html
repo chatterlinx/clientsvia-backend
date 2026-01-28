@@ -4328,6 +4328,10 @@
             if (urlParams.get('tab') === 'audit') {
                 console.log('🔧 [AUDIT] Auto-switching to audit tab');
                 
+                // Check if returning from Deep Audit fix (vs Template Audit fix)
+                const returnToDeepAudit = localStorage.getItem('returnToDeepAudit') === 'true';
+                localStorage.removeItem('returnToDeepAudit'); // Clear flag
+                
                 // Click the audit tab
                 setTimeout(() => {
                     const auditTab = document.querySelector('[onclick*="showTab"][onclick*="audit"]');
@@ -4337,9 +4341,63 @@
                     
                     // Check if we have fixed scenarios to process
                     const fixedScenarios = JSON.parse(localStorage.getItem('auditFixedScenarios') || '[]');
-                    if (fixedScenarios.length > 0) {
-                        console.log('🔧 [AUDIT] Found fixed scenarios, auto-running audit');
-                        // Auto-run audit to refresh the list
+                    
+                    if (returnToDeepAudit) {
+                        // ════════════════════════════════════════════════════════════════
+                        // RETURNING FROM DEEP AUDIT FIX
+                        // Show the Deep Audit results view with fixed scenarios removed
+                        // ════════════════════════════════════════════════════════════════
+                        console.log('🔧 [DEEP AUDIT] Returning from Deep Audit fix, showing results');
+                        
+                        if (lastDeepAuditResults) {
+                            // Remove fixed scenarios from the cached results
+                            if (fixedScenarios.length > 0 && lastDeepAuditResults.scenarios) {
+                                const originalCount = lastDeepAuditResults.scenarios.length;
+                                lastDeepAuditResults.scenarios = lastDeepAuditResults.scenarios.filter(
+                                    s => !fixedScenarios.includes(s.scenarioId)
+                                );
+                                const removedCount = originalCount - lastDeepAuditResults.scenarios.length;
+                                
+                                if (removedCount > 0) {
+                                    console.log(`🔧 [DEEP AUDIT] Removed ${removedCount} fixed scenarios`);
+                                    showToast(`${removedCount} scenario${removedCount !== 1 ? 's' : ''} fixed and removed!`, 'success');
+                                    
+                                    // Update summary
+                                    if (lastDeepAuditResults.summary) {
+                                        lastDeepAuditResults.summary.totalScenarios = Math.max(0, 
+                                            (lastDeepAuditResults.summary.totalScenarios || 0) - removedCount);
+                                        lastDeepAuditResults.summary.needsWork = Math.max(0,
+                                            (lastDeepAuditResults.summary.needsWork || 0) - removedCount);
+                                    }
+                                    
+                                    // Persist the updated results
+                                    persistDeepAuditResults(lastDeepAuditResults);
+                                }
+                                localStorage.removeItem('auditFixedScenarios');
+                            }
+                            
+                            // Re-display the Deep Audit results
+                            displayDeepAuditResults(lastDeepAuditResults);
+                            
+                            // Make sure Deep Audit view is visible
+                            document.getElementById('audit-empty').style.display = 'none';
+                            document.getElementById('audit-results').style.display = 'none';
+                            document.getElementById('deep-audit-results').style.display = 'block';
+                        } else {
+                            // No cached results - run Deep Audit again
+                            console.log('🔧 [DEEP AUDIT] No cached results, running new audit');
+                            setTimeout(() => {
+                                if (typeof runDeepAudit === 'function') {
+                                    runDeepAudit();
+                                }
+                            }, 500);
+                        }
+                    } else if (fixedScenarios.length > 0) {
+                        // ════════════════════════════════════════════════════════════════
+                        // RETURNING FROM TEMPLATE AUDIT FIX
+                        // Re-run Template Audit to refresh the list
+                        // ════════════════════════════════════════════════════════════════
+                        console.log('🔧 [TEMPLATE AUDIT] Found fixed scenarios, auto-running audit');
                         setTimeout(() => {
                             if (typeof runAudit === 'function') {
                                 runAudit();
@@ -4663,8 +4721,8 @@
                     scenarios: allResults.sort((a, b) => (a.score || 0) - (b.score || 0))
                 };
                 
-                // Store results for "Fix in Global Brain" button
-                lastDeepAuditResults = finalResult;
+                // Store results for "Fix in Global Brain" button (persist for page navigation)
+                persistDeepAuditResults(finalResult);
                 
                 if (deepAuditCancelled) {
                     document.getElementById('progress-title').innerHTML = `
@@ -4787,8 +4845,8 @@
         }
         
         function displayDeepAuditResults(result) {
-            // Store results globally for openDeepAuditFix to access
-            lastDeepAuditResults = result;
+            // Store results globally for openDeepAuditFix to access (persist for navigation)
+            persistDeepAuditResults(result);
             
             const { summary, scenarios } = result;
             
@@ -4874,7 +4932,29 @@
         }
         
         // Store deep audit results globally for access by openDeepAuditFix
+        // Also persist to sessionStorage so results survive page navigation
         let lastDeepAuditResults = null;
+        
+        // Load persisted deep audit results on page load
+        try {
+            const stored = sessionStorage.getItem('deepAuditResults');
+            if (stored) {
+                lastDeepAuditResults = JSON.parse(stored);
+                console.log('🔧 [DEEP AUDIT] Loaded cached results from sessionStorage');
+            }
+        } catch (e) {
+            console.warn('Failed to load deep audit results from sessionStorage');
+        }
+        
+        // Helper to persist deep audit results
+        function persistDeepAuditResults(results) {
+            lastDeepAuditResults = results;
+            try {
+                sessionStorage.setItem('deepAuditResults', JSON.stringify(results));
+            } catch (e) {
+                console.warn('Failed to persist deep audit results');
+            }
+        }
         
         function openDeepAuditFix(scenarioId, categoryId) {
             // Store company ID for return navigation

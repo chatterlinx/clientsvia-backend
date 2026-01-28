@@ -21946,20 +21946,25 @@ ${JSON.stringify(healthData, null, 2)}
                 localStorage.setItem('auditFixedScenarios', JSON.stringify(fixedScenarios));
             }
             
-            // Get the company ID from URL params to return to the right audit page
+            // Check which audit we came from (Deep Audit vs Template Audit)
             const urlParams = new URLSearchParams(window.location.search);
-            const templateId = urlParams.get('templateId');
+            const prefillType = urlParams.get('prefill');
+            const wasDeepAudit = prefillType === 'deep-audit-fix';
+            
+            // Store the audit source for the scenario-gaps page to know which view to show
+            if (wasDeepAudit) {
+                localStorage.setItem('returnToDeepAudit', 'true');
+            }
             
             // Close the modal
             closeAuditFixPostSaveModal();
             
             // Navigate back to the audit page
-            // Try to find the original company ID from the opener or localStorage
             const companyId = localStorage.getItem('lastAuditCompanyId');
             if (companyId) {
+                // Navigate to audit tab - scenario-gaps.html will check returnToDeepAudit flag
                 window.location.href = `/scenario-gaps.html?companyId=${companyId}&tab=audit`;
             } else {
-                // Fallback - just go to scenario gaps
                 window.location.href = '/scenario-gaps.html';
             }
         }
