@@ -913,6 +913,31 @@ const companySchema = new mongoose.Schema({
             // Example: "Fixture installation including chandeliers, ceiling fans,
             // decorative lighting, and custom electrical work"
         },
+        
+        // -------------------------------------------------------------------
+        // SERVICE TOGGLES - Enable/disable services per company
+        // -------------------------------------------------------------------
+        // Controls which template categories (services) are active for this company
+        // Runtime filters scenarios + provides deterministic decline for disabled services
+        // 
+        // Schema per serviceKey:
+        // {
+        //   enabled: boolean,                    // Service on/off
+        //   overrideKeywords: [string],          // Extra keywords for intent detection
+        //   overrideDeclineMessage: string       // Custom decline message
+        // }
+        //
+        // If a serviceKey is not present, uses template's defaultEnabled value
+        services: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {}
+            // Example:
+            // {
+            //   duct_cleaning: { enabled: false, overrideDeclineMessage: "We don't do ducts" },
+            //   dryer_vent: { enabled: true },
+            //   commercial: { enabled: false }
+            // }
+        },
 
         // -------------------------------------------------------------------
         // BUSINESS HOURS (canonical, trade-agnostic)

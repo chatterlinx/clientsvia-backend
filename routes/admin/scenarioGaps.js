@@ -1420,6 +1420,193 @@ router.get('/:companyId/local-config', async (req, res) => {
 });
 
 /**
+ * GET /:companyId/services-config
+ * 
+ * SINGLE SOURCE OF TRUTH for service toggle configuration
+ * Returns merged config: template defaults + company overrides
+ * Called by: Blueprint Builder, Gap Fill, Company Local, Audit, Runtime
+ */
+router.get('/:companyId/services-config', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        // Load company with services config
+        const company = await Company.findById(companyId)
+            .select('name aiAgentSettings.templateReferences aiAgentSettings.services')
+            .lean();
+            
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get company's primary template
+        const templateRef = company.aiAgentSettings?.templateReferences?.[0];
+        if (!templateRef?.templateId) {
+            return res.json({
+                success: true,
+                company: { id: companyId, name: company.name },
+                template: null,
+                services: {},
+                toggleableCategories: [],
+                enabledServiceKeys: [],
+                disabledServiceKeys: []
+            });
+        }
+        
+        // Load template with categories
+        const template = await GlobalInstantResponseTemplate.findById(templateRef.templateId)
+            .select('name categories.id categories.name categories.icon categories.serviceKey categories.isToggleable categories.defaultEnabled categories.serviceIntent categories.serviceDecline')
+            .lean();
+            
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Extract toggleable categories
+        const toggleableCategories = (template.categories || [])
+            .filter(cat => cat.isToggleable && cat.serviceKey)
+            .map(cat => ({
+                categoryId: cat.id,
+                categoryName: cat.name,
+                categoryIcon: cat.icon || '📋',
+                serviceKey: cat.serviceKey,
+                defaultEnabled: cat.defaultEnabled !== false, // Default to true if not specified
+                intent: {
+                    keywords: cat.serviceIntent?.keywords || [],
+                    phrases: cat.serviceIntent?.phrases || [],
+                    negative: cat.serviceIntent?.negative || [],
+                    minConfidence: cat.serviceIntent?.minConfidence || 0.6
+                },
+                decline: {
+                    defaultMessage: cat.serviceDecline?.defaultMessage || null,
+                    suggestAlternatives: cat.serviceDecline?.suggestAlternatives !== false
+                }
+            }));
+        
+        // Merge with company overrides
+        const companyServices = company.aiAgentSettings?.services || {};
+        const mergedServices = {};
+        const enabledServiceKeys = [];
+        const disabledServiceKeys = [];
+        
+        for (const cat of toggleableCategories) {
+            const companyOverride = companyServices[cat.serviceKey];
+            
+            // Determine if enabled (company override > template default)
+            let isEnabled;
+            if (companyOverride !== undefined && companyOverride.enabled !== undefined) {
+                isEnabled = companyOverride.enabled;
+            } else {
+                isEnabled = cat.defaultEnabled;
+            }
+            
+            // Build merged config
+            mergedServices[cat.serviceKey] = {
+                enabled: isEnabled,
+                source: companyOverride?.enabled !== undefined ? 'company_override' : 'template_default',
+                categoryId: cat.categoryId,
+                categoryName: cat.categoryName,
+                categoryIcon: cat.categoryIcon,
+                // Merge keywords (template + company overrides)
+                keywords: [
+                    ...cat.intent.keywords,
+                    ...(companyOverride?.overrideKeywords || [])
+                ],
+                phrases: cat.intent.phrases,
+                negative: cat.intent.negative,
+                minConfidence: cat.intent.minConfidence,
+                // Decline message (company override > template default)
+                declineMessage: companyOverride?.overrideDeclineMessage || cat.decline.defaultMessage,
+                suggestAlternatives: cat.decline.suggestAlternatives,
+                // Track if company has custom overrides
+                hasOverrides: !!(companyOverride?.overrideKeywords?.length || companyOverride?.overrideDeclineMessage)
+            };
+            
+            if (isEnabled) {
+                enabledServiceKeys.push(cat.serviceKey);
+            } else {
+                disabledServiceKeys.push(cat.serviceKey);
+            }
+        }
+        
+        logger.info('[SERVICES CONFIG] Loaded', {
+            companyId,
+            templateName: template.name,
+            toggleableCount: toggleableCategories.length,
+            enabled: enabledServiceKeys.length,
+            disabled: disabledServiceKeys.length
+        });
+        
+        return res.json({
+            success: true,
+            company: {
+                id: companyId,
+                name: company.name
+            },
+            template: {
+                id: templateRef.templateId,
+                name: template.name
+            },
+            services: mergedServices,
+            toggleableCategories,
+            enabledServiceKeys,
+            disabledServiceKeys,
+            summary: {
+                totalToggleable: toggleableCategories.length,
+                enabled: enabledServiceKeys.length,
+                disabled: disabledServiceKeys.length,
+                withOverrides: Object.values(mergedServices).filter(s => s.hasOverrides).length
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[SERVICES CONFIG] Error', { error: error.message, companyId });
+        return res.status(500).json({ error: 'Failed to load services config' });
+    }
+});
+
+/**
+ * PATCH /:companyId/services-config
+ * 
+ * Update company's service toggles and overrides
+ */
+router.patch('/:companyId/services-config', async (req, res) => {
+    const { companyId } = req.params;
+    const { services } = req.body;
+    
+    if (!services || typeof services !== 'object') {
+        return res.status(400).json({ error: 'services object is required' });
+    }
+    
+    try {
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            { $set: { 'aiAgentSettings.services': services } },
+            { new: true }
+        ).select('name aiAgentSettings.services');
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        logger.info('[SERVICES CONFIG] Updated', {
+            companyId,
+            servicesCount: Object.keys(services).length,
+            services: Object.entries(services).map(([k, v]) => `${k}:${v.enabled}`)
+        });
+        
+        return res.json({
+            success: true,
+            services: company.aiAgentSettings?.services || {}
+        });
+        
+    } catch (error) {
+        logger.error('[SERVICES CONFIG] Update error', { error: error.message, companyId });
+        return res.status(500).json({ error: 'Failed to update services config' });
+    }
+});
+
+/**
  * PATCH /:companyId/local-config
  * 
  * Update company's custom template assignment and service context

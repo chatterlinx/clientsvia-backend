@@ -2232,6 +2232,86 @@
                 </div>
             </div>
             
+            <!-- ════════════════════════════════════════════════════════════════════════════════
+                 SERVICES OFFERED - Toggle which services this company provides
+                 Runtime filters scenarios + deterministic decline for disabled services
+                 ════════════════════════════════════════════════════════════════════════════════ -->
+            <div id="services-offered-card" style="
+                background: var(--bg-secondary);
+                border: 1px solid var(--border-color);
+                border-radius: 16px;
+                padding: 24px;
+                margin-bottom: 24px;
+            ">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 40px;
+                            height: 40px;
+                            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                            border-radius: 10px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 18px;
+                        ">🔧</div>
+                        <div>
+                            <h3 style="color: var(--text-primary); margin: 0; font-size: 16px;">Services Offered</h3>
+                            <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0 0;">
+                                Toggle which services this company provides
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="viewServicesConfig()" style="
+                            padding: 8px 12px;
+                            background: var(--bg-tertiary);
+                            border: 1px solid var(--border-color);
+                            border-radius: 6px;
+                            color: var(--text-secondary);
+                            cursor: pointer;
+                            font-size: 12px;
+                        " title="View config JSON for debugging">
+                            <i class="fas fa-code"></i> View Config
+                        </button>
+                        <button onclick="saveServicesConfig()" id="save-services-btn" style="
+                            padding: 8px 16px;
+                            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                            border: none;
+                            border-radius: 6px;
+                            color: white;
+                            cursor: pointer;
+                            font-size: 12px;
+                            font-weight: 600;
+                        ">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Services List -->
+                <div id="services-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                        <i class="fas fa-spinner fa-spin"></i> Loading services...
+                    </div>
+                </div>
+                
+                <!-- Summary -->
+                <div id="services-summary" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                    <div style="display: flex; gap: 24px; font-size: 13px;">
+                        <span style="color: var(--text-muted);">
+                            <span id="services-enabled-count" style="color: #10b981; font-weight: 600;">0</span> enabled
+                        </span>
+                        <span style="color: var(--text-muted);">
+                            <span id="services-disabled-count" style="color: #ef4444; font-weight: 600;">0</span> disabled
+                        </span>
+                        <span style="color: var(--text-muted);">
+                            <span id="services-custom-count" style="color: #8b5cf6; font-weight: 600;">0</span> with custom responses
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Service Context Card - PROMINENT -->
             <div id="service-context-card" style="
                 background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(249, 115, 22, 0.10) 100%);
@@ -2994,6 +3074,8 @@
             customTemplate: null,
             serviceContext: '',
             availableTemplates: [],
+            servicesConfig: null,      // Full services config from API
+            serviceChanges: {},        // Pending changes to save
             initialized: false
         };
         
@@ -3003,10 +3085,11 @@
             console.log('[COMPANY LOCAL] Loading data for company:', companyId);
             
             try {
-                // Load available templates and company settings in parallel
+                // Load available templates, company settings, and services in parallel
                 await Promise.all([
                     refreshCustomTemplates(),
-                    loadServiceContext()
+                    loadServiceContext(),
+                    loadServicesConfig()
                 ]);
                 
                 companyLocalState.initialized = true;
@@ -3014,6 +3097,367 @@
                 console.error('[COMPANY LOCAL] Error loading data:', error);
                 showToast('Failed to load company local data', 'error');
             }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════════
+        // SERVICES OFFERED - Toggle which services this company provides
+        // ════════════════════════════════════════════════════════════════════════════════════
+        
+        async function loadServicesConfig() {
+            const listEl = document.getElementById('services-list');
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/services-config`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load services config');
+                }
+                
+                const config = await response.json();
+                companyLocalState.servicesConfig = config;
+                companyLocalState.serviceChanges = {}; // Reset pending changes
+                
+                renderServicesUI(config);
+                
+            } catch (error) {
+                console.error('[SERVICES] Error loading config:', error);
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                        <i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i>
+                        <p style="margin-top: 8px;">Failed to load services. Make sure a template is assigned.</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function renderServicesUI(config) {
+            const listEl = document.getElementById('services-list');
+            const summaryEl = document.getElementById('services-summary');
+            
+            if (!config.toggleableCategories || config.toggleableCategories.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                        <i class="fas fa-info-circle"></i>
+                        <p style="margin-top: 8px;">No toggleable services found in the assigned template.</p>
+                        <p style="font-size: 12px;">Template categories need serviceKey and isToggleable: true to appear here.</p>
+                    </div>
+                `;
+                summaryEl.style.display = 'none';
+                return;
+            }
+            
+            // Render service toggles
+            listEl.innerHTML = config.toggleableCategories.map(cat => {
+                const service = config.services[cat.serviceKey] || {};
+                const isEnabled = service.enabled !== false;
+                const hasOverrides = service.hasOverrides;
+                
+                return `
+                    <div class="service-item" data-service-key="${cat.serviceKey}" style="
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        padding: 12px 16px;
+                        background: ${isEnabled ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'};
+                        border: 1px solid ${isEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'};
+                        border-radius: 10px;
+                        transition: all 0.2s;
+                    ">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <label class="toggle-switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
+                                <input type="checkbox" 
+                                    ${isEnabled ? 'checked' : ''} 
+                                    onchange="toggleService('${cat.serviceKey}', this.checked)"
+                                    style="opacity: 0; width: 0; height: 0;">
+                                <span style="
+                                    position: absolute;
+                                    cursor: pointer;
+                                    top: 0; left: 0; right: 0; bottom: 0;
+                                    background-color: ${isEnabled ? '#10b981' : '#6b7280'};
+                                    transition: 0.3s;
+                                    border-radius: 24px;
+                                "></span>
+                                <span style="
+                                    position: absolute;
+                                    content: '';
+                                    height: 18px;
+                                    width: 18px;
+                                    left: ${isEnabled ? '23px' : '3px'};
+                                    bottom: 3px;
+                                    background-color: white;
+                                    transition: 0.3s;
+                                    border-radius: 50%;
+                                "></span>
+                            </label>
+                            <div>
+                                <div style="font-size: 14px; font-weight: 500; color: var(--text-primary);">
+                                    ${cat.categoryIcon} ${escapeHtml(cat.categoryName)}
+                                    ${hasOverrides ? '<span style="color: #8b5cf6; font-size: 11px; margin-left: 6px;">✎ custom</span>' : ''}
+                                </div>
+                                <div style="font-size: 11px; color: var(--text-muted);">
+                                    ${cat.intent.keywords.slice(0, 3).join(', ')}${cat.intent.keywords.length > 3 ? '...' : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="
+                                font-size: 11px;
+                                padding: 2px 8px;
+                                border-radius: 4px;
+                                background: ${isEnabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'};
+                                color: ${isEnabled ? '#10b981' : '#ef4444'};
+                            ">${isEnabled ? 'ON' : 'OFF'}</span>
+                            <button onclick="editServiceDecline('${cat.serviceKey}')" style="
+                                padding: 4px 8px;
+                                background: transparent;
+                                border: 1px solid var(--border-color);
+                                border-radius: 4px;
+                                color: var(--text-muted);
+                                cursor: pointer;
+                                font-size: 11px;
+                            " title="Edit decline message">
+                                <i class="fas fa-comment-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Update summary
+            summaryEl.style.display = 'block';
+            document.getElementById('services-enabled-count').textContent = config.enabledServiceKeys.length;
+            document.getElementById('services-disabled-count').textContent = config.disabledServiceKeys.length;
+            document.getElementById('services-custom-count').textContent = config.summary?.withOverrides || 0;
+        }
+        
+        function toggleService(serviceKey, enabled) {
+            // Track change
+            if (!companyLocalState.serviceChanges[serviceKey]) {
+                companyLocalState.serviceChanges[serviceKey] = {};
+            }
+            companyLocalState.serviceChanges[serviceKey].enabled = enabled;
+            
+            // Update UI immediately
+            const item = document.querySelector(`[data-service-key="${serviceKey}"]`);
+            if (item) {
+                item.style.background = enabled ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                item.style.borderColor = enabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+                
+                const statusBadge = item.querySelector('span[style*="border-radius: 4px"]');
+                if (statusBadge) {
+                    statusBadge.textContent = enabled ? 'ON' : 'OFF';
+                    statusBadge.style.background = enabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+                    statusBadge.style.color = enabled ? '#10b981' : '#ef4444';
+                }
+                
+                // Update toggle visual
+                const toggleSpan = item.querySelector('.toggle-switch span:first-of-type');
+                const toggleKnob = item.querySelector('.toggle-switch span:last-of-type');
+                if (toggleSpan) toggleSpan.style.backgroundColor = enabled ? '#10b981' : '#6b7280';
+                if (toggleKnob) toggleKnob.style.left = enabled ? '23px' : '3px';
+            }
+            
+            // Update summary counts
+            const config = companyLocalState.servicesConfig;
+            let enabledCount = 0;
+            let disabledCount = 0;
+            
+            for (const cat of config.toggleableCategories) {
+                const change = companyLocalState.serviceChanges[cat.serviceKey];
+                const original = config.services[cat.serviceKey];
+                const isEnabled = change?.enabled !== undefined ? change.enabled : original?.enabled !== false;
+                if (isEnabled) enabledCount++;
+                else disabledCount++;
+            }
+            
+            document.getElementById('services-enabled-count').textContent = enabledCount;
+            document.getElementById('services-disabled-count').textContent = disabledCount;
+            
+            console.log('[SERVICES] Toggle:', serviceKey, enabled);
+        }
+        
+        function editServiceDecline(serviceKey) {
+            const config = companyLocalState.servicesConfig;
+            const service = config.services[serviceKey] || {};
+            const category = config.toggleableCategories.find(c => c.serviceKey === serviceKey);
+            
+            const currentMessage = companyLocalState.serviceChanges[serviceKey]?.overrideDeclineMessage 
+                || service.declineMessage 
+                || '';
+            
+            const newMessage = prompt(
+                `Decline message for "${category?.categoryName || serviceKey}":\n\n(Leave empty to use template default)`,
+                currentMessage
+            );
+            
+            if (newMessage !== null) {
+                if (!companyLocalState.serviceChanges[serviceKey]) {
+                    companyLocalState.serviceChanges[serviceKey] = {};
+                }
+                companyLocalState.serviceChanges[serviceKey].overrideDeclineMessage = newMessage || null;
+                
+                // Update UI to show custom badge if needed
+                const item = document.querySelector(`[data-service-key="${serviceKey}"]`);
+                if (item && newMessage) {
+                    const nameDiv = item.querySelector('div[style*="font-weight: 500"]');
+                    if (nameDiv && !nameDiv.innerHTML.includes('custom')) {
+                        nameDiv.innerHTML += '<span style="color: #8b5cf6; font-size: 11px; margin-left: 6px;">✎ custom</span>';
+                    }
+                }
+                
+                showToast('Decline message updated. Click Save to apply.', 'info');
+            }
+        }
+        
+        async function saveServicesConfig() {
+            if (Object.keys(companyLocalState.serviceChanges).length === 0) {
+                showToast('No changes to save', 'info');
+                return;
+            }
+            
+            const btn = document.getElementById('save-services-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            
+            try {
+                // Merge changes with existing config
+                const currentServices = companyLocalState.servicesConfig?.services || {};
+                const updatedServices = {};
+                
+                // Copy existing services
+                for (const [key, value] of Object.entries(currentServices)) {
+                    updatedServices[key] = {
+                        enabled: value.enabled,
+                        overrideKeywords: value.overrideKeywords || [],
+                        overrideDeclineMessage: value.declineMessage
+                    };
+                }
+                
+                // Apply changes
+                for (const [key, changes] of Object.entries(companyLocalState.serviceChanges)) {
+                    if (!updatedServices[key]) {
+                        updatedServices[key] = { enabled: true };
+                    }
+                    if (changes.enabled !== undefined) {
+                        updatedServices[key].enabled = changes.enabled;
+                    }
+                    if (changes.overrideDeclineMessage !== undefined) {
+                        updatedServices[key].overrideDeclineMessage = changes.overrideDeclineMessage;
+                    }
+                }
+                
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/services-config`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ services: updatedServices })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to save services config');
+                }
+                
+                companyLocalState.serviceChanges = {};
+                showToast('Services configuration saved!', 'success');
+                
+                // Reload to get fresh data
+                await loadServicesConfig();
+                
+            } catch (error) {
+                console.error('[SERVICES] Save error:', error);
+                showToast('Failed to save services: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Save';
+            }
+        }
+        
+        function viewServicesConfig() {
+            const config = companyLocalState.servicesConfig;
+            if (!config) {
+                showToast('No services config loaded', 'warning');
+                return;
+            }
+            
+            // Build debug view
+            const debugData = {
+                company: config.company,
+                template: config.template,
+                services: config.services,
+                summary: config.summary,
+                pendingChanges: companyLocalState.serviceChanges
+            };
+            
+            // Create modal
+            const modal = document.createElement('div');
+            modal.id = 'services-config-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.8);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+            `;
+            modal.innerHTML = `
+                <div style="
+                    background: var(--bg-secondary);
+                    border-radius: 16px;
+                    padding: 24px;
+                    max-width: 700px;
+                    max-height: 80vh;
+                    overflow: auto;
+                    width: 90%;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="color: var(--text-primary); margin: 0;">
+                            <i class="fas fa-code"></i> Services Config (Debug)
+                        </h3>
+                        <button onclick="document.getElementById('services-config-modal').remove()" style="
+                            background: none;
+                            border: none;
+                            color: var(--text-muted);
+                            cursor: pointer;
+                            font-size: 20px;
+                        ">&times;</button>
+                    </div>
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+                        Copy this JSON when reporting issues. It contains all service toggle configuration.
+                    </p>
+                    <pre style="
+                        background: var(--bg-tertiary);
+                        padding: 16px;
+                        border-radius: 8px;
+                        overflow: auto;
+                        font-size: 12px;
+                        color: #10b981;
+                        max-height: 400px;
+                    ">${JSON.stringify(debugData, null, 2)}</pre>
+                    <button onclick="navigator.clipboard.writeText(JSON.stringify(${JSON.stringify(debugData).replace(/"/g, '&quot;')}, null, 2)); showToast('Copied to clipboard', 'success');" style="
+                        margin-top: 16px;
+                        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+                        border: none;
+                        color: white;
+                        padding: 10px 20px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        font-size: 14px;
+                    ">
+                        <i class="fas fa-copy"></i> Copy to Clipboard
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Close on backdrop click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
         }
         
         async function refreshCustomTemplates() {

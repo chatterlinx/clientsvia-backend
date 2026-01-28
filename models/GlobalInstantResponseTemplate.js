@@ -1018,6 +1018,88 @@ const categorySchema = new Schema({
     lastEditedBy: { type: String, default: null },
     lastEditedFromContext: { type: String, default: null },
     
+    // ============================================
+    // 🔧 SERVICE TOGGLE SYSTEM
+    // ============================================
+    // Allows companies to enable/disable entire categories of service
+    // Example: HVAC company doesn't offer duct cleaning → disable that category
+    // Runtime filters out scenarios, provides deterministic decline
+    
+    // Stable service identifier (use this, not category name)
+    serviceKey: {
+        type: String,
+        trim: true,
+        default: null
+        // Examples: "duct_cleaning", "dryer_vent", "commercial_hvac"
+        // null = not a toggleable service (always shown)
+    },
+    
+    // Can companies toggle this service on/off?
+    isToggleable: {
+        type: Boolean,
+        default: false
+        // true = shows in company's "Services Offered" checklist
+        // false = always active (e.g., Emergency, General Questions)
+    },
+    
+    // Default state for new companies
+    defaultEnabled: {
+        type: Boolean,
+        default: true
+        // true = most companies offer this (e.g., AC Repair)
+        // false = niche service, opt-in (e.g., Duct Cleaning)
+    },
+    
+    // Service intent detection (for deterministic decline)
+    serviceIntent: {
+        // Keywords that indicate caller is asking about this service
+        keywords: {
+            type: [String],
+            default: []
+            // Examples: ["duct cleaning", "clean ducts", "air duct"]
+        },
+        
+        // Full phrases for higher confidence matching
+        phrases: {
+            type: [String],
+            default: []
+            // Examples: ["do you clean ducts", "need duct cleaning"]
+        },
+        
+        // Negative keywords (avoid false matches)
+        negative: {
+            type: [String],
+            default: []
+            // Examples: ["duct tape"] - not about duct cleaning
+        },
+        
+        // Minimum confidence to trigger service detection
+        minConfidence: {
+            type: Number,
+            default: 0.6,
+            min: 0,
+            max: 1
+        }
+    },
+    
+    // Decline response when service is disabled
+    serviceDecline: {
+        // Default message when company doesn't offer this service
+        defaultMessage: {
+            type: String,
+            trim: true,
+            default: null
+            // Example: "We don't offer duct cleaning, but we do AC repair and maintenance."
+            // null = use generic decline
+        },
+        
+        // Suggest alternative services
+        suggestAlternatives: {
+            type: Boolean,
+            default: true
+        }
+    },
+    
     // 🎭 BEHAVIOR: Default AI behavior for scenarios in this category
     // DEPRECATED: Scenarios control their own behavior (more flexible)
     // Kept for backward compatibility with existing categories
