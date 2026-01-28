@@ -1842,12 +1842,44 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h3 style="display: flex; align-items: center; gap: 10px; margin: 0; color: #fff; font-size: 18px;">
                         <i class="fas fa-clipboard-check" style="color: #8b5cf6;"></i>
-                        Audit Engine Rules (9 Deterministic Checks)
+                        Company Audit Engine
+                        <span style="background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">SERVICE-AWARE</span>
                     </h3>
                     <button onclick="toggleChecklist()" style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.3); color: #a78bfa; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 6px;">
                         <i class="fas fa-chevron-down" id="checklist-toggle-icon"></i> Toggle
                     </button>
                 </div>
+                
+                <!-- Service-Aware Scope Explanation -->
+                <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(6, 182, 212, 0.1) 100%); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <div style="font-size: 24px;">🎯</div>
+                        <div>
+                            <div style="font-weight: 700; color: #34d399; margin-bottom: 6px; font-size: 14px;">
+                                Audit = Runtime Truth
+                            </div>
+                            <div style="font-size: 13px; color: #e2e8f0; line-height: 1.6;">
+                                This audit matches exactly what the AI agent uses at runtime:
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+                                <span style="background: rgba(139, 92, 246, 0.2); color: #a78bfa; padding: 4px 10px; border-radius: 6px; font-size: 12px;">
+                                    📋 Main Template (enabled services only)
+                                </span>
+                                <span style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; padding: 4px 10px; border-radius: 6px; font-size: 12px;">
+                                    🏢 Company Local Scenarios
+                                </span>
+                                <span style="background: rgba(107, 114, 128, 0.2); color: #9ca3af; padding: 4px 10px; border-radius: 6px; font-size: 12px;">
+                                    🔇 Disabled Services = Excluded
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                    <strong>9 Deterministic Rules</strong> check every scenario for quality, consistency, and proper wiring:
+                </div>
+                
                 <div id="audit-checklist" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
                     
                     <!-- Rule 1: Completeness -->
