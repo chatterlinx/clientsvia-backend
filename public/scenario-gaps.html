@@ -1760,144 +1760,138 @@
             </div>
             
             <!-- Audit Rules Checklist (always visible) -->
-            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <h3 style="display: flex; align-items: center; gap: 8px; margin: 0;">
-                        <i class="fas fa-list-check" style="color: var(--accent-purple);"></i>
-                        What the Audit Engine Checks (9 Rules, Content-Only)
+            <div style="background: linear-gradient(135deg, #1e1e2e 0%, #252538 100%); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 16px; padding: 24px; margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="display: flex; align-items: center; gap: 10px; margin: 0; color: #fff; font-size: 18px;">
+                        <i class="fas fa-clipboard-check" style="color: #8b5cf6;"></i>
+                        Audit Engine Rules (9 Deterministic Checks)
                     </h3>
-                    <button onclick="toggleChecklist()" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 13px;">
-                        <i class="fas fa-chevron-down" id="checklist-toggle-icon"></i>
+                    <button onclick="toggleChecklist()" style="background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.3); color: #a78bfa; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 6px;">
+                        <i class="fas fa-chevron-down" id="checklist-toggle-icon"></i> Toggle
                     </button>
                 </div>
-                <div id="audit-checklist" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+                <div id="audit-checklist" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                    
                     <!-- Rule 1: Completeness -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-blue); margin-bottom: 8px;">
-                            <i class="fas fa-check-square"></i> Completeness
+                    <div style="background: rgba(59, 130, 246, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #3b82f6;">
+                        <div style="font-weight: 700; color: #60a5fa; margin-bottom: 10px; font-size: 14px;">
+                            <i class="fas fa-check-circle"></i> Completeness
                         </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>name is present</li>
-                            <li>triggers[] has items</li>
-                            <li>quickReplies[] has items</li>
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
+                            <li>Scenario name is present</li>
+                            <li>triggers[] has at least 1 item</li>
+                            <li>quickReplies[] has at least 1 item</li>
                             <li>scenarioType is not UNKNOWN</li>
-                            <li>categories[] assigned</li>
-                            <li>behavior is set</li>
-                            <li><strong>quickReplies: 4-7 variations</strong></li>
-                            <li><strong>fullReplies: 4-5 variations</strong></li>
-                            <li><strong>_noName variants exist</strong></li>
+                            <li>behavior is set and valid</li>
+                            <li>4-7 quickReplies variations</li>
+                            <li>4-5 fullReplies variations</li>
                         </ul>
                     </div>
                     
-                    <!-- Rule 2: Wiring -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-pink); margin-bottom: 8px;">
-                            <i class="fas fa-plug"></i> Wiring
-                        </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>bookingIntent is boolean</li>
-                            <li>bookingIntent true for BOOKING/EMERGENCY</li>
-                            <li>bookingIntent false for FAQ/BILLING/SMALL_TALK</li>
-                        </ul>
-                    </div>
-                    
-                    <!-- Rule 3: Banned Phrases -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-red); margin-bottom: 8px;">
+                    <!-- Rule 2: Banned Phrases (ERROR severity) -->
+                    <div style="background: rgba(239, 68, 68, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #ef4444;">
+                        <div style="font-weight: 700; color: #f87171; margin-bottom: 10px; font-size: 14px;">
                             <i class="fas fa-ban"></i> Banned Phrases
                         </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>No chatbot words in quickReplies</li>
-                            <li>No help desk words in fullReplies</li>
-                            <li>No troubleshooting questions</li>
-                            <li>No "Got it", "No problem", etc.</li>
-                            <li>Checks ALL text fields</li>
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
+                            <li><strong style="color: #fca5a5;">Chatbot:</strong> "we're here to help", "thank you for reaching out"</li>
+                            <li><strong style="color: #fca5a5;">Help desk:</strong> "got it", "no problem", "absolutely"</li>
+                            <li><strong style="color: #fca5a5;">Troubleshooting:</strong> "have you tried", "have you checked"</li>
+                            <li>Checks all reply fields</li>
                         </ul>
                     </div>
                     
-                    <!-- Rule 4: Structure -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-yellow); margin-bottom: 8px;">
-                            <i class="fas fa-sitemap"></i> Structure
+                    <!-- Rule 3: Structure -->
+                    <div style="background: rgba(234, 179, 8, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #eab308;">
+                        <div style="font-weight: 700; color: #fde047; margin-bottom: 10px; font-size: 14px;">
+                            <i class="fas fa-sitemap"></i> Response Structure
                         </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>quickReplies = classify (no booking)</li>
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
+                            <li>quickReplies = classify (diagnostic Qs)</li>
                             <li>fullReplies = book (move forward)</li>
+                            <li>No booking language in quickReplies</li>
                             <li>No stacked acknowledgments</li>
                             <li>Only ONE question per reply</li>
                         </ul>
                     </div>
                     
-                    <!-- Rule 5: Personalization -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-green); margin-bottom: 8px;">
-                            <i class="fas fa-user"></i> Personalization
+                    <!-- Rule 4: Personalization -->
+                    <div style="background: rgba(34, 197, 94, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #22c55e;">
+                        <div style="font-weight: 700; color: #4ade80; margin-bottom: 10px; font-size: 14px;">
+                            <i class="fas fa-user-check"></i> Personalization
                         </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>{callerName} placeholder used</li>
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
+                            <li>{callerName} used in replies</li>
                             <li>_noName variants exist</li>
                             <li>No deprecated placeholders</li>
-                            <li>Consistent placeholder naming</li>
+                            <li>Valid placeholder format</li>
                         </ul>
                     </div>
                     
-                    <!-- Rule 6: Response Length -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-purple); margin-bottom: 8px;">
-                            <i class="fas fa-ruler"></i> Response Length
+                    <!-- Rule 5: Response Length -->
+                    <div style="background: rgba(139, 92, 246, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #8b5cf6;">
+                        <div style="font-weight: 700; color: #a78bfa; margin-bottom: 10px; font-size: 14px;">
+                            <i class="fas fa-text-width"></i> Response Length
                         </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>quickReplies / _noName ≤ 20 words</li>
-                            <li>fullReplies / _noName ≤ 25 words</li>
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
+                            <li>quickReplies ≤ 20 words</li>
+                            <li>fullReplies ≤ 25 words</li>
+                            <li>_noName variants same limits</li>
                         </ul>
                     </div>
                     
-                    <!-- Rule 7: Triggers -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-blue); margin-bottom: 8px;">
+                    <!-- Rule 6: Triggers -->
+                    <div style="background: rgba(6, 182, 212, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #06b6d4;">
+                        <div style="font-weight: 700; color: #22d3ee; margin-bottom: 10px; font-size: 14px;">
                             <i class="fas fa-bolt"></i> Triggers
                         </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
                             <li>3-20 triggers per scenario</li>
-                            <li>No generic triggers ("yes", "ok")</li>
-                            <li>Has short (2-3 word) triggers</li>
-                            <li>Has long (5+ word) triggers</li>
-                            <li>regexTriggers[] are valid</li>
+                            <li>No generic ("yes", "ok", "hello")</li>
+                            <li>Mix of short + long triggers</li>
+                            <li>regexTriggers[] compile cleanly</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Rule 7: Wiring -->
+                    <div style="background: rgba(236, 72, 153, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #ec4899;">
+                        <div style="font-weight: 700; color: #f472b6; margin-bottom: 10px; font-size: 14px;">
+                            <i class="fas fa-plug"></i> Wiring
+                        </div>
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
+                            <li>bookingIntent = true for BOOKING/EMERGENCY</li>
+                            <li>bookingIntent = false for FAQ/BILLING</li>
+                            <li>Type matches intent flag</li>
                         </ul>
                     </div>
                     
                     <!-- Rule 8: Priority -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-yellow); margin-bottom: 8px;">
-                            <i class="fas fa-sort-amount-up"></i> Priority
+                    <div style="background: rgba(249, 115, 22, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #f97316;">
+                        <div style="font-weight: 700; color: #fb923c; margin-bottom: 10px; font-size: 14px;">
+                            <i class="fas fa-sort-numeric-up"></i> Priority Ranges
                         </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
                             <li>EMERGENCY: 90-100</li>
                             <li>BOOKING: 70-85</li>
-                            <li>TRANSFER: 80-90</li>
                             <li>FAQ/BILLING: 40-60</li>
                             <li>SMALL_TALK: -5 to 10</li>
-                            <li>minConfidence is reasonable</li>
                         </ul>
                     </div>
                     
-                    <!-- Rule 9: Full Scenario -->
-                    <div style="background: var(--bg-tertiary); padding: 12px; border-radius: 8px;">
-                        <div style="font-weight: 600; color: var(--accent-pink); margin-bottom: 8px;">
-                            <i class="fas fa-cogs"></i> Content Integrity (content-only)
+                    <!-- Rule 9: Content Integrity -->
+                    <div style="background: rgba(148, 163, 184, 0.15); padding: 16px; border-radius: 12px; border-left: 4px solid #94a3b8;">
+                        <div style="font-weight: 700; color: #cbd5e1; margin-bottom: 10px; font-size: 14px;">
+                            <i class="fas fa-shield-alt"></i> Content Integrity
                         </div>
-                        <ul style="font-size: 12px; color: var(--text-muted); margin: 0; padding-left: 16px;">
-                            <li>status is valid, isActive is true</li>
-                            <li>regexTriggers compile cleanly</li>
-                            <li>placeholder consistency (no legacy/unknown)</li>
-                            <li>negativeTriggers don't conflict</li>
-                            <li>entityCapture[] valid types</li>
-                            <li>behavior is allowed (no "Friendly & Warm")</li>
-                            <li>channel is valid</li>
-                            <li>minConfidence within range</li>
-                            <li>non-content fields reported as INFO</li>
+                        <ul style="font-size: 13px; color: #e2e8f0; margin: 0; padding-left: 18px; line-height: 1.7;">
+                            <li>isActive = true, status = valid</li>
+                            <li>No conflicting negativeTriggers</li>
+                            <li>Valid entityCapture[] types</li>
+                            <li>minConfidence in range</li>
+                            <li>Non-content fields = INFO only</li>
                         </ul>
                     </div>
+                    
                 </div>
             </div>
             
