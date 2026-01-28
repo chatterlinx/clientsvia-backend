@@ -1704,6 +1704,87 @@ router.post('/:companyId/services-config/test', async (req, res) => {
 });
 
 /**
+ * POST /services-config/migrate-hvac
+ * 
+ * Add service toggle configuration to HVAC template categories
+ * This is a one-time migration that adds serviceKey, isToggleable, etc.
+ */
+router.post('/services-config/migrate-hvac', async (req, res) => {
+    try {
+        const { SERVICE_CONFIG } = require('../../scripts/migrations/add-service-keys-to-hvac-template');
+        
+        // Find HVAC template(s)
+        const templates = await GlobalInstantResponseTemplate.find({
+            $or: [
+                { templateType: { $regex: /hvac/i } },
+                { name: { $regex: /hvac/i } }
+            ]
+        });
+        
+        if (templates.length === 0) {
+            return res.status(404).json({ error: 'No HVAC templates found' });
+        }
+        
+        const results = [];
+        
+        for (const template of templates) {
+            let updated = 0;
+            let skipped = 0;
+            const configuredCategories = [];
+            
+            for (const category of (template.categories || [])) {
+                const config = SERVICE_CONFIG[category.name];
+                
+                if (config) {
+                    category.serviceKey = config.serviceKey;
+                    category.isToggleable = config.isToggleable;
+                    category.defaultEnabled = config.defaultEnabled;
+                    category.serviceIntent = config.serviceIntent;
+                    category.serviceDecline = config.serviceDecline;
+                    
+                    configuredCategories.push({
+                        name: category.name,
+                        serviceKey: config.serviceKey,
+                        isToggleable: config.isToggleable,
+                        defaultEnabled: config.defaultEnabled
+                    });
+                    updated++;
+                } else {
+                    skipped++;
+                }
+            }
+            
+            await template.save();
+            
+            results.push({
+                templateId: template._id,
+                templateName: template.name,
+                categoriesUpdated: updated,
+                categoriesSkipped: skipped,
+                configuredCategories
+            });
+            
+            logger.info('[SERVICE MIGRATION] Updated HVAC template', {
+                templateId: template._id,
+                templateName: template.name,
+                updated,
+                skipped
+            });
+        }
+        
+        return res.json({
+            success: true,
+            message: `Updated ${templates.length} HVAC template(s)`,
+            results
+        });
+        
+    } catch (error) {
+        logger.error('[SERVICE MIGRATION] Error', { error: error.message });
+        return res.status(500).json({ error: 'Migration failed: ' + error.message });
+    }
+});
+
+/**
  * PATCH /:companyId/local-config
  * 
  * Update company's custom template assignment and service context
