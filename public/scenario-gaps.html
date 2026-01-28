@@ -4302,6 +4302,22 @@
             try {
                 console.log('🚀 [DEEP AUDIT] Starting batch-based audit...');
                 
+                // Load services config for service-aware auditing
+                let deepAuditServicesConfig = null;
+                try {
+                    const svcResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/services-config`, {
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    });
+                    if (svcResponse.ok) {
+                        deepAuditServicesConfig = await svcResponse.json();
+                        console.log('[DEEP AUDIT] Loaded services config:', {
+                            disabled: deepAuditServicesConfig.disabledServiceKeys?.length || 0
+                        });
+                    }
+                } catch (e) {
+                    console.warn('[DEEP AUDIT] Could not load services config, auditing all scenarios');
+                }
+                
                 // STEP 1: Get list of scenarios to audit (non-streaming request)
                 const listResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
                     method: 'POST',
@@ -4318,11 +4334,40 @@
                 }
                 
                 const listData = await listResponse.json();
-                const scenarioIds = listData.scenarioIds || [];
+                let scenarioIds = listData.scenarioIds || [];
                 const templateId = listData.templateId;
+                const scenarioMetadata = listData.scenarioMetadata || {}; // category info per scenario
+                
+                // Filter out scenarios from disabled service categories
+                let skippedScenarios = 0;
+                if (deepAuditServicesConfig && deepAuditServicesConfig.disabledServiceKeys?.length > 0) {
+                    const disabledCategories = new Set();
+                    
+                    // Build set of disabled category IDs
+                    for (const serviceKey of deepAuditServicesConfig.disabledServiceKeys) {
+                        const service = deepAuditServicesConfig.services[serviceKey];
+                        if (service?.categoryId) {
+                            disabledCategories.add(service.categoryId);
+                        }
+                    }
+                    
+                    if (disabledCategories.size > 0) {
+                        const originalCount = scenarioIds.length;
+                        scenarioIds = scenarioIds.filter(id => {
+                            const meta = scenarioMetadata[id];
+                            return !meta?.categoryId || !disabledCategories.has(meta.categoryId);
+                        });
+                        skippedScenarios = originalCount - scenarioIds.length;
+                        
+                        if (skippedScenarios > 0) {
+                            console.log(`🔧 [DEEP AUDIT] Skipped ${skippedScenarios} scenarios from disabled service categories`);
+                        }
+                    }
+                }
+                
                 const totalCount = scenarioIds.length;
                 
-                console.log(`📋 [DEEP AUDIT] Got ${totalCount} scenarios to audit`);
+                console.log(`📋 [DEEP AUDIT] Got ${totalCount} scenarios to audit${skippedScenarios > 0 ? ` (${skippedScenarios} skipped - disabled services)` : ''}`);
                 
                 if (totalCount === 0) {
                     throw new Error('No scenarios found to audit');
@@ -4910,6 +4955,35 @@
         // BLUEPRINT BUILDER FUNCTIONS
         // ════════════════════════════════════════════════════════════════════════════════
         
+        // ════════════════════════════════════════════════════════════════════════════════
+        // BLUEPRINT SERVICE AWARENESS
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Blueprint Builder respects service toggles - disabled services are grayed out
+        let blueprintServicesConfig = null;
+        
+        async function loadBlueprintServicesConfig() {
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/services-config`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (response.ok) {
+                    blueprintServicesConfig = await response.json();
+                    console.log('[BLUEPRINT] Loaded services config:', {
+                        enabled: blueprintServicesConfig.enabledServiceKeys?.length || 0,
+                        disabled: blueprintServicesConfig.disabledServiceKeys?.length || 0
+                    });
+                }
+            } catch (error) {
+                console.warn('[BLUEPRINT] Failed to load services config:', error);
+                blueprintServicesConfig = null;
+            }
+        }
+        
+        function isServiceDisabled(serviceKey) {
+            if (!blueprintServicesConfig || !serviceKey) return false;
+            return blueprintServicesConfig.disabledServiceKeys?.includes(serviceKey) || false;
+        }
+        
         async function runBlueprintAssessment() {
             const btn = document.getElementById('run-blueprint-btn');
             const tradeKey = document.getElementById('blueprint-select').value;
@@ -4919,6 +4993,9 @@
             
             try {
                 const token = getAuthToken();
+                
+                // Load services config for service-aware rendering
+                await loadBlueprintServicesConfig();
                 
                 // Fetch blueprint spec first (for copy/export)
                 const specResponse = await fetch(`/api/admin/blueprints/${tradeKey}`, {
@@ -5060,29 +5137,44 @@
             // Group by category
             const byCategory = result.missingByCategory || {};
             let html = '';
+            let disabledCategoryCount = 0;
             
             for (const [categoryKey, items] of Object.entries(byCategory)) {
                 const categoryName = items[0]?.categoryName || categoryKey;
+                
+                // Check if this category's service is disabled
+                // Match by category name to serviceKey mapping (in services config)
+                const serviceConfig = blueprintServicesConfig?.services || {};
+                const matchingService = Object.entries(serviceConfig).find(([key, svc]) => 
+                    svc.categoryName?.toLowerCase() === categoryName.toLowerCase()
+                );
+                const serviceKey = matchingService?.[0] || null;
+                const isDisabled = serviceKey ? isServiceDisabled(serviceKey) : false;
+                
+                if (isDisabled) disabledCategoryCount++;
+                
                 html += `
-                    <div style="margin-bottom: 16px;">
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 8px;">
-                            <span style="font-weight: 600; color: var(--text-primary);">
+                    <div style="margin-bottom: 16px; ${isDisabled ? 'opacity: 0.5;' : ''}">
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: ${isDisabled ? 'rgba(107, 114, 128, 0.2)' : 'var(--bg-secondary)'}; border-radius: 8px; margin-bottom: 8px; ${isDisabled ? 'border: 1px dashed rgba(107, 114, 128, 0.5);' : ''}">
+                            <span style="font-weight: 600; color: ${isDisabled ? 'var(--text-muted)' : 'var(--text-primary)'};">
                                 ${escapeHtml(categoryName)}
+                                ${isDisabled ? '<span style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 8px; border-radius: 4px; font-size: 10px; margin-left: 8px;">SERVICE OFF</span>' : ''}
                             </span>
                             <span style="font-size: 13px; color: var(--text-muted);">
                                 ${items.length} missing
                             </span>
                         </div>
                         ${items.map(item => `
-                            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; margin-bottom: 4px; cursor: pointer; border-left: 3px solid ${item.required !== false ? '#f59e0b' : '#6b7280'};">
+                            <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: ${isDisabled ? 'rgba(107, 114, 128, 0.1)' : 'rgba(255,255,255,0.03)'}; border-radius: 8px; margin-bottom: 4px; cursor: ${isDisabled ? 'not-allowed' : 'pointer'}; border-left: 3px solid ${isDisabled ? '#6b7280' : (item.required !== false ? '#f59e0b' : '#6b7280')};" ${isDisabled ? 'title="Service disabled - enable in Company Local tab"' : ''}>
                                 <input type="checkbox" 
                                        value="${escapeHtml(item.itemKey)}" 
                                        onchange="toggleBlueprintItem('${escapeHtml(item.itemKey)}')"
-                                       style="margin-top: 3px; width: 18px; height: 18px; accent-color: #8b5cf6;">
+                                       style="margin-top: 3px; width: 18px; height: 18px; accent-color: #8b5cf6;"
+                                       ${isDisabled ? 'disabled' : ''}>
                                 <div style="flex: 1;">
-                                    <div style="font-weight: 500; color: white; margin-bottom: 4px;">
+                                    <div style="font-weight: 500; color: ${isDisabled ? 'var(--text-muted)' : 'white'}; margin-bottom: 4px;">
                                         ${escapeHtml(item.name)}
-                                        ${item.required !== false ? '<span style="color: #f59e0b; font-size: 11px; margin-left: 8px;">REQUIRED</span>' : ''}
+                                        ${!isDisabled && item.required !== false ? '<span style="color: #f59e0b; font-size: 11px; margin-left: 8px;">REQUIRED</span>' : ''}
                                     </div>
                                     <div style="font-size: 12px; color: var(--text-muted);">
                                         Type: ${item.scenarioType} | Goal: ${item.replyGoal || 'classify'}
@@ -5095,6 +5187,20 @@
                         `).join('')}
                     </div>
                 `;
+            }
+            
+            // Add disabled services notice if any
+            if (disabledCategoryCount > 0) {
+                html = `
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; margin-bottom: 20px;">
+                        <i class="fas fa-toggle-off" style="font-size: 18px; color: #ef4444;"></i>
+                        <div style="font-size: 13px; color: var(--text-secondary);">
+                            <strong style="color: #ef4444;">${disabledCategoryCount} categor${disabledCategoryCount === 1 ? 'y' : 'ies'} disabled</strong> — 
+                            These services are turned off in Company Local → Services Offered. 
+                            <a href="#" onclick="switchTab('company-local'); return false;" style="color: #60a5fa; text-decoration: underline;">Enable them</a> to generate scenarios.
+                        </div>
+                    </div>
+                ` + html;
             }
             
             listEl.innerHTML = html;
@@ -6400,6 +6506,47 @@
         // ========================================
         // API CALLS
         // ========================================
+        // ════════════════════════════════════════════════════════════════════════════════
+        // GAP FILL SERVICE AWARENESS
+        // ════════════════════════════════════════════════════════════════════════════════
+        // Separate True Gaps (missing scenarios) from Disabled Service Requests (expected declines)
+        let gapFillServicesConfig = null;
+        
+        async function loadGapFillServicesConfig() {
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/services-config`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                if (response.ok) {
+                    gapFillServicesConfig = await response.json();
+                }
+            } catch (error) {
+                console.warn('[GAP FILL] Failed to load services config:', error);
+            }
+        }
+        
+        function detectDisabledServiceInGap(gapText) {
+            if (!gapFillServicesConfig || !gapFillServicesConfig.services) return null;
+            
+            const normalizedText = gapText.toLowerCase().replace(/[^\w\s]/g, ' ');
+            
+            for (const [serviceKey, service] of Object.entries(gapFillServicesConfig.services)) {
+                if (service.enabled) continue; // Only check disabled services
+                
+                const keywords = service.keywords || [];
+                for (const keyword of keywords) {
+                    if (normalizedText.includes(keyword.toLowerCase())) {
+                        return {
+                            serviceKey,
+                            categoryName: service.categoryName || serviceKey,
+                            matchedKeyword: keyword
+                        };
+                    }
+                }
+            }
+            return null;
+        }
+        
         async function loadGaps() {
             document.getElementById('gaps-content').innerHTML = `
                 <div class="loading">
@@ -6416,6 +6563,9 @@
                     showError('Not logged in. Please log in from the Control Plane first, then click the Gaps tab again.');
                     return;
                 }
+                
+                // Load services config for service-aware gap filtering
+                await loadGapFillServicesConfig();
                 
                 const response = await fetch(`/api/admin/scenario-gaps/${companyId}/gaps?days=${selectedDays}&minCalls=2`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -7214,25 +7364,122 @@
                 return;
             }
             
-            const highPriority = gaps.filter(g => g.priority === 'high');
-            const mediumPriority = gaps.filter(g => g.priority === 'medium');
-            const lowPriority = gaps.filter(g => g.priority === 'low');
+            // ════════════════════════════════════════════════════════════════════════════════
+            // SERVICE-AWARE GAP SPLITTING
+            // ════════════════════════════════════════════════════════════════════════════════
+            // Separate true gaps from disabled service requests
+            const trueGaps = [];
+            const disabledServiceRequests = [];
+            
+            for (const gap of gaps) {
+                const disabledService = detectDisabledServiceInGap(gap.representative);
+                if (disabledService) {
+                    gap._disabledService = disabledService;
+                    disabledServiceRequests.push(gap);
+                } else {
+                    trueGaps.push(gap);
+                }
+            }
             
             let html = '';
             
-            if (highPriority.length > 0) {
-                html += renderPrioritySection('high', highPriority, '🔴 High Priority', 'Asked 5+ times');
+            // Render TRUE GAPS section
+            if (trueGaps.length > 0) {
+                const highPriority = trueGaps.filter(g => g.priority === 'high');
+                const mediumPriority = trueGaps.filter(g => g.priority === 'medium');
+                const lowPriority = trueGaps.filter(g => g.priority === 'low');
+                
+                html += `<div style="margin-bottom: 24px;">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px 16px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">
+                        <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                        <div>
+                            <strong style="color: #ef4444;">True Gaps (${trueGaps.length})</strong>
+                            <span style="color: var(--text-muted); font-size: 13px; margin-left: 8px;">
+                                Missing scenarios - these need content
+                            </span>
+                        </div>
+                    </div>
+                `;
+                
+                if (highPriority.length > 0) {
+                    html += renderPrioritySection('high', highPriority, '🔴 High Priority', 'Asked 5+ times');
+                }
+                if (mediumPriority.length > 0) {
+                    html += renderPrioritySection('medium', mediumPriority, '🟡 Medium Priority', 'Asked 3-4 times');
+                }
+                if (lowPriority.length > 0) {
+                    html += renderPrioritySection('low', lowPriority, '⚪ Low Priority', 'Asked 2 times');
+                }
+                
+                html += `</div>`;
             }
             
-            if (mediumPriority.length > 0) {
-                html += renderPrioritySection('medium', mediumPriority, '🟡 Medium Priority', 'Asked 3-4 times');
+            // Render DISABLED SERVICE REQUESTS section
+            if (disabledServiceRequests.length > 0) {
+                html += `
+                    <div style="margin-bottom: 24px;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px 16px; background: rgba(107, 114, 128, 0.1); border: 1px solid rgba(107, 114, 128, 0.3); border-radius: 8px;">
+                            <i class="fas fa-toggle-off" style="color: #6b7280;"></i>
+                            <div>
+                                <strong style="color: #9ca3af;">Disabled Service Requests (${disabledServiceRequests.length})</strong>
+                                <span style="color: var(--text-muted); font-size: 13px; margin-left: 8px;">
+                                    NOT gaps - these services are intentionally off
+                                </span>
+                            </div>
+                            <button onclick="toggleDisabledServiceDetails()" style="margin-left: auto; padding: 4px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: var(--text-muted); cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-eye"></i> Details
+                            </button>
+                        </div>
+                        <div id="disabled-service-details" style="display: none;">
+                            ${disabledServiceRequests.map(gap => `
+                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: rgba(107, 114, 128, 0.05); border-radius: 8px; margin-bottom: 4px; border-left: 3px solid #6b7280;">
+                                    <div>
+                                        <div style="color: var(--text-muted); font-size: 14px;">
+                                            "${escapeHtml(gap.representative)}"
+                                        </div>
+                                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                                            Matched: <span style="color: #f59e0b;">${gap._disabledService.categoryName}</span> 
+                                            (keyword: "${gap._disabledService.matchedKeyword}")
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <span style="font-size: 12px; color: var(--text-muted);">${gap.callCount} calls</span>
+                                        <button onclick="switchTab('company-local')" style="padding: 4px 10px; background: rgba(16, 185, 129, 0.2); border: none; border-radius: 4px; color: #10b981; cursor: pointer; font-size: 11px;">
+                                            Enable Service
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px; padding: 8px; background: var(--bg-secondary); border-radius: 6px;">
+                                <i class="fas fa-info-circle"></i> 
+                                These requests are being handled with deterministic decline responses. 
+                                If callers frequently ask about these services, consider enabling them in 
+                                <a href="#" onclick="switchTab('company-local'); return false;" style="color: #60a5fa;">Company Local → Services Offered</a>.
+                            </p>
+                        </div>
+                    </div>
+                `;
             }
             
-            if (lowPriority.length > 0) {
-                html += renderPrioritySection('low', lowPriority, '⚪ Low Priority', 'Asked 2 times');
+            // Handle empty state for true gaps
+            if (trueGaps.length === 0 && disabledServiceRequests.length > 0) {
+                html = `
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle"></i>
+                        <h3>No True Gaps!</h3>
+                        <p>All scenario coverage gaps are handled by disabled service declines.</p>
+                    </div>
+                ` + html;
             }
             
             container.innerHTML = html;
+        }
+        
+        function toggleDisabledServiceDetails() {
+            const el = document.getElementById('disabled-service-details');
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
         }
         
         function renderPrioritySection(priority, gaps, title, subtitle) {

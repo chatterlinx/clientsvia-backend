@@ -76,6 +76,14 @@ try {
     STTPreprocessor = null;
 }
 
+// 🔧 Service Intent Detector - Deterministic decline for disabled services
+let ServiceIntentDetector;
+try {
+    ServiceIntentDetector = require('./ServiceIntentDetector');
+} catch (e) {
+    ServiceIntentDetector = null;
+}
+
 // 🚨 EMERGENCY Enforcement - Ensure EMERGENCY scenarios stop routing and escalate
 const EmergencyEnforcement = require('./EmergencyEnforcement');
 
@@ -255,6 +263,110 @@ class IntelligentRouter {
                     logger.debug('[INTELLIGENT ROUTER] STT Preprocessing failed, using raw input', {
                         error: sttError.message
                     });
+                }
+            }
+            
+            // ============================================
+            // 🔧 SERVICE INTENT DETECTION (Jan 2026)
+            // ============================================
+            // BEFORE any AI processing, check if caller is asking about a disabled service
+            // If detected → deterministic decline (no LLM hallucination risk)
+            // This is RULES-FIRST, runs in <5ms
+            let serviceIntentResult = null;
+            
+            if (ServiceIntentDetector && company?._id) {
+                try {
+                    // Build services config from company settings
+                    const companyServices = company.aiAgentSettings?.services || {};
+                    const servicesConfig = { services: {} };
+                    
+                    // Build config from template categories
+                    for (const category of (template?.categories || [])) {
+                        if (!category.isToggleable || !category.serviceKey) continue;
+                        
+                        const override = companyServices[category.serviceKey];
+                        servicesConfig.services[category.serviceKey] = {
+                            enabled: override?.enabled !== undefined ? override.enabled : (category.defaultEnabled !== false),
+                            keywords: [...(category.serviceIntent?.keywords || []), ...(override?.overrideKeywords || [])],
+                            phrases: category.serviceIntent?.phrases || [],
+                            negative: category.serviceIntent?.negative || [],
+                            minConfidence: category.serviceIntent?.minConfidence || 0.6,
+                            declineMessage: override?.overrideDeclineMessage || category.serviceDecline?.defaultMessage,
+                            categoryName: category.name
+                        };
+                    }
+                    
+                    // Run detection
+                    serviceIntentResult = ServiceIntentDetector.detect(processedInput, servicesConfig);
+                    
+                    // Attach to result for diagnostics
+                    result.serviceIntentDetection = {
+                        detected: serviceIntentResult.detected,
+                        serviceKey: serviceIntentResult.serviceKey,
+                        confidence: serviceIntentResult.confidence,
+                        enabled: serviceIntentResult.enabled,
+                        action: serviceIntentResult.action,
+                        processingTimeMs: serviceIntentResult.trace?.processingTimeMs
+                    };
+                    
+                    // SHORT-CIRCUIT: If disabled service detected → deterministic decline
+                    if (serviceIntentResult.detected && !serviceIntentResult.enabled) {
+                        const declineMessage = ServiceIntentDetector.generateDeclineResponse(serviceIntentResult);
+                        
+                        logger.info('[INTELLIGENT ROUTER] 🔧 Disabled service detected - deterministic decline', {
+                            callId,
+                            serviceKey: serviceIntentResult.serviceKey,
+                            confidence: serviceIntentResult.confidence,
+                            categoryName: serviceIntentResult.categoryName
+                        });
+                        
+                        // Log to Black Box
+                        if (BlackBoxLogger) {
+                            try {
+                                await BlackBoxLogger.logEvent({
+                                    callId,
+                                    companyId: company._id.toString(),
+                                    type: 'SERVICE_DISABLED_DECLINE',
+                                    data: {
+                                        serviceKey: serviceIntentResult.serviceKey,
+                                        confidence: serviceIntentResult.confidence,
+                                        categoryName: serviceIntentResult.categoryName,
+                                        declineMessage,
+                                        input: processedInput.substring(0, 100),
+                                        matchedKeywords: serviceIntentResult.matchedKeywords,
+                                        matchedPhrases: serviceIntentResult.matchedPhrases
+                                    }
+                                });
+                            } catch (logErr) {
+                                logger.debug('[INTELLIGENT ROUTER] Black Box log failed', { error: logErr.message });
+                            }
+                        }
+                        
+                        // Return deterministic decline result
+                        result.tierUsed = 'SERVICE_TOGGLE';
+                        result.matched = true;
+                        result.scenario = {
+                            id: `service-decline-${serviceIntentResult.serviceKey}`,
+                            name: `Service Disabled: ${serviceIntentResult.categoryName || serviceIntentResult.serviceKey}`,
+                            category: 'Service Toggles',
+                            response: declineMessage,
+                            isServiceDecline: true,
+                            disabledServiceKey: serviceIntentResult.serviceKey
+                        };
+                        result.confidence = serviceIntentResult.confidence;
+                        result.response = declineMessage;
+                        result.success = true;
+                        result.performance.totalTime = Date.now() - startTime;
+                        result.cost.total = 0; // No LLM cost!
+                        
+                        return result;
+                    }
+                    
+                } catch (serviceError) {
+                    logger.debug('[INTELLIGENT ROUTER] Service Intent Detection failed, continuing', {
+                        error: serviceError.message
+                    });
+                    result.serviceIntentDetection = { error: serviceError.message };
                 }
             }
             

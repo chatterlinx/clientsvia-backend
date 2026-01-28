@@ -3485,11 +3485,22 @@ router.post('/:companyId/audit/deep', async (req, res) => {
                 scenarioCount: totalCount
             });
             
+            // Build scenario metadata for service-aware filtering on frontend
+            const scenarioMetadata = {};
+            for (const s of scenariosToAudit) {
+                const id = s.scenarioId || s._id?.toString();
+                scenarioMetadata[id] = {
+                    categoryId: s.categoryId,
+                    categoryName: s.categoryName
+                };
+            }
+            
             return res.json({
                 success: true,
                 listOnly: true,
                 templateId: template._id?.toString(),
                 scenarioIds: scenariosToAudit.map(s => s.scenarioId || s._id?.toString()),
+                scenarioMetadata, // For service-aware filtering
                 totalCount: totalCount,
                 tradeType: tradeType
             });
