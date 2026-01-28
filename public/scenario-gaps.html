@@ -3044,12 +3044,17 @@
                     // Skip the primary template
                     if (templateId === primaryTemplateId) return;
                     
+                    // Skip templates linked to OTHER companies (they're exclusive)
+                    if (template.linkedCompanyId && template.linkedCompanyId !== companyId) {
+                        return; // This template belongs to another company
+                    }
+                    
                     const option = document.createElement('option');
                     option.value = templateId;
                     
-                    // Show if it's company-specific
-                    const isCompanySpecific = template.linkedCompanyId === companyId;
-                    const badge = isCompanySpecific ? ' ★' : '';
+                    // Show if it's already linked to THIS company
+                    const isLinkedToUs = template.linkedCompanyId === companyId;
+                    const badge = isLinkedToUs ? ' ★ (yours)' : '';
                     
                     const categoryCount = template.categories?.length || 0;
                     const scenarioCount = template.categories?.reduce((sum, c) => sum + (c.scenarios?.length || 0), 0) || 0;
@@ -3213,7 +3218,7 @@
         
         async function saveCustomTemplateAssignment(templateId) {
             try {
-                await fetch(`/api/admin/scenario-gaps/${companyId}/local-config`, {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/local-config`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
@@ -3221,8 +3226,28 @@
                     },
                     body: JSON.stringify({ customTemplateId: templateId || null })
                 });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    
+                    // Handle "already linked to another company" error
+                    if (error.linkedCompanyId) {
+                        showToast(error.error, 'error');
+                        // Reset dropdown
+                        document.getElementById('custom-template-select').value = '';
+                        document.getElementById('custom-template-info').style.display = 'none';
+                        document.getElementById('company-local-builder').style.display = 'none';
+                        document.getElementById('no-template-selected').style.display = 'block';
+                        return;
+                    }
+                    
+                    throw new Error(error.error || 'Failed to save assignment');
+                }
+                
+                showToast('Template assigned successfully', 'success');
             } catch (error) {
                 console.error('[COMPANY LOCAL] Error saving template assignment:', error);
+                showToast(error.message || 'Failed to save template assignment', 'error');
             }
         }
         

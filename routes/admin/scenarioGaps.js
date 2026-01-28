@@ -1423,6 +1423,7 @@ router.get('/:companyId/local-config', async (req, res) => {
  * PATCH /:companyId/local-config
  * 
  * Update company's custom template assignment and service context
+ * SAFEGUARD: Custom templates can only be assigned to ONE company
  */
 router.patch('/:companyId/local-config', async (req, res) => {
     const { companyId } = req.params;
@@ -1431,8 +1432,68 @@ router.patch('/:companyId/local-config', async (req, res) => {
     try {
         const updateFields = {};
         
-        if (customTemplateId !== undefined) {
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // EXCLUSIVE ASSIGNMENT SAFEGUARD
+        // A custom template can only be assigned to ONE company - prevents contamination
+        // ═══════════════════════════════════════════════════════════════════════════════
+        if (customTemplateId) {
+            const template = await GlobalInstantResponseTemplate.findById(customTemplateId);
+            
+            if (!template) {
+                return res.status(404).json({ error: 'Template not found' });
+            }
+            
+            // Check if template is already linked to a DIFFERENT company
+            if (template.linkedCompanyId && template.linkedCompanyId !== companyId) {
+                // Find the other company's name for a helpful error message
+                const otherCompany = await Company.findById(template.linkedCompanyId).select('name').lean();
+                const otherCompanyName = otherCompany?.name || 'another company';
+                
+                logger.warn('[COMPANY LOCAL] Attempted to assign template already linked to another company', {
+                    templateId: customTemplateId,
+                    templateName: template.name,
+                    requestingCompanyId: companyId,
+                    linkedToCompanyId: template.linkedCompanyId
+                });
+                
+                return res.status(400).json({ 
+                    error: `This template is already assigned to ${otherCompanyName}. Custom templates can only be used by one company.`,
+                    linkedCompanyId: template.linkedCompanyId,
+                    linkedCompanyName: otherCompanyName
+                });
+            }
+            
+            // Mark template as linked to this company (if not already)
+            if (!template.linkedCompanyId) {
+                template.linkedCompanyId = companyId;
+                template.isCompanyCustom = true;
+                await template.save();
+                
+                logger.info('[COMPANY LOCAL] Template linked to company', {
+                    templateId: customTemplateId,
+                    templateName: template.name,
+                    companyId
+                });
+            }
+            
             updateFields['aiAgentSettings.customTemplateId'] = customTemplateId;
+        } else if (customTemplateId === null) {
+            // Unassigning - clear the link on the template too
+            const company = await Company.findById(companyId).select('aiAgentSettings.customTemplateId').lean();
+            const oldTemplateId = company?.aiAgentSettings?.customTemplateId;
+            
+            if (oldTemplateId) {
+                await GlobalInstantResponseTemplate.findByIdAndUpdate(oldTemplateId, {
+                    $unset: { linkedCompanyId: 1, isCompanyCustom: 1 }
+                });
+                
+                logger.info('[COMPANY LOCAL] Template unlinked from company', {
+                    templateId: oldTemplateId,
+                    companyId
+                });
+            }
+            
+            updateFields['aiAgentSettings.customTemplateId'] = null;
         }
         
         if (localServiceContext !== undefined) {

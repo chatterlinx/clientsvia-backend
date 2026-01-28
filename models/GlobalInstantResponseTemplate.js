@@ -1124,6 +1124,29 @@ const globalInstantResponseTemplateSchema = new Schema({
         default: false
     },
     
+    // ============================================
+    // 🏢 COMPANY-EXCLUSIVE TEMPLATE (Local Scenarios)
+    // ============================================
+    // When a template is used for "Company Local Scenarios",
+    // it gets linked to ONE company and cannot be shared.
+    // This prevents cross-tenant contamination.
+    
+    isCompanyCustom: {
+        type: Boolean,
+        default: false
+        // true = This template is exclusive to one company
+        // false = This is a global/shared template
+    },
+    
+    linkedCompanyId: {
+        type: String,
+        trim: true,
+        default: null
+        // The companyId this template is exclusively linked to
+        // null = Not linked (global template)
+        // Set when company selects this as their custom template
+    },
+    
     // Statistics (auto-calculated)
     stats: {
         totalCategories: { type: Number, default: 0 },
