@@ -1895,6 +1895,98 @@
                 </div>
             </div>
             
+            <!-- Agent Wiring Status (what the agent actually uses) -->
+            <div style="background: linear-gradient(135deg, #1a2332 0%, #1e293b 100%); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 16px; padding: 24px; margin-bottom: 24px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                    <h3 style="display: flex; align-items: center; gap: 10px; margin: 0; color: #fff; font-size: 18px;">
+                        <i class="fas fa-plug" style="color: #22c55e;"></i>
+                        Agent Wiring Status
+                        <span style="background: rgba(34, 197, 94, 0.2); color: #4ade80; padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 600;">18/22 Active</span>
+                    </h3>
+                    <button onclick="toggleWiringStatus()" style="background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 6px;">
+                        <i class="fas fa-chevron-down" id="wiring-toggle-icon"></i> Details
+                    </button>
+                </div>
+                
+                <!-- Summary bar -->
+                <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+                    <div style="flex: 1; background: rgba(34, 197, 94, 0.15); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: 700; color: #4ade80;">18</div>
+                        <div style="font-size: 12px; color: #86efac;">Fully Wired</div>
+                    </div>
+                    <div style="flex: 1; background: rgba(148, 163, 184, 0.15); border-radius: 8px; padding: 12px; text-align: center;">
+                        <div style="font-size: 24px; font-weight: 700; color: #94a3b8;">4</div>
+                        <div style="font-size: 12px; color: #cbd5e1;">Future Features</div>
+                    </div>
+                </div>
+                
+                <!-- Expandable details -->
+                <div id="wiring-status-details" style="display: none;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <!-- Wired settings -->
+                        <div style="background: rgba(34, 197, 94, 0.1); border-radius: 12px; padding: 16px; border-left: 4px solid #22c55e;">
+                            <div style="font-weight: 600; color: #4ade80; margin-bottom: 12px; font-size: 14px;">
+                                <i class="fas fa-check-circle"></i> Active at Runtime
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 12px; color: #e2e8f0;">
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> triggers</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> negativeTriggers</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> regexTriggers</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> quickReplies</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> fullReplies</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> quickReplies_noName</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> fullReplies_noName</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> replyStrategy</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> behavior</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> bookingIntent</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> priority</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> minConfidence</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> followUpMode</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> followUpQuestionText</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> actionType</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> handoffPolicy</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> cooldownSeconds</div>
+                                <div><i class="fas fa-check" style="color: #22c55e; width: 14px;"></i> entityCapture</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Not wired settings -->
+                        <div style="background: rgba(148, 163, 184, 0.1); border-radius: 12px; padding: 16px; border-left: 4px solid #64748b;">
+                            <div style="font-weight: 600; color: #94a3b8; margin-bottom: 12px; font-size: 14px;">
+                                <i class="fas fa-clock"></i> Planned (Not Active)
+                            </div>
+                            <div style="font-size: 12px; color: #94a3b8;">
+                                <div style="margin-bottom: 8px;"><i class="fas fa-minus" style="width: 14px;"></i> replySelection <span style="color: #64748b;">- defaults to random</span></div>
+                                <div style="margin-bottom: 8px;"><i class="fas fa-minus" style="width: 14px;"></i> replyBundles <span style="color: #64748b;">- future feature</span></div>
+                                <div style="margin-bottom: 8px;"><i class="fas fa-minus" style="width: 14px;"></i> replyPolicy <span style="color: #64748b;">- future feature</span></div>
+                                <div><i class="fas fa-minus" style="width: 14px;"></i> entityValidation <span style="color: #64748b;">- defined but not enforced</span></div>
+                            </div>
+                            <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(148, 163, 184, 0.2); font-size: 11px; color: #64748b;">
+                                These fields are safe to configure but won't affect agent behavior until wired.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Call flow -->
+                    <div style="margin-top: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 12px; padding: 16px;">
+                        <div style="font-weight: 600; color: #a78bfa; margin-bottom: 10px; font-size: 13px;">
+                            <i class="fas fa-route"></i> Runtime Call Flow
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px;">
+                            <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">v2AIAgentRuntime</span>
+                            <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
+                            <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">AIBrain3tierllm</span>
+                            <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
+                            <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">IntelligentRouter</span>
+                            <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
+                            <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">HybridScenarioSelector</span>
+                            <i class="fas fa-arrow-right" style="color: #6366f1;"></i>
+                            <span style="background: rgba(139, 92, 246, 0.3); color: #c4b5fd; padding: 4px 8px; border-radius: 4px;">ResponseEngine</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Empty state (shown before audit) -->
             <div id="audit-empty" class="audit-empty">
                 <i class="fas fa-clipboard-check"></i>
@@ -2517,6 +2609,20 @@
                 checklist.style.display = 'none';
                 icon.classList.remove('fa-chevron-down');
                 icon.classList.add('fa-chevron-right');
+            }
+        }
+        
+        function toggleWiringStatus() {
+            const details = document.getElementById('wiring-status-details');
+            const icon = document.getElementById('wiring-toggle-icon');
+            if (details.style.display === 'none') {
+                details.style.display = 'block';
+                icon.classList.remove('fa-chevron-right');
+                icon.classList.add('fa-chevron-up');
+            } else {
+                details.style.display = 'none';
+                icon.classList.remove('fa-chevron-up');
+                icon.classList.add('fa-chevron-down');
             }
         }
         
