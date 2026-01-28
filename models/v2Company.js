@@ -890,6 +890,29 @@ const companySchema = new mongoose.Schema({
                 default: Date.now 
             }
         }],
+        
+        // -------------------------------------------------------------------
+        // COMPANY LOCAL SCENARIOS - Custom template for company-specific scenarios
+        // -------------------------------------------------------------------
+        // Separate from global templates - stores niche/custom scenarios
+        // that shouldn't pollute the global template
+        customTemplateId: {
+            type: String,
+            trim: true,
+            default: null
+            // References a template in GlobalInstantResponseTemplate that is
+            // specific to this company (e.g., "ABC Company - Custom Services")
+        },
+        
+        // Service context description for GPT-4 to understand what custom
+        // services this company offers (used when generating local scenarios)
+        localServiceContext: {
+            type: String,
+            trim: true,
+            default: ''
+            // Example: "Fixture installation including chandeliers, ceiling fans,
+            // decorative lighting, and custom electrical work"
+        },
 
         // -------------------------------------------------------------------
         // BUSINESS HOURS (canonical, trade-agnostic)

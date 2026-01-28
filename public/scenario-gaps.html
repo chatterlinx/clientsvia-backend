@@ -1244,6 +1244,11 @@
             Blueprint Builder
             <span class="badge" id="blueprint-badge" style="background: #8b5cf6;">NEW</span>
         </button>
+        <button class="sub-tab" data-tab="company-local" onclick="switchTab('company-local')">
+            <i class="fas fa-building"></i>
+            Company Local
+            <span class="badge" id="company-local-badge" style="background: #f59e0b;">0</span>
+        </button>
     </nav>
     
     <!-- Main Content -->
@@ -2212,6 +2217,332 @@
                 </div>
             </div>
         </div><!-- END tab-blueprint -->
+        
+        <!-- ════════════════════════════════════════════════════════════════════════════════════
+             TAB 4: Company Local Scenarios
+             Custom scenarios specific to this company - separate from global template
+             ════════════════════════════════════════════════════════════════════════════════════ -->
+        <div class="tab-content" id="tab-company-local">
+            <div class="audit-header">
+                <div>
+                    <h2 style="margin-bottom: 4px;"><i class="fas fa-building"></i> Company Local Scenarios</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px;">
+                        Custom scenarios specific to this company - separate from the global template
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Service Context Card - PROMINENT -->
+            <div id="service-context-card" style="
+                background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(249, 115, 22, 0.10) 100%);
+                border: 2px solid rgba(245, 158, 11, 0.4);
+                border-radius: 16px;
+                padding: 24px;
+                margin-bottom: 24px;
+            ">
+                <div style="display: flex; align-items: flex-start; gap: 16px;">
+                    <div style="
+                        width: 48px;
+                        height: 48px;
+                        min-width: 48px;
+                        background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+                        border-radius: 12px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 22px;
+                    ">🎯</div>
+                    <div style="flex: 1;">
+                        <h3 style="color: var(--text-primary); margin: 0 0 4px 0; font-size: 16px;">
+                            Service Context
+                            <span style="font-size: 12px; color: #f59e0b; font-weight: normal; margin-left: 8px;">
+                                Required for GPT-4 generation
+                            </span>
+                        </h3>
+                        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+                            Describe what custom services this company offers. GPT-4 uses this context to generate accurate scenarios.
+                        </p>
+                        <textarea id="company-service-context" placeholder="Example: Fixture installation including chandeliers, ceiling fans, decorative lighting, and custom electrical work. Also provides smart home device installation and outdoor lighting design." style="
+                            width: 100%;
+                            min-height: 80px;
+                            padding: 12px;
+                            border: 1px solid rgba(245, 158, 11, 0.3);
+                            border-radius: 8px;
+                            background: rgba(0,0,0,0.2);
+                            color: var(--text-primary);
+                            font-size: 14px;
+                            resize: vertical;
+                        "></textarea>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+                            <span id="context-save-status" style="font-size: 12px; color: var(--text-muted);"></span>
+                            <button onclick="saveServiceContext()" style="
+                                background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+                                border: none;
+                                color: white;
+                                padding: 8px 16px;
+                                border-radius: 8px;
+                                cursor: pointer;
+                                font-size: 13px;
+                                font-weight: 600;
+                            ">
+                                <i class="fas fa-save"></i> Save Context
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Template Assignment Card -->
+            <div style="
+                background: var(--bg-secondary);
+                border: 1px solid var(--border-color);
+                border-radius: 16px;
+                padding: 24px;
+                margin-bottom: 24px;
+            ">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="
+                            width: 40px;
+                            height: 40px;
+                            background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+                            border-radius: 10px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 18px;
+                        ">📋</div>
+                        <div>
+                            <h3 style="color: var(--text-primary); margin: 0; font-size: 15px;">Custom Template Assignment</h3>
+                            <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0 0;">
+                                Select a template from Global Brain to store this company's local scenarios
+                            </p>
+                        </div>
+                    </div>
+                    <a href="/admin-global-instant-responses.html" target="_blank" style="
+                        font-size: 12px;
+                        color: var(--accent-purple);
+                        text-decoration: none;
+                    ">
+                        <i class="fas fa-external-link-alt"></i> Open Global Brain
+                    </a>
+                </div>
+                
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <select id="custom-template-select" onchange="selectCustomTemplate()" style="
+                        flex: 1;
+                        padding: 12px 16px;
+                        border-radius: 8px;
+                        background: var(--bg-tertiary);
+                        border: 1px solid var(--border-color);
+                        color: var(--text-primary);
+                        font-size: 14px;
+                        cursor: pointer;
+                    ">
+                        <option value="">-- Select a custom template --</option>
+                    </select>
+                    <button onclick="refreshCustomTemplates()" style="
+                        padding: 12px;
+                        background: var(--bg-tertiary);
+                        border: 1px solid var(--border-color);
+                        border-radius: 8px;
+                        color: var(--text-primary);
+                        cursor: pointer;
+                    " title="Refresh template list">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+                
+                <!-- Template Info (shown when selected) -->
+                <div id="custom-template-info" style="display: none; margin-top: 16px; padding: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);" id="custom-template-name">Template Name</div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;" id="custom-template-desc">Description</div>
+                        </div>
+                        <div style="display: flex; gap: 20px; text-align: center;">
+                            <div>
+                                <div style="font-size: 24px; font-weight: 700; color: #8b5cf6;" id="custom-template-categories">0</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Categories</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 24px; font-weight: 700; color: #10b981;" id="custom-template-scenarios">0</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Scenarios</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Add Scenario Section (shown when template selected) -->
+            <div id="company-local-builder" style="display: none;">
+                <div style="
+                    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+                    border: 1px solid rgba(16, 185, 129, 0.3);
+                    border-radius: 16px;
+                    padding: 24px;
+                    margin-bottom: 24px;
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                        <div style="
+                            width: 48px;
+                            height: 48px;
+                            background: linear-gradient(135deg, #10b981 0%, #8b5cf6 100%);
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 24px;
+                        ">➕</div>
+                        <div>
+                            <h3 style="color: var(--text-primary); margin: 0; font-size: 18px;">Add Local Scenario</h3>
+                            <div style="font-size: 13px; color: var(--text-muted);">
+                                GPT-4 generates a scenario using your Service Context
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Question Input -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">
+                            What did the caller ask? <span style="color: #ef4444;">*</span>
+                        </label>
+                        <textarea id="local-scenario-question" placeholder="Example: How much to hang a chandelier?" style="
+                            width: 100%;
+                            min-height: 80px;
+                            padding: 12px;
+                            border: 1px solid var(--border-color);
+                            border-radius: 8px;
+                            background: var(--bg-secondary);
+                            color: var(--text-primary);
+                            font-size: 14px;
+                            resize: vertical;
+                        "></textarea>
+                    </div>
+                    
+                    <!-- Options Row -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">Category</label>
+                            <select id="local-category-select" style="
+                                width: 100%;
+                                padding: 10px 12px;
+                                border-radius: 8px;
+                                background: var(--bg-secondary);
+                                border: 1px solid var(--border-color);
+                                color: var(--text-primary);
+                                font-size: 14px;
+                            ">
+                                <option value="">Auto (let AI choose)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block;">Scenario Type</label>
+                            <select id="local-type-select" style="
+                                width: 100%;
+                                padding: 10px 12px;
+                                border-radius: 8px;
+                                background: var(--bg-secondary);
+                                border: 1px solid var(--border-color);
+                                color: var(--text-primary);
+                                font-size: 14px;
+                            ">
+                                <option value="">Auto (let AI choose)</option>
+                                <option value="FAQ">FAQ</option>
+                                <option value="Booking">Booking</option>
+                                <option value="Objection">Objection</option>
+                                <option value="Transfer">Transfer</option>
+                                <option value="Emergency">Emergency</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Generate Button -->
+                    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px;">
+                        <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                            <input type="checkbox" id="local-allow-warnings"> Allow saving with warnings
+                        </label>
+                        <button id="generate-local-btn" onclick="generateLocalScenario()" style="
+                            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                            border: none;
+                            color: white;
+                            padding: 12px 24px;
+                            border-radius: 10px;
+                            cursor: pointer;
+                            font-size: 14px;
+                            font-weight: 600;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        ">
+                            <i class="fas fa-magic"></i> Generate with GPT-4
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Generated Scenario Preview -->
+                <div id="local-scenario-preview" style="display: none;"></div>
+                
+                <!-- Existing Local Scenarios List -->
+                <div style="
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border-color);
+                    border-radius: 16px;
+                    padding: 24px;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="color: var(--text-primary); margin: 0; font-size: 16px;">
+                            <i class="fas fa-list"></i> Local Scenarios
+                        </h3>
+                        <button onclick="refreshLocalScenarios()" style="
+                            padding: 8px 12px;
+                            background: var(--bg-tertiary);
+                            border: 1px solid var(--border-color);
+                            border-radius: 6px;
+                            color: var(--text-primary);
+                            cursor: pointer;
+                            font-size: 12px;
+                        ">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                    <div id="local-scenarios-list" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            <i class="fas fa-folder-open fa-2x" style="margin-bottom: 12px; opacity: 0.5;"></i>
+                            <p>Select a custom template to view scenarios</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- No Template Selected State -->
+            <div id="no-template-selected" style="
+                text-align: center;
+                padding: 60px 20px;
+                background: var(--bg-secondary);
+                border: 1px dashed var(--border-color);
+                border-radius: 16px;
+            ">
+                <i class="fas fa-folder-plus fa-3x" style="color: var(--text-muted); margin-bottom: 16px;"></i>
+                <h3 style="color: var(--text-primary); margin-bottom: 8px;">No Custom Template Selected</h3>
+                <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+                    Select an existing custom template from the dropdown above, or create a new one in Global Brain.
+                </p>
+                <a href="/admin-global-instant-responses.html" target="_blank" style="
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+                    color: white;
+                    padding: 12px 24px;
+                    border-radius: 10px;
+                    text-decoration: none;
+                    font-weight: 600;
+                ">
+                    <i class="fas fa-plus"></i> Create Template in Global Brain
+                </a>
+            </div>
+        </div><!-- END tab-company-local -->
     </main>
     
     <!-- Create Scenario Modal - SIMPLIFIED: Preview + Open Global Brain -->
@@ -2645,6 +2976,558 @@
             if (tabName === 'audit') {
                 loadSettingsRegistry();
                 loadScenarioPoolAlignment();
+            }
+            
+            // Load company local data when switching to that tab
+            if (tabName === 'company-local') {
+                loadCompanyLocalData();
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════════
+        // COMPANY LOCAL SCENARIOS TAB
+        // Custom scenarios specific to this company - stored in a separate template
+        // ════════════════════════════════════════════════════════════════════════════════════
+        
+        let companyLocalState = {
+            customTemplateId: null,
+            customTemplate: null,
+            serviceContext: '',
+            availableTemplates: [],
+            initialized: false
+        };
+        
+        async function loadCompanyLocalData() {
+            if (companyLocalState.initialized) return;
+            
+            console.log('[COMPANY LOCAL] Loading data for company:', companyId);
+            
+            try {
+                // Load available templates and company settings in parallel
+                await Promise.all([
+                    refreshCustomTemplates(),
+                    loadServiceContext()
+                ]);
+                
+                companyLocalState.initialized = true;
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Error loading data:', error);
+                showToast('Failed to load company local data', 'error');
+            }
+        }
+        
+        async function refreshCustomTemplates() {
+            const select = document.getElementById('custom-template-select');
+            select.innerHTML = '<option value="">Loading templates...</option>';
+            
+            try {
+                // Fetch all templates (we'll filter to show relevant ones)
+                const response = await fetch('/api/admin/templates', {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load templates');
+                
+                const templates = await response.json();
+                companyLocalState.availableTemplates = templates;
+                
+                // Build dropdown - show all templates except the primary one
+                select.innerHTML = '<option value="">-- Select a custom template --</option>';
+                
+                // Get company's primary template ID to exclude it
+                const primaryTemplateId = manualBuilderTemplateData?._id?.toString() || manualBuilderTemplateData?.templateId;
+                
+                templates.forEach(template => {
+                    const templateId = template._id?.toString() || template.id;
+                    
+                    // Skip the primary template
+                    if (templateId === primaryTemplateId) return;
+                    
+                    const option = document.createElement('option');
+                    option.value = templateId;
+                    
+                    // Show if it's company-specific
+                    const isCompanySpecific = template.linkedCompanyId === companyId;
+                    const badge = isCompanySpecific ? ' ★' : '';
+                    
+                    const categoryCount = template.categories?.length || 0;
+                    const scenarioCount = template.categories?.reduce((sum, c) => sum + (c.scenarios?.length || 0), 0) || 0;
+                    
+                    option.textContent = `${template.name}${badge} (${categoryCount} categories, ${scenarioCount} scenarios)`;
+                    select.appendChild(option);
+                });
+                
+                // Check if company already has a custom template assigned
+                await loadCompanyCustomTemplateAssignment();
+                
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Error loading templates:', error);
+                select.innerHTML = '<option value="">Error loading templates</option>';
+            }
+        }
+        
+        async function loadCompanyCustomTemplateAssignment() {
+            try {
+                // Fetch company to get customTemplateId
+                const response = await fetch(`/api/admin/scenario-gaps/companies/${companyId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load company');
+                
+                const company = await response.json();
+                
+                if (company.customTemplateId) {
+                    companyLocalState.customTemplateId = company.customTemplateId;
+                    document.getElementById('custom-template-select').value = company.customTemplateId;
+                    await selectCustomTemplate();
+                }
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Error loading company:', error);
+            }
+        }
+        
+        async function loadServiceContext() {
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/companies/${companyId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load company');
+                
+                const company = await response.json();
+                
+                if (company.localServiceContext) {
+                    companyLocalState.serviceContext = company.localServiceContext;
+                    document.getElementById('company-service-context').value = company.localServiceContext;
+                }
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Error loading service context:', error);
+            }
+        }
+        
+        async function saveServiceContext() {
+            const context = document.getElementById('company-service-context').value.trim();
+            const statusEl = document.getElementById('context-save-status');
+            
+            if (!context) {
+                showToast('Please enter a service context', 'warning');
+                return;
+            }
+            
+            statusEl.textContent = 'Saving...';
+            statusEl.style.color = '#f59e0b';
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/companies/${companyId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ localServiceContext: context })
+                });
+                
+                if (!response.ok) throw new Error('Failed to save');
+                
+                companyLocalState.serviceContext = context;
+                statusEl.textContent = '✓ Saved';
+                statusEl.style.color = '#10b981';
+                showToast('Service context saved', 'success');
+                
+                setTimeout(() => { statusEl.textContent = ''; }, 3000);
+                
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Error saving context:', error);
+                statusEl.textContent = 'Error saving';
+                statusEl.style.color = '#ef4444';
+                showToast('Failed to save service context', 'error');
+            }
+        }
+        
+        async function selectCustomTemplate() {
+            const templateId = document.getElementById('custom-template-select').value;
+            const infoEl = document.getElementById('custom-template-info');
+            const builderEl = document.getElementById('company-local-builder');
+            const noTemplateEl = document.getElementById('no-template-selected');
+            
+            if (!templateId) {
+                // No template selected
+                infoEl.style.display = 'none';
+                builderEl.style.display = 'none';
+                noTemplateEl.style.display = 'block';
+                companyLocalState.customTemplateId = null;
+                companyLocalState.customTemplate = null;
+                document.getElementById('company-local-badge').textContent = '0';
+                return;
+            }
+            
+            try {
+                // Find template in our loaded list
+                let template = companyLocalState.availableTemplates.find(t => 
+                    (t._id?.toString() || t.id) === templateId
+                );
+                
+                // If not found, fetch it
+                if (!template) {
+                    const response = await fetch(`/api/admin/templates/${templateId}`, {
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    });
+                    if (!response.ok) throw new Error('Failed to load template');
+                    template = await response.json();
+                }
+                
+                companyLocalState.customTemplateId = templateId;
+                companyLocalState.customTemplate = template;
+                
+                // Update UI
+                const categoryCount = template.categories?.length || 0;
+                const scenarioCount = template.categories?.reduce((sum, c) => sum + (c.scenarios?.length || 0), 0) || 0;
+                
+                document.getElementById('custom-template-name').textContent = template.name;
+                document.getElementById('custom-template-desc').textContent = template.description || 'No description';
+                document.getElementById('custom-template-categories').textContent = categoryCount;
+                document.getElementById('custom-template-scenarios').textContent = scenarioCount;
+                document.getElementById('company-local-badge').textContent = scenarioCount;
+                
+                infoEl.style.display = 'block';
+                builderEl.style.display = 'block';
+                noTemplateEl.style.display = 'none';
+                
+                // Populate category dropdown
+                populateLocalCategoryDropdown(template);
+                
+                // Load scenarios list
+                refreshLocalScenarios();
+                
+                // Save assignment to company
+                await saveCustomTemplateAssignment(templateId);
+                
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Error selecting template:', error);
+                showToast('Failed to load template', 'error');
+            }
+        }
+        
+        async function saveCustomTemplateAssignment(templateId) {
+            try {
+                await fetch(`/api/admin/scenario-gaps/companies/${companyId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ customTemplateId: templateId || null })
+                });
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Error saving template assignment:', error);
+            }
+        }
+        
+        function populateLocalCategoryDropdown(template) {
+            const select = document.getElementById('local-category-select');
+            select.innerHTML = '<option value="">Auto (let AI choose)</option>';
+            
+            (template.categories || []).forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat.id || cat._id;
+                option.textContent = cat.name;
+                select.appendChild(option);
+            });
+        }
+        
+        async function refreshLocalScenarios() {
+            const listEl = document.getElementById('local-scenarios-list');
+            const template = companyLocalState.customTemplate;
+            
+            if (!template) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fas fa-folder-open fa-2x" style="margin-bottom: 12px; opacity: 0.5;"></i>
+                        <p>Select a custom template to view scenarios</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Flatten scenarios from all categories
+            const scenarios = [];
+            (template.categories || []).forEach(cat => {
+                (cat.scenarios || []).forEach(s => {
+                    scenarios.push({
+                        ...s,
+                        categoryName: cat.name,
+                        categoryId: cat.id || cat._id
+                    });
+                });
+            });
+            
+            if (scenarios.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fas fa-inbox fa-2x" style="margin-bottom: 12px; opacity: 0.5;"></i>
+                        <p>No scenarios yet. Generate one using GPT-4 above!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            listEl.innerHTML = scenarios.map(s => `
+                <div style="
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 12px 16px;
+                    background: var(--bg-tertiary);
+                    border-radius: 8px;
+                    border-left: 3px solid ${s.scenarioType === 'Emergency' ? '#ef4444' : s.scenarioType === 'Booking' ? '#10b981' : '#8b5cf6'};
+                ">
+                    <div style="flex: 1;">
+                        <div style="font-size: 14px; font-weight: 500; color: var(--text-primary);">${escapeHtml(s.name)}</div>
+                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                            <span style="color: #8b5cf6;">${escapeHtml(s.categoryName)}</span>
+                            <span style="margin: 0 8px;">•</span>
+                            <span>${s.scenarioType || 'FAQ'}</span>
+                            <span style="margin: 0 8px;">•</span>
+                            <span>${(s.triggers || []).length} triggers</span>
+                        </div>
+                    </div>
+                    <a href="/admin-global-instant-responses.html?editScenario=${s.scenarioId || s._id}&categoryId=${s.categoryId}&templateId=${companyLocalState.customTemplateId}" 
+                       target="_blank"
+                       style="
+                           padding: 6px 12px;
+                           background: var(--bg-secondary);
+                           border: 1px solid var(--border-color);
+                           border-radius: 6px;
+                           color: var(--text-primary);
+                           font-size: 12px;
+                           text-decoration: none;
+                       ">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                </div>
+            `).join('');
+        }
+        
+        async function generateLocalScenario() {
+            const question = document.getElementById('local-scenario-question').value.trim();
+            const serviceContext = document.getElementById('company-service-context').value.trim();
+            const categoryId = document.getElementById('local-category-select').value;
+            const scenarioType = document.getElementById('local-type-select').value;
+            const allowWarnings = document.getElementById('local-allow-warnings').checked;
+            
+            if (!question) {
+                showToast('Please enter a caller question', 'warning');
+                return;
+            }
+            
+            if (!serviceContext) {
+                showToast('Please enter a Service Context above so GPT-4 knows what services this company offers', 'warning');
+                document.getElementById('company-service-context').focus();
+                return;
+            }
+            
+            if (!companyLocalState.customTemplateId) {
+                showToast('Please select a custom template first', 'warning');
+                return;
+            }
+            
+            const btn = document.getElementById('generate-local-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/generate-local`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question,
+                        serviceContext,
+                        templateId: companyLocalState.customTemplateId,
+                        categoryId: categoryId || null,
+                        scenarioType: scenarioType || null,
+                        allowWarnings
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Generation failed');
+                }
+                
+                const result = await response.json();
+                displayLocalScenarioPreview(result);
+                
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Generation error:', error);
+                showToast('Failed to generate scenario: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-magic"></i> Generate with GPT-4';
+            }
+        }
+        
+        function displayLocalScenarioPreview(result) {
+            const previewEl = document.getElementById('local-scenario-preview');
+            const scenario = result.scenario;
+            const validation = result.validation;
+            
+            previewEl.style.display = 'block';
+            previewEl.innerHTML = `
+                <div style="
+                    background: var(--bg-secondary);
+                    border: 1px solid var(--border-color);
+                    border-radius: 16px;
+                    padding: 24px;
+                    margin-bottom: 24px;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="color: var(--text-primary); margin: 0;">
+                            <i class="fas fa-check-circle" style="color: #10b981;"></i> Generated Scenario Preview
+                        </h3>
+                        <div style="display: flex; gap: 8px;">
+                            <button onclick="saveLocalScenario()" style="
+                                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                                border: none;
+                                color: white;
+                                padding: 10px 20px;
+                                border-radius: 8px;
+                                cursor: pointer;
+                                font-weight: 600;
+                            ">
+                                <i class="fas fa-save"></i> Save to Template
+                            </button>
+                            <button onclick="document.getElementById('local-scenario-preview').style.display='none'" style="
+                                background: var(--bg-tertiary);
+                                border: 1px solid var(--border-color);
+                                color: var(--text-primary);
+                                padding: 10px 16px;
+                                border-radius: 8px;
+                                cursor: pointer;
+                            ">
+                                <i class="fas fa-times"></i> Discard
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        <!-- Left Column: Content -->
+                        <div>
+                            <div style="margin-bottom: 16px;">
+                                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Name</div>
+                                <div style="font-size: 15px; font-weight: 600; color: var(--text-primary);">${escapeHtml(scenario.name)}</div>
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                                <span style="background: #8b5cf6; color: white; padding: 4px 10px; border-radius: 6px; font-size: 12px;">
+                                    ${scenario.scenarioType || 'FAQ'}
+                                </span>
+                                <span style="background: var(--bg-tertiary); color: var(--text-secondary); padding: 4px 10px; border-radius: 6px; font-size: 12px;">
+                                    ${scenario.priority || 'normal'} priority
+                                </span>
+                            </div>
+                            
+                            <div style="margin-bottom: 16px;">
+                                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Triggers (${(scenario.triggers || []).length})</div>
+                                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                    ${(scenario.triggers || []).slice(0, 8).map(t => `
+                                        <span style="background: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; font-size: 12px; color: var(--text-secondary);">${escapeHtml(t)}</span>
+                                    `).join('')}
+                                    ${(scenario.triggers || []).length > 8 ? `<span style="color: var(--text-muted); font-size: 12px;">+${scenario.triggers.length - 8} more</span>` : ''}
+                                </div>
+                            </div>
+                            
+                            <div style="margin-bottom: 16px;">
+                                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px;">Quick Replies</div>
+                                ${(scenario.quickReplies || []).map(r => `
+                                    <div style="background: var(--bg-tertiary); padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary);">${escapeHtml(r)}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <!-- Right Column: Settings Summary -->
+                        <div style="background: var(--bg-tertiary); padding: 16px; border-radius: 12px;">
+                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; font-weight: 600;">22 SETTINGS GENERATED</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px;">
+                                <div style="color: var(--text-secondary);">Type:</div>
+                                <div style="color: var(--text-primary);">${scenario.scenarioType || 'FAQ'}</div>
+                                
+                                <div style="color: var(--text-secondary);">Priority:</div>
+                                <div style="color: var(--text-primary);">${scenario.priority || 'normal'}</div>
+                                
+                                <div style="color: var(--text-secondary);">Booking:</div>
+                                <div style="color: var(--text-primary);">${scenario.requiresBooking ? 'Yes' : 'No'}</div>
+                                
+                                <div style="color: var(--text-secondary);">Confidence:</div>
+                                <div style="color: var(--text-primary);">${scenario.confidenceThreshold || 0.75}</div>
+                                
+                                <div style="color: var(--text-secondary);">Confirm:</div>
+                                <div style="color: var(--text-primary);">${scenario.confirmBeforeAction ? 'Yes' : 'No'}</div>
+                                
+                                <div style="color: var(--text-secondary);">Multi-intent:</div>
+                                <div style="color: var(--text-primary);">${scenario.allowMultiIntent ? 'Yes' : 'No'}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${validation && validation.errors?.length > 0 ? `
+                        <div style="margin-top: 16px; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">
+                            <div style="font-size: 12px; color: #ef4444; font-weight: 600; margin-bottom: 8px;">
+                                <i class="fas fa-exclamation-triangle"></i> Validation Warnings
+                            </div>
+                            ${validation.errors.map(e => `<div style="font-size: 12px; color: #fca5a5;">• ${escapeHtml(e)}</div>`).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            // Store for save
+            previewEl.dataset.scenario = JSON.stringify(scenario);
+            previewEl.dataset.categoryId = result.categoryId || '';
+        }
+        
+        async function saveLocalScenario() {
+            const previewEl = document.getElementById('local-scenario-preview');
+            const scenario = JSON.parse(previewEl.dataset.scenario);
+            const categoryId = previewEl.dataset.categoryId;
+            
+            if (!companyLocalState.customTemplateId) {
+                showToast('No template selected', 'error');
+                return;
+            }
+            
+            try {
+                // Save to the custom template via Global Brain API
+                const response = await fetch(`/api/admin/templates/${companyLocalState.customTemplateId}/categories/${categoryId}/scenarios`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(scenario)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to save scenario');
+                }
+                
+                showToast('Scenario saved to custom template!', 'success');
+                
+                // Clear form and preview
+                document.getElementById('local-scenario-question').value = '';
+                previewEl.style.display = 'none';
+                
+                // Refresh template to get updated data
+                await refreshCustomTemplates();
+                await selectCustomTemplate();
+                
+            } catch (error) {
+                console.error('[COMPANY LOCAL] Error saving scenario:', error);
+                showToast('Failed to save: ' + error.message, 'error');
             }
         }
         

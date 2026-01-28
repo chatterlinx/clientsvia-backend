@@ -1391,6 +1391,84 @@ function generateFallbackScenario(gap, company) {
 // ============================================================================
 
 /**
+ * GET /companies/:companyId
+ * 
+ * Get company details (for Company Local tab)
+ */
+router.get('/companies/:companyId', async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+        const company = await Company.findById(companyId)
+            .select('name aiAgentSettings.customTemplateId aiAgentSettings.localServiceContext')
+            .lean();
+            
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        return res.json({
+            _id: company._id,
+            name: company.name,
+            customTemplateId: company.aiAgentSettings?.customTemplateId || null,
+            localServiceContext: company.aiAgentSettings?.localServiceContext || ''
+        });
+    } catch (error) {
+        logger.error('[COMPANY LOCAL] Error fetching company', { error: error.message, companyId });
+        return res.status(500).json({ error: 'Failed to fetch company' });
+    }
+});
+
+/**
+ * PATCH /companies/:companyId
+ * 
+ * Update company's custom template assignment and service context
+ */
+router.patch('/companies/:companyId', async (req, res) => {
+    const { companyId } = req.params;
+    const { customTemplateId, localServiceContext } = req.body;
+    
+    try {
+        const updateFields = {};
+        
+        if (customTemplateId !== undefined) {
+            updateFields['aiAgentSettings.customTemplateId'] = customTemplateId;
+        }
+        
+        if (localServiceContext !== undefined) {
+            updateFields['aiAgentSettings.localServiceContext'] = localServiceContext;
+        }
+        
+        const company = await Company.findByIdAndUpdate(
+            companyId,
+            { $set: updateFields },
+            { new: true }
+        ).select('name aiAgentSettings.customTemplateId aiAgentSettings.localServiceContext');
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        logger.info('[COMPANY LOCAL] Company updated', { 
+            companyId, 
+            customTemplateId: company.aiAgentSettings?.customTemplateId,
+            localServiceContext: company.aiAgentSettings?.localServiceContext?.substring(0, 50)
+        });
+        
+        return res.json({
+            success: true,
+            _id: company._id,
+            name: company.name,
+            customTemplateId: company.aiAgentSettings?.customTemplateId || null,
+            localServiceContext: company.aiAgentSettings?.localServiceContext || ''
+        });
+    } catch (error) {
+        logger.error('[COMPANY LOCAL] Error updating company', { error: error.message, companyId });
+        return res.status(500).json({ error: 'Failed to update company' });
+    }
+});
+
+/**
  * GET /:companyId/gaps
  * 
  * Get all scenario gaps for a company, prioritized by impact
@@ -1775,6 +1853,173 @@ router.post('/:companyId/manual/generate', async (req, res) => {
             error: isPlaceholderError ? 'Invalid placeholders in generated scenario' : 'Failed to generate scenario',
             details: cleanedMessage
         });
+    }
+});
+
+/**
+ * POST /:companyId/generate-local
+ *
+ * Generate scenario for Company Local tab with custom service context
+ * Uses a custom template separate from the global template
+ * Body: { question: string, serviceContext: string, templateId: string, categoryId?: string, scenarioType?: string }
+ */
+router.post('/:companyId/generate-local', async (req, res) => {
+    const { companyId } = req.params;
+    const { question, serviceContext, templateId, categoryId, scenarioType, allowWarnings } = req.body || {};
+
+    if (!question || !String(question).trim()) {
+        return res.status(400).json({ error: 'Question is required' });
+    }
+    
+    if (!serviceContext || !String(serviceContext).trim()) {
+        return res.status(400).json({ error: 'Service context is required for GPT-4 to understand what services this company offers' });
+    }
+    
+    if (!templateId) {
+        return res.status(400).json({ error: 'Custom template ID is required' });
+    }
+
+    try {
+        const company = await Company.findById(companyId).lean();
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Load the custom template
+        const Template = require('../../models/Template');
+        const customTemplate = await Template.findById(templateId).lean();
+        if (!customTemplate) {
+            return res.status(404).json({ error: 'Custom template not found' });
+        }
+        
+        // Find or determine category
+        let targetCategory = null;
+        let targetCategoryId = categoryId;
+        
+        if (categoryId) {
+            targetCategory = (customTemplate.categories || []).find(c => 
+                (c.id || c._id?.toString()) === categoryId
+            );
+        }
+        
+        // Build GPT-4 prompt with custom service context
+        const promptText = String(question).trim();
+        
+        const systemPrompt = `You are an expert AI scenario builder for a business phone answering service.
+
+SERVICE CONTEXT (What this company offers):
+${serviceContext}
+
+COMPANY: ${company.name}
+
+Your task is to generate a complete scenario configuration based on a caller question. The scenario should help an AI dispatcher handle calls about the services described above.
+
+DISPATCHER PERSONA:
+- Sounds like a SEASONED dispatcher who handles 50+ calls/day
+- Calm, confident, experienced - never surprised
+- Friendly but NOT chatty - no fluff, no filler
+- Every sentence moves toward DIAGNOSIS or BOOKING
+- Uses "we" language (team member, not outsider)
+
+Generate a JSON object with these fields:
+{
+  "name": "Short descriptive name (2-5 words)",
+  "scenarioType": "${scenarioType || 'One of: FAQ, Booking, Emergency, Transfer, Objection'}",
+  "priority": "normal, high, or critical",
+  "triggers": ["array of 8-12 trigger phrases callers might say"],
+  "quickReplies": ["2-3 short responses (1-2 sentences each)"],
+  "fullReplies": ["1-2 detailed responses with placeholders like {{company_name}}"],
+  "contextTags": ["relevant tags"],
+  "requiresBooking": true/false,
+  "isEmergency": true/false,
+  "confidenceThreshold": 0.75,
+  "confirmBeforeAction": true/false,
+  "allowMultiIntent": false,
+  "enabled": true,
+  "notes": "Brief note about this scenario"
+}
+
+Important:
+- Triggers should be natural phrases a caller might say
+- Quick replies are for simple acknowledgments
+- Full replies use placeholders: {{company_name}}, {{service_area}}, {{phone_number}}
+- Match the tone to a professional service dispatcher`;
+
+        const userMessage = `Generate a scenario for this caller question: "${promptText}"
+
+${targetCategory ? `Category hint: ${targetCategory.name}` : 'Choose the most appropriate category based on the service context.'}`;
+
+        // Call GPT-4
+        const openaiClient = getOpenAIClient();
+        const completion = await openaiClient.chat.completions.create({
+            model: 'gpt-4o',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userMessage }
+            ],
+            temperature: 0.7,
+            response_format: { type: 'json_object' }
+        });
+        
+        const responseText = completion.choices[0]?.message?.content || '{}';
+        let scenario;
+        
+        try {
+            scenario = JSON.parse(responseText);
+        } catch (parseError) {
+            logger.error('[GENERATE LOCAL] Failed to parse GPT-4 response', { responseText });
+            return res.status(500).json({ error: 'Failed to parse AI response' });
+        }
+        
+        // Add required fields
+        scenario.scenarioId = `scenario-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        scenario.createdAt = new Date().toISOString();
+        scenario.source = 'company-local-builder';
+        scenario.sourceQuestion = promptText;
+        
+        // If no category specified, try to find or create one
+        if (!targetCategoryId && customTemplate.categories?.length > 0) {
+            // Use the first category as default, or create a "General" category
+            const generalCat = customTemplate.categories.find(c => 
+                c.name?.toLowerCase().includes('general') || c.name?.toLowerCase().includes('other')
+            );
+            targetCategoryId = generalCat?.id || generalCat?._id?.toString() || 
+                              customTemplate.categories[0]?.id || customTemplate.categories[0]?._id?.toString();
+        }
+        
+        // Basic validation
+        const validation = {
+            isValid: true,
+            errors: [],
+            warnings: []
+        };
+        
+        if (!scenario.name) validation.errors.push('Missing scenario name');
+        if (!scenario.triggers || scenario.triggers.length === 0) validation.errors.push('Missing triggers');
+        if (!scenario.quickReplies || scenario.quickReplies.length === 0) validation.warnings.push('No quick replies generated');
+        
+        if (validation.errors.length > 0 && !allowWarnings) {
+            validation.isValid = false;
+        }
+        
+        logger.info('[GENERATE LOCAL] Scenario generated successfully', {
+            companyId,
+            templateId,
+            scenarioName: scenario.name,
+            categoryId: targetCategoryId
+        });
+        
+        return res.json({
+            success: true,
+            scenario,
+            categoryId: targetCategoryId,
+            validation,
+            tokensUsed: completion.usage?.total_tokens || 0
+        });
+        
+    } catch (error) {
+        logger.error('[GENERATE LOCAL] Error generating scenario', { error: error.message, companyId });
+        res.status(500).json({ error: 'Failed to generate scenario', details: error.message });
     }
 });
 
