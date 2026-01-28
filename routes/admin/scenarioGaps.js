@@ -3946,8 +3946,9 @@ Return JSON only:
                     };
                 }
                 
-                if (auditResult.score >= 9) perfect++;
-                else if (auditResult.score < 7) needsWork++;
+                // Count by rewriteNeeded flag (more accurate than score threshold)
+                if (auditResult.score >= 9 && !auditResult.rewriteNeeded) perfect++;
+                else if (auditResult.rewriteNeeded || auditResult.score < 7) needsWork++;
                 
                 const resultEntry = {
                     scenarioId: scenario.scenarioId || scenario._id?.toString(),

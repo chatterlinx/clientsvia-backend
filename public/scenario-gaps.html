@@ -4661,8 +4661,9 @@
                             processed++;
                             allResults.push(result);
                             
-                            if (result.score >= 9) perfect++;
-                            else if (result.score < 7) needsWork++;
+                            // Count by rewriteNeeded flag (more accurate than score threshold)
+                            if (result.score >= 9 && !result.rewriteNeeded) perfect++;
+                            else if (result.rewriteNeeded || result.score < 7) needsWork++;
                             
                             totalTokens += batchData.summary?.tokensUsed / batchResults.length || 0;
                             
