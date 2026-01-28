@@ -14853,14 +14853,16 @@ Higher = detailed, thorough scenarios (more context)
                 console.log('✅ [SAVE SCENARIO] Success:', result);
                 
                 // ════════════════════════════════════════════════════════════════════════
-                // CHECK: Was this a Template Audit fix? Show post-save options if so
+                // CHECK: Was this an Audit fix? Show post-save options if so
+                // Works for both Template Audit (edit-scenario) and Deep Audit (deep-audit-fix)
                 // ════════════════════════════════════════════════════════════════════════
                 const urlParams = new URLSearchParams(window.location.search);
-                const wasAuditFix = urlParams.get('prefill') === 'edit-scenario';
+                const prefillType = urlParams.get('prefill');
+                const wasAuditFix = prefillType === 'edit-scenario' || prefillType === 'deep-audit-fix';
                 const auditScenarioId = urlParams.get('scenarioId');
                 
                 if (wasAuditFix && auditScenarioId) {
-                    console.log('🔧 [AUDIT FIX] Scenario saved from Template Audit, showing post-save options');
+                    console.log(`🔧 [AUDIT FIX] Scenario saved from ${prefillType === 'deep-audit-fix' ? 'Deep' : 'Template'} Audit, showing post-save options`);
                     
                     // Close the edit modal first
                     closeScenarioModal();
