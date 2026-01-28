@@ -3100,13 +3100,16 @@
             // Find the scenario in deep audit results to get the full data
             const scenarioResult = lastDeepAuditResults?.scenarios?.find(s => s.scenarioId === scenarioId);
             
+            // Get template ID from manual builder data if available
+            const templateId = manualBuilderTemplateData?.templateId || manualBuilderTemplateData?._id || null;
+            
             // Build prefill data similar to Template Audit flow
             const prefillData = {
                 mode: 'deep-audit-fix',
                 source: 'deep-audit',
                 timestamp: Date.now(),
                 navigation: {
-                    templateId: currentTemplateId || null,
+                    templateId: templateId,
                     categoryId: categoryId,
                     scenarioId: scenarioId,
                     companyId: companyId
