@@ -1711,7 +1711,7 @@ router.post('/:companyId/services-config/test', async (req, res) => {
  */
 router.post('/services-config/migrate-hvac', async (req, res) => {
     try {
-        const { SERVICE_CONFIG } = require('../../scripts/migrations/add-service-keys-to-hvac-template');
+        const { SERVICE_CONFIG, findServiceConfig } = require('../../scripts/migrations/add-service-keys-to-hvac-template');
         
         // Find HVAC template(s)
         const templates = await GlobalInstantResponseTemplate.find({
@@ -1730,25 +1730,35 @@ router.post('/services-config/migrate-hvac', async (req, res) => {
         for (const template of templates) {
             let updated = 0;
             let skipped = 0;
+            let alwaysOn = 0;
             const configuredCategories = [];
             
             for (const category of (template.categories || [])) {
-                const config = SERVICE_CONFIG[category.name];
+                // Use fuzzy matching to find config
+                const config = typeof findServiceConfig === 'function' 
+                    ? findServiceConfig(category.name)
+                    : SERVICE_CONFIG[category.name];
                 
                 if (config) {
-                    category.serviceKey = config.serviceKey;
-                    category.isToggleable = config.isToggleable;
-                    category.defaultEnabled = config.defaultEnabled;
-                    category.serviceIntent = config.serviceIntent;
-                    category.serviceDecline = config.serviceDecline;
-                    
-                    configuredCategories.push({
-                        name: category.name,
-                        serviceKey: config.serviceKey,
-                        isToggleable: config.isToggleable,
-                        defaultEnabled: config.defaultEnabled
-                    });
-                    updated++;
+                    if (config.isToggleable === false) {
+                        category.isToggleable = false;
+                        category.serviceKey = null;
+                        alwaysOn++;
+                    } else {
+                        category.serviceKey = config.serviceKey;
+                        category.isToggleable = config.isToggleable;
+                        category.defaultEnabled = config.defaultEnabled;
+                        category.serviceIntent = config.serviceIntent;
+                        category.serviceDecline = config.serviceDecline;
+                        
+                        configuredCategories.push({
+                            name: category.name,
+                            serviceKey: config.serviceKey,
+                            isToggleable: config.isToggleable,
+                            defaultEnabled: config.defaultEnabled
+                        });
+                        updated++;
+                    }
                 } else {
                     skipped++;
                 }
@@ -1760,6 +1770,7 @@ router.post('/services-config/migrate-hvac', async (req, res) => {
                 templateId: template._id,
                 templateName: template.name,
                 categoriesUpdated: updated,
+                categoriesAlwaysOn: alwaysOn,
                 categoriesSkipped: skipped,
                 configuredCategories
             });
@@ -1768,6 +1779,7 @@ router.post('/services-config/migrate-hvac', async (req, res) => {
                 templateId: template._id,
                 templateName: template.name,
                 updated,
+                alwaysOn,
                 skipped
             });
         }
