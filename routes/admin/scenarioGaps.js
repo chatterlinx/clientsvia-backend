@@ -2984,6 +2984,7 @@ Return JSON only:
                     scenarioType: scenario.scenarioType,
                     category: scenario.categoryName,
                     categoryId: scenario.categoryId,
+                    templateId: template._id?.toString(),
                     ...auditResult
                 };
                 

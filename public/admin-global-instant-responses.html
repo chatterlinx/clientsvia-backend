@@ -20893,7 +20893,8 @@ ${JSON.stringify(healthData, null, 2)}
                             await initializeDeepAuditEdit(
                                 data.navigation?.scenarioId || urlParams.get('scenarioId'),
                                 data.navigation?.categoryId || urlParams.get('categoryId'),
-                                data.navigation?.companyId
+                                data.navigation?.companyId,
+                                data.navigation?.templateId
                             );
                         }, 1500);
                     } else {
@@ -20977,83 +20978,102 @@ ${JSON.stringify(healthData, null, 2)}
         if (status) status.textContent = message;
     }
     
-    async function initializeDeepAuditEdit(scenarioId, categoryIdHint, companyIdParam) {
+    async function initializeDeepAuditEdit(scenarioId, categoryIdHint, companyIdParam, templateIdParam) {
         try {
-            updateDeepAuditEditStatus('Loading company templates...');
+            updateDeepAuditEditStatus('Loading template...');
             
-            // Get company ID - prefer passed param, fall back to localStorage
+            // Get template ID from param or localStorage prefill
+            let templateId = templateIdParam;
+            if (!templateId) {
+                // Try to get from the prefill data that was just saved
+                const prefillData = localStorage.getItem('deepAuditEditPrefill');
+                if (prefillData) {
+                    try {
+                        const data = JSON.parse(prefillData);
+                        templateId = data.navigation?.templateId;
+                    } catch (e) {}
+                }
+            }
+            
+            // Get company ID as fallback
             const companyId = companyIdParam || localStorage.getItem('lastAuditCompanyId');
-            if (!companyId) {
-                throw new Error('No company ID found. Please return to Deep Audit and try again.');
+            
+            console.log('🔧 [DEEP-AUDIT-EDIT] Using templateId:', templateId, 'companyId:', companyId);
+            
+            if (!templateId && !companyId) {
+                throw new Error('No template or company ID found. Please return to Deep Audit and try again.');
             }
             
-            console.log('🔧 [DEEP-AUDIT-EDIT] Using company ID:', companyId);
-            
-            // Fetch the company's template
-            updateDeepAuditEditStatus('Fetching template...');
-            
-            const templatesResponse = await fetch(`/api/admin/global-instant-responses?companyId=${companyId}`, {
-                headers: { 'Authorization': `Bearer ${getAuthToken()}` }
-            });
-            
-            if (!templatesResponse.ok) {
-                throw new Error('Failed to fetch templates');
+            // ═══════════════════════════════════════════════════════════════════
+            // STEP 1: Load the template (same approach as Template Audit)
+            // ═══════════════════════════════════════════════════════════════════
+            if (templateId) {
+                updateDeepAuditEditStatus('Loading template by ID...');
+                
+                // Use existing loadTemplate function if available
+                if (typeof loadTemplateById === 'function') {
+                    await loadTemplateById(templateId);
+                } else if (typeof switchDashboardTemplate === 'function') {
+                    await switchDashboardTemplate(templateId);
+                } else {
+                    // Fallback: Direct fetch
+                    const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    });
+                    if (!response.ok) throw new Error('Failed to load template');
+                    const templateData = await response.json();
+                    activeTemplate = templateData.data || templateData;
+                    activeTemplateId = templateId;
+                }
+                
+                // Wait for template to be fully loaded
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
             
-            const templatesData = await templatesResponse.json();
-            const templates = templatesData.data || templatesData.templates || templatesData;
+            // ═══════════════════════════════════════════════════════════════════
+            // STEP 2: Find the scenario in the loaded template
+            // ═══════════════════════════════════════════════════════════════════
+            updateDeepAuditEditStatus('Finding scenario...');
             
-            if (!templates || templates.length === 0) {
-                throw new Error('No templates found for this company');
+            if (!activeTemplate || !activeTemplate.categories) {
+                throw new Error('Template not loaded or has no categories');
             }
             
-            // Find the scenario in the templates
-            updateDeepAuditEditStatus('Searching for scenario...');
-            
-            let foundTemplate = null;
             let foundCategory = null;
             let foundScenario = null;
             let foundCategoryIndex = -1;
             let foundScenarioIndex = -1;
             
-            for (const template of templates) {
-                for (let ci = 0; ci < (template.categories || []).length; ci++) {
-                    const category = template.categories[ci];
-                    for (let si = 0; si < (category.scenarios || []).length; si++) {
-                        const scenario = category.scenarios[si];
-                        const sId = scenario.scenarioId || scenario._id?.toString();
-                        if (sId === scenarioId) {
-                            foundTemplate = template;
-                            foundCategory = category;
-                            foundScenario = scenario;
-                            foundCategoryIndex = ci;
-                            foundScenarioIndex = si;
-                            break;
-                        }
+            for (let ci = 0; ci < activeTemplate.categories.length; ci++) {
+                const category = activeTemplate.categories[ci];
+                for (let si = 0; si < (category.scenarios || []).length; si++) {
+                    const scenario = category.scenarios[si];
+                    const sId = scenario.scenarioId || scenario._id?.toString();
+                    if (sId === scenarioId) {
+                        foundCategory = category;
+                        foundScenario = scenario;
+                        foundCategoryIndex = ci;
+                        foundScenarioIndex = si;
+                        console.log('✅ [DEEP-AUDIT-EDIT] Found scenario at', { categoryIndex: ci, scenarioIndex: si });
+                        break;
                     }
-                    if (foundScenario) break;
                 }
                 if (foundScenario) break;
             }
             
             if (!foundScenario) {
-                throw new Error(`Scenario ${scenarioId} not found in any template`);
+                throw new Error(`Scenario ${scenarioId} not found in template`);
             }
             
             console.log('🔧 [DEEP-AUDIT-EDIT] Found scenario:', {
-                template: foundTemplate.name,
+                template: activeTemplate.name,
                 category: foundCategory.name,
                 scenario: foundScenario.name
             });
             
-            updateDeepAuditEditStatus(`Found: "${foundScenario.name}" - Loading template...`);
+            updateDeepAuditEditStatus(`Found: "${foundScenario.name}" - Opening editor...`);
             
-            // Load the template in Global Brain
-            await switchDashboardTemplate(foundTemplate._id);
-            
-            updateDeepAuditEditStatus('Opening edit modal...');
-            
-            // Wait for template to load, then open edit modal
+            // Open edit modal directly (template already loaded above)
             setTimeout(() => {
                 // Store the scenario data for edit
                 window.currentCategoryIndex = foundCategoryIndex;
@@ -21072,7 +21092,7 @@ ${JSON.stringify(healthData, null, 2)}
                 const newUrl = window.location.pathname;
                 window.history.replaceState({}, '', newUrl);
                 
-            }, 1000);
+            }, 500);
             
         } catch (error) {
             console.error('❌ [DEEP-AUDIT-EDIT] Error:', error);
