@@ -2755,8 +2755,10 @@ router.post('/:companyId/audit/deep', async (req, res) => {
     const isStreaming = stream === true || stream === 'true';
     if (isStreaming) {
         res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Cache-Control', 'no-cache, no-transform');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+        res.setHeader('Access-Control-Allow-Origin', '*');
         res.flushHeaders();
     }
     
@@ -2856,19 +2858,23 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         let consecutiveErrors = 0;
         const MAX_CONSECUTIVE_ERRORS = 5;
         
-        // Keepalive interval to prevent connection timeout
+        // Keepalive interval to prevent connection timeout (5 seconds for aggressive keep-alive)
         let keepaliveInterval;
         if (isStreaming) {
             keepaliveInterval = setInterval(() => {
                 try {
-                    res.write(`: keepalive\n\n`);
+                    res.write(`: keepalive ${Date.now()}\n\n`);
                     if (res.flush) res.flush();
                 } catch (e) {
                     // Connection closed
                     clearInterval(keepaliveInterval);
                 }
-            }, 15000); // Every 15 seconds
+            }, 5000); // Every 5 seconds - more aggressive to prevent proxy timeouts
         }
+        
+        // Disable request timeout for this long-running request
+        req.setTimeout(0);
+        res.setTimeout(0);
         
         for (const scenario of scenariosToAudit) {
             // Check if we've hit too many consecutive errors (likely API issue)

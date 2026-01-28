@@ -2879,14 +2879,43 @@
                 
             } catch (error) {
                 console.error('Deep audit error:', error);
-                showToast('Deep audit failed: ' + error.message, 'error');
-                document.getElementById('deep-audit-list').innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #ef4444;">
-                        <i class="fas fa-exclamation-triangle fa-2x" style="margin-bottom: 12px;"></i>
-                        <h3>Deep Audit Failed</h3>
-                        <p>${error.message}</p>
-                    </div>
-                `;
+                
+                // Check if we have partial results to show
+                const progressFeed = document.getElementById('progress-feed');
+                const feedItems = progressFeed ? progressFeed.children.length : 0;
+                
+                if (feedItems > 0) {
+                    // We got some results before disconnection - show them
+                    showToast(`Connection lost after ${feedItems} scenarios. Partial results shown.`, 'warning');
+                    document.getElementById('progress-title').innerHTML = `
+                        <span style="color: #f59e0b;">⚠️ Connection Lost</span><br>
+                        <span style="font-size: 14px; color: #888;">Showing ${feedItems} scenarios processed before disconnect</span>
+                    `;
+                    document.getElementById('progress-current').innerHTML = `
+                        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 12px;">
+                            <button onclick="runDeepAudit()" style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); border: none; color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer;">
+                                <i class="fas fa-redo"></i> Retry Full Audit
+                            </button>
+                        </div>
+                    `;
+                    document.getElementById('progress-current').style.display = 'block';
+                    document.getElementById('progress-current').style.background = 'rgba(245, 158, 11, 0.1)';
+                } else {
+                    // No results at all
+                    document.getElementById('deep-audit-list').innerHTML = `
+                        <div style="text-align: center; padding: 40px;">
+                            <i class="fas fa-exclamation-triangle fa-2x" style="color: #ef4444; margin-bottom: 12px;"></i>
+                            <h3 style="color: #ef4444;">Deep Audit Failed</h3>
+                            <p style="color: #888; margin-bottom: 20px;">${error.message}</p>
+                            <p style="color: #666; font-size: 13px; margin-bottom: 20px;">
+                                This may be a network timeout. Try again - the audit will resume.
+                            </p>
+                            <button onclick="runDeepAudit()" style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); border: none; color: white; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                                <i class="fas fa-redo"></i> Retry Deep Audit
+                            </button>
+                        </div>
+                    `;
+                }
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-brain"></i> Deep Audit (AI)';
