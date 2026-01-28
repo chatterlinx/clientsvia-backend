@@ -3028,7 +3028,8 @@
                 
                 if (!response.ok) throw new Error('Failed to load templates');
                 
-                const templates = await response.json();
+                const result = await response.json();
+                const templates = result.data || [];
                 companyLocalState.availableTemplates = templates;
                 
                 // Build dropdown - show all templates except the primary one
@@ -3174,7 +3175,8 @@
                         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                     });
                     if (!response.ok) throw new Error('Failed to load template');
-                    template = await response.json();
+                    const result = await response.json();
+                    template = result.data || result;
                 }
                 
                 companyLocalState.customTemplateId = templateId;
