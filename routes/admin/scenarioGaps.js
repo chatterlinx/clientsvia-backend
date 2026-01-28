@@ -2760,12 +2760,22 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         res.flushHeaders();
     }
     
-    // Helper to send SSE events
+    // Helper to send SSE events with explicit flush
     const sendProgress = (data) => {
         if (isStreaming) {
             res.write(`data: ${JSON.stringify(data)}\n\n`);
+            // Force flush to ensure data is sent immediately
+            if (res.flush) {
+                res.flush();
+            }
         }
     };
+    
+    // Send initial connection confirmation immediately
+    if (isStreaming) {
+        res.write(`data: ${JSON.stringify({ type: 'connected', message: 'SSE connection established' })}\n\n`);
+        if (res.flush) res.flush();
+    }
     
     try {
         const company = await Company.findById(companyId);

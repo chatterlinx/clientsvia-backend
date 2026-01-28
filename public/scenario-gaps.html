@@ -2824,6 +2824,8 @@
             `;
             
             try {
+                console.log('🚀 [DEEP AUDIT] Starting request to:', `/api/admin/scenario-gaps/${companyId}/audit/deep`);
+                
                 // Use fetch with streaming
                 const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
                     method: 'POST',
@@ -2834,7 +2836,14 @@
                     body: JSON.stringify({ maxScenarios: 100, stream: true })
                 });
                 
+                console.log('📡 [DEEP AUDIT] Response status:', response.status, 'Content-Type:', response.headers.get('content-type'));
+                
                 if (!response.ok) {
+                    // For SSE streams, we can't use .json() - read as text instead
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.includes('text/event-stream')) {
+                        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                    }
                     const error = await response.json();
                     throw new Error(error.error || 'Deep audit failed');
                 }
@@ -2843,10 +2852,16 @@
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let buffer = '';
+                let eventCount = 0;
+                
+                console.log('📥 [DEEP AUDIT] Starting to read SSE stream...');
                 
                 while (true) {
                     const { done, value } = await reader.read();
-                    if (done) break;
+                    if (done) {
+                        console.log('✅ [DEEP AUDIT] Stream complete. Total events received:', eventCount);
+                        break;
+                    }
                     
                     buffer += decoder.decode(value, { stream: true });
                     
@@ -2858,6 +2873,8 @@
                         if (line.startsWith('data: ')) {
                             try {
                                 const data = JSON.parse(line.slice(6));
+                                eventCount++;
+                                console.log(`📨 [DEEP AUDIT] Event #${eventCount}:`, data.type, data.current || '', data.total || '');
                                 handleDeepAuditProgress(data);
                             } catch (e) {
                                 console.warn('Failed to parse SSE data:', line);
@@ -2893,6 +2910,12 @@
             const btn = document.getElementById('run-deep-audit-btn');
             
             switch (data.type) {
+                case 'connected':
+                    // Initial SSE connection confirmed
+                    progressTitle.textContent = 'Connected! Loading scenarios...';
+                    console.log('✅ [DEEP AUDIT] SSE connection established');
+                    break;
+                    
                 case 'start':
                     progressTitle.textContent = `Analyzing ${data.total} scenarios with GPT-4...`;
                     progressCount.textContent = `0 / ${data.total}`;
