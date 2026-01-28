@@ -5311,14 +5311,59 @@
             const hasErrors = validation?.errors?.length > 0;
             const hasWarnings = validation?.warnings?.length > 0;
             
-            const triggers = (scenario.triggers || []).slice(0, 8);
-            const quickReplies = scenario.quickReplies || [];
-            const fullReplies = scenario.fullReplies || [];
+            // Helper to render a setting row
+            const renderSetting = (label, value, type = 'text', color = '#e2e8f0') => {
+                let displayValue = '';
+                let statusIcon = '';
+                
+                if (value === undefined || value === null || value === '') {
+                    displayValue = '<span style="color: #64748b; font-style: italic;">not set</span>';
+                    statusIcon = '<i class="fas fa-minus-circle" style="color: #64748b;"></i>';
+                } else if (type === 'boolean') {
+                    displayValue = value ? '<span style="color: #4ade80;">true</span>' : '<span style="color: #f87171;">false</span>';
+                    statusIcon = '<i class="fas fa-check-circle" style="color: #22c55e;"></i>';
+                } else if (type === 'array') {
+                    const arr = Array.isArray(value) ? value : [];
+                    displayValue = arr.length > 0 
+                        ? `<span style="color: #4ade80;">${arr.length} items</span>` 
+                        : '<span style="color: #64748b;">empty</span>';
+                    statusIcon = arr.length > 0 
+                        ? '<i class="fas fa-check-circle" style="color: #22c55e;"></i>' 
+                        : '<i class="fas fa-minus-circle" style="color: #64748b;"></i>';
+                } else if (type === 'number') {
+                    displayValue = `<span style="color: #60a5fa;">${value}</span>`;
+                    statusIcon = '<i class="fas fa-check-circle" style="color: #22c55e;"></i>';
+                } else {
+                    displayValue = `<span style="color: ${color};">${escapeHtml(String(value))}</span>`;
+                    statusIcon = '<i class="fas fa-check-circle" style="color: #22c55e;"></i>';
+                }
+                
+                return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <span style="color: #94a3b8; font-size: 12px;">${statusIcon} ${label}</span>
+                        <span style="font-size: 12px; font-family: monospace;">${displayValue}</span>
+                    </div>
+                `;
+            };
+            
+            // Count how many settings are populated
+            const settingsCount = [
+                scenario.name, scenario.status, scenario.isActive, scenario.categories?.length,
+                scenario.scenarioType, scenario.priority, scenario.minConfidence, scenario.behavior,
+                scenario.replyStrategy, scenario.bookingIntent !== undefined, scenario.triggers?.length,
+                scenario.regexTriggers?.length, scenario.negativeTriggers?.length,
+                scenario.quickReplies?.length, scenario.fullReplies?.length,
+                scenario.quickReplies_noName?.length, scenario.fullReplies_noName?.length,
+                scenario.entityCapture?.length, scenario.channel, scenario.notes
+            ].filter(v => v).length;
             
             resultDiv.innerHTML = `
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
                     <h3 style="margin: 0; color: #10b981;">
                         <i class="fas fa-check-circle"></i> Scenario Generated
+                        <span style="font-size: 14px; color: #94a3b8; font-weight: normal; margin-left: 12px;">
+                            ${settingsCount}/22 settings populated
+                        </span>
                     </h3>
                     <div style="display: flex; gap: 10px;">
                         <button class="btn" onclick="copyManualScenarioJson()" style="padding: 8px 16px;">
@@ -5334,86 +5379,119 @@
                     </div>
                 </div>
                 
-                <!-- Scenario Card -->
-                <div style="
-                    background: var(--card-bg);
-                    border: 1px solid var(--border-color);
-                    border-radius: 12px;
-                    padding: 20px;
-                ">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 16px;">
-                        <div>
-                            <h4 style="margin: 0 0 8px 0; color: white; font-size: 18px;">
-                                ${escapeHtml(scenario.name || 'Untitled')}
-                            </h4>
-                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                                <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
-                                    ${escapeHtml(scenario.categories?.[0] || scenario.category || 'General')}
-                                </span>
-                                <span style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
-                                    ${escapeHtml(scenario.scenarioType || 'FAQ')}
-                                </span>
-                                ${scenario.bookingIntent ? `
-                                    <span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
-                                        Booking Intent
-                                    </span>
-                                ` : ''}
+                <!-- Two Column Layout: Content + Settings -->
+                <div style="display: grid; grid-template-columns: 1fr 350px; gap: 20px;">
+                    
+                    <!-- LEFT: Content Preview -->
+                    <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px;">
+                        <h4 style="margin: 0 0 16px 0; color: white; font-size: 18px;">
+                            ${escapeHtml(scenario.name || 'Untitled')}
+                        </h4>
+                        
+                        <!-- Type Badges -->
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+                            <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
+                                ${escapeHtml(scenario.categories?.[0] || 'General')}
+                            </span>
+                            <span style="background: rgba(59, 130, 246, 0.2); color: #3b82f6; padding: 4px 10px; border-radius: 6px; font-size: 11px;">
+                                ${escapeHtml(scenario.scenarioType || 'FAQ')}
+                            </span>
+                            ${scenario.bookingIntent ? `<span style="background: rgba(245, 158, 11, 0.2); color: #f59e0b; padding: 4px 10px; border-radius: 6px; font-size: 11px;">Booking Intent</span>` : ''}
+                        </div>
+                        
+                        <!-- Triggers -->
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
+                                TRIGGERS (${scenario.triggers?.length || 0})
+                            </div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                ${(scenario.triggers || []).slice(0, 8).map(t => `
+                                    <span style="background: rgba(139, 92, 246, 0.2); color: #a78bfa; padding: 4px 10px; border-radius: 6px; font-size: 12px;">${escapeHtml(t)}</span>
+                                `).join('')}
+                                ${(scenario.triggers?.length || 0) > 8 ? `<span style="color: var(--text-muted); font-size: 12px;">+${scenario.triggers.length - 8} more</span>` : ''}
                             </div>
                         </div>
+                        
+                        <!-- Replies Grid -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div>
+                                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
+                                    QUICK REPLIES (${scenario.quickReplies?.length || 0})
+                                </div>
+                                ${(scenario.quickReplies || []).slice(0, 3).map(r => `
+                                    <div style="background: rgba(16, 185, 129, 0.15); border-left: 3px solid #10b981; padding: 10px 12px; margin-bottom: 8px; border-radius: 0 8px 8px 0; font-size: 13px; color: #a7f3d0;">${escapeHtml(r)}</div>
+                                `).join('')}
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
+                                    FULL REPLIES (${scenario.fullReplies?.length || 0})
+                                </div>
+                                ${(scenario.fullReplies || []).slice(0, 3).map(r => `
+                                    <div style="background: rgba(59, 130, 246, 0.15); border-left: 3px solid #3b82f6; padding: 10px 12px; margin-bottom: 8px; border-radius: 0 8px 8px 0; font-size: 13px; color: #93c5fd;">${escapeHtml(r)}</div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <!-- Notes -->
+                        ${scenario.notes ? `
+                            <div style="margin-top: 16px; padding: 12px; background: rgba(148, 163, 184, 0.1); border-radius: 8px;">
+                                <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">NOTES</div>
+                                <div style="font-size: 13px; color: #cbd5e1;">${escapeHtml(scenario.notes)}</div>
+                            </div>
+                        ` : ''}
                     </div>
                     
-                    <!-- Triggers -->
-                    <div style="margin-bottom: 16px;">
-                        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
-                            TRIGGERS (${scenario.triggers?.length || 0})
+                    <!-- RIGHT: All 22 Settings -->
+                    <div style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; padding: 16px;">
+                        <h4 style="margin: 0 0 16px 0; color: #a78bfa; font-size: 14px;">
+                            <i class="fas fa-cogs"></i> All 22 Scenario Settings
+                        </h4>
+                        
+                        <!-- Identity -->
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-size: 10px; color: #8b5cf6; font-weight: 600; margin-bottom: 6px; text-transform: uppercase;">Identity</div>
+                            ${renderSetting('name', scenario.name)}
+                            ${renderSetting('status', scenario.status)}
+                            ${renderSetting('isActive', scenario.isActive, 'boolean')}
+                            ${renderSetting('categories', scenario.categories, 'array')}
+                            ${renderSetting('scenarioType', scenario.scenarioType)}
                         </div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                            ${triggers.map(t => `
-                                <span style="
-                                    background: rgba(139, 92, 246, 0.2);
-                                    color: #a78bfa;
-                                    padding: 4px 10px;
-                                    border-radius: 6px;
-                                    font-size: 12px;
-                                ">${escapeHtml(t)}</span>
-                            `).join('')}
-                            ${scenario.triggers?.length > 8 ? `<span style="color: var(--text-muted); font-size: 12px;">+${scenario.triggers.length - 8} more</span>` : ''}
+                        
+                        <!-- Matching -->
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-size: 10px; color: #22c55e; font-weight: 600; margin-bottom: 6px; text-transform: uppercase;">Matching</div>
+                            ${renderSetting('triggers', scenario.triggers, 'array')}
+                            ${renderSetting('regexTriggers', scenario.regexTriggers, 'array')}
+                            ${renderSetting('negativeTriggers', scenario.negativeTriggers, 'array')}
+                            ${renderSetting('priority', scenario.priority, 'number')}
+                            ${renderSetting('minConfidence', scenario.minConfidence, 'number')}
                         </div>
-                    </div>
-                    
-                    <!-- Replies Grid -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        
+                        <!-- Behavior -->
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-size: 10px; color: #f59e0b; font-weight: 600; margin-bottom: 6px; text-transform: uppercase;">Behavior</div>
+                            ${renderSetting('behavior', scenario.behavior)}
+                            ${renderSetting('replyStrategy', scenario.replyStrategy)}
+                            ${renderSetting('bookingIntent', scenario.bookingIntent, 'boolean')}
+                            ${renderSetting('channel', scenario.channel)}
+                        </div>
+                        
+                        <!-- Replies -->
+                        <div style="margin-bottom: 12px;">
+                            <div style="font-size: 10px; color: #3b82f6; font-weight: 600; margin-bottom: 6px; text-transform: uppercase;">Replies</div>
+                            ${renderSetting('quickReplies', scenario.quickReplies, 'array')}
+                            ${renderSetting('fullReplies', scenario.fullReplies, 'array')}
+                            ${renderSetting('quickReplies_noName', scenario.quickReplies_noName, 'array')}
+                            ${renderSetting('fullReplies_noName', scenario.fullReplies_noName, 'array')}
+                        </div>
+                        
+                        <!-- Advanced -->
                         <div>
-                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
-                                QUICK REPLIES (${quickReplies.length})
-                            </div>
-                            ${quickReplies.slice(0, 3).map(r => `
-                                <div style="
-                                    background: rgba(16, 185, 129, 0.15);
-                                    border-left: 3px solid #10b981;
-                                    padding: 10px 12px;
-                                    margin-bottom: 8px;
-                                    border-radius: 0 8px 8px 0;
-                                    font-size: 13px;
-                                    color: #a7f3d0;
-                                ">${escapeHtml(r)}</div>
-                            `).join('')}
-                        </div>
-                        <div>
-                            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; font-weight: 600;">
-                                FULL REPLIES (${fullReplies.length})
-                            </div>
-                            ${fullReplies.slice(0, 3).map(r => `
-                                <div style="
-                                    background: rgba(59, 130, 246, 0.15);
-                                    border-left: 3px solid #3b82f6;
-                                    padding: 10px 12px;
-                                    margin-bottom: 8px;
-                                    border-radius: 0 8px 8px 0;
-                                    font-size: 13px;
-                                    color: #93c5fd;
-                                ">${escapeHtml(r)}</div>
-                            `).join('')}
+                            <div style="font-size: 10px; color: #ec4899; font-weight: 600; margin-bottom: 6px; text-transform: uppercase;">Advanced</div>
+                            ${renderSetting('entityCapture', scenario.entityCapture, 'array')}
+                            ${renderSetting('followUpMode', scenario.followUpMode)}
+                            ${renderSetting('actionType', scenario.actionType)}
+                            ${renderSetting('notes', scenario.notes ? 'provided' : null)}
                         </div>
                     </div>
                 </div>
