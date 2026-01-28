@@ -1607,6 +1607,103 @@ router.patch('/:companyId/services-config', async (req, res) => {
 });
 
 /**
+ * POST /:companyId/services-config/test
+ * 
+ * Test the Service Intent Detector with a sample input
+ * Useful for debugging and verifying configuration
+ */
+router.post('/:companyId/services-config/test', async (req, res) => {
+    const { companyId } = req.params;
+    const { input } = req.body;
+    
+    if (!input) {
+        return res.status(400).json({ error: 'input text is required' });
+    }
+    
+    try {
+        // Load services config
+        const configResponse = await new Promise((resolve, reject) => {
+            const mockReq = { params: { companyId } };
+            const mockRes = {
+                json: (data) => resolve(data),
+                status: (code) => ({ json: (data) => reject(new Error(data.error || 'Error')) })
+            };
+            // We can't easily call our own route, so let's duplicate the logic
+        });
+        
+        // Load company's services config directly
+        const company = await Company.findById(companyId)
+            .select('name aiAgentSettings.templateReferences aiAgentSettings.services')
+            .lean();
+            
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        const templateRef = company.aiAgentSettings?.templateReferences?.[0];
+        if (!templateRef?.templateId) {
+            return res.json({
+                success: true,
+                detection: { detected: false, reason: 'no_template_assigned' }
+            });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(templateRef.templateId)
+            .select('categories.serviceKey categories.isToggleable categories.serviceIntent categories.serviceDecline categories.name')
+            .lean();
+        
+        // Build services config
+        const companyServices = company.aiAgentSettings?.services || {};
+        const servicesConfig = { services: {} };
+        
+        for (const cat of (template?.categories || [])) {
+            if (!cat.isToggleable || !cat.serviceKey) continue;
+            
+            const override = companyServices[cat.serviceKey];
+            servicesConfig.services[cat.serviceKey] = {
+                enabled: override?.enabled !== undefined ? override.enabled : (cat.defaultEnabled !== false),
+                keywords: [...(cat.serviceIntent?.keywords || []), ...(override?.overrideKeywords || [])],
+                phrases: cat.serviceIntent?.phrases || [],
+                negative: cat.serviceIntent?.negative || [],
+                minConfidence: cat.serviceIntent?.minConfidence || 0.6,
+                declineMessage: override?.overrideDeclineMessage || cat.serviceDecline?.defaultMessage,
+                categoryName: cat.name
+            };
+        }
+        
+        // Run detection
+        const ServiceIntentDetector = require('../../services/ServiceIntentDetector');
+        const detection = ServiceIntentDetector.detect(input, servicesConfig);
+        
+        // Generate decline if applicable
+        let declineResponse = null;
+        if (detection.detected && !detection.enabled) {
+            declineResponse = ServiceIntentDetector.generateDeclineResponse(detection);
+        }
+        
+        logger.info('[SERVICE INTENT TEST]', {
+            companyId,
+            input: input.substring(0, 50),
+            detected: detection.detected,
+            serviceKey: detection.serviceKey,
+            enabled: detection.enabled
+        });
+        
+        return res.json({
+            success: true,
+            input,
+            detection,
+            declineResponse,
+            trace: ServiceIntentDetector.buildTraceEntry(detection, companyId)
+        });
+        
+    } catch (error) {
+        logger.error('[SERVICE INTENT TEST] Error', { error: error.message, companyId });
+        return res.status(500).json({ error: 'Failed to test service intent' });
+    }
+});
+
+/**
  * PATCH /:companyId/local-config
  * 
  * Update company's custom template assignment and service context
