@@ -2975,6 +2975,9 @@
         }
         
         function displayDeepAuditResults(result) {
+            // Store results globally for openDeepAuditFix to access
+            lastDeepAuditResults = result;
+            
             const { summary, scenarios } = result;
             
             // Update summary
@@ -3058,12 +3061,40 @@
             }
         }
         
+        // Store deep audit results globally for access by openDeepAuditFix
+        let lastDeepAuditResults = null;
+        
         function openDeepAuditFix(scenarioId, categoryId) {
             // Store company ID for return navigation
             localStorage.setItem('lastAuditCompanyId', companyId);
             
-            // Open Global Brain to this scenario
-            const gbUrl = `/admin-global-instant-responses.html?editScenario=${scenarioId}&categoryId=${categoryId}`;
+            // Find the scenario in deep audit results to get the full data
+            const scenarioResult = lastDeepAuditResults?.scenarios?.find(s => s.scenarioId === scenarioId);
+            
+            // Build prefill data similar to Template Audit flow
+            const prefillData = {
+                mode: 'deep-audit-fix',
+                source: 'deep-audit',
+                timestamp: Date.now(),
+                navigation: {
+                    templateId: currentTemplateId || null,
+                    categoryId: categoryId,
+                    scenarioId: scenarioId,
+                    companyId: companyId
+                },
+                auditResult: scenarioResult || {
+                    scenarioId: scenarioId,
+                    categoryId: categoryId
+                }
+            };
+            
+            // Store in localStorage (same pattern as Template Audit)
+            localStorage.setItem('deepAuditEditPrefill', JSON.stringify(prefillData));
+            
+            console.log('🔧 [DEEP AUDIT] Opening Global Brain with prefill:', prefillData);
+            
+            // Open Global Brain with prefill flag
+            const gbUrl = `/admin-global-instant-responses.html?prefill=deep-audit-fix&scenarioId=${scenarioId}&categoryId=${categoryId}`;
             window.open(gbUrl, '_blank');
         }
         

@@ -20868,20 +20868,56 @@ ${JSON.stringify(healthData, null, 2)}
             }
             
             // ════════════════════════════════════════════════════════════════════════
-            // 🎯 DEEP AUDIT DIRECT EDIT: Coming from Deep Audit "Fix in Global Brain"
+            // 🎯 DEEP AUDIT FIX: Coming from Deep Audit "Fix in Global Brain" (NEW FLOW)
             // ════════════════════════════════════════════════════════════════════════
-            // URL: ?editScenario=<scenarioId>&categoryId=<categoryId>
-            // - Finds the scenario in the company's template
-            // - Opens the edit modal directly
+            // URL: ?prefill=deep-audit-fix&scenarioId=<id>&categoryId=<id>
+            // Uses localStorage for reliable data transfer (same as Template Audit)
             // ════════════════════════════════════════════════════════════════════════
-            const editScenarioId = urlParams.get('editScenario');
-            if (editScenarioId) {
-                console.log('🔧 [DEEP-AUDIT-EDIT] Direct edit requested for scenario:', editScenarioId);
+            if (urlParams.get('prefill') === 'deep-audit-fix') {
+                console.log('🔧 [DEEP-AUDIT-FIX] Deep Audit fix requested via prefill');
                 
                 // Show loading overlay
                 showDeepAuditEditOverlay();
                 
-                // Wait for page to load then find and edit the scenario
+                try {
+                    const prefillData = localStorage.getItem('deepAuditEditPrefill');
+                    if (prefillData) {
+                        const data = JSON.parse(prefillData);
+                        console.log('🔧 [DEEP-AUDIT-FIX] Loaded prefill data:', data);
+                        
+                        // Clean up localStorage
+                        localStorage.removeItem('deepAuditEditPrefill');
+                        
+                        // Wait for page to load then find and edit
+                        setTimeout(async () => {
+                            await initializeDeepAuditEdit(
+                                data.navigation?.scenarioId || urlParams.get('scenarioId'),
+                                data.navigation?.categoryId || urlParams.get('categoryId'),
+                                data.navigation?.companyId
+                            );
+                        }, 1500);
+                    } else {
+                        // Fallback to URL params only
+                        console.warn('🔧 [DEEP-AUDIT-FIX] No prefill data, using URL params');
+                        setTimeout(async () => {
+                            await initializeDeepAuditEdit(
+                                urlParams.get('scenarioId'),
+                                urlParams.get('categoryId')
+                            );
+                        }, 1500);
+                    }
+                } catch (e) {
+                    console.error('🔧 [DEEP-AUDIT-FIX] Error parsing prefill:', e);
+                    hideDeepAuditEditOverlay();
+                    showToast('Failed to load Deep Audit data', 'error');
+                }
+            }
+            
+            // Legacy: Direct editScenario param (fallback)
+            const editScenarioId = urlParams.get('editScenario');
+            if (editScenarioId && urlParams.get('prefill') !== 'deep-audit-fix') {
+                console.log('🔧 [DEEP-AUDIT-EDIT] Legacy direct edit for scenario:', editScenarioId);
+                showDeepAuditEditOverlay();
                 setTimeout(async () => {
                     await initializeDeepAuditEdit(editScenarioId, urlParams.get('categoryId'));
                 }, 1500);
@@ -20941,15 +20977,17 @@ ${JSON.stringify(healthData, null, 2)}
         if (status) status.textContent = message;
     }
     
-    async function initializeDeepAuditEdit(scenarioId, categoryIdHint) {
+    async function initializeDeepAuditEdit(scenarioId, categoryIdHint, companyIdParam) {
         try {
             updateDeepAuditEditStatus('Loading company templates...');
             
-            // Get company ID from localStorage (stored by Deep Audit)
-            const companyId = localStorage.getItem('lastAuditCompanyId');
+            // Get company ID - prefer passed param, fall back to localStorage
+            const companyId = companyIdParam || localStorage.getItem('lastAuditCompanyId');
             if (!companyId) {
                 throw new Error('No company ID found. Please return to Deep Audit and try again.');
             }
+            
+            console.log('🔧 [DEEP-AUDIT-EDIT] Using company ID:', companyId);
             
             // Fetch the company's template
             updateDeepAuditEditStatus('Fetching template...');
