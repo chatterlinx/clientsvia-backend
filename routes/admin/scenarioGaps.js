@@ -1391,11 +1391,11 @@ function generateFallbackScenario(gap, company) {
 // ============================================================================
 
 /**
- * GET /companies/:companyId
+ * GET /:companyId/local-config
  * 
- * Get company details (for Company Local tab)
+ * Get company's local scenario configuration (custom template + service context)
  */
-router.get('/companies/:companyId', async (req, res) => {
+router.get('/:companyId/local-config', async (req, res) => {
     const { companyId } = req.params;
     
     try {
@@ -1420,11 +1420,11 @@ router.get('/companies/:companyId', async (req, res) => {
 });
 
 /**
- * PATCH /companies/:companyId
+ * PATCH /:companyId/local-config
  * 
  * Update company's custom template assignment and service context
  */
-router.patch('/companies/:companyId', async (req, res) => {
+router.patch('/:companyId/local-config', async (req, res) => {
     const { companyId } = req.params;
     const { customTemplateId, localServiceContext } = req.body;
     

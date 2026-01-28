@@ -3021,8 +3021,8 @@
             select.innerHTML = '<option value="">Loading templates...</option>';
             
             try {
-                // Fetch all templates (we'll filter to show relevant ones)
-                const response = await fetch('/api/admin/templates', {
+                // Fetch all templates from Global Brain API
+                const response = await fetch('/api/admin/global-instant-responses', {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
@@ -3069,7 +3069,7 @@
         async function loadCompanyCustomTemplateAssignment() {
             try {
                 // Fetch company to get customTemplateId
-                const response = await fetch(`/api/admin/scenario-gaps/companies/${companyId}`, {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/local-config`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
@@ -3089,7 +3089,7 @@
         
         async function loadServiceContext() {
             try {
-                const response = await fetch(`/api/admin/scenario-gaps/companies/${companyId}`, {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/local-config`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
@@ -3119,7 +3119,7 @@
             statusEl.style.color = '#f59e0b';
             
             try {
-                const response = await fetch(`/api/admin/scenario-gaps/companies/${companyId}`, {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/local-config`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
@@ -3170,7 +3170,7 @@
                 
                 // If not found, fetch it
                 if (!template) {
-                    const response = await fetch(`/api/admin/templates/${templateId}`, {
+                    const response = await fetch(`/api/admin/global-instant-responses/${templateId}`, {
                         headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                     });
                     if (!response.ok) throw new Error('Failed to load template');
@@ -3211,7 +3211,7 @@
         
         async function saveCustomTemplateAssignment(templateId) {
             try {
-                await fetch(`/api/admin/scenario-gaps/companies/${companyId}`, {
+                await fetch(`/api/admin/scenario-gaps/${companyId}/local-config`, {
                     method: 'PATCH',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
@@ -3501,7 +3501,7 @@
             
             try {
                 // Save to the custom template via Global Brain API
-                const response = await fetch(`/api/admin/templates/${companyLocalState.customTemplateId}/categories/${categoryId}/scenarios`, {
+                const response = await fetch(`/api/admin/global-instant-responses/${companyLocalState.customTemplateId}/categories/${categoryId}/scenarios`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
