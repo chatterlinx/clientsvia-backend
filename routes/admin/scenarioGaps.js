@@ -4588,8 +4588,7 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         // ════════════════════════════════════════════════════════════════════════════
         const matcher = new IntentMatcher(HVAC_BLUEPRINT_SPEC);
         
-        // Helper: Calculate content hash for caching
-        const crypto = require('crypto');
+        // Helper: Calculate content hash for caching (crypto already imported at top)
         function calculateContentHash(scenario) {
             const content = JSON.stringify({
                 name: scenario.name,
