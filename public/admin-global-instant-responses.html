@@ -21789,13 +21789,20 @@ ${JSON.stringify(healthData, null, 2)}
             const modal = document.getElementById('audit-fix-post-save-modal');
             const content = modal?.querySelector('div > div');
             
+            // Check if this fix came from Deep Audit (GPT-4) or Template Audit (rules)
+            const urlParams = new URLSearchParams(window.location.search);
+            const prefillType = urlParams.get('prefill');
+            const isDeepAuditFix = prefillType === 'deep-audit-fix';
+            
             if (content) {
                 content.innerHTML = `
                     <div style="font-size: 48px; margin-bottom: 20px; animation: spin 1s linear infinite;">
                         <i class="fas fa-sync"></i>
                     </div>
                     <h2 style="color: white; margin-bottom: 12px;">Verifying Fix...</h2>
-                    <p style="color: #a0a0b0;">Re-running audit on this scenario</p>
+                    <p style="color: #a0a0b0;">
+                        ${isDeepAuditFix ? 'Running GPT-4 Deep Audit on this scenario...' : 'Running rules audit on this scenario...'}
+                    </p>
                 `;
             }
             
@@ -21807,7 +21814,6 @@ ${JSON.stringify(healthData, null, 2)}
                 
                 if (!companyId) {
                     // Fall back: try to get from template
-                    const urlParams = new URLSearchParams(window.location.search);
                     const templateId = urlParams.get('templateId') || activeTemplateId;
                     
                     if (templateId) {
@@ -21830,45 +21836,91 @@ ${JSON.stringify(healthData, null, 2)}
                     throw new Error('Could not determine company ID for verification');
                 }
                 
-                console.log('🔍 [VERIFY] Using company ID:', companyId);
-                
-                // Call the audit endpoint for just this scenario
-                const auditResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/scenario`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${getAuthToken()}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ scenarioId })
-                });
-                
-                const auditResult = await auditResponse.json();
-                
-                // Show result
-                const violations = auditResult.violations || [];
-                const errorCount = violations.filter(v => v.severity === 'error').length;
-                const warningCount = violations.filter(v => v.severity === 'warning').length;
-                const infoCount = violations.filter(v => v.severity === 'info').length;
-                
-                const isPerfect = violations.length === 0;
-                const isGood = errorCount === 0;
+                console.log('🔍 [VERIFY] Using company ID:', companyId, 'Audit type:', isDeepAuditFix ? 'DEEP (GPT-4)' : 'RULES');
                 
                 let statusIcon, statusColor, statusText, statusDesc;
-                if (isPerfect) {
-                    statusIcon = '🎉';
-                    statusColor = '#10b981';
-                    statusText = 'Perfect! 10/10';
-                    statusDesc = 'No violations found. This scenario is clean!';
-                } else if (isGood) {
-                    statusIcon = '✅';
-                    statusColor = '#22c55e';
-                    statusText = 'Good! No Errors';
-                    statusDesc = `${warningCount} warning${warningCount !== 1 ? 's' : ''}, ${infoCount} info`;
+                
+                if (isDeepAuditFix) {
+                    // ════════════════════════════════════════════════════════════════════
+                    // DEEP AUDIT FIX: Verify with GPT-4 (same as what found the issues)
+                    // ════════════════════════════════════════════════════════════════════
+                    const auditResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep/single`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${getAuthToken()}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ scenarioId })
+                    });
+                    
+                    const auditResult = await auditResponse.json();
+                    console.log('🔍 [VERIFY] GPT-4 result:', auditResult);
+                    
+                    const score = auditResult.score || 0;
+                    const verdict = auditResult.verdict || 'UNKNOWN';
+                    const issues = auditResult.issues || [];
+                    
+                    if (score >= 9 && !auditResult.rewriteNeeded) {
+                        statusIcon = '🎉';
+                        statusColor = '#10b981';
+                        statusText = `Perfect! ${score}/10`;
+                        statusDesc = 'GPT-4 says this scenario is excellent!';
+                    } else if (score >= 7) {
+                        statusIcon = '✅';
+                        statusColor = '#22c55e';
+                        statusText = `Good! ${score}/10`;
+                        statusDesc = issues.length > 0 
+                            ? `Minor suggestions: ${issues.length} item${issues.length !== 1 ? 's' : ''}`
+                            : 'Looking good with minor polish possible.';
+                    } else {
+                        statusIcon = '⚠️';
+                        statusColor = '#f59e0b';
+                        statusText = `Needs Work: ${score}/10`;
+                        statusDesc = `${issues.length} issue${issues.length !== 1 ? 's' : ''} found by GPT-4`;
+                    }
+                    
+                    // Add cost info
+                    statusDesc += ` (${auditResult.estimatedCost || '$0.02'})`;
+                    
                 } else {
-                    statusIcon = '⚠️';
-                    statusColor = '#f59e0b';
-                    statusText = 'Needs More Work';
-                    statusDesc = `${errorCount} error${errorCount !== 1 ? 's' : ''}, ${warningCount} warning${warningCount !== 1 ? 's' : ''}`;
+                    // ════════════════════════════════════════════════════════════════════
+                    // TEMPLATE AUDIT FIX: Verify with rules (fast, free)
+                    // ════════════════════════════════════════════════════════════════════
+                    const auditResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/scenario`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${getAuthToken()}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ scenarioId })
+                    });
+                    
+                    const auditResult = await auditResponse.json();
+                    
+                    const violations = auditResult.violations || [];
+                    const errorCount = violations.filter(v => v.severity === 'error').length;
+                    const warningCount = violations.filter(v => v.severity === 'warning').length;
+                    const infoCount = violations.filter(v => v.severity === 'info').length;
+                    
+                    const isPerfect = violations.length === 0;
+                    const isGood = errorCount === 0;
+                    
+                    if (isPerfect) {
+                        statusIcon = '🎉';
+                        statusColor = '#10b981';
+                        statusText = 'Perfect! 10/10';
+                        statusDesc = 'No rule violations found. This scenario is clean!';
+                    } else if (isGood) {
+                        statusIcon = '✅';
+                        statusColor = '#22c55e';
+                        statusText = 'Good! No Errors';
+                        statusDesc = `${warningCount} warning${warningCount !== 1 ? 's' : ''}, ${infoCount} info`;
+                    } else {
+                        statusIcon = '⚠️';
+                        statusColor = '#f59e0b';
+                        statusText = 'Needs More Work';
+                        statusDesc = `${errorCount} error${errorCount !== 1 ? 's' : ''}, ${warningCount} warning${warningCount !== 1 ? 's' : ''}`;
+                    }
                 }
                 
                 if (content) {
