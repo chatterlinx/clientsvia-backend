@@ -252,6 +252,25 @@ const scenarioSchema = new Schema({
         // Did the scenario fulfill its blueprint intent?
     },
     
+    // ════════════════════════════════════════════════════════════════
+    // CONTENT HASH (Audit Caching)
+    // ════════════════════════════════════════════════════════════════
+    // Hash of scenario content for deterministic audit caching
+    // If content unchanged, reuse last audit result
+    
+    contentHash: {
+        type: String,
+        default: null
+        // SHA256 of JSON.stringify({triggers, quickReplies, fullReplies, name, scenarioType})
+    },
+    
+    lastAuditContentHash: {
+        type: String,
+        default: null
+        // Content hash at time of last audit
+        // If contentHash === lastAuditContentHash, audit result is still valid
+    },
+    
     // ============================================
     // 🔄 DEPRECATION TRACKING (Replace-not-Add)
     // ============================================

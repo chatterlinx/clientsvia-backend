@@ -4588,6 +4588,21 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         // ════════════════════════════════════════════════════════════════════════════
         const matcher = new IntentMatcher(HVAC_BLUEPRINT_SPEC);
         
+        // Helper: Calculate content hash for caching
+        const crypto = require('crypto');
+        function calculateContentHash(scenario) {
+            const content = JSON.stringify({
+                name: scenario.name,
+                triggers: scenario.triggers || [],
+                quickReplies: scenario.quickReplies || [],
+                fullReplies: scenario.fullReplies || [],
+                scenarioType: scenario.scenarioType
+            });
+            return crypto.createHash('sha256').update(content).digest('hex').substring(0, 16);
+        }
+        
+        let cachedCount = 0;
+        
         for (const scenario of scenariosToAudit) {
             // Check if we've hit too many consecutive errors (likely API issue)
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -4601,21 +4616,92 @@ router.post('/:companyId/audit/deep', async (req, res) => {
             
             try {
                 // ════════════════════════════════════════════════════════════════
+                // CONTENT HASH CACHING: Skip re-audit if content unchanged
+                // ════════════════════════════════════════════════════════════════
+                const contentHash = calculateContentHash(scenario);
+                
+                if (scenario.lastAuditContentHash === contentHash && 
+                    scenario.lastAuditScore != null && 
+                    scenario.lastAuditedAt) {
+                    // Content unchanged since last audit - reuse cached result
+                    cachedCount++;
+                    processed++;
+                    
+                    const cachedScore = scenario.lastAuditScore;
+                    if (cachedScore >= 9 && scenario.lastAuditVerdict !== 'NEEDS_WORK') perfect++;
+                    else if (cachedScore < 7 || scenario.lastAuditVerdict === 'NEEDS_WORK') needsWork++;
+                    
+                    results.push({
+                        scenarioId: scenario.scenarioId || scenario._id?.toString(),
+                        name: scenario.name,
+                        scenarioType: scenario.scenarioType,
+                        category: scenario.categoryName,
+                        categoryId: scenario.categoryId,
+                        templateId: template._id?.toString(),
+                        score: cachedScore,
+                        verdict: scenario.lastAuditVerdict || (cachedScore >= 9 ? 'PERFECT' : cachedScore >= 7 ? 'GOOD' : 'NEEDS_WORK'),
+                        issues: [],
+                        strengths: [],
+                        rewriteNeeded: cachedScore < 7,
+                        cached: true,
+                        cacheNote: 'Content unchanged since last audit'
+                    });
+                    
+                    sendProgress({
+                        type: 'progress',
+                        current: processed,
+                        total: totalCount,
+                        percent: Math.round((processed / totalCount) * 100),
+                        scenario: { name: scenario.name, score: cachedScore, verdict: 'CACHED' },
+                        message: `${processed}/${totalCount}: "${scenario.name}" → ${cachedScore}/10 (cached)`
+                    });
+                    
+                    continue;
+                }
+                // ════════════════════════════════════════════════════════════════
                 // Get blueprint context for this scenario
+                // CRITICAL: Only use blueprint if we have HIGH confidence match
+                // Wrong intent = worse than no intent
                 // ════════════════════════════════════════════════════════════════
                 let blueprintIntent = null;
                 let blueprintContext = '';
+                let matchConfidence = null;
+                let matchSource = null;
                 
-                // Check if scenario has explicit mapping
+                // PRIORITY 1: Explicit mapping (from generation or manual assignment)
+                // These are trusted - never override
                 if (scenario.blueprintItemKey) {
                     blueprintIntent = findBlueprintItem(scenario.blueprintItemKey);
+                    matchSource = 'explicit_mapping';
+                    matchConfidence = 1.0;
                 }
                 
-                // If no explicit mapping, try auto-match
+                // PRIORITY 2: Auto-match ONLY if confidence >= 0.75 (high threshold)
+                // Low confidence matches cause more harm than good
                 if (!blueprintIntent) {
                     const matchResult = matcher.match(scenario);
-                    if (matchResult.matched && matchResult.confidence >= 0.5) {
+                    
+                    // Only use match if:
+                    // 1. High confidence (>= 0.75)
+                    // 2. Category aligns (prevents "Emergency" matching to "greeting")
+                    const categoryAligns = matchResult.matchedItemKey && 
+                        (scenario.categoryName?.toLowerCase().includes(
+                            matchResult.matchedItemKey?.replace('hvac_', '').split('_')[0]
+                        ) || matchResult.confidence >= 0.85);
+                    
+                    if (matchResult.matched && matchResult.confidence >= 0.75 && categoryAligns) {
                         blueprintIntent = findBlueprintItem(matchResult.matchedItemKey);
+                        matchSource = 'auto_match';
+                        matchConfidence = matchResult.confidence;
+                    } else if (matchResult.matched && matchResult.confidence >= 0.5) {
+                        // Log low-confidence matches for debugging
+                        logger.info('[DEEP AUDIT] Skipping low-confidence match', {
+                            scenarioName: scenario.name,
+                            scenarioCategory: scenario.categoryName,
+                            wouldMatchTo: matchResult.matchedItemKey,
+                            confidence: matchResult.confidence,
+                            reason: 'Below 0.75 threshold or category mismatch'
+                        });
                     }
                 }
                 
@@ -4811,6 +4897,11 @@ Return JSON only:
                     categoryId: scenario.categoryId,
                     templateId: template._id?.toString(),
                     ...auditResult,
+                    // Content hash for caching
+                    contentHash,
+                    // Blueprint match metadata
+                    matchConfidence,
+                    matchSource,
                     // Supervision metadata
                     supervision: {
                         grounded: true,
@@ -4884,7 +4975,11 @@ Return JSON only:
             perfect: perfect,
             needsWork: needsWork,
             tokensUsed: totalTokens,
-            estimatedCost: `$${(totalTokens * 0.00001).toFixed(4)}`
+            estimatedCost: `$${(totalTokens * 0.00001).toFixed(4)}`,
+            // Caching stats
+            cached: cachedCount,
+            freshAudited: results.length - cachedCount,
+            cacheHitRate: results.length > 0 ? `${Math.round((cachedCount / results.length) * 100)}%` : '0%'
         };
         
         // ════════════════════════════════════════════════════════════════════════════
@@ -4893,17 +4988,19 @@ Return JSON only:
         try {
             const scoreMap = new Map();
             for (const r of results) {
-                if (r.scenarioId && typeof r.score === 'number') {
+                if (r.scenarioId && typeof r.score === 'number' && !r.cached) {
                     scoreMap.set(r.scenarioId, {
                         score: r.score,
                         verdict: r.verdict,
                         intentFulfilled: r.intentFulfilled ?? null,
-                        blueprintMatch: r.blueprintMatch ?? null
+                        blueprintMatch: r.blueprintMatch ?? null,
+                        contentHash: r.contentHash ?? null,
+                        matchConfidence: r.matchConfidence ?? null
                     });
                 }
             }
             
-            // Update scenarios in template
+            // Update scenarios in template with audit results + content hash
             let scoresUpdated = 0;
             for (const cat of (template.categories || [])) {
                 for (const scenario of (cat.scenarios || [])) {
@@ -4914,10 +5011,14 @@ Return JSON only:
                         scenario.lastAuditVerdict = scoreData.verdict;
                         scenario.lastAuditIntentFulfilled = scoreData.intentFulfilled;
                         
-                        // Auto-assign blueprint mapping if found during audit
-                        if (scoreData.blueprintMatch && !scenario.blueprintItemKey) {
+                        // Store content hash for cache validation
+                        scenario.lastAuditContentHash = scoreData.contentHash;
+                        
+                        // Auto-assign blueprint mapping if found during audit (only high confidence)
+                        if (scoreData.blueprintMatch && !scenario.blueprintItemKey && scoreData.matchConfidence >= 0.75) {
                             scenario.blueprintItemKey = scoreData.blueprintMatch;
                             scenario.blueprintMatchSource = 'auto_match';
+                            scenario.blueprintMatchConfidence = scoreData.matchConfidence;
                             scenario.blueprintMatchedAt = new Date();
                         }
                         
@@ -5135,25 +5236,49 @@ router.post('/:companyId/audit/deep/single', async (req, res) => {
         
         // ════════════════════════════════════════════════════════════════════════════
         // BLUEPRINT-AWARE AUDIT: Get intent context if scenario is mapped
+        // CRITICAL: Only use blueprint if HIGH confidence - wrong intent = worse than none
         // ════════════════════════════════════════════════════════════════════════════
         const blueprintItemKey = scenario.blueprintItemKey;
         let blueprintIntent = null;
         let blueprintContext = '';
+        let matchConfidence = null;
+        let matchSource = null;
         
+        // PRIORITY 1: Explicit mapping (trusted)
         if (blueprintItemKey) {
             blueprintIntent = findBlueprintItem(blueprintItemKey);
+            matchSource = 'explicit_mapping';
+            matchConfidence = 1.0;
         }
         
-        // If no mapping, try to auto-match using IntentMatcher
+        // PRIORITY 2: Auto-match ONLY if high confidence (>= 0.75)
         if (!blueprintIntent && !blueprintItemKey) {
             const matcher = new IntentMatcher(HVAC_BLUEPRINT_SPEC);
             const matchResult = matcher.match(scenario);
-            if (matchResult.matched && matchResult.confidence >= 0.5) {
+            
+            // Category alignment check - prevent "Emergency" matching to "greeting"
+            const categoryAligns = matchResult.matchedItemKey && 
+                (scenario.categoryName?.toLowerCase().includes(
+                    matchResult.matchedItemKey?.replace('hvac_', '').split('_')[0]
+                ) || matchResult.confidence >= 0.85);
+            
+            if (matchResult.matched && matchResult.confidence >= 0.75 && categoryAligns) {
                 blueprintIntent = findBlueprintItem(matchResult.matchedItemKey);
+                matchSource = 'auto_match';
+                matchConfidence = matchResult.confidence;
                 logger.info('[SUPERVISED AUDIT] Auto-matched to blueprint intent', {
                     scenarioId,
                     matchedIntent: matchResult.matchedItemKey,
                     confidence: matchResult.confidence
+                });
+            } else if (matchResult.matched) {
+                logger.info('[SUPERVISED AUDIT] Skipping low-confidence match', {
+                    scenarioId,
+                    scenarioName: scenario.name,
+                    wouldMatchTo: matchResult.matchedItemKey,
+                    confidence: matchResult.confidence,
+                    categoryAligns,
+                    reason: 'Below threshold or category mismatch - will audit as generic scenario'
                 });
             }
         }
