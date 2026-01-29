@@ -45,6 +45,11 @@ const logger = require('../../utils/logger');
 const { AuditEngine, getAvailableRules } = require('../../services/scenarioAudit');
 const { buildPlaceholderGovernanceBlock, validateScenarioPlaceholders } = require('../../services/placeholders/PlaceholderRegistry');
 
+// Coverage Engine
+const HVAC_BLUEPRINT_SPEC = require('../../config/blueprints/HVAC_BLUEPRINT_SPEC');
+const IntentMatcher = require('../../services/IntentMatcher');
+const CoverageAssessor = require('../../services/CoverageAssessor');
+
 // ============================================================================
 // MIDDLEWARE - All routes require authentication
 // ============================================================================
@@ -1603,6 +1608,108 @@ router.patch('/:companyId/services-config', async (req, res) => {
     } catch (error) {
         logger.error('[SERVICES CONFIG] Update error', { error: error.message, companyId });
         return res.status(500).json({ error: 'Failed to update services config' });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// COVERAGE ENGINE - Blueprint-based intent coverage assessment
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/coverage
+ * 
+ * Assess how well the company's scenarios cover required intents from the blueprint.
+ * This is the core of the Blueprint Builder's "Assess Coverage" feature.
+ * 
+ * Returns:
+ * - summary: { good, weak, missing, skipped, needsReview }
+ * - coveragePercent: Overall coverage %
+ * - intents: Detailed status per intent
+ * - recommendations: Actionable next steps
+ */
+router.get('/:companyId/coverage', async (req, res) => {
+    const { companyId } = req.params;
+    const { blueprint = 'hvac', includeAuditScores = 'false' } = req.query;
+    
+    try {
+        // Select blueprint spec based on trade
+        let blueprintSpec;
+        if (blueprint === 'hvac' || blueprint === 'HVAC') {
+            blueprintSpec = HVAC_BLUEPRINT_SPEC;
+        } else {
+            return res.status(400).json({ error: `Unknown blueprint: ${blueprint}. Supported: hvac` });
+        }
+        
+        // Create assessor and run assessment
+        const assessor = new CoverageAssessor(blueprintSpec);
+        
+        // Optionally load audit scores
+        let auditScores = {};
+        if (includeAuditScores === 'true') {
+            // TODO: Load from last Deep Audit results
+            // For now, this can be passed in via query or we skip it
+        }
+        
+        const result = await assessor.assess(companyId, { auditScores });
+        
+        if (result.error) {
+            return res.status(400).json(result);
+        }
+        
+        logger.info('[COVERAGE] Assessment complete', {
+            companyId,
+            blueprint: blueprintSpec.blueprintId,
+            coverage: `${result.coveragePercent}%`,
+            good: result.summary.good,
+            weak: result.summary.weak,
+            missing: result.summary.missing,
+            skipped: result.summary.skipped
+        });
+        
+        return res.json(result);
+        
+    } catch (error) {
+        logger.error('[COVERAGE] Error', { companyId, error: error.message });
+        return res.status(500).json({ error: 'Coverage assessment failed', details: error.message });
+    }
+});
+
+/**
+ * POST /:companyId/coverage/match-scenario
+ * 
+ * Match a single scenario to blueprint intents (for debugging/testing)
+ */
+router.post('/:companyId/coverage/match-scenario', async (req, res) => {
+    const { companyId } = req.params;
+    const { scenario, blueprint = 'hvac' } = req.body;
+    
+    if (!scenario) {
+        return res.status(400).json({ error: 'scenario object is required' });
+    }
+    
+    try {
+        let blueprintSpec;
+        if (blueprint === 'hvac' || blueprint === 'HVAC') {
+            blueprintSpec = HVAC_BLUEPRINT_SPEC;
+        } else {
+            return res.status(400).json({ error: `Unknown blueprint: ${blueprint}` });
+        }
+        
+        const matcher = new IntentMatcher(blueprintSpec);
+        const result = matcher.match(scenario);
+        
+        return res.json({
+            success: true,
+            scenario: {
+                name: scenario.name,
+                triggers: scenario.triggers?.slice(0, 5)
+            },
+            match: result
+        });
+        
+    } catch (error) {
+        logger.error('[COVERAGE] Match error', { error: error.message });
+        return res.status(500).json({ error: 'Matching failed', details: error.message });
     }
 });
 
