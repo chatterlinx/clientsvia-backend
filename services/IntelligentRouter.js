@@ -1486,7 +1486,13 @@ class IntelligentRouter {
                 scenarioMatched: result.matched ? {
                     scenarioId: result.scenario?.scenarioId,
                     scenarioName: result.scenario?.name,
-                    confidence: result.confidence
+                    confidence: result.confidence,
+                    // ════════════════════════════════════════════════════════════════════
+                    // COMPANY LOCAL FLAG: Track if scenario came from customTemplateId
+                    // ════════════════════════════════════════════════════════════════════
+                    isCompanyLocal: result.scenario?.isCompanyLocal || false,
+                    templateId: result.scenario?.templateId,
+                    categoryName: result.scenario?.categoryName
                 } : null,
                 
                 patternsLearned: result.patternsLearned || [],
