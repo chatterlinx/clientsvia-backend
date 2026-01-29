@@ -21854,33 +21854,46 @@ ${JSON.stringify(healthData, null, 2)}
                     });
                     
                     const auditResult = await auditResponse.json();
-                    console.log('🔍 [VERIFY] GPT-4 result:', auditResult);
+                    console.log('🔍 [VERIFY] Supervised audit result:', auditResult);
                     
                     const score = auditResult.score || 0;
                     const verdict = auditResult.verdict || 'UNKNOWN';
                     const issues = auditResult.issues || [];
+                    const supervision = auditResult.supervision || {};
+                    const supervisorAgreement = auditResult.supervisorAgreement || 'N/A';
+                    
+                    // Build supervision badge
+                    let supervisionBadge = '';
+                    if (supervision.hallucinatedIssuesRemoved > 0) {
+                        supervisionBadge = `<br><span style="font-size: 11px; color: #a78bfa;">🛡️ ${supervision.hallucinatedIssuesRemoved} false positive${supervision.hallucinatedIssuesRemoved !== 1 ? 's' : ''} filtered out</span>`;
+                    }
+                    if (supervisorAgreement === 'ADJUSTED') {
+                        supervisionBadge += `<br><span style="font-size: 11px; color: #fbbf24;">⚖️ Supervisor adjusted score</span>`;
+                    } else if (supervisorAgreement === 'AGREED') {
+                        supervisionBadge += `<br><span style="font-size: 11px; color: #34d399;">✓ Supervisor verified</span>`;
+                    }
                     
                     if (score >= 9 && !auditResult.rewriteNeeded) {
                         statusIcon = '🎉';
                         statusColor = '#10b981';
                         statusText = `Perfect! ${score}/10`;
-                        statusDesc = 'GPT-4 says this scenario is excellent!';
+                        statusDesc = '3-layer supervised audit passed!' + supervisionBadge;
                     } else if (score >= 7) {
                         statusIcon = '✅';
                         statusColor = '#22c55e';
                         statusText = `Good! ${score}/10`;
                         statusDesc = issues.length > 0 
-                            ? `Minor suggestions: ${issues.length} item${issues.length !== 1 ? 's' : ''}`
-                            : 'Looking good with minor polish possible.';
+                            ? `${issues.length} verified issue${issues.length !== 1 ? 's' : ''} (supervisor checked)` + supervisionBadge
+                            : 'Looking good with minor polish possible.' + supervisionBadge;
                     } else {
                         statusIcon = '⚠️';
                         statusColor = '#f59e0b';
                         statusText = `Needs Work: ${score}/10`;
-                        statusDesc = `${issues.length} issue${issues.length !== 1 ? 's' : ''} found by GPT-4`;
+                        statusDesc = `${issues.length} verified issue${issues.length !== 1 ? 's' : ''} (grounded + supervisor checked)` + supervisionBadge;
                     }
                     
                     // Add cost info
-                    statusDesc += ` (${auditResult.estimatedCost || '$0.02'})`;
+                    statusDesc += `<br><span style="font-size: 10px; color: #6b7280;">${supervision.estimatedCost || '$0.06'}</span>`;
                     
                 } else {
                     // ════════════════════════════════════════════════════════════════════

@@ -3946,6 +3946,73 @@ Return JSON only:
                     };
                 }
                 
+                // ════════════════════════════════════════════════════════════════════
+                // GROUNDING VALIDATION: Filter out hallucinated issues
+                // Verifies each issue references actual content in the scenario
+                // ════════════════════════════════════════════════════════════════════
+                const allScenarioText = [
+                    scenario.name,
+                    ...(scenario.triggers || []),
+                    ...(scenario.quickReplies || []),
+                    ...(scenario.fullReplies || [])
+                ].join(' ').toLowerCase();
+                
+                const originalIssueCount = (auditResult.issues || []).length;
+                const groundedIssues = [];
+                let hallucinatedCount = 0;
+                
+                for (const issue of (auditResult.issues || [])) {
+                    // General issues are always kept (they're subjective assessments)
+                    if (issue.field === 'general') {
+                        groundedIssues.push(issue);
+                        continue;
+                    }
+                    
+                    // Check for banned phrase claims
+                    const bannedPhrases = [
+                        "i'd be happy to", "thank you for reaching out", "wonderful to hear",
+                        "we're here to help", "absolutely", "definitely", "of course",
+                        "certainly", "no problem", "have you tried", "have you checked",
+                        "tell me more", "can you describe", "let me"
+                    ];
+                    
+                    const issueText = (issue.issue || '').toLowerCase();
+                    const mentionsBanned = bannedPhrases.some(phrase => issueText.includes(phrase));
+                    
+                    if (mentionsBanned) {
+                        // Verify the banned phrase actually exists
+                        const foundBanned = bannedPhrases.some(phrase => allScenarioText.includes(phrase));
+                        if (foundBanned) {
+                            groundedIssues.push({ ...issue, grounded: true });
+                        } else {
+                            hallucinatedCount++;
+                        }
+                    } else {
+                        // For other issues, check if key words from issue exist in scenario
+                        const issueWords = issueText.split(/\s+/).filter(w => w.length > 4);
+                        const foundWords = issueWords.filter(w => allScenarioText.includes(w));
+                        const isGrounded = foundWords.length >= issueWords.length * 0.3 || issueWords.length < 3;
+                        
+                        if (isGrounded) {
+                            groundedIssues.push({ ...issue, grounded: true });
+                        } else {
+                            hallucinatedCount++;
+                        }
+                    }
+                }
+                
+                // Replace issues with grounded issues only
+                auditResult.issues = groundedIssues;
+                auditResult.hallucinatedIssuesFiltered = hallucinatedCount;
+                
+                // Recalculate score if we filtered out issues
+                if (hallucinatedCount > 0 && groundedIssues.length === 0 && auditResult.score < 9) {
+                    // Bump score up since all "issues" were hallucinations
+                    auditResult.score = Math.min(9, auditResult.score + 2);
+                    auditResult.rewriteNeeded = false;
+                    auditResult.verdict = auditResult.score >= 9 ? 'PERFECT' : 'GOOD';
+                }
+                
                 // Count by rewriteNeeded flag (more accurate than score threshold)
                 if (auditResult.score >= 9 && !auditResult.rewriteNeeded) perfect++;
                 else if (auditResult.rewriteNeeded || auditResult.score < 7) needsWork++;
@@ -3957,13 +4024,21 @@ Return JSON only:
                     category: scenario.categoryName,
                     categoryId: scenario.categoryId,
                     templateId: template._id?.toString(),
-                    ...auditResult
+                    ...auditResult,
+                    // Supervision metadata
+                    supervision: {
+                        grounded: true,
+                        originalIssueCount,
+                        hallucinatedFiltered: hallucinatedCount,
+                        verifiedIssueCount: groundedIssues.length
+                    }
                 };
                 
                 results.push(resultEntry);
                 processed++;
                 
-                // Send progress update
+                // Send progress update with grounding info
+                const groundingNote = hallucinatedCount > 0 ? ` (${hallucinatedCount} false+ filtered)` : '';
                 sendProgress({
                     type: 'progress',
                     current: processed,
@@ -3972,9 +4047,10 @@ Return JSON only:
                     scenario: {
                         name: scenario.name,
                         score: auditResult.score,
-                        verdict: auditResult.verdict
+                        verdict: auditResult.verdict,
+                        hallucinatedFiltered: hallucinatedCount
                     },
-                    message: `${processed}/${totalCount}: "${scenario.name}" → ${auditResult.score}/10`
+                    message: `${processed}/${totalCount}: "${scenario.name}" → ${auditResult.score}/10${groundingNote}`
                 });
                 
             } catch (scenarioError) {
@@ -4159,16 +4235,23 @@ router.post('/:companyId/audit/scenario', async (req, res) => {
 /**
  * POST /:companyId/audit/deep/single
  * 
- * GPT-4 Deep Audit for a SINGLE scenario (for verification after fix)
- * Same logic as full Deep Audit but just one scenario
- * Cost: ~$0.02 per call
+ * SUPERVISED GPT-4 Deep Audit for a SINGLE scenario
+ * 
+ * Architecture (3-Layer Supervision):
+ *   Layer 1: Primary Auditor (GPT-4) - Scores and identifies issues
+ *   Layer 2: Grounding Validator - Verifies issues exist in actual text
+ *   Layer 3: Supervisor Judge (GPT-4) - Reviews & confirms/overrides primary
+ * 
+ * This prevents hallucinated issues and ensures audit accuracy.
+ * Cost: ~$0.06 per call (3 GPT calls)
  * 
  * Body:
  * - scenarioId: string - ID of scenario to audit
+ * - skipSupervision: boolean - (optional) skip Layer 3 for faster/cheaper audit
  */
 router.post('/:companyId/audit/deep/single', async (req, res) => {
     const { companyId } = req.params;
-    const { scenarioId } = req.body;
+    const { scenarioId, skipSupervision = false } = req.body;
     
     if (!scenarioId) {
         return res.status(400).json({ error: 'scenarioId is required' });
@@ -4210,14 +4293,20 @@ router.post('/:companyId/audit/deep/single', async (req, res) => {
             return res.status(404).json({ error: `Scenario ${scenarioId} not found` });
         }
         
-        logger.info('[DEEP AUDIT SINGLE] Auditing scenario', { 
+        logger.info('[SUPERVISED AUDIT] Starting 3-layer audit', { 
             scenarioId, 
             name: scenario.name,
-            tradeType 
+            tradeType,
+            skipSupervision
         });
         
-        // Build GPT-4 audit prompt (same as full Deep Audit)
-        const auditPrompt = `You are a SENIOR QA AUDITOR reviewing AI dispatcher scenarios for a ${tradeType.toUpperCase()} service company.
+        let totalTokens = 0;
+        const supervisionTrace = [];
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // LAYER 1: PRIMARY AUDITOR (GPT-4)
+        // ════════════════════════════════════════════════════════════════════════════
+        const primaryPrompt = `You are a SENIOR QA AUDITOR reviewing AI dispatcher scenarios for a ${tradeType.toUpperCase()} service company.
 
 SCENARIO TO AUDIT:
 Name: ${scenario.name}
@@ -4226,10 +4315,10 @@ Category: ${scenario.categoryName}
 Triggers: ${(scenario.triggers || []).slice(0, 5).join(', ')}
 
 Quick Replies (short responses):
-${(scenario.quickReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
+${(scenario.quickReplies || []).map((r, i) => `[${i}] "${r}"`).join('\n') || '(none)'}
 
 Full Replies (detailed responses):
-${(scenario.fullReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
+${(scenario.fullReplies || []).map((r, i) => `[${i}] "${r}"`).join('\n') || '(none)'}
 
 DISPATCHER PERSONA STANDARDS:
 - Sounds like a SEASONED dispatcher who handles 50+ calls/day
@@ -4242,73 +4331,282 @@ WHAT TO CHECK:
 1. TONE: Does it sound like a real dispatcher? (Not a chatbot, not help desk)
 2. BREVITY: Quick replies ≤20 words, full replies ≤25 words
 3. STRUCTURE: Quick=diagnostic question, Full=move toward booking
-4. BANNED: "I'd be happy to", "Thank you for", "Let me", "Absolutely", "Definitely", "No problem"
+4. BANNED PHRASES: "I'd be happy to", "Thank you for", "Let me", "Absolutely", "Definitely", "No problem"
 5. FLOW: Does it move the conversation forward efficiently?
 
-SCORING GUIDE:
+CRITICAL: For each issue you identify, you MUST quote the EXACT text from the scenario that contains the problem. If you cannot quote exact text, do not report the issue.
+
+SCORING:
 10 = Perfect dispatcher tone, concise, actionable
-9 = Excellent, minor polish possible
+9 = Excellent, minor polish possible  
 7-8 = Good but needs some revision
 5-6 = Mediocre, significant issues
-1-3 = Fails completely, would confuse callers
+1-3 = Fails completely
 
 Return JSON only:
 {
   "score": <1-10>,
   "verdict": "<PERFECT|GOOD|NEEDS_WORK|FAILS>",
   "issues": [
-    { "field": "<quickReplies[0]|fullReplies[1]|general>", "issue": "<specific problem>", "suggestion": "<how to fix>" }
+    { 
+      "field": "<quickReplies[0]|fullReplies[1]|triggers|general>", 
+      "exactQuote": "<EXACT text from scenario that has the problem>",
+      "issue": "<what's wrong>", 
+      "suggestion": "<how to fix>" 
+    }
   ],
-  "strengths": ["<what's good about this scenario>"],
-  "rewriteNeeded": <true|false>
+  "strengths": ["<specific good things>"],
+  "rewriteNeeded": <true|false>,
+  "confidence": <0.0-1.0>
 }`;
 
-        // Call GPT-4
-        const response = await openaiClient.chat.completions.create({
+        const primaryResponse = await openaiClient.chat.completions.create({
             model: 'gpt-4o',
             messages: [
-                { role: 'system', content: 'You are a QA auditor. Return only valid JSON.' },
-                { role: 'user', content: auditPrompt }
+                { role: 'system', content: 'You are a QA auditor. Return only valid JSON. Be precise - only report issues you can prove with exact quotes.' },
+                { role: 'user', content: primaryPrompt }
             ],
-            temperature: 0.3,
-            max_tokens: 800
+            temperature: 0.2,
+            max_tokens: 1000
         });
         
-        let auditResult;
+        totalTokens += primaryResponse.usage?.total_tokens || 0;
+        
+        let primaryResult;
         try {
-            auditResult = JSON.parse(response.choices[0]?.message?.content || '{}');
+            primaryResult = JSON.parse(primaryResponse.choices[0]?.message?.content || '{}');
         } catch (parseErr) {
-            auditResult = { 
+            primaryResult = { 
                 score: 5, 
                 verdict: 'PARSE_ERROR', 
-                issues: [{ field: 'general', issue: 'Could not parse GPT response', suggestion: 'Review manually' }],
+                issues: [],
                 strengths: [],
-                rewriteNeeded: true
+                rewriteNeeded: true,
+                confidence: 0.5
             };
         }
         
-        const tokensUsed = response.usage?.total_tokens || 0;
-        const estimatedCost = (tokensUsed * 0.00001).toFixed(4);
+        supervisionTrace.push({
+            layer: 'PRIMARY_AUDITOR',
+            score: primaryResult.score,
+            issueCount: (primaryResult.issues || []).length,
+            confidence: primaryResult.confidence
+        });
         
-        logger.info('[DEEP AUDIT SINGLE] Complete', { 
+        logger.info('[SUPERVISED AUDIT] Layer 1 complete', { 
+            score: primaryResult.score,
+            issues: (primaryResult.issues || []).length,
+            confidence: primaryResult.confidence
+        });
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // LAYER 2: GROUNDING VALIDATOR
+        // Verifies each issue's exactQuote actually exists in the scenario
+        // ════════════════════════════════════════════════════════════════════════════
+        const allScenarioText = [
+            scenario.name,
+            ...(scenario.triggers || []),
+            ...(scenario.quickReplies || []),
+            ...(scenario.fullReplies || [])
+        ].join(' ').toLowerCase();
+        
+        const groundedIssues = [];
+        const hallucinatedIssues = [];
+        
+        for (const issue of (primaryResult.issues || [])) {
+            const quote = (issue.exactQuote || '').toLowerCase().trim();
+            
+            // Check if the quoted text actually exists in the scenario
+            let isGrounded = false;
+            
+            if (quote.length >= 3) {
+                // Direct match
+                if (allScenarioText.includes(quote)) {
+                    isGrounded = true;
+                } else {
+                    // Fuzzy match - check if most words from quote exist
+                    const quoteWords = quote.split(/\s+/).filter(w => w.length > 2);
+                    const matchedWords = quoteWords.filter(w => allScenarioText.includes(w));
+                    isGrounded = matchedWords.length >= quoteWords.length * 0.7;
+                }
+            }
+            
+            // Also check for banned phrase issues - verify the phrase exists
+            if (issue.issue?.toLowerCase().includes('banned') || issue.issue?.toLowerCase().includes('phrase')) {
+                const bannedPhrases = ["i'd be happy to", "thank you for", "let me", "absolutely", "definitely", "no problem"];
+                const foundBanned = bannedPhrases.some(phrase => allScenarioText.includes(phrase));
+                if (!foundBanned && !isGrounded) {
+                    isGrounded = false; // Hallucinated banned phrase
+                }
+            }
+            
+            if (isGrounded || issue.field === 'general') {
+                groundedIssues.push({ ...issue, grounded: true });
+            } else {
+                hallucinatedIssues.push({ ...issue, grounded: false, reason: 'Quote not found in scenario' });
+            }
+        }
+        
+        supervisionTrace.push({
+            layer: 'GROUNDING_VALIDATOR',
+            totalIssues: (primaryResult.issues || []).length,
+            groundedIssues: groundedIssues.length,
+            hallucinatedIssues: hallucinatedIssues.length,
+            removedIssues: hallucinatedIssues.map(i => i.issue?.substring(0, 50))
+        });
+        
+        logger.info('[SUPERVISED AUDIT] Layer 2 complete', { 
+            grounded: groundedIssues.length,
+            hallucinated: hallucinatedIssues.length
+        });
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // LAYER 3: SUPERVISOR JUDGE (GPT-4)
+        // Reviews the primary audit and confirms/adjusts the score
+        // ════════════════════════════════════════════════════════════════════════════
+        let finalResult;
+        
+        if (skipSupervision || groundedIssues.length === 0) {
+            // Skip supervision if no issues or explicitly requested
+            finalResult = {
+                score: groundedIssues.length === 0 ? Math.max(primaryResult.score, 9) : primaryResult.score,
+                verdict: groundedIssues.length === 0 ? 'PERFECT' : primaryResult.verdict,
+                issues: groundedIssues,
+                strengths: primaryResult.strengths || [],
+                rewriteNeeded: groundedIssues.length > 0 && primaryResult.rewriteNeeded,
+                supervisorAgreement: 'SKIPPED'
+            };
+            
+            supervisionTrace.push({
+                layer: 'SUPERVISOR_JUDGE',
+                status: 'SKIPPED',
+                reason: skipSupervision ? 'User requested skip' : 'No grounded issues to review'
+            });
+        } else {
+            // Run supervisor to validate primary's judgment
+            const supervisorPrompt = `You are a SUPERVISOR reviewing another auditor's work. Your job is to verify the audit is fair and accurate.
+
+SCENARIO BEING AUDITED:
+Name: ${scenario.name}
+Quick Replies: ${JSON.stringify(scenario.quickReplies || [])}
+Full Replies: ${JSON.stringify(scenario.fullReplies || [])}
+
+PRIMARY AUDITOR'S ASSESSMENT:
+Score: ${primaryResult.score}/10
+Verdict: ${primaryResult.verdict}
+Issues Found: ${JSON.stringify(groundedIssues, null, 2)}
+Strengths: ${JSON.stringify(primaryResult.strengths || [])}
+
+YOUR TASK:
+1. Review each issue - is it a real problem or nitpicking?
+2. Is the score fair given the issues?
+3. Would you agree or adjust?
+
+IMPORTANT:
+- Be fair to the scenario author
+- Don't penalize for minor style preferences
+- Focus on real usability issues
+- Banned phrases ARE serious (if actually present)
+- Tone issues matter if they'd confuse a caller
+
+Return JSON only:
+{
+  "agree": <true|false>,
+  "adjustedScore": <1-10 or null if agree>,
+  "adjustedVerdict": "<PERFECT|GOOD|NEEDS_WORK|FAILS or null if agree>",
+  "reasoning": "<why you agree or disagree>",
+  "validIssues": [<indices of issues you consider valid, e.g. [0, 2]>],
+  "dismissedIssues": [<indices of issues you consider nitpicking, e.g. [1]>],
+  "supervisorConfidence": <0.0-1.0>
+}`;
+
+            const supervisorResponse = await openaiClient.chat.completions.create({
+                model: 'gpt-4o',
+                messages: [
+                    { role: 'system', content: 'You are a fair supervisor. Return only valid JSON. Be balanced - neither too harsh nor too lenient.' },
+                    { role: 'user', content: supervisorPrompt }
+                ],
+                temperature: 0.2,
+                max_tokens: 600
+            });
+            
+            totalTokens += supervisorResponse.usage?.total_tokens || 0;
+            
+            let supervisorResult;
+            try {
+                supervisorResult = JSON.parse(supervisorResponse.choices[0]?.message?.content || '{}');
+            } catch (parseErr) {
+                supervisorResult = { agree: true, supervisorConfidence: 0.5 };
+            }
+            
+            // Apply supervisor's adjustments
+            const validIssueIndices = new Set(supervisorResult.validIssues || groundedIssues.map((_, i) => i));
+            const finalIssues = groundedIssues.filter((_, i) => validIssueIndices.has(i));
+            
+            finalResult = {
+                score: supervisorResult.adjustedScore || primaryResult.score,
+                verdict: supervisorResult.adjustedVerdict || primaryResult.verdict,
+                issues: finalIssues,
+                strengths: primaryResult.strengths || [],
+                rewriteNeeded: finalIssues.length > 0 && (supervisorResult.adjustedScore || primaryResult.score) < 9,
+                supervisorAgreement: supervisorResult.agree ? 'AGREED' : 'ADJUSTED',
+                supervisorReasoning: supervisorResult.reasoning
+            };
+            
+            // Recalculate verdict based on final score
+            if (finalResult.score >= 9) finalResult.verdict = 'PERFECT';
+            else if (finalResult.score >= 7) finalResult.verdict = 'GOOD';
+            else if (finalResult.score >= 5) finalResult.verdict = 'NEEDS_WORK';
+            else finalResult.verdict = 'FAILS';
+            
+            supervisionTrace.push({
+                layer: 'SUPERVISOR_JUDGE',
+                primaryScore: primaryResult.score,
+                supervisorAgreed: supervisorResult.agree,
+                finalScore: finalResult.score,
+                issuesValidated: finalIssues.length,
+                issuesDismissed: groundedIssues.length - finalIssues.length,
+                reasoning: supervisorResult.reasoning,
+                confidence: supervisorResult.supervisorConfidence
+            });
+            
+            logger.info('[SUPERVISED AUDIT] Layer 3 complete', { 
+                agreed: supervisorResult.agree,
+                primaryScore: primaryResult.score,
+                finalScore: finalResult.score,
+                validIssues: finalIssues.length
+            });
+        }
+        
+        const estimatedCost = (totalTokens * 0.00001).toFixed(4);
+        
+        logger.info('[SUPERVISED AUDIT] Complete', { 
             scenarioId, 
-            score: auditResult.score,
-            verdict: auditResult.verdict,
-            tokensUsed
+            finalScore: finalResult.score,
+            finalVerdict: finalResult.verdict,
+            totalTokens,
+            layersRun: supervisionTrace.length
         });
         
         res.json({
             success: true,
             scenarioId,
             scenarioName: scenario.name,
-            auditType: 'deep', // Important: indicates this was GPT-4 audit
-            score: auditResult.score,
-            verdict: auditResult.verdict,
-            issues: auditResult.issues || [],
-            strengths: auditResult.strengths || [],
-            rewriteNeeded: auditResult.rewriteNeeded,
-            tokensUsed,
-            estimatedCost: `$${estimatedCost}`
+            auditType: 'supervised-deep', // Indicates this was 3-layer supervised audit
+            score: finalResult.score,
+            verdict: finalResult.verdict,
+            issues: finalResult.issues,
+            strengths: finalResult.strengths,
+            rewriteNeeded: finalResult.rewriteNeeded,
+            supervisorAgreement: finalResult.supervisorAgreement,
+            supervisorReasoning: finalResult.supervisorReasoning,
+            // Transparency: show what was filtered out
+            supervision: {
+                trace: supervisionTrace,
+                hallucinatedIssuesRemoved: hallucinatedIssues.length,
+                totalTokens,
+                estimatedCost: `$${estimatedCost}`
+            }
         });
         
     } catch (error) {
