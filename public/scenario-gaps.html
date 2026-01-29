@@ -2320,6 +2320,32 @@
                 <!-- Recommendations Panel -->
                 <div id="coverage-recommendations" style="display: none; margin-bottom: 20px;"></div>
                 
+                <!-- Fix All Actions Panel -->
+                <div id="fix-all-panel" style="display: none; margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.1)); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3 style="margin: 0 0 4px 0; font-size: 16px; color: #a78bfa;">
+                                <i class="fas fa-wand-magic-sparkles"></i> Fix Weak + Add Missing
+                            </h3>
+                            <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">
+                                One-click: Generate and import all fixable intents (<span id="fix-all-count">0</span> total)
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 12px;">
+                            <button onclick="runFixAll(true)" style="padding: 10px 16px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;">
+                                <i class="fas fa-eye"></i> Preview (Dry Run)
+                            </button>
+                            <button onclick="runFixAll(false)" id="fix-all-btn" style="padding: 10px 20px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 14px; font-weight: 600;">
+                                <i class="fas fa-magic"></i> Fix All Now
+                            </button>
+                        </div>
+                    </div>
+                    <div id="fix-all-breakdown" style="margin-top: 12px; display: flex; gap: 16px; font-size: 12px;">
+                        <span style="color: #f59e0b;"><i class="fas fa-arrows-rotate"></i> <span id="fix-weak-count">0</span> weak → replace</span>
+                        <span style="color: #22c55e;"><i class="fas fa-plus"></i> <span id="fix-missing-count">0</span> missing → add</span>
+                    </div>
+                </div>
+                
                 <!-- Generate Missing Button -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <div>
@@ -5650,6 +5676,112 @@
             updateSelectedCount();
         }
         
+        // ════════════════════════════════════════════════════════════════════════════════
+        // FIX ALL - One-click fix weak + add missing
+        // ════════════════════════════════════════════════════════════════════════════════
+        async function runFixAll(dryRun = false) {
+            const btn = document.getElementById('fix-all-btn');
+            const originalText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = dryRun 
+                ? '<i class="fas fa-spinner fa-spin"></i> Previewing...'
+                : '<i class="fas fa-spinner fa-spin"></i> Fixing...';
+            
+            try {
+                const token = getAuthToken();
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/coverage/fix-all`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        blueprint: 'hvac',
+                        includeWeak: true,
+                        includeMissing: true,
+                        dryRun
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Fix-all failed');
+                }
+                
+                if (dryRun) {
+                    // Show preview modal
+                    showFixAllPreview(result);
+                } else {
+                    // Show success and refresh coverage
+                    alert(`✅ Fixed ${result.importResults?.filter(r => r.imported)?.length || 0} intents!\n\nEstimated new coverage: ${result.newCoverage?.estimated}%`);
+                    
+                    // Refresh coverage assessment
+                    await runBlueprintAssessment();
+                }
+                
+                console.log('✅ [FIX-ALL] Complete:', result);
+                
+            } catch (error) {
+                console.error('[FIX-ALL] Error:', error);
+                alert('Fix-all failed: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+        
+        function showFixAllPreview(result) {
+            const previewHtml = `
+                <div style="max-height: 400px; overflow-y: auto;">
+                    <h4 style="margin-top: 0;">Dry Run Preview</h4>
+                    <p style="color: var(--text-secondary);">
+                        Would generate <strong>${result.generated?.readyToImport || 0}</strong> scenarios:
+                    </p>
+                    <ul style="list-style: none; padding: 0;">
+                        ${(result.results || []).map(r => `
+                            <li style="padding: 8px 12px; margin: 4px 0; background: ${r.readyToImport ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'}; border-radius: 6px; border-left: 3px solid ${r.readyToImport ? '#22c55e' : '#ef4444'};">
+                                <strong>${escapeHtml(r.intentKey)}</strong>
+                                <span style="color: var(--text-muted); margin-left: 8px;">${r.action}</span>
+                                ${r.readyToImport ? '<span style="color: #22c55e; margin-left: 8px;">✓ Ready</span>' : `<span style="color: #ef4444; margin-left: 8px;">✗ ${escapeHtml(r.validation?.issues?.[0]?.message || 'Failed')}</span>`}
+                            </li>
+                        `).join('')}
+                    </ul>
+                    <p style="margin-top: 16px; font-size: 13px; color: var(--text-muted);">
+                        Click "Fix All Now" to generate and import these scenarios.
+                    </p>
+                </div>
+            `;
+            
+            // Show in a simple alert or modal - using alert for now
+            const summary = `DRY RUN PREVIEW\n\nWould fix ${result.generated?.readyToImport || 0} intents.\n\n${(result.results || []).map(r => `${r.intentKey} (${r.action}) - ${r.readyToImport ? '✓ Ready' : '✗ Failed'}`).join('\n')}\n\nClick "Fix All Now" to proceed.`;
+            alert(summary);
+        }
+        
+        // Update Fix All panel with counts
+        function updateFixAllPanel(coverageResult) {
+            const panel = document.getElementById('fix-all-panel');
+            if (!panel) return;
+            
+            const ce = coverageResult.coverageEngine || {};
+            const summary = ce.summary || {};
+            
+            // Only show for non-global scope items that can be fixed
+            const weakCount = (ce.byStatus?.weak || []).filter(i => !i.serviceKey).length;
+            const missingCount = (ce.byStatus?.missing || []).filter(i => !i.serviceKey).length;
+            const totalFixable = weakCount + missingCount;
+            
+            if (totalFixable > 0) {
+                panel.style.display = 'block';
+                document.getElementById('fix-all-count').textContent = totalFixable;
+                document.getElementById('fix-weak-count').textContent = weakCount;
+                document.getElementById('fix-missing-count').textContent = missingCount;
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+        
         function renderBlueprintAssessment(result) {
             // Hide initial state, show summary
             document.getElementById('blueprint-initial').style.display = 'none';
@@ -5694,6 +5826,9 @@
             
             // Render recommendations
             renderCoverageRecommendations(ce.recommendations || []);
+            
+            // Update Fix All panel
+            updateFixAllPanel(result);
             
             // ════════════════════════════════════════════════════════════════════════════════
             // RENDER MODE BANNER + ACTION BUTTONS (based on explicit actions from backend)
