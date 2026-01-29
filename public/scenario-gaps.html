@@ -2281,29 +2281,44 @@
                 <!-- Mode Banner (populated by JS) -->
                 <div id="blueprint-mode-banner" style="display: none;"></div>
                 
-                <!-- Coverage Stats -->
+                <!-- Coverage Stats (Coverage Engine style) -->
                 <div class="health-score-card" style="margin-bottom: 24px;">
                     <div class="health-score" id="blueprint-coverage-score">--%</div>
-                    <div class="health-label">Blueprint Coverage</div>
+                    <div class="health-label">Intent Coverage</div>
                     <div class="health-stats">
                         <div class="health-stat">
                             <div class="health-stat-value" id="bp-total" style="color: var(--accent-purple);">--</div>
-                            <div class="health-stat-label">Total in Blueprint</div>
+                            <div class="health-stat-label">Total Intents</div>
                         </div>
-                        <div class="health-stat" title="Scenarios matched to blueprint items">
-                            <div class="health-stat-value" id="bp-covered" style="color: var(--accent-green);">--</div>
-                            <div class="health-stat-label">Covered</div>
+                        <div class="health-stat" title="Well-covered with audit score >= 8">
+                            <div class="health-stat-value" id="bp-good" style="color: #22c55e;">--</div>
+                            <div class="health-stat-label">✓ Good</div>
                         </div>
-                        <div class="health-stat" title="Blueprint items without matching scenarios">
-                            <div class="health-stat-value" id="bp-missing" style="color: var(--accent-red);">--</div>
-                            <div class="health-stat-label">Missing</div>
+                        <div class="health-stat" title="Covered but audit score 5-7">
+                            <div class="health-stat-value" id="bp-weak" style="color: #f59e0b;">--</div>
+                            <div class="health-stat-label">⚠ Weak</div>
                         </div>
-                        <div class="health-stat" title="Required items missing">
-                            <div class="health-stat-value" id="bp-required-missing" style="color: var(--accent-yellow);">--</div>
-                            <div class="health-stat-label">Required Missing</div>
+                        <div class="health-stat" title="No scenario maps to this intent">
+                            <div class="health-stat-value" id="bp-missing" style="color: #ef4444;">--</div>
+                            <div class="health-stat-label">✗ Missing</div>
+                        </div>
+                        <div class="health-stat" title="Service disabled - skipped">
+                            <div class="health-stat-value" id="bp-skipped" style="color: #6b7280;">--</div>
+                            <div class="health-stat-label">⊘ Skipped</div>
                         </div>
                     </div>
+                    <!-- Coverage breakdown bar -->
+                    <div id="coverage-breakdown-bar" style="margin-top: 16px; height: 12px; background: rgba(0,0,0,0.3); border-radius: 6px; overflow: hidden; display: flex;"></div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                        <span>Good (8+)</span>
+                        <span>Weak (5-7)</span>
+                        <span>Missing</span>
+                        <span>Skipped</span>
+                    </div>
                 </div>
+                
+                <!-- Recommendations Panel -->
+                <div id="coverage-recommendations" style="display: none; margin-bottom: 20px;"></div>
                 
                 <!-- Generate Missing Button -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -5468,16 +5483,10 @@
                 // Load services config for service-aware rendering
                 await loadBlueprintServicesConfig();
                 
-                // Fetch blueprint spec first (for copy/export)
-                const specResponse = await fetch(`/api/admin/blueprints/${tradeKey}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (specResponse.ok) {
-                    window.__lastBlueprintSpec = await specResponse.json();
-                }
-                
-                // Fetch assessment
-                const response = await fetch(`/api/admin/blueprints/${tradeKey}/assess?companyId=${companyId}&source=activePool`, {
+                // ════════════════════════════════════════════════════════════════════════════════
+                // USE NEW COVERAGE ENGINE ENDPOINT
+                // ════════════════════════════════════════════════════════════════════════════════
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/coverage?blueprint=${tradeKey}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -5487,24 +5496,28 @@
                 
                 const result = await response.json();
                 
-                if (!result.success) {
-                    throw new Error(result.error || 'Assessment failed');
+                if (result.error) {
+                    throw new Error(result.error);
                 }
                 
-                blueprintAssessment = result;
-                window.__lastBlueprintAssess = result; // Store for copy/export
+                // Transform result to match existing UI expectations
+                const transformed = transformCoverageResult(result);
+                
+                blueprintAssessment = transformed;
+                window.__lastBlueprintAssess = result; // Store raw for copy/export
+                window.__lastCoverageEngineResult = result; // Store for debugging
                 selectedBlueprintItems.clear();
                 
                 // Update UI
-                renderBlueprintAssessment(result);
+                renderBlueprintAssessment(transformed);
                 
                 // Update badge
                 const badge = document.getElementById('blueprint-badge');
-                badge.textContent = `${result.coverage.percent}%`;
-                badge.style.background = result.coverage.percent >= 80 ? '#22c55e' : result.coverage.percent >= 50 ? '#f59e0b' : '#ef4444';
+                badge.textContent = `${result.coveragePercent}%`;
+                badge.style.background = result.healthyPercent >= 80 ? '#22c55e' : result.coveragePercent >= 50 ? '#f59e0b' : '#ef4444';
                 
-                console.log('✅ [BLUEPRINT] Assessment complete:', result.coverage);
-                console.log('✅ [BLUEPRINT] Spec and Assess JSON stored for copy/export');
+                console.log('✅ [COVERAGE ENGINE] Assessment complete:', result.summary);
+                console.log('✅ [COVERAGE ENGINE] Good:', result.summary.good, 'Weak:', result.summary.weak, 'Missing:', result.summary.missing, 'Skipped:', result.summary.skipped);
                 
             } catch (error) {
                 console.error('[BLUEPRINT] Assessment error:', error);
@@ -5515,6 +5528,128 @@
             }
         }
         
+        // ════════════════════════════════════════════════════════════════════════════════
+        // TRANSFORM COVERAGE ENGINE RESULT TO MATCH EXISTING UI
+        // ════════════════════════════════════════════════════════════════════════════════
+        function transformCoverageResult(result) {
+            // Group missing by category for existing UI
+            const missingByCategory = {};
+            for (const intent of (result.byStatus?.missing || [])) {
+                const catKey = intent.categoryKey || 'unknown';
+                if (!missingByCategory[catKey]) {
+                    missingByCategory[catKey] = [];
+                }
+                missingByCategory[catKey].push({
+                    itemKey: intent.itemKey,
+                    name: intent.itemName,
+                    categoryKey: intent.categoryKey,
+                    categoryName: intent.categoryName,
+                    required: intent.required,
+                    serviceKey: intent.serviceKey,
+                    scenarioType: 'BOOKING', // Default, can be enhanced
+                    replyGoal: 'classify',
+                    triggerHints: [] // Would need blueprint data
+                });
+            }
+            
+            // Calculate totals
+            const coveredCount = result.summary.good + result.summary.weak + result.summary.needsReview;
+            
+            return {
+                success: true,
+                mode: coveredCount < 10 ? 'GREENFIELD_FULL_PACK' : 'FILLING_GAPS',
+                coverage: {
+                    percent: result.coveragePercent,
+                    totalInBlueprint: result.summary.total,
+                    totalCovered: coveredCount,
+                    existingScenarios: result.scenariosAnalyzed || 0
+                },
+                stats: {
+                    totalRequired: result.intents?.filter(i => i.required)?.length || 0,
+                    missingRequired: result.byStatus?.missing?.filter(i => i.required)?.length || 0
+                },
+                missingItems: result.byStatus?.missing || [],
+                missingByCategory,
+                
+                // NEW: Coverage Engine specific data
+                coverageEngine: {
+                    byStatus: result.byStatus,
+                    summary: result.summary,
+                    recommendations: result.recommendations,
+                    healthyPercent: result.healthyPercent
+                }
+            };
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // RENDER COVERAGE RECOMMENDATIONS
+        // ════════════════════════════════════════════════════════════════════════════════
+        function renderCoverageRecommendations(recommendations) {
+            const container = document.getElementById('coverage-recommendations');
+            if (!container) return;
+            
+            if (!recommendations || recommendations.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            container.style.display = 'block';
+            
+            const priorityColors = {
+                HIGH: { bg: 'rgba(239, 68, 68, 0.1)', border: '#ef4444', icon: 'exclamation-triangle' },
+                MEDIUM: { bg: 'rgba(245, 158, 11, 0.1)', border: '#f59e0b', icon: 'info-circle' },
+                LOW: { bg: 'rgba(107, 114, 128, 0.1)', border: '#6b7280', icon: 'lightbulb' }
+            };
+            
+            let html = `
+                <div style="background: var(--bg-secondary); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+                    <h4 style="margin: 0 0 12px 0; font-size: 14px; color: var(--text-primary);">
+                        <i class="fas fa-clipboard-check"></i> Recommendations
+                    </h4>
+            `;
+            
+            for (const rec of recommendations) {
+                const style = priorityColors[rec.priority] || priorityColors.LOW;
+                html += `
+                    <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: ${style.bg}; border-left: 3px solid ${style.border}; border-radius: 6px; margin-bottom: 8px;">
+                        <i class="fas fa-${style.icon}" style="color: ${style.border}; margin-top: 2px;"></i>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; font-size: 13px; color: white; margin-bottom: 4px;">
+                                ${escapeHtml(rec.message)}
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">
+                                ${escapeHtml(rec.action)}
+                            </div>
+                            ${rec.intents?.length > 3 ? `
+                                <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                                    ${rec.intents.length} intents affected
+                                </div>
+                            ` : ''}
+                        </div>
+                        ${rec.type === 'MISSING_REQUIRED' || rec.type === 'WEAK_REQUIRED' ? `
+                            <button onclick="selectRecommendedIntents(${JSON.stringify(rec.intents).replace(/"/g, '&quot;')})" 
+                                    style="padding: 6px 12px; background: ${style.border}; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 11px; white-space: nowrap;">
+                                <i class="fas fa-check"></i> Select
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            html += '</div>';
+            container.innerHTML = html;
+        }
+        
+        // Select intents from recommendation
+        function selectRecommendedIntents(intentKeys) {
+            for (const key of intentKeys) {
+                selectedBlueprintItems.add(key);
+                const checkbox = document.querySelector(`input[value="${key}"]`);
+                if (checkbox) checkbox.checked = true;
+            }
+            updateSelectedCount();
+        }
+        
         function renderBlueprintAssessment(result) {
             // Hide initial state, show summary
             document.getElementById('blueprint-initial').style.display = 'none';
@@ -5523,16 +5658,42 @@
             // Store mode for later use
             window.__blueprintMode = result.mode;
             
-            // Update coverage stats
-            document.getElementById('blueprint-coverage-score').textContent = `${result.coverage.percent}%`;
-            document.getElementById('blueprint-coverage-score').style.color = 
-                result.coverage.percent >= 80 ? 'var(--accent-green)' : 
-                result.coverage.percent >= 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+            // Get coverage engine data (if available)
+            const ce = result.coverageEngine || {};
+            const summary = ce.summary || {};
             
-            document.getElementById('bp-total').textContent = result.coverage.totalInBlueprint;
-            document.getElementById('bp-covered').textContent = result.coverage.totalCovered;
-            document.getElementById('bp-missing').textContent = result.missingItems.length;
-            document.getElementById('bp-required-missing').textContent = result.stats.missingRequired;
+            // Update coverage stats
+            const coveragePercent = result.coverage?.percent || 0;
+            document.getElementById('blueprint-coverage-score').textContent = `${coveragePercent}%`;
+            document.getElementById('blueprint-coverage-score').style.color = 
+                coveragePercent >= 80 ? 'var(--accent-green)' : 
+                coveragePercent >= 50 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+            
+            // Update new stat boxes
+            document.getElementById('bp-total').textContent = summary.total || result.coverage?.totalInBlueprint || '--';
+            document.getElementById('bp-good').textContent = summary.good || '--';
+            document.getElementById('bp-weak').textContent = summary.weak || '--';
+            document.getElementById('bp-missing').textContent = summary.missing || result.missingItems?.length || '--';
+            document.getElementById('bp-skipped').textContent = summary.skipped || 0;
+            
+            // Update coverage breakdown bar
+            const barEl = document.getElementById('coverage-breakdown-bar');
+            if (barEl && summary.total > 0) {
+                const goodPct = (summary.good / summary.total) * 100;
+                const weakPct = (summary.weak / summary.total) * 100;
+                const missingPct = (summary.missing / summary.total) * 100;
+                const skippedPct = (summary.skipped / summary.total) * 100;
+                
+                barEl.innerHTML = `
+                    <div style="width: ${goodPct}%; background: #22c55e; transition: width 0.3s;"></div>
+                    <div style="width: ${weakPct}%; background: #f59e0b; transition: width 0.3s;"></div>
+                    <div style="width: ${missingPct}%; background: #ef4444; transition: width 0.3s;"></div>
+                    <div style="width: ${skippedPct}%; background: #6b7280; transition: width 0.3s;"></div>
+                `;
+            }
+            
+            // Render recommendations
+            renderCoverageRecommendations(ce.recommendations || []);
             
             // ════════════════════════════════════════════════════════════════════════════════
             // RENDER MODE BANNER + ACTION BUTTONS (based on explicit actions from backend)
