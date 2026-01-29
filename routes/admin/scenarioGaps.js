@@ -4583,6 +4583,11 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         req.setTimeout(0);
         res.setTimeout(0);
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // BLUEPRINT-AWARE AUDIT: Create matcher for intent lookup
+        // ════════════════════════════════════════════════════════════════════════════
+        const matcher = new IntentMatcher(HVAC_BLUEPRINT_SPEC);
+        
         for (const scenario of scenariosToAudit) {
             // Check if we've hit too many consecutive errors (likely API issue)
             if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -4595,6 +4600,41 @@ router.post('/:companyId/audit/deep', async (req, res) => {
             }
             
             try {
+                // ════════════════════════════════════════════════════════════════
+                // Get blueprint context for this scenario
+                // ════════════════════════════════════════════════════════════════
+                let blueprintIntent = null;
+                let blueprintContext = '';
+                
+                // Check if scenario has explicit mapping
+                if (scenario.blueprintItemKey) {
+                    blueprintIntent = findBlueprintItem(scenario.blueprintItemKey);
+                }
+                
+                // If no explicit mapping, try auto-match
+                if (!blueprintIntent) {
+                    const matchResult = matcher.match(scenario);
+                    if (matchResult.matched && matchResult.confidence >= 0.5) {
+                        blueprintIntent = findBlueprintItem(matchResult.matchedItemKey);
+                    }
+                }
+                
+                // Build blueprint context
+                if (blueprintIntent) {
+                    blueprintContext = `
+═══════════════════════════════════════════════════════════════════════════════
+BLUEPRINT INTENT (This scenario's PURPOSE):
+Intent: ${blueprintIntent.name} (${blueprintIntent.itemKey})
+Type: ${blueprintIntent.scenarioType} | Goal: ${blueprintIntent.replyGoal || 'classify'}
+Booking: ${blueprintIntent.bookingIntent ? 'YES' : 'NO'}
+Expected Triggers: ${(blueprintIntent.triggerHints || []).slice(0, 5).join(', ')}
+Notes: ${blueprintIntent.notes || 'N/A'}
+
+CRITICAL: Score based on how well this scenario fulfills this specific intent!
+═══════════════════════════════════════════════════════════════════════════════
+`;
+                }
+                
                 const auditPrompt = `You are a SENIOR QA AUDITOR reviewing AI dispatcher scenarios for a ${tradeType.toUpperCase()} service company.
 
 SCENARIO TO AUDIT:
@@ -4608,7 +4648,7 @@ ${(scenario.quickReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || 
 
 Full Replies (detailed responses):
 ${(scenario.fullReplies || []).map((r, i) => `${i + 1}. "${r}"`).join('\n') || '(none)'}
-
+${blueprintContext}
 DISPATCHER PERSONA STANDARDS:
 - Sounds like a SEASONED dispatcher who handles 50+ calls/day
 - Calm, confident, experienced - never surprised
@@ -4626,16 +4666,26 @@ AUTOMATIC FAILURES:
 - Vague questions: "tell me more", "can you describe"
 
 RATE THIS SCENARIO 1-10:
+${blueprintIntent ? `
+BLUEPRINT-AWARE SCORING (most important = intent fulfillment):
+10 = Perfect: Fulfills intent perfectly + dispatcher tone
+8-9 = Good: Fulfills intent well, minor polish
+6-7 = Acceptable: Fulfills intent but tone issues
+4-5 = Needs work: Partially fulfills intent OR wrong approach
+1-3 = Fails: Does not fulfill its intended purpose` : `
+GENERAL SCORING:
 10 = Perfect dispatcher. Would hire this person.
 8-9 = Good, minor tweaks possible
 6-7 = Acceptable but noticeably imperfect
 4-5 = Needs work, sounds like chatbot/help desk
-1-3 = Fails completely, would confuse callers
+1-3 = Fails completely, would confuse callers`}
 
 Return JSON only:
 {
   "score": <1-10>,
   "verdict": "<PERFECT|GOOD|NEEDS_WORK|FAILS>",
+  "blueprintMatch": ${blueprintIntent ? `"${blueprintIntent.itemKey}"` : 'null'},
+  "intentFulfilled": ${blueprintIntent ? '<true|false>' : 'null'},
   "issues": [
     { "field": "<quickReplies[0]|fullReplies[1]|general>", "issue": "<specific problem>", "suggestion": "<how to fix>" }
   ],
@@ -4837,6 +4887,60 @@ Return JSON only:
             estimatedCost: `$${(totalTokens * 0.00001).toFixed(4)}`
         };
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // PERSIST AUDIT SCORES TO SCENARIOS (for Coverage Engine integration)
+        // ════════════════════════════════════════════════════════════════════════════
+        try {
+            const scoreMap = new Map();
+            for (const r of results) {
+                if (r.scenarioId && typeof r.score === 'number') {
+                    scoreMap.set(r.scenarioId, {
+                        score: r.score,
+                        verdict: r.verdict,
+                        intentFulfilled: r.intentFulfilled ?? null,
+                        blueprintMatch: r.blueprintMatch ?? null
+                    });
+                }
+            }
+            
+            // Update scenarios in template
+            let scoresUpdated = 0;
+            for (const cat of (template.categories || [])) {
+                for (const scenario of (cat.scenarios || [])) {
+                    const scoreData = scoreMap.get(scenario.scenarioId);
+                    if (scoreData) {
+                        scenario.lastAuditScore = scoreData.score;
+                        scenario.lastAuditedAt = new Date();
+                        scenario.lastAuditVerdict = scoreData.verdict;
+                        scenario.lastAuditIntentFulfilled = scoreData.intentFulfilled;
+                        
+                        // Auto-assign blueprint mapping if found during audit
+                        if (scoreData.blueprintMatch && !scenario.blueprintItemKey) {
+                            scenario.blueprintItemKey = scoreData.blueprintMatch;
+                            scenario.blueprintMatchSource = 'auto_match';
+                            scenario.blueprintMatchedAt = new Date();
+                        }
+                        
+                        scoresUpdated++;
+                    }
+                }
+            }
+            
+            if (scoresUpdated > 0) {
+                await template.save();
+                logger.info('[DEEP AUDIT] Persisted scores to scenarios', {
+                    companyId,
+                    scoresUpdated,
+                    templateId: template._id.toString()
+                });
+            }
+        } catch (persistError) {
+            logger.error('[DEEP AUDIT] Failed to persist scores', {
+                error: persistError.message
+            });
+            // Don't fail the audit, just log
+        }
+        
         logger.info('[DEEP AUDIT] Completed', {
             companyId,
             ...summary
@@ -5029,18 +5133,75 @@ router.post('/:companyId/audit/deep/single', async (req, res) => {
             return res.status(404).json({ error: `Scenario ${scenarioId} not found` });
         }
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // BLUEPRINT-AWARE AUDIT: Get intent context if scenario is mapped
+        // ════════════════════════════════════════════════════════════════════════════
+        const blueprintItemKey = scenario.blueprintItemKey;
+        let blueprintIntent = null;
+        let blueprintContext = '';
+        
+        if (blueprintItemKey) {
+            blueprintIntent = findBlueprintItem(blueprintItemKey);
+        }
+        
+        // If no mapping, try to auto-match using IntentMatcher
+        if (!blueprintIntent && !blueprintItemKey) {
+            const matcher = new IntentMatcher(HVAC_BLUEPRINT_SPEC);
+            const matchResult = matcher.match(scenario);
+            if (matchResult.matched && matchResult.confidence >= 0.5) {
+                blueprintIntent = findBlueprintItem(matchResult.matchedItemKey);
+                logger.info('[SUPERVISED AUDIT] Auto-matched to blueprint intent', {
+                    scenarioId,
+                    matchedIntent: matchResult.matchedItemKey,
+                    confidence: matchResult.confidence
+                });
+            }
+        }
+        
+        // Build blueprint context for the prompt
+        if (blueprintIntent) {
+            blueprintContext = `
+═══════════════════════════════════════════════════════════════════════════════
+BLUEPRINT INTENT REQUIREMENTS (This scenario MUST fulfill this purpose):
+═══════════════════════════════════════════════════════════════════════════════
+Intent: ${blueprintIntent.name} (${blueprintIntent.itemKey})
+Purpose: ${blueprintIntent.scenarioType} scenario for ${blueprintIntent.categoryName}
+Reply Goal: ${blueprintIntent.replyGoal || 'classify'}
+Booking Intent: ${blueprintIntent.bookingIntent ? 'YES - must guide toward booking' : 'NO - informational only'}
+
+Expected Trigger Coverage: ${(blueprintIntent.triggerHints || []).join(', ')}
+Should NOT Match: ${(blueprintIntent.negativeTriggerHints || []).join(', ') || 'N/A'}
+
+Special Notes: ${blueprintIntent.notes || 'None'}
+
+CRITICAL AUDIT CRITERIA FOR THIS INTENT:
+1. Does the scenario's triggers adequately cover the intent's trigger hints?
+2. Does the reply goal (${blueprintIntent.replyGoal}) match what the responses actually do?
+3. If booking intent is ${blueprintIntent.bookingIntent ? 'YES' : 'NO'}, do responses reflect this?
+4. Are the responses appropriate for a ${blueprintIntent.scenarioType} scenario?
+═══════════════════════════════════════════════════════════════════════════════
+`;
+        } else {
+            blueprintContext = `
+NOTE: This scenario is NOT mapped to a blueprint intent.
+Audit for general quality standards only.
+`;
+        }
+        
         logger.info('[SUPERVISED AUDIT] Starting 3-layer audit', { 
             scenarioId, 
             name: scenario.name,
             tradeType,
-            skipSupervision
+            skipSupervision,
+            blueprintItemKey: blueprintItemKey || 'none',
+            autoMatched: !blueprintItemKey && !!blueprintIntent
         });
         
         let totalTokens = 0;
         const supervisionTrace = [];
         
         // ════════════════════════════════════════════════════════════════════════════
-        // LAYER 1: PRIMARY AUDITOR (GPT-4)
+        // LAYER 1: PRIMARY AUDITOR (GPT-4) - NOW BLUEPRINT-AWARE
         // ════════════════════════════════════════════════════════════════════════════
         const primaryPrompt = `You are a SENIOR QA AUDITOR reviewing AI dispatcher scenarios for a ${tradeType.toUpperCase()} service company.
 
@@ -5055,7 +5216,7 @@ ${(scenario.quickReplies || []).map((r, i) => `[${i}] "${r}"`).join('\n') || '(n
 
 Full Replies (detailed responses):
 ${(scenario.fullReplies || []).map((r, i) => `[${i}] "${r}"`).join('\n') || '(none)'}
-
+${blueprintContext}
 DISPATCHER PERSONA STANDARDS:
 - Sounds like a SEASONED dispatcher who handles 50+ calls/day
 - Calm, confident, experienced - never surprised
@@ -5064,28 +5225,36 @@ DISPATCHER PERSONA STANDARDS:
 - Uses trade terminology naturally
 
 WHAT TO CHECK:
-1. TONE: Does it sound like a real dispatcher? (Not a chatbot, not help desk)
-2. BREVITY: Quick replies ≤20 words, full replies ≤25 words
-3. STRUCTURE: Quick=diagnostic question, Full=move toward booking
-4. BANNED PHRASES: "I'd be happy to", "Thank you for", "Let me", "Absolutely", "Definitely", "No problem"
-5. FLOW: Does it move the conversation forward efficiently?
+1. INTENT FULFILLMENT: Does this scenario properly fulfill its blueprint purpose? (Most important!)
+2. TONE: Does it sound like a real dispatcher? (Not a chatbot, not help desk)
+3. BREVITY: Quick replies ≤20 words, full replies ≤25 words
+4. STRUCTURE: Quick=diagnostic question, Full=move toward booking
+5. BANNED PHRASES: "I'd be happy to", "Thank you for", "Let me", "Absolutely", "Definitely", "No problem"
+6. FLOW: Does it move the conversation forward efficiently?
 
 CRITICAL: For each issue you identify, you MUST quote the EXACT text from the scenario that contains the problem. If you cannot quote exact text, do not report the issue.
 
-SCORING:
-10 = Perfect dispatcher tone, concise, actionable
-9 = Excellent, minor polish possible  
-7-8 = Good but needs some revision
-5-6 = Mediocre, significant issues
-1-3 = Fails completely
+SCORING (Blueprint-aware):
+10 = Perfect: Fulfills blueprint intent perfectly + excellent dispatcher tone
+9 = Excellent: Fulfills intent well, minor polish possible  
+7-8 = Good: Fulfills intent but needs revision for tone/structure
+5-6 = Mediocre: Partially fulfills intent OR significant tone issues
+3-4 = Poor: Does not adequately fulfill its intended purpose
+1-2 = Fails: Wrong intent entirely or completely broken
 
 Return JSON only:
 {
   "score": <1-10>,
   "verdict": "<PERFECT|GOOD|NEEDS_WORK|FAILS>",
+  "blueprintAlignment": {
+    "intentFulfilled": <true|false>,
+    "triggersCoverIntent": <true|false>,
+    "replyGoalMatches": <true|false>,
+    "notes": "<brief explanation>"
+  },
   "issues": [
     { 
-      "field": "<quickReplies[0]|fullReplies[1]|triggers|general>", 
+      "field": "<quickReplies[0]|fullReplies[1]|triggers|general|blueprintAlignment>", 
       "exactQuote": "<EXACT text from scenario that has the problem>",
       "issue": "<what's wrong>", 
       "suggestion": "<how to fix>" 

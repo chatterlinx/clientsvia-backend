@@ -91,9 +91,28 @@ class CoverageAssessor {
             });
             
             // ════════════════════════════════════════════════════════════════════
-            // STEP 4: Load audit scores (if available)
+            // STEP 4: Build audit scores from persisted scenario data
             // ════════════════════════════════════════════════════════════════════
-            const auditScores = options.auditScores || {}; // { scenarioId: score }
+            const auditScores = {}; // { scenarioId: score }
+            const auditDetails = {}; // { scenarioId: { score, verdict, intentFulfilled } }
+            
+            for (const scenario of scenarios) {
+                const scenarioId = scenario.scenarioId || scenario._id?.toString();
+                if (scenarioId && scenario.lastAuditScore != null) {
+                    auditScores[scenarioId] = scenario.lastAuditScore;
+                    auditDetails[scenarioId] = {
+                        score: scenario.lastAuditScore,
+                        verdict: scenario.lastAuditVerdict,
+                        auditedAt: scenario.lastAuditedAt,
+                        intentFulfilled: scenario.lastAuditIntentFulfilled
+                    };
+                }
+            }
+            
+            // Allow external scores to override (for testing)
+            if (options.auditScores) {
+                Object.assign(auditScores, options.auditScores);
+            }
             
             // ════════════════════════════════════════════════════════════════════
             // STEP 5: Classify each assessable intent
@@ -142,6 +161,9 @@ class CoverageAssessor {
                     }
                 }
                 
+                // Get audit details if available
+                const auditDetail = scenario ? auditDetails[scenario.scenarioId] : null;
+                
                 intentStatuses.push({
                     itemKey: intent.itemKey,
                     itemName: intent.name,
@@ -152,7 +174,11 @@ class CoverageAssessor {
                     status,
                     scenario,
                     score,
-                    matchConfidence: confidence
+                    matchConfidence: confidence,
+                    // Audit details
+                    auditVerdict: auditDetail?.verdict || null,
+                    auditedAt: auditDetail?.auditedAt || null,
+                    intentFulfilled: auditDetail?.intentFulfilled ?? null
                 });
             }
             
@@ -217,7 +243,17 @@ class CoverageAssessor {
                 
                 // Metadata
                 scenariosAnalyzed: scenarios.length,
-                processingTimeMs: Date.now() - startTime
+                scenariosWithAuditScores: Object.keys(auditScores).length,
+                processingTimeMs: Date.now() - startTime,
+                
+                // Audit integration note
+                auditIntegration: {
+                    hasScores: Object.keys(auditScores).length > 0,
+                    scoreCount: Object.keys(auditScores).length,
+                    note: Object.keys(auditScores).length === 0 
+                        ? 'Run Deep Audit to get scores. NEEDS_REVIEW items have no audit data.'
+                        : `${Object.keys(auditScores).length} scenarios have audit scores.`
+                }
             };
             
         } catch (error) {

@@ -222,6 +222,37 @@ const scenarioSchema = new Schema({
     },
     
     // ============================================
+    // 📊 AUDIT SCORE (Coverage Engine Integration)
+    // ============================================
+    // Persisted audit scores for Coverage Engine to read
+    // Updated by Deep Audit, read by Coverage Assessor
+    
+    lastAuditScore: {
+        type: Number,
+        min: 1,
+        max: 10,
+        default: null
+        // Last Deep Audit score (1-10)
+    },
+    
+    lastAuditedAt: {
+        type: Date,
+        default: null
+    },
+    
+    lastAuditVerdict: {
+        type: String,
+        enum: ['PERFECT', 'GOOD', 'NEEDS_WORK', 'FAILS', null],
+        default: null
+    },
+    
+    lastAuditIntentFulfilled: {
+        type: Boolean,
+        default: null
+        // Did the scenario fulfill its blueprint intent?
+    },
+    
+    // ============================================
     // 🔄 DEPRECATION TRACKING (Replace-not-Add)
     // ============================================
     // Supports safe scenario replacement without data loss
