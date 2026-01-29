@@ -14,9 +14,14 @@
  * - Informational (hours, service areas, pricing)
  * - Edge cases (wrong number, spam, confusion)
  * 
- * ITEMS: 75 scenarios across 12 categories
+ * ITEMS: 80 intents across 12 categories
  * REQUIRED: 55 (must-have for production)
- * OPTIONAL: 20 (nice-to-have)
+ * OPTIONAL: 18 (nice-to-have, always assessed)
+ * SERVICE-DEPENDENT: 7 (only assessed if service enabled)
+ *   - duct_cleaning: 1 intent
+ *   - dryer_vent_cleaning: 1 intent  
+ *   - membership: 1 intent
+ *   - commercial_hvac: 4 intents
  * 
  * ════════════════════════════════════════════════════════════════════════════════
  */
@@ -333,11 +338,35 @@ const HVAC_BLUEPRINT_SPEC = {
                     priority: 'low',
                     bookingIntent: true,
                     replyGoal: 'book',
+                    // ════════════════════════════════════════════════════════════════
+                    // SERVICE TOGGLE: Only assessed if company offers duct cleaning
+                    // ════════════════════════════════════════════════════════════════
+                    serviceKey: 'duct_cleaning',
+                    defaultEnabled: false, // Most HVAC companies don't offer this
                     triggerHints: ['duct cleaning', 'clean ducts', 'air duct cleaning', 'ductwork cleaning'],
                     negativeTriggerHints: [],
                     entityCaptureHints: ['address'],
                     tags: ['maintenance', 'ducts', 'cleaning'],
-                    notes: 'May be separate service. Check if company offers.'
+                    notes: 'SERVICE-DEPENDENT: Only show if duct_cleaning enabled. Many HVAC companies do not offer.'
+                },
+                {
+                    itemKey: 'hvac_dryer_vent_cleaning',
+                    name: 'Dryer Vent Cleaning',
+                    scenarioType: 'BOOKING',
+                    required: false,
+                    priority: 'low',
+                    bookingIntent: true,
+                    replyGoal: 'book',
+                    // ════════════════════════════════════════════════════════════════
+                    // SERVICE TOGGLE: Only assessed if company offers dryer vent cleaning
+                    // ════════════════════════════════════════════════════════════════
+                    serviceKey: 'dryer_vent_cleaning',
+                    defaultEnabled: false, // Most HVAC companies don't offer this
+                    triggerHints: ['dryer vent', 'dryer vent cleaning', 'clean dryer vent', 'lint buildup', 'dryer taking long'],
+                    negativeTriggerHints: [],
+                    entityCaptureHints: ['address'],
+                    tags: ['maintenance', 'dryer', 'cleaning', 'fire-safety'],
+                    notes: 'SERVICE-DEPENDENT: Only show if dryer_vent_cleaning enabled. Fire safety upsell opportunity.'
                 },
                 {
                     itemKey: 'hvac_membership_plan',
@@ -347,11 +376,16 @@ const HVAC_BLUEPRINT_SPEC = {
                     priority: 'medium',
                     bookingIntent: false,
                     replyGoal: 'inform',
-                    triggerHints: ['maintenance plan', 'service plan', 'membership', 'annual plan', 'subscription'],
+                    // ════════════════════════════════════════════════════════════════
+                    // SERVICE TOGGLE: Only assessed if company offers membership plans
+                    // ════════════════════════════════════════════════════════════════
+                    serviceKey: 'membership',
+                    defaultEnabled: true, // Most HVAC companies offer maintenance plans
+                    triggerHints: ['maintenance plan', 'service plan', 'membership', 'annual plan', 'subscription', 'club member'],
                     negativeTriggerHints: [],
                     entityCaptureHints: [],
                     tags: ['membership', 'plan', 'sales'],
-                    notes: 'Upsell opportunity. Describe plan benefits.'
+                    notes: 'SERVICE-DEPENDENT: Only show if membership enabled. Upsell opportunity.'
                 }
             ]
         },
@@ -788,6 +822,60 @@ const HVAC_BLUEPRINT_SPEC = {
                     entityCaptureHints: [],
                     tags: ['sales', 'financing', 'payment'],
                     notes: 'Explain financing options. Good closing opportunity.'
+                },
+                // ════════════════════════════════════════════════════════════════
+                // COMMERCIAL HVAC - Service-dependent items
+                // ════════════════════════════════════════════════════════════════
+                {
+                    itemKey: 'hvac_commercial_service_call',
+                    name: 'Commercial HVAC Service Call',
+                    scenarioType: 'BOOKING',
+                    required: false,
+                    priority: 'high',
+                    bookingIntent: true,
+                    replyGoal: 'book',
+                    // ════════════════════════════════════════════════════════════════
+                    // SERVICE TOGGLE: Only assessed if company does commercial work
+                    // ════════════════════════════════════════════════════════════════
+                    serviceKey: 'commercial_hvac',
+                    defaultEnabled: false, // Many residential-only companies
+                    triggerHints: ['commercial', 'business', 'office building', 'restaurant', 'retail store', 'warehouse', 'commercial ac', 'rooftop unit'],
+                    negativeTriggerHints: ['residential', 'home', 'house'],
+                    entityCaptureHints: ['business_name', 'address', 'name', 'phone'],
+                    tags: ['commercial', 'service', 'business'],
+                    notes: 'SERVICE-DEPENDENT: Only show if commercial_hvac enabled. Higher value, different equipment.'
+                },
+                {
+                    itemKey: 'hvac_commercial_new_system',
+                    name: 'Commercial HVAC Installation',
+                    scenarioType: 'BOOKING',
+                    required: false,
+                    priority: 'high',
+                    bookingIntent: true,
+                    replyGoal: 'book',
+                    serviceKey: 'commercial_hvac',
+                    defaultEnabled: false,
+                    triggerHints: ['new commercial system', 'commercial installation', 'new rooftop unit', 'rtu replacement', 'commercial hvac install'],
+                    negativeTriggerHints: ['residential'],
+                    entityCaptureHints: ['business_name', 'address', 'name', 'phone'],
+                    tags: ['commercial', 'installation', 'high-value'],
+                    notes: 'SERVICE-DEPENDENT: Highest value commercial lead. Requires site survey.'
+                },
+                {
+                    itemKey: 'hvac_commercial_maintenance',
+                    name: 'Commercial HVAC Maintenance',
+                    scenarioType: 'BOOKING',
+                    required: false,
+                    priority: 'medium',
+                    bookingIntent: true,
+                    replyGoal: 'book',
+                    serviceKey: 'commercial_hvac',
+                    defaultEnabled: false,
+                    triggerHints: ['commercial maintenance', 'business hvac maintenance', 'commercial tune up', 'quarterly maintenance', 'commercial service contract'],
+                    negativeTriggerHints: ['residential'],
+                    entityCaptureHints: ['business_name', 'address', 'name', 'phone'],
+                    tags: ['commercial', 'maintenance', 'recurring'],
+                    notes: 'SERVICE-DEPENDENT: Recurring revenue opportunity. Often multi-unit contracts.'
                 }
             ]
         },
