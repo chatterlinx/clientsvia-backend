@@ -563,6 +563,12 @@ class ScenarioPoolService {
                             return;
                         }
                         
+                        // FILTER: Skip deprecated/replaced scenarios
+                        // Replace-not-Add sets replacedByScenarioId when upgrading
+                        if (scenario.replacedByScenarioId) {
+                            return;
+                        }
+                        
                         activeInCategory++;
                         
                         // 🎯 PHASE A.1: Ensure all Phase A.1 fields are normalized and present

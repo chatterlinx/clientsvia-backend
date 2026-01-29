@@ -49,6 +49,7 @@ const { buildPlaceholderGovernanceBlock, validateScenarioPlaceholders } = requir
 const HVAC_BLUEPRINT_SPEC = require('../../config/blueprints/HVAC_BLUEPRINT_SPEC');
 const IntentMatcher = require('../../services/IntentMatcher');
 const CoverageAssessor = require('../../services/CoverageAssessor');
+const BlueprintGenerator = require('../../services/BlueprintGenerator');
 
 // ============================================================================
 // MIDDLEWARE - All routes require authentication
@@ -1710,6 +1711,634 @@ router.post('/:companyId/coverage/match-scenario', async (req, res) => {
     } catch (error) {
         logger.error('[COVERAGE] Match error', { error: error.message });
         return res.status(500).json({ error: 'Matching failed', details: error.message });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// REPLACE-NOT-ADD IMPORT - Safe scenario import with scope enforcement
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /:companyId/coverage/import
+ * 
+ * Import a generated scenario with scope enforcement and replace-not-add logic.
+ * 
+ * SCOPE RULES:
+ * - scope: "global" → import to shared global template only
+ * - scope: "companyLocal" → import to company's customTemplateId only
+ * - scope: "either" → uses defaultDestination or explicit param
+ * 
+ * ACTIONS:
+ * - ADD: Create new scenario (checks no existing coverage for this intentKey)
+ * - REPLACE: Deprecate old scenario, create new one
+ */
+router.post('/:companyId/coverage/import', async (req, res) => {
+    const { companyId } = req.params;
+    const { 
+        intentKey,
+        action,           // 'ADD' or 'REPLACE'
+        scenario,         // Full 22-field scenario object
+        replaceTargetScenarioId, // Required when action = 'REPLACE'
+        targetCategoryId, // Which category to add to
+        forceDestination  // Override scope destination ('global' or 'companyLocal')
+    } = req.body;
+    
+    // Validate required fields
+    if (!intentKey) {
+        return res.status(400).json({ error: 'intentKey is required' });
+    }
+    if (!action || !['ADD', 'REPLACE'].includes(action)) {
+        return res.status(400).json({ error: 'action must be ADD or REPLACE' });
+    }
+    if (!scenario || typeof scenario !== 'object') {
+        return res.status(400).json({ error: 'scenario object is required' });
+    }
+    if (action === 'REPLACE' && !replaceTargetScenarioId) {
+        return res.status(400).json({ error: 'replaceTargetScenarioId required for REPLACE action' });
+    }
+    
+    try {
+        // ════════════════════════════════════════════════════════════════════
+        // STEP 1: Load blueprint item to get scope
+        // ════════════════════════════════════════════════════════════════════
+        const blueprintItem = findBlueprintItem(intentKey);
+        if (!blueprintItem) {
+            return res.status(400).json({ error: `Unknown intentKey: ${intentKey}` });
+        }
+        
+        const itemScope = blueprintItem.scope || 'global';
+        const serviceKey = blueprintItem.serviceKey || null;
+        
+        // ════════════════════════════════════════════════════════════════════
+        // STEP 2: Determine destination template
+        // ════════════════════════════════════════════════════════════════════
+        const company = await Company.findById(companyId)
+            .select('aiAgentSettings.templateReferences aiAgentSettings.customTemplateId companyName businessName')
+            .lean();
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Determine destination based on scope
+        let destination;
+        let templateId;
+        
+        if (forceDestination === 'global' && itemScope !== 'companyLocal') {
+            destination = 'global';
+        } else if (forceDestination === 'companyLocal' || itemScope === 'companyLocal') {
+            destination = 'companyLocal';
+        } else if (itemScope === 'either') {
+            destination = serviceKey ? 'companyLocal' : 'global';
+        } else {
+            destination = 'global';
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // STEP 3: SCOPE ENFORCEMENT - Hard stop on contamination
+        // ════════════════════════════════════════════════════════════════════
+        if (itemScope === 'companyLocal' && forceDestination === 'global') {
+            return res.status(403).json({
+                error: 'SCOPE_VIOLATION',
+                message: `Intent "${intentKey}" is company-local only and cannot be added to a shared global template.`,
+                itemScope,
+                serviceKey,
+                suggestion: 'Import to Company Local template instead.'
+            });
+        }
+        
+        // Get target template ID
+        if (destination === 'companyLocal') {
+            templateId = company.aiAgentSettings?.customTemplateId;
+            if (!templateId) {
+                return res.status(400).json({
+                    error: 'NO_COMPANY_LOCAL_TEMPLATE',
+                    message: 'Company does not have a Company Local template. Create one first.',
+                    suggestion: 'Go to Company Local tab and assign a custom template.'
+                });
+            }
+        } else {
+            // Global template
+            const templateRef = company.aiAgentSettings?.templateReferences?.[0];
+            templateId = templateRef?.templateId;
+            if (!templateId) {
+                return res.status(400).json({ error: 'Company has no assigned global template' });
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // STEP 4: Load target template
+        // ════════════════════════════════════════════════════════════════════
+        const template = await GlobalInstantResponseTemplate.findById(templateId);
+        if (!template) {
+            return res.status(404).json({ error: `Template ${templateId} not found` });
+        }
+        
+        // Find target category
+        let category;
+        if (targetCategoryId) {
+            category = template.categories.find(c => c.id === targetCategoryId);
+        }
+        if (!category) {
+            // Try to find by blueprint item's category
+            const categoryKey = blueprintItem.categoryKey || blueprintItem.category;
+            category = template.categories.find(c => 
+                c.name?.toLowerCase().includes(categoryKey?.replace('hvac-', '').replace(/-/g, ' ')) ||
+                c.id === categoryKey
+            );
+        }
+        if (!category) {
+            // Fall back to first category
+            category = template.categories[0];
+        }
+        if (!category) {
+            return res.status(400).json({ error: 'No suitable category found in template' });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // STEP 5: Handle REPLACE action - deprecate old scenario
+        // ════════════════════════════════════════════════════════════════════
+        let deprecatedScenario = null;
+        
+        if (action === 'REPLACE') {
+            // Find the scenario to replace
+            for (const cat of template.categories) {
+                const existing = cat.scenarios?.find(s => s.scenarioId === replaceTargetScenarioId);
+                if (existing) {
+                    // Mark as deprecated (don't delete)
+                    existing.replacedByScenarioId = scenario.scenarioId;
+                    existing.replacedAt = new Date();
+                    existing.replacedReason = 'weak_audit_score';
+                    existing.isActive = false;
+                    deprecatedScenario = {
+                        scenarioId: existing.scenarioId,
+                        name: existing.name
+                    };
+                    break;
+                }
+            }
+            
+            if (!deprecatedScenario) {
+                logger.warn('[IMPORT] Replace target not found, proceeding as ADD', { 
+                    replaceTargetScenarioId, 
+                    intentKey 
+                });
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // STEP 6: Handle ADD action - check for existing coverage
+        // ════════════════════════════════════════════════════════════════════
+        if (action === 'ADD') {
+            // Check if another active scenario already covers this intentKey
+            for (const cat of template.categories) {
+                const existingCoverage = cat.scenarios?.find(s => 
+                    s.blueprintItemKey === intentKey && 
+                    s.isActive !== false &&
+                    !s.replacedByScenarioId
+                );
+                if (existingCoverage) {
+                    return res.status(409).json({
+                        error: 'DUPLICATE_COVERAGE',
+                        message: `Intent "${intentKey}" is already covered by scenario "${existingCoverage.name}"`,
+                        existingScenarioId: existingCoverage.scenarioId,
+                        suggestion: 'Use REPLACE action if you want to upgrade this scenario.'
+                    });
+                }
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════
+        // STEP 7: Prepare and add new scenario
+        // ════════════════════════════════════════════════════════════════════
+        const newScenarioId = scenario.scenarioId || `scenario-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        const newScenario = {
+            ...scenario,
+            scenarioId: newScenarioId,
+            
+            // Blueprint mapping
+            blueprintItemKey: intentKey,
+            blueprintMatchConfidence: 1.0, // Generated from blueprint = perfect match
+            blueprintMatchedAt: new Date(),
+            blueprintMatchSource: 'import_generated',
+            
+            // Ensure active
+            isActive: true,
+            status: 'live',
+            
+            // Metadata
+            createdAt: new Date(),
+            lastEditedAt: new Date(),
+            editContext: 'BLUEPRINT_BUILDER'
+        };
+        
+        // Add to category
+        if (!category.scenarios) {
+            category.scenarios = [];
+        }
+        category.scenarios.push(newScenario);
+        
+        // ════════════════════════════════════════════════════════════════════
+        // STEP 8: Save template
+        // ════════════════════════════════════════════════════════════════════
+        await template.save();
+        
+        logger.info('[IMPORT] Scenario imported successfully', {
+            companyId,
+            intentKey,
+            action,
+            destination,
+            templateId,
+            categoryId: category.id,
+            newScenarioId,
+            deprecatedScenarioId: deprecatedScenario?.scenarioId
+        });
+        
+        return res.json({
+            success: true,
+            action,
+            destination,
+            templateId,
+            categoryId: category.id,
+            categoryName: category.name,
+            scenario: {
+                scenarioId: newScenarioId,
+                name: newScenario.name,
+                blueprintItemKey: intentKey
+            },
+            deprecated: deprecatedScenario,
+            message: action === 'REPLACE' 
+                ? `Replaced scenario "${deprecatedScenario?.name}" with new version`
+                : `Added new scenario for intent "${intentKey}"`
+        });
+        
+    } catch (error) {
+        logger.error('[IMPORT] Error', { companyId, intentKey, error: error.message });
+        return res.status(500).json({ error: 'Import failed', details: error.message });
+    }
+});
+
+/**
+ * Helper: Find blueprint item by intentKey
+ */
+function findBlueprintItem(intentKey) {
+    for (const category of (HVAC_BLUEPRINT_SPEC.categories || [])) {
+        for (const item of (category.items || [])) {
+            if (item.itemKey === intentKey) {
+                return { ...item, categoryKey: category.categoryKey };
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * POST /:companyId/coverage/generate
+ * 
+ * Generate scenarios for MISSING or WEAK intents.
+ * This is the "Fix Weak + Add Missing" button.
+ * 
+ * ACTIONS:
+ * - For MISSING intents: Generate new scenario
+ * - For WEAK intents: Generate replacement scenario
+ */
+router.post('/:companyId/coverage/generate', async (req, res) => {
+    const { companyId } = req.params;
+    const { 
+        intents,  // Array of { intentKey, action: 'ADD'|'REPLACE', existingScenarioId? }
+        blueprint = 'hvac',
+        batchSize = 5
+    } = req.body;
+    
+    if (!intents || !Array.isArray(intents) || intents.length === 0) {
+        return res.status(400).json({ error: 'intents array is required' });
+    }
+    
+    if (intents.length > 50) {
+        return res.status(400).json({ error: 'Maximum 50 intents per batch' });
+    }
+    
+    try {
+        // Select blueprint spec
+        let blueprintSpec;
+        if (blueprint === 'hvac' || blueprint === 'HVAC') {
+            blueprintSpec = HVAC_BLUEPRINT_SPEC;
+        } else {
+            return res.status(400).json({ error: `Unknown blueprint: ${blueprint}` });
+        }
+        
+        // Load company context
+        const company = await Company.findById(companyId)
+            .select('companyName businessName aiAgentSettings.services')
+            .lean();
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Create generator
+        const generator = new BlueprintGenerator(blueprintSpec, openaiClient);
+        
+        // Build company context
+        const companyContext = {
+            companyName: company.companyName || company.businessName,
+            tone: blueprintSpec.metadata?.companyTone || 'calm_professional'
+        };
+        
+        // Load existing scenarios for REPLACE actions
+        const existingScenarios = new Map();
+        const replaceIntents = intents.filter(i => i.action === 'REPLACE' && i.existingScenarioId);
+        
+        if (replaceIntents.length > 0) {
+            const templateRef = (await Company.findById(companyId)
+                .select('aiAgentSettings.templateReferences')
+                .lean())?.aiAgentSettings?.templateReferences?.[0];
+            
+            if (templateRef?.templateId) {
+                const template = await GlobalInstantResponseTemplate.findById(templateRef.templateId)
+                    .select('categories.scenarios.scenarioId categories.scenarios.name categories.scenarios.triggers')
+                    .lean();
+                
+                if (template) {
+                    for (const cat of (template.categories || [])) {
+                        for (const scenario of (cat.scenarios || [])) {
+                            existingScenarios.set(scenario.scenarioId, scenario);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Prepare intents with existing scenario data
+        const preparedIntents = intents.map(intent => ({
+            ...intent,
+            existingScenario: intent.existingScenarioId 
+                ? existingScenarios.get(intent.existingScenarioId) 
+                : null
+        }));
+        
+        // Generate batch
+        logger.info('[GENERATE] Starting batch generation', {
+            companyId,
+            totalIntents: intents.length,
+            replaceCount: replaceIntents.length,
+            addCount: intents.length - replaceIntents.length
+        });
+        
+        const { results, summary } = await generator.generateBatch(preparedIntents, {
+            batchSize,
+            companyContext,
+            serviceContext: {}
+        });
+        
+        logger.info('[GENERATE] Batch complete', {
+            companyId,
+            success: summary.success,
+            failed: summary.failed,
+            readyToImport: summary.readyToImport
+        });
+        
+        return res.json({
+            success: true,
+            summary,
+            results: results.map(r => ({
+                intentKey: r.intentKey,
+                intentName: r.intentName,
+                success: r.success,
+                readyToImport: r.readyToImport,
+                scope: r.scope,
+                serviceKey: r.serviceKey,
+                scenario: r.scenario ? {
+                    scenarioId: r.scenario.scenarioId,
+                    name: r.scenario.name,
+                    triggers: r.scenario.triggers?.slice(0, 5),
+                    scenarioType: r.scenario.scenarioType
+                } : null,
+                validation: r.validation,
+                error: r.error
+            })),
+            // Include full scenarios for ready-to-import items
+            fullScenarios: results
+                .filter(r => r.readyToImport)
+                .map(r => r.scenario)
+        });
+        
+    } catch (error) {
+        logger.error('[GENERATE] Error', { companyId, error: error.message });
+        return res.status(500).json({ error: 'Generation failed', details: error.message });
+    }
+});
+
+/**
+ * POST /:companyId/coverage/fix-all
+ * 
+ * One-click: Generate + Import all fixable intents.
+ * Combines generate + import in a single operation.
+ * 
+ * SAFETY: 
+ * - Respects scope rules
+ * - Only imports readyToImport=true scenarios
+ * - Creates audit trail
+ */
+router.post('/:companyId/coverage/fix-all', async (req, res) => {
+    const { companyId } = req.params;
+    const { 
+        blueprint = 'hvac',
+        includeWeak = true,
+        includeMissing = true,
+        dryRun = false  // If true, generate but don't import
+    } = req.body;
+    
+    try {
+        // Step 1: Run coverage assessment
+        let blueprintSpec;
+        if (blueprint === 'hvac' || blueprint === 'HVAC') {
+            blueprintSpec = HVAC_BLUEPRINT_SPEC;
+        } else {
+            return res.status(400).json({ error: `Unknown blueprint: ${blueprint}` });
+        }
+        
+        const assessor = new CoverageAssessor(blueprintSpec);
+        const coverage = await assessor.assess(companyId);
+        
+        if (coverage.error) {
+            return res.status(400).json({ error: coverage.error });
+        }
+        
+        // Step 2: Collect intents to fix
+        const intentsToFix = [];
+        
+        if (includeMissing) {
+            for (const intent of (coverage.byStatus?.missing || [])) {
+                // Skip companyLocal intents for now (need custom template)
+                if (intent.serviceKey) continue;
+                
+                intentsToFix.push({
+                    intentKey: intent.itemKey,
+                    action: 'ADD',
+                    status: 'MISSING'
+                });
+            }
+        }
+        
+        if (includeWeak) {
+            for (const intent of (coverage.byStatus?.weak || [])) {
+                if (intent.serviceKey) continue;
+                
+                intentsToFix.push({
+                    intentKey: intent.itemKey,
+                    action: 'REPLACE',
+                    existingScenarioId: intent.scenario?.scenarioId,
+                    status: 'WEAK'
+                });
+            }
+        }
+        
+        if (intentsToFix.length === 0) {
+            return res.json({
+                success: true,
+                message: 'Nothing to fix - all intents are covered!',
+                coverage: {
+                    coveragePercent: coverage.coveragePercent,
+                    summary: coverage.summary
+                }
+            });
+        }
+        
+        // Step 3: Generate scenarios
+        const company = await Company.findById(companyId)
+            .select('companyName businessName aiAgentSettings.templateReferences')
+            .lean();
+        
+        const generator = new BlueprintGenerator(blueprintSpec, openaiClient);
+        const { results, summary: genSummary } = await generator.generateBatch(intentsToFix, {
+            batchSize: 5,
+            companyContext: {
+                companyName: company?.companyName || company?.businessName,
+                tone: 'calm_professional'
+            }
+        });
+        
+        if (dryRun) {
+            return res.json({
+                success: true,
+                dryRun: true,
+                message: `Would fix ${genSummary.readyToImport} intents`,
+                generated: genSummary,
+                results: results.map(r => ({
+                    intentKey: r.intentKey,
+                    action: intentsToFix.find(i => i.intentKey === r.intentKey)?.action,
+                    readyToImport: r.readyToImport,
+                    validation: r.validation
+                }))
+            });
+        }
+        
+        // Step 4: Import ready scenarios
+        const importResults = [];
+        const templateRef = company?.aiAgentSettings?.templateReferences?.[0];
+        
+        if (!templateRef?.templateId) {
+            return res.status(400).json({ 
+                error: 'Company has no assigned template',
+                generated: genSummary
+            });
+        }
+        
+        const template = await GlobalInstantResponseTemplate.findById(templateRef.templateId);
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        for (const result of results) {
+            if (!result.readyToImport) {
+                importResults.push({
+                    intentKey: result.intentKey,
+                    imported: false,
+                    reason: result.error || 'Validation failed'
+                });
+                continue;
+            }
+            
+            const intentConfig = intentsToFix.find(i => i.intentKey === result.intentKey);
+            const scenario = result.scenario;
+            
+            // Find target category
+            const blueprintItem = findBlueprintItem(result.intentKey);
+            let category = template.categories.find(c => 
+                c.name?.toLowerCase().includes(blueprintItem?.categoryKey?.replace('hvac-', '').replace(/-/g, ' '))
+            ) || template.categories[0];
+            
+            if (!category) {
+                importResults.push({
+                    intentKey: result.intentKey,
+                    imported: false,
+                    reason: 'No suitable category found'
+                });
+                continue;
+            }
+            
+            // Handle REPLACE - deprecate old
+            if (intentConfig.action === 'REPLACE' && intentConfig.existingScenarioId) {
+                for (const cat of template.categories) {
+                    const existing = cat.scenarios?.find(s => s.scenarioId === intentConfig.existingScenarioId);
+                    if (existing) {
+                        existing.replacedByScenarioId = scenario.scenarioId;
+                        existing.replacedAt = new Date();
+                        existing.replacedReason = 'weak_audit_score';
+                        existing.isActive = false;
+                        break;
+                    }
+                }
+            }
+            
+            // Add blueprint mapping
+            scenario.blueprintItemKey = result.intentKey;
+            scenario.blueprintMatchConfidence = 1.0;
+            scenario.blueprintMatchedAt = new Date();
+            scenario.blueprintMatchSource = 'import_generated';
+            scenario.isActive = true;
+            scenario.status = 'live';
+            
+            // Add to category
+            if (!category.scenarios) category.scenarios = [];
+            category.scenarios.push(scenario);
+            
+            importResults.push({
+                intentKey: result.intentKey,
+                imported: true,
+                scenarioId: scenario.scenarioId,
+                action: intentConfig.action,
+                categoryName: category.name
+            });
+        }
+        
+        // Save template
+        await template.save();
+        
+        const importedCount = importResults.filter(r => r.imported).length;
+        
+        logger.info('[FIX-ALL] Complete', {
+            companyId,
+            generated: genSummary.success,
+            imported: importedCount,
+            failed: importResults.filter(r => !r.imported).length
+        });
+        
+        return res.json({
+            success: true,
+            message: `Fixed ${importedCount} intents`,
+            generated: genSummary,
+            importResults,
+            newCoverage: {
+                estimated: Math.round(((coverage.summary.good + coverage.summary.weak + importedCount) / coverage.summary.total) * 100)
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[FIX-ALL] Error', { companyId, error: error.message });
+        return res.status(500).json({ error: 'Fix-all failed', details: error.message });
     }
 });
 

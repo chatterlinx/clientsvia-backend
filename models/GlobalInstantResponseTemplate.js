@@ -187,6 +187,64 @@ const scenarioSchema = new Schema({
     },
     
     // ============================================
+    // 🎯 BLUEPRINT MAPPING (Coverage Engine)
+    // ============================================
+    // Links scenario to blueprint intent for coverage tracking
+    // Used by Replace-not-Add import to prevent duplicates
+    
+    blueprintItemKey: {
+        type: String,
+        default: null,
+        trim: true
+        // e.g., 'hvac_gas_smell', 'hvac_ac_not_cooling'
+        // Links to HVAC_BLUEPRINT_SPEC.js itemKey
+    },
+    
+    blueprintMatchConfidence: {
+        type: Number,
+        default: null,
+        min: 0,
+        max: 1
+        // Confidence score from IntentMatcher (0-1)
+    },
+    
+    blueprintMatchedAt: {
+        type: Date,
+        default: null
+        // When the blueprint mapping was established
+    },
+    
+    blueprintMatchSource: {
+        type: String,
+        enum: ['auto_match', 'manual_assign', 'import_generated', null],
+        default: null
+        // How the mapping was created
+    },
+    
+    // ============================================
+    // 🔄 DEPRECATION TRACKING (Replace-not-Add)
+    // ============================================
+    // Supports safe scenario replacement without data loss
+    
+    replacedByScenarioId: {
+        type: String,
+        default: null
+        // Points to new scenario that replaced this one
+        // Router should skip scenarios with this set
+    },
+    
+    replacedAt: {
+        type: Date,
+        default: null
+    },
+    
+    replacedReason: {
+        type: String,
+        enum: ['weak_audit_score', 'missing_coverage', 'manual_upgrade', 'duplicate', null],
+        default: null
+    },
+    
+    // ============================================
     // CATEGORIZATION & ORGANIZATION
     // ============================================
     

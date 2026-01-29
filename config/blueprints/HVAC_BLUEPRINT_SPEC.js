@@ -23,6 +23,11 @@
  *   - membership: 1 intent
  *   - commercial_hvac: 4 intents
  * 
+ * SCOPE POLICY:
+ * - "global": Core HVAC intents - import to shared global template
+ * - "companyLocal": Service-dependent - import to company-specific template only
+ * - "either": Can be either, defaults to companyLocal if serviceKey exists
+ * 
  * ════════════════════════════════════════════════════════════════════════════════
  */
 
@@ -340,7 +345,9 @@ const HVAC_BLUEPRINT_SPEC = {
                     replyGoal: 'book',
                     // ════════════════════════════════════════════════════════════════
                     // SERVICE TOGGLE: Only assessed if company offers duct cleaning
+                    // SCOPE: companyLocal - Never add to global, company-specific only
                     // ════════════════════════════════════════════════════════════════
+                    scope: 'companyLocal',
                     serviceKey: 'duct_cleaning',
                     defaultEnabled: false, // Most HVAC companies don't offer this
                     triggerHints: ['duct cleaning', 'clean ducts', 'air duct cleaning', 'ductwork cleaning'],
@@ -359,7 +366,9 @@ const HVAC_BLUEPRINT_SPEC = {
                     replyGoal: 'book',
                     // ════════════════════════════════════════════════════════════════
                     // SERVICE TOGGLE: Only assessed if company offers dryer vent cleaning
+                    // SCOPE: companyLocal - Never add to global, company-specific only
                     // ════════════════════════════════════════════════════════════════
+                    scope: 'companyLocal',
                     serviceKey: 'dryer_vent_cleaning',
                     defaultEnabled: false, // Most HVAC companies don't offer this
                     triggerHints: ['dryer vent', 'dryer vent cleaning', 'clean dryer vent', 'lint buildup', 'dryer taking long'],
@@ -378,7 +387,9 @@ const HVAC_BLUEPRINT_SPEC = {
                     replyGoal: 'inform',
                     // ════════════════════════════════════════════════════════════════
                     // SERVICE TOGGLE: Only assessed if company offers membership plans
+                    // SCOPE: companyLocal - Plans vary per company
                     // ════════════════════════════════════════════════════════════════
+                    scope: 'companyLocal',
                     serviceKey: 'membership',
                     defaultEnabled: true, // Most HVAC companies offer maintenance plans
                     triggerHints: ['maintenance plan', 'service plan', 'membership', 'annual plan', 'subscription', 'club member'],
@@ -825,6 +836,7 @@ const HVAC_BLUEPRINT_SPEC = {
                 },
                 // ════════════════════════════════════════════════════════════════
                 // COMMERCIAL HVAC - Service-dependent items
+                // SCOPE: companyLocal - Only for companies offering commercial
                 // ════════════════════════════════════════════════════════════════
                 {
                     itemKey: 'hvac_commercial_service_call',
@@ -834,9 +846,7 @@ const HVAC_BLUEPRINT_SPEC = {
                     priority: 'high',
                     bookingIntent: true,
                     replyGoal: 'book',
-                    // ════════════════════════════════════════════════════════════════
-                    // SERVICE TOGGLE: Only assessed if company does commercial work
-                    // ════════════════════════════════════════════════════════════════
+                    scope: 'companyLocal',
                     serviceKey: 'commercial_hvac',
                     defaultEnabled: false, // Many residential-only companies
                     triggerHints: ['commercial', 'business', 'office building', 'restaurant', 'retail store', 'warehouse', 'commercial ac', 'rooftop unit'],
@@ -853,6 +863,7 @@ const HVAC_BLUEPRINT_SPEC = {
                     priority: 'high',
                     bookingIntent: true,
                     replyGoal: 'book',
+                    scope: 'companyLocal',
                     serviceKey: 'commercial_hvac',
                     defaultEnabled: false,
                     triggerHints: ['new commercial system', 'commercial installation', 'new rooftop unit', 'rtu replacement', 'commercial hvac install'],
@@ -869,6 +880,7 @@ const HVAC_BLUEPRINT_SPEC = {
                     priority: 'medium',
                     bookingIntent: true,
                     replyGoal: 'book',
+                    scope: 'companyLocal',
                     serviceKey: 'commercial_hvac',
                     defaultEnabled: false,
                     triggerHints: ['commercial maintenance', 'business hvac maintenance', 'commercial tune up', 'quarterly maintenance', 'commercial service contract'],
