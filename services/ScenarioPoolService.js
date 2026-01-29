@@ -159,7 +159,7 @@ class ScenarioPoolService {
             // STEP 1: LOAD COMPANY DATA
             // ========================================================
             const company = await Company.findById(companyId)
-                .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls configuration.clonedFrom companyName businessName tradeKey')
+                .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls aiAgentSettings.customTemplateId configuration.clonedFrom companyName businessName tradeKey')
                 .lean();
             
             if (!company) {
@@ -331,6 +331,22 @@ class ScenarioPoolService {
         const templateRefs = company.aiAgentSettings?.templateReferences || [];
         const legacyActiveTemplates = company.aiAgentSettings?.activeTemplates || [];
         const legacyClonedFrom = company.configuration?.clonedFrom;
+        const customTemplateId = company.aiAgentSettings?.customTemplateId;
+        
+        const result = [];
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // COMPANY LOCAL TEMPLATE (customTemplateId) - HIGHEST PRIORITY
+        // These are company-specific scenarios that override global templates
+        // ════════════════════════════════════════════════════════════════════════════
+        if (customTemplateId) {
+            logger.debug(`🏢 [SCENARIO POOL] Adding COMPANY LOCAL template: ${customTemplateId}`);
+            result.push({
+                templateId: customTemplateId.toString(),
+                priority: 0, // Highest priority - company local wins
+                isCompanyLocal: true
+            });
+        }
         
         // NEW SYSTEM: Multi-template via templateReferences
         const enabledRefs = templateRefs.filter(ref => 
@@ -341,12 +357,16 @@ class ScenarioPoolService {
             logger.debug(`📚 [SCENARIO POOL] Using NEW multi-template system: ${enabledRefs.length} template(s)`);
             
             // Sort by priority (lower number = higher priority)
-            return enabledRefs
+            const mainTemplates = enabledRefs
                 .map(ref => ({
                     templateId: ref.templateId,
-                    priority: ref.priority || 999
+                    priority: ref.priority || 999,
+                    isCompanyLocal: false
                 }))
                 .sort((a, b) => a.priority - b.priority);
+            
+            result.push(...mainTemplates);
+            return result;
         }
 
         // LEGACY (v1.0) SYSTEM: aiAgentSettings.activeTemplates (array of IDs or objects)
@@ -360,7 +380,8 @@ class ScenarioPoolService {
                         return {
                             templateId: entry,
                             priority: index + 1,
-                            enabled: true
+                            enabled: true,
+                            isCompanyLocal: false
                         };
                     }
 
@@ -374,7 +395,8 @@ class ScenarioPoolService {
                         return {
                             templateId: templateId.toString(),
                             priority: entry.priority || entry.sortOrder || index + 1,
-                            enabled: true
+                            enabled: true,
+                            isCompanyLocal: false
                         };
                     }
 
@@ -384,17 +406,26 @@ class ScenarioPoolService {
 
             if (normalizedLegacyRefs.length > 0) {
                 logger.debug(`📚 [SCENARIO POOL] Using LEGACY activeTemplates array: ${normalizedLegacyRefs.length} template(s)`);
-                return normalizedLegacyRefs.sort((a, b) => (a.priority || 999) - (b.priority || 999));
+                result.push(...normalizedLegacyRefs.sort((a, b) => (a.priority || 999) - (b.priority || 999)));
+                return result;
             }
         }
         
         // LEGACY SYSTEM: Single template via configuration.clonedFrom
         if (legacyClonedFrom) {
             logger.debug(`📚 [SCENARIO POOL] Using LEGACY single-template system`);
-            return [{
+            result.push({
                 templateId: legacyClonedFrom.toString(),
-                priority: 1
-            }];
+                priority: 1,
+                isCompanyLocal: false
+            });
+            return result;
+        }
+        
+        // Return result even if only customTemplateId was added
+        if (result.length > 0) {
+            logger.debug(`🏢 [SCENARIO POOL] Only COMPANY LOCAL template available`);
+            return result;
         }
         
         logger.debug(`⚠️ [SCENARIO POOL] No templates found (neither new nor legacy system)`);
@@ -496,6 +527,11 @@ class ScenarioPoolService {
                             templateId: template._id.toString(),
                             templateName: template.name,
                             templatePriority: ref.priority,
+                            
+                            // ════════════════════════════════════════════════════════════════════
+                            // COMPANY LOCAL FLAG: Scenarios from customTemplateId have priority
+                            // ════════════════════════════════════════════════════════════════════
+                            isCompanyLocal: ref.isCompanyLocal === true,
                             
                             // Category metadata
                             categoryId: category.id || category._id?.toString() || null,
@@ -655,7 +691,7 @@ class ScenarioPoolService {
             // STEP 1: LOAD COMPANY DATA
             // ========================================================
             const company = await Company.findById(companyId)
-                .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls configuration.clonedFrom companyName businessName')
+                .select('aiAgentSettings.templateReferences aiAgentSettings.scenarioControls aiAgentSettings.customTemplateId configuration.clonedFrom companyName businessName')
                 .lean();
             
             if (!company) {
