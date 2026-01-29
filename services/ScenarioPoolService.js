@@ -200,6 +200,51 @@ class ScenarioPoolService {
             
             logger.info(`✅ [SCENARIO POOL] Loaded ${scenarioPool.length} scenarios from ${templatesUsed.length} template(s)`);
             
+            // ════════════════════════════════════════════════════════════════════════════
+            // GUARDRAIL: Pool Composition Logging (for Black Box / diagnostics)
+            // This ensures we can always trace where scenarios came from
+            // ════════════════════════════════════════════════════════════════════════════
+            const companyLocalScenarios = scenarioPool.filter(s => s.isCompanyLocal === true);
+            const globalScenarios = scenarioPool.filter(s => s.isCompanyLocal !== true);
+            
+            // Group by templateId
+            const scenariosByTemplate = {};
+            scenarioPool.forEach(s => {
+                const key = s.templateId || 'unknown';
+                scenariosByTemplate[key] = (scenariosByTemplate[key] || 0) + 1;
+            });
+            
+            const poolComposition = {
+                total: scenarioPool.length,
+                companyLocalCount: companyLocalScenarios.length,
+                globalCount: globalScenarios.length,
+                byTemplate: scenariosByTemplate,
+                customTemplateId: company.aiAgentSettings?.customTemplateId || null
+            };
+            
+            logger.info(`📊 [SCENARIO POOL] Composition:`, poolComposition);
+            
+            // ════════════════════════════════════════════════════════════════════════════
+            // GUARDRAIL: Alarm if customTemplateId configured but no Company Local loaded
+            // This catches the "UI looks right, runtime is lying" bug
+            // ════════════════════════════════════════════════════════════════════════════
+            if (company.aiAgentSettings?.customTemplateId && companyLocalScenarios.length === 0) {
+                logger.error(`🚨 [CRITICAL_WIRING_GAP] customTemplateId configured but 0 Company Local scenarios loaded!`, {
+                    companyId,
+                    companyName,
+                    customTemplateId: company.aiAgentSettings.customTemplateId,
+                    totalScenariosLoaded: scenarioPool.length,
+                    possibleCauses: [
+                        'Custom template has no active scenarios',
+                        'Custom template not found in database',
+                        'Scenarios in custom template have isActive=false'
+                    ]
+                });
+            }
+            
+            // Attach pool composition to result for Black Box logging
+            const _poolComposition = poolComposition;
+            
             // ========================================================
             // STEP 4: APPLY PER-COMPANY SCENARIO CONTROLS
             // ========================================================
@@ -272,6 +317,11 @@ class ScenarioPoolService {
                 templatesUsed,
                 templatesMeta,
                 effectiveConfigVersion,
+                
+                // ════════════════════════════════════════════════════════════════════
+                // POOL COMPOSITION: For Black Box logging and diagnostics
+                // ════════════════════════════════════════════════════════════════════
+                poolComposition: _poolComposition,
                 
                 // 🚀 NEW: Compiled runtime specs + indexes
                 compiled: {

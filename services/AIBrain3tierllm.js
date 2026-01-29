@@ -386,7 +386,7 @@ class AIBrain3tierllm {
             }
 
             // Load scenarios from AI Brain (Scenario Pool)
-            const { scenarios, templatesUsed } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
+            const { scenarios, templatesUsed, poolComposition } = await ScenarioPoolService.getScenarioPoolForCompany(companyId);
             
             if (!templatesUsed || templatesUsed.length === 0) {
                 logger.info(`ℹ️ [AI BRAIN] No templates configured for company`, {
@@ -414,6 +414,40 @@ class AIBrain3tierllm {
                         reason: 'No enabled scenarios (all disabled)'
                     }
                 };
+            }
+
+            // ════════════════════════════════════════════════════════════════════════════
+            // GUARDRAIL: Log pool composition to Black Box for diagnostics
+            // This ensures we can always trace where scenarios came from
+            // ════════════════════════════════════════════════════════════════════════════
+            if (poolComposition) {
+                logger.info(`📊 [AI BRAIN] Pool composition:`, {
+                    total: poolComposition.total,
+                    companyLocalCount: poolComposition.companyLocalCount,
+                    globalCount: poolComposition.globalCount,
+                    customTemplateId: poolComposition.customTemplateId
+                });
+                
+                // Log to Black Box if available
+                if (BlackBoxLogger && context.callId) {
+                    try {
+                        await BlackBoxLogger.logEvent({
+                            callId: context.callId,
+                            companyId,
+                            type: 'SCENARIO_POOL_LOADED',
+                            data: {
+                                total: poolComposition.total,
+                                companyLocalCount: poolComposition.companyLocalCount,
+                                globalCount: poolComposition.globalCount,
+                                byTemplate: poolComposition.byTemplate,
+                                customTemplateId: poolComposition.customTemplateId,
+                                enabledCount: enabledScenarios.length
+                            }
+                        });
+                    } catch (logErr) {
+                        logger.debug('[AI BRAIN] Failed to log pool composition to Black Box');
+                    }
+                }
             }
 
             logger.info(`🧠 [AI BRAIN] Loaded ${enabledScenarios.length} enabled scenarios from ${templatesUsed.length} template(s)`);
