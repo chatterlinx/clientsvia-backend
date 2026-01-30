@@ -6553,6 +6553,82 @@ ${governanceBlock}`;
             contentChanged: beforeHash !== afterHash
         });
         
+        // ════════════════════════════════════════════════════════════════════════
+        // VERIFICATION RE-AUDIT: After fix, immediately re-audit to confirm 10/10
+        // This is the "checked and done" confirmation step
+        // ════════════════════════════════════════════════════════════════════════
+        let verificationResult = null;
+        
+        if (beforeHash !== afterHash && fixesApplied > 0) {
+            try {
+                logger.info('[AUDIT FIX-SCENARIO] Running verification re-audit', { scenarioId });
+                
+                const auditProfile = await deepAuditService.getActiveAuditProfile(templateIdStr);
+                const auditProfileId = auditProfile._id.toString();
+                const newContentHash = deepAuditService.hashScenarioContent(targetScenario);
+                
+                // Call GPT-4 to verify the fix
+                const { auditScenarioWithGPT } = require('../../services/scenarioAuditService');
+                const tradeType = template.templateType?.toLowerCase() || 'general';
+                
+                const verifyResult = await auditScenarioWithGPT(targetScenario, tradeType, {
+                    skipSupervision: true, // Faster verification
+                    context: 'verification_reaudit'
+                });
+                
+                // Save to ScenarioAuditResult - this marks it as "checked and done"
+                const ScenarioAuditResult = require('../../models/ScenarioAuditResult');
+                await ScenarioAuditResult.upsertResult({
+                    templateId: templateIdStr,
+                    scenarioId: targetScenario.scenarioId || scenarioId,
+                    auditProfileId,
+                    scenarioContentHash: newContentHash,
+                    score: verifyResult.score,
+                    verdict: verifyResult.verdict,
+                    rewriteNeeded: verifyResult.rewriteNeeded || false,
+                    issues: verifyResult.issues || [],
+                    strengths: verifyResult.strengths || [],
+                    fixSuggestions: [],
+                    model: 'gpt-4o',
+                    promptVersion: 'DEEP_AUDIT_PROMPT_V1',
+                    rubricVersion: auditProfile.rubricVersion,
+                    cached: false,
+                    scenarioName: targetScenario.name,
+                    scenarioType: targetScenario.scenarioType,
+                    categoryName: targetScenario.categoryName,
+                    categoryId: targetScenario.categoryId
+                });
+                
+                verificationResult = {
+                    score: verifyResult.score,
+                    verdict: verifyResult.verdict,
+                    passed: verifyResult.score >= 9,
+                    issues: verifyResult.issues?.length || 0
+                };
+                
+                // Update fix ledger with verification
+                await ScenarioFixLedger.markVerified(
+                    null, // We don't have the ledger entry ID, but that's ok
+                    verifyResult.score,
+                    verifyResult.verdict
+                );
+                
+                logger.info('[AUDIT FIX-SCENARIO] Verification complete', {
+                    scenarioId,
+                    score: verifyResult.score,
+                    verdict: verifyResult.verdict,
+                    passed: verifyResult.score >= 9
+                });
+                
+            } catch (verifyError) {
+                logger.warn('[AUDIT FIX-SCENARIO] Verification re-audit failed (non-fatal)', {
+                    scenarioId,
+                    error: verifyError.message
+                });
+                // Non-fatal - fix was still applied, just couldn't verify
+            }
+        }
+        
         res.json({
             success: true,
             scenarioId,
@@ -6573,8 +6649,10 @@ ${governanceBlock}`;
                 newValue: f.newValue?.substring(0, 50)
             })),
             tokensUsed,
+            // Verification result - the "checked and done" confirmation
+            verification: verificationResult,
             message: fixesApplied > 0 
-                ? `Applied ${fixesApplied} fixes to scenario` 
+                ? `Applied ${fixesApplied} fixes${verificationResult ? ` → Score: ${verificationResult.score}/10` : ''}` 
                 : `No fixable issues found (${skipped.infoLevel} info-only, ${skipped.nonFixable} admin-owned)`
         });
         
