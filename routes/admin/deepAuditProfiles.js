@@ -453,11 +453,14 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
     try {
         const { templateId } = req.params;
         
+        logger.info('[SCENARIO-AUDIT-STATUS] Request received', { templateId });
+        
         // Get template with all scenarios
         const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
         const template = await GlobalInstantResponseTemplate.findById(templateId).lean();
         
         if (!template) {
+            logger.warn('[SCENARIO-AUDIT-STATUS] Template not found', { templateId });
             return res.status(404).json({ error: 'Template not found' });
         }
         
@@ -465,11 +468,23 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
         const activeProfile = await deepAuditService.getActiveAuditProfile(templateId);
         const auditProfileId = activeProfile._id.toString();
         
+        logger.info('[SCENARIO-AUDIT-STATUS] Looking for results', { 
+            templateId, 
+            auditProfileId,
+            profileName: activeProfile.name
+        });
+        
         // Get all audit results for this profile
         const auditResults = await ScenarioAuditResult.find({ 
             templateId, 
             auditProfileId 
         }).lean();
+        
+        logger.info('[SCENARIO-AUDIT-STATUS] Found results', { 
+            templateId, 
+            auditProfileId,
+            resultsCount: auditResults.length 
+        });
         
         // Create a map for quick lookup
         const auditMap = new Map();
@@ -573,6 +588,64 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
     } catch (error) {
         logger.error('[AUDIT_PROFILES] Get scenario audit status error', { error: error.message });
         res.status(500).json({ error: 'Failed to get scenario audit status', details: error.message });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// GET /api/admin/templates/:templateId/audit-diagnostic
+// Debug endpoint: Check what's actually stored in the database
+// ════════════════════════════════════════════════════════════════════════════════
+router.get('/templates/:templateId/audit-diagnostic', async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        // Get all profiles for this template
+        const profiles = await AuditProfile.find({ templateId }).lean();
+        
+        // Get count of results per profile
+        const resultCounts = await ScenarioAuditResult.aggregate([
+            { $match: { templateId } },
+            { $group: { _id: '$auditProfileId', count: { $sum: 1 }, avgScore: { $avg: '$score' } } }
+        ]);
+        
+        // Get sample results (first 5)
+        const sampleResults = await ScenarioAuditResult.find({ templateId })
+            .limit(5)
+            .sort({ createdAt: -1 })
+            .lean();
+        
+        // Also check with different templateId formats
+        const allResults = await ScenarioAuditResult.find({}).limit(10).lean();
+        const uniqueTemplateIds = [...new Set(allResults.map(r => r.templateId))];
+        
+        res.json({
+            success: true,
+            templateId,
+            profiles: profiles.map(p => ({
+                id: p._id.toString(),
+                name: p.name,
+                isActive: p.isActive,
+                createdAt: p.createdAt
+            })),
+            resultCounts,
+            sampleResults: sampleResults.map(r => ({
+                scenarioId: r.scenarioId,
+                scenarioName: r.scenarioName,
+                templateId: r.templateId,
+                auditProfileId: r.auditProfileId,
+                score: r.score,
+                verdict: r.verdict,
+                createdAt: r.createdAt
+            })),
+            debug: {
+                totalResultsInDb: allResults.length,
+                uniqueTemplateIdsInDb: uniqueTemplateIds
+            }
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT_DIAGNOSTIC] Error', { error: error.message });
+        res.status(500).json({ error: 'Diagnostic failed', details: error.message });
     }
 });
 

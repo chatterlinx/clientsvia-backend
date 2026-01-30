@@ -4943,7 +4943,7 @@ Return JSON only:
                 // This is the authoritative "done" memory
                 // ════════════════════════════════════════════════════════════════
                 try {
-                    await ScenarioAuditResult.upsertResult({
+                    const savedResult = await ScenarioAuditResult.upsertResult({
                         templateId: templateIdStr,
                         scenarioId,
                         auditProfileId,
@@ -4975,11 +4975,24 @@ Return JSON only:
                         categoryName: scenario.categoryName,
                         categoryId: scenario.categoryId
                     });
-                } catch (cacheError) {
-                    // Non-fatal - just log and continue
-                    logger.warn('[DEEP AUDIT] Failed to cache result', {
+                    
+                    logger.info('[DEEP AUDIT] ✅ Saved result to ScenarioAuditResult', {
                         scenarioId,
-                        error: cacheError.message
+                        scenarioName: scenario.name,
+                        score: auditResult.score,
+                        templateId: templateIdStr,
+                        auditProfileId,
+                        savedId: savedResult?._id?.toString()
+                    });
+                } catch (cacheError) {
+                    // Log full error for debugging
+                    logger.error('[DEEP AUDIT] ❌ Failed to cache result', {
+                        scenarioId,
+                        scenarioName: scenario.name,
+                        templateId: templateIdStr,
+                        auditProfileId,
+                        error: cacheError.message,
+                        stack: cacheError.stack
                     });
                 }
                 
