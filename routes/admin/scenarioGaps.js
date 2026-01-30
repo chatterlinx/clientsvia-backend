@@ -5137,12 +5137,54 @@ Return JSON only:
             ...summary
         });
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // FINAL RESULT: Include all critical identifiers for debugging/export
+        // ════════════════════════════════════════════════════════════════════════════
         const finalResult = {
             success: true,
             auditType: 'deep',
             poweredBy: 'GPT-4o',
+            
+            // Critical identifiers (MUST be in export for debugging)
+            templateId: templateIdStr,
+            companyId,
+            exportedAt: new Date().toISOString(),
+            
+            // Audit profile (proves we're using new system)
+            auditProfile: {
+                id: auditProfileId,
+                name: auditProfile.name,
+                rubricVersion: auditProfile.rubricVersion
+            },
+            
             summary,
-            scenarios: results.sort((a, b) => (a.score || 0) - (b.score || 0)) // Worst first
+            scenarios: results.sort((a, b) => (a.score || 0) - (b.score || 0)), // Worst first
+            
+            // Groupings for UI
+            byVerdict: {
+                PERFECT: results.filter(r => r.verdict === 'PERFECT').map(r => r.name),
+                GOOD: results.filter(r => r.verdict === 'GOOD').map(r => r.name),
+                ACCEPTABLE: results.filter(r => r.verdict === 'ACCEPTABLE').map(r => r.name),
+                NEEDS_WORK: results.filter(r => r.verdict === 'NEEDS_WORK').map(r => r.name),
+                FAILS: results.filter(r => r.verdict === 'FAILS').map(r => r.name)
+            },
+            
+            // Common issues for quick analysis
+            commonIssues: (() => {
+                const issueCounts = {};
+                results.forEach(r => {
+                    (r.issues || []).forEach(issue => {
+                        const key = (issue.issue || '').toLowerCase().substring(0, 50);
+                        if (key) {
+                            issueCounts[key] = (issueCounts[key] || 0) + 1;
+                        }
+                    });
+                });
+                return Object.entries(issueCounts)
+                    .map(([issue, count]) => ({ issue, count }))
+                    .sort((a, b) => b.count - a.count)
+                    .slice(0, 20);
+            })()
         };
         
         // Clean up keepalive interval
