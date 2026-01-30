@@ -6153,10 +6153,13 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
         if (beforeHash !== afterHash && targetScenario) {
             try {
                 const auditProfile = await deepAuditService.getActiveAuditProfile(templateIdStr);
+                const auditProfileId = auditProfile._id.toString();
+                const fixedScenarioId = targetScenario.scenarioId || scenarioId;
+                
                 await ScenarioFixLedger.recordFix({
                     templateId: templateIdStr,
-                    scenarioId: targetScenario.scenarioId || scenarioId,
-                    auditProfileId: auditProfile._id.toString(),
+                    scenarioId: fixedScenarioId,
+                    auditProfileId,
                     beforeHash,
                     afterHash,
                     fixType: 'auto_gpt',
@@ -6166,8 +6169,16 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
                     appliedBy: req.user?.email || 'admin',
                     notes: `Fixed field: ${field}`
                 });
-                logger.info('[AUDIT FIX] Recorded fix in ledger', {
-                    scenarioId,
+                
+                // ════════════════════════════════════════════════════════════════
+                // PURGE CACHED RESULT: Content changed, old result is invalid
+                // This forces re-audit on next Deep Audit run
+                // ════════════════════════════════════════════════════════════════
+                const ScenarioAuditResult = require('../../models/ScenarioAuditResult');
+                await ScenarioAuditResult.purgeForScenario(templateIdStr, fixedScenarioId, auditProfileId);
+                
+                logger.info('[AUDIT FIX] Recorded fix and purged cached result', {
+                    scenarioId: fixedScenarioId,
                     beforeHash,
                     afterHash
                 });
@@ -6492,10 +6503,13 @@ ${governanceBlock}`;
         if (beforeHash !== afterHash) {
             try {
                 const auditProfile = await deepAuditService.getActiveAuditProfile(templateIdStr);
+                const auditProfileId = auditProfile._id.toString();
+                const fixedScenarioId = targetScenario.scenarioId || scenarioId;
+                
                 await ScenarioFixLedger.recordFix({
                     templateId: templateIdStr,
-                    scenarioId: targetScenario.scenarioId || scenarioId,
-                    auditProfileId: auditProfile._id.toString(),
+                    scenarioId: fixedScenarioId,
+                    auditProfileId,
                     beforeHash,
                     afterHash,
                     fixType: 'auto_gpt',
@@ -6506,8 +6520,16 @@ ${governanceBlock}`;
                     appliedBy: req.user?.email || 'admin',
                     notes: `Batch fix: ${fixesApplied} fields fixed`
                 });
-                logger.info('[AUDIT FIX-SCENARIO] Recorded batch fix in ledger', {
-                    scenarioId,
+                
+                // ════════════════════════════════════════════════════════════════
+                // PURGE CACHED RESULT: Content changed, old result is invalid
+                // This forces re-audit on next Deep Audit run
+                // ════════════════════════════════════════════════════════════════
+                const ScenarioAuditResult = require('../../models/ScenarioAuditResult');
+                await ScenarioAuditResult.purgeForScenario(templateIdStr, fixedScenarioId, auditProfileId);
+                
+                logger.info('[AUDIT FIX-SCENARIO] Recorded batch fix and purged cached result', {
+                    scenarioId: fixedScenarioId,
                     beforeHash,
                     afterHash,
                     fixesApplied

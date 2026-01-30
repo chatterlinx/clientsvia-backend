@@ -1593,10 +1593,10 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
-                        <button onclick="loadScenarioAuditStatus()" 
+                        <button onclick="refreshAuditStatus(this)" id="audit-status-refresh-btn"
                             style="background: rgba(96,165,250,0.2); border: 1px solid rgba(96,165,250,0.5); color: var(--accent-blue); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;"
                             title="Refresh scenario list">
-                            <i class="fas fa-sync"></i>
+                            <i class="fas fa-sync" id="audit-status-refresh-icon"></i>
                         </button>
                         <button onclick="toggleAuditProfileDetails()" style="background: transparent; border: none; color: #888; cursor: pointer; font-size: 12px;">
                             <i class="fas fa-chevron-down" id="audit-profile-toggle-icon"></i>
@@ -4747,6 +4747,24 @@
         // SCENARIO AUDIT STATUS - SINGLE SOURCE OF TRUTH
         // Shows all scenarios with their audit status under the active profile
         // ════════════════════════════════════════════════════════════════════════════════
+        
+        async function refreshAuditStatus(btn) {
+            const icon = document.getElementById('audit-status-refresh-icon');
+            if (icon) icon.classList.add('fa-spin');
+            if (btn) btn.disabled = true;
+            
+            try {
+                await loadAuditProfile(); // This also calls loadScenarioAuditStatus
+                showToast('Audit status refreshed', 'success');
+            } catch (error) {
+                console.error('[REFRESH] Error:', error);
+                showToast('Refresh failed', 'error');
+            } finally {
+                if (icon) icon.classList.remove('fa-spin');
+                if (btn) btn.disabled = false;
+            }
+        }
+        
         async function loadScenarioAuditStatus() {
             const templateId = window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
             if (!templateId) return;
