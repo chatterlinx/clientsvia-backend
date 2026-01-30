@@ -1570,83 +1570,169 @@
             </div>
             
             <!-- ════════════════════════════════════════════════════════════════════════════════ -->
-            <!-- AUDIT PROFILE MANAGEMENT PANEL -->
+            <!-- AUDIT PROFILE MANAGEMENT PANEL - SINGLE SOURCE OF TRUTH -->
             <!-- Controls which audit settings are active and cached results management -->
             <!-- ════════════════════════════════════════════════════════════════════════════════ -->
             <div id="audit-profile-panel" style="background: linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(99,102,241,0.1) 100%); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h3 style="margin: 0; color: #8b5cf6; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-id-card"></i>
-                        Audit Profile
-                        <span style="font-size: 11px; background: rgba(139,92,246,0.3); padding: 2px 8px; border-radius: 8px; color: #a78bfa;">Scenarios audited under this profile are cached</span>
-                    </h3>
-                    <button onclick="toggleAuditProfileDetails()" style="background: transparent; border: none; color: #888; cursor: pointer; font-size: 12px;">
-                        <i class="fas fa-chevron-down" id="audit-profile-toggle-icon"></i>
-                    </button>
+                
+                <!-- Header Row -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; color: #8b5cf6; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                            <i class="fas fa-id-card"></i>
+                            Audit Profile
+                            <span style="font-size: 11px; background: rgba(139,92,246,0.3); padding: 2px 8px; border-radius: 8px; color: #a78bfa;">GLOBAL - Template Scoped</span>
+                        </h3>
+                        <!-- Template Info -->
+                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                            <div style="font-size: 13px; color: var(--text-muted);">
+                                <i class="fas fa-file-alt" style="margin-right: 4px;"></i>
+                                Template: <span id="profile-template-name" style="color: #fff; font-weight: 600;">Loading...</span>
+                            </div>
+                            <div style="font-size: 11px; color: #888; font-family: monospace;" id="profile-template-id"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button onclick="loadScenarioAuditStatus()" 
+                            style="background: rgba(96,165,250,0.2); border: 1px solid rgba(96,165,250,0.5); color: var(--accent-blue); padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 11px;"
+                            title="Refresh scenario list">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                        <button onclick="toggleAuditProfileDetails()" style="background: transparent; border: none; color: #888; cursor: pointer; font-size: 12px;">
+                            <i class="fas fa-chevron-down" id="audit-profile-toggle-icon"></i>
+                        </button>
+                    </div>
                 </div>
                 
-                <!-- Active Profile Summary -->
-                <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 200px;">
-                        <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Active Profile:</div>
+                <!-- Profile Summary Row -->
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
+                    <div style="flex: 1; min-width: 180px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Active Profile:</div>
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <span id="active-profile-name" style="font-size: 16px; font-weight: 600; color: #fff;">Loading...</span>
-                            <span id="active-profile-version" style="font-size: 11px; background: rgba(52,211,153,0.2); color: var(--accent-green); padding: 2px 6px; border-radius: 4px;"></span>
+                            <span id="active-profile-name" style="font-size: 15px; font-weight: 600; color: #fff;">Loading...</span>
+                            <span id="active-profile-version" style="font-size: 10px; background: rgba(52,211,153,0.2); color: var(--accent-green); padding: 2px 6px; border-radius: 4px;"></span>
                         </div>
                     </div>
                     
-                    <div style="text-align: center; padding: 0 16px; border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1);">
-                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-green);" id="profile-cached-count">--</div>
-                        <div style="font-size: 11px; color: var(--text-muted);">Cached</div>
+                    <!-- Counts -->
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <div style="text-align: center; padding: 8px 12px; background: rgba(168,85,247,0.2); border-radius: 8px; min-width: 60px;">
+                            <div style="font-size: 20px; font-weight: bold; color: #a78bfa;" id="profile-total-count">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">Total</div>
+                        </div>
+                        <div style="text-align: center; padding: 8px 12px; background: rgba(52,211,153,0.2); border-radius: 8px; min-width: 60px;">
+                            <div style="font-size: 20px; font-weight: bold; color: var(--accent-green);" id="profile-audited-count">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">Audited</div>
+                        </div>
+                        <div style="text-align: center; padding: 8px 12px; background: rgba(251,191,36,0.2); border-radius: 8px; min-width: 60px;">
+                            <div style="font-size: 20px; font-weight: bold; color: var(--accent-yellow);" id="profile-pending-count">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">Pending</div>
+                        </div>
+                        <div style="text-align: center; padding: 8px 12px; background: rgba(34,211,238,0.2); border-radius: 8px; min-width: 60px;">
+                            <div style="font-size: 20px; font-weight: bold; color: #22d3ee;" id="profile-perfect-count">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">Perfect</div>
+                        </div>
+                        <div style="text-align: center; padding: 8px 12px; background: rgba(239,68,68,0.2); border-radius: 8px; min-width: 60px;">
+                            <div style="font-size: 20px; font-weight: bold; color: #ef4444;" id="profile-needswork-count">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">Needs Work</div>
+                        </div>
                     </div>
                     
-                    <div style="text-align: center; padding: 0 16px; border-right: 1px solid rgba(255,255,255,0.1);">
-                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-yellow);" id="profile-needswork-count">--</div>
-                        <div style="font-size: 11px; color: var(--text-muted);">Needs Work</div>
-                    </div>
-                    
+                    <!-- Action Buttons -->
                     <div style="display: flex; gap: 8px;">
                         <button onclick="resetAuditProfile()" 
                             style="background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); color: #ef4444; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;"
                             title="Clear all cached results - all scenarios will be re-audited on next run">
-                            <i class="fas fa-redo"></i> Reset Profile
+                            <i class="fas fa-redo"></i> Reset
                         </button>
                         <button onclick="showNewProfileModal()" 
                             style="background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.5); color: #8b5cf6; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;"
                             title="Create new profile with different settings">
-                            <i class="fas fa-plus"></i> New Profile
+                            <i class="fas fa-plus"></i> New
                         </button>
                     </div>
                 </div>
                 
-                <!-- Expanded Details (hidden by default) -->
-                <div id="audit-profile-details" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <!-- Progress Bar -->
+                <div style="margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">Audit Progress</span>
+                        <span style="font-size: 11px; color: #fff; font-weight: 600;" id="profile-progress-percent">0%</span>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.3); border-radius: 4px; height: 8px; overflow: hidden;">
+                        <div id="profile-progress-bar" style="background: linear-gradient(90deg, var(--accent-green), #22d3ee); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+                
+                <!-- Expanded Details -->
+                <div id="audit-profile-details" style="display: none; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+                    
+                    <!-- Profile Metadata -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px;">
                         <div>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Profile ID</div>
-                            <div style="font-size: 12px; color: #888; font-family: monospace;" id="profile-id">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 2px;">Profile ID</div>
+                            <div style="font-size: 11px; color: #888; font-family: monospace;" id="profile-id">--</div>
                         </div>
                         <div>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Created</div>
-                            <div style="font-size: 12px; color: #888;" id="profile-created">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 2px;">Created</div>
+                            <div style="font-size: 11px; color: #888;" id="profile-created">--</div>
                         </div>
                         <div>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Last Audit Run</div>
-                            <div style="font-size: 12px; color: #888;" id="profile-last-audit">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 2px;">Last Audit Run</div>
+                            <div style="font-size: 11px; color: #888;" id="profile-last-audit">--</div>
                         </div>
                         <div>
-                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Fixes Applied</div>
-                            <div style="font-size: 12px; color: #888;" id="profile-fixes-count">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 2px;">Fixes Applied</div>
+                            <div style="font-size: 11px; color: #888;" id="profile-fixes-count">--</div>
                         </div>
                     </div>
                     
-                    <!-- Switch Profile -->
-                    <div style="margin-top: 16px;">
-                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Switch Profile:</div>
+                    <!-- Switch Profile Dropdown -->
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 4px;">Switch Profile:</div>
                         <select id="profile-selector" onchange="switchAuditProfile(this.value)" 
-                            style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%; max-width: 300px; cursor: pointer;">
+                            style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 6px 10px; border-radius: 6px; width: 100%; max-width: 300px; cursor: pointer; font-size: 12px;">
                             <option value="">Loading profiles...</option>
                         </select>
+                    </div>
+                    
+                    <!-- ════════════════════════════════════════════════════════════════════════ -->
+                    <!-- SCENARIO AUDIT STATUS LIST - SINGLE SOURCE OF TRUTH -->
+                    <!-- ════════════════════════════════════════════════════════════════════════ -->
+                    <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <h4 style="margin: 0; font-size: 13px; color: #fff; display: flex; align-items: center; gap: 8px;">
+                                <i class="fas fa-list-check" style="color: var(--accent-green);"></i>
+                                Scenario Audit Status
+                                <span style="font-size: 10px; background: rgba(52,211,153,0.3); padding: 2px 6px; border-radius: 4px; color: var(--accent-green);">SINGLE SOURCE OF TRUTH</span>
+                            </h4>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <select id="scenario-status-filter" onchange="filterScenarioList()" 
+                                    style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                                    <option value="all">All Scenarios</option>
+                                    <option value="pending">Pending Only</option>
+                                    <option value="audited">Audited Only</option>
+                                    <option value="perfect">Perfect Only</option>
+                                    <option value="needswork">Needs Work Only</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Scenario List Header -->
+                        <div style="display: grid; grid-template-columns: 30px 1fr 120px 80px 140px; gap: 8px; padding: 8px 12px; background: rgba(0,0,0,0.3); border-radius: 6px 6px 0 0; font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 600;">
+                            <div style="text-align: center;">✓</div>
+                            <div>Scenario Name</div>
+                            <div>Category</div>
+                            <div style="text-align: center;">Score</div>
+                            <div style="text-align: right;">Audited At</div>
+                        </div>
+                        
+                        <!-- Scrollable Scenario List -->
+                        <div id="scenario-audit-list" style="max-height: 400px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 0 0 6px 6px; border: 1px solid rgba(255,255,255,0.1); border-top: none;">
+                            <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+                                <i class="fas fa-spinner fa-spin"></i> Loading scenarios...
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4595,6 +4681,7 @@
         // ════════════════════════════════════════════════════════════════════════════════
         let currentAuditProfile = null;
         let allAuditProfiles = [];
+        let allScenariosAuditStatus = []; // Full scenario list with audit status
         
         async function loadAuditProfile() {
             try {
@@ -4629,20 +4716,170 @@
                 
                 // Stats
                 if (currentAuditProfile.stats) {
-                    document.getElementById('profile-cached-count').textContent = currentAuditProfile.stats.totalResults || 0;
-                    document.getElementById('profile-needswork-count').textContent = currentAuditProfile.stats.needsWork || 0;
                     document.getElementById('profile-fixes-count').textContent = 
                         (currentAuditProfile.fixStats?.totalFixes || currentAuditProfile.stats.totalFixes || 0);
                 }
                 
                 console.log('✅ [AUDIT PROFILE] Loaded:', currentAuditProfile.name, currentAuditProfile._id || currentAuditProfile.id);
                 
-                // Also load all profiles for the dropdown
+                // Load all profiles for the dropdown
                 loadAllAuditProfiles(templateId);
+                
+                // Load full scenario audit status (the source of truth)
+                loadScenarioAuditStatus();
                 
             } catch (error) {
                 console.error('[AUDIT PROFILE] Load error:', error);
             }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // SCENARIO AUDIT STATUS - SINGLE SOURCE OF TRUTH
+        // Shows all scenarios with their audit status under the active profile
+        // ════════════════════════════════════════════════════════════════════════════════
+        async function loadScenarioAuditStatus() {
+            const templateId = window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
+            if (!templateId) return;
+            
+            try {
+                const response = await fetch(`/api/admin/templates/${templateId}/scenario-audit-status`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) {
+                    console.warn('[SCENARIO STATUS] Failed to load:', response.status);
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                // Update template info
+                const templateNameEl = document.getElementById('profile-template-name');
+                const templateIdEl = document.getElementById('profile-template-id');
+                if (templateNameEl) templateNameEl.textContent = data.template?.name || 'Unknown';
+                if (templateIdEl) templateIdEl.textContent = `ID: ${data.template?.id || templateId}`;
+                
+                // Update counts
+                const summary = data.summary || {};
+                document.getElementById('profile-total-count').textContent = summary.totalScenarios || 0;
+                document.getElementById('profile-audited-count').textContent = summary.auditedCount || 0;
+                document.getElementById('profile-pending-count').textContent = summary.pendingCount || 0;
+                document.getElementById('profile-perfect-count').textContent = summary.perfectCount || 0;
+                document.getElementById('profile-needswork-count').textContent = summary.needsWorkCount || 0;
+                
+                // Update progress bar
+                const percent = summary.progressPercent || 0;
+                document.getElementById('profile-progress-percent').textContent = `${percent}%`;
+                document.getElementById('profile-progress-bar').style.width = `${percent}%`;
+                
+                // Store scenarios and render list
+                allScenariosAuditStatus = data.scenarios || [];
+                renderScenarioList(allScenariosAuditStatus);
+                
+                console.log('✅ [SCENARIO STATUS] Loaded:', summary.totalScenarios, 'scenarios,', summary.auditedCount, 'audited');
+                
+            } catch (error) {
+                console.error('[SCENARIO STATUS] Load error:', error);
+            }
+        }
+        
+        function renderScenarioList(scenarios) {
+            const listEl = document.getElementById('scenario-audit-list');
+            if (!listEl) return;
+            
+            if (!scenarios || scenarios.length === 0) {
+                listEl.innerHTML = `
+                    <div style="padding: 20px; text-align: center; color: var(--text-muted);">
+                        <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 8px;"></i>
+                        <div>No scenarios found</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            listEl.innerHTML = scenarios.map((s, idx) => {
+                const isAudited = s.isAudited;
+                const isPerfect = s.verdict === 'perfect' || s.score >= 9;
+                const needsWork = s.verdict === 'needs_work' || (s.score !== null && s.score < 7);
+                
+                // Checkmark styling
+                let checkIcon, checkColor;
+                if (!isAudited) {
+                    checkIcon = 'fa-clock';
+                    checkColor = '#888';
+                } else if (isPerfect) {
+                    checkIcon = 'fa-check-circle';
+                    checkColor = 'var(--accent-green)';
+                } else if (needsWork) {
+                    checkIcon = 'fa-exclamation-circle';
+                    checkColor = '#ef4444';
+                } else {
+                    checkIcon = 'fa-check';
+                    checkColor = 'var(--accent-blue)';
+                }
+                
+                // Score display
+                let scoreDisplay = '--';
+                let scoreColor = '#888';
+                if (s.score !== null) {
+                    scoreDisplay = s.score + '/10';
+                    if (s.score >= 9) scoreColor = 'var(--accent-green)';
+                    else if (s.score >= 7) scoreColor = 'var(--accent-blue)';
+                    else scoreColor = '#ef4444';
+                }
+                
+                // Timestamp
+                const timestamp = s.auditedAt 
+                    ? new Date(s.auditedAt).toLocaleString('en-US', { 
+                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' 
+                      })
+                    : '--';
+                
+                return `
+                    <div style="display: grid; grid-template-columns: 30px 1fr 120px 80px 140px; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; ${idx % 2 === 0 ? '' : 'background: rgba(0,0,0,0.1);'}"
+                         data-audited="${isAudited}" data-perfect="${isPerfect}" data-needswork="${needsWork}">
+                        <div style="text-align: center;">
+                            <i class="fas ${checkIcon}" style="color: ${checkColor};"></i>
+                        </div>
+                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <span style="color: #fff;" title="${escapeHtml(s.scenarioName)}">${escapeHtml(s.scenarioName)}</span>
+                            <div style="font-size: 10px; color: #666; font-family: monospace;">${s.scenarioId}</div>
+                        </div>
+                        <div style="color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(s.categoryName)}">
+                            ${escapeHtml(s.categoryName)}
+                        </div>
+                        <div style="text-align: center; color: ${scoreColor}; font-weight: 600;">
+                            ${scoreDisplay}
+                        </div>
+                        <div style="text-align: right; color: #888; font-size: 11px;">
+                            ${timestamp}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        function filterScenarioList() {
+            const filter = document.getElementById('scenario-status-filter')?.value || 'all';
+            
+            let filtered = allScenariosAuditStatus;
+            
+            switch (filter) {
+                case 'pending':
+                    filtered = allScenariosAuditStatus.filter(s => !s.isAudited);
+                    break;
+                case 'audited':
+                    filtered = allScenariosAuditStatus.filter(s => s.isAudited);
+                    break;
+                case 'perfect':
+                    filtered = allScenariosAuditStatus.filter(s => s.verdict === 'perfect' || s.score >= 9);
+                    break;
+                case 'needswork':
+                    filtered = allScenariosAuditStatus.filter(s => s.verdict === 'needs_work' || (s.score !== null && s.score < 7));
+                    break;
+            }
+            
+            renderScenarioList(filtered);
         }
         
         async function loadAllAuditProfiles(templateId) {

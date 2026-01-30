@@ -445,4 +445,135 @@ router.get('/templates/:templateId/audit-results', async (req, res) => {
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// GET /api/admin/templates/:templateId/scenario-audit-status
+// SINGLE SOURCE OF TRUTH: All scenarios with their audit status under active profile
+// ════════════════════════════════════════════════════════════════════════════════
+router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        // Get template with all scenarios
+        const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+        const template = await GlobalInstantResponseTemplate.findById(templateId).lean();
+        
+        if (!template) {
+            return res.status(404).json({ error: 'Template not found' });
+        }
+        
+        // Get active profile
+        const activeProfile = await deepAuditService.getActiveAuditProfile(templateId);
+        const auditProfileId = activeProfile._id.toString();
+        
+        // Get all audit results for this profile
+        const auditResults = await ScenarioAuditResult.find({ 
+            templateId, 
+            auditProfileId 
+        }).lean();
+        
+        // Create a map for quick lookup
+        const auditMap = new Map();
+        auditResults.forEach(r => {
+            auditMap.set(r.scenarioId, r);
+        });
+        
+        // Build the comprehensive scenario list
+        const scenarios = [];
+        let totalScenarios = 0;
+        let auditedCount = 0;
+        let pendingCount = 0;
+        let perfectCount = 0;
+        let needsWorkCount = 0;
+        
+        // Flatten all scenarios from categories
+        (template.categories || []).forEach(category => {
+            (category.scenarios || []).forEach(scenario => {
+                totalScenarios++;
+                
+                const scenarioId = scenario._id?.toString() || scenario.id;
+                const auditResult = auditMap.get(scenarioId);
+                
+                const scenarioInfo = {
+                    scenarioId,
+                    scenarioName: scenario.scenarioName || scenario.name || 'Unnamed',
+                    categoryName: category.categoryName || category.name || 'Uncategorized',
+                    isAudited: !!auditResult,
+                    auditedAt: auditResult?.createdAt || null,
+                    verdict: auditResult?.verdict || null,
+                    score: auditResult?.score ?? null,
+                    contentHash: auditResult?.scenarioContentHash || null
+                };
+                
+                if (auditResult) {
+                    auditedCount++;
+                    if (auditResult.verdict === 'perfect' || auditResult.score >= 9) {
+                        perfectCount++;
+                    } else if (auditResult.verdict === 'needs_work' || auditResult.score < 7) {
+                        needsWorkCount++;
+                    }
+                } else {
+                    pendingCount++;
+                }
+                
+                scenarios.push(scenarioInfo);
+            });
+        });
+        
+        // Sort: pending first, then needs_work, then by name
+        scenarios.sort((a, b) => {
+            // Pending (not audited) first
+            if (!a.isAudited && b.isAudited) return -1;
+            if (a.isAudited && !b.isAudited) return 1;
+            
+            // Among audited: needs_work first
+            if (a.isAudited && b.isAudited) {
+                const aScore = a.score ?? 10;
+                const bScore = b.score ?? 10;
+                if (aScore !== bScore) return aScore - bScore;
+            }
+            
+            // Then by name
+            return (a.scenarioName || '').localeCompare(b.scenarioName || '');
+        });
+        
+        res.json({
+            success: true,
+            
+            // Template info
+            template: {
+                id: templateId,
+                name: template.name || template.templateName || 'Unknown Template',
+                totalCategories: template.categories?.length || 0
+            },
+            
+            // Active profile
+            auditProfile: {
+                id: auditProfileId,
+                name: activeProfile.name,
+                rubricVersion: activeProfile.rubricVersion || 'v1',
+                createdAt: activeProfile.createdAt
+            },
+            
+            // Summary counts
+            summary: {
+                totalScenarios,
+                auditedCount,
+                pendingCount,
+                perfectCount,
+                needsWorkCount,
+                progressPercent: totalScenarios > 0 
+                    ? Math.round((auditedCount / totalScenarios) * 100) 
+                    : 0
+            },
+            
+            // Full scenario list
+            scenarios
+        });
+        
+    } catch (error) {
+        logger.error('[AUDIT_PROFILES] Get scenario audit status error', { error: error.message });
+        res.status(500).json({ error: 'Failed to get scenario audit status', details: error.message });
+    }
+});
+
 module.exports = router;
