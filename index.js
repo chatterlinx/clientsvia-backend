@@ -616,6 +616,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/scenario-diagnostics', routes.scenarioDiagnosticsRoutes); // 🔍 Scenario Diagnostics (proof layer)
     app.use('/api/admin/scenario-migrations', require('./routes/admin/scenarioMigrations')); // 🔧 Scenario Migrations (fix matching issues)
     app.use('/api/admin/scenario-gaps', require('./routes/admin/scenarioGaps')); // 🎯 Scenario Gaps Detection & Auto-Create (V88)
+    app.use('/api/admin', require('./routes/admin/deepAuditProfiles')); // 🧪 Deep Audit Profiles (versioned standards + caching)
     app.use('/api/admin/blueprints', require('./routes/admin/blueprintRoutes')); // 🏗️ Blueprint Builder - Template Coverage & Generation (V22)
     app.use('/api/admin/placeholders', require('./routes/admin/placeholderRoutes')); // 🏷️ Placeholder Catalog, Scanner & Coverage (Enterprise Onboarding)
     app.use('/api/admin', require('./routes/admin/configAudit')); // 🧾 Config Audit Log (append-only) - read endpoint

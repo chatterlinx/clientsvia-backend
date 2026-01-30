@@ -4584,21 +4584,36 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         res.setTimeout(0);
         
         // ════════════════════════════════════════════════════════════════════════════
+        // AUDIT PROFILE SYSTEM: Get or create active profile
+        // This is the "standards contract" that makes "done" deterministic
+        // ════════════════════════════════════════════════════════════════════════════
+        const deepAuditService = require('../../services/deepAudit');
+        const ScenarioAuditResult = require('../../models/ScenarioAuditResult');
+        
+        const templateIdStr = template._id?.toString();
+        const auditProfile = await deepAuditService.getActiveAuditProfile(templateIdStr);
+        const auditProfileId = auditProfile._id.toString();
+        
+        logger.info('[DEEP AUDIT] Using audit profile', {
+            auditProfileId,
+            profileName: auditProfile.name,
+            rubricVersion: auditProfile.rubricVersion
+        });
+        
+        sendProgress({
+            type: 'profile',
+            auditProfile: {
+                id: auditProfileId,
+                name: auditProfile.name,
+                rubricVersion: auditProfile.rubricVersion
+            },
+            message: `Using audit profile: ${auditProfile.name}`
+        });
+        
+        // ════════════════════════════════════════════════════════════════════════════
         // BLUEPRINT-AWARE AUDIT: Create matcher for intent lookup
         // ════════════════════════════════════════════════════════════════════════════
         const matcher = new IntentMatcher(HVAC_BLUEPRINT_SPEC);
-        
-        // Helper: Calculate content hash for caching (crypto already imported at top)
-        function calculateContentHash(scenario) {
-            const content = JSON.stringify({
-                name: scenario.name,
-                triggers: scenario.triggers || [],
-                quickReplies: scenario.quickReplies || [],
-                fullReplies: scenario.fullReplies || [],
-                scenarioType: scenario.scenarioType
-            });
-            return crypto.createHash('sha256').update(content).digest('hex').substring(0, 16);
-        }
         
         let cachedCount = 0;
         
@@ -4615,35 +4630,47 @@ router.post('/:companyId/audit/deep', async (req, res) => {
             
             try {
                 // ════════════════════════════════════════════════════════════════
-                // CONTENT HASH CACHING: Skip re-audit if content unchanged
+                // PROFILE-BASED CACHING: Check ScenarioAuditResult collection
+                // Cache key: templateId + scenarioId + auditProfileId + contentHash
                 // ════════════════════════════════════════════════════════════════
-                const contentHash = calculateContentHash(scenario);
+                const scenarioId = scenario.scenarioId || scenario._id?.toString();
+                const contentHash = deepAuditService.hashScenarioContent(scenario);
                 
-                if (scenario.lastAuditContentHash === contentHash && 
-                    scenario.lastAuditScore != null && 
-                    scenario.lastAuditedAt) {
-                    // Content unchanged since last audit - reuse cached result
+                // Check for cached result in ScenarioAuditResult collection
+                const cachedResult = await ScenarioAuditResult.findCached({
+                    templateId: templateIdStr,
+                    scenarioId,
+                    auditProfileId,
+                    scenarioContentHash: contentHash
+                });
+                
+                if (cachedResult) {
+                    // Valid cache hit - reuse result, no GPT call
                     cachedCount++;
                     processed++;
                     
-                    const cachedScore = scenario.lastAuditScore;
-                    if (cachedScore >= 9 && scenario.lastAuditVerdict !== 'NEEDS_WORK') perfect++;
-                    else if (cachedScore < 7 || scenario.lastAuditVerdict === 'NEEDS_WORK') needsWork++;
+                    const cachedScore = cachedResult.score;
+                    if (cachedScore >= 9 && cachedResult.verdict !== 'NEEDS_WORK') perfect++;
+                    else if (cachedScore < 7 || cachedResult.verdict === 'NEEDS_WORK') needsWork++;
                     
                     results.push({
-                        scenarioId: scenario.scenarioId || scenario._id?.toString(),
+                        scenarioId,
                         name: scenario.name,
                         scenarioType: scenario.scenarioType,
                         category: scenario.categoryName,
                         categoryId: scenario.categoryId,
-                        templateId: template._id?.toString(),
+                        templateId: templateIdStr,
+                        auditProfileId,
                         score: cachedScore,
-                        verdict: scenario.lastAuditVerdict || (cachedScore >= 9 ? 'PERFECT' : cachedScore >= 7 ? 'GOOD' : 'NEEDS_WORK'),
-                        issues: [],
-                        strengths: [],
-                        rewriteNeeded: cachedScore < 7,
+                        verdict: cachedResult.verdict,
+                        issues: cachedResult.issues || [],
+                        strengths: cachedResult.strengths || [],
+                        rewriteNeeded: cachedResult.rewriteNeeded || cachedScore < 7,
                         cached: true,
-                        cacheNote: 'Content unchanged since last audit'
+                        cacheNote: `Cached under profile: ${auditProfile.name}`,
+                        contentHash,
+                        blueprintMatch: cachedResult.blueprintItemKey,
+                        intentFulfilled: cachedResult.intentFulfilled
                     });
                     
                     sendProgress({
@@ -4889,12 +4916,13 @@ Return JSON only:
                 else if (auditResult.rewriteNeeded || auditResult.score < 7) needsWork++;
                 
                 const resultEntry = {
-                    scenarioId: scenario.scenarioId || scenario._id?.toString(),
+                    scenarioId,
                     name: scenario.name,
                     scenarioType: scenario.scenarioType,
                     category: scenario.categoryName,
                     categoryId: scenario.categoryId,
-                    templateId: template._id?.toString(),
+                    templateId: templateIdStr,
+                    auditProfileId,
                     ...auditResult,
                     // Content hash for caching
                     contentHash,
@@ -4909,6 +4937,51 @@ Return JSON only:
                         verifiedIssueCount: groundedIssues.length
                     }
                 };
+                
+                // ════════════════════════════════════════════════════════════════
+                // PERSIST TO ScenarioAuditResult COLLECTION (profile-based cache)
+                // This is the authoritative "done" memory
+                // ════════════════════════════════════════════════════════════════
+                try {
+                    await ScenarioAuditResult.upsertResult({
+                        templateId: templateIdStr,
+                        scenarioId,
+                        auditProfileId,
+                        scenarioContentHash: contentHash,
+                        score: auditResult.score,
+                        verdict: auditResult.verdict,
+                        rewriteNeeded: auditResult.rewriteNeeded,
+                        issues: groundedIssues,
+                        strengths: auditResult.strengths || [],
+                        fixSuggestions: groundedIssues.map(i => i.suggestion).filter(Boolean),
+                        blueprintItemKey: auditResult.blueprintMatch || null,
+                        matchConfidence,
+                        matchSource,
+                        intentFulfilled: auditResult.intentFulfilled ?? null,
+                        supervision: {
+                            grounded: true,
+                            originalIssueCount,
+                            hallucinatedFiltered: hallucinatedCount,
+                            verifiedIssueCount: groundedIssues.length
+                        },
+                        model: 'gpt-4o',
+                        promptVersion: 'DEEP_AUDIT_PROMPT_V1',
+                        rubricVersion: auditProfile.rubricVersion,
+                        tokensUsed: 0, // TODO: track tokens
+                        durationMs: 0, // TODO: track duration
+                        cached: false,
+                        scenarioName: scenario.name,
+                        scenarioType: scenario.scenarioType,
+                        categoryName: scenario.categoryName,
+                        categoryId: scenario.categoryId
+                    });
+                } catch (cacheError) {
+                    // Non-fatal - just log and continue
+                    logger.warn('[DEEP AUDIT] Failed to cache result', {
+                        scenarioId,
+                        error: cacheError.message
+                    });
+                }
                 
                 results.push(resultEntry);
                 processed++;
@@ -4975,11 +5048,29 @@ Return JSON only:
             needsWork: needsWork,
             tokensUsed: totalTokens,
             estimatedCost: `$${(totalTokens * 0.00001).toFixed(4)}`,
-            // Caching stats
+            // Caching stats (profile-based)
             cached: cachedCount,
             freshAudited: results.length - cachedCount,
-            cacheHitRate: results.length > 0 ? `${Math.round((cachedCount / results.length) * 100)}%` : '0%'
+            cacheHitRate: results.length > 0 ? `${Math.round((cachedCount / results.length) * 100)}%` : '0%',
+            // Audit profile info
+            auditProfile: {
+                id: auditProfileId,
+                name: auditProfile.name,
+                rubricVersion: auditProfile.rubricVersion
+            }
         };
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // UPDATE PROFILE STATS
+        // ════════════════════════════════════════════════════════════════════════════
+        try {
+            await deepAuditService.updateProfileStats(auditProfileId, {
+                perfectCount: perfect,
+                needsWorkCount: needsWork
+            });
+        } catch (statsError) {
+            logger.warn('[DEEP AUDIT] Failed to update profile stats', { error: statsError.message });
+        }
         
         // ════════════════════════════════════════════════════════════════════════════
         // PERSIST AUDIT SCORES TO SCENARIOS (for Coverage Engine integration)
@@ -5925,10 +6016,18 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
             return res.status(400).json({ error: error.message });
         }
         
+        // Import fix ledger service
+        const deepAuditService = require('../../services/deepAudit');
+        const ScenarioFixLedger = require('../../models/ScenarioFixLedger');
+        const templateIdStr = template._id?.toString();
+        
         // Find and update the scenario
         let updated = false;
         let categoryIndex = -1;
         let scenarioIndex = -1;
+        let beforeHash = null;
+        let afterHash = null;
+        let targetScenario = null;
         
         for (let ci = 0; ci < (template.categories || []).length; ci++) {
             const category = template.categories[ci];
@@ -5937,6 +6036,12 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
                 if (scenario.scenarioId === scenarioId || scenario._id?.toString() === scenarioId) {
                     categoryIndex = ci;
                     scenarioIndex = si;
+                    targetScenario = scenario;
+                    
+                    // ════════════════════════════════════════════════════════════════
+                    // FIX LEDGER: Hash BEFORE the fix
+                    // ════════════════════════════════════════════════════════════════
+                    beforeHash = deepAuditService.hashScenarioContent(scenario);
                     
                     // Parse field path (e.g., "quickReplies[0]" -> ["quickReplies", "0"])
                     const fieldPath = field.replace(/\[(\d+)\]/g, '.$1').split('.');
@@ -5951,6 +6056,11 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
                     const oldValue = target[lastKey];
                     target[lastKey] = newValue;
                     
+                    // ════════════════════════════════════════════════════════════════
+                    // FIX LEDGER: Hash AFTER the fix
+                    // ════════════════════════════════════════════════════════════════
+                    afterHash = deepAuditService.hashScenarioContent(scenario);
+                    
                     // Mark as modified
                     scenario.lastEditedAt = new Date();
                     scenario.lastEditedBy = 'AI Audit Fix';
@@ -5964,7 +6074,10 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
                         scenarioId,
                         field,
                         oldValue,
-                        newValue
+                        newValue,
+                        beforeHash,
+                        afterHash,
+                        contentChanged: beforeHash !== afterHash
                     });
                     
                     break;
@@ -5992,12 +6105,45 @@ router.post('/:companyId/audit/apply-fix', async (req, res) => {
             }
         );
         
+        // ════════════════════════════════════════════════════════════════════════
+        // FIX LEDGER: Record the fix for audit trail
+        // ════════════════════════════════════════════════════════════════════════
+        if (beforeHash !== afterHash && targetScenario) {
+            try {
+                const auditProfile = await deepAuditService.getActiveAuditProfile(templateIdStr);
+                await ScenarioFixLedger.recordFix({
+                    templateId: templateIdStr,
+                    scenarioId: targetScenario.scenarioId || scenarioId,
+                    auditProfileId: auditProfile._id.toString(),
+                    beforeHash,
+                    afterHash,
+                    fixType: 'auto_gpt',
+                    scenarioName: targetScenario.name,
+                    scenarioType: targetScenario.scenarioType,
+                    categoryName: targetScenario.categoryName,
+                    appliedBy: req.user?.email || 'admin',
+                    notes: `Fixed field: ${field}`
+                });
+                logger.info('[AUDIT FIX] Recorded fix in ledger', {
+                    scenarioId,
+                    beforeHash,
+                    afterHash
+                });
+            } catch (ledgerError) {
+                // Non-fatal - just log
+                logger.warn('[AUDIT FIX] Failed to record fix in ledger', {
+                    error: ledgerError.message
+                });
+            }
+        }
+        
         res.json({
             success: true,
             scenarioId,
             field,
             newValue,
-            message: 'Fix applied successfully'
+            message: 'Fix applied successfully',
+            contentChanged: beforeHash !== afterHash
         });
         
     } catch (error) {
@@ -6077,11 +6223,20 @@ router.post('/:companyId/audit/fix-scenario', async (req, res) => {
             return res.status(404).json({ error: 'Scenario not found', searchId });
         }
         
+        // Import fix ledger service
+        const deepAuditService = require('../../services/deepAudit');
+        const ScenarioFixLedger = require('../../models/ScenarioFixLedger');
+        const templateIdStr = template._id?.toString();
+        
+        // FIX LEDGER: Hash BEFORE the fix
+        const beforeHash = deepAuditService.hashScenarioContent(targetScenario);
+        
         logger.info('[AUDIT FIX-SCENARIO] Starting batch fix', {
             companyId,
             scenarioId,
             scenarioName: targetScenario.name,
-            violationCount: violations?.length || 0
+            violationCount: violations?.length || 0,
+            beforeHash
         });
         
         // Build full scenario context for GPT
@@ -6287,6 +6442,42 @@ ${governanceBlock}`;
             }
         );
         
+        // ════════════════════════════════════════════════════════════════════════
+        // FIX LEDGER: Record the batch fix for audit trail
+        // ════════════════════════════════════════════════════════════════════════
+        const afterHash = deepAuditService.hashScenarioContent(targetScenario);
+        
+        if (beforeHash !== afterHash) {
+            try {
+                const auditProfile = await deepAuditService.getActiveAuditProfile(templateIdStr);
+                await ScenarioFixLedger.recordFix({
+                    templateId: templateIdStr,
+                    scenarioId: targetScenario.scenarioId || scenarioId,
+                    auditProfileId: auditProfile._id.toString(),
+                    beforeHash,
+                    afterHash,
+                    fixType: 'auto_gpt',
+                    issuesAddressed: violations?.map(v => v.ruleId || v.message).filter(Boolean) || [],
+                    scenarioName: targetScenario.name,
+                    scenarioType: targetScenario.scenarioType,
+                    categoryName: targetScenario.categoryName,
+                    appliedBy: req.user?.email || 'admin',
+                    notes: `Batch fix: ${fixesApplied} fields fixed`
+                });
+                logger.info('[AUDIT FIX-SCENARIO] Recorded batch fix in ledger', {
+                    scenarioId,
+                    beforeHash,
+                    afterHash,
+                    fixesApplied
+                });
+            } catch (ledgerError) {
+                // Non-fatal - just log
+                logger.warn('[AUDIT FIX-SCENARIO] Failed to record fix in ledger', {
+                    error: ledgerError.message
+                });
+            }
+        }
+        
         logger.info('[AUDIT FIX-SCENARIO] Batch fix complete', {
             companyId,
             scenarioId,
@@ -6294,13 +6485,15 @@ ${governanceBlock}`;
             totalViolations: violations?.length || 0,
             fixesGenerated: fixes.length,
             fixesApplied,
-            tokensUsed
+            tokensUsed,
+            contentChanged: beforeHash !== afterHash
         });
         
         res.json({
             success: true,
             scenarioId,
             scenarioName: targetScenario.name,
+            contentChanged: beforeHash !== afterHash,
             totalViolations: violations?.length || 0,
             fixesGenerated: fixes.length,
             fixesApplied,
