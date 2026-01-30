@@ -4406,6 +4406,16 @@ router.post('/:companyId/audit/deep', async (req, res) => {
     const { companyId } = req.params;
     const { scenarioIds, category, maxScenarios = 50, stream = false, listOnly = false, templateId: providedTemplateId } = req.body;
     
+    // CRITICAL DEBUG: Log every Deep Audit request
+    logger.info('[DEEP AUDIT] ═══════════════════════════════════════════════════════');
+    logger.info('[DEEP AUDIT] 📥 REQUEST RECEIVED', {
+        companyId,
+        scenarioIdsCount: scenarioIds?.length || 0,
+        stream,
+        providedTemplateId,
+        timestamp: new Date().toISOString()
+    });
+    
     // Set up SSE if streaming requested
     const isStreaming = stream === true || stream === 'true';
     if (isStreaming) {
@@ -4591,6 +4601,15 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         const ScenarioAuditResult = require('../../models/ScenarioAuditResult');
         
         const templateIdStr = template._id?.toString();
+        
+        // CRITICAL DEBUG: Log the exact templateId being used
+        logger.info('[DEEP AUDIT] 🔑 TEMPLATE ID FOR SAVING', {
+            templateIdStr,
+            templateIdRaw: template._id,
+            templateName: template.name || template.templateName,
+            companyId
+        });
+        
         const auditProfile = await deepAuditService.getActiveAuditProfile(templateIdStr);
         const auditProfileId = auditProfile._id.toString();
         

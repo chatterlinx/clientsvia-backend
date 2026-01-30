@@ -599,52 +599,105 @@ router.get('/templates/:templateId/audit-diagnostic', async (req, res) => {
     try {
         const { templateId } = req.params;
         
+        logger.info('[AUDIT_DIAGNOSTIC] Running diagnostic', { templateId });
+        
         // Get all profiles for this template
         const profiles = await AuditProfile.find({ templateId }).lean();
         
-        // Get count of results per profile
-        const resultCounts = await ScenarioAuditResult.aggregate([
+        // Get count of results per profile for THIS templateId
+        const resultCountsForTemplate = await ScenarioAuditResult.aggregate([
             { $match: { templateId } },
             { $group: { _id: '$auditProfileId', count: { $sum: 1 }, avgScore: { $avg: '$score' } } }
         ]);
         
-        // Get sample results (first 5)
-        const sampleResults = await ScenarioAuditResult.find({ templateId })
+        // Get sample results for THIS templateId
+        const sampleResultsForTemplate = await ScenarioAuditResult.find({ templateId })
             .limit(5)
             .sort({ createdAt: -1 })
             .lean();
         
-        // Also check with different templateId formats
-        const allResults = await ScenarioAuditResult.find({}).limit(10).lean();
-        const uniqueTemplateIds = [...new Set(allResults.map(r => r.templateId))];
+        // ═══════════════════════════════════════════════════════════════════
+        // GLOBAL CHECK: What templateIds exist in the ENTIRE collection?
+        // ═══════════════════════════════════════════════════════════════════
+        const allTemplateIds = await ScenarioAuditResult.distinct('templateId');
+        const totalResultCount = await ScenarioAuditResult.countDocuments();
+        
+        // Get counts per templateId
+        const countsByTemplateId = await ScenarioAuditResult.aggregate([
+            { $group: { _id: '$templateId', count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+        ]);
+        
+        // Get recent results from ANY templateId (to see what's being saved)
+        const recentResults = await ScenarioAuditResult.find({})
+            .limit(10)
+            .sort({ createdAt: -1 })
+            .select('templateId scenarioId scenarioName score verdict createdAt auditProfileId')
+            .lean();
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // COLLECTION CHECK: Verify the collection exists
+        // ═══════════════════════════════════════════════════════════════════
+        const mongoose = require('mongoose');
+        const collections = await mongoose.connection.db.listCollections().toArray();
+        const collectionNames = collections.map(c => c.name);
+        const hasScenarioAuditResults = collectionNames.includes('scenarioAuditResults');
         
         res.json({
             success: true,
-            templateId,
-            profiles: profiles.map(p => ({
-                id: p._id.toString(),
-                name: p.name,
-                isActive: p.isActive,
-                createdAt: p.createdAt
-            })),
-            resultCounts,
-            sampleResults: sampleResults.map(r => ({
-                scenarioId: r.scenarioId,
-                scenarioName: r.scenarioName,
-                templateId: r.templateId,
-                auditProfileId: r.auditProfileId,
-                score: r.score,
-                verdict: r.verdict,
-                createdAt: r.createdAt
-            })),
-            debug: {
-                totalResultsInDb: allResults.length,
-                uniqueTemplateIdsInDb: uniqueTemplateIds
+            queryTemplateId: templateId,
+            
+            // Results for the requested templateId
+            forRequestedTemplate: {
+                profileCount: profiles.length,
+                profiles: profiles.map(p => ({
+                    id: p._id.toString(),
+                    name: p.name,
+                    isActive: p.isActive
+                })),
+                resultCount: resultCountsForTemplate.reduce((sum, r) => sum + r.count, 0),
+                resultsByProfile: resultCountsForTemplate,
+                sampleResults: sampleResultsForTemplate.map(r => ({
+                    scenarioId: r.scenarioId,
+                    scenarioName: r.scenarioName,
+                    score: r.score,
+                    verdict: r.verdict
+                }))
+            },
+            
+            // Global database state
+            globalDatabaseState: {
+                collectionExists: hasScenarioAuditResults,
+                totalResultsInCollection: totalResultCount,
+                uniqueTemplateIdsInDb: allTemplateIds,
+                countsByTemplateId: countsByTemplateId,
+                recentResults: recentResults.map(r => ({
+                    templateId: r.templateId,
+                    scenarioId: r.scenarioId,
+                    scenarioName: r.scenarioName,
+                    score: r.score,
+                    verdict: r.verdict,
+                    auditProfileId: r.auditProfileId,
+                    createdAt: r.createdAt
+                }))
+            },
+            
+            // Mismatch detection
+            diagnosis: {
+                templateIdMatch: allTemplateIds.includes(templateId),
+                possibleMismatch: allTemplateIds.length > 0 && !allTemplateIds.includes(templateId)
+                    ? `Results exist for other templateIds but NOT for ${templateId}. Check if templateId format differs.`
+                    : null,
+                suggestion: totalResultCount === 0 
+                    ? 'No results in database at all. Either Deep Audit never ran, or saves are failing silently. Check Render logs for [DEEP AUDIT] messages.'
+                    : allTemplateIds.includes(templateId)
+                        ? 'Results exist for this template. Check if auditProfileId matches.'
+                        : 'Results exist but for different templateIds. The Deep Audit might be using a different templateId format.'
             }
         });
         
     } catch (error) {
-        logger.error('[AUDIT_DIAGNOSTIC] Error', { error: error.message });
+        logger.error('[AUDIT_DIAGNOSTIC] Error', { error: error.message, stack: error.stack });
         res.status(500).json({ error: 'Diagnostic failed', details: error.message });
     }
 });
