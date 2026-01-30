@@ -1569,6 +1569,88 @@
                 </div>
             </div>
             
+            <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+            <!-- AUDIT PROFILE MANAGEMENT PANEL -->
+            <!-- Controls which audit settings are active and cached results management -->
+            <!-- ════════════════════════════════════════════════════════════════════════════════ -->
+            <div id="audit-profile-panel" style="background: linear-gradient(135deg, rgba(139,92,246,0.15) 0%, rgba(99,102,241,0.1) 100%); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h3 style="margin: 0; color: #8b5cf6; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-id-card"></i>
+                        Audit Profile
+                        <span style="font-size: 11px; background: rgba(139,92,246,0.3); padding: 2px 8px; border-radius: 8px; color: #a78bfa;">Scenarios audited under this profile are cached</span>
+                    </h3>
+                    <button onclick="toggleAuditProfileDetails()" style="background: transparent; border: none; color: #888; cursor: pointer; font-size: 12px;">
+                        <i class="fas fa-chevron-down" id="audit-profile-toggle-icon"></i>
+                    </button>
+                </div>
+                
+                <!-- Active Profile Summary -->
+                <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 4px;">Active Profile:</div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span id="active-profile-name" style="font-size: 16px; font-weight: 600; color: #fff;">Loading...</span>
+                            <span id="active-profile-version" style="font-size: 11px; background: rgba(52,211,153,0.2); color: var(--accent-green); padding: 2px 6px; border-radius: 4px;"></span>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; padding: 0 16px; border-left: 1px solid rgba(255,255,255,0.1); border-right: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-green);" id="profile-cached-count">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Cached</div>
+                    </div>
+                    
+                    <div style="text-align: center; padding: 0 16px; border-right: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 24px; font-weight: bold; color: var(--accent-yellow);" id="profile-needswork-count">--</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">Needs Work</div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="resetAuditProfile()" 
+                            style="background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); color: #ef4444; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                            title="Clear all cached results - all scenarios will be re-audited on next run">
+                            <i class="fas fa-redo"></i> Reset Profile
+                        </button>
+                        <button onclick="showNewProfileModal()" 
+                            style="background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.5); color: #8b5cf6; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                            title="Create new profile with different settings">
+                            <i class="fas fa-plus"></i> New Profile
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Expanded Details (hidden by default) -->
+                <div id="audit-profile-details" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Profile ID</div>
+                            <div style="font-size: 12px; color: #888; font-family: monospace;" id="profile-id">--</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Created</div>
+                            <div style="font-size: 12px; color: #888;" id="profile-created">--</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Last Audit Run</div>
+                            <div style="font-size: 12px; color: #888;" id="profile-last-audit">--</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Fixes Applied</div>
+                            <div style="font-size: 12px; color: #888;" id="profile-fixes-count">--</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Switch Profile -->
+                    <div style="margin-top: 16px;">
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Switch Profile:</div>
+                        <select id="profile-selector" onchange="switchAuditProfile(this.value)" 
+                            style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 8px 12px; border-radius: 6px; width: 100%; max-width: 300px; cursor: pointer;">
+                            <option value="">Loading profiles...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Health Score (hidden until audit runs) -->
             <div id="audit-results" style="display: none;">
                 <div class="health-score-card">
@@ -3250,6 +3332,11 @@
             if (tabName === 'audit') {
                 loadSettingsRegistry();
                 loadScenarioPoolAlignment();
+                
+                // Load audit profile for Deep Audit management
+                if (typeof loadAuditProfile === 'function') {
+                    loadAuditProfile();
+                }
             }
             
             // Load company local data when switching to that tab
@@ -4499,6 +4586,251 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fas fa-play"></i> Run Audit';
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // AUDIT PROFILE MANAGEMENT
+        // Controls cached audit results and profile switching
+        // ════════════════════════════════════════════════════════════════════════════════
+        let currentAuditProfile = null;
+        let allAuditProfiles = [];
+        
+        async function loadAuditProfile() {
+            try {
+                // We need the templateId - get it from the registry or global state
+                const templateId = window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
+                
+                if (!templateId) {
+                    console.warn('[AUDIT PROFILE] No templateId available yet');
+                    return;
+                }
+                
+                // Load active profile
+                const response = await fetch(`/api/admin/templates/${templateId}/audit-profiles/active`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) {
+                    console.warn('[AUDIT PROFILE] Failed to load active profile:', response.status);
+                    return;
+                }
+                
+                const data = await response.json();
+                currentAuditProfile = data.auditProfile;
+                
+                // Update UI
+                document.getElementById('active-profile-name').textContent = currentAuditProfile.name || 'Default';
+                document.getElementById('active-profile-version').textContent = `v${currentAuditProfile.rubricVersion || '1.0'}`;
+                document.getElementById('profile-id').textContent = currentAuditProfile._id || currentAuditProfile.id || '--';
+                document.getElementById('profile-created').textContent = currentAuditProfile.createdAt 
+                    ? new Date(currentAuditProfile.createdAt).toLocaleDateString() 
+                    : '--';
+                
+                // Stats
+                if (currentAuditProfile.stats) {
+                    document.getElementById('profile-cached-count').textContent = currentAuditProfile.stats.totalResults || 0;
+                    document.getElementById('profile-needswork-count').textContent = currentAuditProfile.stats.needsWork || 0;
+                    document.getElementById('profile-fixes-count').textContent = 
+                        (currentAuditProfile.fixStats?.totalFixes || currentAuditProfile.stats.totalFixes || 0);
+                }
+                
+                console.log('✅ [AUDIT PROFILE] Loaded:', currentAuditProfile.name, currentAuditProfile._id || currentAuditProfile.id);
+                
+                // Also load all profiles for the dropdown
+                loadAllAuditProfiles(templateId);
+                
+            } catch (error) {
+                console.error('[AUDIT PROFILE] Load error:', error);
+            }
+        }
+        
+        async function loadAllAuditProfiles(templateId) {
+            try {
+                const response = await fetch(`/api/admin/templates/${templateId}/audit-profiles`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) return;
+                
+                const data = await response.json();
+                allAuditProfiles = data.profiles || [];
+                
+                // Update dropdown
+                const selector = document.getElementById('profile-selector');
+                selector.innerHTML = allAuditProfiles.map(p => `
+                    <option value="${p._id}" ${p.isActive ? 'selected' : ''}>
+                        ${p.name} ${p.isActive ? '(Active)' : ''} - ${p.stats?.totalResults || 0} cached
+                    </option>
+                `).join('');
+                
+            } catch (error) {
+                console.error('[AUDIT PROFILE] Load all error:', error);
+            }
+        }
+        
+        function toggleAuditProfileDetails() {
+            const details = document.getElementById('audit-profile-details');
+            const icon = document.getElementById('audit-profile-toggle-icon');
+            
+            if (details.style.display === 'none') {
+                details.style.display = 'block';
+                icon.className = 'fas fa-chevron-up';
+            } else {
+                details.style.display = 'none';
+                icon.className = 'fas fa-chevron-down';
+            }
+        }
+        
+        async function resetAuditProfile() {
+            if (!currentAuditProfile) {
+                showToast('No active profile loaded', 'error');
+                return;
+            }
+            
+            const profileId = currentAuditProfile._id || currentAuditProfile.id;
+            const cachedCount = currentAuditProfile.stats?.totalResults || 0;
+            
+            const confirmed = confirm(
+                `⚠️ RESET AUDIT PROFILE\n\n` +
+                `This will clear ${cachedCount} cached audit results.\n\n` +
+                `All scenarios will be RE-AUDITED on the next Deep Audit run.\n\n` +
+                `Use this when you've changed the audit settings/rules and need fresh results.\n\n` +
+                `Continue?`
+            );
+            
+            if (!confirmed) return;
+            
+            try {
+                const templateId = window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
+                
+                const response = await fetch(
+                    `/api/admin/templates/${templateId}/audit-profiles/${profileId}/results?confirm=true`, 
+                    {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    }
+                );
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to reset profile');
+                }
+                
+                const data = await response.json();
+                
+                showToast(`✅ Reset complete! ${data.deletedCount} cached results cleared. Run Deep Audit to re-audit all scenarios.`, 'success');
+                
+                // Clear sessionStorage cache too
+                sessionStorage.removeItem('deepAuditResults');
+                sessionStorage.removeItem('lastDeepAuditResults');
+                
+                // Reload profile to show updated counts
+                await loadAuditProfile();
+                
+            } catch (error) {
+                console.error('[AUDIT PROFILE] Reset error:', error);
+                showToast('Reset failed: ' + error.message, 'error');
+            }
+        }
+        
+        async function showNewProfileModal() {
+            const name = prompt(
+                '📝 CREATE NEW AUDIT PROFILE\n\n' +
+                'Enter a name for the new profile:\n' +
+                '(e.g., "Strict v2", "More Chatty", "Enterprise Standards")\n\n' +
+                'This creates a fresh profile - all scenarios will need to be re-audited.',
+                `Profile ${new Date().toLocaleDateString()}`
+            );
+            
+            if (!name) return;
+            
+            try {
+                const templateId = window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
+                
+                const response = await fetch(`/api/admin/templates/${templateId}/audit-profiles`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        activateImmediately: true,
+                        description: `Created from UI on ${new Date().toISOString()}`
+                    })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to create profile');
+                }
+                
+                const data = await response.json();
+                
+                showToast(`✅ Created and activated profile "${name}". Run Deep Audit to audit scenarios under new profile.`, 'success');
+                
+                // Clear sessionStorage cache
+                sessionStorage.removeItem('deepAuditResults');
+                sessionStorage.removeItem('lastDeepAuditResults');
+                
+                // Reload profiles
+                await loadAuditProfile();
+                
+            } catch (error) {
+                console.error('[AUDIT PROFILE] Create error:', error);
+                showToast('Create failed: ' + error.message, 'error');
+            }
+        }
+        
+        async function switchAuditProfile(profileId) {
+            if (!profileId) return;
+            
+            const profile = allAuditProfiles.find(p => p._id === profileId);
+            if (!profile) return;
+            
+            if (profile.isActive) {
+                showToast('This profile is already active', 'info');
+                return;
+            }
+            
+            const confirmed = confirm(
+                `🔄 SWITCH AUDIT PROFILE\n\n` +
+                `Switch to profile: "${profile.name}"?\n\n` +
+                `This profile has ${profile.stats?.totalResults || 0} cached results.\n` +
+                `Scenarios not in this profile's cache will be re-audited.`
+            );
+            
+            if (!confirmed) return;
+            
+            try {
+                const templateId = window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
+                
+                const response = await fetch(
+                    `/api/admin/templates/${templateId}/audit-profiles/${profileId}/activate`,
+                    {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    }
+                );
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to switch profile');
+                }
+                
+                showToast(`✅ Switched to profile "${profile.name}"`, 'success');
+                
+                // Clear sessionStorage cache
+                sessionStorage.removeItem('deepAuditResults');
+                sessionStorage.removeItem('lastDeepAuditResults');
+                
+                // Reload profile
+                await loadAuditProfile();
+                
+            } catch (error) {
+                console.error('[AUDIT PROFILE] Switch error:', error);
+                showToast('Switch failed: ' + error.message, 'error');
             }
         }
         
@@ -7492,6 +7824,21 @@
                 
                 const data = await response.json();
                 manualBuilderTemplateData = data;
+                
+                // ════════════════════════════════════════════════════════════════════
+                // Store global template ID for audit profile management
+                // ════════════════════════════════════════════════════════════════════
+                const templateId = data.templateId || data._id;
+                if (templateId) {
+                    window.globalTemplateId = templateId;
+                    sessionStorage.setItem('globalTemplateId', templateId);
+                    console.log('✅ [TEMPLATE] Set globalTemplateId:', templateId);
+                    
+                    // Load audit profile now that we have the templateId
+                    if (typeof loadAuditProfile === 'function') {
+                        loadAuditProfile();
+                    }
+                }
                 
                 // Update template info display
                 if (templateNameEl) {
