@@ -4372,6 +4372,13 @@
             const urlParams = new URLSearchParams(window.location.search);
             
             // ════════════════════════════════════════════════════════════════════════
+            // FIX: Set companyId early so API calls don't use null
+            // ════════════════════════════════════════════════════════════════════════
+            if (!companyId) {
+                companyId = urlParams.get('companyId');
+            }
+            
+            // ════════════════════════════════════════════════════════════════════════
             // CHECK: Auto-switch to audit tab if returning from Global Brain fix
             // ════════════════════════════════════════════════════════════════════════
             if (urlParams.get('tab') === 'audit') {
