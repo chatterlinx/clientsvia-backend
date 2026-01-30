@@ -1715,6 +1715,16 @@
                                     <option value="perfect">Perfect Only</option>
                                     <option value="needswork">Needs Work Only</option>
                                 </select>
+                                <button onclick="downloadAuditStatusJSON()" 
+                                    style="background: rgba(52,211,153,0.2); border: 1px solid rgba(52,211,153,0.5); color: var(--accent-green); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 4px;"
+                                    title="Download full audit status report as JSON">
+                                    <i class="fas fa-download"></i> JSON
+                                </button>
+                                <button onclick="copyAuditStatusJSON()" 
+                                    style="background: rgba(168,85,247,0.2); border: 1px solid rgba(168,85,247,0.5); color: #a78bfa; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 4px;"
+                                    title="Copy full audit status report to clipboard">
+                                    <i class="fas fa-copy"></i> Copy
+                                </button>
                             </div>
                         </div>
                         
@@ -4880,6 +4890,121 @@
             }
             
             renderScenarioList(filtered);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // EXPORT AUDIT STATUS - Download/Copy full report as JSON
+        // ════════════════════════════════════════════════════════════════════════════════
+        function buildAuditStatusReport() {
+            const templateId = window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
+            const templateName = document.getElementById('profile-template-name')?.textContent || 'Unknown';
+            
+            // Build counts from current state
+            const total = parseInt(document.getElementById('profile-total-count')?.textContent) || 0;
+            const audited = parseInt(document.getElementById('profile-audited-count')?.textContent) || 0;
+            const pending = parseInt(document.getElementById('profile-pending-count')?.textContent) || 0;
+            const perfect = parseInt(document.getElementById('profile-perfect-count')?.textContent) || 0;
+            const needsWork = parseInt(document.getElementById('profile-needswork-count')?.textContent) || 0;
+            const progress = document.getElementById('profile-progress-percent')?.textContent || '0%';
+            
+            return {
+                exportedAt: new Date().toISOString(),
+                exportType: 'AUDIT_PROFILE_STATUS',
+                
+                template: {
+                    id: templateId,
+                    name: templateName
+                },
+                
+                auditProfile: currentAuditProfile ? {
+                    id: currentAuditProfile._id || currentAuditProfile.id,
+                    name: currentAuditProfile.name,
+                    rubricVersion: currentAuditProfile.rubricVersion,
+                    createdAt: currentAuditProfile.createdAt
+                } : null,
+                
+                summary: {
+                    totalScenarios: total,
+                    auditedCount: audited,
+                    pendingCount: pending,
+                    perfectCount: perfect,
+                    needsWorkCount: needsWork,
+                    progressPercent: progress
+                },
+                
+                scenarios: allScenariosAuditStatus.map(s => ({
+                    scenarioId: s.scenarioId,
+                    scenarioName: s.scenarioName,
+                    categoryName: s.categoryName,
+                    isAudited: s.isAudited,
+                    score: s.score,
+                    verdict: s.verdict,
+                    auditedAt: s.auditedAt,
+                    contentHash: s.contentHash
+                }))
+            };
+        }
+        
+        function downloadAuditStatusJSON() {
+            try {
+                const report = buildAuditStatusReport();
+                const json = JSON.stringify(report, null, 2);
+                
+                // Create filename with timestamp
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const templateName = (report.template?.name || 'audit').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+                const filename = `audit-status_${templateName}_${timestamp}.json`;
+                
+                // Create download blob
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                // Trigger download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast(`Downloaded ${filename}`, 'success');
+                
+            } catch (error) {
+                console.error('[EXPORT] Download error:', error);
+                showToast('Download failed: ' + error.message, 'error');
+            }
+        }
+        
+        async function copyAuditStatusJSON() {
+            try {
+                const report = buildAuditStatusReport();
+                const json = JSON.stringify(report, null, 2);
+                
+                await navigator.clipboard.writeText(json);
+                
+                showToast(`Copied ${report.summary?.totalScenarios || 0} scenarios to clipboard`, 'success');
+                
+            } catch (error) {
+                console.error('[EXPORT] Copy error:', error);
+                
+                // Fallback: create textarea and copy
+                try {
+                    const report = buildAuditStatusReport();
+                    const json = JSON.stringify(report, null, 2);
+                    const textarea = document.createElement('textarea');
+                    textarea.value = json;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    showToast(`Copied to clipboard (fallback)`, 'success');
+                } catch (fallbackError) {
+                    showToast('Copy failed: ' + error.message, 'error');
+                }
+            }
         }
         
         async function loadAllAuditProfiles(templateId) {
