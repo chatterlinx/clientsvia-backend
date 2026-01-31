@@ -5356,7 +5356,7 @@ router.post('/:companyId/audit/scenario', async (req, res) => {
  */
 router.post('/:companyId/audit/deep/single', async (req, res) => {
     const { companyId } = req.params;
-    const { scenarioId, skipSupervision = false } = req.body;
+    const { scenarioId, skipSupervision = false, fixContext = null } = req.body;
     
     if (!scenarioId) {
         return res.status(400).json({ error: 'scenarioId is required' });
@@ -5381,14 +5381,19 @@ router.post('/:companyId/audit/deep/single', async (req, res) => {
         
         // Find the scenario
         let scenario = null;
+        let scenarioCategoryName = null;
+        let scenarioCategoryId = null;
         for (const category of (template.categories || [])) {
             const found = (category.scenarios || []).find(s => 
                 s.scenarioId === scenarioId || s._id?.toString() === scenarioId
             );
             if (found) {
+                scenarioCategoryName = category.categoryName || category.name || 'Uncategorized';
+                scenarioCategoryId = category.categoryId || category._id?.toString() || category.id || null;
                 scenario = {
                     ...found.toObject ? found.toObject() : found,
-                    categoryName: category.name
+                    categoryName: scenarioCategoryName,
+                    categoryId: scenarioCategoryId
                 };
                 break;
             }
@@ -5397,6 +5402,19 @@ router.post('/:companyId/audit/deep/single', async (req, res) => {
         if (!scenario) {
             return res.status(404).json({ error: `Scenario ${scenarioId} not found` });
         }
+        
+        const verificationMeta = {
+            scenarioLoaded: true,
+            auditRan: false,
+            groundingApplied: false,
+            supervisorStatus: null,
+            auditResultSaved: false,
+            fixLedger: {
+                recorded: false,
+                reason: null,
+                entryId: null
+            }
+        };
         
         // ════════════════════════════════════════════════════════════════════════════
         // BLUEPRINT-AWARE AUDIT: Get intent context if scenario is mapped
@@ -5773,6 +5791,9 @@ Return JSON only:
         }
         
         const estimatedCost = (totalTokens * 0.00001).toFixed(4);
+        verificationMeta.auditRan = true;
+        verificationMeta.groundingApplied = true;
+        verificationMeta.supervisorStatus = finalResult?.supervisorAgreement || 'UNKNOWN';
         
         logger.info('[SUPERVISED AUDIT] Complete', { 
             scenarioId, 
@@ -5781,12 +5802,151 @@ Return JSON only:
             totalTokens,
             layersRun: supervisionTrace.length
         });
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // PERSIST RESULT TO ScenarioAuditResult (profile-scoped "done" record)
+        // Ensures Deep Audit status list + progress bar stay in sync
+        // ════════════════════════════════════════════════════════════════════════════
+        const templateIdStr = template._id?.toString();
+        let auditProfile = null;
+        let auditProfileId = null;
+        let scenarioContentHash = null;
+        let resultPersisted = false;
+        
+        try {
+            const deepAuditService = require('../../services/deepAudit');
+            const ScenarioAuditResult = require('../../models/ScenarioAuditResult');
+            
+            auditProfile = await deepAuditService.getActiveAuditProfile(templateIdStr);
+            auditProfileId = auditProfile?._id?.toString() || null;
+            scenarioContentHash = deepAuditService.hashScenarioContent(scenario);
+            
+            if (auditProfileId) {
+                const normalizedScenarioId = scenario.scenarioId || scenario._id?.toString() || scenarioId;
+                
+                // Purge previous results for this scenario/profile (avoid stale hash collisions)
+                await ScenarioAuditResult.purgeForScenario(templateIdStr, normalizedScenarioId, auditProfileId);
+                
+                await ScenarioAuditResult.upsertResult({
+                    templateId: templateIdStr,
+                    scenarioId: normalizedScenarioId,
+                    auditProfileId,
+                    scenarioContentHash: scenarioContentHash,
+                    score: finalResult.score,
+                    verdict: finalResult.verdict,
+                    rewriteNeeded: finalResult.rewriteNeeded || false,
+                    issues: finalResult.issues || [],
+                    strengths: finalResult.strengths || [],
+                    fixSuggestions: (finalResult.issues || []).map(i => i.suggestion).filter(Boolean),
+                    blueprintItemKey: scenario.blueprintItemKey || blueprintIntent?.itemKey || null,
+                    matchConfidence: matchConfidence ?? null,
+                    matchSource: matchSource ?? null,
+                    intentFulfilled: primaryResult?.blueprintAlignment?.intentFulfilled ?? null,
+                    supervision: {
+                        grounded: true,
+                        originalIssueCount: (primaryResult.issues || []).length,
+                        hallucinatedFiltered: hallucinatedIssues.length,
+                        verifiedIssueCount: (finalResult.issues || []).length
+                    },
+                    model: 'gpt-4o',
+                    promptVersion: 'DEEP_AUDIT_PROMPT_V1',
+                    rubricVersion: auditProfile.rubricVersion,
+                    tokensUsed: totalTokens,
+                    durationMs: 0,
+                    cached: false,
+                    scenarioName: scenario.name || scenario.scenarioName,
+                    scenarioType: scenario.scenarioType,
+                    categoryName: scenario.categoryName || scenarioCategoryName,
+                    categoryId: scenario.categoryId || scenarioCategoryId
+                });
+                
+                resultPersisted = true;
+                
+                logger.info('[SUPERVISED AUDIT] ✅ Saved result to ScenarioAuditResult', {
+                    scenarioId: normalizedScenarioId,
+                    templateId: templateIdStr,
+                    auditProfileId,
+                    score: finalResult.score,
+                    verdict: finalResult.verdict
+                });
+            }
+        } catch (persistError) {
+            logger.warn('[SUPERVISED AUDIT] Failed to persist ScenarioAuditResult', {
+                scenarioId,
+                error: persistError.message
+            });
+        }
+        
+        verificationMeta.auditResultSaved = resultPersisted;
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // RECORD MANUAL FIX IN LEDGER (if context provided from Global Brain)
+        // ════════════════════════════════════════════════════════════════════════════
+        try {
+            if (fixContext && fixContext.beforeHash && auditProfileId && scenarioContentHash) {
+                const ScenarioFixLedger = require('../../models/ScenarioFixLedger');
+                const normalizedScenarioId = scenario.scenarioId || scenario._id?.toString() || scenarioId;
+                
+                const fixEntry = await ScenarioFixLedger.recordFix({
+                    templateId: templateIdStr,
+                    scenarioId: normalizedScenarioId,
+                    auditProfileId,
+                    beforeHash: fixContext.beforeHash,
+                    afterHash: scenarioContentHash,
+                    fixType: 'manual_edit',
+                    model: 'gpt-4o',
+                    auditScore: fixContext.auditScore ?? null,
+                    auditVerdict: fixContext.auditVerdict ?? null,
+                    issuesAddressed: fixContext.issuesAddressed || [],
+                    scenarioName: scenario.name || scenario.scenarioName,
+                    scenarioType: scenario.scenarioType,
+                    categoryName: scenario.categoryName || scenarioCategoryName,
+                    appliedBy: req.user?.email || req.user?.username || 'admin',
+                    notes: 'Deep Audit manual fix verified in Global Brain'
+                });
+                
+                if (fixEntry && fixEntry._id) {
+                    await ScenarioFixLedger.markVerified(
+                        fixEntry._id.toString(),
+                        finalResult.score,
+                        finalResult.verdict
+                    );
+                    
+                    verificationMeta.fixLedger.recorded = true;
+                    verificationMeta.fixLedger.entryId = fixEntry._id.toString();
+                } else {
+                    verificationMeta.fixLedger.recorded = false;
+                    verificationMeta.fixLedger.reason = 'no_content_change';
+                }
+            } else {
+                verificationMeta.fixLedger.recorded = false;
+                verificationMeta.fixLedger.reason = !fixContext?.beforeHash
+                    ? 'missing_before_hash'
+                    : (!auditProfileId || !scenarioContentHash ? 'missing_audit_profile_or_hash' : 'unknown');
+            }
+        } catch (ledgerError) {
+            verificationMeta.fixLedger.recorded = false;
+            verificationMeta.fixLedger.reason = ledgerError.message;
+            logger.warn('[SUPERVISED AUDIT] Failed to record fix ledger', {
+                scenarioId,
+                error: ledgerError.message
+            });
+        }
         
         res.json({
             success: true,
             scenarioId,
             scenarioName: scenario.name,
             auditType: 'supervised-deep', // Indicates this was 3-layer supervised audit
+            model: 'gpt-4o',
+            promptVersion: 'DEEP_AUDIT_PROMPT_V1',
+            templateId: templateIdStr,
+            scenarioContentHash: scenarioContentHash || null,
+            auditProfile: auditProfile ? {
+                id: auditProfileId,
+                name: auditProfile.name,
+                rubricVersion: auditProfile.rubricVersion
+            } : null,
             score: finalResult.score,
             verdict: finalResult.verdict,
             issues: finalResult.issues,
@@ -5800,7 +5960,8 @@ Return JSON only:
                 hallucinatedIssuesRemoved: hallucinatedIssues.length,
                 totalTokens,
                 estimatedCost: `$${estimatedCost}`
-            }
+            },
+            verificationMeta
         });
         
     } catch (error) {

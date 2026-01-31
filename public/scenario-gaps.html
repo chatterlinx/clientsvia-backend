@@ -3263,6 +3263,24 @@
             </div>
         </div>
     </div>
+
+    <!-- Fix Ledger Viewer Modal -->
+    <div class="modal-overlay" id="fix-ledger-modal">
+        <div class="modal" style="max-width: 900px; width: 95%;">
+            <div class="modal-header">
+                <h2><i class="fas fa-clipboard-check"></i> Fix Ledger</h2>
+                <button class="modal-close" onclick="closeFixLedgerModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                <div id="fix-ledger-content" style="padding: 16px;">
+                    Loading fix ledger...
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeFixLedgerModal()">Close</button>
+            </div>
+        </div>
+    </div>
     
     <!-- Toast -->
     <div class="toast" id="toast">
@@ -4567,6 +4585,17 @@
             if (urlParams.get('tab') === 'audit') {
                 console.log('🔧 [AUDIT] Auto-switching to audit tab');
                 
+                // If a ledger viewer request is present, queue it
+                const ledgerScenarioId = urlParams.get('ledgerScenarioId');
+                if (ledgerScenarioId) {
+                    pendingLedgerOpen = {
+                        scenarioId: ledgerScenarioId,
+                        ledgerId: urlParams.get('ledgerId') || '',
+                        templateId: urlParams.get('ledgerTemplateId') || '',
+                        auditProfileId: urlParams.get('ledgerAuditProfileId') || ''
+                    };
+                }
+                
                 // Check if returning from Deep Audit fix (vs Template Audit fix)
                 const returnToDeepAudit = localStorage.getItem('returnToDeepAudit') === 'true';
                 localStorage.removeItem('returnToDeepAudit'); // Clear flag
@@ -4644,6 +4673,20 @@
                         }, 500);
                     }
                 }, 300);
+                
+                // If verification requested a refresh, reload audit profile/status
+                const refreshAuditStatus = localStorage.getItem('refreshAuditStatus') === 'true';
+                if (refreshAuditStatus) {
+                    localStorage.removeItem('refreshAuditStatus');
+                    localStorage.removeItem('refreshAuditStatusAt');
+                    setTimeout(() => {
+                        if (typeof loadAuditProfile === 'function') {
+                            loadAuditProfile();
+                        } else if (typeof loadScenarioAuditStatus === 'function') {
+                            loadScenarioAuditStatus();
+                        }
+                    }, 800);
+                }
                 
                 loadSettingsRegistry();
                 loadScenarioPoolAlignment();
@@ -4804,6 +4847,9 @@
                 allScenariosAuditStatus = data.scenarios || [];
                 renderScenarioList(allScenariosAuditStatus);
                 
+                // If a ledger open is pending (from URL), try now that data is loaded
+                tryOpenPendingLedger();
+                
                 console.log('✅ [SCENARIO STATUS] Loaded:', summary.totalScenarios, 'scenarios,', summary.auditedCount, 'audited');
                 
             } catch (error) {
@@ -4863,6 +4909,32 @@
                       })
                     : '--';
                 
+                // Fix/verification badge
+                let fixBadgeHtml = '';
+                if (s.verifiedAt) {
+                    const verifiedScore = s.verifiedScore ?? s.score ?? '--';
+                    const verifiedDate = new Date(s.verifiedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    fixBadgeHtml = `
+                        <div style="font-size: 10px; color: #34d399; margin-top: 2px; white-space: normal;">
+                            ✓ Verified ${verifiedScore}/10 • ${verifiedDate}
+                            <span style="margin-left: 6px;">
+                                <a href="javascript:void(0)" onclick="openFixLedgerModal('${s.scenarioId}', '${s.fixLedgerId || ''}')" style="color:#93c5fd; text-decoration: underline;">Ledger</a>
+                            </span>
+                        </div>
+                    `;
+                } else if (s.lastFixAt) {
+                    const fixDate = new Date(s.lastFixAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const fixType = s.fixType ? ` (${escapeHtml(s.fixType)})` : '';
+                    fixBadgeHtml = `
+                        <div style="font-size: 10px; color: #f59e0b; margin-top: 2px; white-space: normal;">
+                            Fix recorded${fixType} • ${fixDate}
+                            <span style="margin-left: 6px;">
+                                <a href="javascript:void(0)" onclick="openFixLedgerModal('${s.scenarioId}', '${s.fixLedgerId || ''}')" style="color:#93c5fd; text-decoration: underline;">Ledger</a>
+                            </span>
+                        </div>
+                    `;
+                }
+                
                 return `
                     <div style="display: grid; grid-template-columns: 30px 1fr 120px 80px 140px; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; ${idx % 2 === 0 ? '' : 'background: rgba(0,0,0,0.1);'}"
                          data-audited="${isAudited}" data-perfect="${isPerfect}" data-needswork="${needsWork}">
@@ -4872,6 +4944,7 @@
                         <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                             <span style="color: #fff;" title="${escapeHtml(s.scenarioName)}">${escapeHtml(s.scenarioName)}</span>
                             <div style="font-size: 10px; color: #666; font-family: monospace;">${s.scenarioId}</div>
+                            ${fixBadgeHtml}
                         </div>
                         <div style="color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(s.categoryName)}">
                             ${escapeHtml(s.categoryName)}
@@ -4908,6 +4981,121 @@
             }
             
             renderScenarioList(filtered);
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════════
+        // FIX LEDGER VIEWER (in-UI modal)
+        // ════════════════════════════════════════════════════════════════════════════════
+        let pendingLedgerOpen = null;
+        
+        function tryOpenPendingLedger() {
+            if (!pendingLedgerOpen) return;
+            
+            const templateId = pendingLedgerOpen.templateId || window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
+            if (!templateId) return;
+            
+            openFixLedgerModal(
+                pendingLedgerOpen.scenarioId,
+                pendingLedgerOpen.ledgerId,
+                templateId,
+                pendingLedgerOpen.auditProfileId
+            );
+            pendingLedgerOpen = null;
+        }
+        
+        function openFixLedgerModal(scenarioId, ledgerId = '', templateIdOverride = null, auditProfileIdOverride = null) {
+            const modal = document.getElementById('fix-ledger-modal');
+            const content = document.getElementById('fix-ledger-content');
+            if (!modal || !content) return;
+            
+            const templateId = templateIdOverride || window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
+            const auditProfileId = auditProfileIdOverride || currentAuditProfile?._id || currentAuditProfile?.id || null;
+            
+            if (!templateId || !scenarioId) {
+                content.innerHTML = `<div style="color:#fca5a5;">Missing template or scenario ID.</div>`;
+                modal.classList.add('active');
+                return;
+            }
+            
+            modal.classList.add('active');
+            content.innerHTML = `
+                <div style="padding: 12px; color: #a0a0b0;">
+                    Loading fix ledger for <span style="color:#fff;">${escapeHtml(scenarioId)}</span>...
+                </div>
+            `;
+            
+            fetch(`/api/admin/templates/${templateId}/scenarios/${scenarioId}/fix-history?limit=20`, {
+                headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (!data?.success) {
+                        throw new Error(data?.error || 'Failed to load fix history');
+                    }
+                    renderFixLedgerHistory(content, data.history || [], {
+                        scenarioId,
+                        templateId,
+                        auditProfileId,
+                        highlightId: ledgerId
+                    });
+                })
+                .catch(err => {
+                    content.innerHTML = `<div style="color:#fca5a5;">${escapeHtml(err.message)}</div>`;
+                });
+        }
+        
+        function closeFixLedgerModal() {
+            const modal = document.getElementById('fix-ledger-modal');
+            if (modal) modal.classList.remove('active');
+        }
+        
+        function renderFixLedgerHistory(container, history, meta) {
+            if (!history || history.length === 0) {
+                container.innerHTML = `
+                    <div style="color:#a0a0b0;">No fix ledger entries found for this scenario.</div>
+                `;
+                return;
+            }
+            
+            const rows = history.map(entry => {
+                const isHighlighted = meta.highlightId && entry._id?.toString() === meta.highlightId;
+                const verified = entry.verifiedAt ? 'Verified' : 'Not verified';
+                const verifiedColor = entry.verifiedAt ? '#34d399' : '#f59e0b';
+                const created = entry.createdAt ? new Date(entry.createdAt).toLocaleString() : '--';
+                const verifiedAt = entry.verifiedAt ? new Date(entry.verifiedAt).toLocaleString() : '--';
+                
+                return `
+                    <div style="
+                        padding: 12px;
+                        margin-bottom: 10px;
+                        border: 1px solid ${isHighlighted ? 'rgba(59,130,246,0.7)' : 'rgba(255,255,255,0.08)'};
+                        background: ${isHighlighted ? 'rgba(59,130,246,0.1)' : 'rgba(0,0,0,0.2)'};
+                        border-radius: 8px;
+                        font-size: 12px;
+                        color: #cbd5e1;
+                    ">
+                        <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 6px;">
+                            ${escapeHtml(entry.fixType || 'manual_edit')} • ${created}
+                        </div>
+                        <div>Ledger ID: <span style="color:#93c5fd;">${entry._id}</span></div>
+                        <div>Profile: ${escapeHtml(entry.auditProfileId || 'N/A')}</div>
+                        <div>Before hash: ${escapeHtml(entry.beforeHash || '--')}</div>
+                        <div>After hash: ${escapeHtml(entry.afterHash || '--')}</div>
+                        <div>Applied by: ${escapeHtml(entry.appliedBy || 'unknown')}</div>
+                        <div>Notes: ${escapeHtml(entry.notes || '--')}</div>
+                        <div style="margin-top: 6px; color: ${verifiedColor};">
+                            ${verified} • Score: ${entry.verifiedScore ?? '--'} • Verdict: ${escapeHtml(entry.verifiedVerdict || '--')} • ${verifiedAt}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.innerHTML = `
+                <div style="margin-bottom: 8px; color:#e2e8f0; font-weight:600;">
+                    Fix ledger history (latest first)
+                </div>
+                ${rows}
+            `;
         }
         
         // ════════════════════════════════════════════════════════════════════════════════

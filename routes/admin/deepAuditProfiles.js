@@ -492,6 +492,21 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
             auditMap.set(r.scenarioId, r);
         });
         
+        // Get latest fix ledger entry per scenario (for verified badges)
+        const fixLedgerEntries = await ScenarioFixLedger.find({
+            templateId,
+            auditProfileId
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+        
+        const fixLedgerMap = new Map();
+        for (const entry of fixLedgerEntries) {
+            if (!fixLedgerMap.has(entry.scenarioId)) {
+                fixLedgerMap.set(entry.scenarioId, entry);
+            }
+        }
+        
         // Build the comprehensive scenario list
         const scenarios = [];
         let totalScenarios = 0;
@@ -505,8 +520,10 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
             (category.scenarios || []).forEach(scenario => {
                 totalScenarios++;
                 
-                const scenarioId = scenario._id?.toString() || scenario.id;
+                const scenarioId = scenario.scenarioId || scenario._id?.toString() || scenario.id;
                 const auditResult = auditMap.get(scenarioId);
+                
+                const fixEntry = fixLedgerMap.get(scenarioId);
                 
                 const scenarioInfo = {
                     scenarioId,
@@ -516,7 +533,13 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
                     auditedAt: auditResult?.createdAt || null,
                     verdict: auditResult?.verdict || null,
                     score: auditResult?.score ?? null,
-                    contentHash: auditResult?.scenarioContentHash || null
+                    contentHash: auditResult?.scenarioContentHash || null,
+                    lastFixAt: fixEntry?.createdAt || null,
+                    fixType: fixEntry?.fixType || null,
+                    fixLedgerId: fixEntry?._id?.toString() || null,
+                    verifiedAt: fixEntry?.verifiedAt || null,
+                    verifiedScore: fixEntry?.verifiedScore ?? null,
+                    verifiedVerdict: fixEntry?.verifiedVerdict || null
                 };
                 
                 if (auditResult) {

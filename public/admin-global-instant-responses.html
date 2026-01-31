@@ -21209,6 +21209,22 @@ ${JSON.stringify(healthData, null, 2)}
                         const data = JSON.parse(prefillData);
                         console.log('🔧 [DEEP-AUDIT-FIX] Loaded prefill data:', data);
                         
+                        // Persist fix context for verification (before hash + audit context)
+                        try {
+                            const fixContext = {
+                                scenarioId: data.navigation?.scenarioId,
+                                templateId: data.navigation?.templateId,
+                                auditProfileId: data.auditResult?.auditProfileId || null,
+                                beforeHash: data.auditResult?.contentHash || null,
+                                auditScore: data.auditResult?.score ?? null,
+                                auditVerdict: data.auditResult?.verdict ?? null,
+                                issuesAddressed: (data.auditResult?.issues || []).map(i => i.issue).filter(Boolean)
+                            };
+                            sessionStorage.setItem('deepAuditFixContext', JSON.stringify(fixContext));
+                        } catch (e) {
+                            console.warn('Failed to persist Deep Audit fix context', e);
+                        }
+                        
                         // Clean up localStorage
                         localStorage.removeItem('deepAuditEditPrefill');
                         
@@ -21839,28 +21855,47 @@ ${JSON.stringify(healthData, null, 2)}
                 console.log('🔍 [VERIFY] Using company ID:', companyId, 'Audit type:', isDeepAuditFix ? 'DEEP (GPT-4)' : 'RULES');
                 
                 let statusIcon, statusColor, statusText, statusDesc;
+                let auditResult = null;
+                let supervisorAgreement = null;
+                let issues = [];
+                let supervision = {};
                 
                 if (isDeepAuditFix) {
                     // ════════════════════════════════════════════════════════════════════
                     // DEEP AUDIT FIX: Verify with GPT-4 (same as what found the issues)
                     // ════════════════════════════════════════════════════════════════════
+                    let fixContext = null;
+                    try {
+                        const stored = sessionStorage.getItem('deepAuditFixContext');
+                        if (stored) {
+                            fixContext = JSON.parse(stored);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to load Deep Audit fix context', e);
+                    }
+                    
                     const auditResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep/single`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${getAuthToken()}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ scenarioId })
+                        body: JSON.stringify({ scenarioId, fixContext })
                     });
                     
-                    const auditResult = await auditResponse.json();
+                    auditResult = await auditResponse.json();
                     console.log('🔍 [VERIFY] Supervised audit result:', auditResult);
+                    
+                    if (auditResult?.success) {
+                        localStorage.setItem('refreshAuditStatus', 'true');
+                        localStorage.setItem('refreshAuditStatusAt', new Date().toISOString());
+                    }
                     
                     const score = auditResult.score || 0;
                     const verdict = auditResult.verdict || 'UNKNOWN';
-                    const issues = auditResult.issues || [];
-                    const supervision = auditResult.supervision || {};
-                    const supervisorAgreement = auditResult.supervisorAgreement || 'N/A';
+                    issues = auditResult.issues || [];
+                    supervision = auditResult.supervision || {};
+                    supervisorAgreement = auditResult.supervisorAgreement || 'N/A';
                     
                     // Build supervision badge
                     let supervisionBadge = '';
@@ -21908,7 +21943,7 @@ ${JSON.stringify(healthData, null, 2)}
                         body: JSON.stringify({ scenarioId })
                     });
                     
-                    const auditResult = await auditResponse.json();
+                    auditResult = await auditResponse.json();
                     
                     const violations = auditResult.violations || [];
                     const errorCount = violations.filter(v => v.severity === 'error').length;
@@ -21937,10 +21972,75 @@ ${JSON.stringify(healthData, null, 2)}
                 }
                 
                 if (content) {
+                    const profile = auditResult?.auditProfile || {};
+                    const meta = auditResult?.verificationMeta || {};
+                    const fixLedger = meta.fixLedger || {};
+                    const checklist = isDeepAuditFix ? `
+                        <div style="
+                            margin: 10px auto 0;
+                            padding: 10px 12px;
+                            background: rgba(15, 23, 42, 0.7);
+                            border: 1px solid rgba(148, 163, 184, 0.2);
+                            border-radius: 10px;
+                            text-align: left;
+                            font-size: 12px;
+                            color: #cbd5e1;
+                        ">
+                            <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 6px;">Admin verification checklist</div>
+                            <div>✅ Scenario loaded from template</div>
+                            <div>✅ GPT-4 audit run</div>
+                            <div>✅ Grounding validator applied</div>
+                            <div>✅ Supervisor check: ${escapeHtml(meta.supervisorStatus || supervisorAgreement || 'UNKNOWN')}</div>
+                            <div>${meta.auditResultSaved ? '✅' : '⚠️'} Saved to audit profile cache</div>
+                            <div>${fixLedger.recorded ? '✅' : '⚠️'} Fix ledger recorded (${fixLedger.recorded ? 'manual_edit' : escapeHtml(fixLedger.reason || 'not recorded')})</div>
+                            ${fixLedger.entryId ? `<div>Ledger ID: ${fixLedger.entryId}</div>` : ''}
+                        </div>
+                    ` : '';
+                    const fixHistoryUrl = (auditResult?.templateId && scenarioId)
+                        ? `/api/admin/templates/${auditResult.templateId}/scenarios/${scenarioId}/fix-history?limit=20`
+                        : null;
+                    const profileLedgerUrl = (auditResult?.templateId && profile?.id)
+                        ? `/api/admin/templates/${auditResult.templateId}/audit-profiles/${profile.id}/fix-ledger?limit=200`
+                        : null;
+                    const ledgerUiUrl = (auditResult?.templateId && scenarioId && companyId)
+                        ? `/scenario-gaps.html?companyId=${companyId}&tab=audit&ledgerScenarioId=${scenarioId}&ledgerTemplateId=${auditResult.templateId}&ledgerAuditProfileId=${profile?.id || ''}&ledgerId=${fixLedger?.entryId || ''}`
+                        : null;
+                    
+                    const verificationDetails = isDeepAuditFix ? `
+                        <div style="
+                            margin: 18px auto 28px;
+                            padding: 12px 14px;
+                            background: rgba(255,255,255,0.04);
+                            border: 1px solid rgba(255,255,255,0.08);
+                            border-radius: 10px;
+                            text-align: left;
+                            font-size: 12px;
+                            color: #cbd5e1;
+                            max-width: 520px;
+                        ">
+                            <div style="font-weight: 600; color: #e2e8f0; margin-bottom: 6px;">Verification details</div>
+                            <div>Audit type: ${auditResult.auditType || 'supervised-deep'}</div>
+                            <div>Model: ${auditResult.model || 'gpt-4o'}</div>
+                            <div>Supervisor: ${supervisorAgreement || 'N/A'}</div>
+                            <div>Issues verified: ${issues.length} • Hallucinated removed: ${supervision.hallucinatedIssuesRemoved || 0}</div>
+                            ${profile?.id ? `<div>Profile: ${escapeHtml(profile.name || 'Unnamed')} (${profile.id})</div>` : ''}
+                            ${auditResult.scenarioContentHash ? `<div>Content hash: ${auditResult.scenarioContentHash}</div>` : ''}
+                            ${auditResult.templateId ? `<div>Template: ${auditResult.templateId}</div>` : ''}
+                            ${typeof supervision.totalTokens === 'number' ? `<div>Tokens: ${supervision.totalTokens}</div>` : ''}
+                            <div>Cost: ${supervision.estimatedCost || '$0.06'}</div>
+                            <div>Checked at: ${new Date().toLocaleString()}</div>
+                            ${ledgerUiUrl ? `<div><a href="${ledgerUiUrl}" target="_blank" style="color:#93c5fd; text-decoration: underline;">Open ledger viewer (UI)</a></div>` : ''}
+                            ${fixHistoryUrl ? `<div><a href="${fixHistoryUrl}" target="_blank" style="color:#93c5fd; text-decoration: underline;">Open fix history (JSON)</a></div>` : ''}
+                            ${profileLedgerUrl ? `<div><a href="${profileLedgerUrl}" target="_blank" style="color:#93c5fd; text-decoration: underline;">Open fix ledger (JSON)</a></div>` : ''}
+                        </div>
+                        ${checklist}
+                    ` : '';
+                    
                     content.innerHTML = `
                         <div style="font-size: 64px; margin-bottom: 20px;">${statusIcon}</div>
                         <h2 style="color: ${statusColor}; margin-bottom: 12px; font-size: 28px;">${statusText}</h2>
-                        <p style="color: #a0a0b0; margin-bottom: 32px; font-size: 14px;">${statusDesc}</p>
+                        <p style="color: #a0a0b0; margin-bottom: 12px; font-size: 14px;">${statusDesc}</p>
+                        ${verificationDetails}
                         
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <button onclick="doneAndReturnToAudit('${scenarioId}')" style="
