@@ -4883,9 +4883,16 @@
                 totalScenarios++;
                 if (s.isAudited) {
                     auditedCount++;
-                    if (s.score !== null && s.score >= 9) {
+                    // Unified classification logic - aligned with backend:
+                    // Perfect: score >= 9 AND !rewriteNeeded
+                    // NeedsWork: rewriteNeeded OR score < 7 OR verdict is NEEDS_WORK/FAILS
+                    const score = s.score ?? 0;
+                    const rewriteNeeded = s.rewriteNeeded === true || score < 7;
+                    const verdict = (s.verdict || '').toUpperCase();
+                    
+                    if (score >= 9 && !rewriteNeeded) {
                         perfectCount++;
-                    } else if (s.score !== null && s.score < 7) {
+                    } else if (rewriteNeeded || verdict === 'NEEDS_WORK' || verdict === 'FAILS') {
                         needsWorkCount++;
                     }
                 } else {
@@ -4987,8 +4994,12 @@
             
             listEl.innerHTML = scenarios.map((s, idx) => {
                 const isAudited = s.isAudited;
-                const isPerfect = s.verdict === 'perfect' || s.score >= 9;
-                const needsWork = s.verdict === 'needs_work' || (s.score !== null && s.score < 7);
+                // Unified classification logic - aligned with backend
+                const score = s.score ?? 0;
+                const rewriteNeeded = s.rewriteNeeded === true || score < 7;
+                const verdict = (s.verdict || '').toUpperCase();
+                const isPerfect = score >= 9 && !rewriteNeeded;
+                const needsWork = rewriteNeeded || verdict === 'NEEDS_WORK' || verdict === 'FAILS';
                 
                 // Checkmark styling
                 let checkIcon, checkColor;
@@ -5079,6 +5090,17 @@
             
             let filtered = allScenariosAuditStatus;
             
+            // Helper function for unified classification - aligned with backend
+            const classifyScenario = (s) => {
+                const score = s.score ?? 0;
+                const rewriteNeeded = s.rewriteNeeded === true || score < 7;
+                const verdict = (s.verdict || '').toUpperCase();
+                return {
+                    isPerfect: score >= 9 && !rewriteNeeded,
+                    needsWork: rewriteNeeded || verdict === 'NEEDS_WORK' || verdict === 'FAILS'
+                };
+            };
+            
             switch (filter) {
                 case 'pending':
                     filtered = allScenariosAuditStatus.filter(s => !s.isAudited);
@@ -5087,10 +5109,10 @@
                     filtered = allScenariosAuditStatus.filter(s => s.isAudited);
                     break;
                 case 'perfect':
-                    filtered = allScenariosAuditStatus.filter(s => s.verdict === 'perfect' || s.score >= 9);
+                    filtered = allScenariosAuditStatus.filter(s => classifyScenario(s).isPerfect);
                     break;
                 case 'needswork':
-                    filtered = allScenariosAuditStatus.filter(s => s.verdict === 'needs_work' || (s.score !== null && s.score < 7));
+                    filtered = allScenariosAuditStatus.filter(s => classifyScenario(s).needsWork);
                     break;
             }
             
@@ -5757,9 +5779,15 @@
                             processed++;
                             allResults.push(result);
                             
-                            // Count by rewriteNeeded flag (more accurate than score threshold)
-                            if (result.score >= 9 && !result.rewriteNeeded) perfect++;
-                            else if (result.rewriteNeeded || result.score < 7) needsWork++;
+                            // Unified classification logic - aligned with backend and Audit Profile:
+                            // Perfect: score >= 9 AND !rewriteNeeded
+                            // NeedsWork: rewriteNeeded OR score < 7 OR verdict is NEEDS_WORK/FAILS
+                            const score = result.score || 0;
+                            const rewriteNeeded = result.rewriteNeeded === true || score < 7;
+                            const verdict = (result.verdict || '').toUpperCase();
+                            
+                            if (score >= 9 && !rewriteNeeded) perfect++;
+                            else if (rewriteNeeded || verdict === 'NEEDS_WORK' || verdict === 'FAILS') needsWork++;
                             
                             totalTokens += batchData.summary?.tokensUsed / batchResults.length || 0;
                             
