@@ -6310,6 +6310,22 @@
                 // Also store company ID so Global Brain can return to the right audit page
                 localStorage.setItem('lastAuditCompanyId', companyId);
                 
+                // ════════════════════════════════════════════════════════════════════════════════
+                // STORE DEEP AUDIT FIX CONTEXT (for verification modal to use GPT-4 verification)
+                // Using localStorage since sessionStorage is NOT shared between windows
+                // ════════════════════════════════════════════════════════════════════════════════
+                const fixContext = {
+                    scenarioId: scenarioId,
+                    templateId: result.navigation?.templateId || templateId,
+                    auditProfileId: scenarioResult?.auditProfileId || null,
+                    beforeHash: scenarioResult?.contentHash || null,
+                    auditScore: scenarioResult?.score ?? null,
+                    auditVerdict: scenarioResult?.verdict ?? null,
+                    issuesAddressed: (scenarioResult?.issues || []).map(i => i.issue || i.message).filter(Boolean),
+                    isDeepAuditFix: true  // Flag for verification modal
+                };
+                localStorage.setItem('deepAuditFixContext', JSON.stringify(fixContext));
+                
                 console.log('📦 [DEEP AUDIT FIX] Prefill data stored with', result.fixes?.length || 0, 'fixes');
                 
                 // ════════════════════════════════════════════════════════════════════════════════

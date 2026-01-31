@@ -21808,7 +21808,19 @@ ${JSON.stringify(healthData, null, 2)}
             // Check if this fix came from Deep Audit (GPT-4) or Template Audit (rules)
             const urlParams = new URLSearchParams(window.location.search);
             const prefillType = urlParams.get('prefill');
-            const isDeepAuditFix = prefillType === 'deep-audit-fix';
+            
+            // Deep Audit fix detection: check URL param OR localStorage/sessionStorage context
+            // (the openDeepAuditFix flow now uses 'edit-scenario' prefill but stores deepAuditFixContext)
+            // Check localStorage first (shared across windows), then sessionStorage
+            let deepAuditContextStr = localStorage.getItem('deepAuditFixContext') || sessionStorage.getItem('deepAuditFixContext');
+            const hasDeepAuditContext = !!deepAuditContextStr;
+            const isDeepAuditFix = prefillType === 'deep-audit-fix' || hasDeepAuditContext;
+            
+            // Move context from localStorage to sessionStorage for this session (and clean up localStorage)
+            if (localStorage.getItem('deepAuditFixContext')) {
+                sessionStorage.setItem('deepAuditFixContext', localStorage.getItem('deepAuditFixContext'));
+                // Don't remove from localStorage yet - might need it for the actual verification call
+            }
             
             if (content) {
                 content.innerHTML = `
@@ -21866,9 +21878,12 @@ ${JSON.stringify(healthData, null, 2)}
                     // ════════════════════════════════════════════════════════════════════
                     let fixContext = null;
                     try {
-                        const stored = sessionStorage.getItem('deepAuditFixContext');
+                        // Check localStorage first (shared across windows), then sessionStorage
+                        const stored = localStorage.getItem('deepAuditFixContext') || sessionStorage.getItem('deepAuditFixContext');
                         if (stored) {
                             fixContext = JSON.parse(stored);
+                            // Clean up localStorage after reading (but keep in sessionStorage)
+                            localStorage.removeItem('deepAuditFixContext');
                         }
                     } catch (e) {
                         console.warn('Failed to load Deep Audit fix context', e);
