@@ -21805,7 +21805,8 @@ ${JSON.stringify(healthData, null, 2)}
             const modal = document.getElementById('audit-fix-post-save-modal');
             const content = modal?.querySelector('div > div');
             
-            // Check if this fix came from Deep Audit (GPT-4) or Template Audit (rules)
+            // Check if this fix came from Deep Audit (GPT-4)
+            // NOTE: Legacy rules-based audit has been deprecated - all verifications now use GPT-4
             const urlParams = new URLSearchParams(window.location.search);
             const prefillType = urlParams.get('prefill');
             
@@ -21947,42 +21948,57 @@ ${JSON.stringify(healthData, null, 2)}
                     
                 } else {
                     // ════════════════════════════════════════════════════════════════════
-                    // TEMPLATE AUDIT FIX: Verify with rules (fast, free)
+                    // FALLBACK: No Deep Audit context detected
+                    // Still use GPT-4 for verification (legacy rules audit is deprecated)
                     // ════════════════════════════════════════════════════════════════════
-                    const auditResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/scenario`, {
+                    console.warn('⚠️ [VERIFY] No Deep Audit context - falling back to GPT-4 verification');
+                    
+                    // Call the Deep Audit verify endpoint even without context
+                    const auditResponse = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${getAuthToken()}`,
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ scenarioId })
+                        body: JSON.stringify({ 
+                            scenarioIds: [scenarioId],
+                            templateId: window.currentTemplateId || localStorage.getItem('lastTemplateId'),
+                            stream: false
+                        })
                     });
                     
-                    auditResult = await auditResponse.json();
+                    const deepResult = await auditResponse.json();
+                    const scenarioResult = deepResult.scenarios?.[0] || {};
+                    const score = scenarioResult.score || 0;
+                    const issues = scenarioResult.issues || [];
                     
-                    const violations = auditResult.violations || [];
-                    const errorCount = violations.filter(v => v.severity === 'error').length;
-                    const warningCount = violations.filter(v => v.severity === 'warning').length;
-                    const infoCount = violations.filter(v => v.severity === 'info').length;
+                    auditResult = {
+                        score,
+                        issues,
+                        auditType: 'supervised-deep',
+                        verificationMeta: {
+                            fixLedger: { status: 'no_context' }
+                        }
+                    };
                     
-                    const isPerfect = violations.length === 0;
-                    const isGood = errorCount === 0;
+                    // Force Deep Audit display path
+                    isDeepAuditFix = true;
                     
-                    if (isPerfect) {
+                    if (score >= 9) {
                         statusIcon = '🎉';
                         statusColor = '#10b981';
-                        statusText = 'Perfect! 10/10';
-                        statusDesc = 'No rule violations found. This scenario is clean!';
-                    } else if (isGood) {
+                        statusText = `Perfect! ${score}/10`;
+                        statusDesc = `3-layer supervised audit passed!`;
+                    } else if (score >= 7) {
                         statusIcon = '✅';
                         statusColor = '#22c55e';
-                        statusText = 'Good! No Errors';
-                        statusDesc = `${warningCount} warning${warningCount !== 1 ? 's' : ''}, ${infoCount} info`;
+                        statusText = `Good! ${score}/10`;
+                        statusDesc = `Minor improvements suggested`;
                     } else {
                         statusIcon = '⚠️';
                         statusColor = '#f59e0b';
-                        statusText = 'Needs More Work';
-                        statusDesc = `${errorCount} error${errorCount !== 1 ? 's' : ''}, ${warningCount} warning${warningCount !== 1 ? 's' : ''}`;
+                        statusText = `Needs Work: ${score}/10`;
+                        statusDesc = `${issues.length} issue${issues.length !== 1 ? 's' : ''} found`;
                     }
                 }
                 

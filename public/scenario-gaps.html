@@ -3314,7 +3314,8 @@
         let currentGap = null;
         let currentPreview = null;
         let selectedDays = 14;
-        let lastAuditResult = null;
+        // LEGACY REMOVED: let lastAuditResult = null;
+        // Deep Audit (GPT-4) is now the only audit method
         let currentReviewScenarioIdx = null;
         
         // Blueprint Builder State
@@ -6049,12 +6050,8 @@
         
         function hideDeepAuditResults() {
             document.getElementById('deep-audit-results').style.display = 'none';
-            // Show regular audit results if we have them
-            if (lastAuditResult) {
-                document.getElementById('audit-results').style.display = 'block';
-            } else {
-                document.getElementById('audit-empty').style.display = 'block';
-            }
+            // Deep Audit is the only audit method - show empty state
+            document.getElementById('audit-empty').style.display = 'block';
         }
         
         // ════════════════════════════════════════════════════════════════════════════
@@ -6383,8 +6380,22 @@
         }
         
         function displayAuditResults(result) {
+            // ════════════════════════════════════════════════════════════════════════════════
+            // ⚠️ DEPRECATED: This function was used by the legacy rules-based Template Audit
+            // The legacy "Run Audit" button has been removed. Use Deep Audit (GPT-4) instead.
+            // This function is kept only for backwards compatibility and will redirect users.
+            // ════════════════════════════════════════════════════════════════════════════════
+            console.warn('⚠️ [DEPRECATED] displayAuditResults() called - this is legacy code');
+            console.log('📌 Please use Deep Audit (GPT-4) instead for comprehensive AI review');
+            
+            // Show empty state with guidance
+            document.getElementById('audit-results').style.display = 'none';
+            document.getElementById('audit-empty').style.display = 'block';
+            showToast('Legacy audit is deprecated. Please use Deep Audit (AI) instead.', 'warning');
+            return;
+            
             // ════════════════════════════════════════════════════════════════════════
-            // CHECK: Remove any scenarios that were fixed in Global Brain
+            // LEGACY CODE BELOW - Kept for reference, but never executed
             // ════════════════════════════════════════════════════════════════════════
             const fixedScenarios = JSON.parse(localStorage.getItem('auditFixedScenarios') || '[]');
             if (fixedScenarios.length > 0 && result.scenarios) {
@@ -7685,6 +7696,15 @@
         // SCENARIO REVIEW MODAL
         // ========================================
         function openScenarioReview(scenarioIdx) {
+            // ════════════════════════════════════════════════════════════════════════════════
+            // ⚠️ DEPRECATED: This modal was used by the legacy rules-based Template Audit
+            // The legacy "Run Audit" button has been removed. Use Deep Audit (GPT-4) instead.
+            // ════════════════════════════════════════════════════════════════════════════════
+            console.warn('⚠️ [DEPRECATED] openScenarioReview() called - this is legacy code');
+            showToast('Legacy scenario review is deprecated. Please use Deep Audit (AI) instead.', 'warning');
+            return;
+            
+            // LEGACY CODE BELOW
             const scenario = window.auditScenarios[scenarioIdx];
             if (!scenario) return;
             
@@ -7982,6 +8002,16 @@
         // NO AUTO-SAVE - Admin has full control over what gets saved
         // ════════════════════════════════════════════════════════════════════════════════
         async function reviewAndFixInGlobalBrain() {
+            // ════════════════════════════════════════════════════════════════════════════════
+            // ⚠️ DEPRECATED: This function was used by the legacy rules-based Template Audit
+            // The legacy "Run Audit" button has been removed. Use Deep Audit (GPT-4) instead.
+            // Deep Audit has its own "Fix in Global Brain" button via openDeepAuditFix().
+            // ════════════════════════════════════════════════════════════════════════════════
+            console.warn('⚠️ [DEPRECATED] reviewAndFixInGlobalBrain() called - this is legacy code');
+            showToast('Legacy fix flow is deprecated. Please use Deep Audit\'s "Fix in Global Brain" instead.', 'warning');
+            return;
+            
+            // LEGACY CODE BELOW
             const scenario = window.auditScenarios[currentReviewScenarioIdx];
             if (!scenario) {
                 showToast('No scenario selected', 'error');
