@@ -1567,13 +1567,9 @@
                     </p>
                 </div>
                 <div class="audit-actions" style="display: flex; gap: 12px;">
-                    <button class="run-audit-btn" onclick="runAudit()" id="run-audit-btn">
-                        <i class="fas fa-play"></i>
-                        Run Audit
-                    </button>
                     <button class="run-audit-btn" onclick="runDeepAudit()" id="run-deep-audit-btn"
                         style="background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);"
-                        title="GPT-4 powered comprehensive review - catches nuanced issues rules miss">
+                        title="GPT-4 powered comprehensive AI review">
                         <i class="fas fa-brain"></i>
                         Deep Audit (AI)
                     </button>
@@ -2338,11 +2334,11 @@
             
             <!-- Empty state (shown before audit) -->
             <div id="audit-empty" class="audit-empty">
-                <i class="fas fa-clipboard-check"></i>
+                <i class="fas fa-brain"></i>
                 <h3>Ready to Audit</h3>
-                <p>Click "Run Audit" to check all scenarios against deterministic rules (free, instant).</p>
+                <p>Click <strong>"Deep Audit (AI)"</strong> to run a comprehensive GPT-4 review of all scenarios.</p>
                 <p style="font-size: 13px; color: var(--text-muted); margin-top: 8px;">
-                    Or use <strong>Deep Audit (AI)</strong> for GPT-4 powered comprehensive review.
+                    AI analyzes tone, word limits, banned phrases, booking intent, and more.
                 </p>
             </div>
             
@@ -2360,7 +2356,7 @@
                             <i class="fas fa-download"></i> Download
                         </button>
                         <button class="btn" onclick="hideDeepAuditResults()" style="padding: 8px 16px;">
-                            <i class="fas fa-arrow-left"></i> Back to Rules Audit
+                            <i class="fas fa-times"></i> Close Results
                         </button>
                     </div>
                 </div>
@@ -4684,12 +4680,12 @@
                     } else if (fixedScenarios.length > 0) {
                         // ════════════════════════════════════════════════════════════════
                         // RETURNING FROM TEMPLATE AUDIT FIX
-                        // Re-run Template Audit to refresh the list
+                        // Refresh audit profile status to show updated counts
                         // ════════════════════════════════════════════════════════════════
-                        console.log('🔧 [TEMPLATE AUDIT] Found fixed scenarios, auto-running audit');
+                        console.log('🔧 [TEMPLATE AUDIT] Found fixed scenarios, refreshing audit status');
                         setTimeout(() => {
-                            if (typeof runAudit === 'function') {
-                                runAudit();
+                            if (typeof loadScenarioAuditStatus === 'function') {
+                                loadScenarioAuditStatus();
                             }
                         }, 500);
                     }
@@ -4715,39 +4711,10 @@
         });
         
         // ========================================
-        // AUDIT FUNCTIONS
+        // AUDIT FUNCTIONS (Deep Audit is now the primary)
         // ========================================
-        async function runAudit() {
-            const btn = document.getElementById('run-audit-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
-            
-            try {
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/run`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${getAuthToken()}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Audit failed');
-                }
-                
-                const result = await response.json();
-                lastAuditResult = result;
-                displayAuditResults(result);
-                
-            } catch (error) {
-                console.error('Audit error:', error);
-                showToast('Audit failed: ' + error.message, 'error');
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-play"></i> Run Audit';
-            }
-        }
+        // NOTE: Legacy runAudit() removed - Deep Audit (GPT-4) is now the only audit method.
+        // The old rules-based audit has been deprecated in favor of comprehensive AI review.
         
         // ════════════════════════════════════════════════════════════════════════════════
         // AUDIT PROFILE MANAGEMENT
