@@ -4726,7 +4726,7 @@ Return JSON only:
   "blueprintMatch": ${blueprintIntent ? `"${blueprintIntent.itemKey}"` : 'null'},
   "intentFulfilled": ${blueprintIntent ? '<true|false>' : 'null'},
   "issues": [
-    { "field": "<quickReplies[0]|fullReplies[1]|general>", "issue": "<specific problem>", "suggestion": "<how to fix>" }
+    { "field": "<quickReplies[0]|fullReplies[1]|general>", "exactQuote": "<EXACT text with the problem>", "issue": "<specific problem>", "suggestion": "<how to fix>" }
   ],
   "strengths": ["<what's good about this scenario>"],
   "rewriteNeeded": <true|false>

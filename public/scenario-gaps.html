@@ -6245,6 +6245,7 @@
             try {
                 // ════════════════════════════════════════════════════════════════════════════════
                 // Convert Deep Audit issues to violations format for generate-fix endpoint
+                // IMPORTANT: Include 'value' (exactQuote) so the backend knows what text to fix
                 // ════════════════════════════════════════════════════════════════════════════════
                 const violations = (scenarioResult?.issues || []).map(issue => ({
                     scenarioId: scenarioId,
@@ -6253,8 +6254,16 @@
                     message: issue.issue || issue.message || '',
                     suggestion: issue.suggestion || '',
                     severity: issue.severity || 'major',
-                    ruleId: 'deep-audit'
+                    ruleId: 'deep-audit',
+                    // CRITICAL: Pass the exact text to fix (from Deep Audit's exactQuote)
+                    value: issue.exactQuote || issue.value || ''
                 }));
+                
+                console.log('🔧 [DEEP AUDIT FIX] Violations with values:', violations.map(v => ({
+                    field: v.field,
+                    hasValue: !!v.value,
+                    valuePreview: v.value?.substring?.(0, 30)
+                })));
                 
                 console.log('🔧 [DEEP AUDIT FIX] Calling generate-fix with', violations.length, 'violations');
                 
