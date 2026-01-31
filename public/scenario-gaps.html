@@ -4693,6 +4693,7 @@
                 }, 300);
                 
                 // If verification requested a refresh, reload audit profile/status
+                // BUT keep Deep Audit results visible if they exist
                 const refreshAuditStatus = localStorage.getItem('refreshAuditStatus') === 'true';
                 if (refreshAuditStatus) {
                     localStorage.removeItem('refreshAuditStatus');
@@ -4702,6 +4703,13 @@
                             loadAuditProfile();
                         } else if (typeof loadScenarioAuditStatus === 'function') {
                             loadScenarioAuditStatus();
+                        }
+                        // Re-display Deep Audit results if we have them
+                        if (lastDeepAuditResults && lastDeepAuditResults.scenarios?.length > 0) {
+                            displayDeepAuditResults(lastDeepAuditResults);
+                            document.getElementById('audit-empty').style.display = 'none';
+                            document.getElementById('audit-results').style.display = 'none';
+                            document.getElementById('deep-audit-results').style.display = 'block';
                         }
                     }, 800);
                 }
@@ -6014,9 +6022,12 @@
                     </div>
                 `).join('');
                 
-                const strengthsHtml = (s.strengths || []).map(str => `
-                    <span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 4px;">✓ ${str}</span>
-                `).join('');
+                // Handle strengths - can be strings or objects with text/description property
+                const strengthsHtml = (s.strengths || []).map(str => {
+                    // Extract text from object if needed
+                    const text = typeof str === 'string' ? str : (str?.text || str?.description || str?.strength || JSON.stringify(str));
+                    return `<span style="background: rgba(16, 185, 129, 0.2); color: #10b981; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-right: 4px;">✓ ${escapeHtml(text)}</span>`;
+                }).join('');
                 
                 return `
                     <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; ${s.rewriteNeeded ? 'border-left: 4px solid #ef4444;' : ''}">
@@ -6346,6 +6357,11 @@
                     isDeepAuditFix: true  // Flag for verification modal
                 };
                 localStorage.setItem('deepAuditFixContext', JSON.stringify(fixContext));
+                
+                // ════════════════════════════════════════════════════════════════════════════════
+                // FLAG FOR RETURN NAVIGATION - tells scenario-gaps.html to show Deep Audit results
+                // ════════════════════════════════════════════════════════════════════════════════
+                localStorage.setItem('returnToDeepAudit', 'true');
                 
                 console.log('📦 [DEEP AUDIT FIX] Prefill data stored with', result.fixes?.length || 0, 'fixes');
                 
