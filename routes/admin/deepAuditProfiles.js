@@ -645,8 +645,9 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════════
 // GET /api/admin/templates/:templateId/audit-diagnostic
 // Debug endpoint: Check what's actually stored in the database
+// NOTE: Temporarily public for debugging - add auth back later
 // ════════════════════════════════════════════════════════════════════════════════
-router.get('/templates/:templateId/audit-diagnostic', async (req, res) => {
+router.get('/templates/:templateId/audit-diagnostic', /* NO AUTH - TEMP DEBUG */ async (req, res) => {
     try {
         const { templateId } = req.params;
         
