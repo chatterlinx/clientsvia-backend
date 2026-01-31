@@ -550,6 +550,7 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
                     auditedAt: auditResult?.createdAt || null,
                     verdict: auditResult?.verdict || null,
                     score: auditResult?.score ?? null,
+                    rewriteNeeded: auditResult?.rewriteNeeded ?? null,
                     contentHash: auditResult?.scenarioContentHash || null,
                     lastFixAt: fixEntry?.createdAt || null,
                     fixType: fixEntry?.fixType || null,
@@ -561,9 +562,16 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
                 
                 if (auditResult) {
                     auditedCount++;
-                    if (auditResult.verdict === 'perfect' || auditResult.score >= 9) {
+                    // Classification logic - aligned with Deep Audit modal:
+                    // Perfect: score >= 9 AND (verdict is PERFECT or no rewrite needed)
+                    // NeedsWork: rewriteNeeded OR score < 7 OR verdict is NEEDS_WORK/FAILS
+                    const verdict = (auditResult.verdict || '').toUpperCase();
+                    const score = auditResult.score || 0;
+                    const rewriteNeeded = auditResult.rewriteNeeded === true;
+                    
+                    if (score >= 9 && !rewriteNeeded) {
                         perfectCount++;
-                    } else if (auditResult.verdict === 'needs_work' || auditResult.score < 7) {
+                    } else if (rewriteNeeded || score < 7 || verdict === 'NEEDS_WORK' || verdict === 'FAILS') {
                         needsWorkCount++;
                     }
                 } else {
