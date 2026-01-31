@@ -4635,6 +4635,15 @@ router.post('/:companyId/audit/deep', async (req, res) => {
         const matcher = new IntentMatcher(HVAC_BLUEPRINT_SPEC);
         
         let cachedCount = 0;
+        let freshAuditCount = 0;
+        let saveSuccessCount = 0;
+        let saveFailCount = 0;
+        
+        logger.info('[DEEP AUDIT] 🚀 Starting audit loop', {
+            totalScenariosToAudit: scenariosToAudit.length,
+            templateId: templateIdStr,
+            auditProfileId
+        });
         
         for (const scenario of scenariosToAudit) {
             // Check if we've hit too many consecutive errors (likely API issue)
@@ -4973,59 +4982,82 @@ Return JSON only:
                 // PERSIST TO ScenarioAuditResult COLLECTION (profile-based cache)
                 // This is the authoritative "done" memory
                 // ════════════════════════════════════════════════════════════════
-                try {
-                    const savedResult = await ScenarioAuditResult.upsertResult({
-                        templateId: templateIdStr,
-                        scenarioId,
-                        auditProfileId,
-                        scenarioContentHash: contentHash,
-                        score: auditResult.score,
-                        verdict: auditResult.verdict,
-                        rewriteNeeded: auditResult.rewriteNeeded,
-                        issues: groundedIssues,
-                        strengths: auditResult.strengths || [],
-                        fixSuggestions: groundedIssues.map(i => i.suggestion).filter(Boolean),
-                        blueprintItemKey: auditResult.blueprintMatch || null,
-                        matchConfidence,
-                        matchSource,
-                        intentFulfilled: auditResult.intentFulfilled ?? null,
-                        supervision: {
-                            grounded: true,
-                            originalIssueCount,
-                            hallucinatedFiltered: hallucinatedCount,
-                            verifiedIssueCount: groundedIssues.length
-                        },
-                        model: 'gpt-4o',
-                        promptVersion: 'DEEP_AUDIT_PROMPT_V1',
-                        rubricVersion: auditProfile.rubricVersion,
-                        tokensUsed: 0, // TODO: track tokens
-                        durationMs: 0, // TODO: track duration
-                        cached: false,
+                
+                // VALIDATION: Ensure all required cache key fields are present
+                if (!templateIdStr || !scenarioId || !auditProfileId || !contentHash) {
+                    logger.error('[DEEP AUDIT] ⚠️ MISSING REQUIRED FIELD - Cannot save', {
+                        hasTemplateId: !!templateIdStr,
+                        hasScenarioId: !!scenarioId,
+                        hasAuditProfileId: !!auditProfileId,
+                        hasContentHash: !!contentHash,
                         scenarioName: scenario.name,
-                        scenarioType: scenario.scenarioType,
-                        categoryName: scenario.categoryName,
-                        categoryId: scenario.categoryId
+                        scenarioIdField: scenario.scenarioId,
+                        scenario_id: scenario._id?.toString()
                     });
-                    
-                    logger.info('[DEEP AUDIT] ✅ Saved result to ScenarioAuditResult', {
-                        scenarioId,
-                        scenarioName: scenario.name,
-                        score: auditResult.score,
-                        templateId: templateIdStr,
-                        auditProfileId,
-                        savedId: savedResult?._id?.toString()
-                    });
-                } catch (cacheError) {
-                    // Log full error for debugging
-                    logger.error('[DEEP AUDIT] ❌ Failed to cache result', {
-                        scenarioId,
-                        scenarioName: scenario.name,
-                        templateId: templateIdStr,
-                        auditProfileId,
-                        error: cacheError.message,
-                        stack: cacheError.stack
-                    });
+                    // Still continue with the audit, just can't cache
+                } else {
+                    try {
+                        const savedResult = await ScenarioAuditResult.upsertResult({
+                            templateId: templateIdStr,
+                            scenarioId,
+                            auditProfileId,
+                            scenarioContentHash: contentHash,
+                            score: auditResult.score,
+                            verdict: auditResult.verdict,
+                            rewriteNeeded: auditResult.rewriteNeeded,
+                            issues: groundedIssues,
+                            strengths: auditResult.strengths || [],
+                            fixSuggestions: groundedIssues.map(i => i.suggestion).filter(Boolean),
+                            blueprintItemKey: auditResult.blueprintMatch || null,
+                            matchConfidence,
+                            matchSource,
+                            intentFulfilled: auditResult.intentFulfilled ?? null,
+                            supervision: {
+                                grounded: true,
+                                originalIssueCount,
+                                hallucinatedFiltered: hallucinatedCount,
+                                verifiedIssueCount: groundedIssues.length
+                            },
+                            model: 'gpt-4o',
+                            promptVersion: 'DEEP_AUDIT_PROMPT_V1',
+                            rubricVersion: auditProfile.rubricVersion,
+                            tokensUsed: 0, // TODO: track tokens
+                            durationMs: 0, // TODO: track duration
+                            cached: false,
+                            scenarioName: scenario.name,
+                            scenarioType: scenario.scenarioType,
+                            categoryName: scenario.categoryName,
+                            categoryId: scenario.categoryId
+                        });
+                        
+                        saveSuccessCount++;
+                        logger.info('[DEEP AUDIT] ✅ Saved result to ScenarioAuditResult', {
+                            scenarioId,
+                            scenarioName: scenario.name,
+                            score: auditResult.score,
+                            templateId: templateIdStr,
+                            auditProfileId,
+                            savedId: savedResult?._id?.toString(),
+                            saveSuccessCount
+                        });
+                    } catch (cacheError) {
+                        saveFailCount++;
+                        // Log full error for debugging
+                        logger.error('[DEEP AUDIT] ❌ Failed to cache result', {
+                            scenarioId,
+                            scenarioName: scenario.name,
+                            templateId: templateIdStr,
+                            auditProfileId,
+                            contentHash,
+                            error: cacheError.message,
+                            code: cacheError.code,
+                            stack: cacheError.stack,
+                            saveFailCount
+                        });
+                    }
                 }
+                
+                freshAuditCount++;
                 
                 results.push(resultEntry);
                 processed++;
@@ -5176,10 +5208,19 @@ Return JSON only:
             // Don't fail the audit, just log
         }
         
-        logger.info('[DEEP AUDIT] Completed', {
+        logger.info('[DEEP AUDIT] ════════════════════════════════════════════════════');
+        logger.info('[DEEP AUDIT] ✅ COMPLETED - SAVE STATISTICS', {
             companyId,
+            templateId: templateIdStr,
+            auditProfileId,
+            totalProcessed: processed,
+            cachedHits: cachedCount,
+            freshAudits: freshAuditCount,
+            saveSuccess: saveSuccessCount,
+            saveFail: saveFailCount,
             ...summary
         });
+        logger.info('[DEEP AUDIT] ════════════════════════════════════════════════════');
         
         // ════════════════════════════════════════════════════════════════════════════
         // FINAL RESULT: Include all critical identifiers for debugging/export
