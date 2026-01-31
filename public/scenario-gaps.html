@@ -4808,6 +4808,82 @@
             }
         }
         
+        let serviceAwareScopeCache = null;
+        
+        async function getServiceAwareScope(templateId) {
+            if (!companyId || !templateId) return null;
+            
+            const now = Date.now();
+            if (serviceAwareScopeCache &&
+                serviceAwareScopeCache.templateId === templateId &&
+                serviceAwareScopeCache.companyId === companyId &&
+                now - serviceAwareScopeCache.fetchedAt < 120000) {
+                return serviceAwareScopeCache;
+            }
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ maxScenarios: 1000, stream: false, listOnly: true, templateId })
+                });
+                
+                if (!response.ok) return null;
+                
+                const data = await response.json();
+                const scenarioIds = data.scenarioIds || [];
+                
+                serviceAwareScopeCache = {
+                    templateId,
+                    companyId,
+                    fetchedAt: now,
+                    scenarioIds,
+                    scopeInfo: data.auditScope || null
+                };
+                
+                return serviceAwareScopeCache;
+            } catch (error) {
+                console.warn('[SCENARIO STATUS] Failed to load service-aware scope:', error.message);
+                return null;
+            }
+        }
+        
+        function computeScenarioSummary(scenarios) {
+            let totalScenarios = 0;
+            let auditedCount = 0;
+            let pendingCount = 0;
+            let perfectCount = 0;
+            let needsWorkCount = 0;
+            
+            for (const s of scenarios) {
+                totalScenarios++;
+                if (s.isAudited) {
+                    auditedCount++;
+                    if (s.score !== null && s.score >= 9) {
+                        perfectCount++;
+                    } else if (s.score !== null && s.score < 7) {
+                        needsWorkCount++;
+                    }
+                } else {
+                    pendingCount++;
+                }
+            }
+            
+            return {
+                totalScenarios,
+                auditedCount,
+                pendingCount,
+                perfectCount,
+                needsWorkCount,
+                progressPercent: totalScenarios > 0
+                    ? Math.round((auditedCount / totalScenarios) * 100)
+                    : 0
+            };
+        }
+        
         async function loadScenarioAuditStatus() {
             const templateId = window.globalTemplateId || sessionStorage.getItem('globalTemplateId');
             if (!templateId) return;
@@ -4830,8 +4906,25 @@
                 if (templateNameEl) templateNameEl.textContent = data.template?.name || 'Unknown';
                 if (templateIdEl) templateIdEl.textContent = `ID: ${data.template?.id || templateId}`;
                 
+                // Optionally scope to service-aware scenario list for this company
+                let scopedScenarios = data.scenarios || [];
+                let summary = data.summary || {};
+                
+                const scope = await getServiceAwareScope(templateId);
+                if (scope?.scenarioIds?.length > 0) {
+                    const scenarioSet = new Set(scope.scenarioIds);
+                    scopedScenarios = (data.scenarios || []).filter(s => scenarioSet.has(s.scenarioId));
+                    summary = computeScenarioSummary(scopedScenarios);
+                    console.log('[SCENARIO STATUS] Service-aware scope applied:', {
+                        total: summary.totalScenarios,
+                        audited: summary.auditedCount,
+                        pending: summary.pendingCount,
+                        perfect: summary.perfectCount,
+                        needsWork: summary.needsWorkCount
+                    });
+                }
+                
                 // Update counts
-                const summary = data.summary || {};
                 document.getElementById('profile-total-count').textContent = summary.totalScenarios || 0;
                 document.getElementById('profile-audited-count').textContent = summary.auditedCount || 0;
                 document.getElementById('profile-pending-count').textContent = summary.pendingCount || 0;
@@ -4844,7 +4937,7 @@
                 document.getElementById('profile-progress-bar').style.width = `${percent}%`;
                 
                 // Store scenarios and render list
-                allScenariosAuditStatus = data.scenarios || [];
+                allScenariosAuditStatus = scopedScenarios;
                 renderScenarioList(allScenariosAuditStatus);
                 
                 // If a ledger open is pending (from URL), try now that data is loaded

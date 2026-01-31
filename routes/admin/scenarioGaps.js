@@ -4655,6 +4655,18 @@ router.post('/:companyId/audit/deep', async (req, res) => {
                 const scenarioId = scenario.scenarioId || scenario._id?.toString();
                 const contentHash = deepAuditService.hashScenarioContent(scenario);
                 
+                // DEBUG: Log first 3 scenario IDs to compare with query
+                if (processed < 3) {
+                    logger.info('[DEEP AUDIT] 🆔 SCENARIO ID BEING SAVED', {
+                        scenarioId,
+                        hasScenarioIdField: !!scenario.scenarioId,
+                        scenarioIdField: scenario.scenarioId,
+                        has_idField: !!scenario._id,
+                        _idField: scenario._id?.toString(),
+                        scenarioName: scenario.name
+                    });
+                }
+                
                 // Check for cached result in ScenarioAuditResult collection
                 const cachedResult = await ScenarioAuditResult.findCached({
                     templateId: templateIdStr,

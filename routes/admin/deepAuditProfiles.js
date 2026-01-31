@@ -515,12 +515,29 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
         let perfectCount = 0;
         let needsWorkCount = 0;
         
+        // DEBUG: Log sample of stored scenarioIds vs template scenarioIds
+        const storedIds = Array.from(auditMap.keys()).slice(0, 5);
+        logger.info('[SCENARIO-AUDIT-STATUS] Sample stored scenarioIds', { storedIds });
+        
         // Flatten all scenarios from categories
+        let templateIdsSample = [];
         (template.categories || []).forEach(category => {
             (category.scenarios || []).forEach(scenario => {
                 totalScenarios++;
                 
                 const scenarioId = scenario.scenarioId || scenario._id?.toString() || scenario.id;
+                
+                // Collect first 5 template scenario IDs for comparison
+                if (templateIdsSample.length < 5) {
+                    templateIdsSample.push({
+                        scenarioId,
+                        hasScenarioId: !!scenario.scenarioId,
+                        has_id: !!scenario._id,
+                        hasId: !!scenario.id,
+                        name: scenario.name || scenario.scenarioName
+                    });
+                }
+                
                 const auditResult = auditMap.get(scenarioId);
                 
                 const fixEntry = fixLedgerMap.get(scenarioId);
@@ -555,6 +572,17 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
                 
                 scenarios.push(scenarioInfo);
             });
+        });
+        
+        // DEBUG: Log the ID comparison to diagnose mismatch
+        logger.info('[SCENARIO-AUDIT-STATUS] 🔍 ID COMPARISON', {
+            templateIdsSample,
+            storedIdsCount: auditMap.size,
+            matchedCount: auditedCount,
+            mismatchLikely: auditMap.size > 0 && auditedCount < auditMap.size,
+            diagnosis: auditMap.size > auditedCount 
+                ? 'MISMATCH: More stored IDs than matches - scenarioId format differs!'
+                : 'OK'
         });
         
         // Sort: pending first, then needs_work, then by name
