@@ -913,6 +913,17 @@
             color: var(--text-muted);
         }
         
+        /* Clickable stat boxes in Audit Profile panel */
+        .stat-box-clickable:hover {
+            transform: scale(1.05);
+            border: 2px solid rgba(255,255,255,0.3) !important;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .stat-box-clickable:active {
+            transform: scale(0.98);
+        }
+        
         .violations-list {
             display: flex;
             flex-direction: column;
@@ -1614,25 +1625,35 @@
                         </div>
                     </div>
                     
-                    <!-- Counts -->
+                    <!-- Counts - Clickable to filter -->
                     <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <div style="text-align: center; padding: 8px 12px; background: rgba(168,85,247,0.2); border-radius: 8px; min-width: 60px;">
+                        <div onclick="setFilterAndScroll('all')" class="stat-box-clickable" 
+                            style="text-align: center; padding: 8px 12px; background: rgba(168,85,247,0.2); border-radius: 8px; min-width: 60px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;"
+                            title="Click to show all scenarios">
                             <div style="font-size: 20px; font-weight: bold; color: #a78bfa;" id="profile-total-count">--</div>
                             <div style="font-size: 10px; color: var(--text-muted);">Total</div>
                         </div>
-                        <div style="text-align: center; padding: 8px 12px; background: rgba(52,211,153,0.2); border-radius: 8px; min-width: 60px;">
+                        <div onclick="setFilterAndScroll('audited')" class="stat-box-clickable"
+                            style="text-align: center; padding: 8px 12px; background: rgba(52,211,153,0.2); border-radius: 8px; min-width: 60px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;"
+                            title="Click to show audited scenarios only">
                             <div style="font-size: 20px; font-weight: bold; color: var(--accent-green);" id="profile-audited-count">--</div>
                             <div style="font-size: 10px; color: var(--text-muted);">Audited</div>
                         </div>
-                        <div style="text-align: center; padding: 8px 12px; background: rgba(251,191,36,0.2); border-radius: 8px; min-width: 60px;">
+                        <div onclick="setFilterAndScroll('pending')" class="stat-box-clickable"
+                            style="text-align: center; padding: 8px 12px; background: rgba(251,191,36,0.2); border-radius: 8px; min-width: 60px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;"
+                            title="Click to show pending scenarios only">
                             <div style="font-size: 20px; font-weight: bold; color: var(--accent-yellow);" id="profile-pending-count">--</div>
                             <div style="font-size: 10px; color: var(--text-muted);">Pending</div>
                         </div>
-                        <div style="text-align: center; padding: 8px 12px; background: rgba(34,211,238,0.2); border-radius: 8px; min-width: 60px;">
+                        <div onclick="setFilterAndScroll('perfect')" class="stat-box-clickable"
+                            style="text-align: center; padding: 8px 12px; background: rgba(34,211,238,0.2); border-radius: 8px; min-width: 60px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;"
+                            title="Click to show perfect scenarios only">
                             <div style="font-size: 20px; font-weight: bold; color: #22d3ee;" id="profile-perfect-count">--</div>
                             <div style="font-size: 10px; color: var(--text-muted);">Perfect</div>
                         </div>
-                        <div style="text-align: center; padding: 8px 12px; background: rgba(239,68,68,0.2); border-radius: 8px; min-width: 60px;">
+                        <div onclick="setFilterAndScroll('needswork')" class="stat-box-clickable"
+                            style="text-align: center; padding: 8px 12px; background: rgba(239,68,68,0.2); border-radius: 8px; min-width: 60px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;"
+                            title="Click to show needs work scenarios only">
                             <div style="font-size: 20px; font-weight: bold; color: #ef4444;" id="profile-needswork-count">--</div>
                             <div style="font-size: 10px; color: var(--text-muted);">Needs Work</div>
                         </div>
@@ -5074,6 +5095,32 @@
             }
             
             renderScenarioList(filtered);
+        }
+        
+        // Set filter from stat box click and scroll to list
+        function setFilterAndScroll(filterValue) {
+            // Update the dropdown
+            const dropdown = document.getElementById('scenario-status-filter');
+            if (dropdown) {
+                dropdown.value = filterValue;
+            }
+            
+            // Apply filter
+            filterScenarioList();
+            
+            // Scroll to the scenario list
+            const listSection = document.getElementById('scenario-audit-list');
+            if (listSection) {
+                listSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            
+            // Visual feedback on the clicked stat box
+            document.querySelectorAll('.stat-box-clickable').forEach(box => {
+                box.style.border = '2px solid transparent';
+            });
+            
+            // Highlight the clicked one briefly
+            event.currentTarget.style.border = '2px solid rgba(255,255,255,0.5)';
         }
 
         // ════════════════════════════════════════════════════════════════════════════════
