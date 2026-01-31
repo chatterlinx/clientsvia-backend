@@ -4689,9 +4689,14 @@ router.post('/:companyId/audit/deep', async (req, res) => {
                     cachedCount++;
                     processed++;
                     
-                    const cachedScore = cachedResult.score;
-                    if (cachedScore >= 9 && cachedResult.verdict !== 'NEEDS_WORK') perfect++;
-                    else if (cachedScore < 7 || cachedResult.verdict === 'NEEDS_WORK') needsWork++;
+                    // Counting logic - aligned with fresh results and Audit Profile panel:
+                    // Uses rewriteNeeded flag (more accurate than score/verdict alone)
+                    const cachedScore = cachedResult.score || 0;
+                    const cachedRewriteNeeded = cachedResult.rewriteNeeded === true || cachedScore < 7;
+                    const cachedVerdict = (cachedResult.verdict || '').toUpperCase();
+                    
+                    if (cachedScore >= 9 && !cachedRewriteNeeded) perfect++;
+                    else if (cachedRewriteNeeded || cachedVerdict === 'NEEDS_WORK' || cachedVerdict === 'FAILS') needsWork++;
                     
                     results.push({
                         scenarioId,
@@ -4951,9 +4956,14 @@ Return JSON only:
                     auditResult.verdict = auditResult.score >= 9 ? 'PERFECT' : 'GOOD';
                 }
                 
-                // Count by rewriteNeeded flag (more accurate than score threshold)
-                if (auditResult.score >= 9 && !auditResult.rewriteNeeded) perfect++;
-                else if (auditResult.rewriteNeeded || auditResult.score < 7) needsWork++;
+                // Counting logic - aligned with cached results and Audit Profile panel:
+                // Uses rewriteNeeded flag (more accurate than score/verdict alone)
+                const freshScore = auditResult.score || 0;
+                const freshRewriteNeeded = auditResult.rewriteNeeded === true || freshScore < 7;
+                const freshVerdict = (auditResult.verdict || '').toUpperCase();
+                
+                if (freshScore >= 9 && !freshRewriteNeeded) perfect++;
+                else if (freshRewriteNeeded || freshVerdict === 'NEEDS_WORK' || freshVerdict === 'FAILS') needsWork++;
                 
                 const resultEntry = {
                     scenarioId,
