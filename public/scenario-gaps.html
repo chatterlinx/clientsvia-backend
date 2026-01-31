@@ -6231,7 +6231,14 @@
             }
         }
         
-        function openDeepAuditFix(scenarioId, categoryId) {
+        async function openDeepAuditFix(scenarioId, categoryId) {
+            // ════════════════════════════════════════════════════════════════════════════════
+            // DEEP AUDIT "FIX IN GLOBAL BRAIN" - NOW GENERATES ACTUAL FIXES
+            // ════════════════════════════════════════════════════════════════════════════════
+            // This now calls the same /audit/generate-fix endpoint as Template Audit,
+            // ensuring the form is populated with AI-fixed content (not just navigation).
+            // ════════════════════════════════════════════════════════════════════════════════
+            
             // Store company ID for return navigation
             localStorage.setItem('lastAuditCompanyId', companyId);
             
@@ -6239,35 +6246,130 @@
             const scenarioResult = lastDeepAuditResults?.scenarios?.find(s => s.scenarioId === scenarioId);
             
             // Get template ID from the audit result (backend now includes it) or manual builder
-            const templateId = scenarioResult?.templateId || manualBuilderTemplateData?.templateId || manualBuilderTemplateData?._id || null;
+            const templateId = scenarioResult?.templateId || manualBuilderTemplateData?.templateId || manualBuilderTemplateData?._id || window.globalTemplateId || null;
             
-            console.log('🔧 [DEEP AUDIT FIX] Opening with templateId:', templateId);
+            console.log('🔧 [DEEP AUDIT FIX] Starting fix generation for:', { scenarioId, templateId, categoryId });
             
-            // Build prefill data similar to Template Audit flow
-            const prefillData = {
-                mode: 'deep-audit-fix',
-                source: 'deep-audit',
-                timestamp: Date.now(),
-                navigation: {
-                    templateId: templateId,
-                    categoryId: categoryId,
+            // ════════════════════════════════════════════════════════════════════════════════
+            // OPEN WINDOW IMMEDIATELY (before async) to avoid popup blocker
+            // ════════════════════════════════════════════════════════════════════════════════
+            const loadingHtml = `
+                <html>
+                <head><title>Generating Deep Audit Fixes...</title></head>
+                <body style="background: #1a1a2e; color: white; font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 48px; animation: pulse 1s ease-in-out infinite;">🔧</div>
+                        <h2 style="margin-top: 20px;">Generating AI Fixes...</h2>
+                        <p style="color: #888;">GPT-4 is rewriting the scenario to fix issues</p>
+                        <div style="margin-top: 16px; width: 200px; height: 4px; background: #333; border-radius: 2px; overflow: hidden; margin: 20px auto;">
+                            <div style="width: 30%; height: 100%; background: linear-gradient(90deg, #8b5cf6, #ec4899); animation: loading 1s ease-in-out infinite;"></div>
+                        </div>
+                    </div>
+                    <style>
+                        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+                        @keyframes loading { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+                    </style>
+                </body>
+                </html>
+            `;
+            const newWindow = window.open('about:blank', '_blank');
+            if (newWindow) {
+                newWindow.document.write(loadingHtml);
+                newWindow.document.close();
+            }
+            
+            try {
+                // ════════════════════════════════════════════════════════════════════════════════
+                // Convert Deep Audit issues to violations format for generate-fix endpoint
+                // ════════════════════════════════════════════════════════════════════════════════
+                const violations = (scenarioResult?.issues || []).map(issue => ({
                     scenarioId: scenarioId,
-                    companyId: companyId
-                },
-                auditResult: scenarioResult || {
-                    scenarioId: scenarioId,
-                    categoryId: categoryId
+                    scenarioName: scenarioResult?.name || '',
+                    field: issue.field || 'general',
+                    message: issue.issue || issue.message || '',
+                    suggestion: issue.suggestion || '',
+                    severity: issue.severity || 'major',
+                    ruleId: 'deep-audit'
+                }));
+                
+                console.log('🔧 [DEEP AUDIT FIX] Calling generate-fix with', violations.length, 'violations');
+                
+                // ════════════════════════════════════════════════════════════════════════════════
+                // CALL THE SAME GENERATE-FIX ENDPOINT AS TEMPLATE AUDIT
+                // ════════════════════════════════════════════════════════════════════════════════
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/generate-fix`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scenarioId: scenarioId,
+                        violations: violations
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to generate fixes');
                 }
-            };
-            
-            // Store in localStorage (same pattern as Template Audit)
-            localStorage.setItem('deepAuditEditPrefill', JSON.stringify(prefillData));
-            
-            console.log('🔧 [DEEP AUDIT] Opening Global Brain with prefill:', prefillData);
-            
-            // Open Global Brain with prefill flag
-            const gbUrl = `/admin-global-instant-responses.html?prefill=deep-audit-fix&scenarioId=${scenarioId}&categoryId=${categoryId}`;
-            window.open(gbUrl, '_blank');
+                
+                console.log('✅ [DEEP AUDIT FIX] Fixes generated:', {
+                    fixCount: result.fixes?.length || 0,
+                    navigation: result.navigation
+                });
+                
+                // ════════════════════════════════════════════════════════════════════════════════
+                // BUILD PREFILL DATA WITH FIXED CONTENT (same as Template Audit)
+                // ════════════════════════════════════════════════════════════════════════════════
+                const prefillData = buildEditScenarioPrefill(result.fixedScenario, result.navigation, result.fixes);
+                
+                // Add deep audit context for verification
+                prefillData.auditResult = {
+                    score: scenarioResult?.score,
+                    verdict: scenarioResult?.verdict,
+                    rewriteNeeded: scenarioResult?.rewriteNeeded,
+                    issues: scenarioResult?.issues || [],
+                    contentHash: scenarioResult?.contentHash,
+                    auditProfileId: scenarioResult?.auditProfileId
+                };
+                
+                // ════════════════════════════════════════════════════════════════════════════════
+                // STORE IN LOCALSTORAGE (using the Template Audit key for compatibility)
+                // ════════════════════════════════════════════════════════════════════════════════
+                localStorage.setItem('scenarioEditPrefill', JSON.stringify(prefillData));
+                
+                // Also store company ID so Global Brain can return to the right audit page
+                localStorage.setItem('lastAuditCompanyId', companyId);
+                
+                console.log('📦 [DEEP AUDIT FIX] Prefill data stored with', result.fixes?.length || 0, 'fixes');
+                
+                // ════════════════════════════════════════════════════════════════════════════════
+                // NAVIGATE TO GLOBAL BRAIN (using edit-scenario prefill type for proper handling)
+                // ════════════════════════════════════════════════════════════════════════════════
+                const gbUrl = `/admin-global-instant-responses.html?prefill=edit-scenario&templateId=${result.navigation?.templateId || templateId}&categoryId=${result.navigation?.categoryId || categoryId}&scenarioId=${scenarioId}`;
+                
+                console.log('🚀 [DEEP AUDIT FIX] Navigating to Global Brain:', gbUrl);
+                
+                if (newWindow && !newWindow.closed) {
+                    newWindow.location.href = gbUrl;
+                    showToast(`Opening Global Brain with ${result.fixes?.length || 0} AI fixes applied - review and save!`, 'success');
+                } else {
+                    // Window was closed - provide manual link
+                    showToast('Popup blocked. Opening in current tab...', 'warning');
+                    window.location.href = gbUrl;
+                }
+                
+            } catch (error) {
+                console.error('❌ [DEEP AUDIT FIX] Error:', error);
+                showToast('Failed to generate fixes: ' + error.message, 'error');
+                
+                // Close the pre-opened window on error
+                if (newWindow && !newWindow.closed) {
+                    newWindow.close();
+                }
+            }
         }
         
         function toggleRulesChecked() {
