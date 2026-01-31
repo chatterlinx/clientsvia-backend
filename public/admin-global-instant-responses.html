@@ -22314,6 +22314,14 @@ ${JSON.stringify(healthData, null, 2)}
             }
             
             console.log('🔧 [EDIT-PREFILL] Applying fixed scenario data to form...');
+            console.log('🔧 [EDIT-PREFILL] DEBUG - scenarioData:', {
+                hasData: !!scenarioData,
+                quickRepliesCount: scenarioData?.quickReplies?.length,
+                fullRepliesCount: scenarioData?.fullReplies?.length,
+                quickRepliesSample: scenarioData?.quickReplies?.[0]?.substring?.(0, 50),
+                fullRepliesSample: scenarioData?.fullReplies?.[0]?.substring?.(0, 50)
+            });
+            console.log('🔧 [EDIT-PREFILL] DEBUG - fixes:', auditFix?.fixes?.map(f => f.field));
             
             const s = scenarioData;
             const fixes = auditFix?.fixes || [];
@@ -22396,6 +22404,14 @@ ${JSON.stringify(healthData, null, 2)}
                         fullRepliesInput.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.2)';
                     }
                 }
+                
+                // Debug: Verify values were actually set
+                console.log('🔧 [EDIT-PREFILL] DEBUG - Form values after apply:', {
+                    quickRepliesSet: quickRepliesInput?.value?.substring?.(0, 100),
+                    fullRepliesSet: fullRepliesInput?.value?.substring?.(0, 100),
+                    quickRepliesElement: !!quickRepliesInput,
+                    fullRepliesElement: !!fullRepliesInput
+                });
                 
                 // ════════════════════════════════════════════════════════════════════
                 // OTHER FIELDS

@@ -6284,7 +6284,22 @@
                 
                 console.log('✅ [DEEP AUDIT FIX] Fixes generated:', {
                     fixCount: result.fixes?.length || 0,
-                    navigation: result.navigation
+                    navigation: result.navigation,
+                    // Debug: Show what fixes were actually generated
+                    fixes: result.fixes?.map(f => ({
+                        field: f.field,
+                        oldValuePreview: f.oldValue?.substring?.(0, 50),
+                        newValuePreview: f.newValue?.substring?.(0, 50),
+                        changed: f.oldValue !== f.newValue
+                    }))
+                });
+                
+                // Debug: Check if fixedScenario has different content
+                console.log('🔍 [DEEP AUDIT FIX] Fixed scenario preview:', {
+                    quickRepliesCount: result.fixedScenario?.quickReplies?.length,
+                    fullRepliesCount: result.fixedScenario?.fullReplies?.length,
+                    quickRepliesSample: result.fixedScenario?.quickReplies?.[0]?.substring?.(0, 50),
+                    fullRepliesSample: result.fixedScenario?.fullReplies?.[0]?.substring?.(0, 50)
                 });
                 
                 // ════════════════════════════════════════════════════════════════════════════════
