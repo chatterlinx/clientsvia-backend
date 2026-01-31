@@ -4245,145 +4245,27 @@ async function buildServiceAwareAuditScope(company) {
 /**
  * POST /:companyId/audit/run
  * 
- * Run full audit on company's ACTUAL runtime brain:
- * - Template scenarios (filtered by enabled services)
- * - Company Local scenarios
- * - Disabled services labeled but not audited
+ * DEPRECATED: Legacy rules-based audit has been replaced by Deep Audit (GPT-4).
+ * This endpoint now returns a deprecation notice.
  * 
- * Body:
- * - rules: string[] (optional) - specific rule IDs to run
- * - category: string (optional) - audit only this category
+ * Use POST /:companyId/audit/deep instead for comprehensive AI-powered audits.
  */
 router.post('/:companyId/audit/run', async (req, res) => {
-    const { companyId } = req.params;
-    const { rules: ruleIds, category } = req.body;
+    logger.warn('[AUDIT] DEPRECATED: /audit/run called - this endpoint is deprecated', {
+        companyId: req.params.companyId,
+        timestamp: new Date().toISOString()
+    });
     
-    try {
-        const company = await Company.findById(companyId);
-        if (!company) {
-            return res.status(404).json({ error: 'Company not found' });
+    res.status(410).json({
+        success: false,
+        error: 'This endpoint has been deprecated',
+        message: 'The legacy rules-based audit has been replaced by Deep Audit (GPT-4). Please use the "Deep Audit (AI)" button in the UI.',
+        deprecated: true,
+        replacement: {
+            endpoint: `POST /api/admin/scenario-gaps/${req.params.companyId}/audit/deep`,
+            description: 'GPT-4 powered comprehensive AI review'
         }
-        
-        // Build service-aware audit scope
-        const auditScope = await buildServiceAwareAuditScope(company);
-        
-        if (auditScope.error) {
-            return res.status(400).json({
-                error: auditScope.error.message,
-                code: auditScope.error.code,
-                fix: auditScope.error.fix
-            });
-        }
-        
-        const { template, scope, stats } = auditScope;
-        
-        // Combine enabled + company local for audit
-        let scenariosToAudit = [...scope.enabled, ...scope.companyLocal];
-        
-        // Filter by category if specified
-        if (category) {
-            scenariosToAudit = scenariosToAudit.filter(s => 
-                s.categoryId === category || s.categoryName === category
-            );
-        }
-        
-        // Run audit on the filtered scenarios
-        const engine = new AuditEngine({ logger });
-        const report = await engine.auditScenarios(scenariosToAudit, template, {
-            rules: ruleIds
-        });
-        
-        // Add source labels to results
-        if (report.scenarios) {
-            for (const result of report.scenarios) {
-                const original = scenariosToAudit.find(s => 
-                    s.scenarioId === result.scenarioId
-                );
-                if (original) {
-                    result.source = original.source;
-                    result.customTemplateName = original.customTemplateName;
-                }
-            }
-        }
-        
-        // Build bucketed summary
-        const templateResults = (report.scenarios || []).filter(s => s.source === 'main_template');
-        const companyLocalResults = (report.scenarios || []).filter(s => s.source === 'company_local');
-        
-        logger.info('[AUDIT] Completed service-aware audit', {
-            companyId,
-            templateId: template._id,
-            templateType: template.templateType,
-            enabled: stats.enabledCount,
-            disabled: stats.disabledCount,
-            companyLocal: stats.companyLocalCount,
-            audited: scenariosToAudit.length,
-            violations: report.summary?.totalViolations,
-            healthScore: report.summary?.healthScore
-        });
-        
-        res.json({
-            success: true,
-            companyId,
-            templateId: template._id,
-            templateType: template.templateType,
-            customTemplateId: auditScope.customTemplate?._id,
-            customTemplateName: auditScope.customTemplate?.name,
-            
-            // Service-aware scope info
-            auditScope: {
-                enabled: stats.enabledCount,
-                disabled: stats.disabledCount,
-                companyLocal: stats.companyLocalCount,
-                totalAuditable: stats.totalAuditable,
-                disabledServices: stats.disabledServices
-            },
-            
-            // Excluded scenarios (for display, not audited)
-            excludedScenarios: scope.disabled.map(s => ({
-                scenarioId: s.scenarioId,
-                name: s.name,
-                categoryName: s.categoryName,
-                excludeReason: s.excludeReason,
-                excludeLabel: s.excludeLabel
-            })),
-            
-            // Bucketed results
-            buckets: {
-                mainTemplate: {
-                    count: templateResults.length,
-                    passing: templateResults.filter(s => !s.violations?.length).length,
-                    failing: templateResults.filter(s => s.violations?.length > 0).length,
-                    scenarios: templateResults
-                },
-                companyLocal: {
-                    count: companyLocalResults.length,
-                    passing: companyLocalResults.filter(s => !s.violations?.length).length,
-                    failing: companyLocalResults.filter(s => s.violations?.length > 0).length,
-                    scenarios: companyLocalResults
-                },
-                disabled: {
-                    count: scope.disabled.length,
-                    services: stats.disabledServices,
-                    message: `${scope.disabled.length} scenarios excluded (service disabled)`
-                }
-            },
-            
-            // Full report for backward compatibility
-            ...report
-        });
-        
-    } catch (error) {
-        logger.error('[AUDIT] Error running audit', { 
-            companyId, 
-            error: error.message,
-            stack: error.stack
-        });
-        res.status(500).json({ 
-            error: 'Failed to run audit', 
-            details: error.message 
-        });
-    }
+    });
 });
 
 // ════════════════════════════════════════════════════════════════════════════════
