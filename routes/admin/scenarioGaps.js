@@ -4997,6 +4997,14 @@ Return JSON only:
                     // Still continue with the audit, just can't cache
                 } else {
                     try {
+                        // Transform strengths from strings to objects (GPT returns strings)
+                        const normalizedStrengths = (auditResult.strengths || []).map(s => {
+                            if (typeof s === 'string') {
+                                return { description: s, category: 'general' };
+                            }
+                            return s; // Already an object
+                        });
+                        
                         const savedResult = await ScenarioAuditResult.upsertResult({
                             templateId: templateIdStr,
                             scenarioId,
@@ -5006,7 +5014,7 @@ Return JSON only:
                             verdict: auditResult.verdict,
                             rewriteNeeded: auditResult.rewriteNeeded,
                             issues: groundedIssues,
-                            strengths: auditResult.strengths || [],
+                            strengths: normalizedStrengths,
                             fixSuggestions: groundedIssues.map(i => i.suggestion).filter(Boolean),
                             blueprintItemKey: auditResult.blueprintMatch || null,
                             matchConfidence,
