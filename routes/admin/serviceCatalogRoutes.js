@@ -261,13 +261,16 @@ router.post('/template/:templateId/seed', async (req, res) => {
             admin: catalog.services.filter(s => s.serviceType === 'admin').length
         };
         
-        const actionType = added > 0 ? 'catalog_seeded' : (updated > 0 ? 'catalog_updated' : 'catalog_verified');
-        catalog.changeLog.push({
-            action: actionType,
-            details: `V1.2 sync: Added ${added}, Updated ${updated}, Skipped ${skipped}. Types: ${typeCounts.work} work, ${typeCounts.symptom} symptom, ${typeCounts.admin} admin`,
-            changedBy: seededBy,
-            changedAt: new Date()
-        });
+        // Use valid enum values: service_added, service_removed, service_updated, catalog_created, catalog_reset
+        // For seed operations, use 'catalog_created' (covers both initial seed and updates)
+        if (added > 0 || updated > 0) {
+            catalog.changeLog.push({
+                action: 'catalog_created',
+                details: `V1.2 sync: Added ${added}, Updated ${updated}, Skipped ${skipped}. Types: ${typeCounts.work} work, ${typeCounts.symptom} symptom, ${typeCounts.admin} admin`,
+                changedBy: seededBy,
+                changedAt: new Date()
+            });
+        }
         
         await catalog.save();
         
