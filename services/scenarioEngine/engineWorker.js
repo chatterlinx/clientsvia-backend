@@ -304,6 +304,16 @@ async function processJob(jobId) {
                         
                         serviceGenerated++;
                     }
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // SAVE PROGRESS AFTER EACH BATCH (Feb 2026 fix for stale UI)
+                    // ═══════════════════════════════════════════════════════════════
+                    job.progress.scenariosGenerated = totalGenerated + serviceGenerated;
+                    job.progress.scenariosQueuedForReview = totalQueued + serviceQueued;
+                    job.progress.tokensUsed = totalTokens + serviceTokens;
+                    job.progress.currentService = service.serviceKey;
+                    job.progress.currentServiceProgress = `${serviceGenerated}/${needed}`;
+                    await job.save();
                 }
                 
                 // Update service run

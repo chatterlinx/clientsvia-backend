@@ -8567,9 +8567,15 @@
                     const total = progress.servicesTotal || 1;
                     const percent = Math.round((done / total) * 100);
                     
+                    // Show current service being processed
+                    const currentService = progress.currentService ? ` (${progress.currentService} ${progress.currentServiceProgress || ''})` : '';
+                    
                     document.getElementById('job-progress-text').textContent = 
-                        `${done}/${total} services • ${progress.scenariosGenerated || 0} generated • ${progress.scenariosQueuedForReview || 0} queued`;
+                        `${done}/${total} services${currentService} • ${progress.scenariosGenerated || 0} generated • ${progress.scenariosQueuedForReview || 0} queued`;
                     document.getElementById('job-progress-bar').style.width = percent + '%';
+                    
+                    // Also refresh pending count in background
+                    loadPendingReview();
                     
                     // Check if finished
                     if (['completed', 'failed', 'cancelled'].includes(job.status)) {
