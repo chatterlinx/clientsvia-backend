@@ -2570,8 +2570,11 @@
                                 <i class="fas fa-plus"></i> Add Service
                             </button>
                             <button onclick="seedDefaultServices()" id="seed-services-btn" style="padding: 8px 12px; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 6px; color: #a78bfa; cursor: pointer; font-size: 12px;">
-                                <i class="fas fa-seedling"></i> Seed HVAC Defaults
+                                <i class="fas fa-seedling"></i> <span id="seed-btn-text">Seed HVAC Defaults</span>
                             </button>
+                            <span id="new-services-badge" style="display: none; padding: 4px 8px; background: rgba(251, 146, 60, 0.2); border: 1px solid rgba(251, 146, 60, 0.5); border-radius: 4px; color: #fb923c; font-size: 11px; margin-left: 4px;">
+                                <i class="fas fa-exclamation-circle"></i> <span id="new-services-count">0</span> new services available
+                            </span>
                         </div>
                     </div>
                     
@@ -7293,9 +7296,34 @@
                 document.getElementById('sw-local-count').textContent = stats.localSourceCount || 0;
                 document.getElementById('sw-total-count').textContent = stats.totalServices || 0;
                 
-                // Show/hide seed button
+                // Update seed button based on service count
                 const seedBtn = document.getElementById('seed-services-btn');
-                seedBtn.style.display = (stats.totalServices || 0) < 5 ? 'inline-flex' : 'none';
+                const seedBtnText = document.getElementById('seed-btn-text');
+                const newServicesBadge = document.getElementById('new-services-badge');
+                const newServicesCount = document.getElementById('new-services-count');
+                
+                // V1.2 has 44 services (24 original + 20 new with symptoms/admin)
+                const EXPECTED_V12_COUNT = 44;
+                const currentCount = stats.totalServices || 0;
+                const missingCount = Math.max(0, EXPECTED_V12_COUNT - currentCount);
+                
+                // Always show seed button
+                seedBtn.style.display = 'inline-flex';
+                
+                if (currentCount < 5) {
+                    // New catalog - needs initial seeding
+                    seedBtnText.textContent = 'Seed HVAC Defaults';
+                    newServicesBadge.style.display = 'none';
+                } else if (missingCount > 0) {
+                    // Existing catalog - can update to V1.2
+                    seedBtnText.textContent = 'Update to V1.2';
+                    newServicesBadge.style.display = 'inline-flex';
+                    newServicesCount.textContent = missingCount;
+                } else {
+                    // Up to date
+                    seedBtnText.textContent = 'Sync Defaults';
+                    newServicesBadge.style.display = 'none';
+                }
                 
                 // Render services list
                 renderSwitchboardServices(switchboardData.services || []);
@@ -7586,13 +7614,17 @@
         // Seed default services
         async function seedDefaultServices() {
             const btn = document.getElementById('seed-services-btn');
+            const btnText = document.getElementById('seed-btn-text');
+            const originalText = btnText?.textContent || 'Seed HVAC Defaults';
+            
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Seeding...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
             
             try {
                 const templateId = window.globalTemplateId;
+                const beforeCount = switchboardData?.stats?.totalServices || 0;
                 
-                // First, seed the catalog
+                // First, seed the catalog (adds any missing default services)
                 const catalogRes = await fetch(`/api/admin/service-catalog/template/${templateId}/seed`, {
                     method: 'POST',
                     headers: {
@@ -7629,7 +7661,14 @@
                 const syncResult = await syncRes.json();
                 console.log('[SWITCHBOARD] Synced:', syncResult);
                 
-                showToast(`Seeded ${catalogResult.catalog?.serviceCount || 0} services!`, 'success');
+                const afterCount = catalogResult.catalog?.serviceCount || 0;
+                const addedCount = afterCount - beforeCount;
+                
+                if (addedCount > 0) {
+                    showToast(`✨ Added ${addedCount} new services! (V1.2: Work, Symptom, Admin types)`, 'success');
+                } else {
+                    showToast(`Catalog is up to date (${afterCount} services)`, 'success');
+                }
                 
                 // Reload switchboard
                 await loadServiceSwitchboard();
@@ -7639,7 +7678,7 @@
                 showToast('Failed to seed: ' + error.message, 'error');
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-seedling"></i> Seed HVAC Defaults';
+                btn.innerHTML = `<i class="fas fa-seedling"></i> <span id="seed-btn-text">${originalText}</span>`;
             }
         }
         
