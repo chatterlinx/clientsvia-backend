@@ -2599,23 +2599,100 @@
                     </div>
                     
                     <!-- ═══════════════════════════════════════════════════════════════ -->
-                    <!-- SCENARIO GENERATION SECTION -->
+                    <!-- SCENARIO ENGINE CONSOLE (Feb 2026) -->
+                    <!-- Coverage-driven scenario generation with GPT-4 supervision -->
                     <!-- ═══════════════════════════════════════════════════════════════ -->
-                    <div id="scenario-generation-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(139, 92, 246, 0.3);">
+                    <div id="scenario-engine-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(139, 92, 246, 0.3);">
+                        <!-- Engine Header -->
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                             <div>
                                 <h4 style="margin: 0; font-size: 15px; color: #a78bfa;">
-                                    <i class="fas fa-magic"></i> Scenario Generation
+                                    <i class="fas fa-brain"></i> Scenario Engine
                                 </h4>
                                 <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">
-                                    Generate scenarios for services • One card at a time • Deep Audit verified
+                                    Coverage-driven generation • GPT-4 supervised • Auto-fill gaps
                                 </p>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="exportEngineCoverage()" 
+                                        style="padding: 8px 12px; background: rgba(34, 211, 238, 0.2); border: 1px solid rgba(34, 211, 238, 0.4); border-radius: 6px; color: #22d3ee; cursor: pointer; font-size: 12px;">
+                                    <i class="fas fa-download"></i> Export JSON
+                                </button>
+                                <button onclick="copyEngineCoverage()" 
+                                        style="padding: 8px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #3b82f6; cursor: pointer; font-size: 12px;">
+                                    <i class="fas fa-copy"></i> Copy JSON
+                                </button>
+                                <button onclick="loadEngineCoverage()" 
+                                        style="padding: 8px 12px; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 6px; color: #a78bfa; cursor: pointer; font-size: 12px;">
+                                    <i class="fas fa-sync"></i> Refresh
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Engine Stats Cards -->
+                        <div id="engine-stats" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 16px;">
+                            <div style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05)); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 8px; padding: 16px; text-align: center;">
+                                <div id="engine-target" style="font-size: 24px; font-weight: 700; color: #a78bfa;">--</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Target</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(34, 197, 94, 0.05)); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; padding: 16px; text-align: center;">
+                                <div id="engine-existing" style="font-size: 24px; font-weight: 700; color: #22c55e;">--</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Existing</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), rgba(251, 146, 60, 0.05)); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 8px; padding: 16px; text-align: center;">
+                                <div id="engine-gap" style="font-size: 24px; font-weight: 700; color: #fb923c;">--</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Gap</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, rgba(34, 211, 238, 0.15), rgba(34, 211, 238, 0.05)); border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 8px; padding: 16px; text-align: center;">
+                                <div id="engine-healthy" style="font-size: 24px; font-weight: 700; color: #22d3ee;">--</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Healthy</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05)); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 16px; text-align: center;">
+                                <div id="engine-needs-work" style="font-size: 24px; font-weight: 700; color: #ef4444;">--</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Needs Work</div>
+                            </div>
+                            <div style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(168, 85, 247, 0.05)); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 8px; padding: 16px; text-align: center;">
+                                <div id="engine-supervised" style="font-size: 24px; font-weight: 700; color: #a855f7;">--</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">✓✓ Supervised</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Coverage Progress Bar -->
+                        <div style="margin-bottom: 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <span style="font-size: 12px; color: var(--text-muted);">Scenario Coverage</span>
+                                <span id="engine-coverage-percent" style="font-size: 12px; font-weight: 600; color: #22c55e;">--%</span>
+                            </div>
+                            <div style="height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden;">
+                                <div id="engine-coverage-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #8b5cf6, #22c55e); transition: width 0.5s ease;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Service Coverage Table -->
+                        <div id="engine-coverage-table" style="max-height: 400px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                            <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                                <p>Loading coverage data...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Engine Actions -->
+                        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-size: 12px; color: var(--text-muted);">
+                                <i class="fas fa-info-circle"></i>
+                                Coverage targets: WORK=20, SYMPTOM=5, ADMIN=2 scenarios per service
                             </div>
                             <button onclick="openGenerationPanel()" 
                                     style="padding: 8px 16px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600;">
-                                <i class="fas fa-play"></i> Start Generation
+                                <i class="fas fa-play"></i> Generate for Service
                             </button>
                         </div>
+                    </div>
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- LEGACY SCENARIO GENERATION SECTION (Hidden, kept for modal) -->
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <div id="scenario-generation-section" style="display: none;">
                         
                         <!-- Coverage Progress -->
                         <div id="generation-coverage" style="display: none; padding: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 8px;">
@@ -7244,6 +7321,8 @@
                 }
                 // Load coverage stats
                 loadGenerationCoverage();
+                // Load Scenario Engine coverage
+                loadEngineCoverage();
             } else {
                 content.style.display = 'none';
                 icon.style.transform = 'rotate(0deg)';
@@ -8020,6 +8099,248 @@
             skipped: 0,
             selectedService: null
         };
+        
+        // ============================================================================
+        // SCENARIO ENGINE CONSOLE FUNCTIONS (Feb 2026)
+        // ============================================================================
+        
+        let engineCoverageData = null;
+        
+        // Load coverage data from API
+        async function loadEngineCoverage() {
+            const tableEl = document.getElementById('engine-coverage-table');
+            
+            tableEl.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                    <p>Calculating coverage...</p>
+                </div>
+            `;
+            
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    throw new Error('No template selected');
+                }
+                
+                const response = await fetch(`/api/admin/scenario-engine/coverage/${templateId}?companyId=${companyId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load coverage');
+                }
+                
+                engineCoverageData = await response.json();
+                console.log('[ENGINE] Coverage loaded:', engineCoverageData);
+                
+                // Update stats cards
+                updateEngineStats(engineCoverageData);
+                
+                // Render coverage table
+                renderEngineCoverageTable(engineCoverageData);
+                
+            } catch (error) {
+                console.error('[ENGINE] Error loading coverage:', error);
+                tableEl.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ef4444;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 24px; margin-bottom: 12px;"></i>
+                        <p>Error: ${error.message}</p>
+                        <button onclick="loadEngineCoverage()" style="margin-top: 12px; padding: 8px 16px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; cursor: pointer;">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        // Update stats cards
+        function updateEngineStats(data) {
+            const summary = data.summary || {};
+            
+            document.getElementById('engine-target').textContent = summary.targetTotal || 0;
+            document.getElementById('engine-existing').textContent = summary.existingTotal || 0;
+            document.getElementById('engine-gap').textContent = summary.gapTotal || 0;
+            document.getElementById('engine-healthy').textContent = summary.healthyCount || 0;
+            document.getElementById('engine-needs-work').textContent = (summary.warningCount || 0) + (summary.criticalCount || 0);
+            document.getElementById('engine-supervised').textContent = summary.fullySupervisedCount || 0;
+            
+            // Update coverage bar
+            const percent = summary.overallCoveragePercent || 0;
+            document.getElementById('engine-coverage-percent').textContent = percent + '%';
+            document.getElementById('engine-coverage-bar').style.width = percent + '%';
+            
+            // Color the percent based on coverage
+            const percentEl = document.getElementById('engine-coverage-percent');
+            if (percent >= 90) {
+                percentEl.style.color = '#22c55e';
+            } else if (percent >= 50) {
+                percentEl.style.color = '#fb923c';
+            } else {
+                percentEl.style.color = '#ef4444';
+            }
+        }
+        
+        // Render coverage table
+        function renderEngineCoverageTable(data) {
+            const tableEl = document.getElementById('engine-coverage-table');
+            const services = data.services || [];
+            
+            if (services.length === 0) {
+                tableEl.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 12px;"></i>
+                        <p>No enabled services found</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Group by service type
+            const workServices = services.filter(s => s.serviceType === 'work');
+            const symptomServices = services.filter(s => s.serviceType === 'symptom');
+            const adminServices = services.filter(s => s.serviceType === 'admin');
+            
+            let html = `
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background: var(--bg-primary); position: sticky; top: 0; z-index: 10;">
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">Status</th>
+                            <th style="padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">Service</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 70px;">Type</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 60px;">Target</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 60px;">Exist</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 60px;">Gap</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 80px;">Coverage</th>
+                            <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 80px;">Audit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            // Render section helper
+            function renderServiceSection(sectionServices, sectionTitle, sectionColor) {
+                if (sectionServices.length === 0) return '';
+                
+                let sectionHtml = `
+                    <tr>
+                        <td colspan="8" style="padding: 12px 12px 8px 12px; background: rgba(0,0,0,0.2); font-weight: 600; color: ${sectionColor}; font-size: 12px;">
+                            ${sectionTitle} (${sectionServices.length})
+                        </td>
+                    </tr>
+                `;
+                
+                for (const s of sectionServices) {
+                    const statusIcon = s.supervisionLevel === 'full' ? '✓✓' : (s.supervisionLevel === 'partial' ? '✓' : s.statusIcon);
+                    const statusColor = s.status === 'healthy' ? '#22c55e' : (s.status === 'warning' ? '#fb923c' : '#ef4444');
+                    
+                    const typeBadgeColor = s.serviceType === 'work' ? '#22c55e' : (s.serviceType === 'symptom' ? '#fb923c' : '#a855f7');
+                    const typeBadgeBg = s.serviceType === 'work' ? 'rgba(34, 197, 94, 0.2)' : (s.serviceType === 'symptom' ? 'rgba(251, 146, 60, 0.2)' : 'rgba(168, 85, 247, 0.2)');
+                    
+                    const gapColor = s.gap > 0 ? '#fb923c' : '#22c55e';
+                    const coverageColor = s.coveragePercent >= 90 ? '#22c55e' : (s.coveragePercent >= 50 ? '#fb923c' : '#ef4444');
+                    
+                    const auditDisplay = s.avgAuditScore !== null 
+                        ? `<span style="color: ${s.avgAuditScore >= 7 ? '#22c55e' : '#fb923c'}">${s.supervisionIcon} ${s.avgAuditScore}</span>`
+                        : '<span style="color: var(--text-muted)">--</span>';
+                    
+                    sectionHtml += `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 10px 12px; color: ${statusColor}; font-size: 14px;">${statusIcon}</td>
+                            <td style="padding: 10px 12px;">
+                                <div style="font-weight: 500;">${escapeHtml(s.displayName)}</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(s.serviceKey)}</div>
+                            </td>
+                            <td style="padding: 10px 12px; text-align: center;">
+                                <span style="background: ${typeBadgeBg}; color: ${typeBadgeColor}; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">${s.serviceType.toUpperCase()}</span>
+                            </td>
+                            <td style="padding: 10px 12px; text-align: center; color: var(--text-muted);">${s.target}</td>
+                            <td style="padding: 10px 12px; text-align: center; color: #22c55e; font-weight: 500;">${s.existing}</td>
+                            <td style="padding: 10px 12px; text-align: center; color: ${gapColor}; font-weight: 600;">${s.gap > 0 ? s.gap : '✓'}</td>
+                            <td style="padding: 10px 12px; text-align: center; color: ${coverageColor}; font-weight: 500;">${s.coveragePercent}%</td>
+                            <td style="padding: 10px 12px; text-align: center;">${auditDisplay}</td>
+                        </tr>
+                    `;
+                }
+                
+                return sectionHtml;
+            }
+            
+            html += renderServiceSection(workServices, '🔧 WORK Services', '#22c55e');
+            html += renderServiceSection(symptomServices, '🔶 SYMPTOM Services', '#fb923c');
+            html += renderServiceSection(adminServices, '🟣 ADMIN Services', '#a855f7');
+            
+            html += '</tbody></table>';
+            tableEl.innerHTML = html;
+        }
+        
+        // Export coverage as JSON file download
+        async function exportEngineCoverage() {
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    showToast('No template selected', 'error');
+                    return;
+                }
+                
+                const response = await fetch(`/api/admin/scenario-engine/coverage/${templateId}/export?companyId=${companyId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to export');
+                }
+                
+                const data = await response.json();
+                
+                // Download as file
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `scenario-coverage-${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                showToast('Coverage report downloaded', 'success');
+                
+            } catch (error) {
+                console.error('[ENGINE] Export error:', error);
+                showToast('Export failed: ' + error.message, 'error');
+            }
+        }
+        
+        // Copy coverage JSON to clipboard
+        async function copyEngineCoverage() {
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    showToast('No template selected', 'error');
+                    return;
+                }
+                
+                const response = await fetch(`/api/admin/scenario-engine/coverage/${templateId}/export?companyId=${companyId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to get coverage');
+                }
+                
+                const data = await response.json();
+                
+                await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+                showToast('Coverage JSON copied to clipboard!', 'success');
+                
+            } catch (error) {
+                console.error('[ENGINE] Copy error:', error);
+                showToast('Copy failed: ' + error.message, 'error');
+            }
+        }
+        
+        // ============================================================================
+        // GENERATION PANEL FUNCTIONS (Legacy, kept for manual generation)
+        // ============================================================================
         
         // Open generation panel/modal
         function openGenerationPanel() {
