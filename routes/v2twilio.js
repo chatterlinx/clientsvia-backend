@@ -2812,6 +2812,65 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       });
       
       // ═══════════════════════════════════════════════════════════════════════════
+      // 🎯 SLOT EXTRACTION (Feb 2026) - RUNS BEFORE ANY ROUTING
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Extract slots from EVERY utterance, even in discovery mode.
+      // This ensures we capture "Hi I'm Mark" and don't re-ask later.
+      // Slots are persisted to Redis with confidence metadata.
+      // ═══════════════════════════════════════════════════════════════════════════
+      const { SlotExtractor } = require('../services/engine/booking');
+      
+      // Initialize slots from existing state or empty
+      callState.slots = callState.slots || {};
+      
+      // Extract slots from current utterance
+      const extractedSlots = SlotExtractor.extractAll(speechResult, {
+        turnCount: callState.turnCount || 1,
+        callerPhone: fromNumber,
+        existingSlots: callState.slots,
+        company,
+        expectingSlot: callState.currentBookingStep || null
+      });
+      
+      // Merge new extractions with existing slots (with confidence rules)
+      if (Object.keys(extractedSlots).length > 0) {
+        callState.slots = SlotExtractor.mergeSlots(callState.slots, extractedSlots);
+        
+        // 📼 BLACK BOX: Log slot extraction
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'SLOTS_EXTRACTED',
+            turn: callState.turnCount,
+            data: {
+              extracted: Object.fromEntries(
+                Object.entries(extractedSlots).map(([k, v]) => [k, { value: v.value, confidence: v.confidence, source: v.source }])
+              ),
+              totalSlots: Object.keys(callState.slots).length
+            }
+          }).catch(() => {});
+        }
+        
+        logger.info('[SLOT EXTRACTOR] Slots extracted pre-routing', {
+          callSid,
+          turnCount: callState.turnCount,
+          extracted: Object.keys(extractedSlots),
+          totalSlots: Object.keys(callState.slots)
+        });
+      }
+      
+      // Also sync slots to bookingCollected for backward compatibility
+      if (callState.slots && Object.keys(callState.slots).length > 0) {
+        callState.bookingCollected = callState.bookingCollected || {};
+        for (const [key, slot] of Object.entries(callState.slots)) {
+          if (slot?.value && !callState.bookingCollected[key]) {
+            callState.bookingCollected[key] = slot.value;
+          }
+        }
+      }
+      
+      // ═══════════════════════════════════════════════════════════════════════════
       // 🧠 LLM-0 ENABLEMENT LOGIC (Dec 2025 Update)
       // ═══════════════════════════════════════════════════════════════════════════
       // LLM-0 ROUTING DECISION - ALWAYS USE LLM-0 FOR VOICE CALLS
@@ -2983,6 +3042,154 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
 
         // ════════════════════════════════════════════════════════════════════════════════════
+        // 🎯 BOOKING FLOW SHORT-CIRCUIT (Feb 2026)
+        // ════════════════════════════════════════════════════════════════════════════════════
+        // When bookingModeLocked is TRUE, skip ALL AI paths and run deterministic booking flow.
+        // This is the "clipboard takes over" moment - no scenarios, no LLM, just checklist.
+        // ════════════════════════════════════════════════════════════════════════════════════
+        if (callState?.bookingModeLocked === true && !result) {
+          try {
+            const { BookingFlowRunner, BookingFlowResolver } = require('../services/engine/booking');
+            
+            tracer.step('BOOKING_FLOW_START', '📋 Booking flow locked - running deterministic booking runner');
+            
+            // Resolve the booking flow from company config
+            const flow = BookingFlowResolver.resolve({
+              companyId: companyID,
+              trade: callState.trade || null,
+              serviceType: callState.serviceType || null,
+              company
+            });
+            
+            // Build state from Redis callState
+            const bookingState = {
+              bookingModeLocked: true,
+              bookingFlowId: callState.bookingFlowId || flow.flowId,
+              currentStepId: callState.currentStepId || callState.currentBookingStep || flow.steps[0]?.id,
+              bookingCollected: callState.bookingCollected || {},
+              slotMetadata: callState.slotMetadata || {},
+              confirmedSlots: callState.confirmedSlots || {},
+              askCount: callState.bookingAskCount || {},
+              pendingConfirmation: callState.pendingConfirmation || null
+            };
+            
+            // Handle confirmation response if awaiting confirmation
+            let bookingResult;
+            if (bookingState.currentStepId === 'CONFIRMATION' || callState.awaitingConfirmation) {
+              bookingResult = BookingFlowRunner.handleConfirmationResponse(speechResult, flow, bookingState);
+            } else {
+              // Pass slots (with metadata) to BookingFlowRunner for confirm-vs-collect logic
+              bookingResult = await BookingFlowRunner.runStep({
+                flow,
+                state: bookingState,
+                userInput: speechResult,
+                company,
+                callSid,
+                slots: callState.slots || {}  // 🎯 Pre-extracted slots with confidence
+              });
+            }
+            
+            // Map BookingFlowRunner result to expected format
+            result = {
+              text: bookingResult.reply,
+              response: bookingResult.reply,
+              action: bookingResult.action === 'COMPLETE' ? 'COMPLETE' :
+                      bookingResult.action === 'ESCALATE' ? 'transfer' : 'BOOKING',
+              shouldTransfer: bookingResult.requiresTransfer === true,
+              transferReason: bookingResult.transferReason || null,
+              matchSource: bookingResult.matchSource || 'BOOKING_FLOW_RUNNER',
+              tier: 'tier1',
+              tokensUsed: 0,  // 🎯 0 tokens - 100% deterministic!
+              callState: {
+                ...callState,
+                bookingModeLocked: bookingResult.state?.bookingModeLocked !== false,
+                bookingFlowId: bookingResult.state?.bookingFlowId || flow.flowId,
+                currentStepId: bookingResult.state?.currentStepId,
+                currentBookingStep: bookingResult.state?.currentStepId,
+                bookingCollected: bookingResult.state?.bookingCollected || {},
+                slotMetadata: bookingResult.state?.slotMetadata || callState.slotMetadata || {},
+                confirmedSlots: bookingResult.state?.confirmedSlots || {},
+                pendingConfirmation: bookingResult.state?.pendingConfirmation || null,
+                bookingAskCount: bookingResult.state?.askCount || {},
+                awaitingConfirmation: bookingResult.state?.awaitingConfirmation || false,
+                bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE',
+                bookingComplete: bookingResult.isComplete || false,
+                // 🎯 Preserve slots across turns
+                slots: callState.slots || {}
+              },
+              debug: {
+                mode: 'booking',
+                source: 'BOOKING_FLOW_RUNNER',
+                flowId: flow.flowId,
+                currentStep: bookingResult.state?.currentStepId,
+                isComplete: bookingResult.isComplete,
+                bookingCollected: bookingResult.state?.bookingCollected,
+                ...bookingResult.debug
+              }
+            };
+            
+            const bookingLatencyMs = Date.now() - aiProcessStart;
+            
+            tracer.step('BOOKING_FLOW_SUCCESS', `📋 Booking flow completed in ${bookingLatencyMs}ms (0 tokens)`);
+            
+            // 📼 BLACK BOX: Log booking flow success
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'BOOKING_FLOW_SUCCESS',
+                turn: turnCount,
+                data: {
+                  latencyMs: bookingLatencyMs,
+                  flowId: flow.flowId,
+                  currentStep: bookingResult.state?.currentStepId,
+                  action: bookingResult.action,
+                  isComplete: bookingResult.isComplete,
+                  bookingCollected: bookingResult.state?.bookingCollected,
+                  tokensUsed: 0,
+                  responsePreview: (result?.text || '').substring(0, 100)
+                }
+              }).catch(() => {});
+            }
+            
+            logger.info('[BOOKING FLOW] ✅ Deterministic booking step completed', {
+              callSid,
+              flowId: flow.flowId,
+              step: bookingResult.state?.currentStepId,
+              action: bookingResult.action,
+              latencyMs: bookingLatencyMs
+            });
+            
+          } catch (bookingFlowErr) {
+            logger.error('[BOOKING FLOW] ❌ Booking flow failed - falling back to ConversationEngine', {
+              callSid,
+              companyId: companyID,
+              error: bookingFlowErr.message,
+              stack: bookingFlowErr.stack?.substring(0, 500)
+            });
+            
+            // 📼 BLACK BOX: Log booking flow failure
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'BOOKING_FLOW_FAILED',
+                turn: turnCount,
+                data: {
+                  error: bookingFlowErr.message?.substring(0, 200),
+                  recovery: 'ConversationEngine_fallback'
+                }
+              }).catch(() => {});
+            }
+            
+            // Clear the result so we fall through to ConversationEngine
+            result = null;
+            // Unlock booking mode to prevent infinite loop
+            callState.bookingModeLocked = false;
+          }
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════════════
         // 🚀 UNIFIED AI PATH (Dec 2025)
         // ════════════════════════════════════════════════════════════════════════════════════
         // ConversationEngine → HybridReceptionistLLM → OpenAI (lean ~400 token prompt)
@@ -3116,7 +3323,21 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 ...callState,
                 sessionId: engineResult.sessionId,
                 phase: engineResult.phase,
-                collectedSlots: engineResult.slotsCollected
+                collectedSlots: engineResult.slotsCollected,
+                // ═══════════════════════════════════════════════════════════════════
+                // 🔒 BOOKING FLOW STATE (Feb 2026)
+                // ═══════════════════════════════════════════════════════════════════
+                // These fields are saved to Redis and checked at the TOP of the next turn.
+                // If bookingModeLocked === true, BookingFlowRunner runs instead of LLM.
+                // ═══════════════════════════════════════════════════════════════════
+                ...(engineResult.bookingFlowState ? {
+                  bookingModeLocked: engineResult.bookingFlowState.bookingModeLocked,
+                  bookingFlowId: engineResult.bookingFlowState.bookingFlowId,
+                  currentStepId: engineResult.bookingFlowState.currentStepId,
+                  currentBookingStep: engineResult.bookingFlowState.currentStepId, // Alias
+                  bookingCollected: engineResult.bookingFlowState.bookingCollected || {},
+                  bookingState: engineResult.bookingFlowState.bookingState || 'ACTIVE'
+                } : {})
               },
               debug: {
                 mode: engineResult.conversationMode,
@@ -3129,7 +3350,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 lastCheckpoint: engineResult.debug?.lastCheckpoint || null,
                 // 🆕 Response source for debugging
                 matchSource: engineResult.matchSource || 'LLM_FALLBACK',
-                tier: engineResult.tier || 'tier3'
+                tier: engineResult.tier || 'tier3',
+                // 🔒 Booking flow state for debugging
+                bookingModeLocked: engineResult.bookingFlowState?.bookingModeLocked || false,
+                bookingFlowId: engineResult.bookingFlowState?.bookingFlowId || null
               }
             };
             
@@ -3335,12 +3559,60 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     logger.security('🤖 AI Response:', JSON.stringify(result, null, 2));
     
     // ════════════════════════════════════════════════════════════════════════════
+    // 📊 PIPELINE TRACE LOG (Feb 2026)
+    // ════════════════════════════════════════════════════════════════════════════
+    // Single-line turn summary for instant debugging. Shows:
+    // - slotExtractorApplied: did we extract slots this turn?
+    // - bookingShortCircuit: did booking runner bypass LLM?
+    // - enginePath: what path did we take?
+    // - slotsTouched: which slots were extracted/merged
+    // - confirmedNow: which slots were confirmed this turn
+    // ════════════════════════════════════════════════════════════════════════════
+    const pipelineTrace = {
+      turn: callState.turnCount || 1,
+      callSid,
+      companyId: companyID,
+      slotExtractorApplied: Object.keys(extractedSlots || {}).length > 0,
+      bookingShortCircuit: result?.debug?.source === 'BOOKING_FLOW_RUNNER',
+      enginePath: result?.debug?.source === 'BOOKING_FLOW_RUNNER' ? 'BOOKING_RUNNER' :
+                  result?.matchSource === 'AFTER_HOURS_FLOW' ? 'AFTER_HOURS' :
+                  result?.matchSource === 'VENDOR_FLOW' ? 'VENDOR' :
+                  result?.tier === 'tier1' ? 'SCENARIO' :
+                  result?.tier === 'tier3' ? 'LLM' : 'UNKNOWN',
+      slotsTouched: Object.keys(extractedSlots || {}),
+      confirmedNow: Object.keys(result?.callState?.confirmedSlots || {}).filter(k => 
+        !callState.confirmedSlots || !callState.confirmedSlots[k]
+      ),
+      bookingModeLocked: !!result?.callState?.bookingModeLocked || !!callState?.bookingModeLocked,
+      currentStepId: result?.callState?.currentStepId || callState?.currentStepId || null,
+      slotsInState: Object.keys(callState.slots || {})
+    };
+    
+    logger.info('[PIPELINE TRACE] 📊 Turn summary', pipelineTrace);
+    
+    // 📼 BLACK BOX: Log pipeline trace for debugging
+    if (BlackBoxLogger) {
+      BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'PIPELINE_TRACE',
+        turn: pipelineTrace.turn,
+        data: pipelineTrace
+      }).catch(() => {});
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
     // 🔒 CRITICAL: Save call state to Redis (NOT just express-session)
     // ════════════════════════════════════════════════════════════════════════════
     // This ensures bookingModeLocked persists between Twilio webhook calls!
     // ════════════════════════════════════════════════════════════════════════════
     const updatedCallState = result.callState || callState;
     updatedCallState.turnCount = callState.turnCount; // Preserve turn count
+    
+    // 🎯 CRITICAL: Ensure slots persist every turn (shared memory contract)
+    if (callState.slots && Object.keys(callState.slots).length > 0) {
+      updatedCallState.slots = updatedCallState.slots || callState.slots;
+    }
     
     // Also save to session for backwards compatibility
     req.session = req.session || {};
@@ -3364,7 +3636,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           callSid,
           bookingModeLocked: !!updatedCallState.bookingModeLocked,
           bookingState: updatedCallState.bookingState,
-          turnCount: updatedCallState.turnCount
+          turnCount: updatedCallState.turnCount,
+          slotsCount: Object.keys(updatedCallState.slots || {}).length
         });
       } else {
         stateSaveResult = 'REDIS_NULL_CLIENT';
@@ -3381,6 +3654,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     
     // 📼 BLACK BOX: Log state save for diagnostics (visible in JSON!)
     if (BlackBoxLogger) {
+      // Build slots preview for logging (show values + confidence)
+      const slotsPreview = {};
+      if (updatedCallState.slots) {
+        for (const [key, slot] of Object.entries(updatedCallState.slots)) {
+          if (slot?.value) {
+            slotsPreview[key] = { v: slot.value, c: slot.confidence, s: slot.source };
+          }
+        }
+      }
+      
       BlackBoxLogger.logEvent({
         callId: callSid,
         companyId: companyID,
@@ -3392,7 +3675,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           bookingModeLocked: !!updatedCallState.bookingModeLocked,
           bookingState: updatedCallState.bookingState || null,
           currentBookingStep: updatedCallState.currentBookingStep || null,
-          bookingCollected: updatedCallState.bookingCollected || null
+          bookingCollected: updatedCallState.bookingCollected || null,
+          // 🎯 Slots are now first-class in state logging!
+          slots: slotsPreview,
+          slotsCount: Object.keys(slotsPreview).length
         }
       }).catch(() => {});
     }

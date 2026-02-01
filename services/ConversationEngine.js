@@ -4660,6 +4660,34 @@ async function processTurn({
         }
             
         // ═══════════════════════════════════════════════════════════════════════
+        // 🎯 DIRECT BOOKING INTENT DETECTION (Feb 2026)
+        // ═══════════════════════════════════════════════════════════════════════
+        // Detect when caller DIRECTLY requests booking:
+        // - "I need to schedule a repair"
+        // - "Can someone come out today?"
+        // - "My AC broke, need help"
+        // 
+        // Skip the "would you like me to schedule?" question - go straight to booking!
+        // ═══════════════════════════════════════════════════════════════════════
+        const { DirectBookingIntentDetector } = require('./engine/booking');
+        
+        let directBookingIntent = null;
+        if (!aiResult && !session.booking?.consentGiven) {
+            directBookingIntent = DirectBookingIntentDetector.detect(userText, {
+                trade: company?.trade || company?.tradeType,
+                company
+            });
+            
+            if (directBookingIntent.hasDirectIntent) {
+                log('🎯 DIRECT BOOKING INTENT DETECTED - Skipping consent question', {
+                    confidence: directBookingIntent.confidence,
+                    reason: directBookingIntent.reason,
+                    pattern: directBookingIntent.matchedPattern
+                });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
         // CONSENT DETECTION - Check if caller explicitly wants to book
         // ═══════════════════════════════════════════════════════════════════════
         // V86: Skip if meta intent already handled
@@ -4669,10 +4697,24 @@ async function processTurn({
         
         const consentCheck = !aiResult ? ConsentDetector.checkForConsent(userText, company, session) : { hasConsent: false };
         
-        if (!aiResult && consentCheck.hasConsent && !session.booking.consentGiven) {
-            // 🎯 CONSENT GIVEN - Transition to BOOKING mode
+        // ═══════════════════════════════════════════════════════════════════════
+        // TRIGGER BOOKING: Either explicit consent OR direct booking intent
+        // ═══════════════════════════════════════════════════════════════════════
+        const shouldEnterBooking = !aiResult && !session.booking?.consentGiven && (
+            consentCheck.hasConsent || 
+            (directBookingIntent?.hasDirectIntent && directBookingIntent.confidence >= 0.75)
+        );
+        
+        if (shouldEnterBooking) {
+            // 🎯 BOOKING MODE TRIGGERED - Either by consent or direct intent
             session.booking.consentGiven = true;
-            session.booking.consentPhrase = consentCheck.matchedPhrase;
+            session.booking.consentPhrase = consentCheck.hasConsent 
+                ? consentCheck.matchedPhrase 
+                : (directBookingIntent?.matchedPattern || 'direct_booking_intent');
+            session.booking.consentReason = consentCheck.hasConsent 
+                ? 'explicit_consent' 
+                : 'direct_booking_intent';
+            session.booking.directBookingConfidence = directBookingIntent?.confidence || null;
             session.booking.consentTurn = (session.metrics?.totalTurns || 0) + 1;
             session.booking.consentTimestamp = new Date();
             session.mode = 'BOOKING';
@@ -4682,11 +4724,44 @@ async function processTurn({
                                        session.conversationMemory?.summary || 
                                        'Caller wants to schedule service';
             
-            log('🎯 CONSENT DETECTED - Transitioning to BOOKING mode', {
-                matchedPhrase: consentCheck.matchedPhrase,
-                reason: consentCheck.reason,
+            // ═══════════════════════════════════════════════════════════════════
+            // 🔒 BOOKING FLOW LOCK (Feb 2026)
+            // ═══════════════════════════════════════════════════════════════════
+            // This is THE CRITICAL MOMENT where we lock into booking mode.
+            // From this point, all subsequent turns will use the BookingFlowRunner
+            // instead of scenarios + LLM.
+            // ═══════════════════════════════════════════════════════════════════
+            const { BookingFlowResolver } = require('./engine/booking');
+            const bookingFlow = BookingFlowResolver.resolve({
+                companyId,
+                trade: company?.trade || company?.tradeType || null,
+                serviceType: session.discovery?.serviceType || null,
+                company
+            });
+            
+            // Set booking lock state - this will be saved to Redis by v2twilio.js
+            session.bookingFlowState = {
+                bookingModeLocked: true,
+                bookingFlowId: bookingFlow.flowId,
+                currentStepId: bookingFlow.steps[0]?.id || 'name',
+                bookingCollected: { ...currentSlots },
+                bookingState: 'ACTIVE'
+            };
+            
+            log('🔒 BOOKING FLOW LOCKED - State machine takes over', {
+                flowId: bookingFlow.flowId,
+                firstStep: bookingFlow.steps[0]?.id,
+                stepCount: bookingFlow.steps.length
+            });
+            
+            log('🎯 BOOKING TRIGGERED - Transitioning to BOOKING mode', {
+                trigger: session.booking.consentReason,
+                matchedPhrase: session.booking.consentPhrase,
+                directIntentConfidence: directBookingIntent?.confidence || null,
                 turn: session.booking.consentTurn,
-                discoverySummary: session.discoverySummary
+                discoverySummary: session.discoverySummary,
+                bookingModeLocked: true,
+                bookingFlowId: bookingFlow.flowId
             });
             
             // ═══════════════════════════════════════════════════════════════════
@@ -4708,6 +4783,9 @@ async function processTurn({
             if (firstMissingSlot) {
                 const slotId = firstMissingSlot.slotId || firstMissingSlot.id || firstMissingSlot.type;
                 session.booking.currentSlotId = slotId;
+                
+                // Update booking flow state with current step
+                session.bookingFlowState.currentStepId = slotId;
                 
                 // ═══════════════════════════════════════════════════════════════
                 // V31: Use prompt variant for natural phrasing
@@ -4749,7 +4827,8 @@ async function processTurn({
             
                 log('📋 BOOKING SNAP: Asking first slot immediately', {
                     slotId,
-                    question: exactQuestion
+                    question: exactQuestion,
+                    bookingModeLocked: true
                 });
                 
                 aiResult = {
@@ -4761,17 +4840,24 @@ async function processTurn({
                     signals: { 
                         wantsBooking: true,
                         consentGiven: true,
-                        bookingJustStarted: true
+                        bookingJustStarted: true,
+                        bookingModeLocked: true  // 🔒 Signal to v2twilio.js
                     },
                     latencyMs: aiLatencyMs,
                     tokensUsed: 0,  // 🎯 0 tokens - deterministic!
                     fromStateMachine: true,
                     mode: 'BOOKING',
+                    matchSource: 'BOOKING_SNAP',
+                    tier: 'tier1',
+                    // 🔒 Booking flow state for Redis persistence
+                    bookingFlowState: session.bookingFlowState,
                     debug: {
                         source: 'BOOKING_SNAP',
                         stage: 'booking',
                         step: slotId,
-                        firstSlotQuestion: exactQuestion
+                        firstSlotQuestion: exactQuestion,
+                        bookingModeLocked: true,
+                        bookingFlowId: bookingFlow.flowId
                     }
                 };
             }
@@ -11458,7 +11544,15 @@ async function processTurn({
             // 🆕 Response source tracking for BlackBox
             matchSource,
             tier,
-            tokensUsed: aiResult?.tokensUsed || 0
+            tokensUsed: aiResult?.tokensUsed || 0,
+            // ═══════════════════════════════════════════════════════════════════
+            // 🔒 BOOKING FLOW STATE (Feb 2026)
+            // ═══════════════════════════════════════════════════════════════════
+            // This is passed back to v2twilio.js to persist to Redis.
+            // On next turn, if bookingModeLocked === true, the booking flow runner
+            // will take over (no scenarios, no LLM, just the checklist).
+            // ═══════════════════════════════════════════════════════════════════
+            bookingFlowState: aiResult?.bookingFlowState || session.bookingFlowState || null
         };
 
         // V93: Allow deterministic mid-call rules (and other protocols) to request transfer in a visible way

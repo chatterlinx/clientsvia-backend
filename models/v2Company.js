@@ -2312,6 +2312,18 @@ const companySchema = new mongoose.Schema({
                     // ═══════════════════════════════════════════════════════════════
                     skipIfKnown: { type: Boolean, default: false }, // Skip for returning customers
                     helperNote: { type: String, default: null }, // Internal AI guidance note
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // 🆕 FEB 2026: PRODUCTION HARDENING FIELDS
+                    // ═══════════════════════════════════════════════════════════════
+                    // These fields are required for the deterministic BookingFlowRunner
+                    maxAttempts: { type: Number, default: 3, min: 1, max: 10 }, // Strikes before escalation
+                    allowSkip: { type: Boolean, default: false }, // Can caller skip this slot?
+                    sensitive: { type: Boolean, default: false }, // Mask in Call Center UI (membership#, DOB, SSN)
+                    retryPrompts: { 
+                        type: [String], 
+                        default: [] // ["I didn't catch that.", "Let me try again."]
+                    }
 
                     // ═══════════════════════════════════════════════════════════════
                     // V93: MID-CALL HELPERS (SLOT-LEVEL, UI CONTROLLED)

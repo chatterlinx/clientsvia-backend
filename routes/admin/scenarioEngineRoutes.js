@@ -491,7 +491,11 @@ router.post('/pending/:id/approve', async (req, res) => {
         
         // Format scenario for template
         const payload = pending.editedPayload || pending.payload;
+        // ═══════════════════════════════════════════════════════════════
+        // PASS ALL WIRING FIELDS (Feb 2026 fix)
+        // ═══════════════════════════════════════════════════════════════
         const formatted = formatForGlobalBrain({
+            // Core content
             scenarioName: payload.scenarioName,
             scenarioType: payload.scenarioType,
             category: payload.category,
@@ -499,7 +503,26 @@ router.post('/pending/:id/approve', async (req, res) => {
             quickReplies: payload.quickReplies,
             fullReplies: payload.fullReplies,
             generationNotes: payload.generationNotes,
-            serviceKey: pending.serviceKey
+            serviceKey: pending.serviceKey,
+            
+            // Agent wiring (CRITICAL)
+            bookingIntent: payload.bookingIntent,
+            actionType: payload.actionType,
+            isEmergency: payload.isEmergency,
+            entityCapture: payload.entityCapture,
+            requiredSlots: payload.requiredSlots,
+            stopRouting: payload.stopRouting,
+            confirmBeforeAction: payload.confirmBeforeAction,
+            followUpMode: payload.followUpMode,
+            contextTags: payload.contextTags,
+            
+            // Matching
+            priority: payload.priority,
+            confidenceThreshold: payload.confidenceThreshold,
+            
+            // Compliance
+            multiTenantCompliant: payload.multiTenantCompliant,
+            placeholdersUsed: payload.placeholdersUsed
         }, pending.templateId);
         
         // Add to template - use nested category structure
@@ -606,7 +629,12 @@ router.post('/pending/bulk-approve', async (req, res) => {
         for (const pending of pendingScenarios) {
             try {
                 const payload = pending.editedPayload || pending.payload;
+                // ═══════════════════════════════════════════════════════════════
+                // PASS ALL WIRING FIELDS (Feb 2026 fix)
+                // The payload contains full wiring from serviceScenarioGenerator
+                // ═══════════════════════════════════════════════════════════════
                 const formatted = formatForGlobalBrain({
+                    // Core content
                     scenarioName: payload.scenarioName,
                     scenarioType: payload.scenarioType,
                     category: payload.category,
@@ -614,7 +642,26 @@ router.post('/pending/bulk-approve', async (req, res) => {
                     quickReplies: payload.quickReplies,
                     fullReplies: payload.fullReplies,
                     generationNotes: payload.generationNotes,
-                    serviceKey: pending.serviceKey
+                    serviceKey: pending.serviceKey,
+                    
+                    // Agent wiring (CRITICAL)
+                    bookingIntent: payload.bookingIntent,
+                    actionType: payload.actionType,
+                    isEmergency: payload.isEmergency,
+                    entityCapture: payload.entityCapture,
+                    requiredSlots: payload.requiredSlots,
+                    stopRouting: payload.stopRouting,
+                    confirmBeforeAction: payload.confirmBeforeAction,
+                    followUpMode: payload.followUpMode,
+                    contextTags: payload.contextTags,
+                    
+                    // Matching
+                    priority: payload.priority,
+                    confidenceThreshold: payload.confidenceThreshold,
+                    
+                    // Compliance
+                    multiTenantCompliant: payload.multiTenantCompliant,
+                    placeholdersUsed: payload.placeholdersUsed
                 }, templateId);
                 
                 // Find or create category (using nested structure)

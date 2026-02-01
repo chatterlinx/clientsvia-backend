@@ -8602,7 +8602,7 @@
                     return;
                 }
                 
-                // Group by service
+                // Group by service with individual line items
                 let html = '';
                 for (const group of result.byService) {
                     const lintWarning = group.lintFailedCount > 0 
@@ -8610,25 +8610,63 @@
                         : '';
                     
                     html += `
-                        <div style="margin-bottom: 12px; padding: 12px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="margin-bottom: 16px; padding: 12px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                            <!-- Service Header -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">
                                 <div>
-                                    <span style="font-weight: 500;">${escapeHtml(group.serviceKey)}</span>
+                                    <span style="font-weight: 600; color: white;">${escapeHtml(group.serviceKey)}</span>
                                     <span style="margin-left: 8px; padding: 2px 6px; background: rgba(251, 146, 60, 0.2); border-radius: 4px; font-size: 11px; color: #fb923c;">${group.scenarios.length} pending</span>
                                     ${lintWarning}
                                 </div>
                                 <div style="display: flex; gap: 8px;">
-                                    <button onclick="reviewServiceScenarios('${escapeHtml(group.serviceKey)}')" style="padding: 4px 8px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 4px; color: #3b82f6; cursor: pointer; font-size: 11px;">
-                                        Review
+                                    <button onclick="bulkRejectService('${escapeHtml(group.serviceKey)}')" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 4px; color: #ef4444; cursor: pointer; font-size: 11px;">
+                                        ✗ Reject All
                                     </button>
                                     <button onclick="bulkApproveService('${escapeHtml(group.serviceKey)}')" style="padding: 4px 8px; background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 4px; color: #22c55e; cursor: pointer; font-size: 11px;">
-                                        Approve All
+                                        ✓ Approve All
                                     </button>
                                 </div>
                             </div>
-                            <div style="font-size: 11px; color: var(--text-muted);">
-                                ${group.scenarios.slice(0, 3).map(s => s.payload.scenarioName).join(' • ')}
-                                ${group.scenarios.length > 3 ? ` • +${group.scenarios.length - 3} more` : ''}
+                            
+                            <!-- Individual Scenarios -->
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                    `;
+                    
+                    // Add each scenario as a line item
+                    for (const s of group.scenarios) {
+                        const payload = s.editedPayload || s.payload || {};
+                        const lintPassed = s.lint?.passed !== false;
+                        const scenarioName = payload.scenarioName || 'Unnamed';
+                        const scenarioType = payload.scenarioType || 'FAQ';
+                        const hasBooking = payload.bookingIntent === true;
+                        const isEmergency = payload.isEmergency === true;
+                        
+                        html += `
+                            <div id="pending-row-${s._id}" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: rgba(0,0,0,0.2); border-radius: 6px; border-left: 3px solid ${lintPassed ? (isEmergency ? '#f59e0b' : '#22c55e') : '#ef4444'};">
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="font-size: 12px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        ${escapeHtml(scenarioName)}
+                                    </div>
+                                    <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+                                        ${scenarioType}
+                                        ${hasBooking ? ' • <span style="color:#22d3ee;">📞 Booking</span>' : ''}
+                                        ${isEmergency ? ' • <span style="color:#f59e0b;">⚠️ Emergency</span>' : ''}
+                                        ${!lintPassed ? ' • <span style="color:#ef4444;">⚠ Lint fail</span>' : ''}
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 6px; flex-shrink: 0; margin-left: 12px;">
+                                    <button onclick="approveSinglePendingInline('${s._id}')" style="padding: 3px 8px; background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 4px; color: #22c55e; cursor: pointer; font-size: 10px;" title="Approve">
+                                        ✓
+                                    </button>
+                                    <button onclick="rejectSinglePendingInline('${s._id}')" style="padding: 3px 8px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 4px; color: #ef4444; cursor: pointer; font-size: 10px;" title="Reject">
+                                        ✗
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
+                    html += `
                             </div>
                         </div>
                     `;
@@ -8687,9 +8725,317 @@
         }
         
         // Review scenarios for a service (opens modal)
-        function reviewServiceScenarios(serviceKey) {
-            // TODO: Implement detailed review modal
-            showToast(`Review modal for ${serviceKey} coming soon. Use Approve All for now.`, 'info');
+        async function reviewServiceScenarios(serviceKey) {
+            const templateId = window.globalTemplateId;
+            if (!templateId) {
+                showToast('No template loaded', 'error');
+                return;
+            }
+            
+            try {
+                // Fetch pending scenarios for this service
+                const response = await fetch(`/api/admin/scenario-engine/pending?templateId=${templateId}&serviceKey=${serviceKey}&limit=50`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                const result = await response.json();
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+                
+                const scenarios = result.scenarios || [];
+                if (scenarios.length === 0) {
+                    showToast('No pending scenarios found', 'info');
+                    return;
+                }
+                
+                // Build modal HTML
+                let html = `
+                    <div style="position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; overflow-y: auto; padding: 40px;">
+                        <div style="max-width: 1000px; margin: 0 auto; background: var(--bg-secondary); border-radius: 16px; padding: 24px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                <h2 style="color: white; margin: 0;">Review: ${serviceKey}</h2>
+                                <button onclick="this.closest('div[style*=fixed]').remove()" style="padding: 8px 16px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); border-radius: 6px; color: #ef4444; cursor: pointer;">
+                                    Close
+                                </button>
+                            </div>
+                            
+                            <p style="color: var(--text-muted); margin-bottom: 20px;">${scenarios.length} scenarios pending review</p>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 16px;">
+                `;
+                
+                for (const s of scenarios) {
+                    const payload = s.editedPayload || s.payload || {};
+                    const lintPassed = s.lint?.passed !== false;
+                    
+                    html += `
+                        <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px; border: 1px solid ${lintPassed ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'};">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                                <div>
+                                    <h4 style="color: white; margin: 0 0 4px 0;">${payload.scenarioName || 'Unnamed'}</h4>
+                                    <span style="font-size: 11px; color: var(--text-muted);">
+                                        Type: ${payload.scenarioType || 'FAQ'} | 
+                                        Booking: ${payload.bookingIntent ? '✓' : '✗'} |
+                                        Emergency: ${payload.isEmergency ? '⚠️ YES' : 'No'}
+                                    </span>
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button onclick="approveSinglePending('${s._id}')" style="padding: 4px 12px; background: rgba(34,197,94,0.2); border: 1px solid rgba(34,197,94,0.4); border-radius: 4px; color: #22c55e; cursor: pointer; font-size: 12px;">
+                                        ✓ Approve
+                                    </button>
+                                    <button onclick="rejectSinglePending('${s._id}')" style="padding: 4px 12px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.4); border-radius: 4px; color: #ef4444; cursor: pointer; font-size: 12px;">
+                                        ✗ Reject
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">
+                                <div>
+                                    <strong style="color: #a78bfa;">Triggers (${(payload.triggers || []).length}):</strong>
+                                    <div style="color: var(--text-muted); margin-top: 4px;">
+                                        ${(payload.triggers || []).slice(0, 5).map(t => `• ${t}`).join('<br>')}
+                                        ${(payload.triggers || []).length > 5 ? `<br><i>+${payload.triggers.length - 5} more...</i>` : ''}
+                                    </div>
+                                </div>
+                                <div>
+                                    <strong style="color: #22d3ee;">Quick Replies (${(payload.quickReplies || []).length}):</strong>
+                                    <div style="color: var(--text-muted); margin-top: 4px;">
+                                        ${(payload.quickReplies || []).slice(0, 2).map(r => `• "${r}"`).join('<br>')}
+                                        ${(payload.quickReplies || []).length > 2 ? `<br><i>+${payload.quickReplies.length - 2} more...</i>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            ${!lintPassed ? `<div style="margin-top: 8px; padding: 8px; background: rgba(239,68,68,0.1); border-radius: 4px; color: #fca5a5; font-size: 11px;">
+                                ⚠️ Lint failed: ${s.lint?.errors?.join(', ') || 'Unknown'}
+                            </div>` : ''}
+                        </div>
+                    `;
+                }
+                
+                html += `
+                            </div>
+                            
+                            <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+                                <button onclick="bulkApproveService('${serviceKey}'); this.closest('div[style*=fixed]').remove();" style="padding: 10px 20px; background: linear-gradient(135deg, #22c55e, #16a34a); border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600;">
+                                    ✓ Approve All (Lint Passed)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.insertAdjacentHTML('beforeend', html);
+                
+            } catch (error) {
+                console.error('[ENGINE] Review error:', error);
+                showToast('Error loading scenarios: ' + error.message, 'error');
+            }
+        }
+        
+        // Approve single pending scenario
+        async function approveSinglePending(pendingId) {
+            try {
+                const response = await fetch(`/api/admin/scenario-engine/pending/${pendingId}/approve`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                
+                showToast('✓ Scenario approved', 'success');
+                
+                // Refresh the review modal by re-triggering
+                const serviceKey = result.scenario?.serviceKey;
+                if (serviceKey) {
+                    // Close current modal
+                    document.querySelector('div[style*="position: fixed"][style*="z-index: 2000"]')?.remove();
+                    // Reload
+                    loadPendingReview();
+                    reviewServiceScenarios(serviceKey);
+                }
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Reject single pending scenario (from modal)
+        async function rejectSinglePending(pendingId) {
+            const reason = prompt('Rejection reason (optional):');
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-engine/pending/${pendingId}/reject`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason })
+                });
+                
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                
+                showToast('Scenario rejected', 'warning');
+                
+                // Refresh
+                loadPendingReview();
+                document.querySelector('div[style*="position: fixed"][style*="z-index: 2000"]')?.remove();
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Approve single pending scenario (inline - from main list)
+        async function approveSinglePendingInline(pendingId) {
+            try {
+                const row = document.getElementById(`pending-row-${pendingId}`);
+                if (row) row.style.opacity = '0.5';
+                
+                const response = await fetch(`/api/admin/scenario-engine/pending/${pendingId}/approve`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                
+                // Remove row with animation
+                if (row) {
+                    row.style.transition = 'all 0.3s';
+                    row.style.transform = 'translateX(100%)';
+                    row.style.opacity = '0';
+                    setTimeout(() => {
+                        row.remove();
+                        // Check if parent group is empty
+                        const parent = document.querySelector(`div[style*="margin-bottom: 16px"]`);
+                        if (parent && !parent.querySelector('[id^="pending-row-"]')) {
+                            parent.remove();
+                        }
+                    }, 300);
+                }
+                
+                showToast('✓ Approved', 'success');
+                
+                // Update badge count
+                const badge = document.getElementById('pending-total-badge');
+                if (badge) {
+                    const current = parseInt(badge.textContent) || 0;
+                    if (current > 1) {
+                        badge.textContent = current - 1;
+                    } else {
+                        badge.style.display = 'none';
+                        loadPendingReview(); // Refresh to show empty state
+                    }
+                }
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+                loadPendingReview();
+            }
+        }
+        
+        // Reject single pending scenario (inline - from main list)
+        async function rejectSinglePendingInline(pendingId) {
+            try {
+                const row = document.getElementById(`pending-row-${pendingId}`);
+                if (row) row.style.opacity = '0.5';
+                
+                const response = await fetch(`/api/admin/scenario-engine/pending/${pendingId}/reject`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason: 'Rejected from review list' })
+                });
+                
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error);
+                
+                // Remove row with animation
+                if (row) {
+                    row.style.transition = 'all 0.3s';
+                    row.style.transform = 'translateX(-100%)';
+                    row.style.opacity = '0';
+                    setTimeout(() => {
+                        row.remove();
+                        // Check if parent group is empty
+                        const parent = document.querySelector(`div[style*="margin-bottom: 16px"]`);
+                        if (parent && !parent.querySelector('[id^="pending-row-"]')) {
+                            parent.remove();
+                        }
+                    }, 300);
+                }
+                
+                showToast('✗ Rejected', 'warning');
+                
+                // Update badge count
+                const badge = document.getElementById('pending-total-badge');
+                if (badge) {
+                    const current = parseInt(badge.textContent) || 0;
+                    if (current > 1) {
+                        badge.textContent = current - 1;
+                    } else {
+                        badge.style.display = 'none';
+                        loadPendingReview(); // Refresh to show empty state
+                    }
+                }
+            } catch (error) {
+                showToast('Error: ' + error.message, 'error');
+                loadPendingReview();
+            }
+        }
+        
+        // Bulk reject all scenarios for a service
+        async function bulkRejectService(serviceKey) {
+            if (!confirm(`REJECT ALL pending scenarios for ${serviceKey}?\n\nThis cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const templateId = window.globalTemplateId;
+                
+                // First get all pending for this service
+                const listResponse = await fetch(`/api/admin/scenario-engine/pending?templateId=${templateId}&serviceKey=${serviceKey}&limit=100`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                const listResult = await listResponse.json();
+                
+                if (!listResult.success) throw new Error(listResult.error);
+                
+                const scenarios = listResult.scenarios || [];
+                let rejected = 0;
+                let errors = 0;
+                
+                // Reject each one
+                for (const s of scenarios) {
+                    try {
+                        await fetch(`/api/admin/scenario-engine/pending/${s._id}/reject`, {
+                            method: 'POST',
+                            headers: { 
+                                'Authorization': `Bearer ${getAuthToken()}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ reason: 'Bulk rejected - regenerating with new format' })
+                        });
+                        rejected++;
+                    } catch (e) {
+                        errors++;
+                    }
+                }
+                
+                showToast(`✗ Rejected ${rejected} scenarios${errors > 0 ? ` (${errors} errors)` : ''}`, 'warning');
+                
+                // Refresh
+                loadPendingReview();
+                loadEngineCoverage();
+                
+            } catch (error) {
+                console.error('[ENGINE] Bulk reject error:', error);
+                showToast('Error: ' + error.message, 'error');
+            }
         }
         
         // ============================================================================

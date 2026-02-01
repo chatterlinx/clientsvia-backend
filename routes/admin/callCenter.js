@@ -288,6 +288,469 @@ router.post('/:companyId/calls/:callId/review',
 );
 
 // ═══════════════════════════════════════════════════════════════════════════
+// RUNTIME TRUTH ENDPOINTS (Feb 2026)
+// ═══════════════════════════════════════════════════════════════════════════
+// These endpoints expose the live Redis state for active calls.
+// This is the "runtime truth" that shows exactly what the system believes.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/call-center/:companyId/calls/:callId/runtime
+ * Get live Redis state for an active call
+ * 
+ * Returns:
+ * - callState from Redis (slots, bookingModeLocked, currentStep, etc.)
+ * - Call summary from DB (timeline, intent, outcome)
+ * - Slot metadata with confidence/source
+ */
+router.get('/:companyId/calls/:callId/runtime',
+  auditLog.logAccess('call.runtime_viewed'),
+  async (req, res) => {
+    try {
+      const { companyId, callId } = req.params;
+      
+      // Get call from DB
+      const call = await CallSummary.findOne({ 
+        companyId, 
+        $or: [{ callId }, { _id: callId }] 
+      }).lean();
+      
+      if (!call) {
+        return res.status(404).json({ success: false, error: 'Call not found' });
+      }
+      
+      // Get live Redis state
+      let redisState = null;
+      try {
+        const { getSharedRedisClient } = require('../../services/redisClientFactory');
+        const redisClient = await getSharedRedisClient();
+        
+        if (redisClient) {
+          const stateKey = `callState:${call.callId}`;
+          const savedState = await redisClient.get(stateKey);
+          if (savedState) {
+            redisState = JSON.parse(savedState);
+          }
+        }
+      } catch (redisErr) {
+        logger.warn('[CALL_CENTER] Failed to get Redis state', {
+          callId,
+          error: redisErr.message
+        });
+      }
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // 🔒 SENSITIVE DATA MASKING (Feb 2026)
+      // Mask sensitive slots for UI display (raw values stay in Redis only)
+      // ═══════════════════════════════════════════════════════════════════
+      const { SensitiveMasker } = require('../../services/engine/booking');
+      
+      // Get company's booking slot config for masking rules
+      let slotConfig = [];
+      try {
+        const Company = require('../../models/v2Company');
+        const companyDoc = await Company.findById(companyId).select('aiAgentSettings.bookingSlots').lean();
+        slotConfig = companyDoc?.aiAgentSettings?.bookingSlots || [];
+      } catch (e) {
+        // Non-fatal - use default masking
+      }
+      
+      // Mask slots if present
+      const maskedRedisSlots = redisState?.slots 
+        ? SensitiveMasker.maskSlots(redisState.slots, slotConfig) 
+        : {};
+      const maskedDbSlots = call.collectedSlots 
+        ? SensitiveMasker.maskSlots(
+            Object.fromEntries(Object.entries(call.collectedSlots).map(([k, v]) => [k, { value: v }])),
+            slotConfig
+          )
+        : {};
+      const maskedTimeline = SensitiveMasker.maskTimeline(call.timeline || [], slotConfig);
+      
+      // Build runtime truth response
+      const runtimeTruth = {
+        callId: call.callId,
+        companyId,
+        isActive: call.status === 'in_progress' || !!redisState,
+        
+        // Redis state (live truth) - WITH MASKING
+        redis: redisState ? {
+          turnCount: redisState.turnCount,
+          bookingModeLocked: redisState.bookingModeLocked || false,
+          bookingFlowId: redisState.bookingFlowId || null,
+          currentStepId: redisState.currentStepId || redisState.currentBookingStep || null,
+          bookingState: redisState.bookingState || null,
+          awaitingConfirmation: redisState.awaitingConfirmation || false,
+          
+          // Slots with metadata - MASKED
+          slots: maskedRedisSlots,
+          bookingCollected: redisState.bookingCollected 
+            ? Object.fromEntries(
+                Object.entries(SensitiveMasker.maskSlots(
+                  Object.fromEntries(Object.entries(redisState.bookingCollected).map(([k, v]) => [k, { value: v }])),
+                  slotConfig
+                )).map(([k, s]) => [k, s.value])
+              )
+            : {},
+          slotMetadata: redisState.slotMetadata || {},
+          confirmedSlots: redisState.confirmedSlots || {},
+          
+          // Context
+          customerId: redisState.customerId || null,
+          customerContext: redisState.customerContext || null,
+          callerType: redisState.callerType || 'unknown',
+          lastIntent: redisState.lastIntent || null
+        } : null,
+        
+        // DB state (persisted truth) - WITH MASKING
+        db: {
+          status: call.status,
+          outcome: call.outcome,
+          primaryIntent: call.primaryIntent,
+          collectedSlots: Object.fromEntries(
+            Object.entries(maskedDbSlots).map(([k, s]) => [k, s.value])
+          ),
+          bookingComplete: call.bookingComplete || false,
+          customerId: call.customerId || null,
+          turnCount: call.turnCount || 0,
+          startedAt: call.startedAt,
+          endedAt: call.endedAt,
+          duration: call.duration
+        },
+        
+        // Timeline events - MASKED
+        timeline: maskedTimeline,
+        
+        // Booking flow info
+        bookingFlow: redisState?.bookingModeLocked ? {
+          locked: true,
+          flowId: redisState.bookingFlowId,
+          currentStep: redisState.currentStepId,
+          collected: Object.keys(redisState.bookingCollected || {}),
+          confirmed: Object.keys(redisState.confirmedSlots || {}),
+          state: redisState.bookingState
+        } : null,
+        
+        // Masking metadata
+        _masked: true,
+        _maskingApplied: slotConfig.filter(s => s.sensitive).map(s => s.id)
+      };
+      
+      res.json({ success: true, data: runtimeTruth });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error fetching runtime truth', {
+        error: error.message,
+        callId: req.params.callId
+      });
+      res.status(500).json({ success: false, error: 'Failed to fetch runtime truth' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/calls/:callId/resolve-customer
+ * Resolve/attach/create customer from call slots
+ * 
+ * Body:
+ * - action: 'attach' | 'create' | 'merge'
+ * - customerId: (for attach/merge)
+ * - useSlots: ['name', 'phone', 'address'] - which slots to use for creation
+ */
+router.post('/:companyId/calls/:callId/resolve-customer',
+  auditLog.logModification('call.customer_resolved'),
+  async (req, res) => {
+    try {
+      const { companyId, callId } = req.params;
+      const { action, customerId, useSlots = ['name', 'phone'] } = req.body;
+      
+      if (!action || !['attach', 'create', 'merge'].includes(action)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Invalid action. Must be attach, create, or merge.' 
+        });
+      }
+      
+      // Get call with slots
+      const call = await CallSummary.findOne({ 
+        companyId, 
+        $or: [{ callId }, { _id: callId }] 
+      });
+      
+      if (!call) {
+        return res.status(404).json({ success: false, error: 'Call not found' });
+      }
+      
+      // Also check Redis for latest slots
+      let currentSlots = call.collectedSlots || {};
+      try {
+        const { getSharedRedisClient } = require('../../services/redisClientFactory');
+        const redisClient = await getSharedRedisClient();
+        if (redisClient) {
+          const stateKey = `callState:${call.callId}`;
+          const savedState = await redisClient.get(stateKey);
+          if (savedState) {
+            const redisState = JSON.parse(savedState);
+            // Merge Redis slots (more recent)
+            if (redisState.slots) {
+              for (const [key, slot] of Object.entries(redisState.slots)) {
+                if (slot?.value) {
+                  currentSlots[key] = slot.value;
+                }
+              }
+            }
+            if (redisState.bookingCollected) {
+              currentSlots = { ...currentSlots, ...redisState.bookingCollected };
+            }
+          }
+        }
+      } catch (e) {
+        // Non-fatal - use DB slots
+      }
+      
+      let customer;
+      
+      switch (action) {
+        case 'attach':
+          // Attach existing customer to call
+          if (!customerId) {
+            return res.status(400).json({ success: false, error: 'customerId required for attach' });
+          }
+          
+          customer = await Customer.findOne({ _id: customerId, companyId });
+          if (!customer) {
+            return res.status(404).json({ success: false, error: 'Customer not found' });
+          }
+          
+          call.customerId = customer._id;
+          call.resolvedBy = req.user.email;
+          call.resolvedAt = new Date();
+          await call.save();
+          
+          // Update Redis state too
+          try {
+            const { getSharedRedisClient } = require('../../services/redisClientFactory');
+            const redisClient = await getSharedRedisClient();
+            if (redisClient) {
+              const stateKey = `callState:${call.callId}`;
+              const savedState = await redisClient.get(stateKey);
+              if (savedState) {
+                const state = JSON.parse(savedState);
+                state.customerId = customer._id.toString();
+                state.customerContext = {
+                  customerName: customer.name,
+                  isReturning: true
+                };
+                await redisClient.setEx(stateKey, 3600, JSON.stringify(state));
+              }
+            }
+          } catch (e) {
+            // Non-fatal
+          }
+          break;
+          
+        case 'create':
+          // Create new customer from slots
+          const customerData = {
+            companyId,
+            name: currentSlots.name || 'Unknown',
+            phone: call.callerPhone || currentSlots.phone,
+            email: currentSlots.email,
+            address: currentSlots.address,
+            source: 'call',
+            sourceCallId: call._id,
+            createdBy: req.user.email
+          };
+          
+          // Only create if we have at least phone or name
+          if (!customerData.phone && !customerData.name) {
+            return res.status(400).json({ 
+              success: false, 
+              error: 'Need at least phone or name to create customer' 
+            });
+          }
+          
+          customer = new Customer(customerData);
+          await customer.save();
+          
+          call.customerId = customer._id;
+          call.resolvedBy = req.user.email;
+          call.resolvedAt = new Date();
+          await call.save();
+          break;
+          
+        case 'merge':
+          // Merge slots into existing customer
+          if (!customerId) {
+            return res.status(400).json({ success: false, error: 'customerId required for merge' });
+          }
+          
+          customer = await Customer.findOne({ _id: customerId, companyId });
+          if (!customer) {
+            return res.status(404).json({ success: false, error: 'Customer not found' });
+          }
+          
+          // Update customer with slots (only if slot has value and customer doesn't)
+          for (const slotKey of useSlots) {
+            if (currentSlots[slotKey]) {
+              const customerField = slotKey === 'name' ? 'name' : 
+                                   slotKey === 'phone' ? 'phone' :
+                                   slotKey === 'address' ? 'address' :
+                                   slotKey === 'email' ? 'email' : null;
+              if (customerField && !customer[customerField]) {
+                customer[customerField] = currentSlots[slotKey];
+              }
+            }
+          }
+          
+          customer.lastContactAt = new Date();
+          await customer.save();
+          
+          call.customerId = customer._id;
+          call.resolvedBy = req.user.email;
+          call.resolvedAt = new Date();
+          await call.save();
+          break;
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          call: {
+            _id: call._id,
+            callId: call.callId,
+            customerId: call.customerId
+          },
+          customer: customer ? {
+            _id: customer._id,
+            name: customer.name,
+            phone: customer.phone,
+            email: customer.email
+          } : null,
+          action,
+          resolvedBy: req.user.email
+        }
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error resolving customer', {
+        error: error.message,
+        callId: req.params.callId,
+        action: req.body?.action
+      });
+      res.status(500).json({ success: false, error: 'Failed to resolve customer' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/call-center/:companyId/calls/:callId/start-booking
+ * Manually start booking mode for an active call from Call Center UI
+ * 
+ * This allows a human supervisor to trigger booking mode if the AI
+ * missed the intent.
+ */
+router.post('/:companyId/calls/:callId/start-booking',
+  auditLog.logModification('call.booking_started_manual'),
+  async (req, res) => {
+    try {
+      const { companyId, callId } = req.params;
+      
+      // Get call
+      const call = await CallSummary.findOne({ 
+        companyId, 
+        $or: [{ callId }, { _id: callId }] 
+      });
+      
+      if (!call) {
+        return res.status(404).json({ success: false, error: 'Call not found' });
+      }
+      
+      // Get Redis state
+      const { getSharedRedisClient } = require('../../services/redisClientFactory');
+      const redisClient = await getSharedRedisClient();
+      
+      if (!redisClient) {
+        return res.status(503).json({ success: false, error: 'Redis not available' });
+      }
+      
+      const stateKey = `callState:${call.callId}`;
+      const savedState = await redisClient.get(stateKey);
+      
+      if (!savedState) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'Call has no active state (may have ended)' 
+        });
+      }
+      
+      const state = JSON.parse(savedState);
+      
+      // Already in booking mode?
+      if (state.bookingModeLocked) {
+        return res.json({
+          success: true,
+          message: 'Call is already in booking mode',
+          data: {
+            bookingModeLocked: true,
+            currentStepId: state.currentStepId
+          }
+        });
+      }
+      
+      // Resolve booking flow
+      const Company = require('../../models/v2Company');
+      const company = await Company.findById(companyId).lean();
+      
+      const { BookingFlowResolver } = require('../../services/engine/booking');
+      const flow = BookingFlowResolver.resolve({
+        companyId,
+        company
+      });
+      
+      // Set booking mode
+      state.bookingModeLocked = true;
+      state.bookingFlowId = flow.flowId;
+      state.currentStepId = flow.steps[0]?.id || 'name';
+      state.currentBookingStep = state.currentStepId;
+      state.bookingState = 'ACTIVE';
+      state.bookingCollected = state.bookingCollected || {};
+      state.manualBookingTrigger = {
+        triggeredBy: req.user.email,
+        triggeredAt: new Date().toISOString()
+      };
+      
+      // Save back to Redis
+      await redisClient.setEx(stateKey, 3600, JSON.stringify(state));
+      
+      logger.info('[CALL_CENTER] Booking mode manually triggered', {
+        callId: call.callId,
+        triggeredBy: req.user.email,
+        flowId: flow.flowId
+      });
+      
+      res.json({
+        success: true,
+        message: 'Booking mode started',
+        data: {
+          bookingModeLocked: true,
+          bookingFlowId: flow.flowId,
+          currentStepId: state.currentStepId,
+          triggeredBy: req.user.email
+        }
+      });
+      
+    } catch (error) {
+      logger.error('[CALL_CENTER] Error starting booking mode', {
+        error: error.message,
+        callId: req.params.callId
+      });
+      res.status(500).json({ success: false, error: 'Failed to start booking mode' });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // CUSTOMER ROUTES
 // ═══════════════════════════════════════════════════════════════════════════
 

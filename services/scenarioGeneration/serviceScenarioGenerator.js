@@ -481,11 +481,19 @@ PLACEHOLDER EXAMPLES FOR RESPONSES:
 ✗ "We service Phoenix..." (NO hardcoded areas)
 
 SCENARIO TYPES EXPLAINED:
-- EMERGENCY: Urgent issues requiring immediate attention
+- EMERGENCY: Urgent issues requiring immediate attention (gas leaks, no heat in winter, etc.)
 - BOOKING: Caller ready to schedule service
 - FAQ: Common questions about the service
 - TROUBLESHOOT: Diagnostic/problem-solving conversations
 - QUOTE: Pricing and estimate requests
+
+WIRING RULES (CRITICAL - determines agent behavior):
+- bookingIntent: true if scenario should trigger booking slot collection
+- entityCapture: what to extract from caller speech (name, phone, address, serviceType)
+- actionType: REPLY_ONLY (just respond), REQUIRE_BOOKING (force booking flow), TRANSFER (send to human)
+- isEmergency: true for life-safety scenarios (gas leak, no heat, flooding)
+- stopRouting: true for high-priority scenarios that shouldn't be overridden
+- confirmBeforeAction: true if should confirm before transferring
 
 Respond with JSON:
 {
@@ -496,6 +504,13 @@ Respond with JSON:
       "triggers": ["trigger 1", "trigger 2", ...],
       "quickReplies": ["reply 1 with {placeholders}", "reply 2", ...],
       "fullReplies": ["reply 1 with {placeholders}", "reply 2", ...],
+      "bookingIntent": true|false,
+      "entityCapture": ["name", "phone", "address"],
+      "actionType": "REPLY_ONLY|REQUIRE_BOOKING|TRANSFER",
+      "isEmergency": true|false,
+      "stopRouting": true|false,
+      "confirmBeforeAction": true|false,
+      "contextTags": ["tag1", "tag2"],
       "generationNotes": "Why this scenario is important"
     }
   ]
@@ -553,15 +568,109 @@ function validateAndEnrichScenario(scenario, service, index) {
         }
     }
     
-    // Enrich with metadata
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DERIVE WIRING FROM SCENARIO TYPE (if GPT didn't specify)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const scenarioType = (scenario.scenarioType || 'FAQ').toUpperCase();
+    
+    // Default wiring based on scenarioType
+    const typeDefaults = {
+        EMERGENCY: {
+            bookingIntent: true,
+            isEmergency: true,
+            actionType: 'REQUIRE_BOOKING',
+            stopRouting: true,
+            confirmBeforeAction: false,
+            entityCapture: ['name', 'phone', 'address'],
+            priority: 95,
+            confidenceThreshold: 0.7
+        },
+        BOOKING: {
+            bookingIntent: true,
+            isEmergency: false,
+            actionType: 'REQUIRE_BOOKING',
+            stopRouting: false,
+            confirmBeforeAction: false,
+            entityCapture: ['name', 'phone', 'address', 'serviceType'],
+            priority: 70,
+            confidenceThreshold: 0.75
+        },
+        FAQ: {
+            bookingIntent: false,
+            isEmergency: false,
+            actionType: 'REPLY_ONLY',
+            stopRouting: false,
+            confirmBeforeAction: false,
+            entityCapture: [],
+            priority: 50,
+            confidenceThreshold: 0.75
+        },
+        TROUBLESHOOT: {
+            bookingIntent: true,  // Troubleshoot often leads to booking
+            isEmergency: false,
+            actionType: 'REPLY_ONLY',  // Respond first, may trigger booking
+            stopRouting: false,
+            confirmBeforeAction: false,
+            entityCapture: ['serviceType'],
+            priority: 60,
+            confidenceThreshold: 0.75
+        },
+        QUOTE: {
+            bookingIntent: false,
+            isEmergency: false,
+            actionType: 'REPLY_ONLY',
+            stopRouting: false,
+            confirmBeforeAction: false,
+            entityCapture: ['serviceType'],
+            priority: 55,
+            confidenceThreshold: 0.75
+        },
+        TRANSFER: {
+            bookingIntent: false,
+            isEmergency: false,
+            actionType: 'TRANSFER',
+            stopRouting: true,
+            confirmBeforeAction: true,
+            entityCapture: ['name', 'phone'],
+            priority: 80,
+            confidenceThreshold: 0.8
+        }
+    };
+    
+    const defaults = typeDefaults[scenarioType] || typeDefaults.FAQ;
+    
+    // Enrich with metadata + FULL WIRING
     return {
         // Core content
         scenarioName: scenario.scenarioName || `${service.displayName} Scenario ${index + 1}`,
-        scenarioType: scenario.scenarioType || 'FAQ',
+        scenarioType: scenarioType,
         category: service.category || 'General',
         triggers: (scenario.triggers || []).slice(0, 10),
         quickReplies: (scenario.quickReplies || []).slice(0, 8),
         fullReplies: (scenario.fullReplies || []).slice(0, 8),
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // AGENT WIRING (Critical for runtime behavior)
+        // ═══════════════════════════════════════════════════════════════════════
+        bookingIntent: scenario.bookingIntent ?? defaults.bookingIntent,
+        isEmergency: scenario.isEmergency ?? defaults.isEmergency,
+        actionType: scenario.actionType || defaults.actionType,
+        stopRouting: scenario.stopRouting ?? defaults.stopRouting,
+        confirmBeforeAction: scenario.confirmBeforeAction ?? defaults.confirmBeforeAction,
+        entityCapture: scenario.entityCapture || defaults.entityCapture,
+        contextTags: scenario.contextTags || [service.serviceKey, scenarioType.toLowerCase()],
+        
+        // Matching thresholds
+        priority: scenario.priority ?? defaults.priority,
+        confidenceThreshold: scenario.confidenceThreshold ?? defaults.confidenceThreshold,
+        
+        // Required slots for booking scenarios
+        requiredSlots: (scenario.bookingIntent ?? defaults.bookingIntent) 
+            ? ['firstName', 'phone', 'address'] 
+            : [],
+        
+        // Follow-up behavior
+        followUpMode: (scenario.bookingIntent ?? defaults.bookingIntent) ? 'ASK_IF_BOOK' : 'NONE',
         
         // Metadata
         serviceKey: service.serviceKey,
@@ -668,22 +777,50 @@ function formatForGlobalBrain(scenario, templateId) {
         category: scenario.category,
         
         // Triggers with standard format
-        triggers: scenario.triggers.map(t => ({
-            phrase: t,
-            intent: 'match',
-            weight: 1.0
-        })),
+        triggers: Array.isArray(scenario.triggers) 
+            ? scenario.triggers.map(t => typeof t === 'string' ? t : t.phrase || t)
+            : [],
         
         // Replies
-        quickReplies: scenario.quickReplies,
-        fullReplies: scenario.fullReplies,
+        quickReplies: scenario.quickReplies || [],
+        fullReplies: scenario.fullReplies || [],
         
-        // Standard defaults
-        confidenceThreshold: 0.75,
-        priority: 5,
-        behavior: 'respond',
+        // ═══════════════════════════════════════════════════════════════════════
+        // AGENT WIRING (Feb 2026 - Full runtime fields)
+        // ═══════════════════════════════════════════════════════════════════════
+        
+        // Booking behavior
+        bookingIntent: scenario.bookingIntent || false,
+        requiredSlots: scenario.requiredSlots || [],
+        
+        // Action type (CRITICAL for routing)
+        actionType: scenario.actionType || 'REPLY_ONLY',
+        
+        // Emergency handling
+        isEmergency: scenario.isEmergency || false,
+        
+        // Entity extraction
+        entityCapture: scenario.entityCapture || [],
+        
+        // Routing control
+        stopRouting: scenario.stopRouting || false,
+        confirmBeforeAction: scenario.confirmBeforeAction || false,
+        
+        // Follow-up behavior
+        followUpMode: scenario.followUpMode || 'NONE',
+        
+        // Context tags for routing
+        contextTags: scenario.contextTags || [scenario.serviceKey],
+        
+        // Matching thresholds
+        confidenceThreshold: scenario.confidenceThreshold || 0.75,
+        priority: scenario.priority || 50,
+        
+        // Standard fields
+        behavior: null,  // Let category/template default handle this
         isActive: true,
         scope: 'GLOBAL',
+        status: 'draft',  // Pending review
         
         // Metadata
         serviceKey: scenario.serviceKey,
@@ -693,7 +830,11 @@ function formatForGlobalBrain(scenario, templateId) {
         
         // For audit tracking
         _generatedFromService: scenario.serviceKey,
-        _generatedAt: scenario.generatedAt
+        _generatedAt: scenario.generatedAt,
+        
+        // Multi-tenant compliance
+        multiTenantCompliant: scenario.multiTenantCompliant,
+        placeholdersUsed: scenario.placeholdersUsed
     };
 }
 
