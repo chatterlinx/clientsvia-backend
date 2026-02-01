@@ -2677,15 +2677,62 @@
                         </div>
                         
                         <!-- Engine Actions -->
-                        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                             <div style="font-size: 12px; color: var(--text-muted);">
                                 <i class="fas fa-info-circle"></i>
                                 Coverage targets: WORK=20, SYMPTOM=5, ADMIN=2 scenarios per service
                             </div>
-                            <button onclick="openGenerationPanel()" 
-                                    style="padding: 8px 16px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600;">
-                                <i class="fas fa-play"></i> Generate for Service
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="openGenerationPanel()" 
+                                        style="padding: 8px 16px; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 6px; color: #a78bfa; cursor: pointer; font-size: 12px;">
+                                    <i class="fas fa-play"></i> Generate One
+                                </button>
+                                <button onclick="generateAllGaps()" id="generate-all-btn"
+                                        style="padding: 8px 16px; background: linear-gradient(135deg, #22c55e, #16a34a); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600;">
+                                    <i class="fas fa-bolt"></i> Generate All Gaps
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Active Job Status -->
+                        <div id="engine-job-status" style="display: none; margin-top: 16px; padding: 16px; background: rgba(34, 211, 238, 0.1); border: 1px solid rgba(34, 211, 238, 0.3); border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-weight: 600; color: #22d3ee;"><i class="fas fa-cog fa-spin"></i> Job Running</span>
+                                <button onclick="cancelCurrentJob()" style="padding: 4px 8px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 4px; color: #ef4444; cursor: pointer; font-size: 11px;">
+                                    Cancel
+                                </button>
+                            </div>
+                            <div id="job-progress-text" style="font-size: 12px; color: var(--text-muted);">Processing...</div>
+                            <div style="margin-top: 8px; height: 6px; background: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden;">
+                                <div id="job-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #22d3ee, #22c55e); transition: width 0.3s;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- PENDING REVIEW QUEUE (Feb 2026) -->
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <div id="pending-review-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(251, 146, 60, 0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <div>
+                                <h4 style="margin: 0; font-size: 15px; color: #fb923c;">
+                                    <i class="fas fa-inbox"></i> Pending Review
+                                    <span id="pending-total-badge" style="display: none; margin-left: 8px; padding: 2px 8px; background: rgba(251, 146, 60, 0.3); border-radius: 10px; font-size: 12px;">0</span>
+                                </h4>
+                                <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">
+                                    GPT-4 generated scenarios awaiting your approval
+                                </p>
+                            </div>
+                            <button onclick="loadPendingReview()" style="padding: 6px 12px; background: rgba(251, 146, 60, 0.2); border: 1px solid rgba(251, 146, 60, 0.4); border-radius: 6px; color: #fb923c; cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-sync-alt"></i> Refresh
                             </button>
+                        </div>
+                        
+                        <div id="pending-review-list" style="max-height: 300px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+                                <i class="fas fa-check-circle" style="font-size: 24px; margin-bottom: 8px; color: #22c55e;"></i>
+                                <p>No scenarios pending review</p>
+                            </div>
                         </div>
                     </div>
                     
@@ -7323,6 +7370,8 @@
                 loadGenerationCoverage();
                 // Load Scenario Engine coverage
                 loadEngineCoverage();
+                // Load Pending Review queue
+                loadPendingReview();
             } else {
                 content.style.display = 'none';
                 icon.style.transform = 'rotate(0deg)';
@@ -8336,6 +8385,287 @@
                 console.error('[ENGINE] Copy error:', error);
                 showToast('Copy failed: ' + error.message, 'error');
             }
+        }
+        
+        // ============================================================================
+        // SCENARIO ENGINE FUNCTIONS - Jobs, Pending Review, Bulk Approve
+        // ============================================================================
+        
+        let activeJobId = null;
+        let jobPollInterval = null;
+        
+        // Generate All Gaps - creates a job to fill all coverage gaps
+        async function generateAllGaps() {
+            const btn = document.getElementById('generate-all-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+            
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    showToast('No template selected', 'error');
+                    return;
+                }
+                
+                const response = await fetch('/api/admin/scenario-engine/jobs', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateId,
+                        companyId,
+                        mode: 'fill_gaps',
+                        limits: {
+                            maxServices: 50,
+                            maxScenariosTotal: 200,
+                            maxScenariosPerService: 25,
+                            maxScenariosPerBatch: 6
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    if (result.existingJobId) {
+                        showToast('Job already running. Please wait.', 'warning');
+                        activeJobId = result.existingJobId;
+                        startJobPolling();
+                    } else {
+                        throw new Error(result.error || 'Failed to create job');
+                    }
+                    return;
+                }
+                
+                showToast('🚀 Generation job started!', 'success');
+                activeJobId = result.job._id;
+                startJobPolling();
+                
+            } catch (error) {
+                console.error('[ENGINE] Generate all error:', error);
+                showToast('Error: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-bolt"></i> Generate All Gaps';
+            }
+        }
+        
+        // Start polling job status
+        function startJobPolling() {
+            if (!activeJobId) return;
+            
+            document.getElementById('engine-job-status').style.display = 'block';
+            document.getElementById('generate-all-btn').disabled = true;
+            
+            // Poll every 3 seconds
+            jobPollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/admin/scenario-engine/jobs/${activeJobId}`, {
+                        headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    });
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        stopJobPolling();
+                        return;
+                    }
+                    
+                    const job = result.job;
+                    const progress = job.progress || {};
+                    
+                    // Update progress UI
+                    const done = progress.servicesDone || 0;
+                    const total = progress.servicesTotal || 1;
+                    const percent = Math.round((done / total) * 100);
+                    
+                    document.getElementById('job-progress-text').textContent = 
+                        `${done}/${total} services • ${progress.scenariosGenerated || 0} generated • ${progress.scenariosQueuedForReview || 0} queued`;
+                    document.getElementById('job-progress-bar').style.width = percent + '%';
+                    
+                    // Check if finished
+                    if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+                        stopJobPolling();
+                        
+                        if (job.status === 'completed') {
+                            showToast(`✅ Job complete! ${progress.scenariosQueuedForReview || 0} scenarios ready for review`, 'success');
+                        } else if (job.status === 'failed') {
+                            showToast('Job failed: ' + (job.lastError || 'Unknown error'), 'error');
+                        } else {
+                            showToast('Job cancelled', 'warning');
+                        }
+                        
+                        // Refresh data
+                        loadEngineCoverage();
+                        loadPendingReview();
+                    }
+                    
+                } catch (error) {
+                    console.error('[ENGINE] Poll error:', error);
+                }
+            }, 3000);
+        }
+        
+        // Stop polling
+        function stopJobPolling() {
+            if (jobPollInterval) {
+                clearInterval(jobPollInterval);
+                jobPollInterval = null;
+            }
+            activeJobId = null;
+            document.getElementById('engine-job-status').style.display = 'none';
+            document.getElementById('generate-all-btn').disabled = false;
+        }
+        
+        // Cancel current job
+        async function cancelCurrentJob() {
+            if (!activeJobId) return;
+            
+            try {
+                await fetch(`/api/admin/scenario-engine/jobs/${activeJobId}/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ reason: 'Cancelled by user' })
+                });
+                
+                showToast('Job cancelled', 'warning');
+                stopJobPolling();
+                
+            } catch (error) {
+                console.error('[ENGINE] Cancel error:', error);
+            }
+        }
+        
+        // Load pending review queue
+        async function loadPendingReview() {
+            const listEl = document.getElementById('pending-review-list');
+            
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) return;
+                
+                const response = await fetch(`/api/admin/scenario-engine/pending?templateId=${templateId}&limit=100`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    throw new Error(result.error);
+                }
+                
+                // Update badge
+                const badge = document.getElementById('pending-total-badge');
+                if (result.total > 0) {
+                    badge.textContent = result.total;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+                
+                // Render list
+                if (result.total === 0) {
+                    listEl.innerHTML = `
+                        <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+                            <i class="fas fa-check-circle" style="font-size: 24px; margin-bottom: 8px; color: #22c55e;"></i>
+                            <p>No scenarios pending review</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Group by service
+                let html = '';
+                for (const group of result.byService) {
+                    const lintWarning = group.lintFailedCount > 0 
+                        ? `<span style="color: #ef4444; margin-left: 8px;"><i class="fas fa-exclamation-triangle"></i> ${group.lintFailedCount} lint issues</span>` 
+                        : '';
+                    
+                    html += `
+                        <div style="margin-bottom: 12px; padding: 12px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div>
+                                    <span style="font-weight: 500;">${escapeHtml(group.serviceKey)}</span>
+                                    <span style="margin-left: 8px; padding: 2px 6px; background: rgba(251, 146, 60, 0.2); border-radius: 4px; font-size: 11px; color: #fb923c;">${group.scenarios.length} pending</span>
+                                    ${lintWarning}
+                                </div>
+                                <div style="display: flex; gap: 8px;">
+                                    <button onclick="reviewServiceScenarios('${escapeHtml(group.serviceKey)}')" style="padding: 4px 8px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 4px; color: #3b82f6; cursor: pointer; font-size: 11px;">
+                                        Review
+                                    </button>
+                                    <button onclick="bulkApproveService('${escapeHtml(group.serviceKey)}')" style="padding: 4px 8px; background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 4px; color: #22c55e; cursor: pointer; font-size: 11px;">
+                                        Approve All
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="font-size: 11px; color: var(--text-muted);">
+                                ${group.scenarios.slice(0, 3).map(s => s.payload.scenarioName).join(' • ')}
+                                ${group.scenarios.length > 3 ? ` • +${group.scenarios.length - 3} more` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                listEl.innerHTML = html;
+                
+            } catch (error) {
+                console.error('[ENGINE] Load pending error:', error);
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #ef4444;">
+                        <p>Error loading: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Bulk approve all scenarios for a service
+        async function bulkApproveService(serviceKey) {
+            if (!confirm(`Approve ALL pending scenarios for ${serviceKey}?\n\nOnly scenarios that passed lint check will be approved.`)) {
+                return;
+            }
+            
+            try {
+                const templateId = window.globalTemplateId;
+                
+                const response = await fetch('/api/admin/scenario-engine/pending/bulk-approve', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateId,
+                        serviceKey,
+                        onlyLintPassed: true
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error);
+                }
+                
+                showToast(`✅ Approved ${result.approved} scenarios for ${serviceKey}`, 'success');
+                
+                // Refresh
+                loadPendingReview();
+                loadEngineCoverage();
+                
+            } catch (error) {
+                console.error('[ENGINE] Bulk approve error:', error);
+                showToast('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Review scenarios for a service (opens modal)
+        function reviewServiceScenarios(serviceKey) {
+            // TODO: Implement detailed review modal
+            showToast(`Review modal for ${serviceKey} coming soon. Use Approve All for now.`, 'info');
         }
         
         // ============================================================================
