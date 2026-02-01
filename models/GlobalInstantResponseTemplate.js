@@ -609,11 +609,12 @@ const scenarioSchema = new Schema({
     
     scenarioType: {
         type: String,
-        enum: ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'UNKNOWN'],
+        enum: ['EMERGENCY', 'BOOKING', 'FAQ', 'TROUBLESHOOT', 'BILLING', 'TRANSFER', 'SMALL_TALK', 'SYSTEM', 'QUOTE', 'UNKNOWN'],
         default: 'UNKNOWN'
         // EMERGENCY: Critical issues (gas leak, no heat, flooding) - priority 90-100
         // BOOKING: Scheduling/appointment intents - priority 70-85
         // FAQ: Informational questions (pricing, warranty, hours) - priority 40-60
+        // QUOTE: Pricing/estimate requests - priority 60-75
         // SMALL_TALK: Casual conversation (greetings, thanks, goodbye) - priority -5 to 10
         // SYSTEM: Internal acks, confirmations - priority 20-40
         // TRANSFER: Human escalation requests - priority 80-90
