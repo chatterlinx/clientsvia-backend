@@ -2638,6 +2638,10 @@
                                 <span id="daily-usage-display" style="margin-left: 12px; color: #fb923c;"></span>
                             </div>
                             <div style="display: flex; gap: 8px;">
+                                <button onclick="clearCooldown()" id="clear-cooldown-btn"
+                                        style="padding: 8px 12px; background: rgba(34, 211, 238, 0.2); border: 1px solid rgba(34, 211, 238, 0.4); border-radius: 6px; color: #22d3ee; cursor: pointer; font-size: 12px;" title="Clear job cooldown">
+                                    <i class="fas fa-clock"></i> Clear Cooldown
+                                </button>
                                 <button onclick="resetDailyLimit()" id="reset-daily-btn"
                                         style="padding: 8px 12px; background: rgba(251, 146, 60, 0.2); border: 1px solid rgba(251, 146, 60, 0.4); border-radius: 6px; color: #fb923c; cursor: pointer; font-size: 12px;" title="Reset daily generation counter">
                                     <i class="fas fa-redo"></i> Reset Daily
@@ -8381,6 +8385,46 @@
         
         let activeJobId = null;
         let jobPollInterval = null;
+        
+        // Clear job cooldown
+        async function clearCooldown() {
+            const btn = document.getElementById('clear-cooldown-btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    showToast('No template selected', 'error');
+                    return;
+                }
+                
+                const response = await fetch('/api/admin/scenario-engine/clear-cooldown', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ templateId, companyId })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Clear cooldown failed');
+                }
+                
+                showToast('✓ Cooldown cleared - ready to generate', 'success');
+                
+            } catch (error) {
+                console.error('[ENGINE] Clear cooldown error:', error);
+                showToast('Error: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
         
         // Reset daily generation limit
         async function resetDailyLimit() {

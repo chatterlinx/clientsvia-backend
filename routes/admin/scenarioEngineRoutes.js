@@ -878,6 +878,36 @@ router.put('/limits', async (req, res) => {
 });
 
 /**
+ * POST /clear-cooldown
+ * Clear the cooldown so you can run another job immediately
+ */
+router.post('/clear-cooldown', async (req, res) => {
+    try {
+        const { templateId, companyId } = req.body;
+        
+        if (!templateId) {
+            return res.status(400).json({ error: 'templateId required' });
+        }
+        
+        const state = await ScenarioEngineState.getOrCreate(templateId, companyId);
+        
+        // Clear cooldown
+        state.cooldownUntil = null;
+        await state.save();
+        
+        logger.info('[SCENARIO ENGINE] Cooldown cleared', { templateId, companyId, by: req.user?.name || 'Admin' });
+        
+        res.json({ 
+            success: true, 
+            message: 'Cooldown cleared - you can run another job now'
+        });
+    } catch (error) {
+        logger.error('[SCENARIO ENGINE] Clear cooldown error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * POST /unblock-service
  * Unblock a service
  */
