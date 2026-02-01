@@ -109,11 +109,17 @@ router.get('/template/:templateId', async (req, res) => {
 /**
  * POST /template/:templateId/seed
  * Seed catalog with default services (HVAC or industry-specific)
+ * 
+ * V1.2 UPSERT LOGIC:
+ * - Inserts any new serviceKeys not in DB
+ * - Backfills new V1.2 fields (serviceType, routesTo, triageMode, etc.) on existing services
+ * - NEVER overwrites admin customizations (keywords, messages, etc.)
+ * - Returns detailed summary: added, updated, skipped
  */
 router.post('/template/:templateId/seed', async (req, res) => {
     try {
         const { templateId } = req.params;
-        const { industryType, clearExisting } = req.body;
+        const { industryType, clearExisting, forceUpdate } = req.body;
         const seededBy = req.body.seededBy || req.user?.email || 'Platform Admin';
         
         // Validate templateId
@@ -134,7 +140,7 @@ router.post('/template/:templateId/seed', async (req, res) => {
             industryType || template.templateType || 'universal'
         );
         
-        // Clear existing if requested
+        // Clear existing if requested (destructive - use with caution)
         if (clearExisting) {
             catalog.services = [];
             catalog.changeLog.push({
@@ -156,47 +162,137 @@ router.post('/template/:templateId/seed', async (req, res) => {
             defaultServices = getHVACDefaultServices(); // Fallback to HVAC for now
         }
         
-        // Add services that don't already exist
-        let addedCount = 0;
-        const existingKeys = new Set(catalog.services.map(s => s.serviceKey));
+        // Build existing services map for O(1) lookup
+        const existingMap = new Map(
+            catalog.services.map((s, idx) => [s.serviceKey, { service: s, index: idx }])
+        );
         
-        for (const service of defaultServices) {
-            if (!existingKeys.has(service.serviceKey)) {
+        // Track changes
+        let added = 0;
+        let updated = 0;
+        let skipped = 0;
+        const changes = [];
+        
+        // V1.2 fields to backfill (only if missing in DB)
+        const V12_BACKFILL_FIELDS = [
+            'serviceType',
+            'routesTo',
+            'triageMode',
+            'triagePrompts',
+            'adminHandler',
+            'disabledBehavior',
+            'scenarioHints'
+        ];
+        
+        for (const defaultService of defaultServices) {
+            const existing = existingMap.get(defaultService.serviceKey);
+            
+            if (!existing) {
+                // NEW SERVICE - Add it
                 catalog.services.push({
-                    ...service,
+                    ...defaultService,
                     createdAt: new Date(),
                     updatedAt: new Date(),
                     createdBy: seededBy,
                     updatedBy: seededBy
                 });
-                addedCount++;
+                added++;
+                changes.push({ action: 'added', key: defaultService.serviceKey, type: defaultService.serviceType || 'work' });
+                continue;
+            }
+            
+            // EXISTING SERVICE - Backfill V1.2 fields if missing
+            const existingService = existing.service;
+            let wasUpdated = false;
+            const fieldsUpdated = [];
+            
+            for (const field of V12_BACKFILL_FIELDS) {
+                const existingValue = existingService[field];
+                const defaultValue = defaultService[field];
+                
+                // Only backfill if:
+                // 1. Field is missing/undefined/null in existing
+                // 2. Default has a value
+                // 3. OR forceUpdate is true (admin explicitly wants to overwrite)
+                const isEmpty = existingValue === undefined || 
+                               existingValue === null || 
+                               (Array.isArray(existingValue) && existingValue.length === 0);
+                
+                if ((isEmpty || forceUpdate) && defaultValue !== undefined && defaultValue !== null) {
+                    existingService[field] = defaultValue;
+                    fieldsUpdated.push(field);
+                    wasUpdated = true;
+                }
+            }
+            
+            // Backfill keywords ONLY if empty (never overwrite admin customizations)
+            if (Array.isArray(defaultService.intentKeywords) && 
+                defaultService.intentKeywords.length > 0 &&
+                (!Array.isArray(existingService.intentKeywords) || existingService.intentKeywords.length === 0)) {
+                existingService.intentKeywords = defaultService.intentKeywords;
+                fieldsUpdated.push('intentKeywords');
+                wasUpdated = true;
+            }
+            
+            if (wasUpdated) {
+                existingService.updatedAt = new Date();
+                existingService.updatedBy = seededBy;
+                updated++;
+                changes.push({ 
+                    action: 'updated', 
+                    key: defaultService.serviceKey, 
+                    fields: fieldsUpdated,
+                    type: existingService.serviceType || 'work'
+                });
+            } else {
+                skipped++;
             }
         }
         
-        // Update catalog
+        // Update catalog metadata
         catalog.version += 1;
         catalog.updatedAt = new Date();
         catalog.updatedBy = seededBy;
         
+        // Calculate service type counts
+        const typeCounts = {
+            work: catalog.services.filter(s => (s.serviceType || 'work') === 'work').length,
+            symptom: catalog.services.filter(s => s.serviceType === 'symptom').length,
+            admin: catalog.services.filter(s => s.serviceType === 'admin').length
+        };
+        
+        const actionType = added > 0 ? 'catalog_seeded' : (updated > 0 ? 'catalog_updated' : 'catalog_verified');
         catalog.changeLog.push({
-            action: 'catalog_created',
-            details: `Seeded ${addedCount} services from ${industry} defaults`,
+            action: actionType,
+            details: `V1.2 sync: Added ${added}, Updated ${updated}, Skipped ${skipped}. Types: ${typeCounts.work} work, ${typeCounts.symptom} symptom, ${typeCounts.admin} admin`,
             changedBy: seededBy,
             changedAt: new Date()
         });
         
         await catalog.save();
         
-        logger.info('[SERVICE CATALOG] Seeded catalog', {
+        logger.info('[SERVICE CATALOG] V1.2 seed complete', {
             templateId,
             industry,
-            addedCount,
+            summary: { added, updated, skipped },
+            typeCounts,
             totalServices: catalog.services.length
         });
         
         res.json({
             success: true,
-            message: `Seeded ${addedCount} services`,
+            message: added > 0 
+                ? `Added ${added} new services, updated ${updated} existing` 
+                : (updated > 0 ? `Updated ${updated} services with V1.2 fields` : 'Catalog already up to date'),
+            summary: {
+                added,
+                updated,
+                skipped,
+                totalDefaults: defaultServices.length,
+                totalNow: catalog.services.length
+            },
+            typeCounts,
+            changes: changes.slice(0, 20), // Limit to first 20 for response size
             catalog: {
                 _id: catalog._id,
                 templateId: catalog.templateId,

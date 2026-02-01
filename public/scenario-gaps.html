@@ -7379,12 +7379,37 @@
             }
             
             if (filtered.length === 0) {
-                listEl.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
-                        <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 12px;"></i>
-                        <p>No services match your filter</p>
-                    </div>
-                `;
+                const totalServices = services.length;
+                const needsSync = totalServices > 0 && totalServices < 40; // V1.2 has 44 services
+                const isTypeFilter = filter === 'symptom' || filter === 'admin';
+                
+                let emptyMessage = '';
+                if (isTypeFilter && needsSync) {
+                    // Filtering by type but catalog not synced to V1.2
+                    emptyMessage = `
+                        <div style="text-align: center; padding: 40px;">
+                            <div style="background: rgba(251, 146, 60, 0.15); border: 1px solid rgba(251, 146, 60, 0.4); border-radius: 8px; padding: 20px; max-width: 400px; margin: 0 auto;">
+                                <i class="fas fa-exclamation-triangle" style="font-size: 28px; color: #fb923c; margin-bottom: 12px;"></i>
+                                <p style="color: #fb923c; font-weight: 600; margin-bottom: 8px;">Catalog Not Synced to V1.2</p>
+                                <p style="color: var(--text-muted); font-size: 12px; margin-bottom: 16px;">
+                                    ${filter.toUpperCase()} services were added in V1.2. Click the button below to sync your catalog.
+                                </p>
+                                <button onclick="seedDefaultServices()" style="padding: 10px 20px; background: linear-gradient(135deg, #fb923c, #ea580c); border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: 600;">
+                                    <i class="fas fa-sync"></i> Sync to V1.2 Now
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    emptyMessage = `
+                        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 12px;"></i>
+                            <p>No services match your filter</p>
+                        </div>
+                    `;
+                }
+                
+                listEl.innerHTML = emptyMessage;
                 return;
             }
             
@@ -7611,20 +7636,19 @@
             }
         }
         
-        // Seed default services
+        // Seed default services (V1.2 UPSERT - adds missing + backfills fields)
         async function seedDefaultServices() {
             const btn = document.getElementById('seed-services-btn');
             const btnText = document.getElementById('seed-btn-text');
             const originalText = btnText?.textContent || 'Seed HVAC Defaults';
             
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing V1.2...';
             
             try {
                 const templateId = window.globalTemplateId;
-                const beforeCount = switchboardData?.stats?.totalServices || 0;
                 
-                // First, seed the catalog (adds any missing default services)
+                // First, seed the catalog (adds missing + backfills V1.2 fields)
                 const catalogRes = await fetch(`/api/admin/service-catalog/template/${templateId}/seed`, {
                     method: 'POST',
                     headers: {
@@ -7638,11 +7662,12 @@
                 });
                 
                 if (!catalogRes.ok) {
-                    throw new Error('Failed to seed catalog');
+                    const errData = await catalogRes.json().catch(() => ({}));
+                    throw new Error(errData.error || 'Failed to seed catalog');
                 }
                 
-                const catalogResult = await catalogRes.json();
-                console.log('[SWITCHBOARD] Seeded catalog:', catalogResult);
+                const result = await catalogRes.json();
+                console.log('[SWITCHBOARD] V1.2 Seed result:', result);
                 
                 // Then, sync switchboard from catalog
                 const syncRes = await fetch(`/api/admin/service-catalog/company/${companyId}/sync`, {
@@ -7661,21 +7686,27 @@
                 const syncResult = await syncRes.json();
                 console.log('[SWITCHBOARD] Synced:', syncResult);
                 
-                const afterCount = catalogResult.catalog?.serviceCount || 0;
-                const addedCount = afterCount - beforeCount;
+                // Show detailed summary
+                const s = result.summary || {};
+                const tc = result.typeCounts || {};
                 
-                if (addedCount > 0) {
-                    showToast(`✨ Added ${addedCount} new services! (V1.2: Work, Symptom, Admin types)`, 'success');
+                if (s.added > 0 || s.updated > 0) {
+                    const parts = [];
+                    if (s.added > 0) parts.push(`✨ Added ${s.added} new`);
+                    if (s.updated > 0) parts.push(`🔄 Updated ${s.updated} existing`);
+                    
+                    const typeInfo = `(${tc.work || 0} Work, ${tc.symptom || 0} Symptom, ${tc.admin || 0} Admin)`;
+                    showToast(`${parts.join(', ')} ${typeInfo}`, 'success');
                 } else {
-                    showToast(`Catalog is up to date (${afterCount} services)`, 'success');
+                    showToast(`✅ Catalog already up to date (${s.totalNow || 0} services)`, 'success');
                 }
                 
-                // Reload switchboard
+                // Reload switchboard to show new services
                 await loadServiceSwitchboard();
                 
             } catch (error) {
                 console.error('[SWITCHBOARD] Error seeding:', error);
-                showToast('Failed to seed: ' + error.message, 'error');
+                showToast('Failed to sync: ' + error.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = `<i class="fas fa-seedling"></i> <span id="seed-btn-text">${originalText}</span>`;
