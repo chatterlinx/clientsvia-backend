@@ -57,7 +57,16 @@ router.get('/coverage/:templateId', async (req, res) => {
             return res.status(404).json({ error: 'Template not found' });
         }
         
-        const scenarios = template.scenarios || [];
+        // Extract scenarios from nested category structure
+        const scenarios = [];
+        for (const category of (template.categories || [])) {
+            for (const scenario of (category.scenarios || [])) {
+                scenarios.push({
+                    ...scenario.toObject ? scenario.toObject() : scenario,
+                    category: category.name
+                });
+            }
+        }
         
         // Get catalog for metadata
         const catalog = await ServiceCatalog.findOne({ templateId });
@@ -178,7 +187,16 @@ router.get('/coverage/:templateId/export', async (req, res) => {
             return res.status(404).json({ error: 'Template not found' });
         }
         
-        const scenarios = template.scenarios || [];
+        // Extract scenarios from nested category structure
+        const scenarios = [];
+        for (const category of (template.categories || [])) {
+            for (const scenario of (category.scenarios || [])) {
+                scenarios.push({
+                    ...scenario.toObject ? scenario.toObject() : scenario,
+                    category: category.name
+                });
+            }
+        }
         
         const catalog = await ServiceCatalog.findOne({ templateId });
         const catalogServices = catalog ? catalog.services : [];
@@ -484,8 +502,24 @@ router.post('/pending/:id/approve', async (req, res) => {
             serviceKey: pending.serviceKey
         }, pending.templateId);
         
-        // Add to template
-        template.scenarios.push(formatted);
+        // Add to template - use nested category structure
+        const targetCategoryName = payload.category || 'Generated Scenarios';
+        let category = template.categories.find(c => c.name === targetCategoryName);
+        
+        if (!category) {
+            // Create new category with required fields
+            template.categories.push({
+                id: `cat-${Date.now()}`,
+                name: targetCategoryName,
+                description: `Auto-generated category for ${targetCategoryName}`,
+                icon: '🤖',
+                isActive: true,
+                scenarios: []
+            });
+            category = template.categories[template.categories.length - 1];
+        }
+        
+        category.scenarios.push(formatted);
         await template.save();
         
         // Mark as approved
@@ -566,6 +600,9 @@ router.post('/pending/bulk-approve', async (req, res) => {
         let approved = 0;
         let skipped = 0;
         
+        // Track categories we've added to
+        const categoryCache = new Map();
+        
         for (const pending of pendingScenarios) {
             try {
                 const payload = pending.editedPayload || pending.payload;
@@ -580,7 +617,27 @@ router.post('/pending/bulk-approve', async (req, res) => {
                     serviceKey: pending.serviceKey
                 }, templateId);
                 
-                template.scenarios.push(formatted);
+                // Find or create category (using nested structure)
+                const targetCategoryName = payload.category || 'Generated Scenarios';
+                
+                if (!categoryCache.has(targetCategoryName)) {
+                    let category = template.categories.find(c => c.name === targetCategoryName);
+                    if (!category) {
+                        template.categories.push({
+                            id: `cat-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            name: targetCategoryName,
+                            description: `Auto-generated category for ${targetCategoryName}`,
+                            icon: '🤖',
+                            isActive: true,
+                            scenarios: []
+                        });
+                        category = template.categories[template.categories.length - 1];
+                    }
+                    categoryCache.set(targetCategoryName, category);
+                }
+                
+                const category = categoryCache.get(targetCategoryName);
+                category.scenarios.push(formatted);
                 
                 await pending.approve(
                     { userId: req.user?._id, name: req.user?.name || 'Admin' },

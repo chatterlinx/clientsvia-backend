@@ -300,10 +300,12 @@ router.post('/card/approve', async (req, res) => {
         let category = template.categories.find(c => c.name === targetCategory);
         
         if (!category) {
-            // Create new category
+            // Create new category with all required fields
             template.categories.push({
                 id: `cat-${Date.now()}`,
                 name: targetCategory,
+                description: `Auto-generated category for ${targetCategory} scenarios`,
+                icon: '🤖',
                 isActive: true,
                 scenarios: []
             });

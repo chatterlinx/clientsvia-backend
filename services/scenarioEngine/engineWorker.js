@@ -214,8 +214,14 @@ async function processJob(jobId) {
                 while (serviceGenerated < needed) {
                     const batchCount = Math.min(batchSize, needed - serviceGenerated);
                     
-                    // Get existing scenarios for dedupe hints
-                    const existingScenarios = template.scenarios
+                    // Get existing scenarios for dedupe hints (from nested category structure)
+                    const allScenarios = [];
+                    for (const cat of (template.categories || [])) {
+                        for (const s of (cat.scenarios || [])) {
+                            allScenarios.push({ ...s.toObject ? s.toObject() : s, category: cat.name });
+                        }
+                    }
+                    const existingScenarios = allScenarios
                         .filter(s => s.serviceKey === service.serviceKey || 
                                     (s.category || '').toLowerCase().includes(service.serviceKey))
                         .map(s => ({ scenarioName: s.scenarioName || s.name }));
@@ -399,9 +405,14 @@ async function getServicesWithCoverage(templateId, companyId) {
         }));
     }
     
-    // Get template for approved counts
+    // Get template for approved counts (extract from nested category structure)
     const template = await GlobalInstantResponseTemplate.findById(templateId);
-    const scenarios = template?.scenarios || [];
+    const scenarios = [];
+    for (const cat of (template?.categories || [])) {
+        for (const s of (cat.scenarios || [])) {
+            scenarios.push({ ...s.toObject ? s.toObject() : s, category: cat.name });
+        }
+    }
     
     // Get pending counts
     const pendingCounts = await PendingScenario.getPendingCountsByService(templateId);
