@@ -2323,7 +2323,7 @@ const companySchema = new mongoose.Schema({
                     retryPrompts: { 
                         type: [String], 
                         default: [] // ["I didn't catch that.", "Let me try again."]
-                    }
+                    },
 
                     // ═══════════════════════════════════════════════════════════════
                     // V93: MID-CALL HELPERS (SLOT-LEVEL, UI CONTROLLED)
