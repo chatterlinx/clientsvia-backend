@@ -1073,6 +1073,34 @@ router.post('/:companyId/bind-template', async (req, res) => {
             }
         );
         
+        // 🎛️ AUTO-CREATE SERVICE SWITCHBOARD
+        // When a company binds to a template, automatically create their Service Switchboard
+        // This gives them the full menu of services (all OFF by default)
+        // Company admin then explicitly enables the services they offer
+        let switchboardCreated = false;
+        try {
+            const ServiceSwitchboard = require('../../models/ServiceSwitchboard');
+            const switchboard = await ServiceSwitchboard.getOrCreateForCompany(
+                companyId,
+                targetTemplateId,
+                company.name || 'Unknown Company',
+                resolvedTemplateName
+            );
+            
+            if (switchboard && switchboard.services.length > 0) {
+                switchboardCreated = true;
+                logger.info('[WIRING API] 🎛️ Service Switchboard created', {
+                    companyId,
+                    templateId: targetTemplateId,
+                    serviceCount: switchboard.services.length,
+                    allDisabled: switchboard.services.every(s => !s.enabled)
+                });
+            }
+        } catch (switchboardErr) {
+            // Non-fatal - binding still works, switchboard can be created later
+            logger.warn('[WIRING API] ⚠️ Service Switchboard creation warning:', switchboardErr.message);
+        }
+        
         // Clear Redis cache to force pool rebuild
         try {
             const { getSharedRedisClient, isRedisConfigured } = require('../../services/redisClientFactory');
@@ -1113,10 +1141,19 @@ router.post('/:companyId/bind-template', async (req, res) => {
                 poolScenarioCount: poolResult.scenarios?.length || 0,
                 templatesUsed: poolResult.templatesUsed?.length || 0
             },
+            serviceSwitchboard: {
+                created: switchboardCreated,
+                note: switchboardCreated 
+                    ? 'Service Switchboard created with all services OFF - admin must enable services'
+                    : 'Switchboard will be created when admin opens Blueprint Builder'
+            },
             durationMs,
             nextSteps: [
                 'Run /audit to verify scenarios are now visible',
                 'Run /wiring-status to confirm TEMPLATE_BINDING_MISSING is resolved',
+                switchboardCreated 
+                    ? 'Open Service Switchboard in Blueprint Builder to enable services'
+                    : 'Service Switchboard will auto-create on first access',
                 'Make a test call to generate runtime proof'
             ]
         });

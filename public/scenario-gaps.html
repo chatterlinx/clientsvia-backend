@@ -2545,14 +2545,24 @@
                                 <option value="all">All Services</option>
                                 <option value="enabled">Enabled Only</option>
                                 <option value="disabled">Disabled Only</option>
-                                <option value="global">Global Source</option>
-                                <option value="local">Company Local</option>
+                                <optgroup label="By Type">
+                                    <option value="work">🔧 Work Services</option>
+                                    <option value="symptom">🔶 Symptom Services</option>
+                                    <option value="admin">🔵 Admin Services</option>
+                                </optgroup>
+                                <optgroup label="By Source">
+                                    <option value="global">📌 Global Source</option>
+                                    <option value="local">🏢 Company Local</option>
+                                </optgroup>
                             </select>
                             <input type="text" id="switchboard-search" placeholder="Search services..." 
                                    oninput="filterSwitchboardServices()"
                                    style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; font-size: 13px; width: 200px;">
                         </div>
                         <div style="display: flex; gap: 8px;">
+                            <button onclick="exportFullCatalogJSON()" style="padding: 8px 12px; background: rgba(251, 191, 36, 0.2); border: 1px solid rgba(251, 191, 36, 0.4); border-radius: 6px; color: #fbbf24; cursor: pointer; font-size: 12px;" title="Export full catalog + switchboard as JSON">
+                                <i class="fas fa-file-export"></i> Export JSON
+                            </button>
                             <button onclick="copyServicesListToClipboard()" style="padding: 8px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #3b82f6; cursor: pointer; font-size: 12px;" title="Copy services list to clipboard">
                                 <i class="fas fa-copy"></i> Copy List
                             </button>
@@ -7309,22 +7319,28 @@
             }
         }
         
-        // Render services table
+        // Render services table (V1.2 - with serviceType badges)
         function renderSwitchboardServices(services) {
             const listEl = document.getElementById('switchboard-services-list');
             const filter = document.getElementById('switchboard-filter').value;
             const search = (document.getElementById('switchboard-search').value || '').toLowerCase();
             
-            // Filter services
+            // Filter services (V1.2 - includes service type filters)
             let filtered = services;
             if (filter === 'enabled') {
                 filtered = services.filter(s => s.enabled);
             } else if (filter === 'disabled') {
                 filtered = services.filter(s => !s.enabled);
             } else if (filter === 'global') {
-                filtered = services.filter(s => s.enabled && s.source === 'global');
+                filtered = services.filter(s => s.enabled && (s.effectiveSource || s.source) === 'global');
             } else if (filter === 'local') {
-                filtered = services.filter(s => s.enabled && s.source === 'companyLocal');
+                filtered = services.filter(s => s.enabled && (s.effectiveSource || s.source) === 'companyLocal');
+            } else if (filter === 'work') {
+                filtered = services.filter(s => (s.serviceType || 'work') === 'work');
+            } else if (filter === 'symptom') {
+                filtered = services.filter(s => s.serviceType === 'symptom');
+            } else if (filter === 'admin') {
+                filtered = services.filter(s => s.serviceType === 'admin');
             }
             
             if (search) {
@@ -7344,7 +7360,7 @@
                 return;
             }
             
-            // Group by category (we don't have category in switchboard, so use serviceKey prefix)
+            // Group by category
             const grouped = {};
             filtered.forEach(s => {
                 const category = s.category || 'General';
@@ -7352,40 +7368,97 @@
                 grouped[category].push(s);
             });
             
+            // Sort categories, with service types sorted within each
+            const sortedCategories = Object.keys(grouped).sort();
+            
             let html = '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
             html += `
                 <thead>
                     <tr style="background: var(--bg-primary); position: sticky; top: 0; z-index: 10;">
                         <th style="padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">Service</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 70px;">Type</th>
                         <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 80px;">Enabled</th>
-                        <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 120px;">Source</th>
-                        <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 60px;">Actions</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 100px;">Source</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 80px;">Options</th>
                     </tr>
                 </thead>
                 <tbody>
             `;
             
-            for (const [category, categoryServices] of Object.entries(grouped)) {
+            for (const category of sortedCategories) {
+                const categoryServices = grouped[category];
+                
+                // Sort services: WORK first, then SYMPTOM, then ADMIN
+                categoryServices.sort((a, b) => {
+                    const typeOrder = { work: 0, symptom: 1, admin: 2 };
+                    const aType = typeOrder[a.serviceType || 'work'] || 0;
+                    const bType = typeOrder[b.serviceType || 'work'] || 0;
+                    if (aType !== bType) return aType - bType;
+                    return (a.displayName || '').localeCompare(b.displayName || '');
+                });
+                
                 // Category header row
+                const workCount = categoryServices.filter(s => (s.serviceType || 'work') === 'work').length;
+                const symptomCount = categoryServices.filter(s => s.serviceType === 'symptom').length;
+                const adminCount = categoryServices.filter(s => s.serviceType === 'admin').length;
+                
                 html += `
                     <tr style="background: rgba(139, 92, 246, 0.1);">
-                        <td colspan="4" style="padding: 8px 12px; font-weight: 600; color: #a78bfa;">
+                        <td colspan="5" style="padding: 8px 12px; font-weight: 600; color: #a78bfa;">
                             <i class="fas fa-folder"></i> ${escapeHtml(category)}
-                            <span style="font-weight: normal; color: var(--text-muted); margin-left: 8px;">(${categoryServices.length})</span>
+                            <span style="font-weight: normal; color: var(--text-muted); margin-left: 8px;">
+                                (${categoryServices.length})
+                                ${workCount > 0 ? `<span style="color: #22c55e; margin-left: 4px;">${workCount} work</span>` : ''}
+                                ${symptomCount > 0 ? `<span style="color: #f59e0b; margin-left: 4px;">${symptomCount} symptom</span>` : ''}
+                                ${adminCount > 0 ? `<span style="color: #3b82f6; margin-left: 4px;">${adminCount} admin</span>` : ''}
+                            </span>
                         </td>
                     </tr>
                 `;
                 
                 // Service rows
                 for (const s of categoryServices) {
-                    const enabledClass = s.enabled ? 'background: rgba(34, 197, 94, 0.1)' : 'background: rgba(239, 68, 68, 0.05)';
-                    const toggleColor = s.enabled ? '#22c55e' : '#6b7280';
+                    const enabledClass = s.enabled ? 'background: rgba(34, 197, 94, 0.05)' : 'background: rgba(239, 68, 68, 0.02)';
+                    const serviceType = s.serviceType || 'work';
+                    
+                    // Badge colors by type
+                    const badgeStyles = {
+                        work: 'background: rgba(34, 197, 94, 0.2); color: #22c55e;',
+                        symptom: 'background: rgba(245, 158, 11, 0.2); color: #f59e0b;',
+                        admin: 'background: rgba(59, 130, 246, 0.2); color: #3b82f6;'
+                    };
+                    const badgeStyle = badgeStyles[serviceType] || badgeStyles.work;
+                    
+                    // Source display (read-only in V1.2)
+                    const effectiveSource = s.effectiveSource || s.source || 'global';
+                    const sourceIcon = effectiveSource === 'global' ? '📌' : '🏢';
+                    const sourceLabel = effectiveSource === 'global' ? 'Global' : 'Company';
+                    
+                    // Routes info for symptoms
+                    let routesInfo = '';
+                    if (serviceType === 'symptom' && s.routesTo && s.routesTo.length > 0) {
+                        routesInfo = `<div style="font-size: 10px; color: #f59e0b; margin-top: 2px;">→ ${s.routesTo.slice(0, 2).join(', ')}${s.routesTo.length > 2 ? '...' : ''}</div>`;
+                    }
+                    
+                    // Admin handler info
+                    let handlerInfo = '';
+                    if (serviceType === 'admin' && s.adminHandler) {
+                        const handlerType = s.adminHandler.type || 'transfer';
+                        handlerInfo = `<div style="font-size: 10px; color: #3b82f6; margin-top: 2px;">⚡ ${handlerType}</div>`;
+                    }
                     
                     html += `
                         <tr style="${enabledClass}" data-service-key="${escapeHtml(s.serviceKey)}">
                             <td style="padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
                                 <div style="font-weight: 500;">${escapeHtml(s.displayName || s.serviceKey)}</div>
                                 <div style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${escapeHtml(s.serviceKey)}</div>
+                                ${routesInfo}
+                                ${handlerInfo}
+                            </td>
+                            <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; ${badgeStyle}">
+                                    ${serviceType}
+                                </span>
                             </td>
                             <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
                                 <label class="toggle-switch" style="cursor: pointer;">
@@ -7399,16 +7472,20 @@
                                 </label>
                             </td>
                             <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                <select onchange="onServiceSourceChange('${escapeHtml(s.serviceKey)}', this.value)"
-                                        style="padding: 4px 8px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: white; font-size: 11px;"
-                                        ${s.enabled ? '' : 'disabled'}>
-                                    <option value="global" ${s.source === 'global' ? 'selected' : ''}>Global</option>
-                                    <option value="companyLocal" ${s.source === 'companyLocal' ? 'selected' : ''}>Company Local</option>
-                                </select>
+                                <span style="font-size: 11px; color: var(--text-muted);">
+                                    ${sourceIcon} ${sourceLabel}
+                                </span>
                             </td>
                             <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                ${serviceType === 'symptom' ? `
+                                    <button onclick="toggleServiceTriage('${escapeHtml(s.serviceKey)}', ${!(s.triageEnabled ?? true)})" 
+                                            style="padding: 4px 8px; background: ${(s.triageEnabled ?? true) ? 'rgba(245, 158, 11, 0.2)' : 'transparent'}; border: 1px solid ${(s.triageEnabled ?? true) ? '#f59e0b' : 'rgba(255,255,255,0.1)'}; border-radius: 4px; color: ${(s.triageEnabled ?? true) ? '#f59e0b' : 'var(--text-muted)'}; cursor: pointer; font-size: 10px;"
+                                            title="${(s.triageEnabled ?? true) ? 'Triage ON - click to disable' : 'Triage OFF - click to enable'}">
+                                        <i class="fas fa-question-circle"></i> Triage
+                                    </button>
+                                ` : ''}
                                 <button onclick="editServiceDecline('${escapeHtml(s.serviceKey)}')" 
-                                        style="padding: 4px 8px; background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-muted); cursor: pointer; font-size: 11px;"
+                                        style="padding: 4px 8px; background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-muted); cursor: pointer; font-size: 10px;"
                                         title="Edit decline message">
                                     <i class="fas fa-comment-slash"></i>
                                 </button>
@@ -7698,6 +7775,90 @@
                 console.error('Copy failed:', err);
                 // Fallback: show in alert
                 prompt('Copy this text:', text.substring(0, 1000) + '...');
+            }
+        }
+        
+        // Export full catalog + switchboard as JSON (V1.2)
+        async function exportFullCatalogJSON() {
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    showToast('No template loaded', 'error');
+                    return;
+                }
+                
+                const response = await fetch(`/api/admin/service-catalog/company/${companyId}/export?templateId=${templateId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to export');
+                }
+                
+                const data = await response.json();
+                const exportJSON = JSON.stringify(data.export, null, 2);
+                
+                // Copy to clipboard
+                try {
+                    await navigator.clipboard.writeText(exportJSON);
+                    showToast('Full catalog JSON copied to clipboard!', 'success');
+                } catch (err) {
+                    // Fallback: download as file
+                    const blob = new Blob([exportJSON], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `service-catalog-export-${new Date().toISOString().split('T')[0]}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast('Downloaded as JSON file', 'success');
+                }
+                
+            } catch (error) {
+                console.error('[EXPORT] Error:', error);
+                showToast('Export failed: ' + error.message, 'error');
+            }
+        }
+        
+        // Toggle triage for a symptom service (V1.2)
+        async function toggleServiceTriage(serviceKey, triageEnabled) {
+            console.log('[SWITCHBOARD] Toggle triage:', serviceKey, triageEnabled);
+            
+            try {
+                const templateId = window.globalTemplateId;
+                const response = await fetch(`/api/admin/service-catalog/company/${companyId}/toggle/${serviceKey}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateId,
+                        triageEnabled
+                    })
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to toggle triage');
+                }
+                
+                // Update local data
+                if (switchboardData && switchboardData.services) {
+                    const service = switchboardData.services.find(s => s.serviceKey === serviceKey);
+                    if (service) {
+                        service.triageEnabled = triageEnabled;
+                    }
+                    renderSwitchboardServices(switchboardData.services);
+                }
+                
+                showToast(`Triage ${triageEnabled ? 'enabled' : 'disabled'} for ${serviceKey}`, 'success');
+                
+            } catch (error) {
+                console.error('[SWITCHBOARD] Error toggling triage:', error);
+                showToast('Failed to toggle triage: ' + error.message, 'error');
             }
         }
         

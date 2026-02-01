@@ -398,7 +398,7 @@ router.get('/company/:companyId', async (req, res) => {
         // Get catalog for additional context (display names, categories)
         const catalog = await ServiceCatalog.findOne({ templateId: targetTemplateId });
         
-        // Build a map of catalog services for enrichment
+        // Build a map of catalog services for enrichment (V1.2 - includes serviceType)
         const catalogMap = new Map();
         if (catalog) {
             for (const svc of catalog.services) {
@@ -406,24 +406,57 @@ router.get('/company/:companyId', async (req, res) => {
                     displayName: svc.displayName,
                     category: svc.category,
                     description: svc.description,
-                    declineMessage: svc.declineMessage
+                    declineMessage: svc.declineMessage,
+                    // V1.2 fields
+                    serviceType: svc.serviceType || 'work',
+                    routesTo: svc.routesTo || [],
+                    triageMode: svc.triageMode || 'light',
+                    triagePrompts: svc.triagePrompts || [],
+                    adminHandler: svc.adminHandler || null,
+                    disabledBehavior: svc.disabledBehavior || null
                 });
             }
         }
         
-        // Enrich switchboard services with catalog data
+        // Enrich switchboard services with catalog data (V1.2)
         const enrichedServices = switchboard.services.map(s => {
             const catalogInfo = catalogMap.get(s.serviceKey) || {};
+            
+            // Compute effectiveSource from sourcePolicy
+            // auto = system determines (global unless company has local scenarios)
+            // force_global = always global
+            // force_companyLocal = always local (requires local scenarios)
+            const sourcePolicy = s.sourcePolicy || 'auto';
+            let effectiveSource = 'global'; // Default
+            if (sourcePolicy === 'force_companyLocal') {
+                effectiveSource = 'companyLocal';
+            } else if (sourcePolicy === 'auto') {
+                // For V1.2, default to global unless we detect local scenarios
+                // Future: Actually check for company-local scenarios
+                effectiveSource = 'global';
+            }
+            
             return {
                 serviceKey: s.serviceKey,
                 enabled: s.enabled,
-                source: s.source,
+                sourcePolicy: sourcePolicy,
+                effectiveSource: effectiveSource,
+                triageEnabled: s.triageEnabled ?? true,
                 customDeclineMessage: s.customDeclineMessage,
+                additionalKeywords: s.additionalKeywords || [],
+                agentNotes: s.agentNotes || '',
                 // Enriched from catalog
                 displayName: catalogInfo.displayName || s.serviceKey,
                 category: catalogInfo.category || 'General',
                 description: catalogInfo.description || '',
-                defaultDeclineMessage: catalogInfo.declineMessage
+                defaultDeclineMessage: catalogInfo.declineMessage,
+                // V1.2 service type info
+                serviceType: catalogInfo.serviceType || 'work',
+                routesTo: catalogInfo.routesTo || [],
+                triageMode: catalogInfo.triageMode || 'light',
+                triagePrompts: catalogInfo.triagePrompts || [],
+                adminHandler: catalogInfo.adminHandler || null,
+                disabledBehavior: catalogInfo.disabledBehavior || null
             };
         });
         
@@ -511,12 +544,20 @@ router.post('/company/:companyId/sync', async (req, res) => {
 
 /**
  * PUT /company/:companyId/toggle/:key
- * Toggle a single service on/off
+ * Toggle a single service on/off (V1.2 - uses sourcePolicy, triageEnabled)
  */
 router.put('/company/:companyId/toggle/:key', async (req, res) => {
     try {
         const { companyId, key } = req.params;
-        const { templateId, enabled, source, customDeclineMessage } = req.body;
+        const { 
+            templateId, 
+            enabled, 
+            sourcePolicy,      // V1.2: replaces 'source'
+            triageEnabled,     // V1.2: for SYMPTOM services
+            customDeclineMessage,
+            additionalKeywords,
+            agentNotes
+        } = req.body;
         const updatedBy = req.body.updatedBy || req.user?.email || 'admin';
         
         if (!templateId) {
@@ -529,18 +570,23 @@ router.put('/company/:companyId/toggle/:key', async (req, res) => {
             return res.status(404).json({ error: 'Switchboard not found' });
         }
         
+        // Build settings object (only include provided fields)
+        const settings = {};
+        if (enabled !== undefined) settings.enabled = enabled;
+        if (sourcePolicy !== undefined) settings.sourcePolicy = sourcePolicy;
+        if (triageEnabled !== undefined) settings.triageEnabled = triageEnabled;
+        if (customDeclineMessage !== undefined) settings.customDeclineMessage = customDeclineMessage;
+        if (additionalKeywords !== undefined) settings.additionalKeywords = additionalKeywords;
+        if (agentNotes !== undefined) settings.agentNotes = agentNotes;
+        
         // Update toggle
-        await switchboard.setServiceToggle(key, {
-            enabled,
-            source,
-            customDeclineMessage
-        }, updatedBy);
+        await switchboard.setServiceToggle(key, settings, updatedBy);
         
         logger.info('[SERVICE SWITCHBOARD] Toggled service', {
             companyId,
             serviceKey: key,
             enabled,
-            source
+            sourcePolicy
         });
         
         res.json({
@@ -598,7 +644,7 @@ router.put('/company/:companyId/bulk', async (req, res) => {
 
 /**
  * GET /company/:companyId/check/:key
- * Check if a specific service is enabled (for runtime)
+ * Check if a specific service is enabled (for runtime - V1.2)
  */
 router.get('/company/:companyId/check/:key', async (req, res) => {
     try {
@@ -626,12 +672,135 @@ router.get('/company/:companyId/check/:key', async (req, res) => {
             serviceKey: key,
             found: true,
             enabled: result.enabled,
-            source: result.source,
-            declineMessage: result.declineMessage
+            sourcePolicy: result.sourcePolicy,
+            triageEnabled: result.triageEnabled,
+            declineMessage: result.declineMessage,
+            agentNotes: result.agentNotes
         });
         
     } catch (error) {
         logger.error('[SERVICE SWITCHBOARD] Error checking service', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /company/:companyId/export
+ * Export full catalog + switchboard as JSON (V1.2)
+ * For review, debugging, and backup
+ */
+router.get('/company/:companyId/export', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { templateId } = req.query;
+        
+        // Validate companyId
+        if (!mongoose.Types.ObjectId.isValid(companyId)) {
+            return res.status(400).json({ error: 'Invalid companyId' });
+        }
+        
+        // Get company
+        const company = await v2Company.findById(companyId, 'companyName aiAgentSettings.templateReferences');
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Determine templateId
+        let targetTemplateId = templateId;
+        if (!targetTemplateId) {
+            const primaryRef = company.aiAgentSettings?.templateReferences?.find(r => r.enabled !== false);
+            if (primaryRef) {
+                targetTemplateId = primaryRef.templateId;
+            }
+        }
+        
+        if (!targetTemplateId) {
+            return res.status(400).json({ error: 'No templateId provided' });
+        }
+        
+        // Get template
+        const template = await GlobalInstantResponseTemplate.findById(targetTemplateId, 'name');
+        
+        // Get catalog
+        const catalog = await ServiceCatalog.findOne({ templateId: targetTemplateId });
+        
+        // Get switchboard
+        const switchboard = await ServiceSwitchboard.findOne({ companyId, templateId: targetTemplateId });
+        
+        // Build comprehensive export
+        const exportData = {
+            exportVersion: '1.2',
+            exportedAt: new Date().toISOString(),
+            
+            company: {
+                companyId,
+                companyName: company.companyName
+            },
+            
+            template: {
+                templateId: targetTemplateId,
+                templateName: template?.name || 'Unknown'
+            },
+            
+            catalog: catalog ? {
+                version: catalog.version,
+                industryType: catalog.industryType,
+                serviceCount: catalog.services.length,
+                services: catalog.services.map(s => ({
+                    serviceKey: s.serviceKey,
+                    displayName: s.displayName,
+                    category: s.category,
+                    serviceType: s.serviceType || 'work',
+                    routesTo: s.routesTo || [],
+                    triageMode: s.triageMode || 'light',
+                    adminHandler: s.adminHandler || null,
+                    intentKeywords: s.intentKeywords || [],
+                    declineMessage: s.declineMessage
+                }))
+            } : null,
+            
+            switchboard: switchboard ? {
+                globalEnabled: switchboard.globalEnabled,
+                catalogVersion: switchboard.catalogVersion,
+                lastSyncedAt: switchboard.lastSyncedAt,
+                services: switchboard.services.map(s => ({
+                    serviceKey: s.serviceKey,
+                    enabled: s.enabled,
+                    sourcePolicy: s.sourcePolicy || 'auto',
+                    triageEnabled: s.triageEnabled ?? true,
+                    customDeclineMessage: s.customDeclineMessage,
+                    additionalKeywords: s.additionalKeywords || [],
+                    agentNotes: s.agentNotes || ''
+                }))
+            } : null,
+            
+            stats: {
+                catalog: catalog ? {
+                    total: catalog.services.length,
+                    work: catalog.services.filter(s => (s.serviceType || 'work') === 'work').length,
+                    symptom: catalog.services.filter(s => s.serviceType === 'symptom').length,
+                    admin: catalog.services.filter(s => s.serviceType === 'admin').length
+                } : null,
+                switchboard: switchboard ? {
+                    total: switchboard.services.length,
+                    enabled: switchboard.services.filter(s => s.enabled).length,
+                    disabled: switchboard.services.filter(s => !s.enabled).length
+                } : null
+            }
+        };
+        
+        logger.info('[SERVICE EXPORT] Exported catalog + switchboard', {
+            companyId,
+            templateId: targetTemplateId
+        });
+        
+        res.json({
+            success: true,
+            export: exportData
+        });
+        
+    } catch (error) {
+        logger.error('[SERVICE EXPORT] Error exporting', { error: error.message });
         res.status(500).json({ error: error.message });
     }
 });

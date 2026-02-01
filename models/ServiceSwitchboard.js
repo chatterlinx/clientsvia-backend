@@ -59,14 +59,38 @@ const serviceToggleSchema = new Schema({
         // false = company does NOT offer this service
     },
     
-    source: {
+    // ============================================
+    // SOURCE POLICY (V1.2 - replaces source dropdown)
+    // ============================================
+    // Determines where scenarios come from
+    // UI shows this as read-only display, not dropdown
+    
+    sourcePolicy: {
         type: String,
-        enum: ['global', 'companyLocal', 'none'],
-        default: 'global'
-        // Where to get scenarios:
-        // - global: Template scenarios (default)
-        // - companyLocal: Company's custom scenarios
-        // - none: No scenarios, just use decline message
+        enum: ['auto', 'force_global', 'force_companyLocal'],
+        default: 'auto'
+        // auto = System detects based on where scenarios exist (DEFAULT)
+        // force_global = Always use template scenarios
+        // force_companyLocal = Always use company's custom scenarios
+        // 
+        // When 'auto':
+        // - If company has local scenarios → companyLocal
+        // - Else → global template scenarios
+    },
+    
+    // ============================================
+    // SYMPTOM SERVICE CONTROLS (V1.2)
+    // ============================================
+    // Only meaningful for serviceType: 'symptom'
+    
+    triageEnabled: {
+        type: Boolean,
+        default: true
+        // true = Run triage prompts before routing (if defined)
+        // false = Skip triage, route immediately to first enabled WORK
+        //
+        // Even if false, symptom keywords still trigger routing
+        // This only controls whether to ASK triage questions
     },
     
     // ============================================
@@ -82,12 +106,27 @@ const serviceToggleSchema = new Schema({
         // Set to customize: "We don't clean ducts, but our partners at XYZ do!"
     },
     
-    // Additional keywords specific to this company
+    // Additional keywords specific to this company (ADDS to catalog, doesn't replace)
+    additionalKeywords: {
+        type: [String],
+        default: []
+        // Extra intent keywords merged with catalog keywords
+        // Example: ["dryer exhaust"] if company calls it differently
+    },
+    
+    // Company-specific notes for the agent
+    agentNotes: {
+        type: String,
+        trim: true,
+        default: ''
+        // Extra context for this company
+        // Example: "We require 48hr notice for this service"
+    },
+    
+    // DEPRECATED: Use additionalKeywords instead (kept for backward compatibility)
     customKeywords: {
         type: [String],
         default: []
-        // Extra intent keywords (merged with catalog keywords)
-        // Example: ["dryer exhaust"] if company calls it differently
     },
     
     // ============================================
@@ -240,6 +279,11 @@ const serviceSwitchboardSchema = new Schema({
         totalServices: { type: Number, default: 0 },
         enabledCount: { type: Number, default: 0 },
         disabledCount: { type: Number, default: 0 },
+        // V1.2 - Source policy counts
+        autoSourceCount: { type: Number, default: 0 },
+        forceGlobalCount: { type: Number, default: 0 },
+        forceLocalCount: { type: Number, default: 0 },
+        // Deprecated but kept for backward compat
         globalSourceCount: { type: Number, default: 0 },
         localSourceCount: { type: Number, default: 0 },
         lastUpdated: { type: Date, default: Date.now }
@@ -364,7 +408,8 @@ serviceSwitchboardSchema.statics.checkService = async function(companyId, templa
     const switchboard = await this.findOne({ companyId, templateId });
     
     if (!switchboard) {
-        // No switchboard = use catalog defaults
+        // No switchboard = service is OFF by default
+        // Company admin must create switchboard and explicitly enable services
         const ServiceCatalog = mongoose.model('ServiceCatalog');
         const catalog = await ServiceCatalog.findOne({ templateId });
         if (!catalog) return null;
@@ -373,8 +418,8 @@ serviceSwitchboardSchema.statics.checkService = async function(companyId, templa
         if (!service) return null;
         
         return {
-            enabled: service.defaultEnabled,
-            source: service.defaultSource,
+            enabled: false, // Always OFF until admin enables
+            source: service.defaultSource || 'global',
             declineMessage: service.declineMessage
         };
     }
@@ -398,8 +443,10 @@ serviceSwitchboardSchema.statics.checkService = async function(companyId, templa
     
     return {
         enabled: toggle.enabled,
-        source: toggle.source,
-        declineMessage: toggle.customDeclineMessage || null
+        sourcePolicy: toggle.sourcePolicy || 'auto',
+        triageEnabled: toggle.triageEnabled ?? true,
+        declineMessage: toggle.customDeclineMessage || null,
+        agentNotes: toggle.agentNotes || ''
     };
 };
 
@@ -439,14 +486,20 @@ serviceSwitchboardSchema.methods.syncFromCatalog = async function(catalog, synce
     let removedKeys = [];
     
     // Add new services from catalog
+    // IMPORTANT: All services start as OFF (enabled: false)
+    // Company admin must explicitly enable each service they offer
+    // This ensures intentional onboarding, not assumed defaults
     for (const catalogService of catalog.services) {
         if (!existingKeys.has(catalogService.serviceKey)) {
             this.services.push({
                 serviceKey: catalogService.serviceKey,
-                enabled: catalogService.defaultEnabled,
-                source: catalogService.defaultSource,
+                enabled: false, // Always OFF by default - admin must enable
+                sourcePolicy: 'auto', // Let system detect source automatically
+                triageEnabled: true, // Enable triage for symptoms by default
                 customDeclineMessage: null,
-                customKeywords: [],
+                additionalKeywords: [],
+                agentNotes: '',
+                customKeywords: [], // Deprecated, kept for backward compat
                 isExplicitlySet: false,
                 lastModifiedAt: new Date(),
                 lastModifiedBy: syncedBy
@@ -503,9 +556,12 @@ serviceSwitchboardSchema.methods.setServiceToggle = async function(serviceKey, s
         this.services.push({
             serviceKey,
             enabled: settings.enabled ?? true,
-            source: settings.source ?? 'global',
+            sourcePolicy: settings.sourcePolicy ?? 'auto',
+            triageEnabled: settings.triageEnabled ?? true,
             customDeclineMessage: settings.customDeclineMessage ?? null,
-            customKeywords: settings.customKeywords ?? [],
+            additionalKeywords: settings.additionalKeywords ?? [],
+            agentNotes: settings.agentNotes ?? '',
+            customKeywords: settings.customKeywords ?? [], // Deprecated
             isExplicitlySet: true,
             lastModifiedAt: new Date(),
             lastModifiedBy: updatedBy
@@ -513,11 +569,14 @@ serviceSwitchboardSchema.methods.setServiceToggle = async function(serviceKey, s
     } else {
         // Update existing
         const oldEnabled = this.services[toggleIndex].enabled;
-        const oldSource = this.services[toggleIndex].source;
+        const oldSourcePolicy = this.services[toggleIndex].sourcePolicy;
         
         if (settings.enabled !== undefined) this.services[toggleIndex].enabled = settings.enabled;
-        if (settings.source !== undefined) this.services[toggleIndex].source = settings.source;
+        if (settings.sourcePolicy !== undefined) this.services[toggleIndex].sourcePolicy = settings.sourcePolicy;
+        if (settings.triageEnabled !== undefined) this.services[toggleIndex].triageEnabled = settings.triageEnabled;
         if (settings.customDeclineMessage !== undefined) this.services[toggleIndex].customDeclineMessage = settings.customDeclineMessage;
+        if (settings.additionalKeywords !== undefined) this.services[toggleIndex].additionalKeywords = settings.additionalKeywords;
+        if (settings.agentNotes !== undefined) this.services[toggleIndex].agentNotes = settings.agentNotes;
         if (settings.customKeywords !== undefined) this.services[toggleIndex].customKeywords = settings.customKeywords;
         
         this.services[toggleIndex].isExplicitlySet = true;
@@ -536,12 +595,12 @@ serviceSwitchboardSchema.methods.setServiceToggle = async function(serviceKey, s
             });
         }
         
-        if (oldSource !== settings.source) {
+        if (oldSourcePolicy !== settings.sourcePolicy) {
             this.changeLog.push({
                 action: 'source_changed',
                 serviceKey,
-                oldValue: oldSource,
-                newValue: settings.source,
+                oldValue: oldSourcePolicy,
+                newValue: settings.sourcePolicy,
                 changedBy: updatedBy,
                 changedAt: new Date()
             });
@@ -578,12 +637,18 @@ serviceSwitchboardSchema.methods.isServiceEnabled = function(serviceKey) {
  * Update statistics
  */
 serviceSwitchboardSchema.methods.updateStats = function() {
+    const enabledServices = this.services.filter(s => s.enabled);
     this.stats = {
         totalServices: this.services.length,
-        enabledCount: this.services.filter(s => s.enabled).length,
+        enabledCount: enabledServices.length,
         disabledCount: this.services.filter(s => !s.enabled).length,
-        globalSourceCount: this.services.filter(s => s.enabled && s.source === 'global').length,
-        localSourceCount: this.services.filter(s => s.enabled && s.source === 'companyLocal').length,
+        // Count by sourcePolicy (V1.2)
+        autoSourceCount: enabledServices.filter(s => !s.sourcePolicy || s.sourcePolicy === 'auto').length,
+        forceGlobalCount: enabledServices.filter(s => s.sourcePolicy === 'force_global').length,
+        forceLocalCount: enabledServices.filter(s => s.sourcePolicy === 'force_companyLocal').length,
+        // Deprecated but kept for backward compat
+        globalSourceCount: enabledServices.filter(s => !s.sourcePolicy || s.sourcePolicy === 'auto' || s.sourcePolicy === 'force_global').length,
+        localSourceCount: enabledServices.filter(s => s.sourcePolicy === 'force_companyLocal').length,
         lastUpdated: new Date()
     };
 };
@@ -597,8 +662,10 @@ serviceSwitchboardSchema.methods.getEnabledServices = function() {
         .filter(s => s.enabled)
         .map(s => ({
             serviceKey: s.serviceKey,
-            source: s.source,
-            customKeywords: s.customKeywords
+            sourcePolicy: s.sourcePolicy,
+            triageEnabled: s.triageEnabled,
+            additionalKeywords: s.additionalKeywords || s.customKeywords || [],
+            agentNotes: s.agentNotes
         }));
 };
 
@@ -615,7 +682,7 @@ serviceSwitchboardSchema.methods.getDisabledServices = function() {
 };
 
 /**
- * Export switchboard as JSON
+ * Export switchboard as JSON (V1.2 - includes serviceType info)
  */
 serviceSwitchboardSchema.methods.toExport = function() {
     return {
@@ -627,8 +694,11 @@ serviceSwitchboardSchema.methods.toExport = function() {
         services: this.services.map(s => ({
             serviceKey: s.serviceKey,
             enabled: s.enabled,
-            source: s.source,
-            customDeclineMessage: s.customDeclineMessage
+            sourcePolicy: s.sourcePolicy || 'auto',
+            triageEnabled: s.triageEnabled ?? true,
+            customDeclineMessage: s.customDeclineMessage,
+            additionalKeywords: s.additionalKeywords || [],
+            agentNotes: s.agentNotes || ''
         })),
         stats: this.stats,
         catalogVersion: this.catalogVersion,

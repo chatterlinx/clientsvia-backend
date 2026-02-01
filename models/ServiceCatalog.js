@@ -71,6 +71,120 @@ const serviceDefinitionSchema = new Schema({
     },
     
     // ============================================
+    // SERVICE TYPE CLASSIFICATION (V1.2)
+    // ============================================
+    // Determines how agent handles this service at runtime
+    
+    serviceType: {
+        type: String,
+        enum: ['work', 'symptom', 'admin'],
+        default: 'work'
+        // work = Actual service you sell, has scenarios, can book
+        // symptom = How customer describes problem, routes to WORK service
+        // admin = Operational request, deterministic handler, no scenarios
+    },
+    
+    // ============================================
+    // SYMPTOM SERVICE FIELDS (only for serviceType: 'symptom')
+    // ============================================
+    
+    // Which WORK services this symptom can route to (ordered by preference)
+    routesTo: {
+        type: [String],
+        default: []
+        // Array of WORK serviceKeys, e.g., ['ac_repair', 'refrigerant_leak_detection']
+        // First enabled service in array wins
+    },
+    
+    // How much triage before routing
+    triageMode: {
+        type: String,
+        enum: ['none', 'light', 'full'],
+        default: 'light'
+        // none = route immediately to first enabled WORK
+        // light = ask 1 question, then route (DEFAULT - tight dispatcher)
+        // full = ask 2-3 questions for complex/dangerous symptoms
+    },
+    
+    // Triage questions and routing hints
+    triagePrompts: [{
+        question: {
+            type: String,
+            trim: true
+            // e.g., "Is the unit still running or has it completely shut off?"
+        },
+        answers: [{
+            label: {
+                type: String,
+                trim: true
+                // e.g., "Still running"
+            },
+            routeHint: {
+                type: String,
+                trim: true
+                // Optional serviceKey to prefer if this answer selected
+                // e.g., "refrigerant_leak_detection"
+            }
+        }]
+    }],
+    
+    // ============================================
+    // ADMIN SERVICE FIELDS (only for serviceType: 'admin')
+    // ============================================
+    // Deterministic handlers - no scenarios, no booking
+    
+    adminHandler: {
+        type: {
+            type: String,
+            enum: ['transfer', 'message', 'link'],
+            default: 'transfer'
+            // transfer = connect to human (dispatch, manager, office)
+            // message = static response with info
+            // link = send a link (payment, portal)
+        },
+        transferTo: {
+            type: String,
+            trim: true
+            // Department/queue: "dispatch", "manager", "billing"
+        },
+        message: {
+            type: String,
+            trim: true
+            // What agent says before action
+            // e.g., "Let me connect you with our dispatch team..."
+        },
+        linkUrl: {
+            type: String,
+            trim: true
+            // URL template for link type
+            // Can include placeholders: {companyId}, {customerId}
+        }
+    },
+    
+    // ============================================
+    // DISABLED BEHAVIOR (all service types)
+    // ============================================
+    // What happens when company disables this service
+    
+    disabledBehavior: {
+        action: {
+            type: String,
+            enum: ['decline', 'transfer', 'decline_with_alternative'],
+            default: 'decline'
+        },
+        message: {
+            type: String,
+            trim: true
+            // Custom decline message when disabled
+        },
+        transferTo: {
+            type: String,
+            trim: true
+            // If action is 'transfer', where to send
+        }
+    },
+    
+    // ============================================
     // DEFAULT BEHAVIOR
     // ============================================
     
