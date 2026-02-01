@@ -495,7 +495,62 @@ router.get('/company/:companyId', async (req, res) => {
         );
         
         // Get catalog for additional context (display names, categories)
-        const catalog = await ServiceCatalog.findOne({ templateId: targetTemplateId });
+        let catalog = await ServiceCatalog.findOne({ templateId: targetTemplateId });
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // AUTO-UPGRADE: Backfill V1.2 fields if missing (dynamic sync)
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (catalog) {
+            const defaultServices = getHVACDefaultServices();
+            const defaultMap = new Map(defaultServices.map(s => [s.serviceKey, s]));
+            
+            let catalogUpdated = false;
+            const V12_FIELDS = ['serviceType', 'routesTo', 'triageMode', 'triagePrompts', 'adminHandler', 'disabledBehavior', 'scenarioHints'];
+            
+            for (const svc of catalog.services) {
+                const defaultSvc = defaultMap.get(svc.serviceKey);
+                if (!defaultSvc) continue;
+                
+                // Check if any V1.2 field is missing
+                for (const field of V12_FIELDS) {
+                    const currentVal = svc[field];
+                    const defaultVal = defaultSvc[field];
+                    
+                    const isMissing = currentVal === undefined || currentVal === null ||
+                                     (Array.isArray(currentVal) && currentVal.length === 0 && 
+                                      Array.isArray(defaultVal) && defaultVal.length > 0);
+                    
+                    if (isMissing && defaultVal !== undefined && defaultVal !== null) {
+                        svc[field] = defaultVal;
+                        catalogUpdated = true;
+                    }
+                }
+            }
+            
+            // Also add any NEW services from defaults that don't exist
+            const existingKeys = new Set(catalog.services.map(s => s.serviceKey));
+            for (const defaultSvc of defaultServices) {
+                if (!existingKeys.has(defaultSvc.serviceKey)) {
+                    catalog.services.push({
+                        ...defaultSvc,
+                        createdAt: new Date(),
+                        updatedAt: new Date()
+                    });
+                    catalogUpdated = true;
+                }
+            }
+            
+            // Save if updated (silent auto-upgrade)
+            if (catalogUpdated) {
+                catalog.version = (catalog.version || 0) + 1;
+                catalog.updatedAt = new Date();
+                await catalog.save();
+                logger.info('[SERVICE CATALOG] Auto-upgraded to V1.2 schema', {
+                    templateId: targetTemplateId,
+                    serviceCount: catalog.services.length
+                });
+            }
+        }
         
         // Build a map of catalog services for enrichment (V1.2 - includes serviceType)
         const catalogMap = new Map();
@@ -506,13 +561,47 @@ router.get('/company/:companyId', async (req, res) => {
                     category: svc.category,
                     description: svc.description,
                     declineMessage: svc.declineMessage,
-                    // V1.2 fields
+                    // V1.2 fields (now guaranteed to exist after auto-upgrade)
                     serviceType: svc.serviceType || 'work',
                     routesTo: svc.routesTo || [],
                     triageMode: svc.triageMode || 'light',
                     triagePrompts: svc.triagePrompts || [],
                     adminHandler: svc.adminHandler || null,
                     disabledBehavior: svc.disabledBehavior || null
+                });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // AUTO-SYNC: Add new services to switchboard if catalog has more
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (catalog && catalogMap.size > switchboard.services.length) {
+            const switchboardKeys = new Set(switchboard.services.map(s => s.serviceKey));
+            let newServicesAdded = 0;
+            
+            for (const [serviceKey, catalogData] of catalogMap) {
+                if (!switchboardKeys.has(serviceKey)) {
+                    // Add missing service to switchboard (default OFF)
+                    switchboard.services.push({
+                        serviceKey,
+                        enabled: false,
+                        sourcePolicy: 'auto',
+                        triageEnabled: true,
+                        customDeclineMessage: null,
+                        additionalKeywords: [],
+                        agentNotes: ''
+                    });
+                    newServicesAdded++;
+                }
+            }
+            
+            if (newServicesAdded > 0) {
+                switchboard.catalogVersion = catalog.version;
+                switchboard.lastSyncedAt = new Date();
+                await switchboard.save();
+                logger.info('[SERVICE SWITCHBOARD] Auto-synced new services', {
+                    companyId,
+                    addedCount: newServicesAdded
                 });
             }
         }
