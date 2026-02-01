@@ -7296,7 +7296,7 @@
                 document.getElementById('sw-local-count').textContent = stats.localSourceCount || 0;
                 document.getElementById('sw-total-count').textContent = stats.totalServices || 0;
                 
-                // Update seed button based on service count
+                // Update seed button based on service count (with null checks)
                 const seedBtn = document.getElementById('seed-services-btn');
                 const seedBtnText = document.getElementById('seed-btn-text');
                 const newServicesBadge = document.getElementById('new-services-badge');
@@ -7307,22 +7307,22 @@
                 const currentCount = stats.totalServices || 0;
                 const missingCount = Math.max(0, EXPECTED_V12_COUNT - currentCount);
                 
-                // Always show seed button
-                seedBtn.style.display = 'inline-flex';
+                // Always show seed button (with null check)
+                if (seedBtn) seedBtn.style.display = 'inline-flex';
                 
                 if (currentCount < 5) {
                     // New catalog - needs initial seeding
-                    seedBtnText.textContent = 'Seed HVAC Defaults';
-                    newServicesBadge.style.display = 'none';
+                    if (seedBtnText) seedBtnText.textContent = 'Seed HVAC Defaults';
+                    if (newServicesBadge) newServicesBadge.style.display = 'none';
                 } else if (missingCount > 0) {
                     // Existing catalog - can update to V1.2
-                    seedBtnText.textContent = 'Update to V1.2';
-                    newServicesBadge.style.display = 'inline-flex';
-                    newServicesCount.textContent = missingCount;
+                    if (seedBtnText) seedBtnText.textContent = 'Update to V1.2';
+                    if (newServicesBadge) newServicesBadge.style.display = 'inline-flex';
+                    if (newServicesCount) newServicesCount.textContent = missingCount;
                 } else {
                     // Up to date
-                    seedBtnText.textContent = 'Sync Defaults';
-                    newServicesBadge.style.display = 'none';
+                    if (seedBtnText) seedBtnText.textContent = 'Sync Defaults';
+                    if (newServicesBadge) newServicesBadge.style.display = 'none';
                 }
                 
                 // Render services list
