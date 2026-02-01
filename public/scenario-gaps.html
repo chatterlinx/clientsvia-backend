@@ -2681,8 +2681,13 @@
                             <div style="font-size: 12px; color: var(--text-muted);">
                                 <i class="fas fa-info-circle"></i>
                                 Coverage targets: WORK=20, SYMPTOM=5, ADMIN=2 scenarios per service
+                                <span id="daily-usage-display" style="margin-left: 12px; color: #fb923c;"></span>
                             </div>
                             <div style="display: flex; gap: 8px;">
+                                <button onclick="resetDailyLimit()" id="reset-daily-btn"
+                                        style="padding: 8px 12px; background: rgba(251, 146, 60, 0.2); border: 1px solid rgba(251, 146, 60, 0.4); border-radius: 6px; color: #fb923c; cursor: pointer; font-size: 12px;" title="Reset daily generation counter">
+                                    <i class="fas fa-redo"></i> Reset Daily
+                                </button>
                                 <button onclick="openGenerationPanel()" 
                                         style="padding: 8px 16px; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 6px; color: #a78bfa; cursor: pointer; font-size: 12px;">
                                     <i class="fas fa-play"></i> Generate One
@@ -8210,6 +8215,11 @@
                 // Update stats cards
                 updateEngineStats(engineCoverageData);
                 
+                // Update daily usage display
+                if (engineCoverageData.engine) {
+                    updateDailyUsageDisplay(engineCoverageData.engine.dailyUsage, engineCoverageData.engine.dailyLimits);
+                }
+                
                 // Render coverage table
                 renderEngineCoverageTable(engineCoverageData);
                 
@@ -8417,6 +8427,61 @@
         
         let activeJobId = null;
         let jobPollInterval = null;
+        
+        // Reset daily generation limit
+        async function resetDailyLimit() {
+            const btn = document.getElementById('reset-daily-btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    showToast('No template selected', 'error');
+                    return;
+                }
+                
+                const response = await fetch('/api/admin/scenario-engine/reset-daily', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ templateId, companyId })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Reset failed');
+                }
+                
+                showToast('✓ Daily limit reset - you can continue generating', 'success');
+                updateDailyUsageDisplay(result.dailyUsage, result.dailyLimits);
+                
+            } catch (error) {
+                console.error('[ENGINE] Reset daily error:', error);
+                showToast('Error: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+        
+        // Update daily usage display
+        function updateDailyUsageDisplay(usage, limits) {
+            const el = document.getElementById('daily-usage-display');
+            if (!el) return;
+            
+            if (usage && limits) {
+                const percent = Math.round((usage.scenariosGenerated / limits.maxScenarios) * 100);
+                const color = percent >= 90 ? '#ef4444' : percent >= 70 ? '#fb923c' : '#22c55e';
+                el.innerHTML = `<span style="color: ${color};">📊 Today: ${usage.scenariosGenerated}/${limits.maxScenarios} scenarios</span>`;
+            } else {
+                el.innerHTML = '';
+            }
+        }
         
         // Generate All Gaps - creates a job to fill all coverage gaps
         async function generateAllGaps() {

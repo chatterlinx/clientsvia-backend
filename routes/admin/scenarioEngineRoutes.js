@@ -154,6 +154,8 @@ router.get('/coverage/:templateId', async (req, res) => {
                     cooldownUntil: state.cooldownUntil,
                     blockedServices: state.blockedServices.length
                 },
+                dailyUsage: state.dailyUsage,
+                dailyLimits: state.dailyLimits,
                 activeJob: activeJob ? {
                     jobId: activeJob._id,
                     status: activeJob.status,
@@ -798,6 +800,79 @@ router.get('/state/:templateId', async (req, res) => {
         
         res.json({ success: true, state });
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /reset-daily
+ * Reset daily usage counters (allows continuing work after hitting limit)
+ */
+router.post('/reset-daily', async (req, res) => {
+    try {
+        const { templateId, companyId } = req.body;
+        
+        if (!templateId) {
+            return res.status(400).json({ error: 'templateId required' });
+        }
+        
+        const state = await ScenarioEngineState.getOrCreate(templateId, companyId);
+        
+        // Reset daily counters
+        state.dailyUsage = {
+            date: new Date().toISOString().split('T')[0],
+            tokensUsed: 0,
+            requestsUsed: 0,
+            scenariosGenerated: 0,
+            estimatedCost: 0
+        };
+        
+        await state.save();
+        
+        logger.info('[SCENARIO ENGINE] Daily usage reset', { templateId, companyId, by: req.user?.name || 'Admin' });
+        
+        res.json({ 
+            success: true, 
+            message: 'Daily usage counters reset',
+            dailyUsage: state.dailyUsage,
+            dailyLimits: state.dailyLimits
+        });
+    } catch (error) {
+        logger.error('[SCENARIO ENGINE] Reset daily error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * PUT /limits
+ * Update daily limits
+ */
+router.put('/limits', async (req, res) => {
+    try {
+        const { templateId, companyId, maxScenarios, maxTokens, maxRequests } = req.body;
+        
+        if (!templateId) {
+            return res.status(400).json({ error: 'templateId required' });
+        }
+        
+        const state = await ScenarioEngineState.getOrCreate(templateId, companyId);
+        
+        // Update limits
+        if (maxScenarios !== undefined) state.dailyLimits.maxScenarios = maxScenarios;
+        if (maxTokens !== undefined) state.dailyLimits.maxTokens = maxTokens;
+        if (maxRequests !== undefined) state.dailyLimits.maxRequests = maxRequests;
+        
+        await state.save();
+        
+        logger.info('[SCENARIO ENGINE] Limits updated', { templateId, companyId, limits: state.dailyLimits, by: req.user?.name || 'Admin' });
+        
+        res.json({ 
+            success: true, 
+            message: 'Limits updated',
+            dailyLimits: state.dailyLimits
+        });
+    } catch (error) {
+        logger.error('[SCENARIO ENGINE] Update limits error', { error: error.message });
         res.status(500).json({ error: error.message });
     }
 });
