@@ -1251,9 +1251,9 @@
             <span class="badge" id="health-badge">--</span>
         </button>
         <button class="sub-tab" data-tab="blueprint" onclick="switchTab('blueprint')">
-            <i class="fas fa-drafting-compass"></i>
-            Blueprint Builder
-            <span class="badge" id="blueprint-badge" style="background: #8b5cf6;">NEW</span>
+            <i class="fas fa-brain"></i>
+            Scenario Generation
+            <span class="badge" id="blueprint-badge" style="background: #22c55e;"></span>
         </button>
         <button class="sub-tab" data-tab="company-local" onclick="switchTab('company-local')">
             <i class="fas fa-building"></i>
@@ -2413,75 +2413,29 @@
             </div>
         </div><!-- END tab-audit -->
         
-        <!-- TAB 3: Blueprint Builder -->
+        <!-- TAB 3: Scenario Generation (formerly Blueprint Builder) -->
         <div class="tab-content" id="tab-blueprint">
+            <!-- Clean header - no dangerous buttons -->
             <div class="audit-header">
                 <div>
-                    <h2 style="margin-bottom: 4px;"><i class="fas fa-drafting-compass"></i> Blueprint Builder</h2>
+                    <h2 style="margin-bottom: 4px;"><i class="fas fa-brain"></i> Scenario Generation</h2>
                     <p style="color: var(--text-secondary); font-size: 14px;">
-                        Generate scenarios from industry blueprints - mass-create 200+ content-only scenarios
+                        Control services, generate scenarios with AI, and review before publishing
                     </p>
                 </div>
-                <div class="audit-actions" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <select id="blueprint-select" style="padding: 10px 16px; border-radius: 8px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.1); color: white; font-size: 14px;">
-                        <option value="hvac">🔧 HVAC Blueprint</option>
-                        <option value="plumbing" disabled>🔧 Plumbing (Coming Soon)</option>
-                        <option value="electrical" disabled>⚡ Electrical (Coming Soon)</option>
-                        <option value="accounting" disabled>📊 Accounting (Coming Soon)</option>
-                    </select>
-                    <button class="run-audit-btn" onclick="runBlueprintAssessment()" id="run-blueprint-btn">
-                        <i class="fas fa-chart-pie"></i>
-                        Assess Coverage
-                    </button>
-                    <div style="display: flex; gap: 4px;">
-                        <!-- Spec dropdown -->
-                        <div style="position: relative;" class="json-dropdown">
-                            <button onclick="toggleDropdown('spec-dropdown')" style="padding: 10px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Blueprint Spec JSON">
-                                <i class="fas fa-file-code"></i> Spec <i class="fas fa-caret-down" style="margin-left: 4px; font-size: 10px;"></i>
-                            </button>
-                            <div id="spec-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; z-index: 100; min-width: 140px;">
-                                <button onclick="copyBlueprintSpec(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
-                                <button onclick="downloadBlueprintSpec(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
-                                    <i class="fas fa-download"></i> Download
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Assess dropdown -->
-                        <div style="position: relative;" class="json-dropdown">
-                            <button onclick="toggleDropdown('assess-dropdown')" style="padding: 10px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Assessment JSON">
-                                <i class="fas fa-clipboard-list"></i> Assess <i class="fas fa-caret-down" style="margin-left: 4px; font-size: 10px;"></i>
-                            </button>
-                            <div id="assess-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; z-index: 100; min-width: 140px;">
-                                <button onclick="copyBlueprintAssess(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
-                                <button onclick="downloadBlueprintAssess(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
-                                    <i class="fas fa-download"></i> Download
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Results dropdown -->
-                        <div style="position: relative;" class="json-dropdown">
-                            <button onclick="toggleDropdown('results-dropdown')" style="padding: 10px 12px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Full Results JSON">
-                                <i class="fas fa-file-export"></i> Results <i class="fas fa-caret-down" style="margin-left: 4px; font-size: 10px;"></i>
-                            </button>
-                            <div id="results-dropdown" class="dropdown-menu" style="display: none; position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; overflow: hidden; z-index: 100; min-width: 140px;">
-                                <button onclick="copyResultsJson(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
-                                    <i class="fas fa-copy"></i> Copy
-                                </button>
-                                <button onclick="downloadResultsJson(); hideDropdowns();" style="display: block; width: 100%; padding: 10px 16px; background: transparent; border: none; color: white; cursor: pointer; text-align: left; font-size: 13px;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
-                                    <i class="fas fa-download"></i> Download
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Import button -->
-                        <button onclick="openImportBlueprintModal()" style="padding: 10px 12px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 13px;" title="Import Blueprint JSON">
-                            <i class="fas fa-upload"></i> Import
-                        </button>
-                    </div>
-                </div>
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════════════════════════
+                 LEGACY BLUEPRINT HEADER - HIDDEN (kept for backwards compatibility)
+                 Contains dangerous "Fix All" and "Import" buttons that bypass review queue
+                 ═══════════════════════════════════════════════════════════════════════════════ -->
+            <div id="legacy-blueprint-header" style="display: none;">
+                <select id="blueprint-select" style="padding: 10px 16px; border-radius: 8px; background: var(--bg-secondary); border: 1px solid rgba(255,255,255,0.1); color: white; font-size: 14px;">
+                    <option value="hvac">🔧 HVAC Blueprint</option>
+                    <option value="plumbing" disabled>🔧 Plumbing (Coming Soon)</option>
+                    <option value="electrical" disabled>⚡ Electrical (Coming Soon)</option>
+                    <option value="accounting" disabled>📊 Accounting (Coming Soon)</option>
+                </select>
             </div>
             
             <!-- ═══════════════════════════════════════════════════════════════════════════ -->
