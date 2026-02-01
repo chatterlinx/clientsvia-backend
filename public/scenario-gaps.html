@@ -8090,16 +8090,30 @@
                 html += `<div style="grid-column: 1 / -1; font-size: 12px; color: #a78bfa; margin-top: 12px; font-weight: 600;">${escapeHtml(category)}</div>`;
                 
                 for (const s of services) {
+                    // Use same effectiveSource logic as Switchboard
+                    const effectiveSource = s.effectiveSource || s.source || 'global';
+                    const sourceIcon = effectiveSource === 'global' ? '📌' : '🏢';
+                    const sourceLabel = effectiveSource === 'global' ? 'Global' : 'Local';
+                    const sourceColor = effectiveSource === 'global' ? '#22d3ee' : '#fb923c';
+                    
+                    // Show type badge for V1.2 services
+                    const serviceType = s.serviceType || 'work';
+                    const typeBadge = serviceType === 'symptom' 
+                        ? '<span style="background: rgba(251, 146, 60, 0.2); color: #fb923c; padding: 2px 6px; border-radius: 4px; font-size: 9px; margin-left: 4px;">SYMPTOM</span>'
+                        : serviceType === 'admin'
+                        ? '<span style="background: rgba(168, 85, 247, 0.2); color: #a855f7; padding: 2px 6px; border-radius: 4px; font-size: 9px; margin-left: 4px;">ADMIN</span>'
+                        : '';
+                    
                     html += `
                         <div class="service-select-card" 
                              onclick="selectServiceForGeneration('${escapeHtml(s.serviceKey)}')"
                              style="padding: 16px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; cursor: pointer; transition: all 0.2s;"
                              onmouseover="this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.background='rgba(139, 92, 246, 0.1)';"
                              onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'; this.style.background='var(--bg-primary)';">
-                            <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(s.displayName)}</div>
+                            <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(s.displayName)}${typeBadge}</div>
                             <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(s.serviceKey)}</div>
-                            <div style="font-size: 11px; color: #a78bfa; margin-top: 4px;">
-                                <i class="fas fa-database"></i> ${s.source === 'global' ? 'Global' : 'Local'}
+                            <div style="font-size: 11px; color: ${sourceColor}; margin-top: 4px;">
+                                ${sourceIcon} ${sourceLabel}
                             </div>
                         </div>
                     `;
