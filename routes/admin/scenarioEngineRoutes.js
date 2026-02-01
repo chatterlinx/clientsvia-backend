@@ -27,7 +27,7 @@ const logger = require('../../utils/logger');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 const ServiceCatalog = require('../../models/ServiceCatalog');
 const ServiceSwitchboard = require('../../models/ServiceSwitchboard');
-const DeepAuditResult = require('../../models/DeepAuditResult');
+const ScenarioAuditResult = require('../../models/ScenarioAuditResult');
 const v2Company = require('../../models/v2Company');
 
 // Services
@@ -82,7 +82,7 @@ router.get('/coverage/:templateId', async (req, res) => {
         // Get audit results for this template
         let auditResults = [];
         try {
-            const auditDocs = await DeepAuditResult.find({ 
+            const auditDocs = await ScenarioAuditResult.find({ 
                 templateId,
                 'results.0': { $exists: true }
             }).sort({ createdAt: -1 }).limit(1);
@@ -166,7 +166,7 @@ router.get('/coverage/:templateId/export', async (req, res) => {
         // Get audit results
         let auditResults = [];
         try {
-            const auditDocs = await DeepAuditResult.find({ 
+            const auditDocs = await ScenarioAuditResult.find({ 
                 templateId,
                 'results.0': { $exists: true }
             }).sort({ createdAt: -1 }).limit(1);
