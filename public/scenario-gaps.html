@@ -2553,6 +2553,9 @@
                                    style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; font-size: 13px; width: 200px;">
                         </div>
                         <div style="display: flex; gap: 8px;">
+                            <button onclick="copyServicesListToClipboard()" style="padding: 8px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #3b82f6; cursor: pointer; font-size: 12px;" title="Copy services list to clipboard">
+                                <i class="fas fa-copy"></i> Copy List
+                            </button>
                             <button onclick="openAddServiceModal()" style="padding: 8px 12px; background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 6px; color: #22c55e; cursor: pointer; font-size: 12px;">
                                 <i class="fas fa-plus"></i> Add Service
                             </button>
@@ -7590,8 +7593,115 @@
             addNewService(serviceKey.toLowerCase().replace(/\s+/g, '_'), displayName);
         }
         
+        // Copy services list to clipboard
+        async function copyServicesListToClipboard() {
+            if (!switchboardData || !switchboardData.services) {
+                showToast('No services loaded', 'error');
+                return;
+            }
+            
+            const services = switchboardData.services;
+            
+            // Group by category
+            const grouped = {};
+            services.forEach(s => {
+                const cat = s.category || 'General';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(s);
+            });
+            
+            // Build text output
+            let text = `SERVICE CATALOG REVIEW\n`;
+            text += `========================\n`;
+            text += `Template: ${switchboardData.templateName || 'N/A'}\n`;
+            text += `Total Services: ${services.length}\n`;
+            text += `Enabled: ${services.filter(s => s.enabled).length}\n`;
+            text += `Disabled: ${services.filter(s => !s.enabled).length}\n`;
+            text += `\n`;
+            
+            // Stats by status
+            const enabledGlobal = services.filter(s => s.enabled && s.source === 'global').length;
+            const enabledLocal = services.filter(s => s.enabled && s.source === 'companyLocal').length;
+            text += `ROUTING:\n`;
+            text += `- Global Template: ${enabledGlobal}\n`;
+            text += `- Company Local: ${enabledLocal}\n`;
+            text += `\n`;
+            
+            text += `═══════════════════════════════════════\n`;
+            text += `SERVICES BY CATEGORY\n`;
+            text += `═══════════════════════════════════════\n\n`;
+            
+            // Sort categories
+            const sortedCategories = Object.keys(grouped).sort();
+            
+            for (const category of sortedCategories) {
+                const categoryServices = grouped[category];
+                const enabledInCat = categoryServices.filter(s => s.enabled).length;
+                
+                text += `📁 ${category} (${enabledInCat}/${categoryServices.length} enabled)\n`;
+                text += `${'─'.repeat(40)}\n`;
+                
+                for (const s of categoryServices) {
+                    const status = s.enabled ? '✅' : '❌';
+                    const source = s.enabled ? (s.source === 'global' ? '[Global]' : '[Local]') : '[OFF]';
+                    text += `${status} ${s.displayName}\n`;
+                    text += `   Key: ${s.serviceKey}\n`;
+                    text += `   Source: ${source}\n`;
+                    if (!s.enabled && s.customDeclineMessage) {
+                        text += `   Decline: "${s.customDeclineMessage}"\n`;
+                    }
+                    text += `\n`;
+                }
+                text += `\n`;
+            }
+            
+            // Add disabled services summary
+            const disabledServices = services.filter(s => !s.enabled);
+            if (disabledServices.length > 0) {
+                text += `═══════════════════════════════════════\n`;
+                text += `DISABLED SERVICES (${disabledServices.length})\n`;
+                text += `═══════════════════════════════════════\n`;
+                disabledServices.forEach(s => {
+                    text += `❌ ${s.displayName} (${s.serviceKey})\n`;
+                });
+                text += `\n`;
+            }
+            
+            // Add JSON for programmatic use
+            text += `═══════════════════════════════════════\n`;
+            text += `JSON EXPORT\n`;
+            text += `═══════════════════════════════════════\n`;
+            text += JSON.stringify({
+                exportedAt: new Date().toISOString(),
+                templateId: switchboardData.templateId,
+                templateName: switchboardData.templateName,
+                summary: {
+                    total: services.length,
+                    enabled: services.filter(s => s.enabled).length,
+                    disabled: services.filter(s => !s.enabled).length,
+                    global: enabledGlobal,
+                    local: enabledLocal
+                },
+                services: services.map(s => ({
+                    serviceKey: s.serviceKey,
+                    displayName: s.displayName,
+                    category: s.category,
+                    enabled: s.enabled,
+                    source: s.source
+                }))
+            }, null, 2);
+            
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('Services list copied to clipboard!', 'success');
+            } catch (err) {
+                console.error('Copy failed:', err);
+                // Fallback: show in alert
+                prompt('Copy this text:', text.substring(0, 1000) + '...');
+            }
+        }
+        
         // Add new service
-        async function addNewService(serviceKey, displayName) {
             try {
                 const templateId = window.globalTemplateId;
                 
