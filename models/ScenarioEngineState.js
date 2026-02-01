@@ -137,7 +137,7 @@ const scenarioEngineStateSchema = new Schema({
         },
         maxScenarios: {
             type: Number,
-            default: 200
+            default: 500
         }
     },
     
