@@ -2484,6 +2484,229 @@
                 </div>
             </div>
             
+            <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+            <!-- SERVICE SWITCHBOARD PANEL (Jan 2026) - Control Plane for AI Agent -->
+            <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+            <div id="service-switchboard-panel" style="margin-bottom: 24px;">
+                <!-- Switchboard Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: linear-gradient(135deg, rgba(14, 116, 144, 0.15), rgba(6, 182, 212, 0.1)); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px 12px 0 0; cursor: pointer;"
+                     onclick="toggleSwitchboardExpand()">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-toggle-on" style="font-size: 20px; color: #22d3ee;"></i>
+                        <div>
+                            <h3 style="margin: 0; font-size: 16px; color: white;">
+                                Service Switchboard
+                                <span id="switchboard-stats-badge" style="font-size: 12px; color: #22d3ee; margin-left: 8px;"></span>
+                            </h3>
+                            <p style="margin: 0; font-size: 12px; color: var(--text-muted);">
+                                Toggle services ON/OFF • Controls what your AI agent offers
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <button onclick="event.stopPropagation(); loadServiceSwitchboard()" 
+                                style="padding: 6px 12px; background: rgba(6, 182, 212, 0.2); border: 1px solid rgba(6, 182, 212, 0.4); border-radius: 6px; color: #22d3ee; cursor: pointer; font-size: 12px;">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                        <i class="fas fa-chevron-down" id="switchboard-expand-icon" style="color: #22d3ee; transition: transform 0.2s;"></i>
+                    </div>
+                </div>
+                
+                <!-- Switchboard Content (Collapsible) -->
+                <div id="switchboard-content" style="display: none; padding: 20px; background: var(--bg-secondary); border: 1px solid rgba(6, 182, 212, 0.2); border-top: none; border-radius: 0 0 12px 12px;">
+                    <!-- Quick Stats -->
+                    <div id="switchboard-quick-stats" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px;">
+                        <div class="stat-box" style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); padding: 12px; border-radius: 8px; text-align: center;">
+                            <div id="sw-enabled-count" style="font-size: 24px; font-weight: 700; color: #22c55e;">--</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Enabled</div>
+                        </div>
+                        <div class="stat-box" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); padding: 12px; border-radius: 8px; text-align: center;">
+                            <div id="sw-disabled-count" style="font-size: 24px; font-weight: 700; color: #ef4444;">--</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Disabled</div>
+                        </div>
+                        <div class="stat-box" style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); padding: 12px; border-radius: 8px; text-align: center;">
+                            <div id="sw-global-count" style="font-size: 24px; font-weight: 700; color: #a78bfa;">--</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Global</div>
+                        </div>
+                        <div class="stat-box" style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); padding: 12px; border-radius: 8px; text-align: center;">
+                            <div id="sw-local-count" style="font-size: 24px; font-weight: 700; color: #fbbf24;">--</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Company Local</div>
+                        </div>
+                        <div class="stat-box" style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); padding: 12px; border-radius: 8px; text-align: center;">
+                            <div id="sw-total-count" style="font-size: 24px; font-weight: 700; color: #6366f1;">--</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">Total Services</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Filter & Actions -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <div style="display: flex; gap: 8px;">
+                            <select id="switchboard-filter" onchange="filterSwitchboardServices()" style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; font-size: 13px;">
+                                <option value="all">All Services</option>
+                                <option value="enabled">Enabled Only</option>
+                                <option value="disabled">Disabled Only</option>
+                                <option value="global">Global Source</option>
+                                <option value="local">Company Local</option>
+                            </select>
+                            <input type="text" id="switchboard-search" placeholder="Search services..." 
+                                   oninput="filterSwitchboardServices()"
+                                   style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; font-size: 13px; width: 200px;">
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button onclick="openAddServiceModal()" style="padding: 8px 12px; background: rgba(34, 197, 94, 0.2); border: 1px solid rgba(34, 197, 94, 0.4); border-radius: 6px; color: #22c55e; cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-plus"></i> Add Service
+                            </button>
+                            <button onclick="seedDefaultServices()" id="seed-services-btn" style="padding: 8px 12px; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 6px; color: #a78bfa; cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-seedling"></i> Seed HVAC Defaults
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Service Toggle Table -->
+                    <div id="switchboard-services-list" style="max-height: 400px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px;">
+                        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                            <p>Loading services...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Switchboard Footer -->
+                    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); display: flex; justify-content: space-between; align-items: center;">
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            <i class="fas fa-info-circle"></i>
+                            Disabled services will decline politely. Enabled services route to scenarios.
+                        </div>
+                        <button onclick="saveSwitchboardChanges()" id="save-switchboard-btn" 
+                                style="padding: 8px 16px; background: linear-gradient(135deg, #22d3ee, #0e7490); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600; display: none;">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </div>
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- SCENARIO GENERATION SECTION -->
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <div id="scenario-generation-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(139, 92, 246, 0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <div>
+                                <h4 style="margin: 0; font-size: 15px; color: #a78bfa;">
+                                    <i class="fas fa-magic"></i> Scenario Generation
+                                </h4>
+                                <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">
+                                    Generate scenarios for services • One card at a time • Deep Audit verified
+                                </p>
+                            </div>
+                            <button onclick="openGenerationPanel()" 
+                                    style="padding: 8px 16px; background: linear-gradient(135deg, #8b5cf6, #6366f1); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600;">
+                                <i class="fas fa-play"></i> Start Generation
+                            </button>
+                        </div>
+                        
+                        <!-- Coverage Progress -->
+                        <div id="generation-coverage" style="display: none; padding: 16px; background: rgba(139, 92, 246, 0.1); border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 13px; color: white;">Scenario Coverage</span>
+                                <span id="coverage-percent" style="font-size: 13px; font-weight: 700; color: #a78bfa;">0%</span>
+                            </div>
+                            <div style="height: 8px; background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden;">
+                                <div id="coverage-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #8b5cf6, #22c55e); transition: width 0.3s;"></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--text-muted);">
+                                <span><span id="coverage-actual">0</span> scenarios</span>
+                                <span>Target: <span id="coverage-target">200</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+            <!-- SCENARIO GENERATION MODAL (Deep Audit Style) -->
+            <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+            <div id="generation-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto;">
+                <div style="max-width: 900px; margin: 40px auto; padding: 24px; background: var(--bg-secondary); border-radius: 16px; border: 1px solid rgba(139, 92, 246, 0.3);">
+                    <!-- Modal Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                        <div>
+                            <h2 style="margin: 0; font-size: 20px; color: white;">
+                                <i class="fas fa-magic" style="color: #a78bfa;"></i> Scenario Generation
+                            </h2>
+                            <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-muted);">
+                                Review each card • Approve to save • Auto Deep Audit
+                            </p>
+                        </div>
+                        <button onclick="closeGenerationModal()" style="width: 36px; height: 36px; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 18px;">
+                            &times;
+                        </button>
+                    </div>
+                    
+                    <!-- Step 1: Select Service -->
+                    <div id="gen-step-1" style="display: block;">
+                        <h3 style="font-size: 16px; margin-bottom: 16px; color: white;">
+                            <span style="display: inline-block; width: 24px; height: 24px; background: #8b5cf6; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; margin-right: 8px;">1</span>
+                            Select Service to Generate
+                        </h3>
+                        <div id="service-select-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto;">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2: Generating -->
+                    <div id="gen-step-2" style="display: none; text-align: center; padding: 60px 20px;">
+                        <i class="fas fa-cog fa-spin" style="font-size: 48px; color: #8b5cf6; margin-bottom: 20px;"></i>
+                        <h3 style="margin-bottom: 8px; color: white;">Generating Scenarios...</h3>
+                        <p style="color: var(--text-muted);">GPT-4 is creating scenarios for <span id="gen-service-name"></span></p>
+                        <div style="margin-top: 20px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; font-family: monospace; font-size: 12px; color: #a78bfa;">
+                            <div id="gen-progress-log"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3: Card Review (ONE AT A TIME) -->
+                    <div id="gen-step-3" style="display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h3 style="font-size: 16px; margin: 0; color: white;">
+                                <span style="display: inline-block; width: 24px; height: 24px; background: #8b5cf6; border-radius: 50%; text-align: center; line-height: 24px; font-size: 12px; margin-right: 8px;">2</span>
+                                Review Card <span id="card-position">1</span> of <span id="card-total">8</span>
+                            </h3>
+                            <div style="display: flex; gap: 8px;">
+                                <button onclick="skipCurrentCard()" style="padding: 8px 16px; background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: var(--text-muted); cursor: pointer; font-size: 13px;">
+                                    <i class="fas fa-forward"></i> Skip
+                                </button>
+                                <button onclick="approveCurrentCard()" id="approve-card-btn" style="padding: 8px 16px; background: linear-gradient(135deg, #22c55e, #16a34a); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 600;">
+                                    <i class="fas fa-check"></i> Approve & Save
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Current Card Display -->
+                        <div id="current-card-display" style="background: var(--bg-primary); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 12px; overflow: hidden;">
+                            <!-- Card content populated by JS -->
+                        </div>
+                        
+                        <!-- Card Progress -->
+                        <div style="margin-top: 16px; display: flex; gap: 4px;" id="card-progress-dots">
+                            <!-- Dots populated by JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- Step 4: Complete -->
+                    <div id="gen-step-4" style="display: none; text-align: center; padding: 60px 20px;">
+                        <i class="fas fa-check-circle" style="font-size: 64px; color: #22c55e; margin-bottom: 20px;"></i>
+                        <h3 style="margin-bottom: 8px; color: white;">Generation Complete!</h3>
+                        <p style="color: var(--text-muted); margin-bottom: 24px;">
+                            <span id="gen-approved-count">0</span> scenarios saved • <span id="gen-skipped-count">0</span> skipped
+                        </p>
+                        <div style="display: flex; justify-content: center; gap: 12px;">
+                            <button onclick="startAnotherService()" style="padding: 10px 20px; background: rgba(139, 92, 246, 0.2); border: 1px solid rgba(139, 92, 246, 0.4); border-radius: 8px; color: #a78bfa; cursor: pointer; font-size: 14px;">
+                                <i class="fas fa-plus"></i> Generate More
+                            </button>
+                            <button onclick="closeGenerationModal()" style="padding: 10px 20px; background: linear-gradient(135deg, #22c55e, #16a34a); border: none; border-radius: 8px; color: white; cursor: pointer; font-size: 14px; font-weight: 600;">
+                                <i class="fas fa-check"></i> Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Blueprint Coverage Summary -->
             <div id="blueprint-summary" style="display: none;">
                 <!-- Mode Banner (populated by JS) -->
@@ -6980,6 +7203,837 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // SERVICE SWITCHBOARD FUNCTIONS (Jan 2026)
+        // ════════════════════════════════════════════════════════════════════════════════
+        // The Control Plane - toggle services ON/OFF for the AI agent
+        
+        let switchboardData = null;
+        let switchboardExpanded = false;
+        let switchboardPendingChanges = [];
+        
+        // Toggle expand/collapse
+        function toggleSwitchboardExpand() {
+            switchboardExpanded = !switchboardExpanded;
+            const content = document.getElementById('switchboard-content');
+            const icon = document.getElementById('switchboard-expand-icon');
+            
+            if (switchboardExpanded) {
+                content.style.display = 'block';
+                icon.style.transform = 'rotate(180deg)';
+                if (!switchboardData) {
+                    loadServiceSwitchboard();
+                }
+                // Load coverage stats
+                loadGenerationCoverage();
+            } else {
+                content.style.display = 'none';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+        
+        // Load switchboard data
+        async function loadServiceSwitchboard() {
+            const listEl = document.getElementById('switchboard-services-list');
+            listEl.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
+                    <p>Loading services...</p>
+                </div>
+            `;
+            
+            try {
+                // Get the templateId from global state
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    listEl.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 24px; margin-bottom: 12px; color: #f59e0b;"></i>
+                            <p>No template bound to this company</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const response = await fetch(`/api/admin/service-catalog/company/${companyId}?templateId=${templateId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load switchboard');
+                }
+                
+                const result = await response.json();
+                switchboardData = result.switchboard;
+                
+                // Update stats badge
+                const stats = switchboardData.stats || {};
+                document.getElementById('switchboard-stats-badge').textContent = 
+                    `${stats.enabledCount || 0}/${stats.totalServices || 0} enabled`;
+                
+                // Update quick stats
+                document.getElementById('sw-enabled-count').textContent = stats.enabledCount || 0;
+                document.getElementById('sw-disabled-count').textContent = stats.disabledCount || 0;
+                document.getElementById('sw-global-count').textContent = stats.globalSourceCount || 0;
+                document.getElementById('sw-local-count').textContent = stats.localSourceCount || 0;
+                document.getElementById('sw-total-count').textContent = stats.totalServices || 0;
+                
+                // Show/hide seed button
+                const seedBtn = document.getElementById('seed-services-btn');
+                seedBtn.style.display = (stats.totalServices || 0) < 5 ? 'inline-flex' : 'none';
+                
+                // Render services list
+                renderSwitchboardServices(switchboardData.services || []);
+                
+                console.log('[SWITCHBOARD] Loaded', {
+                    services: (switchboardData.services || []).length,
+                    stats: stats
+                });
+                
+            } catch (error) {
+                console.error('[SWITCHBOARD] Error loading:', error);
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #ef4444;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 24px; margin-bottom: 12px;"></i>
+                        <p>Error loading services: ${error.message}</p>
+                        <button onclick="loadServiceSwitchboard()" style="margin-top: 12px; padding: 8px 16px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; cursor: pointer;">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        // Render services table
+        function renderSwitchboardServices(services) {
+            const listEl = document.getElementById('switchboard-services-list');
+            const filter = document.getElementById('switchboard-filter').value;
+            const search = (document.getElementById('switchboard-search').value || '').toLowerCase();
+            
+            // Filter services
+            let filtered = services;
+            if (filter === 'enabled') {
+                filtered = services.filter(s => s.enabled);
+            } else if (filter === 'disabled') {
+                filtered = services.filter(s => !s.enabled);
+            } else if (filter === 'global') {
+                filtered = services.filter(s => s.enabled && s.source === 'global');
+            } else if (filter === 'local') {
+                filtered = services.filter(s => s.enabled && s.source === 'companyLocal');
+            }
+            
+            if (search) {
+                filtered = filtered.filter(s => 
+                    s.serviceKey.toLowerCase().includes(search) ||
+                    (s.displayName || '').toLowerCase().includes(search)
+                );
+            }
+            
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 12px;"></i>
+                        <p>No services match your filter</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Group by category (we don't have category in switchboard, so use serviceKey prefix)
+            const grouped = {};
+            filtered.forEach(s => {
+                const category = s.category || 'General';
+                if (!grouped[category]) grouped[category] = [];
+                grouped[category].push(s);
+            });
+            
+            let html = '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+            html += `
+                <thead>
+                    <tr style="background: var(--bg-primary); position: sticky; top: 0; z-index: 10;">
+                        <th style="padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">Service</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 80px;">Enabled</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 120px;">Source</th>
+                        <th style="padding: 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.1); width: 60px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            for (const [category, categoryServices] of Object.entries(grouped)) {
+                // Category header row
+                html += `
+                    <tr style="background: rgba(139, 92, 246, 0.1);">
+                        <td colspan="4" style="padding: 8px 12px; font-weight: 600; color: #a78bfa;">
+                            <i class="fas fa-folder"></i> ${escapeHtml(category)}
+                            <span style="font-weight: normal; color: var(--text-muted); margin-left: 8px;">(${categoryServices.length})</span>
+                        </td>
+                    </tr>
+                `;
+                
+                // Service rows
+                for (const s of categoryServices) {
+                    const enabledClass = s.enabled ? 'background: rgba(34, 197, 94, 0.1)' : 'background: rgba(239, 68, 68, 0.05)';
+                    const toggleColor = s.enabled ? '#22c55e' : '#6b7280';
+                    
+                    html += `
+                        <tr style="${enabledClass}" data-service-key="${escapeHtml(s.serviceKey)}">
+                            <td style="padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <div style="font-weight: 500;">${escapeHtml(s.displayName || s.serviceKey)}</div>
+                                <div style="font-size: 11px; color: var(--text-muted); font-family: monospace;">${escapeHtml(s.serviceKey)}</div>
+                            </td>
+                            <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <label class="toggle-switch" style="cursor: pointer;">
+                                    <input type="checkbox" 
+                                           ${s.enabled ? 'checked' : ''} 
+                                           onchange="onServiceToggleChange('${escapeHtml(s.serviceKey)}', this.checked)"
+                                           style="display: none;">
+                                    <span style="display: inline-block; width: 40px; height: 22px; background: ${s.enabled ? '#22c55e' : '#374151'}; border-radius: 11px; position: relative; transition: background 0.2s;">
+                                        <span style="position: absolute; top: 2px; left: ${s.enabled ? '20px' : '2px'}; width: 18px; height: 18px; background: white; border-radius: 50%; transition: left 0.2s;"></span>
+                                    </span>
+                                </label>
+                            </td>
+                            <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <select onchange="onServiceSourceChange('${escapeHtml(s.serviceKey)}', this.value)"
+                                        style="padding: 4px 8px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: white; font-size: 11px;"
+                                        ${s.enabled ? '' : 'disabled'}>
+                                    <option value="global" ${s.source === 'global' ? 'selected' : ''}>Global</option>
+                                    <option value="companyLocal" ${s.source === 'companyLocal' ? 'selected' : ''}>Company Local</option>
+                                </select>
+                            </td>
+                            <td style="padding: 10px 12px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <button onclick="editServiceDecline('${escapeHtml(s.serviceKey)}')" 
+                                        style="padding: 4px 8px; background: transparent; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; color: var(--text-muted); cursor: pointer; font-size: 11px;"
+                                        title="Edit decline message">
+                                    <i class="fas fa-comment-slash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+            
+            html += '</tbody></table>';
+            listEl.innerHTML = html;
+        }
+        
+        // Filter services
+        function filterSwitchboardServices() {
+            if (switchboardData && switchboardData.services) {
+                renderSwitchboardServices(switchboardData.services);
+            }
+        }
+        
+        // Handle toggle change
+        function onServiceToggleChange(serviceKey, enabled) {
+            console.log('[SWITCHBOARD] Toggle:', serviceKey, enabled);
+            
+            // Track change
+            const existing = switchboardPendingChanges.find(c => c.serviceKey === serviceKey);
+            if (existing) {
+                existing.enabled = enabled;
+            } else {
+                switchboardPendingChanges.push({ serviceKey, enabled });
+            }
+            
+            // Save immediately
+            saveServiceToggle(serviceKey, { enabled });
+        }
+        
+        // Handle source change
+        function onServiceSourceChange(serviceKey, source) {
+            console.log('[SWITCHBOARD] Source:', serviceKey, source);
+            saveServiceToggle(serviceKey, { source });
+        }
+        
+        // Save a single service toggle
+        async function saveServiceToggle(serviceKey, settings) {
+            try {
+                const templateId = window.globalTemplateId;
+                const response = await fetch(`/api/admin/service-catalog/company/${companyId}/toggle/${serviceKey}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateId,
+                        ...settings
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to save');
+                }
+                
+                const result = await response.json();
+                console.log('[SWITCHBOARD] Saved:', result);
+                
+                // Update local data
+                if (switchboardData && switchboardData.services) {
+                    const service = switchboardData.services.find(s => s.serviceKey === serviceKey);
+                    if (service) {
+                        if (settings.enabled !== undefined) service.enabled = settings.enabled;
+                        if (settings.source !== undefined) service.source = settings.source;
+                    }
+                }
+                
+                // Update stats
+                if (result.stats) {
+                    document.getElementById('sw-enabled-count').textContent = result.stats.enabledCount || 0;
+                    document.getElementById('sw-disabled-count').textContent = result.stats.disabledCount || 0;
+                    document.getElementById('sw-global-count').textContent = result.stats.globalSourceCount || 0;
+                    document.getElementById('sw-local-count').textContent = result.stats.localSourceCount || 0;
+                    document.getElementById('switchboard-stats-badge').textContent = 
+                        `${result.stats.enabledCount || 0}/${result.stats.totalServices || 0} enabled`;
+                }
+                
+                // Re-render to update UI state
+                if (switchboardData && switchboardData.services) {
+                    renderSwitchboardServices(switchboardData.services);
+                }
+                
+                showToast('Service updated', 'success');
+                
+            } catch (error) {
+                console.error('[SWITCHBOARD] Error saving:', error);
+                showToast('Failed to save: ' + error.message, 'error');
+            }
+        }
+        
+        // Seed default services
+        async function seedDefaultServices() {
+            const btn = document.getElementById('seed-services-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Seeding...';
+            
+            try {
+                const templateId = window.globalTemplateId;
+                
+                // First, seed the catalog
+                const catalogRes = await fetch(`/api/admin/service-catalog/template/${templateId}/seed`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        industryType: 'hvac',
+                        clearExisting: false
+                    })
+                });
+                
+                if (!catalogRes.ok) {
+                    throw new Error('Failed to seed catalog');
+                }
+                
+                const catalogResult = await catalogRes.json();
+                console.log('[SWITCHBOARD] Seeded catalog:', catalogResult);
+                
+                // Then, sync switchboard from catalog
+                const syncRes = await fetch(`/api/admin/service-catalog/company/${companyId}/sync`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ templateId })
+                });
+                
+                if (!syncRes.ok) {
+                    throw new Error('Failed to sync switchboard');
+                }
+                
+                const syncResult = await syncRes.json();
+                console.log('[SWITCHBOARD] Synced:', syncResult);
+                
+                showToast(`Seeded ${catalogResult.catalog?.serviceCount || 0} services!`, 'success');
+                
+                // Reload switchboard
+                await loadServiceSwitchboard();
+                
+            } catch (error) {
+                console.error('[SWITCHBOARD] Error seeding:', error);
+                showToast('Failed to seed: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-seedling"></i> Seed HVAC Defaults';
+            }
+        }
+        
+        // Edit decline message
+        function editServiceDecline(serviceKey) {
+            const service = switchboardData?.services?.find(s => s.serviceKey === serviceKey);
+            if (!service) return;
+            
+            const currentMessage = service.customDeclineMessage || '';
+            const newMessage = prompt(
+                `Decline message for "${serviceKey}":\n\n(Leave empty to use default)`,
+                currentMessage
+            );
+            
+            if (newMessage !== null && newMessage !== currentMessage) {
+                saveServiceToggle(serviceKey, { customDeclineMessage: newMessage || null });
+            }
+        }
+        
+        // Add service modal (placeholder)
+        function openAddServiceModal() {
+            const serviceKey = prompt('Enter service key (e.g., "dryer_vent_cleaning"):');
+            if (!serviceKey) return;
+            
+            const displayName = prompt('Enter display name (e.g., "Dryer Vent Cleaning"):');
+            if (!displayName) return;
+            
+            addNewService(serviceKey.toLowerCase().replace(/\s+/g, '_'), displayName);
+        }
+        
+        // Add new service
+        async function addNewService(serviceKey, displayName) {
+            try {
+                const templateId = window.globalTemplateId;
+                
+                const response = await fetch(`/api/admin/service-catalog/template/${templateId}/service`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        serviceKey,
+                        displayName,
+                        category: 'Custom',
+                        defaultEnabled: true,
+                        defaultSource: 'companyLocal'
+                    })
+                });
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to add service');
+                }
+                
+                showToast(`Added service: ${displayName}`, 'success');
+                
+                // Sync and reload
+                await fetch(`/api/admin/service-catalog/company/${companyId}/sync`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ templateId })
+                });
+                
+                await loadServiceSwitchboard();
+                
+            } catch (error) {
+                console.error('[SWITCHBOARD] Error adding service:', error);
+                showToast('Failed to add: ' + error.message, 'error');
+            }
+        }
+        
+        // Show toast notification (if not already defined)
+        function showToast(message, type = 'info') {
+            // Check if there's an existing toast function
+            if (typeof showNotification === 'function') {
+                showNotification(message, type);
+                return;
+            }
+            
+            // Simple toast implementation
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                padding: 12px 20px;
+                background: ${type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#3b82f6'};
+                color: white;
+                border-radius: 8px;
+                font-size: 14px;
+                z-index: 10000;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                animation: slideIn 0.3s ease;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // SCENARIO GENERATION FUNCTIONS (Deep Audit Style)
+        // ════════════════════════════════════════════════════════════════════════════════
+        
+        let generationState = {
+            cards: [],
+            currentIndex: 0,
+            approved: 0,
+            skipped: 0,
+            selectedService: null
+        };
+        
+        // Open generation panel/modal
+        function openGenerationPanel() {
+            document.getElementById('generation-modal').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            // Reset state
+            generationState = { cards: [], currentIndex: 0, approved: 0, skipped: 0, selectedService: null };
+            
+            // Show step 1
+            showGenerationStep(1);
+            
+            // Populate service selection
+            populateServiceSelection();
+        }
+        
+        // Close modal
+        function closeGenerationModal() {
+            document.getElementById('generation-modal').style.display = 'none';
+            document.body.style.overflow = '';
+            
+            // Refresh coverage
+            loadGenerationCoverage();
+        }
+        
+        // Show specific step
+        function showGenerationStep(step) {
+            for (let i = 1; i <= 4; i++) {
+                document.getElementById(`gen-step-${i}`).style.display = i === step ? 'block' : 'none';
+            }
+        }
+        
+        // Populate service selection grid
+        function populateServiceSelection() {
+            const grid = document.getElementById('service-select-grid');
+            
+            if (!switchboardData || !switchboardData.services) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
+                        <p>No services loaded. Please refresh the switchboard first.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Filter to enabled services only
+            const enabledServices = switchboardData.services.filter(s => s.enabled);
+            
+            if (enabledServices.length === 0) {
+                grid.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
+                        <p>No enabled services. Enable services in the switchboard first.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Group by category
+            const grouped = {};
+            enabledServices.forEach(s => {
+                const cat = s.category || 'General';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(s);
+            });
+            
+            let html = '';
+            for (const [category, services] of Object.entries(grouped)) {
+                html += `<div style="grid-column: 1 / -1; font-size: 12px; color: #a78bfa; margin-top: 12px; font-weight: 600;">${escapeHtml(category)}</div>`;
+                
+                for (const s of services) {
+                    html += `
+                        <div class="service-select-card" 
+                             onclick="selectServiceForGeneration('${escapeHtml(s.serviceKey)}')"
+                             style="padding: 16px; background: var(--bg-primary); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                             onmouseover="this.style.borderColor='rgba(139, 92, 246, 0.5)'; this.style.background='rgba(139, 92, 246, 0.1)';"
+                             onmouseout="this.style.borderColor='rgba(255,255,255,0.1)'; this.style.background='var(--bg-primary)';">
+                            <div style="font-weight: 500; margin-bottom: 4px;">${escapeHtml(s.displayName)}</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(s.serviceKey)}</div>
+                            <div style="font-size: 11px; color: #a78bfa; margin-top: 4px;">
+                                <i class="fas fa-database"></i> ${s.source === 'global' ? 'Global' : 'Local'}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            grid.innerHTML = html;
+        }
+        
+        // Select service and start generation
+        async function selectServiceForGeneration(serviceKey) {
+            const service = switchboardData.services.find(s => s.serviceKey === serviceKey);
+            if (!service) return;
+            
+            generationState.selectedService = service;
+            
+            // Show step 2 (generating)
+            showGenerationStep(2);
+            document.getElementById('gen-service-name').textContent = service.displayName;
+            document.getElementById('gen-progress-log').innerHTML = 'Initializing GPT-4...<br>';
+            
+            try {
+                const templateId = window.globalTemplateId;
+                
+                // Call generation API
+                const response = await fetch(`/api/admin/scenario-generation/service/${serviceKey}/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateId,
+                        companyId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Generation failed');
+                }
+                
+                const result = await response.json();
+                
+                document.getElementById('gen-progress-log').innerHTML += `Generated ${result.cards?.length || 0} cards<br>`;
+                document.getElementById('gen-progress-log').innerHTML += `Tokens used: ${result.meta?.tokensUsed || 0}<br>`;
+                document.getElementById('gen-progress-log').innerHTML += `Ready for review!<br>`;
+                
+                // Store cards
+                generationState.cards = result.cards || [];
+                generationState.currentIndex = 0;
+                generationState.approved = 0;
+                generationState.skipped = 0;
+                
+                // Wait a moment then show review
+                setTimeout(() => {
+                    if (generationState.cards.length > 0) {
+                        showGenerationStep(3);
+                        renderCurrentCard();
+                    } else {
+                        showGenerationStep(4);
+                        document.getElementById('gen-approved-count').textContent = '0';
+                        document.getElementById('gen-skipped-count').textContent = '0';
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                console.error('[GENERATION] Error:', error);
+                document.getElementById('gen-progress-log').innerHTML += `<span style="color: #ef4444;">Error: ${error.message}</span><br>`;
+            }
+        }
+        
+        // Render current card for review
+        function renderCurrentCard() {
+            const card = generationState.cards[generationState.currentIndex];
+            if (!card) return;
+            
+            const scenario = card.scenario;
+            const display = document.getElementById('current-card-display');
+            
+            // Update position
+            document.getElementById('card-position').textContent = generationState.currentIndex + 1;
+            document.getElementById('card-total').textContent = generationState.cards.length;
+            
+            // Render card content
+            display.innerHTML = `
+                <div style="padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <h4 style="margin: 0 0 4px 0; font-size: 16px; color: white;">${escapeHtml(scenario.scenarioName)}</h4>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <span style="padding: 2px 8px; background: rgba(139, 92, 246, 0.2); border-radius: 4px; font-size: 11px; color: #a78bfa;">
+                                    ${escapeHtml(scenario.scenarioType)}
+                                </span>
+                                <span style="padding: 2px 8px; background: rgba(34, 197, 94, 0.2); border-radius: 4px; font-size: 11px; color: #22c55e;">
+                                    ${escapeHtml(scenario.category)}
+                                </span>
+                                <span style="padding: 2px 8px; background: rgba(99, 102, 241, 0.2); border-radius: 4px; font-size: 11px; color: #6366f1;">
+                                    ${escapeHtml(scenario.serviceKey)}
+                                </span>
+                            </div>
+                        </div>
+                        ${scenario.isValid ? 
+                            '<span style="color: #22c55e; font-size: 12px;"><i class="fas fa-check-circle"></i> Valid</span>' :
+                            '<span style="color: #ef4444; font-size: 12px;"><i class="fas fa-exclamation-circle"></i> Has Issues</span>'
+                        }
+                    </div>
+                </div>
+                
+                <div style="padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Triggers -->
+                    <div>
+                        <h5 style="margin: 0 0 8px 0; font-size: 13px; color: #a78bfa;">
+                            <i class="fas fa-microphone"></i> Triggers (${(scenario.triggers || []).length})
+                        </h5>
+                        <div style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 6px;">
+                            ${(scenario.triggers || []).map(t => 
+                                `<div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px; padding-left: 12px; border-left: 2px solid rgba(139, 92, 246, 0.3);">"${escapeHtml(t)}"</div>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Replies -->
+                    <div>
+                        <h5 style="margin: 0 0 8px 0; font-size: 13px; color: #22c55e;">
+                            <i class="fas fa-bolt"></i> Quick Replies (${(scenario.quickReplies || []).length})
+                        </h5>
+                        <div style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 6px;">
+                            ${(scenario.quickReplies || []).map(r => 
+                                `<div style="font-size: 12px; color: var(--text-muted); margin-bottom: 4px; padding-left: 12px; border-left: 2px solid rgba(34, 197, 94, 0.3);">"${escapeHtml(r)}"</div>`
+                            ).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="padding: 0 20px 20px;">
+                    <!-- Full Replies -->
+                    <h5 style="margin: 0 0 8px 0; font-size: 13px; color: #3b82f6;">
+                        <i class="fas fa-comment-dots"></i> Full Replies (${(scenario.fullReplies || []).length})
+                    </h5>
+                    <div style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 6px;">
+                        ${(scenario.fullReplies || []).map(r => 
+                            `<div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; padding-left: 12px; border-left: 2px solid rgba(59, 130, 246, 0.3);">"${escapeHtml(r)}"</div>`
+                        ).join('')}
+                    </div>
+                </div>
+                
+                ${scenario.generationNotes ? `
+                    <div style="padding: 12px 20px; background: rgba(251, 191, 36, 0.1); border-top: 1px solid rgba(251, 191, 36, 0.2);">
+                        <span style="font-size: 11px; color: #fbbf24;">
+                            <i class="fas fa-lightbulb"></i> ${escapeHtml(scenario.generationNotes)}
+                        </span>
+                    </div>
+                ` : ''}
+            `;
+            
+            // Render progress dots
+            const dotsHtml = generationState.cards.map((c, i) => {
+                let color = 'rgba(255,255,255,0.2)'; // pending
+                if (i < generationState.currentIndex) {
+                    color = c.status === 'approved' ? '#22c55e' : '#6b7280'; // approved or skipped
+                } else if (i === generationState.currentIndex) {
+                    color = '#8b5cf6'; // current
+                }
+                return `<div style="width: 8px; height: 8px; border-radius: 50%; background: ${color};"></div>`;
+            }).join('');
+            document.getElementById('card-progress-dots').innerHTML = dotsHtml;
+        }
+        
+        // Approve current card
+        async function approveCurrentCard() {
+            const card = generationState.cards[generationState.currentIndex];
+            if (!card) return;
+            
+            const btn = document.getElementById('approve-card-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            
+            try {
+                const templateId = window.globalTemplateId;
+                
+                // Call approve API
+                const response = await fetch('/api/admin/scenario-generation/card/approve', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        templateId,
+                        categoryName: card.scenario.category,
+                        scenario: card.formatted,
+                        triggerDeepAudit: true
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to save');
+                }
+                
+                const result = await response.json();
+                console.log('[GENERATION] Card approved:', result);
+                
+                // Mark as approved
+                card.status = 'approved';
+                generationState.approved++;
+                
+                showToast(`Saved: ${card.scenario.scenarioName}`, 'success');
+                
+                // Move to next card
+                moveToNextCard();
+                
+            } catch (error) {
+                console.error('[GENERATION] Error approving:', error);
+                showToast('Failed to save: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> Approve & Save';
+            }
+        }
+        
+        // Skip current card
+        function skipCurrentCard() {
+            const card = generationState.cards[generationState.currentIndex];
+            if (!card) return;
+            
+            card.status = 'skipped';
+            generationState.skipped++;
+            
+            moveToNextCard();
+        }
+        
+        // Move to next card or complete
+        function moveToNextCard() {
+            generationState.currentIndex++;
+            
+            if (generationState.currentIndex >= generationState.cards.length) {
+                // All done
+                showGenerationStep(4);
+                document.getElementById('gen-approved-count').textContent = generationState.approved;
+                document.getElementById('gen-skipped-count').textContent = generationState.skipped;
+            } else {
+                // Show next card
+                renderCurrentCard();
+            }
+        }
+        
+        // Start another service
+        function startAnotherService() {
+            generationState = { cards: [], currentIndex: 0, approved: 0, skipped: 0, selectedService: null };
+            showGenerationStep(1);
+        }
+        
+        // Load generation coverage
+        async function loadGenerationCoverage() {
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) return;
+                
+                const response = await fetch(`/api/admin/scenario-generation/coverage?templateId=${templateId}`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) return;
+                
+                const result = await response.json();
+                
+                // Show coverage section
+                document.getElementById('generation-coverage').style.display = 'block';
+                document.getElementById('coverage-percent').textContent = `${result.summary?.overallPercent || 0}%`;
+                document.getElementById('coverage-bar').style.width = `${result.summary?.overallPercent || 0}%`;
+                document.getElementById('coverage-actual').textContent = result.summary?.actualScenarios || 0;
+                document.getElementById('coverage-target').textContent = result.summary?.targetScenarios || 200;
+                
+            } catch (error) {
+                console.log('[GENERATION] Coverage load error:', error);
+            }
         }
         
         // ════════════════════════════════════════════════════════════════════════════════

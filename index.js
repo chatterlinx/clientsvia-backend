@@ -618,6 +618,8 @@ function registerRoutes(routes) {
     app.use('/api/admin/scenario-gaps', require('./routes/admin/scenarioGaps')); // 🎯 Scenario Gaps Detection & Auto-Create (V88)
     app.use('/api/admin', require('./routes/admin/deepAuditProfiles')); // 🧪 Deep Audit Profiles (versioned standards + caching)
     app.use('/api/admin/blueprints', require('./routes/admin/blueprintRoutes')); // 🏗️ Blueprint Builder - Template Coverage & Generation (V22)
+    app.use('/api/admin/service-catalog', require('./routes/admin/serviceCatalogRoutes')); // 🎛️ Service Catalog & Switchboard (Jan 2026) - Control Plane Layer
+    app.use('/api/admin/scenario-generation', require('./routes/admin/serviceScenarioGenerationRoutes')); // 🧠 Service Scenario Generation (Jan 2026) - GPT-4 powered, Deep Audit style
     app.use('/api/admin/placeholders', require('./routes/admin/placeholderRoutes')); // 🏷️ Placeholder Catalog, Scanner & Coverage (Enterprise Onboarding)
     app.use('/api/admin', require('./routes/admin/configAudit')); // 🧾 Config Audit Log (append-only) - read endpoint
     // callFlowRoutes REMOVED Dec 2025 - use Mission Control (call-flow-engine) instead
