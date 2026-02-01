@@ -21684,10 +21684,10 @@ ${JSON.stringify(healthData, null, 2)}
         // ════════════════════════════════════════════════════════════════════════════════
         // POST-SAVE MODAL FOR TEMPLATE AUDIT FIXES
         // ════════════════════════════════════════════════════════════════════════════════
-        // Shows options after saving a scenario that came from Template Audit:
-        // - Verify Fix: Re-run audit to confirm 0 violations
-        // - Done & Next: Return to audit page and mark this as fixed
+        // Shows options after saving a scenario that came from Deep Audit:
+        // - Verify Fix: Re-run GPT-4 audit to confirm fix is good (REQUIRED)
         // - Stay Here: Continue working in Global Brain
+        // NOTE: "Done & Next" removed Jan 31, 2026 - all fixes MUST go through verification
         // ════════════════════════════════════════════════════════════════════════════════
         
         function showAuditFixPostSaveModal(scenarioName, scenarioId) {
@@ -21747,25 +21747,6 @@ ${JSON.stringify(healthData, null, 2)}
                         ">
                             <i class="fas fa-check-double"></i>
                             Verify Fix (Re-audit this scenario)
-                        </button>
-                        
-                        <!-- Done & Next Button -->
-                        <button onclick="doneAndReturnToAudit('${scenarioId}')" style="
-                            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-                            color: white;
-                            border: none;
-                            padding: 16px 24px;
-                            border-radius: 12px;
-                            font-size: 16px;
-                            font-weight: 600;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 10px;
-                        ">
-                            <i class="fas fa-arrow-right"></i>
-                            Done & Next (Return to Audit)
                         </button>
                         
                         <!-- Stay Here Button -->
@@ -22084,7 +22065,7 @@ ${JSON.stringify(healthData, null, 2)}
                                 font-weight: 600;
                                 cursor: pointer;
                             ">
-                                <i class="fas fa-arrow-right"></i> Done & Next
+                                <i class="fas fa-arrow-right"></i> Return to Deep Audit
                             </button>
                             <button onclick="closeAuditFixPostSaveModal()" style="
                                 background: transparent;
@@ -22109,15 +22090,15 @@ ${JSON.stringify(healthData, null, 2)}
                         <p style="color: #a0a0b0; margin-bottom: 32px;">${error.message}</p>
                         
                         <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <button onclick="doneAndReturnToAudit('${scenarioId}')" style="
-                                background: #10b981;
+                            <button onclick="verifyAuditFix('${scenarioId}')" style="
+                                background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
                                 color: white;
                                 border: none;
                                 padding: 14px 24px;
                                 border-radius: 10px;
                                 cursor: pointer;
                             ">
-                                Return to Audit Anyway
+                                <i class="fas fa-redo"></i> Try Again
                             </button>
                             <button onclick="closeAuditFixPostSaveModal()" style="
                                 background: transparent;
@@ -22135,6 +22116,11 @@ ${JSON.stringify(healthData, null, 2)}
             }
         }
         
+        /**
+         * Return to audit page after verification is complete
+         * NOTE: This is ONLY called AFTER GPT-4 verification - not as a skip option
+         * Jan 31, 2026: Removed from initial save modal to force verification
+         */
         function doneAndReturnToAudit(scenarioId) {
             // Store the fixed scenario ID so audit page can remove it from the list
             const fixedScenarios = JSON.parse(localStorage.getItem('auditFixedScenarios') || '[]');
@@ -22143,15 +22129,8 @@ ${JSON.stringify(healthData, null, 2)}
                 localStorage.setItem('auditFixedScenarios', JSON.stringify(fixedScenarios));
             }
             
-            // Check which audit we came from (Deep Audit vs Template Audit)
-            const urlParams = new URLSearchParams(window.location.search);
-            const prefillType = urlParams.get('prefill');
-            const wasDeepAudit = prefillType === 'deep-audit-fix';
-            
-            // Store the audit source for the scenario-gaps page to know which view to show
-            if (wasDeepAudit) {
-                localStorage.setItem('returnToDeepAudit', 'true');
-            }
+            // Always return to Deep Audit view
+            localStorage.setItem('returnToDeepAudit', 'true');
             
             // Close the modal
             closeAuditFixPostSaveModal();
@@ -22159,7 +22138,6 @@ ${JSON.stringify(healthData, null, 2)}
             // Navigate back to the audit page
             const companyId = localStorage.getItem('lastAuditCompanyId');
             if (companyId) {
-                // Navigate to audit tab - scenario-gaps.html will check returnToDeepAudit flag
                 window.location.href = `/scenario-gaps.html?companyId=${companyId}&tab=audit`;
             } else {
                 window.location.href = '/scenario-gaps.html';

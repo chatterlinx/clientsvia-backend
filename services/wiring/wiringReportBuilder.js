@@ -18,7 +18,16 @@
 const { wiringRegistryV1, WIRING_SCHEMA_VERSION } = require('./wiringRegistry.v1');
 // promptPacks migration REMOVED Jan 2026 - nuked
 const logger = require('../../utils/logger');
-const { getRuntimeFields, getContentFields, getAdminFields } = require('../scenarioAudit/constants');
+const { 
+    getRuntimeFields, 
+    getContentFields, 
+    getAdminFields,
+    getActiveContentFields,
+    getActiveRuntimeFields,
+    getActiveAdminFields,
+    getWiringAccuracyMetrics,
+    getUiOnlyFields
+} = require('../scenarioAudit/constants');
 const BlackBoxRecording = require('../../models/BlackBoxRecording');
 
 // ============================================================================
@@ -1889,23 +1898,41 @@ async function buildWiringReport({
     // OWNERSHIP MODEL - Single source of truth
     // ========================================================================
     
+    // Get wiring accuracy metrics (shows UI_ONLY fields that aren't enforced)
+    const wiringAccuracy = getWiringAccuracyMetrics();
+    const uiOnlyFields = getUiOnlyFields();
+    
     const ownershipModel = {
         content: {
             count: getContentFields().length,
+            activeCount: getActiveContentFields().length,
             description: 'WHAT to say - Scenario defines, GPT generates',
-            fields: getContentFields()
+            fields: getContentFields(),
+            activeFields: getActiveContentFields()
         },
         runtime: {
             count: getRuntimeFields().length,
+            activeCount: getActiveRuntimeFields().length,
             description: 'HOW/WHEN to behave - ConversationEngine decides at call time',
             fields: getRuntimeFields(),
+            activeFields: getActiveRuntimeFields(),
             proof: runtimeProof
         },
         admin: {
             count: getAdminFields().length,
+            activeCount: getActiveAdminFields().length,
             description: 'Infrastructure policies - Admin configures globally',
-            fields: getAdminFields()
-        }
+            fields: getAdminFields(),
+            activeFields: getActiveAdminFields()
+        },
+        // ⚠️ UI_ONLY FIELDS - These show in UI but aren't enforced at runtime yet
+        uiOnlyWarning: uiOnlyFields.length > 0 ? {
+            count: uiOnlyFields.length,
+            message: `${uiOnlyFields.length} fields defined in UI but not yet enforced at runtime`,
+            fields: uiOnlyFields,
+            recommendation: 'These fields appear as "Active" but have no runtime processing code'
+        } : null,
+        wiringAccuracy
     };
     
     // ========================================================================

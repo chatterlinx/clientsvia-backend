@@ -557,7 +557,16 @@ router.get('/templates/:templateId/scenario-audit-status', async (req, res) => {
                     fixLedgerId: fixEntry?._id?.toString() || null,
                     verifiedAt: fixEntry?.verifiedAt || null,
                     verifiedScore: fixEntry?.verifiedScore ?? null,
-                    verifiedVerdict: fixEntry?.verifiedVerdict || null
+                    verifiedVerdict: fixEntry?.verifiedVerdict || null,
+                    // Supervision transparency (READ-ONLY - shows what was filtered during audit)
+                    supervision: auditResult?.supervision ? {
+                        grounded: auditResult.supervision.grounded ?? false,
+                        originalIssueCount: auditResult.supervision.originalIssueCount ?? 0,
+                        hallucinatedFiltered: auditResult.supervision.hallucinatedFiltered ?? 0,
+                        verifiedIssueCount: auditResult.supervision.verifiedIssueCount ?? 0
+                    } : null,
+                    // Double-check indicator: true if supervision validated the audit
+                    isSupervised: !!(auditResult?.supervision?.grounded)
                 };
                 
                 if (auditResult) {

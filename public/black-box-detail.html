@@ -2685,7 +2685,7 @@
             // Load saved state from localStorage
             const savedState = JSON.parse(localStorage.getItem('roadmapState') || '{}');
             
-            // Roadmap data structure - UPDATED Jan 19, 2026
+            // Roadmap data structure - UPDATED Jan 31, 2026 (Deep Audit + Agent Wiring phases added)
             const roadmap = {
                 phases: [
                     {
@@ -2781,6 +2781,40 @@
                             { id: 'wiring-docs', name: 'Wiring registry documented', status: savedState['wiring-docs'] || 'done', priority: 'med', need: 'wiringRegistry.v1.js complete' },
                             { id: 'company-profile-docs', name: 'Company Profile ↔ Runtime mapped', status: savedState['company-profile-docs'] || 'done', priority: 'med', need: '_companyProfileConfig section added' },
                             { id: 'multi-tenant-safe', name: 'Multi-tenant safety verified', status: savedState['multi-tenant-safe'] || 'done', priority: 'high', need: 'All settings per-company, no hardcoding' }
+                        ]
+                    },
+                    {
+                        id: 'deep-audit',
+                        name: 'Deep Audit & Scenario Quality',
+                        icon: '🔬',
+                        target: 'All scenarios pass GPT-4 audit',
+                        timeline: 'CRITICAL for Production',
+                        items: [
+                            { id: 'audit-profile-system', name: 'Audit Profile persistence', status: savedState['audit-profile-system'] || 'done', priority: 'high', need: 'AuditProfile MongoDB model, template-scoped' },
+                            { id: 'deep-audit-cache', name: 'Deep Audit caching (ScenarioAuditResult)', status: savedState['deep-audit-cache'] || 'done', priority: 'high', need: 'Results persist via contentHash + profileId' },
+                            { id: 'fix-ledger', name: 'Fix ledger tracking', status: savedState['fix-ledger'] || 'done', priority: 'med', need: 'ScenarioFixLedger tracks all scenario fixes' },
+                            { id: 'gpt4-verification', name: 'GPT-4 verification modal', status: savedState['gpt4-verification'] || 'done', priority: 'high', need: 'Checklist modal after save shows verification' },
+                            { id: 'legacy-audit-removed', name: 'Legacy rules audit removed', status: savedState['legacy-audit-removed'] || 'done', priority: 'high', need: '/audit/run endpoint deprecated, UI removed' },
+                            { id: 'count-alignment', name: 'Perfect/NeedsWork count alignment', status: savedState['count-alignment'] || 'done', priority: 'high', need: 'Backend + frontend use unified classification' },
+                            { id: 'fix-application', name: 'Fix application flow (Global Brain)', status: savedState['fix-application'] || 'partial', priority: 'high', need: 'exactQuote → prefill → save cycle verified' },
+                            { id: 'wiring-status-accuracy', name: 'Wiring status accuracy', status: savedState['wiring-status-accuracy'] || 'done', priority: 'med', need: 'purpose:future fields flagged as UI_ONLY' },
+                            { id: 'template-scenarios-audit', name: 'HVAC template scenarios audited', status: savedState['template-scenarios-audit'] || 'partial', priority: 'high', need: '78 scenarios → 90%+ GOOD/PERFECT' },
+                            { id: 'strengths-fix', name: 'Strengths schema fix', status: savedState['strengths-fix'] || 'done', priority: 'med', need: 'String→Object transform on save' }
+                        ]
+                    },
+                    {
+                        id: 'agent-wiring',
+                        name: 'Agent Wiring & Runtime',
+                        icon: '⚡',
+                        target: '100% field coverage verified',
+                        timeline: 'Week 2',
+                        items: [
+                            { id: 'triggers-wired', name: 'Triggers → HybridScenarioSelector', status: savedState['triggers-wired'] || 'done', priority: 'high', need: 'triggers, negativeTriggers, regexTriggers used' },
+                            { id: 'replies-wired', name: 'Replies → ResponseEngine', status: savedState['replies-wired'] || 'done', priority: 'high', need: 'quickReplies, fullReplies, noName variants used' },
+                            { id: 'runtime-fields', name: 'Runtime fields used', status: savedState['runtime-fields'] || 'done', priority: 'high', need: 'priority, minConfidence, cooldownSeconds wired' },
+                            { id: 'behavior-wired', name: 'Behavior settings wired', status: savedState['behavior-wired'] || 'done', priority: 'med', need: 'behavior, bookingIntent, scenarioType active' },
+                            { id: 'entity-capture-impl', name: 'entityCapture implementation', status: savedState['entity-capture-impl'] || 'todo', priority: 'low', need: 'Currently UI_ONLY - extraction code needed' },
+                            { id: 'entity-validation-impl', name: 'entityValidation implementation', status: savedState['entity-validation-impl'] || 'todo', priority: 'low', need: 'Currently UI_ONLY - validation code needed' }
                         ]
                     }
                 ]

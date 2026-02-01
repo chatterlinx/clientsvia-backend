@@ -608,8 +608,8 @@ const SCENARIO_SETTINGS_REGISTRY = {
     
     // System-managed reply settings
     replySelection: { ownership: 'system', purpose: 'system', description: 'sequential/random/bandit selection' },
-    replyBundles: { ownership: 'system', purpose: 'future', description: 'Reply bundle system (future)' },
-    replyPolicy: { ownership: 'system', purpose: 'future', description: 'ROTATE_PER_CALLER/etc (future)' },
+    replyBundles: { ownership: 'system', purpose: 'future', description: 'Reply bundle system (future)', wiringStatus: 'PLANNED' },
+    replyPolicy: { ownership: 'system', purpose: 'future', description: 'ROTATE_PER_CALLER/etc (future)', wiringStatus: 'PLANNED' },
     
     // ════════════════════════════════════════════════════════════════════════════
     // PERSONALITY (Scenario owns - CONTENT)
@@ -628,7 +628,8 @@ const SCENARIO_SETTINGS_REGISTRY = {
     },
     entityCapture: { 
         ownership: 'content', purpose: 'future', description: 'Entities to extract (what to capture, not how)',
-        audit: { contentChecks: ['array'], severity: 'info' }
+        audit: { contentChecks: ['array'], severity: 'info' },
+        wiringStatus: 'UI_ONLY' // ⚠️ DEFINED BUT NOT ENFORCED - no extraction code exists yet
     },
     channel: { 
         ownership: 'content', purpose: 'runtime', description: 'voice/sms/chat/any channel restriction',
@@ -649,9 +650,10 @@ const SCENARIO_SETTINGS_REGISTRY = {
     },
     followUpFunnel: { 
         ownership: 'runtime', purpose: 'future', description: 'Re-engagement prompt (Runtime decides)',
-        audit: { runtimeProofKey: 'followUpFunnel', severity: 'info' }
+        audit: { runtimeProofKey: 'followUpFunnel', severity: 'info' },
+        wiringStatus: 'PLANNED' // ⚠️ NOT YET IMPLEMENTED
     },
-    followUpPrompts: { ownership: 'system', purpose: 'future', description: 'Follow-up prompts (future)' },
+    followUpPrompts: { ownership: 'system', purpose: 'future', description: 'Follow-up prompts (future)', wiringStatus: 'PLANNED' },
     transferTarget: { 
         ownership: 'admin', purpose: 'runtime_manual', description: 'Queue/extension for transfer (admin configures)',
         audit: { adminConfigKey: 'frontDesk.transferTarget', severity: 'warn' }
@@ -706,7 +708,8 @@ const SCENARIO_SETTINGS_REGISTRY = {
     },
     entityValidation: { 
         ownership: 'admin', purpose: 'future', description: 'Validation rules per entity (admin configures)',
-        audit: { adminConfigKey: 'entityValidation', severity: 'info' }
+        audit: { adminConfigKey: 'entityValidation', severity: 'info' },
+        wiringStatus: 'UI_ONLY' // ⚠️ DEFINED BUT NOT ENFORCED - validation not implemented yet
     },
     dynamicVariables: { 
         ownership: 'admin', purpose: 'runtime', description: 'Variable fallbacks when entity missing (admin configures)',
@@ -1120,6 +1123,98 @@ function getAdminFields() {
         .map(([k]) => k);
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// WIRING STATUS HELPERS (Jan 2026) - For accurate wiring reports
+// These filter out UI_ONLY and PLANNED fields that show in UI but aren't enforced
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if a field is actually wired (enforced at runtime)
+ * @param {Object} fieldDef - The field definition from SCENARIO_SETTINGS_REGISTRY
+ * @returns {boolean} True if field is actually used at runtime
+ */
+function isFieldActivelyWired(fieldDef) {
+    // Fields with wiringStatus UI_ONLY or PLANNED are NOT enforced
+    if (fieldDef.wiringStatus === 'UI_ONLY' || fieldDef.wiringStatus === 'PLANNED') {
+        return false;
+    }
+    // Fields with purpose 'future' are not yet wired unless explicitly marked
+    if (fieldDef.purpose === 'future' && !fieldDef.wiringStatus) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Get content fields that are actively wired (excluding UI_ONLY/future)
+ * @returns {string[]} Array of field names that are actually enforced
+ */
+function getActiveContentFields() {
+    return Object.entries(SCENARIO_SETTINGS_REGISTRY)
+        .filter(([_, v]) => v.ownership === 'content' && isFieldActivelyWired(v))
+        .map(([k]) => k);
+}
+
+/**
+ * Get runtime fields that are actively wired (excluding UI_ONLY/future)
+ * @returns {string[]} Array of field names that are actually enforced
+ */
+function getActiveRuntimeFields() {
+    return Object.entries(SCENARIO_SETTINGS_REGISTRY)
+        .filter(([_, v]) => v.ownership === 'runtime' && isFieldActivelyWired(v))
+        .map(([k]) => k);
+}
+
+/**
+ * Get admin fields that are actively wired (excluding UI_ONLY/future)
+ * @returns {string[]} Array of field names that are actually enforced
+ */
+function getActiveAdminFields() {
+    return Object.entries(SCENARIO_SETTINGS_REGISTRY)
+        .filter(([_, v]) => v.ownership === 'admin' && isFieldActivelyWired(v))
+        .map(([k]) => k);
+}
+
+/**
+ * Get all fields marked as UI_ONLY (defined but not enforced)
+ * @returns {Object[]} Array of { fieldName, ownership, description }
+ */
+function getUiOnlyFields() {
+    return Object.entries(SCENARIO_SETTINGS_REGISTRY)
+        .filter(([_, v]) => v.wiringStatus === 'UI_ONLY' || (v.purpose === 'future' && !v.wiringStatus))
+        .map(([k, v]) => ({
+            fieldName: k,
+            ownership: v.ownership,
+            purpose: v.purpose,
+            description: v.description,
+            wiringStatus: v.wiringStatus || 'FUTURE'
+        }));
+}
+
+/**
+ * Get wiring accuracy metrics
+ * @returns {Object} { total, activelyWired, uiOnly, accuracy }
+ */
+function getWiringAccuracyMetrics() {
+    const all = Object.entries(SCENARIO_SETTINGS_REGISTRY)
+        .filter(([_, v]) => v.ownership !== 'system'); // Exclude system fields
+    
+    const active = all.filter(([_, v]) => isFieldActivelyWired(v));
+    const uiOnly = all.filter(([_, v]) => !isFieldActivelyWired(v));
+    
+    return {
+        total: all.length,
+        activelyWired: active.length,
+        uiOnly: uiOnly.length,
+        uiOnlyFields: uiOnly.map(([k, v]) => ({ 
+            field: k, 
+            reason: v.wiringStatus || 'purpose:future',
+            description: v.description 
+        })),
+        accuracy: all.length > 0 ? Math.round((active.length / all.length) * 100) : 100
+    };
+}
+
 /**
  * ════════════════════════════════════════════════════════════════════════════════
  * SAVE GUARD: Strip non-content fields from scenario payload
@@ -1292,6 +1387,14 @@ module.exports = {
     enforceContentOwnership,
     exportContentOnly,
     importContentOnly,
+    
+    // ⚡ WIRING STATUS HELPERS (Jan 2026) - For accurate wiring reports
+    isFieldActivelyWired,
+    getActiveContentFields,
+    getActiveRuntimeFields,
+    getActiveAdminFields,
+    getUiOnlyFields,
+    getWiringAccuracyMetrics,
     
     // 🎯 UNIFIED SEVERITY - Same algorithm for Wiring and Audit
     SEVERITY_ORDER,

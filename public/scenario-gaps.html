@@ -1653,10 +1653,22 @@
                             <div style="font-size: 20px; font-weight: bold; color: #ef4444;" id="profile-needswork-count">--</div>
                             <div style="font-size: 10px; color: var(--text-muted);">Needs Work</div>
                         </div>
+                        <div onclick="setFilterAndScroll('supervised')" class="stat-box-clickable"
+                            style="text-align: center; padding: 8px 12px; background: rgba(139,92,246,0.2); border-radius: 8px; min-width: 80px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent;"
+                            title="Supervised scenarios - grounding validation passed (double-checked ✓✓)">
+                            <div style="font-size: 16px; font-weight: bold; color: #8b5cf6;" id="profile-supervised-count">--</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">✓✓ Verified</div>
+                            <div style="font-size: 9px; color: #666; margin-top: 2px;" id="profile-supervised-status">--</div>
+                        </div>
                     </div>
                     
                     <!-- Action Buttons -->
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button onclick="verifyAllUnverified()" id="verify-all-btn"
+                            style="background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.5); color: #a78bfa; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;"
+                            title="Run supervision check on all unverified scenarios">
+                            <i class="fas fa-user-shield" id="verify-all-icon"></i> <span id="verify-all-text">✓✓ Verify All</span>
+                        </button>
                         <button onclick="resetAuditProfile()" 
                             style="background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); color: #ef4444; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px;"
                             title="Clear all cached results - all scenarios will be re-audited on next run">
@@ -1731,6 +1743,7 @@
                                     <option value="audited">Audited Only</option>
                                     <option value="perfect">Perfect Only</option>
                                     <option value="needswork">Needs Work Only</option>
+                                    <option value="supervised">✓✓ Verified Only</option>
                                 </select>
                                 <button onclick="downloadAuditStatusJSON()" 
                                     style="background: rgba(52,211,153,0.2); border: 1px solid rgba(52,211,153,0.5); color: var(--accent-green); padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; display: flex; align-items: center; gap: 4px;"
@@ -4854,11 +4867,16 @@
             let pendingCount = 0;
             let perfectCount = 0;
             let needsWorkCount = 0;
+            let supervisedCount = 0; // Double-checked by grounding validation
             
             for (const s of scenarios) {
                 totalScenarios++;
                 if (s.isAudited) {
                     auditedCount++;
+                    // Count supervised scenarios (double checkmark)
+                    if (s.isSupervised === true) {
+                        supervisedCount++;
+                    }
                     // Unified classification logic - aligned with backend:
                     // Perfect: score >= 9 AND !rewriteNeeded
                     // NeedsWork: rewriteNeeded OR score < 7 OR verdict is NEEDS_WORK/FAILS
@@ -4882,6 +4900,7 @@
                 pendingCount,
                 perfectCount,
                 needsWorkCount,
+                supervisedCount, // ✓✓ Double-checked
                 progressPercent: totalScenarios > 0
                     ? Math.round((auditedCount / totalScenarios) * 100)
                     : 0
@@ -4935,6 +4954,49 @@
                 document.getElementById('profile-perfect-count').textContent = summary.perfectCount || 0;
                 document.getElementById('profile-needswork-count').textContent = summary.needsWorkCount || 0;
                 
+                // Supervised count with visual status
+                const supervisedCount = summary.supervisedCount || 0;
+                const auditedCount = summary.auditedCount || 0;
+                document.getElementById('profile-supervised-count').textContent = `${supervisedCount}/${auditedCount}`;
+                
+                // Status indicator
+                const supervisedStatusEl = document.getElementById('profile-supervised-status');
+                const verifyAllBtn = document.getElementById('verify-all-btn');
+                const verifyAllText = document.getElementById('verify-all-text');
+                const verifyAllIcon = document.getElementById('verify-all-icon');
+                
+                if (supervisedStatusEl) {
+                    if (auditedCount === 0) {
+                        supervisedStatusEl.textContent = 'No audits yet';
+                        supervisedStatusEl.style.color = '#666';
+                    } else if (supervisedCount === auditedCount) {
+                        supervisedStatusEl.innerHTML = '<span style="color: #10b981;">✓ All verified</span>';
+                        // Update button to show all done
+                        if (verifyAllBtn) {
+                            verifyAllBtn.style.background = 'rgba(16,185,129,0.2)';
+                            verifyAllBtn.style.borderColor = 'rgba(16,185,129,0.5)';
+                            verifyAllBtn.style.color = '#10b981';
+                        }
+                        if (verifyAllText) verifyAllText.textContent = '✓✓ All Verified';
+                        if (verifyAllIcon) verifyAllIcon.className = 'fas fa-check-double';
+                    } else if (supervisedCount === 0) {
+                        supervisedStatusEl.innerHTML = '<span style="color: #f59e0b;">Click to verify</span>';
+                        // Reset button style
+                        if (verifyAllBtn) {
+                            verifyAllBtn.style.background = 'rgba(139,92,246,0.2)';
+                            verifyAllBtn.style.borderColor = 'rgba(139,92,246,0.5)';
+                            verifyAllBtn.style.color = '#a78bfa';
+                        }
+                        if (verifyAllText) verifyAllText.textContent = '✓✓ Verify All';
+                        if (verifyAllIcon) verifyAllIcon.className = 'fas fa-user-shield';
+                    } else {
+                        const remaining = auditedCount - supervisedCount;
+                        supervisedStatusEl.innerHTML = `<span style="color: #f59e0b;">${remaining} remaining</span>`;
+                        // Show remaining count on button
+                        if (verifyAllText) verifyAllText.textContent = `✓✓ Verify ${remaining}`;
+                    }
+                }
+                
                 // Update progress bar
                 const percent = summary.progressPercent || 0;
                 document.getElementById('profile-progress-percent').textContent = `${percent}%`;
@@ -4977,20 +5039,25 @@
                 const isPerfect = score >= 9 && !rewriteNeeded;
                 const needsWork = rewriteNeeded || verdict === 'NEEDS_WORK' || verdict === 'FAILS';
                 
-                // Checkmark styling
-                let checkIcon, checkColor;
+                // Checkmark styling - double checkmark if supervised (grounded validation passed)
+                const isSupervised = s.isSupervised === true;
+                let checkIcon, checkColor, checkTitle;
                 if (!isAudited) {
                     checkIcon = 'fa-clock';
                     checkColor = '#888';
+                    checkTitle = 'Pending audit';
                 } else if (isPerfect) {
-                    checkIcon = 'fa-check-circle';
+                    checkIcon = isSupervised ? 'fa-check-double' : 'fa-check-circle';
                     checkColor = 'var(--accent-green)';
+                    checkTitle = isSupervised ? 'Perfect (Supervised ✓✓)' : 'Perfect';
                 } else if (needsWork) {
                     checkIcon = 'fa-exclamation-circle';
                     checkColor = '#ef4444';
+                    checkTitle = 'Needs work';
                 } else {
-                    checkIcon = 'fa-check';
+                    checkIcon = isSupervised ? 'fa-check-double' : 'fa-check';
                     checkColor = 'var(--accent-blue)';
+                    checkTitle = isSupervised ? 'Good (Supervised ✓✓)' : 'Good';
                 }
                 
                 // Score display
@@ -5036,15 +5103,29 @@
                     `;
                 }
                 
+                // Supervision badge
+                const supervisionBadge = isSupervised 
+                    ? `<span style="background: rgba(139,92,246,0.3); color: #a78bfa; padding: 1px 4px; border-radius: 3px; font-size: 9px; margin-left: 4px;">✓✓</span>`
+                    : '';
+                
+                // Verify button (only show for audited scenarios without supervision)
+                const verifyBtn = isAudited && !isSupervised
+                    ? `<button onclick="runSupervisionCheck('${s.scenarioId}', '${escapeHtml(s.scenarioName)}')" 
+                         style="background: rgba(139,92,246,0.2); border: 1px solid rgba(139,92,246,0.4); color: #a78bfa; padding: 2px 6px; border-radius: 4px; cursor: pointer; font-size: 9px; margin-left: 6px;"
+                         title="Run 3-layer supervised verification (read-only)">
+                         ✓✓ Verify
+                       </button>`
+                    : '';
+                
                 return `
                     <div style="display: grid; grid-template-columns: 30px 1fr 120px 80px 140px; gap: 8px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; ${idx % 2 === 0 ? '' : 'background: rgba(0,0,0,0.1);'}"
-                         data-audited="${isAudited}" data-perfect="${isPerfect}" data-needswork="${needsWork}">
-                        <div style="text-align: center;">
+                         data-audited="${isAudited}" data-perfect="${isPerfect}" data-needswork="${needsWork}" data-supervised="${isSupervised}">
+                        <div style="text-align: center;" title="${checkTitle}">
                             <i class="fas ${checkIcon}" style="color: ${checkColor};"></i>
                         </div>
                         <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            <span style="color: #fff;" title="${escapeHtml(s.scenarioName)}">${escapeHtml(s.scenarioName)}</span>
-                            <div style="font-size: 10px; color: #666; font-family: monospace;">${s.scenarioId}</div>
+                            <span style="color: #fff;" title="${escapeHtml(s.scenarioName)}">${escapeHtml(s.scenarioName)}${supervisionBadge}</span>
+                            <div style="font-size: 10px; color: #666; font-family: monospace;">${s.scenarioId}${verifyBtn}</div>
                             ${fixBadgeHtml}
                         </div>
                         <div style="color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(s.categoryName)}">
@@ -5089,6 +5170,9 @@
                     break;
                 case 'needswork':
                     filtered = allScenariosAuditStatus.filter(s => classifyScenario(s).needsWork);
+                    break;
+                case 'supervised':
+                    filtered = allScenariosAuditStatus.filter(s => s.isSupervised === true);
                     break;
             }
             
@@ -5139,6 +5223,230 @@
                 pendingLedgerOpen.auditProfileId
             );
             pendingLedgerOpen = null;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════════
+        // SUPERVISION CHECK - Run 3-layer audit to verify scenarios
+        // Updates the supervision status but preserves existing scores if unchanged
+        // ════════════════════════════════════════════════════════════════════════════════
+        
+        async function verifyAllUnverified() {
+            const unverified = allScenariosAuditStatus.filter(s => s.isAudited && !s.isSupervised);
+            
+            if (unverified.length === 0) {
+                showToast('All scenarios are already verified ✓✓', 'success');
+                return;
+            }
+            
+            const confirmMsg = `This will run 3-layer supervision check on ${unverified.length} unverified scenarios.\n\nThis may take a few minutes. Continue?`;
+            if (!confirm(confirmMsg)) return;
+            
+            const btn = document.getElementById('verify-all-btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+            
+            let completed = 0;
+            let errors = 0;
+            
+            // Process in batches of 3 to avoid overloading
+            const batchSize = 3;
+            for (let i = 0; i < unverified.length; i += batchSize) {
+                const batch = unverified.slice(i, i + batchSize);
+                
+                await Promise.all(batch.map(async (s) => {
+                    try {
+                        await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep/single`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${getAuthToken()}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ scenarioId: s.scenarioId, skipSupervision: false })
+                        });
+                        completed++;
+                    } catch (e) {
+                        console.error(`[VERIFY ALL] Error on ${s.scenarioId}:`, e);
+                        errors++;
+                    }
+                }));
+                
+                // Update button with progress
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${completed}/${unverified.length}...`;
+            }
+            
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            
+            // Reload the audit status to show updated supervision
+            await loadScenarioAuditStatus();
+            
+            if (errors > 0) {
+                showToast(`Verified ${completed} scenarios (${errors} errors)`, 'warning');
+            } else {
+                showToast(`✓✓ Verified ${completed} scenarios`, 'success');
+            }
+        }
+        
+        async function runSupervisionCheck(scenarioId, scenarioName) {
+            // Create modal to show supervision progress and results
+            const existingModal = document.getElementById('supervision-modal');
+            if (existingModal) existingModal.remove();
+            
+            const modal = document.createElement('div');
+            modal.id = 'supervision-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.85); z-index: 10000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            modal.innerHTML = `
+                <div style="background: #1a1a2e; border-radius: 16px; padding: 24px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid rgba(139,92,246,0.3);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="margin: 0; color: #a78bfa;">
+                            <i class="fas fa-user-shield"></i> Supervision Check
+                        </h3>
+                        <button onclick="document.getElementById('supervision-modal').remove()" 
+                            style="background: none; border: none; color: #888; cursor: pointer; font-size: 20px;">&times;</button>
+                    </div>
+                    <div style="color: #fff; margin-bottom: 12px; font-weight: 600;">"${escapeHtml(scenarioName)}"</div>
+                    <div id="supervision-content" style="color: #ccc;">
+                        <div style="text-align: center; padding: 40px;">
+                            <i class="fas fa-spinner fa-spin" style="font-size: 32px; color: #a78bfa;"></i>
+                            <div style="margin-top: 12px; color: #888;">Running 3-layer supervised audit...</div>
+                            <div style="margin-top: 8px; font-size: 11px; color: #666;">Layer 1: Primary Auditor → Layer 2: Grounding → Layer 3: Supervisor</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            const contentEl = document.getElementById('supervision-content');
+            
+            try {
+                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/audit/deep/single`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        scenarioId,
+                        skipSupervision: false  // Run full 3-layer supervision
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Supervision check failed: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Display the supervision trace
+                const trace = result.supervision?.trace || [];
+                const finalScore = result.score ?? '--';
+                const finalVerdict = result.verdict || 'UNKNOWN';
+                const issues = result.issues || [];
+                const strengths = result.strengths || [];
+                const hallucinatedRemoved = result.supervision?.hallucinatedIssuesRemoved || 0;
+                
+                let traceHtml = '';
+                for (const layer of trace) {
+                    const layerColor = layer.layer === 'PRIMARY_AUDITOR' ? '#3b82f6' 
+                        : layer.layer === 'GROUNDING_VALIDATOR' ? '#f59e0b' 
+                        : '#10b981';
+                    const layerIcon = layer.layer === 'PRIMARY_AUDITOR' ? 'fa-search' 
+                        : layer.layer === 'GROUNDING_VALIDATOR' ? 'fa-filter' 
+                        : 'fa-gavel';
+                    
+                    traceHtml += `
+                        <div style="background: rgba(0,0,0,0.3); border-left: 3px solid ${layerColor}; padding: 12px; margin-bottom: 8px; border-radius: 4px;">
+                            <div style="color: ${layerColor}; font-weight: 600; font-size: 12px; margin-bottom: 6px;">
+                                <i class="fas ${layerIcon}"></i> ${layer.layer.replace(/_/g, ' ')}
+                            </div>
+                            <div style="font-size: 11px; color: #aaa;">
+                                ${layer.score !== undefined ? `Score: <b>${layer.score}/10</b> · ` : ''}
+                                ${layer.issueCount !== undefined ? `Issues: ${layer.issueCount} · ` : ''}
+                                ${layer.groundedIssues !== undefined ? `Grounded: ${layer.groundedIssues} · Hallucinated: ${layer.hallucinatedIssues} · ` : ''}
+                                ${layer.status ? `Status: ${layer.status} · ` : ''}
+                                ${layer.supervisorAgreed !== undefined ? `Agreed: ${layer.supervisorAgreed ? '✓' : '✗'} · ` : ''}
+                                ${layer.finalScore !== undefined ? `Final: <b>${layer.finalScore}/10</b>` : ''}
+                            </div>
+                            ${layer.reasoning ? `<div style="font-size: 10px; color: #888; margin-top: 4px; font-style: italic;">"${layer.reasoning}"</div>` : ''}
+                            ${layer.removedIssues?.length > 0 ? `<div style="font-size: 10px; color: #ef4444; margin-top: 4px;">Removed: ${layer.removedIssues.join(', ')}</div>` : ''}
+                        </div>
+                    `;
+                }
+                
+                // Final result summary
+                const verdictColor = finalVerdict === 'PERFECT' ? '#10b981' 
+                    : finalVerdict === 'GOOD' ? '#3b82f6'
+                    : finalVerdict === 'ACCEPTABLE' ? '#f59e0b'
+                    : '#ef4444';
+                
+                contentEl.innerHTML = `
+                    <div style="background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(59,130,246,0.1)); padding: 16px; border-radius: 8px; margin-bottom: 16px; text-align: center;">
+                        <div style="font-size: 36px; font-weight: bold; color: ${verdictColor};">${finalScore}/10</div>
+                        <div style="color: ${verdictColor}; font-weight: 600;">${finalVerdict}</div>
+                        ${hallucinatedRemoved > 0 ? `<div style="font-size: 11px; color: #f59e0b; margin-top: 4px;">🛡️ ${hallucinatedRemoved} hallucinated issues filtered</div>` : ''}
+                    </div>
+                    
+                    <h4 style="color: #a78bfa; margin: 16px 0 8px; font-size: 13px;">
+                        <i class="fas fa-layer-group"></i> Supervision Trace (3 Layers)
+                    </h4>
+                    ${traceHtml || '<div style="color: #888; font-size: 12px;">No trace available</div>'}
+                    
+                    ${issues.length > 0 ? `
+                        <h4 style="color: #ef4444; margin: 16px 0 8px; font-size: 13px;">
+                            <i class="fas fa-exclamation-triangle"></i> Verified Issues (${issues.length})
+                        </h4>
+                        <div style="font-size: 11px;">
+                            ${issues.map(i => `
+                                <div style="background: rgba(239,68,68,0.1); padding: 8px; margin-bottom: 4px; border-radius: 4px;">
+                                    <b>${i.field || 'general'}</b>: ${i.issue || i.message || 'No description'}
+                                    ${i.grounded ? '<span style="color: #10b981; margin-left: 4px;">✓ grounded</span>' : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    
+                    ${strengths.length > 0 ? `
+                        <h4 style="color: #10b981; margin: 16px 0 8px; font-size: 13px;">
+                            <i class="fas fa-check-circle"></i> Strengths (${strengths.length})
+                        </h4>
+                        <div style="font-size: 11px;">
+                            ${strengths.map(s => `
+                                <div style="background: rgba(16,185,129,0.1); padding: 6px 8px; margin-bottom: 4px; border-radius: 4px;">
+                                    ${typeof s === 'string' ? s : (s.text || s.description || JSON.stringify(s))}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    
+                    <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); text-align: center;">
+                        <div style="font-size: 10px; color: #666; margin-bottom: 12px;">
+                            ℹ️ This is a READ-ONLY verification. The result has been saved to update the supervision status.
+                        </div>
+                        <button onclick="document.getElementById('supervision-modal').remove(); loadScenarioAuditStatus();" 
+                            style="background: linear-gradient(135deg, #8b5cf6, #6366f1); color: white; border: none; padding: 10px 24px; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            Done
+                        </button>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('[SUPERVISION] Error:', error);
+                contentEl.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #ef4444;">
+                        <i class="fas fa-exclamation-circle" style="font-size: 32px;"></i>
+                        <div style="margin-top: 12px;">${error.message}</div>
+                        <button onclick="document.getElementById('supervision-modal').remove()" 
+                            style="margin-top: 16px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); color: #ef4444; padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+                            Close
+                        </button>
+                    </div>
+                `;
+            }
         }
         
         function openFixLedgerModal(scenarioId, ledgerId = '', templateIdOverride = null, auditProfileIdOverride = null) {
