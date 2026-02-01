@@ -54,6 +54,91 @@ const CARD_STRUCTURE = {
 };
 
 /**
+ * ============================================================================
+ * MULTI-TENANT PLACEHOLDER SYSTEM (CRITICAL)
+ * ============================================================================
+ * Global template scenarios must be company-agnostic.
+ * They can ONLY contain:
+ * - Placeholders (runtime injected per companyId)
+ * - Generic HVAC truths
+ * - Questions that collect info
+ * 
+ * If a scenario needs company-specific info: use placeholders or move to Company Local.
+ * ============================================================================
+ */
+
+/**
+ * ALLOWED PLACEHOLDERS REGISTRY
+ * GPT can ONLY use these - no inventing placeholders
+ */
+const ALLOWED_PLACEHOLDERS = {
+    // Company Identity
+    'company.name': 'Company name (e.g., "Smith AC")',
+    'company.phone': 'Company phone number',
+    'company.website': 'Company website URL',
+    'company.address': 'Company physical address',
+    'company.serviceArea': 'Geographic service area description',
+    'company.hours': 'Business hours',
+    'company.afterHoursMessage': 'After-hours message/instructions',
+    
+    // Pricing
+    'pricing.diagnostic': 'Diagnostic/service call fee',
+    'pricing.serviceCall': 'Service call fee',
+    'pricing.afterHours': 'After-hours surcharge',
+    
+    // Booking
+    'booking.nextAvailable': 'Next available appointment slot',
+    'booking.soonestWindow': 'Soonest scheduling window',
+    
+    // Branding (optional)
+    'company.tagline': 'Company tagline/slogan',
+    'company.yearsInBusiness': 'Years in business'
+};
+
+/**
+ * MULTI-TENANT RULES (for GPT prompt)
+ */
+const MULTI_TENANT_RULES = `
+CRITICAL MULTI-TENANT RULE (VIOLATION = REJECTION):
+You are generating GLOBAL TEMPLATE scenarios that must work for ANY companyId.
+
+- NEVER hardcode any company-specific facts:
+  × Company names, phone numbers, websites, addresses
+  × Prices, fees, costs, dollar amounts
+  × Cities, states, service areas
+  × Hours, schedules, availability
+  × Brand names, warranties, guarantees, promises
+  
+- Use {placeholders} instead. They will be replaced at runtime per company.
+- If information is unknown or differs by company, ASK A QUESTION or use placeholders.
+- If a request requires specific company policy not in placeholders, respond generically and offer to schedule/transfer.
+
+ALLOWED PLACEHOLDERS (ONLY USE THESE):
+{company.name} - Company name
+{company.phone} - Phone number
+{company.website} - Website
+{company.address} - Address
+{company.serviceArea} - Service area
+{company.hours} - Business hours
+{company.afterHoursMessage} - After-hours message
+{pricing.diagnostic} - Diagnostic fee
+{pricing.serviceCall} - Service call fee
+{pricing.afterHours} - After-hours surcharge
+
+PLACEHOLDER USAGE EXAMPLES:
+✓ "You've reached {company.name}, this is the service line."
+✓ "Our diagnostic fee is {pricing.diagnostic}."
+✓ "We service the {company.serviceArea} area."
+✓ "Our hours are {company.hours}."
+✗ "You've reached Smith AC..." (hardcoded name)
+✗ "The diagnostic is $89..." (hardcoded price)
+✗ "We service Phoenix metro..." (hardcoded area)
+
+DO NOT mention placeholders, tokens, or template mechanics to the caller.
+Write naturally as if speaking - placeholders are invisible to humans.
+`;
+
+/**
  * PERSONA STANDARDS
  * Aligned with Deep Audit rubric
  */
@@ -80,6 +165,109 @@ REQUIRED ELEMENTS:
 - At least one diagnostic question per scenario
 - Clear call to action in full replies
 `;
+
+/**
+ * FORBIDDEN PATTERNS - Post-generation validation
+ * These patterns indicate hardcoded company data (multi-tenant violation)
+ */
+const FORBIDDEN_PATTERNS = [
+    // Phone numbers (various formats)
+    { pattern: /\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g, name: 'phone_number', message: 'Hardcoded phone number detected' },
+    { pattern: /\+1[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/g, name: 'phone_number', message: 'Hardcoded phone number detected' },
+    
+    // URLs and websites
+    { pattern: /https?:\/\/[^\s]+/gi, name: 'url', message: 'Hardcoded URL detected' },
+    { pattern: /www\.[^\s]+/gi, name: 'url', message: 'Hardcoded website detected' },
+    
+    // Emails
+    { pattern: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, name: 'email', message: 'Hardcoded email detected' },
+    
+    // Currency (prices) - must be in placeholder
+    { pattern: /\$\d+(?:\.\d{2})?(?!\})/g, name: 'price', message: 'Hardcoded price detected - use {pricing.*} placeholder' },
+    
+    // Street addresses (common patterns)
+    { pattern: /\d+\s+[A-Z][a-z]+\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct)\b/gi, name: 'address', message: 'Hardcoded street address detected' }
+];
+
+/**
+ * Validate scenario for multi-tenant compliance
+ * @param {Object} scenario - Generated scenario
+ * @returns {Object} { isCompliant, violations, fixSuggestions }
+ */
+function validateMultiTenantCompliance(scenario) {
+    const violations = [];
+    const fixSuggestions = [];
+    
+    // Combine all text to check
+    const textToCheck = [
+        ...(scenario.quickReplies || []),
+        ...(scenario.fullReplies || []),
+        scenario.generationNotes || ''
+    ].join(' ');
+    
+    // Check forbidden patterns
+    for (const { pattern, name, message } of FORBIDDEN_PATTERNS) {
+        const matches = textToCheck.match(pattern);
+        if (matches) {
+            violations.push({
+                type: name,
+                message,
+                matches: [...new Set(matches)], // Unique matches
+                severity: 'error'
+            });
+            
+            // Add fix suggestion
+            if (name === 'phone_number') {
+                fixSuggestions.push('Replace phone numbers with {company.phone}');
+            } else if (name === 'url') {
+                fixSuggestions.push('Replace URLs with {company.website}');
+            } else if (name === 'price') {
+                fixSuggestions.push('Replace prices with {pricing.diagnostic} or {pricing.serviceCall}');
+            } else if (name === 'address') {
+                fixSuggestions.push('Replace addresses with {company.address} or {company.serviceArea}');
+            }
+        }
+    }
+    
+    // Check for placeholder usage (should have at least one if mentioning company)
+    const companyMentionPatterns = [
+        /\bwe are\b/i, /\byou'?ve reached\b/i, /\bcall us\b/i, /\bour (?:website|hours|address|area)\b/i,
+        /\bdiagnostic (?:fee|charge|cost)\b/i, /\bservice call (?:fee|charge)\b/i
+    ];
+    
+    const hasCompanyMention = companyMentionPatterns.some(p => p.test(textToCheck));
+    const hasPlaceholder = /\{[a-z]+\.[a-z]+\}/i.test(textToCheck);
+    
+    if (hasCompanyMention && !hasPlaceholder) {
+        violations.push({
+            type: 'missing_placeholder',
+            message: 'Scenario mentions company-specific info but uses no placeholders',
+            severity: 'warning'
+        });
+        fixSuggestions.push('Add appropriate placeholders for company-specific information');
+    }
+    
+    // Check for invented placeholders (not in registry)
+    const usedPlaceholders = textToCheck.match(/\{([a-z]+\.[a-z]+)\}/gi) || [];
+    for (const placeholder of usedPlaceholders) {
+        const key = placeholder.replace(/[{}]/g, '');
+        if (!ALLOWED_PLACEHOLDERS[key]) {
+            violations.push({
+                type: 'invalid_placeholder',
+                message: `Unknown placeholder: ${placeholder}`,
+                severity: 'error'
+            });
+            fixSuggestions.push(`Replace ${placeholder} with an allowed placeholder`);
+        }
+    }
+    
+    return {
+        isCompliant: violations.filter(v => v.severity === 'error').length === 0,
+        violations,
+        fixSuggestions,
+        placeholdersUsed: usedPlaceholders.map(p => p.replace(/[{}]/g, ''))
+    };
+}
 
 /**
  * Generate scenarios for a service
@@ -200,11 +388,15 @@ async function generateScenariosForService(service, options = {}) {
 
 /**
  * Get system prompt for GPT-4
+ * Includes multi-tenant placeholder requirements
  */
 function getSystemPrompt(tradeType) {
-    return `You are an expert HVAC dispatcher scenario writer for AI receptionist training.
+    return `YOU ARE: Scenario Developer for a multi-tenant AI receptionist platform.
+You are generating GLOBAL TEMPLATE scenarios that must work for ANY companyId.
 
 Your job is to create realistic, high-quality scenarios that train an AI agent to handle ${tradeType.toUpperCase()} customer calls like a seasoned dispatcher.
+
+${MULTI_TENANT_RULES}
 
 ${PERSONA_STANDARDS}
 
@@ -217,11 +409,20 @@ QUALITY STANDARDS:
 - Quick replies are for voice (short, punchy, under 15 words)
 - Full replies are more complete (under 25 words, includes call to action)
 - Every scenario should ultimately lead toward booking or clear next steps
-- Vary the scenarios to cover different caller emotions and situations`;
+- Vary the scenarios to cover different caller emotions and situations
+- Use placeholders for ANY company-specific information
+
+QUALITY CHECK BEFORE YOU OUTPUT:
+✓ Verify agentResponse contains ZERO hardcoded company facts
+✓ Verify placeholders are used wherever company-specific info appears
+✓ If you used a price, it MUST be a {pricing.*} placeholder
+✓ If you mentioned company name, it MUST be {company.name}
+✓ If you mentioned service area, it MUST be {company.serviceArea}`;
 }
 
 /**
  * Build generation prompt for a specific service
+ * Includes placeholder requirements for multi-tenant compliance
  */
 function buildGenerationPrompt(service, options) {
     const { targetCount, templateName, existingScenarios, tradeType } = options;
@@ -267,6 +468,17 @@ REQUIREMENTS:
 5. Responses must follow dispatcher persona standards
 6. Include at least one EMERGENCY type if applicable
 7. Include at least one FAQ type for common questions
+8. **USE PLACEHOLDERS** for all company-specific information
+
+PLACEHOLDER EXAMPLES FOR RESPONSES:
+✓ "You've reached {company.name}, how can I help?"
+✓ "Our diagnostic fee is {pricing.diagnostic}."
+✓ "We service the {company.serviceArea} area. What's your address?"
+✓ "Our hours are {company.hours}."
+✓ "I can get a tech out to you. The service call is {pricing.serviceCall}."
+✗ "You've reached ABC Heating..." (NO hardcoded names)
+✗ "The diagnostic is $89..." (NO hardcoded prices)
+✗ "We service Phoenix..." (NO hardcoded areas)
 
 SCENARIO TYPES EXPLAINED:
 - EMERGENCY: Urgent issues requiring immediate attention
@@ -282,8 +494,8 @@ Respond with JSON:
       "scenarioName": "Descriptive name",
       "scenarioType": "EMERGENCY|BOOKING|FAQ|TROUBLESHOOT|QUOTE",
       "triggers": ["trigger 1", "trigger 2", ...],
-      "quickReplies": ["reply 1", "reply 2", ...],
-      "fullReplies": ["reply 1", "reply 2", ...],
+      "quickReplies": ["reply 1 with {placeholders}", "reply 2", ...],
+      "fullReplies": ["reply 1 with {placeholders}", "reply 2", ...],
       "generationNotes": "Why this scenario is important"
     }
   ]
@@ -292,9 +504,11 @@ Respond with JSON:
 
 /**
  * Validate and enrich a generated scenario
+ * Includes multi-tenant compliance check
  */
 function validateAndEnrichScenario(scenario, service, index) {
     const errors = [];
+    const warnings = [];
     
     // Check required fields
     if (!scenario.scenarioName) errors.push('Missing scenarioName');
@@ -327,6 +541,18 @@ function validateAndEnrichScenario(scenario, service, index) {
         });
     }
     
+    // MULTI-TENANT COMPLIANCE CHECK (Critical)
+    const complianceResult = validateMultiTenantCompliance(scenario);
+    
+    // Add compliance violations to errors
+    for (const violation of complianceResult.violations) {
+        if (violation.severity === 'error') {
+            errors.push(`[TENANT VIOLATION] ${violation.message}: ${(violation.matches || []).join(', ')}`);
+        } else {
+            warnings.push(`[TENANT WARNING] ${violation.message}`);
+        }
+    }
+    
     // Enrich with metadata
     return {
         // Core content
@@ -345,6 +571,13 @@ function validateAndEnrichScenario(scenario, service, index) {
         // Validation
         isValid: errors.length === 0,
         validationErrors: errors,
+        validationWarnings: warnings,
+        
+        // Multi-tenant compliance
+        multiTenantCompliant: complianceResult.isCompliant,
+        placeholdersUsed: complianceResult.placeholdersUsed,
+        complianceViolations: complianceResult.violations,
+        complianceFixSuggestions: complianceResult.fixSuggestions,
         
         // Placeholders for future fields
         scenarioId: null, // Will be assigned on save
@@ -465,10 +698,19 @@ function formatForGlobalBrain(scenario, templateId) {
 }
 
 module.exports = {
+    // Generation
     generateScenariosForService,
     generateSingleScenario,
     getGenerationQueue,
     formatForGlobalBrain,
+    
+    // Validation
     validateAndEnrichScenario,
-    PERSONA_STANDARDS
+    validateMultiTenantCompliance,
+    
+    // Constants
+    PERSONA_STANDARDS,
+    MULTI_TENANT_RULES,
+    ALLOWED_PLACEHOLDERS,
+    FORBIDDEN_PATTERNS
 };
