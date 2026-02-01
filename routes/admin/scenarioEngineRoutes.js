@@ -56,27 +56,40 @@ router.get('/coverage/:templateId', async (req, res) => {
         // Get scenarios from template
         const scenarios = template.scenarios || [];
         
-        // Get services from switchboard (if companyId provided) or catalog
+        // Get catalog (needed for serviceType, displayName, category)
+        const catalog = await ServiceCatalog.findOne({ templateId });
+        const catalogServices = catalog ? catalog.services : [];
+        const catalogMap = new Map(catalogServices.map(s => [s.serviceKey, s.toObject()]));
+        
+        // Get services - merge switchboard toggles with catalog metadata
         let services = [];
         
         if (companyId && mongoose.Types.ObjectId.isValid(companyId)) {
             // Get company's switchboard
             const switchboard = await ServiceSwitchboard.findOne({ companyId });
-            if (switchboard) {
-                services = switchboard.services || [];
+            if (switchboard && switchboard.services.length > 0) {
+                // Enrich switchboard services with catalog data
+                services = switchboard.services.map(sw => {
+                    const catalogData = catalogMap.get(sw.serviceKey) || {};
+                    return {
+                        // Catalog metadata (serviceType, displayName, category, etc.)
+                        ...catalogData,
+                        // Switchboard toggle state (enabled, sourcePolicy, etc.)
+                        serviceKey: sw.serviceKey,
+                        enabled: sw.enabled,
+                        sourcePolicy: sw.sourcePolicy,
+                        customDeclineMessage: sw.customDeclineMessage
+                    };
+                });
             }
         }
         
-        // If no company services, get from catalog
-        if (services.length === 0) {
-            const catalog = await ServiceCatalog.findOne({ templateId });
-            if (catalog) {
-                // Convert catalog services to switchboard format (all enabled)
-                services = catalog.services.map(s => ({
-                    ...s.toObject(),
-                    enabled: true
-                }));
-            }
+        // If no services from switchboard, use catalog directly (all enabled)
+        if (services.length === 0 && catalogServices.length > 0) {
+            services = catalogServices.map(s => ({
+                ...s.toObject(),
+                enabled: true
+            }));
         }
         
         // Get audit results for this template
@@ -139,28 +152,39 @@ router.get('/coverage/:templateId/export', async (req, res) => {
         
         const scenarios = template.scenarios || [];
         
-        // Get services
+        // Get catalog for metadata
+        const catalog = await ServiceCatalog.findOne({ templateId });
+        const catalogServices = catalog ? catalog.services : [];
+        const catalogMap = new Map(catalogServices.map(s => [s.serviceKey, s.toObject()]));
+        
+        // Get services - merge switchboard with catalog
         let services = [];
         let companyName = null;
         
         if (companyId && mongoose.Types.ObjectId.isValid(companyId)) {
             const switchboard = await ServiceSwitchboard.findOne({ companyId });
-            if (switchboard) {
-                services = switchboard.services || [];
+            if (switchboard && switchboard.services.length > 0) {
+                // Enrich with catalog data
+                services = switchboard.services.map(sw => {
+                    const catalogData = catalogMap.get(sw.serviceKey) || {};
+                    return {
+                        ...catalogData,
+                        serviceKey: sw.serviceKey,
+                        enabled: sw.enabled,
+                        sourcePolicy: sw.sourcePolicy
+                    };
+                });
             }
             
             const company = await v2Company.findById(companyId, 'businessName');
             companyName = company?.businessName;
         }
         
-        if (services.length === 0) {
-            const catalog = await ServiceCatalog.findOne({ templateId });
-            if (catalog) {
-                services = catalog.services.map(s => ({
-                    ...s.toObject(),
-                    enabled: true
-                }));
-            }
+        if (services.length === 0 && catalogServices.length > 0) {
+            services = catalogServices.map(s => ({
+                ...s.toObject(),
+                enabled: true
+            }));
         }
         
         // Get audit results
@@ -238,24 +262,34 @@ router.get('/queue/:templateId', async (req, res) => {
         
         const scenarios = template.scenarios || [];
         
-        // Get services
+        // Get catalog for metadata
+        const catalog = await ServiceCatalog.findOne({ templateId });
+        const catalogServices = catalog ? catalog.services : [];
+        const catalogMap = new Map(catalogServices.map(s => [s.serviceKey, s.toObject()]));
+        
+        // Get services - merge switchboard with catalog
         let services = [];
         
         if (companyId && mongoose.Types.ObjectId.isValid(companyId)) {
             const switchboard = await ServiceSwitchboard.findOne({ companyId });
-            if (switchboard) {
-                services = switchboard.services || [];
+            if (switchboard && switchboard.services.length > 0) {
+                services = switchboard.services.map(sw => {
+                    const catalogData = catalogMap.get(sw.serviceKey) || {};
+                    return {
+                        ...catalogData,
+                        serviceKey: sw.serviceKey,
+                        enabled: sw.enabled,
+                        sourcePolicy: sw.sourcePolicy
+                    };
+                });
             }
         }
         
-        if (services.length === 0) {
-            const catalog = await ServiceCatalog.findOne({ templateId });
-            if (catalog) {
-                services = catalog.services.map(s => ({
-                    ...s.toObject(),
-                    enabled: true
-                }));
-            }
+        if (services.length === 0 && catalogServices.length > 0) {
+            services = catalogServices.map(s => ({
+                ...s.toObject(),
+                enabled: true
+            }));
         }
         
         // Calculate coverage
