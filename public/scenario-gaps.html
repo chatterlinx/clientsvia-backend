@@ -7895,11 +7895,21 @@
             text += `\n`;
             
             // Stats by status
-            const enabledGlobal = services.filter(s => s.enabled && s.source === 'global').length;
-            const enabledLocal = services.filter(s => s.enabled && s.source === 'companyLocal').length;
+            const enabledGlobal = services.filter(s => s.enabled && s.effectiveSource === 'global').length;
+            const enabledLocal = services.filter(s => s.enabled && s.effectiveSource === 'companyLocal').length;
             text += `ROUTING:\n`;
             text += `- Global Template: ${enabledGlobal}\n`;
             text += `- Company Local: ${enabledLocal}\n`;
+            text += `\n`;
+            
+            // V1.2 Service Type Stats
+            const workCount = services.filter(s => (s.serviceType || 'work') === 'work').length;
+            const symptomCount = services.filter(s => s.serviceType === 'symptom').length;
+            const adminCount = services.filter(s => s.serviceType === 'admin').length;
+            text += `SERVICE TYPES:\n`;
+            text += `- WORK: ${workCount}\n`;
+            text += `- SYMPTOM: ${symptomCount}\n`;
+            text += `- ADMIN: ${adminCount}\n`;
             text += `\n`;
             
             text += `═══════════════════════════════════════\n`;
@@ -7918,10 +7928,15 @@
                 
                 for (const s of categoryServices) {
                     const status = s.enabled ? '✅' : '❌';
-                    const source = s.enabled ? (s.source === 'global' ? '[Global]' : '[Local]') : '[OFF]';
-                    text += `${status} ${s.displayName}\n`;
+                    const source = s.enabled ? (s.effectiveSource === 'global' ? '[Global]' : '[Local]') : '[OFF]';
+                    const typeTag = s.serviceType === 'symptom' ? ' [SYMPTOM]' : 
+                                    s.serviceType === 'admin' ? ' [ADMIN]' : '';
+                    text += `${status} ${s.displayName}${typeTag}\n`;
                     text += `   Key: ${s.serviceKey}\n`;
-                    text += `   Source: ${source}\n`;
+                    text += `   Type: ${s.serviceType || 'work'} | Source: ${source}\n`;
+                    if (s.serviceType === 'symptom' && s.routesTo && s.routesTo.length > 0) {
+                        text += `   Routes To: ${s.routesTo.join(', ')}\n`;
+                    }
                     if (!s.enabled && s.customDeclineMessage) {
                         text += `   Decline: "${s.customDeclineMessage}"\n`;
                     }
@@ -7944,10 +7959,11 @@
             
             // Add JSON for programmatic use
             text += `═══════════════════════════════════════\n`;
-            text += `JSON EXPORT\n`;
+            text += `JSON EXPORT (V1.2)\n`;
             text += `═══════════════════════════════════════\n`;
             text += JSON.stringify({
                 exportedAt: new Date().toISOString(),
+                exportVersion: '1.2',
                 templateId: switchboardData.templateId,
                 templateName: switchboardData.templateName,
                 summary: {
@@ -7955,14 +7971,22 @@
                     enabled: services.filter(s => s.enabled).length,
                     disabled: services.filter(s => !s.enabled).length,
                     global: enabledGlobal,
-                    local: enabledLocal
+                    local: enabledLocal,
+                    byType: {
+                        work: workCount,
+                        symptom: symptomCount,
+                        admin: adminCount
+                    }
                 },
                 services: services.map(s => ({
                     serviceKey: s.serviceKey,
                     displayName: s.displayName,
                     category: s.category,
+                    serviceType: s.serviceType || 'work',
                     enabled: s.enabled,
-                    source: s.source
+                    effectiveSource: s.effectiveSource || s.source,
+                    routesTo: s.routesTo || [],
+                    triageMode: s.triageMode || 'none'
                 }))
             }, null, 2);
             
