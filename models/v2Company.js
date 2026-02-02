@@ -1936,6 +1936,48 @@ const companySchema = new mongoose.Schema({
         },
         
         // -------------------------------------------------------------------
+        // 🛡️ DUPLICATE GATE - Prevents duplicate scenario creation (Feb 2026)
+        // -------------------------------------------------------------------
+        // Blocks scenarios that are too similar to existing ones
+        // Uses OpenAI embeddings for semantic similarity comparison
+        // Enforced at: scenario approval, import, and generation
+        // -------------------------------------------------------------------
+        duplicateGate: {
+            // Master toggle - disable to allow all scenarios through
+            enabled: { type: Boolean, default: true },
+            
+            // Similarity threshold (0.0 - 1.0)
+            // 0.86 = ~86% similar, good balance of catch vs false positives
+            // Higher = stricter (blocks more), Lower = permissive (allows more)
+            threshold: { 
+                type: Number, 
+                default: 0.86, 
+                min: 0.5, 
+                max: 0.99 
+            },
+            
+            // Action when duplicate detected
+            // 'block': Hard block - return error and don't save
+            // 'warn': Soft block - save but flag for review
+            onDuplicate: {
+                type: String,
+                enum: ['block', 'warn'],
+                default: 'block'
+            },
+            
+            // Force admin override capability
+            // If true, admin can bypass with ?force=true query param
+            allowOverride: { type: Boolean, default: true },
+            
+            // Log all blocked/warned scenarios for audit
+            logToAudit: { type: Boolean, default: true },
+            
+            // METADATA
+            lastUpdated: { type: Date, default: Date.now },
+            updatedBy: { type: String, default: null, trim: true }
+        },
+        
+        // -------------------------------------------------------------------
         // 🎯 CALL FLOW ENGINE - Universal Flow Routing (Dec 2025)
         // -------------------------------------------------------------------
         // PURPOSE: Replace giant frontline scripts with code-driven flow decisions

@@ -491,6 +491,99 @@ router.post('/pending/:id/approve', async (req, res) => {
             return res.status(404).json({ error: 'Template not found' });
         }
         
+        // ═══════════════════════════════════════════════════════════════
+        // DUPLICATE GATE (Feb 2026): Block if too similar to existing
+        // ═══════════════════════════════════════════════════════════════
+        const forceOverride = req.query.force === 'true';
+        
+        // Get company duplicate gate settings (default to enabled with 0.86 threshold)
+        const Company = require('../../models/v2Company');
+        const company = await Company.findById(pending.companyId).lean();
+        const duplicateGate = company?.aiAgentSettings?.duplicateGate || {
+            enabled: true,
+            threshold: 0.86,
+            onDuplicate: 'block',
+            allowOverride: true
+        };
+        
+        if (duplicateGate.enabled && !forceOverride) {
+            try {
+                const embeddingService = require('../../services/scenarioEngine/embeddingService');
+                
+                // Get all existing scenarios in same service
+                const existingScenarios = [];
+                const pendingPayload = pending.editedPayload || pending.payload;
+                
+                for (const cat of template.categories) {
+                    for (const s of cat.scenarios || []) {
+                        // Match by serviceKey or category name containing serviceKey
+                        if (s.serviceKey === pending.serviceKey || 
+                            (cat.name || '').toLowerCase().includes(pending.serviceKey.replace(/_/g, ' '))) {
+                            existingScenarios.push(s);
+                        }
+                    }
+                }
+                
+                if (existingScenarios.length > 0) {
+                    // Get embedding for new scenario
+                    const newEmbedding = await embeddingService.getScenarioEmbedding({
+                        scenarioName: pendingPayload.scenarioName,
+                        triggers: pendingPayload.triggers,
+                        quickReplies: pendingPayload.quickReplies
+                    });
+                    
+                    // Get embeddings for existing scenarios
+                    const existingEmbeddings = await embeddingService.batchGetEmbeddings(existingScenarios);
+                    const scenariosWithEmbeddings = existingScenarios.map((s, i) => ({
+                        scenario: s,
+                        embedding: existingEmbeddings[i]
+                    }));
+                    
+                    // Check for duplicates
+                    const similar = embeddingService.findSimilar(
+                        newEmbedding, 
+                        scenariosWithEmbeddings, 
+                        duplicateGate.threshold
+                    );
+                    
+                    if (similar.length > 0) {
+                        const match = similar[0];
+                        logger.warn('[SCENARIO ENGINE] Duplicate blocked at approval', {
+                            newScenario: pendingPayload.scenarioName,
+                            matchedScenario: match.scenario.scenarioName || match.scenario.name,
+                            similarity: match.similarity,
+                            threshold: duplicateGate.threshold
+                        });
+                        
+                        if (duplicateGate.onDuplicate === 'block') {
+                            return res.status(409).json({
+                                error: 'DUPLICATE_SCENARIO',
+                                blocked: true,
+                                reason: 'This scenario is too similar to an existing one',
+                                maxSimilarity: match.similarity,
+                                threshold: duplicateGate.threshold,
+                                matchedScenario: {
+                                    id: match.scenario.scenarioId || match.scenario._id,
+                                    name: match.scenario.scenarioName || match.scenario.name,
+                                    serviceKey: match.scenario.serviceKey || pending.serviceKey
+                                },
+                                canOverride: duplicateGate.allowOverride,
+                                overrideUrl: duplicateGate.allowOverride 
+                                    ? `${req.originalUrl}?force=true` 
+                                    : null
+                            });
+                        }
+                        // If 'warn' mode, continue but flag for audit
+                    }
+                }
+            } catch (gateError) {
+                // Don't block on gate errors - log and continue
+                logger.warn('[SCENARIO ENGINE] Duplicate gate check failed, allowing', {
+                    error: gateError.message
+                });
+            }
+        }
+        
         // Format scenario for template
         const payload = pending.editedPayload || pending.payload;
         // ═══════════════════════════════════════════════════════════════
@@ -624,6 +717,61 @@ router.post('/pending/bulk-approve', async (req, res) => {
         
         let approved = 0;
         let skipped = 0;
+        let blockedDuplicates = 0;
+        
+        // ═══════════════════════════════════════════════════════════════
+        // DUPLICATE GATE SETUP (Feb 2026)
+        // Load existing scenarios + gate settings once for efficiency
+        // ═══════════════════════════════════════════════════════════════
+        const forceOverride = req.query.force === 'true';
+        const Company = require('../../models/v2Company');
+        
+        // Get first pending's companyId for settings
+        const firstPending = pendingScenarios[0];
+        const company = firstPending 
+            ? await Company.findById(firstPending.companyId).lean() 
+            : null;
+        const duplicateGate = company?.aiAgentSettings?.duplicateGate || {
+            enabled: true,
+            threshold: 0.86,
+            onDuplicate: 'block'
+        };
+        
+        // Pre-load existing scenarios and embeddings for duplicate checking
+        let existingEmbeddings = [];
+        let embeddingService = null;
+        
+        if (duplicateGate.enabled && !forceOverride && pendingScenarios.length > 0) {
+            try {
+                embeddingService = require('../../services/scenarioEngine/embeddingService');
+                
+                // Collect all existing scenarios for this service
+                const existingScenarios = [];
+                for (const cat of template.categories) {
+                    for (const s of cat.scenarios || []) {
+                        if (s.serviceKey === serviceKey || 
+                            (cat.name || '').toLowerCase().includes(serviceKey.replace(/_/g, ' '))) {
+                            existingScenarios.push(s);
+                        }
+                    }
+                }
+                
+                if (existingScenarios.length > 0) {
+                    const embeddings = await embeddingService.batchGetEmbeddings(existingScenarios);
+                    existingEmbeddings = existingScenarios.map((s, i) => ({
+                        scenario: s,
+                        embedding: embeddings[i]
+                    }));
+                    logger.info('[SCENARIO ENGINE] Bulk approve: loaded existing embeddings', {
+                        count: existingEmbeddings.length
+                    });
+                }
+            } catch (gateError) {
+                logger.warn('[SCENARIO ENGINE] Bulk approve: duplicate gate setup failed', {
+                    error: gateError.message
+                });
+            }
+        }
         
         // Track categories we've added to
         const categoryCache = new Map();
@@ -631,6 +779,51 @@ router.post('/pending/bulk-approve', async (req, res) => {
         for (const pending of pendingScenarios) {
             try {
                 const payload = pending.editedPayload || pending.payload;
+                
+                // ═══════════════════════════════════════════════════════════════
+                // DUPLICATE CHECK FOR THIS SCENARIO
+                // ═══════════════════════════════════════════════════════════════
+                if (embeddingService && existingEmbeddings.length > 0 && !forceOverride) {
+                    try {
+                        const newEmbedding = await embeddingService.getScenarioEmbedding({
+                            scenarioName: payload.scenarioName,
+                            triggers: payload.triggers,
+                            quickReplies: payload.quickReplies
+                        });
+                        
+                        const similar = embeddingService.findSimilar(
+                            newEmbedding, 
+                            existingEmbeddings, 
+                            duplicateGate.threshold
+                        );
+                        
+                        if (similar.length > 0) {
+                            logger.info('[SCENARIO ENGINE] Bulk approve: skipping duplicate', {
+                                scenario: payload.scenarioName,
+                                similarTo: similar[0].scenario.scenarioName || similar[0].scenario.name,
+                                similarity: similar[0].similarity
+                            });
+                            
+                            // Mark as rejected due to duplicate
+                            await pending.reject(
+                                { name: 'System - Duplicate Gate' },
+                                `Duplicate of "${similar[0].scenario.scenarioName || similar[0].scenario.name}" (${(similar[0].similarity * 100).toFixed(1)}% similar)`
+                            );
+                            blockedDuplicates++;
+                            continue;  // Skip this scenario
+                        }
+                        
+                        // Add this scenario to existing embeddings (so we don't approve dupes in same batch)
+                        existingEmbeddings.push({
+                            scenario: { scenarioName: payload.scenarioName },
+                            embedding: newEmbedding
+                        });
+                    } catch (dupError) {
+                        logger.warn('[SCENARIO ENGINE] Duplicate check failed for single', {
+                            error: dupError.message
+                        });
+                    }
+                }
                 // ═══════════════════════════════════════════════════════════════
                 // PASS ALL WIRING FIELDS (Feb 2026 fix)
                 // The payload contains full wiring from serviceScenarioGenerator
@@ -702,13 +895,21 @@ router.post('/pending/bulk-approve', async (req, res) => {
         
         await template.save();
         
-        logger.info('[SCENARIO ENGINE] Bulk approve completed', { serviceKey, approved, skipped });
+        logger.info('[SCENARIO ENGINE] Bulk approve completed', { 
+            serviceKey, 
+            approved, 
+            skipped, 
+            blockedDuplicates 
+        });
         
         res.json({
             success: true,
-            message: `Approved ${approved} scenarios`,
+            message: blockedDuplicates > 0
+                ? `Approved ${approved} scenarios (${blockedDuplicates} duplicates blocked)`
+                : `Approved ${approved} scenarios`,
             approved,
-            skipped
+            skipped,
+            blockedDuplicates
         });
     } catch (error) {
         logger.error('[SCENARIO ENGINE] Error in bulk approve', { error: error.message });

@@ -8806,7 +8806,17 @@
                     throw new Error(result.error);
                 }
                 
-                showToast(`✅ Approved ${result.approved} scenarios for ${serviceKey}`, 'success');
+                // ═══════════════════════════════════════════════════════════════
+                // SHOW DUPLICATE GATE RESULTS (Feb 2026)
+                // ═══════════════════════════════════════════════════════════════
+                let message = `✅ Approved ${result.approved} scenarios for ${serviceKey}`;
+                if (result.blockedDuplicates > 0) {
+                    message += `\n🚫 ${result.blockedDuplicates} duplicates blocked`;
+                }
+                if (result.skipped > 0) {
+                    message += `\n⚠️ ${result.skipped} skipped (lint errors)`;
+                }
+                showToast(message, 'success');
                 
                 // Refresh
                 loadPendingReview();
@@ -8994,7 +9004,40 @@
                 });
                 
                 const result = await response.json();
-                if (!response.ok) throw new Error(result.error);
+                
+                // ═══════════════════════════════════════════════════════════════
+                // DUPLICATE GATE HANDLING (Feb 2026)
+                // ═══════════════════════════════════════════════════════════════
+                if (response.status === 409 && result.error === 'DUPLICATE_SCENARIO') {
+                    if (row) row.style.opacity = '1';  // Restore row
+                    
+                    const similarityPct = (result.maxSimilarity * 100).toFixed(1);
+                    const matchName = result.matchedScenario?.name || 'unknown';
+                    
+                    // Show duplicate warning with option to force
+                    const forceApprove = result.canOverride && confirm(
+                        `⚠️ DUPLICATE BLOCKED\n\n` +
+                        `This scenario is ${similarityPct}% similar to:\n` +
+                        `"${matchName}"\n\n` +
+                        `Click OK to force approve anyway, or Cancel to reject.`
+                    );
+                    
+                    if (forceApprove) {
+                        // Retry with force override
+                        const forceResponse = await fetch(`/api/admin/scenario-engine/pending/${pendingId}/approve?force=true`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                        });
+                        const forceResult = await forceResponse.json();
+                        if (!forceResponse.ok) throw new Error(forceResult.error);
+                        showToast('✓ Force approved (duplicate override)', 'success');
+                    } else {
+                        showToast(`🚫 Blocked: ${similarityPct}% duplicate of "${matchName}"`, 'warning');
+                        return;
+                    }
+                } else if (!response.ok) {
+                    throw new Error(result.error);
+                }
                 
                 // Remove row with animation
                 if (row) {
