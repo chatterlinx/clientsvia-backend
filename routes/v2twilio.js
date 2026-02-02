@@ -4561,6 +4561,31 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     logger.error('❌ CHECKPOINT ERROR: AI Agent Respond error:', error);
     logger.error('❌ Error stack:', error.stack);
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 📼 BLACK BOX: CRITICAL ERROR LOGGING (Feb 2026)
+    // This was missing - errors were swallowed without visibility!
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (BlackBoxLogger) {
+      try {
+        await BlackBoxLogger.logEvent({
+          callId: req.body.CallSid || 'UNKNOWN',
+          companyId: req.params.companyID || 'UNKNOWN',
+          type: 'PIPELINE_ERROR',
+          data: {
+            error: error.message,
+            errorType: error.name || 'Error',
+            stack: error.stack?.substring(0, 500),
+            speechResult: (req.body.SpeechResult || '').substring(0, 200),
+            phase: 'v2-agent-respond',
+            turnCount: req.body.turnCount || 'unknown',
+            recovery: 'FALLBACK_TRANSFER'
+          }
+        });
+      } catch (bbErr) {
+        logger.warn('[BLACKBOX] Failed to log pipeline error', { error: bbErr.message });
+      }
+    }
+    
     const twiml = new twilio.twiml.VoiceResponse();
     
     // Try to get the company and check if transfer is enabled
@@ -4575,12 +4600,42 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       twiml.say(errorResponse);
       handleTransfer(twiml, company, "Our team will be happy to assist you.", companyID);
+      
+      // 📼 BLACK BOX: Log fallback response
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: req.body.CallSid || 'UNKNOWN',
+          companyId: companyID,
+          type: 'FALLBACK_RESPONSE_SENT',
+          data: {
+            reason: 'PIPELINE_ERROR',
+            response: errorResponse,
+            transferEnabled: isTransferEnabled(company),
+            transferNumber: getTransferNumber(company) || null
+          }
+        }).catch(() => {});
+      }
     } catch (companyError) {
       logger.error('❌ CHECKPOINT DOUBLE ERROR: Could not load company for transfer:', companyError);
       // Use configurable response instead of hardcoded message [[memory:8276820]]
       const doubleErrorResponse = `Configuration error: Company ${req.params.companyID} must configure error responses in AI Agent Logic. Each company must have their own protocol.`;
       twiml.say(doubleErrorResponse);
       twiml.hangup();
+      
+      // 📼 BLACK BOX: Log double error
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: req.body.CallSid || 'UNKNOWN',
+          companyId: req.params.companyID || 'UNKNOWN',
+          type: 'PIPELINE_DOUBLE_ERROR',
+          data: {
+            primaryError: error.message,
+            secondaryError: companyError.message,
+            response: doubleErrorResponse,
+            action: 'HANGUP'
+          }
+        }).catch(() => {});
+      }
     }
     
     logger.info('📤 CHECKPOINT ERROR RESPONSE: Sending error TwiML');
