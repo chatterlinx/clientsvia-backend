@@ -8331,9 +8331,13 @@ async function processTurn({
                 const addressSlotConfig = bookingSlotsSafe.find(s => (s.slotId || s.id || s.type) === 'address');
                 const addressMeta = session.booking.meta.address;
                 const accessConfig = company?.aiAgentSettings?.frontDeskBehavior?.accessFlow || {};
-                const forcedAccessCompanyIds = ['68e3f77a9d623b8058c700c4'];
-                const isForcedAccessCompany = forcedAccessCompanyIds.includes(String(company?._id || company?.companyId || ''));
-                const accessEnabled = accessConfig.enabled === true || isForcedAccessCompany;
+                // V91: Remove hardcoded company IDs - use config-driven approach
+                // Access flow is enabled if: (1) explicitly enabled in config, OR (2) company has trade that benefits from access collection
+                const accessEnabledByConfig = accessConfig.enabled === true;
+                const accessEnabledByDefault = ['hvac', 'plumbing', 'electrical', 'pest', 'carpet', 'appliance'].includes(
+                    String(company?.trade || '').toLowerCase().trim()
+                );
+                const accessEnabled = accessEnabledByConfig || accessEnabledByDefault;
                 const tradeKey = String(company?.trade || '').toLowerCase().trim();
                 const accessTradeApplicability = Array.isArray(accessConfig.tradeApplicability) && accessConfig.tradeApplicability.length
                     ? accessConfig.tradeApplicability.map(t => String(t).toLowerCase().trim())
@@ -8367,6 +8371,22 @@ async function processTurn({
                 );
 
                 const shouldUseAccessFlow = accessActiveForTrade && addressMeta.confirmed === true;
+                
+                // V91: Log access flow decision for audit
+                if (shouldUseAccessFlow && !addressMeta._accessFlowLogged) {
+                    addressMeta._accessFlowLogged = true;
+                    try {
+                        await BlackBoxLogger.addEvent(session._id?.toString(), 'ACCESS_FLOW_TRIGGERED', {
+                            accessEnabled,
+                            accessEnabledByConfig: accessConfig.enabled === true,
+                            tradeKey,
+                            propertyTypeEnabled: accessConfig.propertyTypeEnabled !== false,
+                            addressConfirmed: addressMeta.confirmed,
+                            triggerReason: accessConfig.enabled === true ? 'config_enabled' : 'trade_default'
+                        });
+                    } catch {}
+                }
+                
                 const propertyTypeTriggersUnit = ['condo/townhome', 'apartment', 'commercial'];
                 const propertyTypeTriggersAccessInstructions = ['condo/townhome', 'apartment', 'commercial'];
                 const propertyTypeIsCommercial = addressMeta.propertyType === 'commercial';

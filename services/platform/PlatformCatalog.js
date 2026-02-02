@@ -219,6 +219,71 @@ const RUNTIME_MODULE_DEFINITIONS = [
         built: true
     },
     {
+        id: 'runtime.addressValidationService',
+        key: 'addressValidationService',
+        label: 'Address Validation (Geo-Verify)',
+        type: ITEM_TYPES.RUNTIME_MODULE,
+        category: ITEM_CATEGORIES.SERVICE,
+        description: 'Google Maps geocoding for address normalization and confidence scoring',
+        entryPoint: 'services/AddressValidationService.js',
+        telemetryEvents: [
+            'ADDRESS_VALIDATION_STARTED',
+            'ADDRESS_VALIDATED',
+            'ADDRESS_VALIDATION_FAILED',
+            'ADDRESS_VALIDATION_ERROR'
+        ],
+        configPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots[type=address]',
+        configKeys: [
+            'useGoogleMapsValidation',
+            'googleMapsValidationMode',
+            'unitNumberMode'
+        ],
+        requiredEnvVars: ['GOOGLE_MAPS_API_KEY'],
+        built: true,
+        capabilities: [
+            'validateAddress() - Geocoding with confidence',
+            'shouldAskForUnit() - Smart unit detection',
+            'shouldAskForGateCode() - Gate code detection',
+            'shouldAskEquipmentAccess() - Equipment location prompts'
+        ]
+    },
+    {
+        id: 'runtime.accessFlowEngine',
+        key: 'accessFlowEngine',
+        label: 'Access Flow Engine',
+        type: ITEM_TYPES.RUNTIME_MODULE,
+        category: ITEM_CATEGORIES.ENGINE,
+        description: 'Collects property type, unit, gate code, and access instructions',
+        entryPoint: 'services/ConversationEngine.js#accessFlow',
+        telemetryEvents: [
+            'ACCESS_FLOW_TRIGGERED',
+            'BOOKING_ACCESS_SNAPSHOT_SAVED'
+        ],
+        configPath: 'aiAgentSettings.frontDeskBehavior.accessFlow',
+        configKeys: [
+            'enabled',
+            'propertyTypeEnabled',
+            'propertyTypeQuestion',
+            'unitQuestion',
+            'gatedQuestion',
+            'gateCodeQuestion',
+            'gateGuardNotifyPrompt',
+            'maxPropertyTypeFollowUps',
+            'maxAccessFollowUps'
+        ],
+        dbFields: [
+            'slots.address.propertyType',
+            'slots.address.unit',
+            'slots.address.unitNotApplicable',
+            'slots.access.gatedCommunity',
+            'slots.access.gateCode',
+            'slots.access.gateAccessType',
+            'slots.access.accessInstructions'
+        ],
+        built: true,
+        tradeApplicability: ['hvac', 'plumbing', 'electrical', 'pest', 'carpet', 'appliance']
+    },
+    {
         id: 'runtime.blackBoxLogger',
         key: 'blackBoxLogger',
         label: 'BlackBox Logger',
