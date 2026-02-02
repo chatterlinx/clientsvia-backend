@@ -332,7 +332,28 @@ class BookingFlowRunner {
         const slotMetadata = state.slotMetadata || {};
         const confirmedSlots = state.confirmedSlots || new Set();
         
-        for (const step of flow.steps) {
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FEB 2026 FIX: Track current step position to prevent going backwards
+        // ═══════════════════════════════════════════════════════════════════════════
+        // If we're at step "address", don't return to "name" for confirmation.
+        // The flow should only move FORWARD, not backwards.
+        // ═══════════════════════════════════════════════════════════════════════════
+        const currentStepId = state.currentStepId;
+        const currentStepIndex = currentStepId 
+            ? flow.steps.findIndex(s => (s.fieldKey || s.id) === currentStepId)
+            : -1;
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // AUTO-CONFIRM THRESHOLD: 0.85 for utterance-sourced slots
+        // ═══════════════════════════════════════════════════════════════════════════
+        // When caller explicitly says "my name is Mark", confidence is 0.9.
+        // This is high enough to auto-confirm without asking again.
+        // Only caller ID (0.7) and low-confidence extractions need confirmation.
+        // ═══════════════════════════════════════════════════════════════════════════
+        const AUTO_CONFIRM_THRESHOLD = 0.85;
+        
+        for (let i = 0; i < flow.steps.length; i++) {
+            const step = flow.steps[i];
             if (!step.required) continue;
             
             const fieldKey = step.fieldKey || step.id;
@@ -341,6 +362,24 @@ class BookingFlowRunner {
             
             // Already confirmed by user - skip
             if (confirmedSlots.has?.(fieldKey) || state.confirmedSlots?.[fieldKey]) {
+                continue;
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // FEB 2026 FIX: Don't go backwards in the flow
+            // ═══════════════════════════════════════════════════════════════════════
+            // If we've passed this step (current step is later), auto-confirm it
+            // This prevents: collect address → go back to confirm name
+            // ═══════════════════════════════════════════════════════════════════════
+            if (currentStepIndex > i && existingValue) {
+                logger.debug('[BOOKING FLOW] Auto-confirming passed step', {
+                    fieldKey,
+                    currentStepId,
+                    reason: 'FLOW_MOVED_FORWARD'
+                });
+                // Mark as confirmed so we don't return to it
+                state.confirmedSlots = state.confirmedSlots || {};
+                state.confirmedSlots[fieldKey] = true;
                 continue;
             }
             
@@ -353,14 +392,32 @@ class BookingFlowRunner {
                 };
             }
             
-            // If value exists with high confidence (confirmed or manual), skip
-            if (metadata?.confidence >= 1.0 || metadata?.confirmed === true) {
+            // ═══════════════════════════════════════════════════════════════════════
+            // FEB 2026 FIX: Auto-confirm high-confidence utterance slots
+            // ═══════════════════════════════════════════════════════════════════════
+            // If caller said "my name is Mark" (confidence 0.9, source: utterance),
+            // don't ask them to confirm it again - that's annoying!
+            // Only ask for confirmation on low-confidence or caller_id slots.
+            // ═══════════════════════════════════════════════════════════════════════
+            const isUtteranceSource = metadata?.source === 'utterance';
+            const hasHighConfidence = metadata?.confidence >= AUTO_CONFIRM_THRESHOLD;
+            
+            if (metadata?.confirmed === true || (isUtteranceSource && hasHighConfidence)) {
+                // Auto-confirm and skip
+                state.confirmedSlots = state.confirmedSlots || {};
+                state.confirmedSlots[fieldKey] = true;
+                logger.debug('[BOOKING FLOW] Auto-confirming high-confidence slot', {
+                    fieldKey,
+                    confidence: metadata?.confidence,
+                    source: metadata?.source
+                });
                 continue;
             }
             
-            // Value exists but not confirmed - need to CONFIRM
-            // This handles caller ID phone, names from discovery, etc.
-            if (metadata?.needsConfirmation || (metadata?.confidence && metadata.confidence < 1.0)) {
+            // Value exists but low confidence or caller_id - need to CONFIRM
+            if (metadata?.needsConfirmation || 
+                (metadata?.confidence && metadata.confidence < AUTO_CONFIRM_THRESHOLD) ||
+                metadata?.source === 'caller_id') {
                 return {
                     step,
                     mode: 'CONFIRM',

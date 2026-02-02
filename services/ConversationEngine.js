@@ -4791,12 +4791,53 @@ async function processTurn({
             const bookingConfigSnap = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
             const bookingSlotsSnap = bookingConfigSnap.slots || [];
             
-            // Find first required slot that's not collected
-            const firstMissingSlot = bookingSlotsSnap.find(slot => {
+            // ═══════════════════════════════════════════════════════════════════
+            // FEB 2026 FIX: Auto-confirm high-confidence slots from discovery
+            // ═══════════════════════════════════════════════════════════════════
+            // When caller said "my name is Mark" during discovery (confidence 0.9),
+            // mark that slot as confirmed so BookingFlowRunner doesn't go back to it.
+            // This prevents: "What's your name?" when we already have it.
+            // ═══════════════════════════════════════════════════════════════════
+            const AUTO_CONFIRM_THRESHOLD = 0.85;
+            const autoConfirmedSlots = {};
+            
+            // Find first required slot that's not collected, and auto-confirm high-confidence slots
+            let firstMissingSlot = null;
+            for (const slot of bookingSlotsSnap) {
+                if (!slot.required) continue;
+                
                 const slotId = slot.slotId || slot.id || slot.type;
-                const isCollected = currentSlots[slotId] || currentSlots[slot.type];
-                return slot.required && !isCollected;
-            });
+                const existingValue = currentSlots[slotId] || currentSlots[slot.type];
+                
+                if (existingValue) {
+                    // Slot is collected - check if we should auto-confirm
+                    // Get metadata from session or preExtractedSlots
+                    const slotMeta = session.collectedSlotsMeta?.[slotId] || 
+                                    preExtractedSlots?.[slotId] ||
+                                    { confidence: 0.9, source: 'utterance' }; // Default for discovery slots
+                    
+                    const isHighConfidence = slotMeta.confidence >= AUTO_CONFIRM_THRESHOLD;
+                    const isUtterance = slotMeta.source === 'utterance';
+                    
+                    if (isHighConfidence || isUtterance) {
+                        autoConfirmedSlots[slotId] = true;
+                        log(`🎯 BOOKING SNAP: Auto-confirmed ${slotId}`, {
+                            value: existingValue?.substring?.(0, 20) || existingValue,
+                            confidence: slotMeta.confidence,
+                            source: slotMeta.source
+                        });
+                    }
+                } else if (!firstMissingSlot) {
+                    // First missing slot found
+                    firstMissingSlot = slot;
+                }
+            }
+            
+            // Add auto-confirmed slots to booking flow state
+            session.bookingFlowState.confirmedSlots = {
+                ...(session.bookingFlowState.confirmedSlots || {}),
+                ...autoConfirmedSlots
+            };
             
             if (firstMissingSlot) {
                 const slotId = firstMissingSlot.slotId || firstMissingSlot.id || firstMissingSlot.type;
