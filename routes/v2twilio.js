@@ -2832,6 +2832,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Initialize slots from existing state or empty
       callState.slots = callState.slots || {};
       
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 📊 TURN TRACE CHECKPOINT A: State loaded (capture BEFORE any changes)
+      // ═══════════════════════════════════════════════════════════════════════════
+      const slotsBefore = JSON.parse(JSON.stringify(callState.slots || {}));
+      const slotKeysBefore = Object.keys(slotsBefore);
+      
       // Extract slots from current utterance
       const extractedSlots = SlotExtractor.extractAll(speechResult, {
         turnCount: callState.turnCount || 1,
@@ -3572,45 +3578,124 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     logger.security('🤖 AI Response:', JSON.stringify(result, null, 2));
     
     // ════════════════════════════════════════════════════════════════════════════
-    // 📊 PIPELINE TRACE LOG (Feb 2026)
+    // 📊 TURN TRACE LOG (Feb 2026) - PRODUCTION-GRADE WIRING VERIFICATION
     // ════════════════════════════════════════════════════════════════════════════
-    // Single-line turn summary for instant debugging. Shows:
-    // - slotExtractorApplied: did we extract slots this turn?
-    // - bookingShortCircuit: did booking runner bypass LLM?
-    // - enginePath: what path did we take?
-    // - slotsTouched: which slots were extracted/merged
-    // - confirmedNow: which slots were confirmed this turn
+    // 6 Checkpoints that PROVE slots + booking wiring is correct:
+    // A. State loaded (before any changes)
+    // B. SlotExtractor ran (before vs after, delta, candidates with confidence)
+    // C. Booking short-circuit decision (which branch taken)
+    // D. Booking runner decision (confirm vs collect vs skip)
+    // E. Scenario/LLM path (if not booking)
+    // F. State saved (what persists for next turn)
     // ════════════════════════════════════════════════════════════════════════════
-    const pipelineTrace = {
-      turn: callState.turnCount || 1,
-      callSid,
-      companyId: companyID,
-      slotExtractorApplied: Object.keys(extractedSlots || {}).length > 0,
-      bookingShortCircuit: result?.debug?.source === 'BOOKING_FLOW_RUNNER',
-      enginePath: result?.debug?.source === 'BOOKING_FLOW_RUNNER' ? 'BOOKING_RUNNER' :
-                  result?.matchSource === 'AFTER_HOURS_FLOW' ? 'AFTER_HOURS' :
-                  result?.matchSource === 'VENDOR_FLOW' ? 'VENDOR' :
-                  result?.tier === 'tier1' ? 'SCENARIO' :
-                  result?.tier === 'tier3' ? 'LLM' : 'UNKNOWN',
-      slotsTouched: Object.keys(extractedSlots || {}),
-      confirmedNow: Object.keys(result?.callState?.confirmedSlots || {}).filter(k => 
-        !callState.confirmedSlots || !callState.confirmedSlots[k]
-      ),
-      bookingModeLocked: !!result?.callState?.bookingModeLocked || !!callState?.bookingModeLocked,
-      currentStepId: result?.callState?.currentStepId || callState?.currentStepId || null,
-      slotsInState: Object.keys(callState.slots || {})
+    
+    // Build slot values summary (masked for sensitive data)
+    const maskSlotValue = (key, slot) => {
+      if (!slot?.value) return null;
+      const sensitive = ['phone', 'email', 'ssn', 'account'];
+      if (sensitive.some(s => key.toLowerCase().includes(s))) {
+        const val = String(slot.value);
+        return val.length > 4 ? '***' + val.slice(-4) : '****';
+      }
+      return slot.value;
     };
     
-    logger.info('[PIPELINE TRACE] 📊 Turn summary', pipelineTrace);
+    // Checkpoint A: State loaded
+    const checkpointA = {
+      turn: callState.turnCount || 1,
+      bookingModeLocked: !!callState.bookingModeLocked,
+      currentBookingStep: callState.currentBookingStep || null,
+      slotsSummary: Object.fromEntries(
+        Object.entries(slotsBefore || {}).map(([k, v]) => [k, maskSlotValue(k, v)])
+      )
+    };
     
-    // 📼 BLACK BOX: Log pipeline trace for debugging
+    // Checkpoint B: SlotExtractor ran
+    const slotsAfter = callState.slots || {};
+    const slotKeysAfter = Object.keys(slotsAfter);
+    const slotDelta = slotKeysAfter.filter(k => !slotKeysBefore.includes(k));
+    const checkpointB = {
+      slotsBefore: slotKeysBefore,
+      slotsAfter: slotKeysAfter,
+      delta: slotDelta,
+      extractedCandidates: Object.fromEntries(
+        Object.entries(extractedSlots || {}).map(([k, v]) => [
+          k, 
+          { 
+            value: maskSlotValue(k, v), 
+            confidence: v?.confidence || 0, 
+            source: v?.source || 'unknown',
+            needsConfirmation: v?.needsConfirmation || false
+          }
+        ])
+      )
+    };
+    
+    // Checkpoint C: Booking short-circuit decision
+    const branchTaken = result?.debug?.source === 'BOOKING_FLOW_RUNNER' ? 'BOOKING_RUNNER' :
+                        result?.matchSource === 'AFTER_HOURS_FLOW' ? 'AFTER_HOURS' :
+                        result?.matchSource === 'VENDOR_FLOW' ? 'VENDOR' :
+                        'NORMAL_ROUTING';
+    const checkpointC = {
+      bookingModeLocked: !!result?.callState?.bookingModeLocked || !!callState?.bookingModeLocked,
+      branchTaken
+    };
+    
+    // Checkpoint D: Booking runner decision (only if booking branch)
+    const bookingSlotKey = result?.debug?.fieldKey || result?.debug?.slotToConfirm || result?.debug?.confirmedField || null;
+    const checkpointD = branchTaken === 'BOOKING_RUNNER' ? {
+      currentStepId: result?.callState?.currentStepId || result?.debug?.currentStep || result?.stepCompleted || null,
+      action: result?.debug?.mode || 'UNKNOWN',  // CONFIRM, COLLECT, CONFIRMED, SKIP
+      slotKey: bookingSlotKey,
+      slotValueIfExists: bookingSlotKey ? maskSlotValue(bookingSlotKey, slotsAfter[bookingSlotKey]) : null,
+      pendingConfirmation: result?.callState?.pendingConfirmation || null,
+      nextStep: result?.nextStep || null,
+      flowId: result?.debug?.flowId || null
+    } : null;
+    
+    // Checkpoint E: Scenario/LLM path (only if not booking)
+    const checkpointE = branchTaken === 'NORMAL_ROUTING' ? {
+      tier: result?.tier || 'unknown',
+      scenarioSelected: result?.debug?.scenarioName || result?.debug?.scenarioId || null,
+      scenarioConfidence: result?.debug?.confidence || null,
+      llmUsed: result?.tier === 'tier3' || result?.matchSource === 'LLM_FALLBACK',
+      matchSource: result?.matchSource || 'unknown',
+      tokensUsed: result?.tokensUsed || result?.debug?.tokensUsed || 0
+    } : null;
+    
+    // Checkpoint F: State to be saved (will be verified after save)
+    const updatedState = result?.callState || callState;
+    const checkpointF = {
+      savedSlotsKeys: Object.keys(updatedState.slots || {}),
+      bookingModeLocked: !!updatedState.bookingModeLocked,
+      currentStepId: updatedState.currentStepId || updatedState.currentBookingStep || null,
+      confirmedSlots: Object.keys(updatedState.confirmedSlots || {})
+    };
+    
+    // Full turn trace object
+    const turnTrace = {
+      callSid,
+      companyId: companyID,
+      timestamp: new Date().toISOString(),
+      checkpointA_stateLoaded: checkpointA,
+      checkpointB_slotsExtracted: checkpointB,
+      checkpointC_branchDecision: checkpointC,
+      checkpointD_bookingRunner: checkpointD,
+      checkpointE_scenarioLLM: checkpointE,
+      checkpointF_stateSaved: checkpointF,
+      responsePreview: (result?.text || result?.response || '').substring(0, 100)
+    };
+    
+    logger.info('[TURN TRACE] 📊 Full turn verification', turnTrace);
+    
+    // 📼 BLACK BOX: Log comprehensive turn trace for debugging
     if (BlackBoxLogger) {
       BlackBoxLogger.logEvent({
         callId: callSid,
         companyId: companyID,
-        type: 'PIPELINE_TRACE',
-        turn: pipelineTrace.turn,
-        data: pipelineTrace
+        type: 'TURN_TRACE',
+        turn: checkpointA.turn,
+        data: turnTrace
       }).catch(() => {});
     }
     
