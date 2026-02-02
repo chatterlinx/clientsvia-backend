@@ -1830,6 +1830,10 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
         });
         
         // Build slots structure for BookingRequest
+        // V90: Include access data from session.booking.meta.address
+        const addressMeta = session?.booking?.meta?.address || {};
+        const accessData = addressMeta.access || {};
+        
         const bookingSlots = {
             name: {
                 first: slots.name?.first || null,
@@ -1841,7 +1845,30 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                 full: slots.address?.full || slots.address || null,
                 street: slots.address?.street || null,
                 city: slots.address?.city || null,
-                unit: slots.address?.unit || null
+                unit: slots.address?.unit || addressMeta.unit || null,
+                // V90: Property and verification fields
+                propertyType: addressMeta.propertyType || null,
+                unitNotApplicable: addressMeta.unitNotApplicable || false,
+                // Geo verification (if available)
+                formatted: addressMeta.formatted || null,
+                placeId: addressMeta.placeId || null,
+                lat: addressMeta.lat || null,
+                lng: addressMeta.lng || null,
+                verified: addressMeta.verified || false,
+                verifyConfidence: addressMeta.verifyConfidence || null
+            },
+            // V90: Access instructions for technician dispatch
+            access: {
+                gatedCommunity: accessData.gatedCommunity ?? null,
+                gateAccessType: Array.isArray(accessData.gateAccessType) ? accessData.gateAccessType : [],
+                gateCode: accessData.gateCode || null,
+                gateGuardNotifyRequired: accessData.gateGuardNotifyRequired || false,
+                gateGuardNotes: accessData.gateGuardNotes || null,
+                callboxName: accessData.callboxName || null,
+                accessInstructions: addressMeta.accessInstructions || null,
+                additionalInstructions: accessData.additionalInstructions || null,
+                unitResolution: accessData.unitResolution || null,
+                accessResolution: accessData.accessResolution || null
             },
             time: {
                 preference: timePreference || null,
@@ -1852,11 +1879,28 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
         };
         
         // Add any custom slots
-        const standardSlots = ['name', 'phone', 'address', 'time', 'partialName'];
+        const standardSlots = ['name', 'phone', 'address', 'time', 'partialName', 'access', 'propertyType', 'unit', 'unitNotApplicable', 'accessInstructions'];
         for (const [key, value] of Object.entries(slots)) {
             if (!standardSlots.includes(key) && value) {
                 bookingSlots.custom.set ? bookingSlots.custom.set(key, value) : (bookingSlots.custom[key] = value);
             }
+        }
+        
+        // 🔍 BLACK BOX: Log access snapshot for audit
+        const hasAccessData = bookingSlots.access.gatedCommunity !== null || 
+                              bookingSlots.access.gateCode || 
+                              bookingSlots.access.accessInstructions ||
+                              bookingSlots.address.propertyType;
+        if (hasAccessData) {
+            await BlackBoxLogger.addEvent(session._id?.toString(), 'BOOKING_ACCESS_SNAPSHOT_SAVED', {
+                propertyType: bookingSlots.address.propertyType,
+                unit: bookingSlots.address.unit,
+                unitNotApplicable: bookingSlots.address.unitNotApplicable,
+                gatedCommunity: bookingSlots.access.gatedCommunity,
+                gateAccessType: bookingSlots.access.gateAccessType,
+                hasGateCode: !!bookingSlots.access.gateCode,
+                hasAccessInstructions: !!bookingSlots.access.accessInstructions
+            });
         }
         
         // Generate case ID
@@ -2016,6 +2060,7 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                 }
                 
                 // Build event data
+                // V90: Include access info for technician dispatch
                 const eventData = {
                     customerName: bookingSlots.name?.full || `${bookingSlots.name?.first || ''} ${bookingSlots.name?.last || ''}`.trim() || 'Customer',
                     customerPhone: bookingSlots.phone || metadata.callerPhone || null,
@@ -2023,7 +2068,17 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                     customerAddress: bookingSlots.address?.full || null,
                     serviceType: metadata.serviceType || session.discovery?.issue || 'Service Call',
                     serviceNotes: session.discovery?.summary || session.discoverySummary || null,
-                    startTime: appointmentTime
+                    startTime: appointmentTime,
+                    // V90: Access data for technician
+                    accessInfo: {
+                        unit: bookingSlots.address?.unit || null,
+                        propertyType: bookingSlots.address?.propertyType || null,
+                        gatedCommunity: bookingSlots.access?.gatedCommunity,
+                        gateCode: bookingSlots.access?.gateCode || null,
+                        gateAccessType: bookingSlots.access?.gateAccessType || [],
+                        accessInstructions: bookingSlots.access?.accessInstructions || null,
+                        additionalInstructions: bookingSlots.access?.additionalInstructions || null
+                    }
                 };
                 
                 // 🔍 BLACK BOX: Log calendar event attempt

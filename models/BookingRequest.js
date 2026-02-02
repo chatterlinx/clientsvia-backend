@@ -98,7 +98,31 @@ const bookingRequestSchema = new mongoose.Schema({
             full: { type: String, default: null, trim: true },
             street: { type: String, default: null, trim: true },
             city: { type: String, default: null, trim: true },
-            unit: { type: String, default: null, trim: true }
+            unit: { type: String, default: null, trim: true },
+            // V90: Property and verification fields
+            propertyType: { type: String, default: null, trim: true },  // house, condo/townhome, apartment, mobile_home, commercial, other
+            unitNotApplicable: { type: Boolean, default: false },
+            // Geo verification (optional - from Google Maps API)
+            formatted: { type: String, default: null, trim: true },    // Google-formatted address
+            placeId: { type: String, default: null, trim: true },
+            lat: { type: Number, default: null },
+            lng: { type: Number, default: null },
+            verified: { type: Boolean, default: false },
+            verifyConfidence: { type: Number, default: null }          // 0-1 confidence score
+        },
+        // V90: Access instructions for technician dispatch
+        access: {
+            gatedCommunity: { type: Boolean, default: null },
+            gateAccessType: [{ type: String, trim: true }],            // ['code', 'guard', 'callbox']
+            gateCode: { type: String, default: null, trim: true },
+            gateGuardNotifyRequired: { type: Boolean, default: false },
+            gateGuardNotes: { type: String, default: null, trim: true },
+            callboxName: { type: String, default: null, trim: true },
+            accessInstructions: { type: String, default: null, trim: true },
+            additionalInstructions: { type: String, default: null, trim: true },
+            // Resolution tracking
+            unitResolution: { type: String, default: null, trim: true },    // 'provided', 'not_applicable', 'unknown_or_not_given'
+            accessResolution: { type: String, default: null, trim: true }   // 'provided', 'open_access', 'unknown_or_not_given'
         },
         time: {
             preference: { type: String, default: null, trim: true },  // "ASAP", "morning", "afternoon"

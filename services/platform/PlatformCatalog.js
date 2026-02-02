@@ -254,6 +254,31 @@ const RUNTIME_MODULE_DEFINITIONS = [
                 description: 'E11000 duplicate key error handler'
             }
         ]
+    },
+    {
+        id: 'runtime.accessFlowPersistence',
+        key: 'accessFlowPersistence',
+        label: 'Access Flow Data Persistence',
+        type: ITEM_TYPES.RUNTIME_MODULE,
+        category: ITEM_CATEGORIES.SERVICE,
+        description: 'Persists property type, unit, gate code, and access instructions to BookingRequest',
+        entryPoint: 'services/ConversationEngine.js#finalizeBooking',
+        telemetryEvents: ['BOOKING_ACCESS_SNAPSHOT_SAVED'],
+        built: true,
+        dbFields: [
+            'slots.address.propertyType',
+            'slots.address.unit',
+            'slots.address.unitNotApplicable',
+            'slots.access.gatedCommunity',
+            'slots.access.gateCode',
+            'slots.access.gateAccessType',
+            'slots.access.accessInstructions'
+        ],
+        propagatedTo: [
+            'BookingRequest document',
+            'Google Calendar event description',
+            'Tech notes / final script'
+        ]
     }
 ];
 

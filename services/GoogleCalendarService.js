@@ -905,6 +905,42 @@ async function createBookingEvent(companyId, bookingData) {
             .replace('{companyName}', companyName);
         
         // ═══════════════════════════════════════════════════════════════════════════
+        // V90: Append access info for technician dispatch
+        // ═══════════════════════════════════════════════════════════════════════════
+        const accessInfo = bookingData.accessInfo || {};
+        const hasAccessInfo = accessInfo.unit || accessInfo.propertyType || 
+                              accessInfo.gatedCommunity || accessInfo.gateCode || 
+                              accessInfo.accessInstructions;
+        
+        if (hasAccessInfo && settings.includeAccessInfo !== false) {
+            const accessLines = ['\n\n═══ ACCESS INFO ═══'];
+            
+            if (accessInfo.propertyType) {
+                accessLines.push(`Property: ${accessInfo.propertyType}`);
+            }
+            if (accessInfo.unit) {
+                accessLines.push(`Unit: ${accessInfo.unit}`);
+            }
+            if (accessInfo.gatedCommunity !== null && accessInfo.gatedCommunity !== undefined) {
+                accessLines.push(`Gated: ${accessInfo.gatedCommunity ? 'Yes' : 'No'}`);
+            }
+            if (accessInfo.gateCode) {
+                accessLines.push(`Gate Code: ${accessInfo.gateCode}`);
+            }
+            if (accessInfo.gateAccessType && accessInfo.gateAccessType.length > 0) {
+                accessLines.push(`Access Type: ${accessInfo.gateAccessType.join(', ')}`);
+            }
+            if (accessInfo.accessInstructions) {
+                accessLines.push(`Instructions: ${accessInfo.accessInstructions}`);
+            }
+            if (accessInfo.additionalInstructions) {
+                accessLines.push(`Additional: ${accessInfo.additionalInstructions}`);
+            }
+            
+            description += accessLines.join('\n');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
         // DETERMINE EVENT COLOR based on service type
         // Google Calendar colorId: 1=Lavender, 2=Sage, 3=Grape, 4=Flamingo, 5=Banana,
         // 6=Tangerine, 7=Peacock, 8=Graphite, 9=Blueberry, 10=Basil, 11=Tomato
