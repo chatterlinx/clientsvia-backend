@@ -412,17 +412,29 @@ class SlotExtractor {
     static extractName(text, context = {}) {
         if (!text) return null;
         
-        // Pattern 1: "My name is X" / "I'm X" / "This is X"
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FEB 2026 FIX: STT preprocessing lowercases everything, so patterns must
+        // use [a-zA-Z] instead of [A-Z][a-z] to match both cases.
+        // The cleanName() function will title-case the result.
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        // Pattern 1: "My name is X" / "I'm X" / "This is X" / "I am X"
+        // Note: Capture group allows any case, cleanName will normalize
         const explicitPatterns = [
-            /(?:my\s+name\s+is|i'?m|i\s+am|this\s+is|it'?s)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
-            /(?:call\s+me|they\s+call\s+me)\s+([A-Z][a-z]+)/i
+            /(?:my\s+name\s+is|i'?m|i\s+am|this\s+is|it'?s)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
+            /(?:call\s+me|they\s+call\s+me)\s+([a-zA-Z]+)/i
         ];
         
         for (const pattern of explicitPatterns) {
             const match = text.match(pattern);
             if (match && match[1]) {
                 const name = this.cleanName(match[1]);
-                if (name) {
+                if (name && !NAME_STOP_WORDS.has(name.toLowerCase())) {
+                    logger.debug('[SLOT EXTRACTOR] Name matched via explicit pattern', {
+                        raw: match[1],
+                        cleaned: name,
+                        pattern: pattern.source.substring(0, 50)
+                    });
                     return {
                         value: name,
                         confidence: CONFIDENCE.UTTERANCE_HIGH,
@@ -433,7 +445,7 @@ class SlotExtractor {
         }
         
         // Pattern 2: "Hi [Name]" / "Hello [Name]" at start
-        const greetingMatch = text.match(/^(?:hi|hello|hey)\s+([A-Z][a-z]+)/i);
+        const greetingMatch = text.match(/^(?:hi|hello|hey)\s+([a-zA-Z]+)/i);
         if (greetingMatch && greetingMatch[1]) {
             const name = this.cleanName(greetingMatch[1]);
             if (name && !NAME_STOP_WORDS.has(name.toLowerCase())) {
@@ -445,12 +457,15 @@ class SlotExtractor {
             }
         }
         
-        // Pattern 3: First + Last name pattern (two capitalized words)
-        const fullNameMatch = text.match(/\b([A-Z][a-z]+)\s+([A-Z][a-z]+)\b/);
+        // Pattern 3: First + Last name pattern (two words that look like names)
+        // Allow any case, filter by stop words
+        const fullNameMatch = text.match(/\b([a-zA-Z]{2,})\s+([a-zA-Z]{2,})\b/i);
         if (fullNameMatch) {
-            const first = fullNameMatch[1];
-            const last = fullNameMatch[2];
-            if (!NAME_STOP_WORDS.has(first.toLowerCase()) && !NAME_STOP_WORDS.has(last.toLowerCase())) {
+            const first = this.cleanName(fullNameMatch[1]);
+            const last = this.cleanName(fullNameMatch[2]);
+            if (first && last && 
+                !NAME_STOP_WORDS.has(first.toLowerCase()) && 
+                !NAME_STOP_WORDS.has(last.toLowerCase())) {
                 return {
                     value: `${first} ${last}`,
                     confidence: CONFIDENCE.UTTERANCE_HIGH,
@@ -464,7 +479,8 @@ class SlotExtractor {
         // Pattern 4: Standalone name (if context suggests we're asking for name)
         if (context.expectingSlot === 'name') {
             const words = text.split(/\s+/)
-                .filter(w => /^[A-Z][a-z]+$/.test(w))
+                .map(w => this.cleanName(w))
+                .filter(w => w && w.length >= 2)
                 .filter(w => !NAME_STOP_WORDS.has(w.toLowerCase()));
             
             if (words.length >= 1) {
