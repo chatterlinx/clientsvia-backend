@@ -9181,6 +9181,85 @@
         
         let duplicateScanResults = null;
         
+        // ═══════════════════════════════════════════════════════════════
+        // DOWNLOAD DUPLICATE SCAN JSON (for verification)
+        // ═══════════════════════════════════════════════════════════════
+        function downloadDuplicateScanJSON() {
+            if (!duplicateScanResults) {
+                showToast('No scan results to download', 'error');
+                return;
+            }
+            
+            // Build a detailed export with clear leader-to-duplicate relationships
+            const exportData = {
+                scanDate: new Date().toISOString(),
+                templateId: window.globalTemplateId,
+                threshold: duplicateScanResults.threshold || 0.86,
+                summary: {
+                    totalGroups: duplicateScanResults.stats.groups,
+                    totalDuplicates: duplicateScanResults.stats.duplicates,
+                    scenariosBeforeCleanup: duplicateScanResults.stats.total,
+                    scenariosAfterCleanup: duplicateScanResults.stats.afterCleanup,
+                    reductionPercent: Math.round((duplicateScanResults.stats.duplicates / duplicateScanResults.stats.total) * 100)
+                },
+                duplicateGroups: duplicateScanResults.groups.map((group, idx) => {
+                    const leader = group.members.find(m => m.isLeader);
+                    const duplicates = group.members.filter(m => !m.isLeader);
+                    
+                    return {
+                        groupNumber: idx + 1,
+                        avgSimilarity: group.avgSimilarity,
+                        totalTriggers: group.triggerCount,
+                        
+                        // LEADER - the one we keep
+                        leader: {
+                            scenarioId: leader?.scenario?.scenarioId || leader?.scenario?._id,
+                            scenarioName: leader?.scenario?.scenarioName || leader?.scenario?.name,
+                            scenarioType: leader?.scenario?.scenarioType,
+                            triggerCount: leader?.scenario?.triggers?.length || 0,
+                            triggers: leader?.scenario?.triggers?.slice(0, 5) || [],  // First 5 for readability
+                            action: 'KEEP'
+                        },
+                        
+                        // DUPLICATES - what will be deleted (and why)
+                        duplicates: duplicates.map(dup => ({
+                            scenarioId: dup.scenario?.scenarioId || dup.scenario?._id,
+                            scenarioName: dup.scenario?.scenarioName || dup.scenario?.name,
+                            scenarioType: dup.scenario?.scenarioType,
+                            triggerCount: dup.scenario?.triggers?.length || 0,
+                            triggers: dup.scenario?.triggers?.slice(0, 5) || [],
+                            similarityToLeader: dup.similarity + '%',
+                            action: 'DELETE',
+                            reason: `${dup.similarity}% similar to "${leader?.scenario?.scenarioName || leader?.scenario?.name}"`
+                        }))
+                    };
+                })
+            };
+            
+            // Create and download file
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `duplicate-scan-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast('📥 Downloaded duplicate scan report', 'success');
+        }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // CLEAR/DISMISS DUPLICATE SCAN RESULTS
+        // ═══════════════════════════════════════════════════════════════
+        function clearDuplicateScanResults() {
+            duplicateScanResults = null;
+            document.getElementById('duplicate-scan-results').style.display = 'none';
+            document.getElementById('duplicate-badge').style.display = 'none';
+            showToast('Scan results cleared', 'info');
+        }
+        
         // Run duplicate scan
         async function runDuplicateScan() {
             const btn = document.getElementById('duplicate-scan-btn');
@@ -9256,16 +9335,27 @@
             
             let html = `
                 <div style="margin-bottom: 12px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                         <div>
                             <strong style="color: #ef4444;">${result.stats.groups} duplicate groups found</strong>
                             <span style="color: var(--text-muted); margin-left: 8px;">
                                 (${result.stats.duplicates} redundant → can reduce to ${result.stats.afterCleanup} scenarios)
                             </span>
                         </div>
-                        <button onclick="applyAllCleanups()" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #ef4444; cursor: pointer; font-size: 12px;">
-                            <i class="fas fa-broom"></i> Clean All (Keep Leaders)
-                        </button>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <!-- Download JSON for verification -->
+                            <button onclick="downloadDuplicateScanJSON()" style="padding: 6px 12px; background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); border-radius: 6px; color: #3b82f6; cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-download"></i> Download JSON
+                            </button>
+                            <!-- Clear/Dismiss results -->
+                            <button onclick="clearDuplicateScanResults()" style="padding: 6px 12px; background: rgba(107, 114, 128, 0.2); border: 1px solid rgba(107, 114, 128, 0.4); border-radius: 6px; color: #9ca3af; cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-times"></i> Dismiss
+                            </button>
+                            <!-- Apply cleanup -->
+                            <button onclick="applyAllCleanups()" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #ef4444; cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-broom"></i> Clean All (Keep Leaders)
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
