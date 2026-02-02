@@ -1417,12 +1417,10 @@ router.post('/voice', async (req, res) => {
         gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(fallbackGreeting))));
       }
       
-      // 🚫 NEVER HANG UP - Blame connection, not caller
-      logger.debug(`[GATHER FALLBACK] No speech detected - prompting again`);
-      // V69: Use random human-like recovery message
-      const recoveryMsg = getRecoveryMessage(company, 'audioUnclear');
-      twiml.say({ voice: 'Polly.Matthew' }, recoveryMsg);
-      // Redirect back to continue listening
+      // 🚫 NEVER HANG UP - Redirect silently to continue listening
+      // FEB 2026 FIX: Removed Polly.Matthew voice - was causing "creepy voice" issue
+      // The silence handler in ConversationEngine will handle prompts properly via ElevenLabs
+      logger.debug(`[GATHER FALLBACK] No speech detected - redirecting to continue`);
       twiml.redirect(`https://${req.get('host')}/api/twilio/${company._id}/voice`);
       
     } catch (v2Error) {
@@ -1458,10 +1456,8 @@ router.post('/voice', async (req, res) => {
       });
       gather.say(escapeTwiML(fallbackGreeting));
       
-      // 🚫 NEVER HANG UP - Blame connection, not caller
-      // V69: Use random human-like recovery message
-      const errorRecovery = getRecoveryMessage(company, 'audioUnclear');
-      twiml.say({ voice: 'Polly.Matthew' }, errorRecovery);
+      // 🚫 NEVER HANG UP - Redirect silently to continue listening
+      // FEB 2026 FIX: Removed Polly.Matthew voice - was causing "creepy voice" issue
       twiml.redirect(`https://${req.get('host')}/api/twilio/${company._id}/voice`);
     }
 
@@ -4630,13 +4626,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       gather.say('');
       
-      // 🚫 NEVER HANG UP - If caller is silent, prompt them with fallback
-      // NOTE: The actual GATHER_TIMEOUT is detected at the START of v2-agent-respond
-      // when SpeechResult is empty. This is just the fallback TwiML setup.
-      
-      // V69: Use random human-like recovery message
-      const recoveryPrompt = getRecoveryMessage(company, 'silenceRecovery');
-      twiml.say({ voice: 'Polly.Matthew' }, recoveryPrompt);
+      // 🚫 NEVER HANG UP - Just redirect, silence handler will manage prompts
+      // FEB 2026 FIX: Removed Polly.Matthew voice - was causing "creepy voice" issue
+      // The SILENCE_HANDLER in ConversationEngine handles prompts via ElevenLabs
       twiml.redirect(`/api/twilio/v2-agent-respond/${companyID}`);
     }
     

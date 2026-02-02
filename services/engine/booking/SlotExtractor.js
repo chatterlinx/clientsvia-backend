@@ -147,7 +147,14 @@ const NAME_STOP_WORDS = new Set([
     // "HOW SOON can you get here?" → "How Soon" is NOT a name!
     'how', 'soon', 'when', 'where', 'why', 'which', 'who', 'whom',
     'can', 'could', 'would', 'should', 'will', 'shall', 'may', 'might',
-    'get', 'somebody', 'someone', 'something', 'possible', 'good', 'great'
+    'get', 'somebody', 'someone', 'something', 'possible', 'good', 'great',
+    // FEB 2026 #2: More false positive words found in traces
+    // "as EARLY as possible" → "As Early" is NOT a name!
+    // "I'm NOT sure" → "Not" is NOT a name!
+    // "I'm HERE" → "Here" is NOT a name!
+    'early', 'not', 'here', 'there', 'now', 'later', 'then', 'still',
+    'case', 'time', 'thing', 'stuff', 'way', 'going', 'come', 'coming',
+    'creepy', 'voice', 'said', 'listening', 'help', 'ahead'
 ]);
 
 /**
