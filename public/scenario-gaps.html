@@ -1391,6 +1391,43 @@
                         </div>
                     </div>
                     
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- DESTINATION SELECTOR (Feb 2026) - Global vs Company Local -->
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <div style="margin-bottom: 16px; padding: 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
+                        <label style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px; display: block;">
+                            <i class="fas fa-database"></i> Save To
+                        </label>
+                        <div style="display: flex; gap: 12px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 16px; background: var(--bg-primary); border: 2px solid var(--border-color); border-radius: 8px; flex: 1; transition: all 0.2s;" 
+                                   onclick="selectDestination('global')" id="dest-global-label">
+                                <input type="radio" name="scenario-destination" id="dest-global" value="global" checked 
+                                       style="width: 16px; height: 16px;" onchange="updateDestinationUI()">
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 600; color: #3b82f6;">
+                                        <i class="fas fa-globe"></i> Global Template
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">
+                                        Shared with all companies using this trade
+                                    </div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 16px; background: var(--bg-primary); border: 2px solid var(--border-color); border-radius: 8px; flex: 1; transition: all 0.2s;"
+                                   onclick="selectDestination('local')" id="dest-local-label">
+                                <input type="radio" name="scenario-destination" id="dest-local" value="local"
+                                       style="width: 16px; height: 16px;" onchange="updateDestinationUI()">
+                                <div>
+                                    <div style="font-size: 13px; font-weight: 600; color: #10b981;">
+                                        <i class="fas fa-building"></i> Company Local
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">
+                                        Only for this company (Penguin Air)
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
                     <!-- Action Buttons -->
                     <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 8px;">
                         <label style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -12102,12 +12139,42 @@
             if (copyBtn) copyBtn.disabled = false;
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // DESTINATION SELECTOR FUNCTIONS (Feb 2026)
+        // ═══════════════════════════════════════════════════════════════
+        function selectDestination(dest) {
+            document.getElementById('dest-global').checked = (dest === 'global');
+            document.getElementById('dest-local').checked = (dest === 'local');
+            updateDestinationUI();
+        }
+        
+        function updateDestinationUI() {
+            const globalLabel = document.getElementById('dest-global-label');
+            const localLabel = document.getElementById('dest-local-label');
+            const isGlobal = document.getElementById('dest-global').checked;
+            
+            if (globalLabel && localLabel) {
+                globalLabel.style.borderColor = isGlobal ? '#3b82f6' : 'var(--border-color)';
+                globalLabel.style.background = isGlobal ? 'rgba(59, 130, 246, 0.1)' : 'var(--bg-primary)';
+                localLabel.style.borderColor = !isGlobal ? '#10b981' : 'var(--border-color)';
+                localLabel.style.background = !isGlobal ? 'rgba(16, 185, 129, 0.1)' : 'var(--bg-primary)';
+            }
+        }
+        
+        function getSelectedDestination() {
+            return document.getElementById('dest-local')?.checked ? 'local' : 'global';
+        }
+        
+        // Initialize destination UI on load
+        setTimeout(() => updateDestinationUI(), 100);
+
         async function generateManualScenario() {
             const questionEl = document.getElementById('manual-question');
             const categoryEl = document.getElementById('manual-category');
             const typeEl = document.getElementById('manual-type');
             const tradeEl = document.getElementById('manual-trade');
             const btn = document.getElementById('manual-generate-btn');
+            const destination = getSelectedDestination();
             const resultDiv = document.getElementById('manual-result');
 
             const question = (questionEl?.value || '').trim();
@@ -12474,12 +12541,23 @@
             const btn = document.getElementById('manual-save-btn');
             const questionEl = document.getElementById('manual-question');
             const tradeEl = document.getElementById('manual-trade');
+            const destination = getSelectedDestination();  // 'global' or 'local'
 
             try {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
                 const token = getAuthToken();
-                const response = await fetch(`/api/admin/scenario-gaps/${companyId}/manual/save`, {
+                
+                // ═══════════════════════════════════════════════════════════════
+                // DESTINATION-AWARE SAVE (Feb 2026)
+                // Global → /api/admin/scenario-gaps/{companyId}/manual/save
+                // Local  → /api/admin/scenario-gaps/{companyId}/manual/save-local
+                // ═══════════════════════════════════════════════════════════════
+                const saveEndpoint = destination === 'local'
+                    ? `/api/admin/scenario-gaps/${companyId}/manual/save-local`
+                    : `/api/admin/scenario-gaps/${companyId}/manual/save`;
+                
+                const response = await fetch(saveEndpoint, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
@@ -12488,7 +12566,8 @@
                     body: JSON.stringify({
                         scenario: manualPreview,
                         allowWarnings: !!allowWarnings,
-                        tradeKey: tradeEl?.value || null
+                        tradeKey: tradeEl?.value || null,
+                        destination  // Include destination in payload too
                     })
                 });
 

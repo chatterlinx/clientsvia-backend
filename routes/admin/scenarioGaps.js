@@ -3453,6 +3453,131 @@ router.post('/:companyId/gaps/manual/save', async (req, res) => {
 });
 
 /**
+ * POST /:companyId/manual/save-local
+ *
+ * Save Manual Scenario Builder draft to Company Local template
+ * Body: { scenario: object, allowWarnings?: boolean }
+ */
+async function handleManualSaveLocal(req, res) {
+    const { companyId } = req.params;
+    const { scenario, allowWarnings = false } = req.body || {};
+
+    if (!scenario) {
+        return res.status(400).json({ error: 'Scenario object is required' });
+    }
+
+    try {
+        const company = await Company.findById(companyId)
+            .select('name aiAgentSettings.customTemplateId');
+        
+        if (!company) {
+            return res.status(404).json({ error: 'Company not found' });
+        }
+        
+        // Get company's custom template
+        const customTemplateId = company.aiAgentSettings?.customTemplateId;
+        if (!customTemplateId) {
+            return res.status(400).json({ 
+                error: 'NO_COMPANY_LOCAL_TEMPLATE',
+                message: 'Company does not have a Company Local template. Create one first.',
+                suggestion: 'Go to Company Local tab and assign a custom template.'
+            });
+        }
+        
+        const customTemplate = await GlobalInstantResponseTemplate.findById(customTemplateId);
+        if (!customTemplate) {
+            return res.status(404).json({ error: 'Company Local template not found' });
+        }
+
+        const scenarioCategory = scenario.categories?.[0] || scenario.category || 'Company Local';
+
+        // Validate scenario
+        const validation = validateScenarioContent(scenario);
+        if ((validation.errors || []).length > 0 && !allowWarnings) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed - scenario has errors',
+                validation
+            });
+        }
+        if ((validation.warnings || []).length > 0 && !allowWarnings) {
+            return res.status(400).json({
+                success: false,
+                error: 'Validation failed - scenario has warnings',
+                validation
+            });
+        }
+
+        // Find or create category
+        let category = customTemplate.categories.find(c => 
+            c.name?.toLowerCase() === scenarioCategory.toLowerCase()
+        );
+        
+        if (!category) {
+            // Create new category for company local
+            const newCategoryId = `cat-local-${Date.now()}`;
+            category = {
+                id: newCategoryId,
+                name: scenarioCategory,
+                description: `Auto-created for ${company.name} local scenarios`,
+                icon: '🏢',
+                scenarios: [],
+                createdAt: new Date()
+            };
+            customTemplate.categories.push(category);
+        }
+
+        // Build scenario object
+        const newScenario = {
+            scenarioId: `scenario-local-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: scenario.name || scenario.scenarioName,
+            scenarioName: scenario.name || scenario.scenarioName,
+            scenarioType: scenario.scenarioType || 'FAQ',
+            triggers: scenario.triggers || [],
+            negativeTriggers: scenario.negativeTriggers || [],
+            quickReplies: scenario.quickReplies || [scenario.quickReply].filter(Boolean),
+            fullReplies: scenario.fullReplies || [scenario.fullReply].filter(Boolean),
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            source: 'gap-fill-local',
+            sourceQuestion: scenario.sourceQuestion || null
+        };
+
+        category.scenarios.push(newScenario);
+        await customTemplate.save();
+
+        logger.info('[GAP FILL LOCAL] Scenario saved to Company Local', {
+            companyId,
+            templateId: customTemplateId,
+            templateName: customTemplate.name,
+            scenarioId: newScenario.scenarioId,
+            category: scenarioCategory
+        });
+
+        return res.json({
+            success: true,
+            scenarioId: newScenario.scenarioId,
+            categoryName: scenarioCategory,
+            templateId: customTemplateId,
+            templateName: customTemplate.name,
+            destination: 'company-local'
+        });
+
+    } catch (error) {
+        logger.error('[GAP FILL LOCAL] Save error', { error: error.message, companyId });
+        return res.status(500).json({ error: 'Failed to save scenario: ' + error.message });
+    }
+}
+
+router.post('/:companyId/manual/save-local', async (req, res) => {
+    return handleManualSaveLocal(req, res);
+});
+
+router.post('/:companyId/gaps/manual/save-local', async (req, res) => {
+    return handleManualSaveLocal(req, res);
+});
+
+/**
  * POST /:companyId/gaps/create
  * 
  * Create a scenario from a gap
