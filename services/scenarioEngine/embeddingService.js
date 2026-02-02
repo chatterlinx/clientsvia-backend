@@ -161,6 +161,132 @@ function findSimilar(scenarioEmbedding, candidates, threshold = 0.86) {
 }
 
 // ============================================================================
+// TRIGGER & RESPONSE ANALYSIS (Feb 2026)
+// ============================================================================
+
+/**
+ * Calculate trigger overlap between two scenarios
+ * Returns detailed overlap info for duplicate analysis
+ */
+function calculateTriggerOverlap(leaderScenario, duplicateScenario) {
+    const leaderTriggers = (leaderScenario.triggers || []).map(t => t.toLowerCase().trim());
+    const dupTriggers = (duplicateScenario.triggers || []).map(t => t.toLowerCase().trim());
+    
+    const leaderSet = new Set(leaderTriggers);
+    const dupSet = new Set(dupTriggers);
+    
+    // Find shared triggers (exact match)
+    const shared = leaderTriggers.filter(t => dupSet.has(t));
+    
+    // Find fuzzy matches (one contains the other)
+    const fuzzyShared = [];
+    for (const lt of leaderTriggers) {
+        for (const dt of dupTriggers) {
+            if (lt !== dt && (lt.includes(dt) || dt.includes(lt))) {
+                fuzzyShared.push({ leader: lt, duplicate: dt });
+            }
+        }
+    }
+    
+    const totalUnique = new Set([...leaderTriggers, ...dupTriggers]).size;
+    const overlapPercent = totalUnique > 0 
+        ? Math.round((shared.length / totalUnique) * 100) 
+        : 0;
+    
+    return {
+        shared: shared.length,
+        fuzzyMatches: fuzzyShared.length,
+        leaderTotal: leaderTriggers.length,
+        duplicateTotal: dupTriggers.length,
+        overlapPercent,
+        sharedTriggers: shared.slice(0, 5),  // First 5 for readability
+        confusionRisk: overlapPercent >= 50 ? 'HIGH' : overlapPercent >= 25 ? 'MEDIUM' : 'LOW'
+    };
+}
+
+/**
+ * Check if responses are similar or divergent
+ * Divergent responses on same intent = dangerous for UX
+ */
+function analyzeResponseDivergence(leaderScenario, duplicateScenario) {
+    const leaderResponse = (leaderScenario.quickReplies?.[0] || leaderScenario.fullReplies?.[0] || '').toLowerCase();
+    const dupResponse = (duplicateScenario.quickReplies?.[0] || duplicateScenario.fullReplies?.[0] || '').toLowerCase();
+    
+    if (!leaderResponse || !dupResponse) {
+        return { similar: true, divergenceRisk: 'UNKNOWN', reason: 'Missing response data' };
+    }
+    
+    // Quick similarity check using word overlap
+    const leaderWords = new Set(leaderResponse.split(/\s+/).filter(w => w.length > 3));
+    const dupWords = new Set(dupResponse.split(/\s+/).filter(w => w.length > 3));
+    
+    const shared = [...leaderWords].filter(w => dupWords.has(w)).length;
+    const total = new Set([...leaderWords, ...dupWords]).size;
+    const wordOverlap = total > 0 ? shared / total : 0;
+    
+    // Check for key action divergence (booking vs info vs transfer)
+    const leaderHasBooking = /schedul|book|appoint|come out|send.*tech/i.test(leaderResponse);
+    const dupHasBooking = /schedul|book|appoint|come out|send.*tech/i.test(dupResponse);
+    const leaderHasPrice = /\$|price|cost|fee|charge/i.test(leaderResponse);
+    const dupHasPrice = /\$|price|cost|fee|charge/i.test(dupResponse);
+    const leaderHasTransfer = /transfer|connect|hold|speak.*with/i.test(leaderResponse);
+    const dupHasTransfer = /transfer|connect|hold|speak.*with/i.test(dupResponse);
+    
+    const actionMismatch = (leaderHasBooking !== dupHasBooking) || 
+                          (leaderHasPrice !== dupHasPrice) ||
+                          (leaderHasTransfer !== dupHasTransfer);
+    
+    let divergenceRisk = 'LOW';
+    let reason = 'Responses are similar';
+    
+    if (actionMismatch) {
+        divergenceRisk = 'HIGH';
+        reason = 'Different actions (booking/price/transfer mismatch)';
+    } else if (wordOverlap < 0.3) {
+        divergenceRisk = 'MEDIUM';
+        reason = 'Low word overlap in responses';
+    }
+    
+    return {
+        similar: divergenceRisk === 'LOW',
+        divergenceRisk,
+        wordOverlapPct: Math.round(wordOverlap * 100),
+        reason,
+        leaderAction: leaderHasBooking ? 'BOOKING' : leaderHasPrice ? 'PRICING' : leaderHasTransfer ? 'TRANSFER' : 'INFO',
+        duplicateAction: dupHasBooking ? 'BOOKING' : dupHasPrice ? 'PRICING' : dupHasTransfer ? 'TRANSFER' : 'INFO'
+    };
+}
+
+/**
+ * Build enhanced reason string with all analysis
+ */
+function buildEnhancedReason(similarity, triggerOverlap, responseDivergence, leaderName, intentMatch) {
+    const parts = [];
+    
+    // Similarity
+    parts.push(`${similarity}% similar to "${leaderName}"`);
+    
+    // Trigger overlap risk
+    if (triggerOverlap.confusionRisk === 'HIGH') {
+        parts.push(`⚠️ HIGH trigger overlap (${triggerOverlap.overlapPercent}%)`);
+    } else if (triggerOverlap.shared > 0) {
+        parts.push(`${triggerOverlap.shared} shared triggers`);
+    }
+    
+    // Response divergence warning
+    if (responseDivergence.divergenceRisk === 'HIGH') {
+        parts.push(`🚨 RESPONSE DIVERGENCE: ${responseDivergence.reason}`);
+    }
+    
+    // Intent type match
+    if (intentMatch) {
+        parts.push(`both ${intentMatch}`);
+    }
+    
+    return parts.join(' • ');
+}
+
+// ============================================================================
 // DUPLICATE CLUSTERING
 // ============================================================================
 
@@ -252,11 +378,64 @@ async function clusterDuplicates(scenarios, threshold = 0.86) {
             // Mark new leader
             members.forEach((m, idx) => m.isLeader = idx === 0);
             
+            // ═══════════════════════════════════════════════════════════════
+            // ENHANCED ANALYSIS (Feb 2026)
+            // Add trigger overlap, response divergence, and enhanced reasons
+            // ═══════════════════════════════════════════════════════════════
+            const leader = members.find(m => m.isLeader);
+            const leaderName = leader?.scenario?.scenarioName || leader?.scenario?.name || 'Leader';
+            const leaderType = leader?.scenario?.scenarioType || 'FAQ';
+            
+            // Track group-level risks
+            let hasHighTriggerOverlap = false;
+            let hasResponseDivergence = false;
+            
+            // Analyze each non-leader member
+            for (const member of members) {
+                if (member.isLeader) {
+                    member.triggerOverlap = null;
+                    member.responseDivergence = null;
+                    member.enhancedReason = 'Leader scenario - will be kept';
+                    continue;
+                }
+                
+                // Calculate trigger overlap
+                member.triggerOverlap = calculateTriggerOverlap(leader.scenario, member.scenario);
+                if (member.triggerOverlap.confusionRisk === 'HIGH') {
+                    hasHighTriggerOverlap = true;
+                }
+                
+                // Analyze response divergence
+                member.responseDivergence = analyzeResponseDivergence(leader.scenario, member.scenario);
+                if (member.responseDivergence.divergenceRisk === 'HIGH') {
+                    hasResponseDivergence = true;
+                }
+                
+                // Check intent type match
+                const memberType = member.scenario?.scenarioType || 'FAQ';
+                const intentMatch = leaderType === memberType ? leaderType : null;
+                
+                // Build enhanced reason
+                member.enhancedReason = buildEnhancedReason(
+                    member.similarity,
+                    member.triggerOverlap,
+                    member.responseDivergence,
+                    leaderName,
+                    intentMatch
+                );
+            }
+            
             groups.push({
                 id: `group-${groups.length + 1}`,
                 avgSimilarity: Math.round(similar.reduce((sum, s) => sum + s.similarity, 100) / (similar.length + 1)),
                 members,
-                triggerCount: members.reduce((sum, m) => sum + (m.scenario.triggers?.length || 0), 0)
+                triggerCount: members.reduce((sum, m) => sum + (m.scenario.triggers?.length || 0), 0),
+                // Group-level risk flags
+                risks: {
+                    hasHighTriggerOverlap,
+                    hasResponseDivergence,
+                    overallRisk: hasResponseDivergence ? 'HIGH' : hasHighTriggerOverlap ? 'MEDIUM' : 'LOW'
+                }
             });
         } else {
             standalone.push(current.scenario);
@@ -334,6 +513,11 @@ module.exports = {
     // Similarity
     cosineSimilarity,
     findSimilar,
+    
+    // Enhanced analysis (Feb 2026)
+    calculateTriggerOverlap,
+    analyzeResponseDivergence,
+    buildEnhancedReason,
     
     // Clustering
     clusterDuplicates,

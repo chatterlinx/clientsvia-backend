@@ -9228,12 +9228,32 @@
                             scenarioType: dup.scenario?.scenarioType,
                             triggerCount: dup.scenario?.triggers?.length || 0,
                             triggers: dup.scenario?.triggers?.slice(0, 5) || [],
+                            
                             // Similarity - both numeric (for sorting/math) and display string
                             similarityPct: dup.similarity,  // Numeric: 90
                             similarityToLeader: dup.similarity + '%',  // Display: "90%"
+                            
+                            // ═══════════════════════════════════════════════════════════
+                            // ENHANCED ANALYSIS (Feb 2026)
+                            // ═══════════════════════════════════════════════════════════
+                            
+                            // Trigger overlap analysis - shows HOW confused agent could get
+                            triggerOverlap: dup.triggerOverlap || null,
+                            
+                            // Response divergence - flags when duplicates have DIFFERENT responses
+                            responseDivergence: dup.responseDivergence || null,
+                            
+                            // Action and enhanced reason
                             action: 'DELETE',
-                            reason: `${dup.similarity}% similar to "${leader?.scenario?.scenarioName || leader?.scenario?.name}"`
-                        }))
+                            reason: dup.enhancedReason || `${dup.similarity}% similar to "${leader?.scenario?.scenarioName || leader?.scenario?.name}"`,
+                            
+                            // Quick risk flags for filtering
+                            riskLevel: dup.responseDivergence?.divergenceRisk === 'HIGH' ? 'HIGH' :
+                                       dup.triggerOverlap?.confusionRisk === 'HIGH' ? 'MEDIUM' : 'LOW'
+                        })),
+                        
+                        // Group-level risk summary
+                        groupRisks: group.risks || { overallRisk: 'LOW' }
                     };
                 })
             };
