@@ -3535,6 +3535,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         companyLoaded: !!company
       });
       
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 📼 BLACK BOX: Log the LLM-0 error (Feb 2026)
+      // This was missing - errors were hidden causing "tier: unknown" in TURN_TRACE
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'LLM0_ERROR',
+          turn: turnCount,
+          data: {
+            error: llm0Error.message,
+            errorType: llm0Error.name || 'Error',
+            stack: llm0Error.stack?.substring(0, 300),
+            speechResult: (speechResult || '').substring(0, 100),
+            companyLoaded: !!company,
+            recovery: 'CONTEXT_AWARE_FALLBACK'
+          }
+        }).catch(() => {});
+      }
+      
       // CONTEXT-AWARE recovery - blame connection, respect booking state!
       // V69: Use random human-like recovery message
       // Safety: company may be null if loading failed, so use fallback
@@ -3562,7 +3583,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           errorRecoveryText = `I missed that. ${phoneQ}`;
           errorRecoveryAction = 'BOOKING';
         } else {
-          errorRecoveryText = errorRecoveryMsgs.generalError || "Sorry, the connection cut out. Could you repeat that?";
+          const recoveryMsgs = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+          errorRecoveryText = recoveryMsgs.generalError || "Sorry, the connection cut out. Could you repeat that?";
           errorRecoveryAction = 'BOOKING';
         }
       }
@@ -3570,7 +3592,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       result = {
         text: errorRecoveryText,
         action: errorRecoveryAction,
-        callState: callState
+        callState: callState,
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 🎯 ADD TRACKING FIELDS (Feb 2026)
+        // Without these, TURN_TRACE shows "tier: unknown" and we can't debug
+        // ═══════════════════════════════════════════════════════════════════════════
+        tier: 'recovery',
+        matchSource: 'LLM0_ERROR_RECOVERY',
+        tokensUsed: 0,
+        debug: {
+          source: 'LLM0_ERROR_RECOVERY',
+          error: llm0Error.message,
+          errorType: llm0Error.name || 'Error'
+        }
       };
       
       tracer.error('Hybrid failed, using context-aware recovery', llm0Error);
