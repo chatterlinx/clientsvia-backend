@@ -2793,9 +2793,18 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const aiProcessStart = Date.now();
     let result;
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 🏢 COMPANY LOADED EARLY (Feb 2026 Fix)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Company must be in outer scope so error handlers can access it.
+    // Previously was declared inside try block, causing "company is not defined"
+    // errors when catch blocks tried to use it for recovery messages.
+    // ═══════════════════════════════════════════════════════════════════════════
+    let company = null;
+    
     try {
       // Load company and check LLM-0 feature flag
-      const company = await Company.findById(companyID).lean();
+      company = await Company.findById(companyID).lean();
       const adminSettings = await AdminSettings.findOne({}).lean();
       
       // 🧠 LOAD LLM-0 CONTROLS (Dec 2025) - Configurable brain behavior
@@ -3512,12 +3521,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       logger.error('[HYBRID] Critical error - using simple recovery', {
         error: llm0Error.message,
         stack: llm0Error.stack?.substring(0, 500),
-        callSid
+        callSid,
+        companyLoaded: !!company
       });
       
       // CONTEXT-AWARE recovery - blame connection, respect booking state!
       // V69: Use random human-like recovery message
-      let errorRecoveryText = getRecoveryMessage(company, 'audioUnclear');
+      // Safety: company may be null if loading failed, so use fallback
+      let errorRecoveryText = company 
+        ? getRecoveryMessage(company, 'audioUnclear')
+        : "Sorry, I didn't catch that. Could you repeat what you said?";
       let errorRecoveryAction = 'DISCOVERY';
       
       // 🚨 Use UI-configured questions for error recovery
