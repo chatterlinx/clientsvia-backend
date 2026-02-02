@@ -660,11 +660,36 @@ class SlotExtractor {
         }
         
         // Specific time pattern (10am, 3:30 pm)
-        const timeMatch = text.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i);
-        if (timeMatch) {
+        // FEB 2026 FIX: Require am/pm suffix OR colon (3:30) to avoid matching "2 weeks ago"
+        // Pattern must have either:
+        // - am/pm suffix (required for standalone numbers like "2pm")
+        // - colon with minutes (like "3:30")
+        // - "at" or "around" prefix (like "at 2" or "around 3")
+        const timeWithAmPmMatch = text.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/i);
+        if (timeWithAmPmMatch) {
             return {
-                value: timeMatch[1],
+                value: timeWithAmPmMatch[1],
                 confidence: CONFIDENCE.UTTERANCE_HIGH,
+                source: SOURCE.UTTERANCE
+            };
+        }
+        
+        // Time with colon (like "3:30")
+        const timeWithColonMatch = text.match(/\b(\d{1,2}:\d{2})\b/);
+        if (timeWithColonMatch) {
+            return {
+                value: timeWithColonMatch[1],
+                confidence: CONFIDENCE.UTTERANCE_HIGH,
+                source: SOURCE.UTTERANCE
+            };
+        }
+        
+        // Time with "at" or "around" prefix (like "at 2" or "around 3 o'clock")
+        const timeWithPrefixMatch = text.match(/\b(?:at|around)\s+(\d{1,2}(?:\s*o'?clock)?)\b/i);
+        if (timeWithPrefixMatch) {
+            return {
+                value: timeWithPrefixMatch[1],
+                confidence: CONFIDENCE.UTTERANCE_MEDIUM,
                 source: SOURCE.UTTERANCE
             };
         }

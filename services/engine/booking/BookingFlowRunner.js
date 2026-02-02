@@ -265,17 +265,24 @@ class BookingFlowRunner {
         // Slots from SlotExtractor (caller ID, discovery phase) are merged here.
         // This is how we avoid re-asking for "Hi I'm Mark" later.
         // ═══════════════════════════════════════════════════════════════════
+        
+        // FEB 2026 FIX: Track slots that were just collected THIS turn
+        // This prevents immediately asking for confirmation of a value the user just gave
+        const slotsCollectedThisTurn = new Set();
+        
         if (slots && Object.keys(slots).length > 0) {
             for (const [key, slotData] of Object.entries(slots)) {
                 if (slotData?.value && !state.bookingCollected[key]) {
                     state.bookingCollected[key] = slotData.value;
                     state.slotMetadata = state.slotMetadata || {};
                     state.slotMetadata[key] = slotData;
+                    slotsCollectedThisTurn.add(key);
                     logger.info('[BOOKING FLOW RUNNER] Merged pre-extracted slot', {
                         key,
                         value: slotData.value,
                         confidence: slotData.confidence,
-                        source: slotData.source
+                        source: slotData.source,
+                        collectedThisTurn: true
                     });
                 }
             }
@@ -283,6 +290,30 @@ class BookingFlowRunner {
         
         // Get current step
         const currentStep = flow.steps.find(s => s.id === state.currentStepId);
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // FEB 2026 FIX: Auto-confirm slots collected THIS turn
+        // ═══════════════════════════════════════════════════════════════════
+        // When user gives a value (e.g., "12155 Metro Parkway"), don't immediately
+        // ask "Is that correct?" - accept it and move on. Only ask for confirmation
+        // if value came from a PREVIOUS turn or from caller ID.
+        // ═══════════════════════════════════════════════════════════════════
+        if (slotsCollectedThisTurn.size > 0) {
+            state.confirmedSlots = state.confirmedSlots || {};
+            for (const key of slotsCollectedThisTurn) {
+                // Only auto-confirm if it's the current step we were asking about
+                if (key === state.currentStepId) {
+                    state.confirmedSlots[key] = true;
+                    if (state.slotMetadata?.[key]) {
+                        state.slotMetadata[key].confirmed = true;
+                    }
+                    logger.info('[BOOKING FLOW RUNNER] Auto-confirmed slot collected this turn', {
+                        key,
+                        reason: 'USER_JUST_PROVIDED_VALUE'
+                    });
+                }
+            }
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // FIND NEXT STEP NEEDING ACTION (CONFIRM OR COLLECT)
@@ -1049,9 +1080,14 @@ class BookingFlowRunner {
         let confirmation = flow.confirmationTemplate || 
             "Let me confirm: I have {name} at {phone}, service address {address}. Is that correct?";
         
-        // Replace placeholders
+        // Replace placeholders - strip trailing punctuation to avoid double periods
         confirmation = confirmation.replace(/\{(\w+)\}/g, (match, key) => {
-            return collected[key] || match;
+            const value = collected[key] || match;
+            // Strip trailing punctuation from values to avoid "address 123 Main St.." issues
+            if (typeof value === 'string') {
+                return value.replace(/[.,!?]+$/, '').trim();
+            }
+            return value;
         });
         
         // Mark flow as awaiting confirmation
