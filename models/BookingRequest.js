@@ -183,6 +183,25 @@ bookingRequestSchema.index({ companyId: 1, outcomeMode: 1 });
 bookingRequestSchema.index({ callerPhone: 1 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// IDEMPOTENCY: Unique session constraint (prevents race-condition duplicates)
+// ═══════════════════════════════════════════════════════════════════════════
+// Only ONE active (non-cancelled) booking per session.
+// This is a DB-level guard that stops duplicates even if two requests race
+// past the application-level check in finalizeBooking().
+// ═══════════════════════════════════════════════════════════════════════════
+bookingRequestSchema.index(
+    { sessionId: 1 },
+    { 
+        unique: true, 
+        partialFilterExpression: { 
+            sessionId: { $ne: null },
+            status: { $ne: 'CANCELLED' } 
+        },
+        name: 'unique_active_session_booking'
+    }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // VIRTUAL: Display Name
 // ═══════════════════════════════════════════════════════════════════════════
 bookingRequestSchema.virtual('displayName').get(function() {
