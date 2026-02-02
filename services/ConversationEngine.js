@@ -2183,10 +2183,15 @@ const ConsentDetector = {
         // Get UI-configured consent phrases
         const consentPhrases = detectionTriggers.wantsBooking || [];
         // Extended yes words - includes "absolutely", "definitely", "sounds good", etc.
+        // FEB 2026 FIX: Added more natural agreement phrases
         const consentYesWords = discoveryConsent.consentYesWords || [
             'yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok', 'alright',
             'absolutely', 'definitely', 'certainly', 'of course', 'sounds good',
-            'that would be great', 'let\'s do it', 'go ahead', 'perfect'
+            'that would be great', 'let\'s do it', 'go ahead', 'perfect',
+            // FEB 2026: More natural agreement phrases
+            'smart idea', 'good idea', 'great idea', 'that works', 'works for me',
+            'i think so', 'think so', 'i agree', 'that\'d be', 'that would be',
+            'right', 'right away', 'asap', 'soon as possible', 'as soon as'
         ];
         const requiresYesAfterPrompt = discoveryConsent.consentRequiresYesAfterPrompt !== false;
         
@@ -2226,14 +2231,20 @@ const ConsentDetector = {
             return { hasConsent: false, matchedPhrase: null, reason: 'acknowledgment_with_followup' };
         }
         
-        // Check if last AI response asked about scheduling
+        // Check if last AI response asked about/offered scheduling
         const lastTurns = session?.turns || [];
         const lastAssistantTurn = [...lastTurns].reverse().find(t => t.role === 'assistant');
         const lastAssistantText = (lastAssistantTurn?.content || '').toLowerCase();
+        // FEB 2026 FIX: Expanded booking offer detection phrases
         const askedAboutScheduling = lastAssistantText.includes('schedule') || 
                                      lastAssistantText.includes('appointment') ||
                                      lastAssistantText.includes('technician') ||
                                      lastAssistantText.includes('come out') ||
+                                     lastAssistantText.includes('back out') ||  // "get someone back out"
+                                     lastAssistantText.includes('send') ||       // "send a tech"
+                                     lastAssistantText.includes('get someone') || // "let me get someone"
+                                     lastAssistantText.includes('set up') ||     // "get that set up"
+                                     lastAssistantText.includes('book') ||       // "book a visit"
                                      session.conversationMemory?.askedConsentQuestion;
         
         if (askedAboutScheduling) {
