@@ -2700,6 +2700,31 @@
                     </div>
                     
                     <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- DUPLICATE SCAN SECTION (Feb 2026) -->
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <div id="duplicate-scan-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(239, 68, 68, 0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <div>
+                                <h4 style="margin: 0; font-size: 15px; color: #ef4444;">
+                                    <i class="fas fa-clone"></i> Duplicate Detection
+                                    <span id="duplicate-badge" style="display: none; margin-left: 8px; padding: 2px 8px; background: rgba(239, 68, 68, 0.3); border-radius: 10px; font-size: 12px;">0</span>
+                                </h4>
+                                <p style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);">
+                                    AI-powered semantic scan to find and merge duplicate scenarios
+                                </p>
+                            </div>
+                            <button onclick="runDuplicateScan()" id="duplicate-scan-btn"
+                                    style="padding: 8px 16px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #ef4444; cursor: pointer; font-size: 12px;">
+                                <i class="fas fa-search"></i> Scan for Duplicates
+                            </button>
+                        </div>
+                        
+                        <div id="duplicate-scan-results" style="display: none;">
+                            <!-- Results will be populated by JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
                     <!-- LEGACY SCENARIO GENERATION SECTION (Hidden, kept for modal) -->
                     <!-- ═══════════════════════════════════════════════════════════════ -->
                     <div id="scenario-generation-section" style="display: none;">
@@ -9103,6 +9128,203 @@
                 
             } catch (error) {
                 console.error('[ENGINE] Bulk reject error:', error);
+                showToast('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // ============================================================================
+        // DUPLICATE SCAN FUNCTIONS (Feb 2026)
+        // ============================================================================
+        
+        let duplicateScanResults = null;
+        
+        // Run duplicate scan
+        async function runDuplicateScan() {
+            const btn = document.getElementById('duplicate-scan-btn');
+            const resultsEl = document.getElementById('duplicate-scan-results');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning (may take 30-60s)...';
+            
+            try {
+                const templateId = window.globalTemplateId;
+                if (!templateId) {
+                    showToast('No template selected', 'error');
+                    return;
+                }
+                
+                const response = await fetch('/api/admin/scenario-engine/duplicate-scan', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        templateId, 
+                        threshold: 0.86 
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Scan failed');
+                }
+                
+                duplicateScanResults = result;
+                renderDuplicateScanResults(result);
+                
+                // Update badge
+                const badge = document.getElementById('duplicate-badge');
+                if (result.stats.duplicates > 0) {
+                    badge.textContent = result.stats.duplicates;
+                    badge.style.display = 'inline';
+                } else {
+                    badge.style.display = 'none';
+                }
+                
+                showToast(`Found ${result.stats.groups} duplicate groups (${result.stats.duplicates} redundant scenarios)`, 
+                    result.stats.duplicates > 0 ? 'warning' : 'success');
+                
+            } catch (error) {
+                console.error('[DUPLICATE SCAN] Error:', error);
+                showToast('Error: ' + error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-search"></i> Scan for Duplicates';
+            }
+        }
+        
+        // Render duplicate scan results
+        function renderDuplicateScanResults(result) {
+            const resultsEl = document.getElementById('duplicate-scan-results');
+            
+            if (!result.groups || result.groups.length === 0) {
+                resultsEl.style.display = 'block';
+                resultsEl.innerHTML = `
+                    <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+                        <i class="fas fa-check-circle" style="font-size: 24px; margin-bottom: 8px; color: #22c55e;"></i>
+                        <p>No duplicate scenarios found!</p>
+                        <p style="font-size: 11px;">Scanned ${result.stats.total} scenarios</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = `
+                <div style="margin-bottom: 12px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="color: #ef4444;">${result.stats.groups} duplicate groups found</strong>
+                            <span style="color: var(--text-muted); margin-left: 8px;">
+                                (${result.stats.duplicates} redundant → can reduce to ${result.stats.afterCleanup} scenarios)
+                            </span>
+                        </div>
+                        <button onclick="applyAllCleanups()" style="padding: 6px 12px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 6px; color: #ef4444; cursor: pointer; font-size: 12px;">
+                            <i class="fas fa-broom"></i> Clean All (Keep Leaders)
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            for (const group of result.groups) {
+                html += `
+                    <div style="margin-bottom: 12px; padding: 12px; background: var(--bg-primary); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">
+                        <div style="margin-bottom: 8px; font-size: 12px; color: #ef4444;">
+                            <i class="fas fa-clone"></i> ${group.avgSimilarity}% similar • ${group.members.length} scenarios • ${group.triggerCount} total triggers
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                `;
+                
+                for (const member of group.members) {
+                    const scenario = member.scenario;
+                    const id = scenario.scenarioId || scenario._id;
+                    const isLeader = member.isLeader;
+                    
+                    html += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: ${isLeader ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.05)'}; border-radius: 4px; border-left: 3px solid ${isLeader ? '#22c55e' : '#ef4444'};">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 12px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    ${isLeader ? '👑 ' : ''}${escapeHtml(scenario.scenarioName || scenario.name || 'Unnamed')}
+                                </div>
+                                <div style="font-size: 10px; color: var(--text-muted);">
+                                    ${scenario.scenarioType || 'FAQ'} • ${scenario.triggers?.length || 0} triggers • ${member.similarity}% match
+                                </div>
+                            </div>
+                            <div style="font-size: 11px; color: ${isLeader ? '#22c55e' : '#ef4444'}; margin-left: 8px;">
+                                ${isLeader ? 'KEEP' : 'DELETE'}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            resultsEl.style.display = 'block';
+            resultsEl.innerHTML = html;
+        }
+        
+        // Apply all cleanups (keep leaders, merge triggers, delete duplicates)
+        async function applyAllCleanups() {
+            if (!duplicateScanResults || !duplicateScanResults.groups) {
+                showToast('No scan results to apply', 'error');
+                return;
+            }
+            
+            const groupCount = duplicateScanResults.groups.length;
+            const deleteCount = duplicateScanResults.stats.duplicates;
+            
+            if (!confirm(`This will:\n\n• Keep ${groupCount} leader scenarios\n• Merge triggers from duplicates\n• Delete ${deleteCount} redundant scenarios\n\nThis cannot be undone. Continue?`)) {
+                return;
+            }
+            
+            try {
+                const templateId = window.globalTemplateId;
+                
+                // Build cleanup plan
+                const plan = duplicateScanResults.groups.map(group => {
+                    const leader = group.members.find(m => m.isLeader);
+                    const duplicates = group.members.filter(m => !m.isLeader);
+                    
+                    return {
+                        groupId: group.id,
+                        winnerId: leader?.scenario?.scenarioId || leader?.scenario?._id,
+                        deleteIds: duplicates.map(d => d.scenario?.scenarioId || d.scenario?._id),
+                        mergeTriggers: true
+                    };
+                });
+                
+                const response = await fetch('/api/admin/scenario-engine/duplicate-cleanup', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ templateId, plan })
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'Cleanup failed');
+                }
+                
+                showToast(`✅ Cleaned up! Deleted ${result.deleted}, modified ${result.modified} scenarios`, 'success');
+                
+                // Clear results and refresh
+                duplicateScanResults = null;
+                document.getElementById('duplicate-scan-results').style.display = 'none';
+                document.getElementById('duplicate-badge').style.display = 'none';
+                
+                // Refresh coverage
+                loadEngineCoverage();
+                
+            } catch (error) {
+                console.error('[DUPLICATE CLEANUP] Error:', error);
                 showToast('Error: ' + error.message, 'error');
             }
         }

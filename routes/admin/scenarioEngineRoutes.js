@@ -928,4 +928,180 @@ router.post('/unblock-service', async (req, res) => {
     }
 });
 
+// ============================================================================
+// DUPLICATE DETECTION ENDPOINTS (Feb 2026)
+// ============================================================================
+
+// Lazy-load embedding services to avoid startup cost
+let embeddingService = null;
+let cleanupService = null;
+
+function getEmbeddingService() {
+    if (!embeddingService) {
+        embeddingService = require('../../services/scenarioEngine/embeddingService');
+    }
+    return embeddingService;
+}
+
+function getCleanupService() {
+    if (!cleanupService) {
+        cleanupService = require('../../services/scenarioEngine/duplicateCleanupService');
+    }
+    return cleanupService;
+}
+
+/**
+ * POST /duplicate-scan
+ * Scan scenarios for duplicates using embedding similarity
+ */
+router.post('/duplicate-scan', async (req, res) => {
+    try {
+        const { templateId, serviceKey, threshold = 0.86 } = req.body;
+        
+        if (!templateId) {
+            return res.status(400).json({ error: 'templateId required' });
+        }
+        
+        const cleanup = getCleanupService();
+        const embedding = getEmbeddingService();
+        
+        let scenarios;
+        
+        if (serviceKey) {
+            // Scan specific service
+            scenarios = await cleanup.getScenariosForService(templateId, serviceKey);
+        } else {
+            // Scan all - get grouped then flatten
+            const grouped = await cleanup.getAllScenariosGrouped(templateId);
+            scenarios = Object.values(grouped).flat();
+        }
+        
+        if (scenarios.length === 0) {
+            return res.json({
+                success: true,
+                message: 'No scenarios found to scan',
+                groups: [],
+                standalone: [],
+                stats: { total: 0, groups: 0, duplicates: 0 }
+            });
+        }
+        
+        logger.info('[DUPLICATE SCAN] Starting scan', { 
+            templateId, 
+            serviceKey: serviceKey || 'all',
+            scenarioCount: scenarios.length,
+            threshold
+        });
+        
+        // Run clustering
+        const result = await embedding.clusterDuplicates(scenarios, threshold);
+        
+        logger.info('[DUPLICATE SCAN] Scan complete', result.stats);
+        
+        res.json({
+            success: true,
+            templateId,
+            serviceKey: serviceKey || 'all',
+            threshold,
+            ...result
+        });
+        
+    } catch (error) {
+        logger.error('[DUPLICATE SCAN] Error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * POST /duplicate-cleanup
+ * Apply a cleanup plan (keep winners, merge triggers, delete duplicates)
+ */
+router.post('/duplicate-cleanup', async (req, res) => {
+    try {
+        const { templateId, plan } = req.body;
+        
+        if (!templateId || !plan || !Array.isArray(plan)) {
+            return res.status(400).json({ error: 'templateId and plan array required' });
+        }
+        
+        const cleanup = getCleanupService();
+        
+        logger.info('[DUPLICATE CLEANUP] Applying cleanup', { 
+            templateId, 
+            groupCount: plan.length 
+        });
+        
+        const result = await cleanup.applyCleanupPlan(templateId, plan, {
+            userId: req.user?._id,
+            name: req.user?.name || 'Admin',
+            email: req.user?.email
+        });
+        
+        res.json({
+            success: result.success,
+            ...result
+        });
+        
+    } catch (error) {
+        logger.error('[DUPLICATE CLEANUP] Error', { error: error.message });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * GET /duplicate-scan/preview/:templateId
+ * Quick preview of duplicate counts per service (no embedding, uses fingerprint)
+ */
+router.get('/duplicate-scan/preview/:templateId', async (req, res) => {
+    try {
+        const { templateId } = req.params;
+        
+        const cleanup = getCleanupService();
+        const grouped = await cleanup.getAllScenariosGrouped(templateId);
+        
+        // Simple count by service
+        const preview = {};
+        for (const [serviceKey, scenarios] of Object.entries(grouped)) {
+            preview[serviceKey] = {
+                total: scenarios.length,
+                // Quick name-based duplicate detection (not as accurate as embedding)
+                potentialDuplicates: findPotentialDuplicatesByName(scenarios)
+            };
+        }
+        
+        res.json({
+            success: true,
+            templateId,
+            services: preview,
+            totalScenarios: Object.values(grouped).flat().length
+        });
+        
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
+ * Quick name-based duplicate detection (fast, but less accurate)
+ */
+function findPotentialDuplicatesByName(scenarios) {
+    const nameWords = scenarios.map(s => {
+        const name = (s.scenarioName || s.name || '').toLowerCase();
+        return new Set(name.split(/[\s_-]+/).filter(w => w.length > 3));
+    });
+    
+    let potentialDupes = 0;
+    for (let i = 0; i < scenarios.length; i++) {
+        for (let j = i + 1; j < scenarios.length; j++) {
+            const intersection = [...nameWords[i]].filter(w => nameWords[j].has(w));
+            const union = new Set([...nameWords[i], ...nameWords[j]]);
+            const jaccard = intersection.length / union.size;
+            if (jaccard > 0.5) {
+                potentialDupes++;
+            }
+        }
+    }
+    return potentialDupes;
+}
+
 module.exports = router;
