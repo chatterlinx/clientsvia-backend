@@ -32,6 +32,15 @@ const ServiceSwitchboard = require('../../models/ServiceSwitchboard');
 const { generateScenariosForService, validateMultiTenantCompliance } = require('../scenarioGeneration/serviceScenarioGenerator');
 const { calculateTemplateCoverage, COVERAGE_TARGETS } = require('./coverageCalculator');
 
+// Duplicate detection (lazy-loaded)
+let embeddingService = null;
+function getEmbeddingService() {
+    if (!embeddingService) {
+        embeddingService = require('./embeddingService');
+    }
+    return embeddingService;
+}
+
 /**
  * BATCH SIZES by service type
  * Smaller batches = better quality
@@ -258,8 +267,68 @@ async function processJob(jobId) {
                     
                     serviceTokens += result.meta.tokensUsed || 0;
                     
+                    // ═══════════════════════════════════════════════════════════════
+                    // DUPLICATE GATE (Feb 2026): Check against existing scenarios
+                    // Skip scenarios that are >86% similar to already-approved ones
+                    // ═══════════════════════════════════════════════════════════════
+                    let existingScenarioEmbeddings = null;
+                    const DUPLICATE_THRESHOLD = 0.86;
+                    
+                    // Get existing scenarios for this service (lazy load once per batch)
+                    if (!existingScenarioEmbeddings) {
+                        try {
+                            const embedding = getEmbeddingService();
+                            const serviceScenarios = allScenarios.filter(s => 
+                                s.serviceKey === service.serviceKey ||
+                                (s.category || '').toLowerCase().includes(service.serviceKey.replace(/_/g, ' '))
+                            );
+                            
+                            if (serviceScenarios.length > 0) {
+                                const embeddings = await embedding.batchGetEmbeddings(serviceScenarios);
+                                existingScenarioEmbeddings = serviceScenarios.map((s, i) => ({
+                                    scenario: s,
+                                    embedding: embeddings[i]
+                                }));
+                                logger.info('[ENGINE] Loaded existing embeddings for duplicate gate', {
+                                    serviceKey: service.serviceKey,
+                                    count: existingScenarioEmbeddings.length
+                                });
+                            }
+                        } catch (embError) {
+                            logger.warn('[ENGINE] Could not load embeddings for duplicate gate', { 
+                                error: embError.message 
+                            });
+                            existingScenarioEmbeddings = [];
+                        }
+                    }
+                    
                     // Process generated scenarios
                     for (const scenario of result.scenarios) {
+                        // ═══════════════════════════════════════════════════════════
+                        // DUPLICATE CHECK: Skip if too similar to existing
+                        // ═══════════════════════════════════════════════════════════
+                        if (existingScenarioEmbeddings && existingScenarioEmbeddings.length > 0) {
+                            try {
+                                const embedding = getEmbeddingService();
+                                const newEmbedding = await embedding.getScenarioEmbedding(scenario);
+                                const similar = embedding.findSimilar(newEmbedding, existingScenarioEmbeddings, DUPLICATE_THRESHOLD);
+                                
+                                if (similar.length > 0) {
+                                    logger.info('[ENGINE] Skipping duplicate scenario', {
+                                        newScenario: scenario.scenarioName,
+                                        similarTo: similar[0].scenario.scenarioName || similar[0].scenario.name,
+                                        similarity: similar[0].similarity
+                                    });
+                                    serviceGenerated++;  // Count as "processed" but don't queue
+                                    continue;  // Skip this scenario
+                                }
+                            } catch (dupError) {
+                                logger.warn('[ENGINE] Duplicate check failed, allowing scenario', {
+                                    error: dupError.message
+                                });
+                            }
+                        }
+                        
                         // Run lint validation
                         const lintResult = validateMultiTenantCompliance(scenario);
                         

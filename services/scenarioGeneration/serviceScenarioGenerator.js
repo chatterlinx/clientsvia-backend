@@ -433,11 +433,21 @@ function buildGenerationPrompt(service, options) {
     const notes = hints.generationNotes || '';
     
     // Build existing scenarios list (to avoid duplicates)
+    // Include type and first trigger to help GPT understand the intent
     let existingList = '';
     if (existingScenarios.length > 0) {
+        const existingFormatted = existingScenarios.map(s => {
+            const type = s.scenarioType || 'FAQ';
+            const firstTrigger = s.triggers?.[0] || '';
+            return `- [${type}] ${s.scenarioName}${firstTrigger ? ` → "${firstTrigger}"` : ''}`;
+        }).join('\n');
+        
         existingList = `
-EXISTING SCENARIOS (DO NOT DUPLICATE):
-${existingScenarios.map(s => `- ${s.scenarioName}`).join('\n')}
+EXISTING SCENARIOS (DO NOT DUPLICATE THESE INTENTS):
+${existingFormatted}
+
+⚠️ The above scenarios already exist. DO NOT generate scenarios with the same INTENT.
+For example, if "AC not cooling" exists, DO NOT generate "air coming out warm" - they're the same intent.
 `;
     }
     
@@ -462,13 +472,21 @@ ${existingList}
 
 REQUIREMENTS:
 1. Generate exactly ${targetCount} scenarios
-2. Each scenario must be unique and non-overlapping
-3. Cover different caller situations (urgent vs routine, first-time vs returning, etc.)
-4. Triggers should be natural caller phrases
-5. Responses must follow dispatcher persona standards
-6. Include at least one EMERGENCY type if applicable
-7. Include at least one FAQ type for common questions
+2. **INTENT-FIRST RULE (CRITICAL):** Each scenario must represent a UNIQUE INTENT, not just different phrasing
+   - WRONG: "AC not cooling" and "Air coming out warm" → These are the SAME intent (broken AC)
+   - RIGHT: "AC not cooling" and "AC making noise" → These are DIFFERENT intents
+3. **DO NOT** generate scenarios that mean the same thing as existing ones listed above
+4. Cover different caller SITUATIONS (urgent vs routine, first-time vs returning)
+5. Triggers should be natural caller phrases
+6. Responses must follow dispatcher persona standards
+7. Include EMERGENCY, FAQ, and BOOKING types as appropriate
 8. **USE PLACEHOLDERS** for all company-specific information
+
+ANTI-DUPLICATE RULES:
+- Before generating, mentally list the unique INTENTS this service needs
+- Each scenario = exactly ONE intent
+- If an intent is already covered above, SKIP IT
+- Prefer filling gaps (missing intent types) over adding variants of existing intents
 
 PLACEHOLDER EXAMPLES FOR RESPONSES:
 ✓ "You've reached {company.name}, how can I help?"
