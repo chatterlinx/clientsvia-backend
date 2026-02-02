@@ -1784,6 +1784,17 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                     createdAt: existingBooking.createdAt
                 });
                 
+                // 🔍 BLACK BOX: Log duplicate blocked (app-level guard)
+                await BlackBoxLogger.addEvent(session._id?.toString(), 'BOOKING_FINALIZE_DUPLICATE_BLOCKED', {
+                    idempotentSource: 'app_level_guard',
+                    existingBookingId: existingBooking._id.toString(),
+                    existingCaseId: existingBooking.caseId,
+                    existingCalendarEventId: existingBooking.calendarEventId || null,
+                    companyId: company._id?.toString(),
+                    sessionId: session._id?.toString(),
+                    callSid: metadata?.callSid || null
+                });
+                
                 // Return the existing booking result
                 return {
                     success: true,
@@ -1795,7 +1806,8 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                     calendarEventId: existingBooking.calendarEventId || null,
                     calendarEventCreated: !!existingBooking.calendarEventId,
                     finalScript: existingBooking.finalScriptUsed,
-                    idempotent: true  // Flag that this was a duplicate call
+                    idempotent: true,
+                    idempotentSource: 'app_level_guard'
                 };
             }
         }
@@ -1915,6 +1927,19 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
                 }).lean();
                 
                 if (existingBooking) {
+                    // 🔍 BLACK BOX: Log duplicate blocked (DB-level guard / race condition)
+                    await BlackBoxLogger.addEvent(session._id?.toString(), 'BOOKING_FINALIZE_DUPLICATE_BLOCKED', {
+                        idempotentSource: 'db_unique_index',
+                        raceConditionCaught: true,
+                        existingBookingId: existingBooking._id?.toString(),
+                        existingCaseId: existingBooking.caseId,
+                        existingCalendarEventId: existingBooking.calendarEventId || null,
+                        companyId: company._id?.toString(),
+                        sessionId: session._id?.toString(),
+                        callSid: metadata?.callSid || null,
+                        mongoErrorCode: 11000
+                    });
+                    
                     return {
                         success: true,
                         bookingRequestId: existingBooking._id?.toString(),

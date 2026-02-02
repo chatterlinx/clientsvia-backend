@@ -304,6 +304,62 @@ router.get('/integrations', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════════════════
+// OPERATIONAL VERIFICATION: Check critical DB indexes exist
+// ════════════════════════════════════════════════════════════════════════════════
+router.get('/verify', async (req, res) => {
+    try {
+        const BookingRequest = require('../../models/BookingRequest');
+        
+        const verifications = [];
+        
+        // Check 1: Booking idempotency index
+        try {
+            const indexes = await BookingRequest.collection.getIndexes();
+            const hasIdempotencyIndex = !!indexes['unique_active_session_booking'];
+            
+            verifications.push({
+                id: 'booking_idempotency_index',
+                label: 'Booking Idempotency Index',
+                category: 'Database',
+                status: hasIdempotencyIndex ? 'VERIFIED' : 'MISSING',
+                critical: true,
+                details: hasIdempotencyIndex 
+                    ? { indexName: 'unique_active_session_booking', collection: 'bookingrequests' }
+                    : { 
+                        error: 'Index not found in MongoDB',
+                        fix: 'POST /api/admin/diag/sync-booking-indexes'
+                    }
+            });
+        } catch (indexErr) {
+            verifications.push({
+                id: 'booking_idempotency_index',
+                label: 'Booking Idempotency Index',
+                category: 'Database',
+                status: 'ERROR',
+                critical: true,
+                details: { error: indexErr.message }
+            });
+        }
+        
+        // Summary
+        const allVerified = verifications.every(v => v.status === 'VERIFIED');
+        const criticalMissing = verifications.filter(v => v.critical && v.status !== 'VERIFIED');
+        
+        res.json({
+            success: true,
+            allVerified,
+            criticalMissing: criticalMissing.length,
+            verifications,
+            checkedAt: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        logger.error('[PLATFORM CATALOG] Verification failed:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════════════════════════════════════════
 

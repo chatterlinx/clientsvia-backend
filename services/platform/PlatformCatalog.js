@@ -228,6 +228,32 @@ const RUNTIME_MODULE_DEFINITIONS = [
         entryPoint: 'services/BlackBoxLogger.js',
         built: true,
         critical: true
+    },
+    {
+        id: 'runtime.bookingIdempotency',
+        key: 'bookingIdempotency',
+        label: 'Booking Idempotency Guard',
+        type: ITEM_TYPES.RUNTIME_MODULE,
+        category: ITEM_CATEGORIES.SERVICE,
+        description: 'Prevents duplicate BookingRequests and calendar events from retries',
+        entryPoint: 'services/ConversationEngine.js#finalizeBooking',
+        telemetryEvents: ['BOOKING_FINALIZE_DUPLICATE_BLOCKED'],
+        built: true,
+        critical: true,
+        verificationChecks: [
+            {
+                type: 'db_index',
+                collection: 'bookingrequests',
+                indexName: 'unique_active_session_booking',
+                description: 'Unique partial index on sessionId (non-cancelled bookings)'
+            },
+            {
+                type: 'code_path',
+                file: 'services/ConversationEngine.js',
+                pattern: 'E11000.*sessionId',
+                description: 'E11000 duplicate key error handler'
+            }
+        ]
     }
 ];
 
