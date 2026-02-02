@@ -865,11 +865,25 @@ class BookingFlowRunner {
             }
         }
         
+        // FEB 2026 FIX: Check if user provided an ADDRESS
+        // Address pattern: number + street name (with optional street type suffix)
+        // "12155 Metro Parkway", "123 Main Street", "456 Oak Drive Apt 2"
+        const addressPattern = /^\d+\s+[a-zA-Z]+(?:\s+[a-zA-Z]+)*(?:\s+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|court|ct|circle|cir|way|place|pl|parkway|pkwy|highway|hwy))?/i;
+        if (addressPattern.test(input.trim())) {
+            // User provided an address directly - use it as new value
+            return { newValue: input.trim(), isAddress: true };
+        }
+        
         // Check if user provided what looks like a name
-        const namePattern = /^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)$/;
+        // FEB 2026 FIX: Also allow lowercase names (after STT preprocessing)
+        const namePattern = /^([a-zA-Z]{2,}(?:\s+[a-zA-Z]{2,})?)$/i;
         const nameMatch = input.match(namePattern);
         if (nameMatch) {
-            return { newValue: nameMatch[1] };
+            // Title case the name
+            const titleCased = nameMatch[1].split(/\s+/).map(w => 
+                w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+            ).join(' ');
+            return { newValue: titleCased };
         }
         
         return { unclear: true };

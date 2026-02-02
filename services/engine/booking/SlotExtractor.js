@@ -154,7 +154,18 @@ const NAME_STOP_WORDS = new Set([
     // "I'm HERE" → "Here" is NOT a name!
     'early', 'not', 'here', 'there', 'now', 'later', 'then', 'still',
     'case', 'time', 'thing', 'stuff', 'way', 'going', 'come', 'coming',
-    'creepy', 'voice', 'said', 'listening', 'help', 'ahead'
+    'creepy', 'voice', 'said', 'listening', 'help', 'ahead',
+    // FEB 2026 #3: Common adjectives mistaken for names
+    // "my name is SMART um, and Mark" → "smart" is NOT a name!
+    'smart', 'fast', 'slow', 'quick', 'nice', 'kind', 'friendly',
+    'long', 'short', 'big', 'small', 'old', 'new', 'young',
+    // FEB 2026 #3: Address/street components (NOT names!)
+    // "12155 METRO PARKWAY" → "Metro Parkway" is NOT a name!
+    'street', 'st', 'avenue', 'ave', 'road', 'rd', 'drive', 'dr',
+    'lane', 'ln', 'boulevard', 'blvd', 'court', 'ct', 'circle', 'cir',
+    'way', 'place', 'pl', 'parkway', 'pkwy', 'highway', 'hwy',
+    'north', 'south', 'east', 'west', 'metro', 'main', 'center',
+    'suite', 'apt', 'apartment', 'unit', 'floor', 'building'
 ]);
 
 /**
@@ -434,6 +445,44 @@ class SlotExtractor {
         // The cleanName() function will title-case the result.
         // ═══════════════════════════════════════════════════════════════════════════
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FEB 2026 FIX #2: CORRECTION PATTERNS TAKE PRIORITY!
+        // When someone says "my name is X um, and mark that's Mark Gonzales"
+        // The "that's Mark Gonzales" is the REAL name, not "X"
+        // Check for self-correction patterns FIRST
+        // ═══════════════════════════════════════════════════════════════════════════
+        const correctionPatterns = [
+            // "that's Mark Gonzales" / "it's Mark" / "actually Mark" / "I mean Mark"
+            /(?:that'?s|that\s+is|it'?s|actually|i\s+mean|well\s+it'?s)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*[.,]?\s*(?:and|$)/i,
+            /(?:that'?s|that\s+is|it'?s|actually|i\s+mean)\s+([a-zA-Z]+\s+[a-zA-Z]+)/i,
+            // "[anything] that's X" at end of sentence - the correction is most likely the real name
+            /that'?s\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*[.!?,]*\s*$/i
+        ];
+        
+        for (const pattern of correctionPatterns) {
+            const match = text.match(pattern);
+            if (match && match[1]) {
+                const name = this.cleanName(match[1]);
+                if (name && name.length >= 2 && !NAME_STOP_WORDS.has(name.toLowerCase())) {
+                    // Validate that at least one word isn't a stop word
+                    const nameParts = name.split(/\s+/);
+                    const validParts = nameParts.filter(p => !NAME_STOP_WORDS.has(p.toLowerCase()));
+                    if (validParts.length >= 1) {
+                        logger.debug('[SLOT EXTRACTOR] Name matched via CORRECTION pattern', {
+                            raw: match[1],
+                            cleaned: name,
+                            pattern: pattern.source.substring(0, 50)
+                        });
+                        return {
+                            value: name,
+                            confidence: CONFIDENCE.UTTERANCE_HIGH,
+                            source: SOURCE.UTTERANCE
+                        };
+                    }
+                }
+            }
+        }
+        
         // Pattern 1: "My name is X" / "I'm X" / "This is X" / "I am X"
         // Note: Capture group allows any case, cleanName will normalize
         const explicitPatterns = [
@@ -578,17 +627,28 @@ class SlotExtractor {
     static extractAddress(text, context = {}) {
         if (!text) return null;
         
-        // Pattern: Street address (number + street name)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FEB 2026 FIX: Use case-insensitive patterns that work with lowercased STT
+        // The STT preprocessor lowercases everything, so [A-Z][a-z]+ won't match
+        // Use [a-zA-Z]+ instead to match any case
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        // Complete list of street type suffixes
+        const streetSuffixes = '(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|way|court|ct|circle|cir|place|pl|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|path|plaza|square|sq)';
+        
+        // Pattern: Street address (number + street name + optional suffix)
         const addressPatterns = [
-            // "123 Main Street"
-            /(\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct|Circle|Cir|Place|Pl)\.?)/i,
-            // "123 Main St, Apt 4"
-            /(\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct|Circle|Cir|Place|Pl)\.?,?\s*(?:Apt|Unit|Suite|#)?\s*\d*[A-Za-z]?)/i
+            // "123 Main Street" / "12155 metro parkway"
+            new RegExp(`(\\d{1,5}\\s+[a-zA-Z]+(?:\\s+[a-zA-Z]+)*\\s+${streetSuffixes}\\.?)`, 'i'),
+            // "123 Main St, Apt 4" / "456 Oak Drive Unit 2B"
+            new RegExp(`(\\d{1,5}\\s+[a-zA-Z]+(?:\\s+[a-zA-Z]+)*\\s+${streetSuffixes}\\.?,?\\s*(?:apt|unit|suite|#)?\\s*\\d*[a-zA-Z]?)`, 'i'),
+            // Just number + two+ words (lenient but specific: "12155 Metro Parkway")
+            /(\d{1,5}\s+[a-zA-Z]{3,}(?:\s+[a-zA-Z]{3,})+)/i
         ];
         
         for (const pattern of addressPatterns) {
             const match = text.match(pattern);
-            if (match) {
+            if (match && match[1].length >= 10) {
                 return {
                     value: match[1].trim(),
                     confidence: CONFIDENCE.UTTERANCE_HIGH,
@@ -601,12 +661,13 @@ class SlotExtractor {
         if (context.expectingSlot === 'address') {
             // Look for number + words pattern
             const lenientMatch = text.match(/(\d{1,5}\s+[A-Za-z].*)/);
-            if (lenientMatch && lenientMatch[1].length > 5) {
+            if (lenientMatch && lenientMatch[1].length >= 8) {
+                // FEB 2026 FIX: Increase confidence when user is directly providing address
+                // They were asked for address and gave something that looks like one
                 return {
                     value: lenientMatch[1].trim(),
-                    confidence: CONFIDENCE.UTTERANCE_LOW,
-                    source: SOURCE.UTTERANCE,
-                    needsValidation: true
+                    confidence: CONFIDENCE.UTTERANCE_HIGH,  // Was UTTERANCE_LOW (0.6)
+                    source: SOURCE.UTTERANCE
                 };
             }
         }
@@ -624,6 +685,14 @@ class SlotExtractor {
         
         const lowerText = text.toLowerCase();
         
+        // FEB 2026 FIX: Skip greeting patterns that are NOT time preferences!
+        // "Good morning", "Good afternoon", "Good evening" are greetings, not scheduling requests
+        const isGreeting = /^(good\s+)?(morning|afternoon|evening)[.!,]?\s*$/i.test(text.trim()) ||
+                           /^(good\s+)(morning|afternoon|evening)/i.test(text.trim());
+        if (isGreeting) {
+            return null;
+        }
+        
         // ASAP patterns
         if (/\b(asap|as soon as possible|soon|right away|immediately|now|today)\b/.test(lowerText)) {
             return {
@@ -633,22 +702,26 @@ class SlotExtractor {
             };
         }
         
-        // Morning/afternoon/evening
-        if (/\b(morning|am|before noon)\b/.test(lowerText)) {
+        // Morning/afternoon/evening (but ONLY if it's a time preference, not a greeting)
+        // Require context like "in the", "prefer", "works", "would be", "sometime" etc.
+        const timeContextPatterns = /\b(in the|prefer|works|would be|sometime|available|free|can do|schedule for|book for|want|need)\b/i;
+        const hasTimeContext = timeContextPatterns.test(lowerText);
+        
+        if (/\b(morning|am|before noon)\b/.test(lowerText) && (hasTimeContext || lowerText.length > 30)) {
             return {
                 value: 'Morning',
                 confidence: CONFIDENCE.UTTERANCE_HIGH,
                 source: SOURCE.UTTERANCE
             };
         }
-        if (/\b(afternoon|pm|after lunch|after noon)\b/.test(lowerText)) {
+        if (/\b(afternoon|pm|after lunch|after noon)\b/.test(lowerText) && (hasTimeContext || lowerText.length > 30)) {
             return {
                 value: 'Afternoon',
                 confidence: CONFIDENCE.UTTERANCE_HIGH,
                 source: SOURCE.UTTERANCE
             };
         }
-        if (/\b(evening|night|after work|after 5)\b/.test(lowerText)) {
+        if (/\b(evening|night|after work|after 5)\b/.test(lowerText) && (hasTimeContext || lowerText.length > 30)) {
             return {
                 value: 'Evening',
                 confidence: CONFIDENCE.UTTERANCE_HIGH,
