@@ -14,7 +14,7 @@
  * - phone: (239) 555-1234 → (239) ***-1234
  * - email: john.doe@email.com → j***@email.com
  * - ssn: 123-45-6789 → ***-**-6789
- * - dob: 1985-06-15 → **/**/1985
+ * - dob: 1985-06-15 → [masked]/[masked]/1985
  * - membershipNumber: ABC123456 → ABC***456
  * - creditCard: BLOCKED entirely
  * 
@@ -163,15 +163,15 @@ class SensitiveMasker {
     }
     
     /**
-     * Mask date: 1985-06-15 → **/**/1985
+     * Mask date: 1985-06-15 → [masked]/[masked]/1985
      */
     static maskDate(date) {
         // Try to extract year
         const yearMatch = date.match(/\d{4}/);
         if (yearMatch) {
-            return `**/**/${yearMatch[0]}`;
+            return `[**]/[**]/${yearMatch[0]}`;
         }
-        return '**/**/****';
+        return '[**]/[**]/[****]';
     }
     
     /**
