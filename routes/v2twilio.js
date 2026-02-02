@@ -3267,6 +3267,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             // ════════════════════════════════════════════════════════════════════════
             const CONVERSATION_ENGINE_TIMEOUT_MS = parseInt(process.env.CONVERSATION_ENGINE_TIMEOUT_MS) || 8000;
             
+            // ═══════════════════════════════════════════════════════════════════
+            // 🎯 FEB 2026 FIX: Pass pre-extracted slots to ConversationEngine
+            // ═══════════════════════════════════════════════════════════════════
+            // CRITICAL: Without this, slots extracted in v2twilio (stored in Redis)
+            // are NOT visible to ConversationEngine's BOOKING_SNAP logic.
+            // This caused "What's your name?" to be asked even when name was collected.
+            // ═══════════════════════════════════════════════════════════════════
+            const preExtractedSlots = {};
+            if (callState.slots && Object.keys(callState.slots).length > 0) {
+              for (const [key, slot] of Object.entries(callState.slots)) {
+                if (slot?.value) {
+                  preExtractedSlots[key] = slot.value;
+                }
+              }
+            }
+            
             const engineResult = await Promise.race([
               ConversationEngine.processTurn({
                 companyId: companyID,
@@ -3279,6 +3295,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   confidence: parseFloat(req.body.Confidence) || 0,
                   sttProcessResult
                 },
+                preExtractedSlots,  // 🎯 Slots from Redis state
                 includeDebug: false  // No debug for production calls
               }),
               new Promise((_, reject) => 

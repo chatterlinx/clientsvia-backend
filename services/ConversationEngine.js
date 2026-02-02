@@ -2690,7 +2690,8 @@ async function processTurn({
     metadata = {},
     includeDebug = false,
     debug = false,
-    forceNewSession = false  // For Test Console - always create fresh session
+    forceNewSession = false,  // For Test Console - always create fresh session
+    preExtractedSlots = {}    // 🎯 FEB 2026: Slots pre-extracted by v2twilio (from Redis state)
 }) {
     const startTime = Date.now();
         const debugLog = [];
@@ -3698,6 +3699,23 @@ async function processTurn({
         // STEP 7: Extract slots programmatically
         // ═══════════════════════════════════════════════════════════════════
         log('CHECKPOINT 8: Extracting slots...');
+        
+        // ════════════════════════════════════════════════════════════════════
+        // 🎯 FEB 2026 FIX: Merge pre-extracted slots from v2twilio (Redis state)
+        // ════════════════════════════════════════════════════════════════════
+        // CRITICAL: v2twilio.js extracts slots and stores them in Redis (callState.slots).
+        // Session.collectedSlots is from MongoDB and may not have these slots yet.
+        // Merge them here so BOOKING_SNAP sees all collected slots.
+        // ════════════════════════════════════════════════════════════════════
+        if (preExtractedSlots && Object.keys(preExtractedSlots).length > 0) {
+            session.collectedSlots = session.collectedSlots || {};
+            for (const [key, value] of Object.entries(preExtractedSlots)) {
+                if (value && !session.collectedSlots[key]) {
+                    session.collectedSlots[key] = value;
+                    log('🎯 PRE-EXTRACTED SLOT MERGED', { key, value: typeof value === 'string' ? value.substring(0, 20) : value });
+                }
+            }
+        }
         
         // ════════════════════════════════════════════════════════════════════
         // SLOT VALIDATOR - Clean up obviously invalid stored values

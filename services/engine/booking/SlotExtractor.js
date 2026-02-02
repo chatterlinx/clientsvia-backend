@@ -138,7 +138,11 @@ const NAME_STOP_WORDS = new Set([
     'hi', 'hello', 'hey', 'please', 'thanks', 'thank', 'you',
     'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for', 'with',
     'got', 'two', 'there', 'uh', 'um', 'yup', 'so', 'well', 'just',
-    'actually', 'really', 'like', 'know', 'think', 'need', 'want'
+    'actually', 'really', 'like', 'know', 'think', 'need', 'want',
+    // FEB 2026: Meta-statement words (not actual names)
+    // "I just TOLD you my name" → "told" is not a name!
+    'told', 'said', 'gave', 'already', 'already', 'mentioned', 'repeat',
+    'again', 'same', 'correct', 'wrong', 'information'
 ]);
 
 /**

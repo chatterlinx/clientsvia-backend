@@ -209,6 +209,7 @@ class STTPreprocessor {
             'have', 'has', 'had',
             'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must',
             'need', 'want', 'get', 'got',
+            'like', 'liked',     // "I would LIKE to schedule" - NOT a filler!
             
             // COGNITIVE/COMMUNICATION VERBS - Critical for understanding caller
             'know', 'knew', 'known',     // "I want to know" is NOT a filler!
