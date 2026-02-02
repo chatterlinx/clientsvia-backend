@@ -2839,12 +2839,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       slotKeysBefore = Object.keys(slotsBefore);
       
       // Extract slots from current utterance
+      // FEB 2026 FIX: Pass confirmedSlots to gate extraction properly
       extractedSlots = SlotExtractor.extractAll(speechResult, {
         turnCount: callState.turnCount || 1,
         callerPhone: fromNumber,
         existingSlots: callState.slots,
         company,
-        expectingSlot: callState.currentBookingStep || null
+        expectingSlot: callState.currentBookingStep || null,
+        currentBookingStep: callState.currentBookingStep || null,
+        confirmedSlots: callState.confirmedSlots || {}
       });
       
       // Merge new extractions with existing slots (with confidence rules)

@@ -199,6 +199,51 @@ class SlotExtractor {
     static extractAll(utterance, context = {}) {
         const { turnCount = 1, callerPhone, existingSlots = {}, company } = context;
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FEB 2026 FIX: BOOKING STEP GATING
+        // ═══════════════════════════════════════════════════════════════════════════
+        // When we're in a specific booking step, DON'T extract irrelevant slots!
+        // This prevents "Metro Parkway" becoming a name during address collection.
+        // ═══════════════════════════════════════════════════════════════════════════
+        const currentBookingStep = context.expectingSlot || context.currentBookingStep || null;
+        const confirmedSlots = context.confirmedSlots || {};
+        
+        // Determine which extractors should run based on current booking step
+        const shouldExtract = (slotKey) => {
+            // If this slot is already confirmed, don't extract (except for explicit corrections)
+            if (confirmedSlots[slotKey] === true) {
+                return false;
+            }
+            
+            // Booking step gating: only extract what's relevant to current step
+            if (currentBookingStep) {
+                switch (currentBookingStep) {
+                    case 'address':
+                        // During address collection, DON'T extract name or time
+                        // "12155 Metro Parkway" should NOT become name: "Metro Parkway"
+                        if (slotKey === 'name') return false;
+                        if (slotKey === 'time') return false;
+                        break;
+                    case 'name':
+                        // During name collection, DON'T extract address
+                        if (slotKey === 'address') return false;
+                        break;
+                    case 'phone':
+                        // During phone collection, DON'T extract name or address
+                        if (slotKey === 'name') return false;
+                        if (slotKey === 'address') return false;
+                        break;
+                    case 'time':
+                        // During time collection, DON'T extract name or address
+                        if (slotKey === 'name') return false;
+                        if (slotKey === 'address') return false;
+                        break;
+                }
+            }
+            
+            return true;
+        };
+        
         const extracted = {};
         const text = (utterance || '').trim();
         
@@ -209,56 +254,84 @@ class SlotExtractor {
         // Detect if this is a correction
         const isCorrection = this.isCorrection(text);
         
-        // Extract each slot type
-        const nameResult = this.extractName(text, context);
-        if (nameResult) {
-            extracted.name = {
-                ...nameResult,
-                turn: turnCount,
-                isCorrection
-            };
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FEB 2026 FIX: GREETING DETECTION (global, before any extraction)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // If utterance is ONLY a greeting, skip time extraction entirely
+        // "Good afternoon" should NOT extract time: "Afternoon"
+        // ═══════════════════════════════════════════════════════════════════════════
+        const normalizedText = text.toLowerCase().replace(/^[\s.,;:]+/g, '').trim();
+        const isGreetingOnly = /^(good\s+)?(morning|afternoon|evening)[.!?,]*$/i.test(normalizedText) ||
+                               /^(hi|hello|hey)[.!?,]*$/i.test(normalizedText) ||
+                               /^(yes[,.]?\s*)?(good\s+)?(morning|afternoon|evening)[.!?,]*$/i.test(normalizedText);
+        
+        // Extract each slot type (with gating)
+        if (shouldExtract('name')) {
+            const nameResult = this.extractName(text, context);
+            if (nameResult) {
+                extracted.name = {
+                    ...nameResult,
+                    turn: turnCount,
+                    isCorrection
+                };
+            }
+        } else {
+            logger.debug('[SLOT EXTRACTOR] Skipping name extraction (gated)', { currentBookingStep });
         }
         
-        const phoneResult = this.extractPhone(text, callerPhone, context);
-        if (phoneResult) {
-            extracted.phone = {
-                ...phoneResult,
-                turn: turnCount,
-                isCorrection
-            };
+        if (shouldExtract('phone')) {
+            const phoneResult = this.extractPhone(text, callerPhone, context);
+            if (phoneResult) {
+                extracted.phone = {
+                    ...phoneResult,
+                    turn: turnCount,
+                    isCorrection
+                };
+            }
         }
         
-        const addressResult = this.extractAddress(text, context);
-        if (addressResult) {
-            extracted.address = {
-                ...addressResult,
-                turn: turnCount,
-                isCorrection
-            };
+        if (shouldExtract('address')) {
+            const addressResult = this.extractAddress(text, context);
+            if (addressResult) {
+                extracted.address = {
+                    ...addressResult,
+                    turn: turnCount,
+                    isCorrection
+                };
+            }
         }
         
-        const timeResult = this.extractTime(text, context);
-        if (timeResult) {
-            extracted.time = {
-                ...timeResult,
-                turn: turnCount,
-                isCorrection
-            };
+        // Time extraction: skip if greeting-only OR gated by booking step
+        if (shouldExtract('time') && !isGreetingOnly) {
+            const timeResult = this.extractTime(text, context);
+            if (timeResult) {
+                extracted.time = {
+                    ...timeResult,
+                    turn: turnCount,
+                    isCorrection
+                };
+            }
+        } else if (isGreetingOnly) {
+            logger.debug('[SLOT EXTRACTOR] Skipping time extraction (greeting-only utterance)');
         }
         
-        const emailResult = this.extractEmail(text, context);
-        if (emailResult) {
-            extracted.email = {
-                ...emailResult,
-                turn: turnCount,
-                isCorrection
-            };
+        if (shouldExtract('email')) {
+            const emailResult = this.extractEmail(text, context);
+            if (emailResult) {
+                extracted.email = {
+                    ...emailResult,
+                    turn: turnCount,
+                    isCorrection
+                };
+            }
         }
         
         // Log extraction results
         if (Object.keys(extracted).length > 0) {
             logger.info('[SLOT EXTRACTOR] Slots extracted from utterance', {
                 turnCount,
+                currentBookingStep,
+                isGreetingOnly,
                 extracted: Object.fromEntries(
                     Object.entries(extracted).map(([k, v]) => [k, { value: v.value, confidence: v.confidence }])
                 ),
