@@ -141,8 +141,13 @@ const NAME_STOP_WORDS = new Set([
     'actually', 'really', 'like', 'know', 'think', 'need', 'want',
     // FEB 2026: Meta-statement words (not actual names)
     // "I just TOLD you my name" → "told" is not a name!
-    'told', 'said', 'gave', 'already', 'already', 'mentioned', 'repeat',
-    'again', 'same', 'correct', 'wrong', 'information'
+    'told', 'said', 'gave', 'already', 'mentioned', 'repeat',
+    'again', 'same', 'correct', 'wrong', 'information',
+    // FEB 2026: Question words and common phrases (not names!)
+    // "HOW SOON can you get here?" → "How Soon" is NOT a name!
+    'how', 'soon', 'when', 'where', 'why', 'which', 'who', 'whom',
+    'can', 'could', 'would', 'should', 'will', 'shall', 'may', 'might',
+    'get', 'somebody', 'someone', 'something', 'possible', 'good', 'great'
 ]);
 
 /**

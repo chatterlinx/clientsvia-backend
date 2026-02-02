@@ -740,7 +740,7 @@ function getMissingConfigPrompt(configType, fieldName, context = {}) {
         // Resume booking protocol
         'resumeBookingTemplate': "Okay — back to booking. I have {collectedSummary}. {nextQuestion}",
         // Booking clarification (meta questions during booking)
-        'bookingClarificationTemplate': "DEFAULT - OVERRIDE IN UI: No problem — {nextQuestion}"
+        'bookingClarificationTemplate': "No problem — {nextQuestion}"
     };
     
     return safeDefaults[configType] || safeDefaults[fieldName] || `[CONFIG MISSING: ${configType}]`;
@@ -3291,10 +3291,11 @@ async function processTurn({
         if (escalationEnabled && escalationPhrases.length > 0) {
             const matched = escalationPhrases.find(p => p && userTextLower.includes(String(p).toLowerCase()));
             if (matched) {
+                // FEB 2026 FIX: Remove debug prefix from fallback - it was being spoken aloud!
                 const transferMsg =
                     escalationCfg.transferMessage ||
                     company.connectionMessages?.voice?.transferMessage ||
-                    "DEFAULT - OVERRIDE IN UI: One moment while I transfer you to our team.";
+                    "One moment while I transfer you to our team.";
 
                 log('🧑‍💼 ESCALATION INTERCEPT - transfer requested (0 tokens)', {
                     matchedPhrase: matched,
@@ -5382,9 +5383,10 @@ async function processTurn({
                     break BOOKING_MODE;
                 }
 
+                // FEB 2026 FIX: Remove debug prefix from fallback - it was being spoken aloud!
                 const noResponseCfg =
                     company?.aiAgentSettings?.frontDeskBehavior?.fallbackResponses?.noResponse ||
-                    "DEFAULT - OVERRIDE IN UI: Hello — are you still there?";
+                    "Hello — are you still there?";
 
                 aiResult = {
                     reply: noResponseCfg,
@@ -5710,7 +5712,7 @@ async function processTurn({
                         const transferMsg =
                             escalationCfg.transferMessage ||
                             company.connectionMessages?.voice?.transferMessage ||
-                            "DEFAULT - OVERRIDE IN UI: One moment while I transfer you to our team.";
+                            "One moment while I transfer you to our team.";
                         reply = transferMsg;
                     }
 
@@ -7124,7 +7126,7 @@ async function processTurn({
                                 const escalationOffer =
                                     escalationCfg.offerMessage ||
                                     escalationCfg.transferMessage ||
-                                    "DEFAULT - OVERRIDE IN UI: No problem — I can connect you to our team or take a message. Which would you prefer?";
+                                    "No problem — I can connect you to our team or take a message. Which would you prefer?";
                                 aiResult = {
                                     reply: escalationOffer,
                                     conversationMode: 'booking',
@@ -9541,7 +9543,7 @@ async function processTurn({
                         const escalationOfferScript =
                             escalationCfg.offerMessage ||
                             escalationCfg.transferMessage ||
-                            "DEFAULT - OVERRIDE IN UI: No problem — I can connect you to our team or take a message. Which would you prefer?";
+                            "No problem — I can connect you to our team or take a message. Which would you prefer?";
                         
                         // Check if we've exceeded max attempts (ANTI-LOOP BREAKER)
                         if (askedCount >= maxAttemptsPerSlot) {
