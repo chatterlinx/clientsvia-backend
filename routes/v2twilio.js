@@ -2794,13 +2794,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     let result;
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // 🏢 COMPANY LOADED EARLY (Feb 2026 Fix)
+    // 🏢 OUTER SCOPE VARIABLES (Feb 2026 Fix)
     // ═══════════════════════════════════════════════════════════════════════════
-    // Company must be in outer scope so error handlers can access it.
-    // Previously was declared inside try block, causing "company is not defined"
-    // errors when catch blocks tried to use it for recovery messages.
+    // These variables must be in outer scope so:
+    // 1. Error handlers can access them for recovery messages
+    // 2. TURN_TRACE can access them after the try/catch
+    // Previously declared inside try block, causing "X is not defined" errors.
     // ═══════════════════════════════════════════════════════════════════════════
     let company = null;
+    let slotsBefore = {};
+    let slotKeysBefore = [];
+    let extractedSlots = {};
     
     try {
       // Load company and check LLM-0 feature flag
@@ -2835,11 +2839,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       // 📊 TURN TRACE CHECKPOINT A: State loaded (capture BEFORE any changes)
       // ═══════════════════════════════════════════════════════════════════════════
-      const slotsBefore = JSON.parse(JSON.stringify(callState.slots || {}));
-      const slotKeysBefore = Object.keys(slotsBefore);
+      slotsBefore = JSON.parse(JSON.stringify(callState.slots || {}));
+      slotKeysBefore = Object.keys(slotsBefore);
       
       // Extract slots from current utterance
-      const extractedSlots = SlotExtractor.extractAll(speechResult, {
+      extractedSlots = SlotExtractor.extractAll(speechResult, {
         turnCount: callState.turnCount || 1,
         callerPhone: fromNumber,
         existingSlots: callState.slots,
