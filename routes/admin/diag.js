@@ -813,4 +813,101 @@ router.post('/test-mongo-performance', authenticateJWT, requireRole('admin'), as
     }
 });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// INDEX SYNC: BookingRequest idempotency index
+// ════════════════════════════════════════════════════════════════════════════════
+// Creates the unique_active_session_booking index that prevents duplicate bookings.
+// Safe to run multiple times - will skip if index already exists.
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/sync-booking-indexes', async (req, res) => {
+    try {
+        const BookingRequest = require('../../models/BookingRequest');
+        
+        // Get existing indexes
+        const existingIndexes = await BookingRequest.collection.getIndexes();
+        const indexNames = Object.keys(existingIndexes);
+        
+        const hasIdempotencyIndex = indexNames.includes('unique_active_session_booking');
+        
+        if (hasIdempotencyIndex) {
+            return res.json({
+                success: true,
+                action: 'SKIPPED',
+                message: 'unique_active_session_booking index already exists',
+                indexes: indexNames
+            });
+        }
+        
+        // Create the index
+        await BookingRequest.collection.createIndex(
+            { sessionId: 1 },
+            {
+                unique: true,
+                partialFilterExpression: {
+                    sessionId: { $ne: null },
+                    status: { $ne: 'CANCELLED' }
+                },
+                name: 'unique_active_session_booking',
+                background: true
+            }
+        );
+        
+        // Sync all schema indexes
+        await BookingRequest.syncIndexes();
+        
+        // Get final index list
+        const finalIndexes = await BookingRequest.collection.getIndexes();
+        
+        logger.info('[DIAG] BookingRequest indexes synced', {
+            action: 'CREATED',
+            indexes: Object.keys(finalIndexes)
+        });
+        
+        res.json({
+            success: true,
+            action: 'CREATED',
+            message: 'unique_active_session_booking index created successfully',
+            indexes: Object.keys(finalIndexes)
+        });
+        
+    } catch (error) {
+        logger.error('[DIAG] Failed to sync BookingRequest indexes', { error: error.message });
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// GET: Check current BookingRequest indexes
+router.get('/booking-indexes', async (req, res) => {
+    try {
+        const BookingRequest = require('../../models/BookingRequest');
+        const indexes = await BookingRequest.collection.getIndexes();
+        
+        const indexDetails = Object.entries(indexes).map(([name, index]) => ({
+            name,
+            key: index.key,
+            unique: index.unique || false,
+            partialFilterExpression: index.partialFilterExpression || null
+        }));
+        
+        const hasIdempotencyIndex = indexDetails.some(i => i.name === 'unique_active_session_booking');
+        
+        res.json({
+            success: true,
+            idempotencyIndexExists: hasIdempotencyIndex,
+            indexCount: indexDetails.length,
+            indexes: indexDetails
+        });
+        
+    } catch (error) {
+        logger.error('[DIAG] Failed to get BookingRequest indexes', { error: error.message });
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;

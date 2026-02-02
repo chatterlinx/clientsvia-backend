@@ -1860,35 +1860,81 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
         };
         
         // Create BookingRequest record
-        const bookingRequest = new BookingRequest({
-            companyId: company._id,
-            sessionId: session._id,
-            customerId: session.customerId || null,
-            ruleId: metadata.ruleId || null,
-            trade: company.trade || null,
-            serviceType: metadata.serviceType || null,
-            status: statusMap[outcomeMode] || 'FAKE_CONFIRMED',
-            outcomeMode: outcomeMode,
-            slots: bookingSlots,
-            issue: session.discovery?.issue || null,
-            issueSummary: session.discoverySummary || null,
-            urgency: isAsap ? 'urgent' : 'normal',
-            caseId: caseId,
-            channel: metadata.channel || 'phone',
-            callSid: metadata.callSid || null,
-            callerPhone: metadata.callerPhone || null,
-            createdAt: new Date(),
-            completedAt: new Date()
-        });
+        // ═══════════════════════════════════════════════════════════════════
+        // RACE CONDITION SAFETY: Wrap in try-catch for E11000 duplicate key
+        // Even with app-level guard, two requests can race past it.
+        // The unique index will reject one - we catch that and return existing.
+        // ═══════════════════════════════════════════════════════════════════
+        let bookingRequest;
         
-        await bookingRequest.save();
-        
-        log('✅ BookingRequest created', {
-            bookingRequestId: bookingRequest._id.toString(),
-            caseId: caseId,
-            status: bookingRequest.status,
-            outcomeMode: outcomeMode
-        });
+        try {
+            bookingRequest = new BookingRequest({
+                companyId: company._id,
+                sessionId: session._id,
+                customerId: session.customerId || null,
+                ruleId: metadata.ruleId || null,
+                trade: company.trade || null,
+                serviceType: metadata.serviceType || null,
+                status: statusMap[outcomeMode] || 'FAKE_CONFIRMED',
+                outcomeMode: outcomeMode,
+                slots: bookingSlots,
+                issue: session.discovery?.issue || null,
+                issueSummary: session.discoverySummary || null,
+                urgency: isAsap ? 'urgent' : 'normal',
+                caseId: caseId,
+                channel: metadata.channel || 'phone',
+                callSid: metadata.callSid || null,
+                callerPhone: metadata.callerPhone || null,
+                createdAt: new Date(),
+                completedAt: new Date()
+            });
+            
+            await bookingRequest.save();
+            
+            log('✅ BookingRequest created', {
+                bookingRequestId: bookingRequest._id.toString(),
+                caseId: caseId,
+                status: bookingRequest.status,
+                outcomeMode: outcomeMode
+            });
+            
+        } catch (saveErr) {
+            // ═══════════════════════════════════════════════════════════════
+            // E11000: Duplicate key error from unique index
+            // This means another request already created a booking for this session
+            // ═══════════════════════════════════════════════════════════════
+            if (saveErr?.code === 11000 && saveErr?.keyPattern?.sessionId) {
+                log('⚠️ IDEMPOTENCY(DB): Duplicate key prevented by index - fetching existing booking', {
+                    sessionId: session._id?.toString(),
+                    errorCode: saveErr.code
+                });
+                
+                const existingBooking = await BookingRequest.findOne({
+                    sessionId: session._id,
+                    status: { $ne: 'CANCELLED' }
+                }).lean();
+                
+                if (existingBooking) {
+                    return {
+                        success: true,
+                        bookingRequestId: existingBooking._id?.toString(),
+                        caseId: existingBooking.caseId || null,
+                        outcomeMode: existingBooking.outcomeMode || null,
+                        isAsap: existingBooking.urgency === 'urgent',
+                        requiresTransfer: existingBooking.outcomeMode === 'transfer_to_scheduler',
+                        calendarEventId: existingBooking.calendarEventId || null,
+                        calendarEventLink: existingBooking.calendarEventLink || null,
+                        calendarEventCreated: !!existingBooking.calendarEventId,
+                        finalScript: existingBooking.finalScriptUsed || null,
+                        idempotent: true,
+                        idempotentSource: 'db_unique_index'
+                    };
+                }
+            }
+            
+            // Not a duplicate key error - rethrow
+            throw saveErr;
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // 📅 GOOGLE CALENDAR INTEGRATION - V88 (Jan 2026)
