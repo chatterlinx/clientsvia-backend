@@ -622,6 +622,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/scenario-generation', require('./routes/admin/serviceScenarioGenerationRoutes')); // 🧠 Service Scenario Generation (Jan 2026) - GPT-4 powered, Deep Audit style
     app.use('/api/admin/scenario-engine', require('./routes/admin/scenarioEngineRoutes')); // 🧠 Scenario Coverage Engine (Feb 2026) - Coverage-driven generation
     app.use('/api/admin/placeholders', require('./routes/admin/placeholderRoutes')); // 🏷️ Placeholder Catalog, Scanner & Coverage (Enterprise Onboarding)
+    app.use('/api/admin/platform-catalog', require('./routes/admin/platformCatalog')); // 📚 Platform Catalog - Unified Capability Registry (Tokens + Config + Integrations + Modules)
     app.use('/api/admin', require('./routes/admin/configAudit')); // 🧾 Config Audit Log (append-only) - read endpoint
     // callFlowRoutes REMOVED Dec 2025 - use Mission Control (call-flow-engine) instead
     // V1 LLM Console API removed - 2025-11-08 (use V2 instead)
