@@ -4206,70 +4206,115 @@ async function processTurn({
         if (isEmptyInput) {
             log('🔇 V87: EMPTY/SILENCE INPUT DETECTED - Using deterministic prompt (NO Tier-3!)');
             
-            // Get UI-configured silence prompts or use smart defaults
-            const silenceConfig = company.aiAgentSettings?.voiceSettings?.silenceHandling || {};
-            const silencePrompts = silenceConfig.silencePrompts || [
-                "Are you still there?",
-                "I'm still here whenever you're ready.",
-                "Take your time - I'm listening.",
-                "Hello? Can you hear me?"
+            // ═══════════════════════════════════════════════════════════════════════
+            // FEB 2026 FIX: SMART SILENCE HANDLING
+            // ═══════════════════════════════════════════════════════════════════════
+            // If agent just offered booking ("let me get some info"), silence = implicit YES
+            // → Continue with booking questions instead of asking "are you still there?"
+            // 
+            // Examples:
+            // Agent: "We'll send a tech. Let me get some information to book."
+            // Caller: [silence]
+            // Agent: "What's the service address?" ← Continue, don't ask if they're there!
+            // ═══════════════════════════════════════════════════════════════════════
+            const lastAgentResponse = session.history?.slice(-1)?.[0]?.agent || '';
+            const bookingOfferPatterns = [
+                /let me get.*(?:info|information|details)/i,
+                /get.*(?:scheduled|booked)/i,
+                /book.*(?:appointment|visit|service)/i,
+                /schedule.*(?:appointment|service|tech)/i,
+                /get.*(?:tech|technician|someone).*out/i
             ];
+            const agentJustOfferedBooking = bookingOfferPatterns.some(p => p.test(lastAgentResponse));
             
-            // Rotate through silence prompts based on turn count
-            const silenceCount = session.metrics?.silenceCount || 0;
-            const silenceReply = silencePrompts[silenceCount % silencePrompts.length];
+            // Also check if we have enough slots to start booking (name at minimum)
+            const hasName = !!currentSlots.name;
             
-            // Track silence count for escalation
-            session.metrics = session.metrics || {};
-            session.metrics.silenceCount = silenceCount + 1;
-            
-            // If too many consecutive silences, offer transfer
-            const maxSilences = silenceConfig.maxSilencesBeforeTransfer || 3;
-            let finalSilenceReply = silenceReply;
-            
-            if (silenceCount >= maxSilences - 1) {
-                finalSilenceReply = silenceConfig.transferPrompt || 
-                    "I'm having trouble hearing you. Would you like me to transfer you to someone who can help?";
-            }
-            
-            aiResult = {
-                reply: finalSilenceReply,
-                conversationMode: session.mode || 'DISCOVERY',
-                filledSlots: currentSlots,
-                signals: { isSilence: true },
-                latencyMs: Date.now() - aiStartTime,
-                tokensUsed: 0,  // NO LLM cost!
-                fromStateMachine: true,
-                matchSource: 'SILENCE_HANDLER',
-                tier: 'tier1',
-                mode: session.mode || 'DISCOVERY',
-                debug: {
-                    source: 'SILENCE_DETERMINISTIC',
-                    silenceCount: silenceCount + 1,
-                    maxSilences
+            if (agentJustOfferedBooking && hasName) {
+                log('🔇 FEB 2026: Agent just offered booking + silence = IMPLICIT CONSENT → Start booking');
+                
+                // Set up booking consent as if user said "yes"
+                session.booking = session.booking || {};
+                session.booking.consentGiven = true;
+                session.booking.consentTurn = (session.metrics?.totalTurns || 0) + 1;
+                session.booking.consentReason = 'SILENCE_AFTER_BOOKING_OFFER';
+                session.booking.consentPhrase = '[implicit consent - silence after booking offer]';
+                
+                // DON'T set aiResult here - let the normal booking trigger logic handle it
+                // by treating this as an implicit "yes" and continuing with normal flow
+                log('🔇 Silence after booking offer → treating as implicit yes, continuing to booking trigger');
+                
+                // Reset silence count since this isn't a real silence issue
+                session.metrics = session.metrics || {};
+                session.metrics.silenceCount = 0;
+                
+                // DON'T set aiResult - fall through to normal processing which will detect consent
+            } else {
+                // Normal silence handling
+                const silenceConfig = company.aiAgentSettings?.voiceSettings?.silenceHandling || {};
+                const silencePrompts = silenceConfig.silencePrompts || [
+                    "Are you still there?",
+                    "I'm still here whenever you're ready.",
+                    "Take your time - I'm listening.",
+                    "Hello? Can you hear me?"
+                ];
+                
+                // Rotate through silence prompts based on turn count
+                const silenceCount = session.metrics?.silenceCount || 0;
+                const silenceReply = silencePrompts[silenceCount % silencePrompts.length];
+                
+                // Track silence count for escalation
+                session.metrics = session.metrics || {};
+                session.metrics.silenceCount = silenceCount + 1;
+                
+                // If too many consecutive silences, offer transfer
+                const maxSilences = silenceConfig.maxSilencesBeforeTransfer || 3;
+                let finalSilenceReply = silenceReply;
+                
+                if (silenceCount >= maxSilences - 1) {
+                    finalSilenceReply = silenceConfig.transferPrompt || 
+                        "I'm having trouble hearing you. Would you like me to transfer you to someone who can help?";
                 }
-            };
-            
-            // Log to Black Box
-            if (BlackBoxLogger) {
-                BlackBoxLogger.logEvent({
-                    callId: session._id?.toString(),
-                    companyId,
-                    type: 'SILENCE_HANDLED_TIER1',
-                    data: {
+                
+                aiResult = {
+                    reply: finalSilenceReply,
+                    conversationMode: session.mode || 'DISCOVERY',
+                    filledSlots: currentSlots,
+                    signals: { isSilence: true },
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: 0,  // NO LLM cost!
+                    fromStateMachine: true,
+                    matchSource: 'SILENCE_HANDLER',
+                    tier: 'tier1',
+                    mode: session.mode || 'DISCOVERY',
+                    debug: {
+                        source: 'SILENCE_DETERMINISTIC',
                         silenceCount: silenceCount + 1,
-                        maxSilences,
-                        reply: finalSilenceReply,
-                        latencyMs: Date.now() - aiStartTime
+                        maxSilences
                     }
-                }).catch(() => {});
+                };
+                
+                // Log to Black Box
+                if (BlackBoxLogger) {
+                    BlackBoxLogger.logEvent({
+                        callId: session._id?.toString(),
+                        companyId,
+                        type: 'SILENCE_HANDLED_TIER1',
+                        data: {
+                            silenceCount: silenceCount + 1,
+                            maxSilences,
+                            reply: finalSilenceReply,
+                            latencyMs: Date.now() - aiStartTime
+                        }
+                    }).catch(() => {});
+                }
+                
+                log('🔇 V87: SILENCE RESPONSE (instant, no LLM)', { 
+                    silenceCount: silenceCount + 1, 
+                    reply: finalSilenceReply 
+                });
             }
-            
-            log('🔇 V87: SILENCE RESPONSE (instant, no LLM)', { 
-                silenceCount: silenceCount + 1, 
-                reply: finalSilenceReply 
-            });
-            // Skip all other processing - go directly to response building
+            // Skip all other processing if aiResult was set
         }
             
         // ═══════════════════════════════════════════════════════════════════════
