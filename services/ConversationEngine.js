@@ -1761,6 +1761,45 @@ async function finalizeBooking(session, company, slots, metadata = {}) {
     });
     
     try {
+        // ═══════════════════════════════════════════════════════════════════
+        // IDEMPOTENCY GUARD: Prevent duplicate bookings from retries/replays
+        // ═══════════════════════════════════════════════════════════════════
+        // Check if this session already has a BookingRequest.
+        // This prevents:
+        // - Duplicate BookingRequest records
+        // - Duplicate calendar events
+        // - Wasted API calls from Twilio retries, STT replays, etc.
+        // ═══════════════════════════════════════════════════════════════════
+        if (session._id) {
+            const existingBooking = await BookingRequest.findOne({
+                sessionId: session._id,
+                status: { $ne: 'CANCELLED' }
+            }).lean();
+            
+            if (existingBooking) {
+                log('⚠️ IDEMPOTENCY: Session already has booking - returning existing', {
+                    existingBookingId: existingBooking._id.toString(),
+                    caseId: existingBooking.caseId,
+                    calendarEventId: existingBooking.calendarEventId || null,
+                    createdAt: existingBooking.createdAt
+                });
+                
+                // Return the existing booking result
+                return {
+                    success: true,
+                    bookingRequestId: existingBooking._id.toString(),
+                    caseId: existingBooking.caseId,
+                    outcomeMode: existingBooking.outcomeMode,
+                    isAsap: existingBooking.urgency === 'urgent',
+                    requiresTransfer: existingBooking.outcomeMode === 'transfer_to_scheduler',
+                    calendarEventId: existingBooking.calendarEventId || null,
+                    calendarEventCreated: !!existingBooking.calendarEventId,
+                    finalScript: existingBooking.finalScriptUsed,
+                    idempotent: true  // Flag that this was a duplicate call
+                };
+            }
+        }
+        
         // Get booking outcome config
         const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
         const bookingOutcome = frontDesk.bookingOutcome || {};
