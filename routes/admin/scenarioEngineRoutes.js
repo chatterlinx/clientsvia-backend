@@ -1216,10 +1216,14 @@ router.post('/duplicate-scan', async (req, res) => {
 /**
  * POST /duplicate-cleanup
  * Apply a cleanup plan (keep winners, merge triggers, delete duplicates)
+ * 
+ * Body: { templateId, plan, dryRun }
+ *   - dryRun: true = preview only, no changes made
+ *   - dryRun: false (default) = actually apply changes
  */
 router.post('/duplicate-cleanup', async (req, res) => {
     try {
-        const { templateId, plan } = req.body;
+        const { templateId, plan, dryRun = false } = req.body;
         
         if (!templateId || !plan || !Array.isArray(plan)) {
             return res.status(400).json({ error: 'templateId and plan array required' });
@@ -1227,16 +1231,22 @@ router.post('/duplicate-cleanup', async (req, res) => {
         
         const cleanup = getCleanupService();
         
-        logger.info('[DUPLICATE CLEANUP] Applying cleanup', { 
+        logger.info('[DUPLICATE CLEANUP] ' + (dryRun ? 'Dry-run preview' : 'Applying cleanup'), { 
             templateId, 
-            groupCount: plan.length 
+            groupCount: plan.length,
+            dryRun
         });
         
-        const result = await cleanup.applyCleanupPlan(templateId, plan, {
-            userId: req.user?._id,
-            name: req.user?.name || 'Admin',
-            email: req.user?.email
-        });
+        const result = await cleanup.applyCleanupPlan(
+            templateId, 
+            plan, 
+            {
+                userId: req.user?._id,
+                name: req.user?.name || 'Admin',
+                email: req.user?.email
+            },
+            { dryRun }
+        );
         
         res.json({
             success: result.success,

@@ -9318,13 +9318,6 @@
                 return;
             }
             
-            const groupCount = duplicateScanResults.groups.length;
-            const deleteCount = duplicateScanResults.stats.duplicates;
-            
-            if (!confirm(`This will:\n\n• Keep ${groupCount} leader scenarios\n• Merge triggers from duplicates\n• Delete ${deleteCount} redundant scenarios\n\nThis cannot be undone. Continue?`)) {
-                return;
-            }
-            
             try {
                 const templateId = window.globalTemplateId;
                 
@@ -9341,13 +9334,57 @@
                     };
                 });
                 
+                // ═══════════════════════════════════════════════════════════════
+                // STEP 1: DRY-RUN FIRST (Feb 2026 - Safety First)
+                // ═══════════════════════════════════════════════════════════════
+                showToast('🔍 Running dry-run preview...', 'info');
+                
+                const dryRunResponse = await fetch('/api/admin/scenario-engine/duplicate-cleanup', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ templateId, plan, dryRun: true })
+                });
+                
+                const dryRunResult = await dryRunResponse.json();
+                
+                if (!dryRunResponse.ok) {
+                    throw new Error(dryRunResult.error || 'Dry-run failed');
+                }
+                
+                // ═══════════════════════════════════════════════════════════════
+                // STEP 2: SHOW PREVIEW AND ASK FOR CONFIRMATION
+                // ═══════════════════════════════════════════════════════════════
+                const previewSummary = dryRunResult.preview.map(p => 
+                    `• KEEP "${p.winnerName}" (+${p.triggersGained} triggers) → DELETE ${p.toDelete.length}: ${p.toDelete.map(d => d.name).join(', ')}`
+                ).join('\n');
+                
+                const confirmMsg = `🔍 DRY-RUN PREVIEW\n\n` +
+                    `Will keep: ${dryRunResult.preview.length} leader scenarios\n` +
+                    `Will delete: ${dryRunResult.deleted} duplicates\n` +
+                    `Will modify: ${dryRunResult.modified} scenarios (merged triggers)\n\n` +
+                    `Preview:\n${previewSummary.substring(0, 800)}${previewSummary.length > 800 ? '...' : ''}\n\n` +
+                    `⚠️ This cannot be undone. Apply these changes?`;
+                
+                if (!confirm(confirmMsg)) {
+                    showToast('Cleanup cancelled', 'info');
+                    return;
+                }
+                
+                // ═══════════════════════════════════════════════════════════════
+                // STEP 3: ACTUAL EXECUTION
+                // ═══════════════════════════════════════════════════════════════
+                showToast('🧹 Applying cleanup...', 'info');
+                
                 const response = await fetch('/api/admin/scenario-engine/duplicate-cleanup', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${getAuthToken()}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ templateId, plan })
+                    body: JSON.stringify({ templateId, plan, dryRun: false })
                 });
                 
                 const result = await response.json();

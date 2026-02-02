@@ -70,9 +70,12 @@ function mergeTriggers(winner, duplicates, maxTriggers = 30) {
  * @param {string} templateId - Template to modify
  * @param {Array} plan - Array of { groupId, winnerId, deleteIds, mergeTriggers }
  * @param {Object} user - User performing the cleanup
- * @returns {Object} { success, modified, deleted, errors }
+ * @param {Object} options - { dryRun: boolean }
+ * @returns {Object} { success, modified, deleted, errors, dryRun, preview }
  */
-async function applyCleanupPlan(templateId, plan, user = {}) {
+async function applyCleanupPlan(templateId, plan, user = {}, options = {}) {
+    const { dryRun = false } = options;
+    
     const template = await GlobalInstantResponseTemplate.findById(templateId);
     if (!template) {
         throw new Error('Template not found');
@@ -80,10 +83,12 @@ async function applyCleanupPlan(templateId, plan, user = {}) {
     
     const results = {
         success: true,
+        dryRun,  // Flag so caller knows this was preview-only
         modified: 0,
         deleted: 0,
         errors: [],
-        details: []
+        details: [],
+        preview: []  // For dry-run: what WOULD happen
     };
     
     // Build a map of all scenarios for quick lookup
@@ -124,16 +129,46 @@ async function applyCleanupPlan(templateId, plan, user = {}) {
                 continue;
             }
             
+            // Calculate what would happen (for both dry-run and actual)
+            const winnerTriggersBefore = winner.triggers?.length || 0;
+            const mergedTriggers = shouldMerge 
+                ? mergeTriggers(winner, duplicates) 
+                : winner.triggers;
+            const triggersToAdd = mergedTriggers.length - winnerTriggersBefore;
+            
+            // Build preview entry
+            const previewEntry = {
+                winnerId,
+                winnerName: winner.scenarioName || winner.name,
+                winnerTriggersBefore,
+                winnerTriggersAfter: mergedTriggers.length,
+                triggersGained: triggersToAdd,
+                toDelete: duplicates.map(d => ({
+                    id: d.scenarioId || d._id?.toString(),
+                    name: d.scenarioName || d.name,
+                    triggerCount: d.triggers?.length || 0,
+                    category: categoryMap.get(d.scenarioId || d._id?.toString())?.name
+                }))
+            };
+            results.preview.push(previewEntry);
+            
+            // If dry-run, don't actually modify
+            if (dryRun) {
+                results.modified += shouldMerge ? 1 : 0;
+                results.deleted += duplicates.length;
+                continue;
+            }
+            
+            // ACTUAL EXECUTION (not dry-run)
             // Merge triggers if requested
             if (shouldMerge) {
-                const originalTriggerCount = winner.triggers?.length || 0;
-                winner.triggers = mergeTriggers(winner, duplicates);
+                winner.triggers = mergedTriggers;
                 
                 results.details.push({
                     action: 'merge',
                     winnerId,
                     winnerName: winner.scenarioName || winner.name,
-                    triggersAdded: winner.triggers.length - originalTriggerCount
+                    triggersAdded: triggersToAdd
                 });
                 results.modified++;
             }
@@ -168,7 +203,26 @@ async function applyCleanupPlan(templateId, plan, user = {}) {
         }
     }
     
-    // Save template
+    // ═══════════════════════════════════════════════════════════════
+    // DRY-RUN: Skip save, return preview only
+    // ═══════════════════════════════════════════════════════════════
+    if (dryRun) {
+        logger.info('[DUPLICATE CLEANUP] Dry-run completed', {
+            templateId,
+            wouldDelete: results.deleted,
+            wouldModify: results.modified,
+            previewGroups: results.preview.length
+        });
+        
+        return {
+            ...results,
+            message: `Dry-run: Would delete ${results.deleted} scenarios and modify ${results.modified} (no changes made)`
+        };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // ACTUAL EXECUTION: Save template and log
+    // ═══════════════════════════════════════════════════════════════
     try {
         await template.save();
         
