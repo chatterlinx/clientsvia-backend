@@ -871,6 +871,251 @@ const wiringRegistryV2 = {
         },
         
         // ---------------------------------------------------------------------
+        // INTEGRATIONS TAB (Company Profile → Configuration)
+        // ---------------------------------------------------------------------
+        {
+            id: 'tab.integrations',
+            label: 'Integrations',
+            description: 'Third-party integrations (Google Calendar, SMS)',
+            ui: { tabId: 'integrations', navSelector: '[data-tab="configuration"]' },
+            db: { collection: 'companies', basePath: 'googleCalendar' },
+            scope: 'company',
+            sections: [
+                // GOOGLE CALENDAR
+                {
+                    id: 'integrations.googleCalendar',
+                    label: 'Google Calendar Integration',
+                    description: 'Real-time availability checking and automatic appointment creation',
+                    ui: {
+                        sectionId: 'google-calendar',
+                        path: 'Company Profile → Configuration → Google Calendar Integration'
+                    },
+                    fields: [
+                        {
+                            id: 'integrations.googleCalendar.enabled',
+                            label: 'Google Calendar Enabled',
+                            ui: { inputId: 'gcEnabled', path: 'Configuration → Google Calendar → Enabled Toggle' },
+                            db: { path: 'googleCalendar.enabled' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.connected'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: false
+                        },
+                        {
+                            id: 'integrations.googleCalendar.connected',
+                            label: 'Calendar Connected',
+                            ui: { inputId: 'gcConnected', path: 'Configuration → Google Calendar → Connection Status' },
+                            db: { path: 'googleCalendar.connected' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.connected'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: false,
+                            notes: 'Set automatically via OAuth2 callback'
+                        },
+                        {
+                            id: 'integrations.googleCalendar.calendarId',
+                            label: 'Calendar ID',
+                            ui: { inputId: 'gcCalendarId', path: 'Configuration → Google Calendar → Calendar Selection' },
+                            db: { path: 'googleCalendar.calendarId' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.settings'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'primary'
+                        },
+                        {
+                            id: 'integrations.googleCalendar.bufferMinutes',
+                            label: 'Buffer Before First Slot',
+                            ui: { inputId: 'gcBufferMinutes', path: 'Configuration → Google Calendar → Booking Settings → Buffer' },
+                            db: { path: 'googleCalendar.settings.bufferMinutes' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.settings'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 60
+                        },
+                        {
+                            id: 'integrations.googleCalendar.defaultDuration',
+                            label: 'Default Appointment Duration',
+                            ui: { inputId: 'gcDefaultDuration', path: 'Configuration → Google Calendar → Booking Settings → Duration' },
+                            db: { path: 'googleCalendar.settings.defaultDurationMinutes' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.settings'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 60
+                        },
+                        {
+                            id: 'integrations.googleCalendar.maxDaysAhead',
+                            label: 'Max Booking Days Ahead',
+                            ui: { inputId: 'gcMaxDaysAhead', path: 'Configuration → Google Calendar → Booking Settings → Max Days' },
+                            db: { path: 'googleCalendar.settings.maxBookingDaysAhead' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.settings'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 30
+                        },
+                        {
+                            id: 'integrations.googleCalendar.fallbackMode',
+                            label: 'Fallback Mode',
+                            ui: { inputId: 'gcFallbackMode', path: 'Configuration → Google Calendar → Fallback Mode' },
+                            db: { path: 'googleCalendar.settings.fallbackMode' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.settings'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'capture_preference',
+                            allowedValues: ['capture_preference', 'message_only', 'transfer']
+                        },
+                        {
+                            id: 'integrations.googleCalendar.eventTitleTemplate',
+                            label: 'Event Title Template',
+                            ui: { inputId: 'gcEventTitleTemplate', path: 'Configuration → Google Calendar → Event Title Template' },
+                            db: { path: 'googleCalendar.settings.eventTitleTemplate' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.settings'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: '{serviceType} - {customerName}',
+                            notes: 'Placeholders: {customerName}, {serviceType}, {companyName}'
+                        }
+                    ]
+                },
+                
+                // SERVICE TYPE TAGS (Color Mapping)
+                {
+                    id: 'integrations.serviceTypeTags',
+                    label: 'Service Type Tags',
+                    description: 'Map service types to calendar colors and scheduling rules',
+                    ui: {
+                        sectionId: 'service-type-tags',
+                        path: 'Company Profile → Configuration → Service Type Tags'
+                    },
+                    fields: [
+                        {
+                            id: 'integrations.googleCalendar.colorCodingEnabled',
+                            label: 'Enable Color Coding',
+                            ui: { inputId: 'gcColorCodingEnabled', path: 'Configuration → Service Type Tags → Enable' },
+                            db: { path: 'googleCalendar.eventColors.enabled' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.eventColors'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true
+                        },
+                        {
+                            id: 'integrations.googleCalendar.colorMapping',
+                            label: 'Service Type Color Mapping',
+                            ui: { inputId: 'gcColorMapping', path: 'Configuration → Service Type Tags → Color Mapping' },
+                            db: { path: 'googleCalendar.eventColors.colorMapping' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.colorMapping'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: [],
+                            notes: 'Array of {serviceType, canonicalType, colorId, label, scheduling}'
+                        },
+                        {
+                            id: 'integrations.googleCalendar.defaultColor',
+                            label: 'Default Color (Unknown Type)',
+                            ui: { inputId: 'gcDefaultColor', path: 'Configuration → Service Type Tags → Default Color' },
+                            db: { path: 'googleCalendar.eventColors.defaultColorId' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleCalendar.eventColors'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: '7',
+                            notes: 'Google Calendar colorId (1-11): 7=Peacock'
+                        }
+                    ]
+                },
+                
+                // SMS NOTIFICATIONS
+                {
+                    id: 'integrations.smsNotifications',
+                    label: 'SMS Notifications',
+                    description: 'Booking confirmations and appointment reminders via SMS',
+                    ui: {
+                        sectionId: 'sms-notifications',
+                        path: 'Company Profile → Configuration → SMS Notifications'
+                    },
+                    fields: [
+                        {
+                            id: 'integrations.smsNotifications.enabled',
+                            label: 'SMS Notifications Enabled',
+                            ui: { inputId: 'smsEnabled', path: 'Configuration → SMS Notifications → Enabled' },
+                            db: { path: 'smsNotifications.enabled' },
+                            runtime: RUNTIME_READERS_MAP['integrations.smsNotifications.enabled'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: false
+                        },
+                        {
+                            id: 'integrations.smsNotifications.bookingConfirmation',
+                            label: 'Booking Confirmation Template',
+                            ui: { inputId: 'smsBookingConfirmation', path: 'Configuration → SMS Notifications → Booking Confirmation' },
+                            db: { path: 'smsNotifications.templates.bookingConfirmation' },
+                            runtime: RUNTIME_READERS_MAP['integrations.smsNotifications.templates'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'Hi {customerName}! Your appointment with {companyName} is confirmed for {appointmentTime}.',
+                            notes: 'Placeholders: {customerName}, {companyName}, {appointmentTime}, {customerAddress}, {serviceType}'
+                        },
+                        {
+                            id: 'integrations.smsNotifications.reminder24h',
+                            label: '24-Hour Reminder Template',
+                            ui: { inputId: 'smsReminder24h', path: 'Configuration → SMS Notifications → 24h Reminder' },
+                            db: { path: 'smsNotifications.templates.reminder24h' },
+                            runtime: RUNTIME_READERS_MAP['integrations.smsNotifications.templates'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'Reminder: Your appointment with {companyName} is tomorrow at {appointmentTime}.'
+                        },
+                        {
+                            id: 'integrations.smsNotifications.reminder1h',
+                            label: '1-Hour Reminder Template',
+                            ui: { inputId: 'smsReminder1h', path: 'Configuration → SMS Notifications → 1h Reminder' },
+                            db: { path: 'smsNotifications.templates.reminder1h' },
+                            runtime: RUNTIME_READERS_MAP['integrations.smsNotifications.templates'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'Heads up! Your technician from {companyName} will arrive in about 1 hour.'
+                        },
+                        {
+                            id: 'integrations.smsNotifications.quietHoursStart',
+                            label: 'Quiet Hours Start',
+                            ui: { inputId: 'smsQuietHoursStart', path: 'Configuration → SMS Notifications → Quiet Hours Start' },
+                            db: { path: 'smsNotifications.quietHours.start' },
+                            runtime: RUNTIME_READERS_MAP['integrations.smsNotifications.enabled'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: '21:00'
+                        },
+                        {
+                            id: 'integrations.smsNotifications.quietHoursEnd',
+                            label: 'Quiet Hours End',
+                            ui: { inputId: 'smsQuietHoursEnd', path: 'Configuration → SMS Notifications → Quiet Hours End' },
+                            db: { path: 'smsNotifications.quietHours.end' },
+                            runtime: RUNTIME_READERS_MAP['integrations.smsNotifications.enabled'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: '08:00'
+                        }
+                    ]
+                }
+            ]
+        },
+        
+        // ---------------------------------------------------------------------
         // CALL CENTER TAB
         // ---------------------------------------------------------------------
         {

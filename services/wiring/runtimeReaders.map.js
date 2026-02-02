@@ -710,6 +710,126 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // GOOGLE CALENDAR INTEGRATION
+    // =========================================================================
+    'integrations.googleCalendar.connected': {
+        readers: [
+            {
+                file: 'services/GoogleCalendarService.js',
+                function: 'getOAuth2ClientForCompany',
+                line: 86,
+                description: 'Checks if calendar is connected before any calendar operation',
+                required: true
+            },
+            {
+                file: 'routes/company/googleCalendar.js',
+                function: 'GET /status',
+                line: 45,
+                description: 'Returns calendar connection status to UI',
+                required: false
+            }
+        ],
+        dbPath: 'company.googleCalendar.connected',
+        scope: 'company',
+        defaultValue: false
+    },
+    'integrations.googleCalendar.settings': {
+        readers: [
+            {
+                file: 'services/GoogleCalendarService.js',
+                function: 'createBookingEvent',
+                line: 871,
+                description: 'Uses settings for event creation (buffer, duration, templates)',
+                required: true
+            },
+            {
+                file: 'services/GoogleCalendarService.js',
+                function: 'checkAvailability',
+                line: 400,
+                description: 'Uses settings for availability windows',
+                required: true
+            }
+        ],
+        dbPath: 'company.googleCalendar.settings',
+        scope: 'company',
+        defaultValue: {}
+    },
+    'integrations.googleCalendar.eventColors': {
+        readers: [
+            {
+                file: 'services/GoogleCalendarService.js',
+                function: 'createBookingEvent',
+                line: 912,
+                description: 'Maps serviceType to Google Calendar colorId via colorMapping',
+                required: false
+            }
+        ],
+        dbPath: 'company.googleCalendar.eventColors',
+        scope: 'company',
+        defaultValue: { enabled: true, colorMapping: [] }
+    },
+    'integrations.googleCalendar.colorMapping': {
+        readers: [
+            {
+                file: 'services/GoogleCalendarService.js',
+                function: 'createBookingEvent',
+                line: 916,
+                description: 'Service type to calendar color mapping (canonicalType → colorId)',
+                required: false
+            },
+            {
+                file: 'services/ServiceTypeResolver.js',
+                function: 'resolveServiceType',
+                line: 50,
+                description: 'Resolves detected service type to canonical type for color matching',
+                required: false
+            }
+        ],
+        dbPath: 'company.googleCalendar.eventColors.colorMapping',
+        scope: 'company',
+        defaultValue: []
+    },
+
+    // =========================================================================
+    // SMS NOTIFICATIONS
+    // =========================================================================
+    'integrations.smsNotifications.enabled': {
+        readers: [
+            {
+                file: 'services/SMSNotificationService.js',
+                function: 'sendBookingConfirmation',
+                line: 50,
+                description: 'Checks if SMS notifications are enabled before sending',
+                required: true
+            }
+        ],
+        dbPath: 'company.smsNotifications.enabled',
+        scope: 'company',
+        defaultValue: false
+    },
+    'integrations.smsNotifications.templates': {
+        readers: [
+            {
+                file: 'services/SMSNotificationService.js',
+                function: 'sendBookingConfirmation',
+                line: 80,
+                description: 'Uses booking confirmation template with placeholders',
+                required: true
+            },
+            {
+                file: 'services/SMSNotificationService.js',
+                function: 'sendReminder',
+                line: 120,
+                description: 'Uses 24h/1h reminder templates',
+                required: false
+            }
+        ],
+        dbPath: 'company.smsNotifications.templates',
+        scope: 'company',
+        defaultValue: {}
+    },
+
+    // =========================================================================
     // INFRASTRUCTURE - REDIS CACHE
     // =========================================================================
     'infra.scenarioPoolCache': {
