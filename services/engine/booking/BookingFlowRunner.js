@@ -28,6 +28,8 @@
 const logger = require('../../../utils/logger');
 const BookingFlowResolver = require('./BookingFlowResolver');
 const AddressValidationService = require('../../AddressValidationService');
+const GoogleCalendarService = require('../../GoogleCalendarService');
+const SMSNotificationService = require('../../SMSNotificationService');
 
 /**
  * Slot extractors - deterministic extraction for each slot type
@@ -205,6 +207,62 @@ function cleanName(name) {
 }
 
 /**
+ * V92: Check if a name needs spelling confirmation
+ * Names that sound similar (Mark/Marc, John/Jon, etc.) should be spelled out
+ * to avoid booking under wrong name.
+ */
+const SIMILAR_NAME_GROUPS = [
+    ['mark', 'marc', 'marcus'],
+    ['john', 'jon', 'jonathan', 'jonathon'],
+    ['steven', 'stephen', 'steve'],
+    ['michael', 'micheal', 'mike'],
+    ['brian', 'bryan', 'bryon'],
+    ['eric', 'erik', 'erick'],
+    ['jason', 'jayson'],
+    ['jeffrey', 'geoffrey', 'geoff', 'jeff'],
+    ['kris', 'chris', 'kristopher', 'christopher'],
+    ['shawn', 'sean', 'shaun'],
+    ['alan', 'allan', 'allen'],
+    ['anne', 'ann', 'anna'],
+    ['cathy', 'kathy', 'catherine', 'katherine'],
+    ['sara', 'sarah'],
+    ['lindsey', 'lindsay'],
+    ['tracy', 'tracey'],
+    ['brittany', 'britney', 'brittney'],
+    ['ashley', 'ashlee', 'ashleigh'],
+    ['megan', 'meghan', 'meagan'],
+    ['rachel', 'rachael'],
+    ['nicole', 'nichole'],
+    ['teresa', 'theresa'],
+    ['carl', 'karl'],
+    ['gary', 'garry'],
+    ['jerry', 'gerry'],
+    ['phil', 'phillip', 'philip'],
+    ['tony', 'toni', 'anthony']
+];
+
+function needsSpellingCheck(name) {
+    if (!name) return false;
+    
+    const nameLower = name.toLowerCase().trim();
+    const firstName = nameLower.split(/\s+/)[0]; // Check first name only
+    
+    // Check if first name is in any similar-sounding group
+    for (const group of SIMILAR_NAME_GROUPS) {
+        if (group.includes(firstName)) {
+            return true;
+        }
+    }
+    
+    // Also check for very short names (3 letters or less) - easy to mishear
+    if (firstName.length <= 3) {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
  * ============================================================================
  * BOOKING FLOW RUNNER
  * ============================================================================
@@ -259,6 +317,11 @@ class BookingFlowRunner {
         
         // Initialize state if needed
         state = this.initializeState(state, flow, slots);
+        
+        // V92: Store companyId in state for later use in buildCompletion (SMS)
+        if (company?._id && !state.companyId) {
+            state.companyId = company._id.toString();
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // MERGE PRE-EXTRACTED SLOTS INTO BOOKING COLLECTED
@@ -346,6 +409,71 @@ class BookingFlowRunner {
                     error: geoError.message,
                     address: state.bookingCollected.address
                 });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: HANDLE PENDING SPELLING CONFIRMATION
+        // ═══════════════════════════════════════════════════════════════════════
+        // If we asked user to confirm spelling and they responded, process it here.
+        // User can say: "yes", "correct", "no", "wrong", or provide a corrected name.
+        // ═══════════════════════════════════════════════════════════════════════
+        if (state.pendingSpellingConfirm && userInput && userInput.trim()) {
+            const confirmResult = this.parseConfirmationResponse(userInput);
+            const { fieldKey, value, step: stepId } = state.pendingSpellingConfirm;
+            
+            if (confirmResult.confirmed) {
+                // Spelling confirmed - mark as confirmed and proceed
+                state.spellingConfirmed = true;
+                delete state.pendingSpellingConfirm;
+                
+                logger.info('[BOOKING FLOW RUNNER] V92: Spelling confirmed', {
+                    fieldKey,
+                    value
+                });
+                
+                // Continue to next step - fall through
+            } else if (confirmResult.denied) {
+                // User said spelling is wrong - ask for correct spelling
+                delete state.pendingSpellingConfirm;
+                delete state.bookingCollected[fieldKey];
+                if (state.confirmedSlots) delete state.confirmedSlots[fieldKey];
+                state.spellingConfirmed = false;
+                
+                logger.info('[BOOKING FLOW RUNNER] V92: Spelling denied - re-asking', {
+                    fieldKey,
+                    originalValue: value
+                });
+                
+                return {
+                    reply: "I apologize. Could you please spell your name for me?",
+                    state,
+                    isComplete: false,
+                    action: 'RE_COLLECT_NAME',
+                    currentStep: stepId,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'RE_COLLECT_NAME_AFTER_SPELLING_DENIED'
+                    }
+                };
+            } else if (confirmResult.newValue) {
+                // User provided a corrected name
+                state.bookingCollected[fieldKey] = confirmResult.newValue;
+                state.spellingConfirmed = true;
+                delete state.pendingSpellingConfirm;
+                
+                logger.info('[BOOKING FLOW RUNNER] V92: New name provided after spelling check', {
+                    fieldKey,
+                    oldValue: value,
+                    newValue: confirmResult.newValue
+                });
+                
+                // Continue to next step - fall through
             }
         }
         
@@ -898,6 +1026,110 @@ class BookingFlowRunner {
             }
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: GOOGLE CALENDAR INTEGRATION FOR TIME SLOT
+        // ═══════════════════════════════════════════════════════════════════════
+        // When collecting time/dateTime preference, check Google Calendar for
+        // available slots and offer choices. Handles "ASAP", "morning", "tomorrow", etc.
+        // Falls back gracefully if calendar not connected or unavailable.
+        // ═══════════════════════════════════════════════════════════════════════
+        if ((fieldKey === 'time' || fieldKey === 'dateTime' || step.type === 'time' || step.type === 'dateTime') && extractResult.value) {
+            const calendarEnabled = company?.integrations?.googleCalendar?.enabled;
+            const calendarConnected = company?.integrations?.googleCalendar?.connected;
+            const companyId = company?._id?.toString();
+            
+            if (calendarEnabled && calendarConnected && companyId) {
+                try {
+                    const userPreference = extractResult.value; // e.g., "ASAP", "tomorrow morning", "Friday"
+                    
+                    // Get available slots based on user preference
+                    const availableSlots = await GoogleCalendarService.findAvailableSlots(
+                        companyId,
+                        new Date(), // Start from now
+                        step.serviceType || 'default'
+                    );
+                    
+                    if (availableSlots && availableSlots.slots && availableSlots.slots.length > 0) {
+                        // Filter slots based on user preference if possible
+                        const topSlots = availableSlots.slots.slice(0, 3);
+                        
+                        // Format slot options for user
+                        const slotChoices = topSlots.map((slot, idx) => {
+                            const start = new Date(slot.start);
+                            const dayName = start.toLocaleDateString('en-US', { weekday: 'long' });
+                            const date = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                            const time = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                            return `${dayName} ${date} at ${time}`;
+                        });
+                        
+                        // Store slots for selection
+                        state.availableSlots = topSlots;
+                        state.awaitingSlotSelection = true;
+                        
+                        const choicesFormatted = slotChoices.length === 1 
+                            ? slotChoices[0]
+                            : slotChoices.slice(0, -1).join(', ') + ', or ' + slotChoices[slotChoices.length - 1];
+                        
+                        logger.info('[BOOKING FLOW RUNNER] V92: Offering calendar slots', {
+                            userPreference,
+                            slotsFound: topSlots.length,
+                            choices: slotChoices
+                        });
+                        
+                        return {
+                            reply: `I have the following available: ${choicesFormatted}. Which works best for you?`,
+                            state,
+                            isComplete: false,
+                            action: 'OFFER_TIME_SLOTS',
+                            currentStep: step.id,
+                            availableSlots: slotChoices,
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                source: 'BOOKING_FLOW_RUNNER',
+                                flowId: flow.flowId,
+                                mode: 'CALENDAR_SLOT_SELECTION',
+                                userPreference,
+                                slotsOffered: slotChoices.length
+                            }
+                        };
+                    } else if (availableSlots?.fallback) {
+                        // Calendar returned fallback mode (e.g., service not available same-day)
+                        logger.info('[BOOKING FLOW RUNNER] V92: Calendar fallback mode', {
+                            message: availableSlots.message,
+                            reason: availableSlots.reason
+                        });
+                        // Store preference and let human schedule
+                        valueToStore = userPreference;
+                    } else {
+                        // No slots available - store preference for human to handle
+                        logger.warn('[BOOKING FLOW RUNNER] V92: No calendar slots available', {
+                            userPreference
+                        });
+                        valueToStore = userPreference;
+                    }
+                } catch (calendarError) {
+                    // Calendar error - fall back to preference capture
+                    logger.warn('[BOOKING FLOW RUNNER] V92: Calendar lookup failed (non-blocking)', {
+                        error: calendarError.message,
+                        preference: extractResult.value
+                    });
+                    // Continue with user's stated preference
+                    valueToStore = extractResult.value;
+                }
+            } else {
+                // Calendar not enabled - use preference capture mode
+                logger.info('[BOOKING FLOW RUNNER] V92: Calendar not enabled, using preference', {
+                    calendarEnabled,
+                    calendarConnected,
+                    preference: extractResult.value
+                });
+                valueToStore = extractResult.value;
+            }
+        }
+        
         state.bookingCollected[fieldKey] = valueToStore;
         state.confirmedSlots = state.confirmedSlots || {};
         state.confirmedSlots[fieldKey] = true; // Directly provided = confirmed
@@ -983,6 +1215,60 @@ class BookingFlowRunner {
                     firstName: state.firstNameCollected,
                     lastName
                 });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: CONFIRM SPELLING FOR NAME - Wire confirmSpelling from booking prompts
+        // ═══════════════════════════════════════════════════════════════════════
+        // If name slot has confirmSpelling: true, spell back the name letter-by-letter
+        // for similar-sounding names (Mark/Marc, John/Jon, etc.) before proceeding.
+        // This addresses the "Biggest current bug" from wiring analysis.
+        // ═══════════════════════════════════════════════════════════════════════
+        const confirmSpelling = slotOptions.confirmSpelling || step.confirmSpelling;
+        
+        if ((fieldKey === 'name' || step.type === 'name') && confirmSpelling && !state.spellingConfirmed) {
+            const nameToSpell = valueToStore || state.bookingCollected[fieldKey];
+            
+            if (nameToSpell && this.needsSpellingCheck(nameToSpell)) {
+                // Spell out the name letter by letter
+                const spelled = nameToSpell.toUpperCase().split('').join(' - ');
+                const spellingPrompt = slotOptions.spellingConfirmPrompt || step.spellingConfirmPrompt || 
+                    `Let me confirm the spelling: ${spelled}. Is that correct?`;
+                
+                state.pendingSpellingConfirm = {
+                    fieldKey,
+                    value: nameToSpell,
+                    step: step.id
+                };
+                
+                logger.info('[BOOKING FLOW RUNNER] V92: Asking spelling confirmation', {
+                    name: nameToSpell,
+                    spelled,
+                    confirmSpelling: true
+                });
+                
+                return {
+                    reply: spellingPrompt,
+                    state,
+                    isComplete: false,
+                    action: 'CONFIRM_SPELLING',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'CONFIRM_SPELLING',
+                        nameToSpell,
+                        spelled
+                    }
+                };
+            } else {
+                // Name doesn't need spelling check (common/unique enough)
+                state.spellingConfirmed = true;
             }
         }
         
@@ -1394,8 +1680,10 @@ class BookingFlowRunner {
      * ========================================================================
      * BUILD COMPLETION - Booking finalized
      * ========================================================================
+     * V92: Added SMS notification on booking complete
+     * ========================================================================
      */
-    static buildCompletion(flow, state) {
+    static buildCompletion(flow, state, company = null) {
         const completion = flow.completionTemplate ||
             "Your appointment has been scheduled. Is there anything else I can help you with?";
         
@@ -1404,12 +1692,69 @@ class BookingFlowRunner {
         state.bookingComplete = true;
         state.completedAt = new Date().toISOString();
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: SEND SMS CONFIRMATION (fire-and-forget, non-blocking)
+        // ═══════════════════════════════════════════════════════════════════════
+        // If company has SMS notifications enabled, send booking confirmation.
+        // This runs async and doesn't block the completion response.
+        // ═══════════════════════════════════════════════════════════════════════
+        const collected = state.bookingCollected || {};
+        const companyId = company?._id?.toString() || state.companyId;
+        const smsEnabled = company?.integrations?.smsNotifications?.enabled;
+        const customerPhone = collected.phone;
+        
+        if (smsEnabled && companyId && customerPhone) {
+            // Fire-and-forget SMS - don't block completion
+            const bookingData = {
+                customerName: collected.name || 'Customer',
+                customerPhone: customerPhone,
+                appointmentTime: collected.time || collected.dateTime || 'TBD',
+                serviceAddress: collected.address || 'N/A',
+                serviceType: collected.serviceType || flow.serviceType || 'service',
+                companyName: company?.companyName || company?.name || 'Us',
+                bookingId: state.bookingId || `BK-${Date.now()}`
+            };
+            
+            SMSNotificationService.sendBookingConfirmation(companyId, bookingData)
+                .then(result => {
+                    logger.info('[BOOKING FLOW RUNNER] V92: SMS confirmation sent', {
+                        companyId,
+                        phone: customerPhone,
+                        success: result?.success,
+                        method: result?.method
+                    });
+                })
+                .catch(smsError => {
+                    logger.warn('[BOOKING FLOW RUNNER] V92: SMS confirmation failed (non-blocking)', {
+                        companyId,
+                        phone: customerPhone,
+                        error: smsError.message
+                    });
+                });
+            
+            // Also schedule reminders if configured
+            SMSNotificationService.scheduleReminders(companyId, bookingData)
+                .catch(reminderError => {
+                    logger.warn('[BOOKING FLOW RUNNER] V92: Reminder scheduling failed', {
+                        companyId,
+                        error: reminderError.message
+                    });
+                });
+        } else {
+            logger.info('[BOOKING FLOW RUNNER] V92: SMS notifications skipped', {
+                smsEnabled,
+                hasCompanyId: !!companyId,
+                hasPhone: !!customerPhone
+            });
+        }
+        
         return {
             reply: completion,
             state,
             isComplete: true,
             action: 'COMPLETE',
             bookingCollected: state.bookingCollected,
+            smsSent: smsEnabled && !!customerPhone,
             matchSource: 'BOOKING_FLOW_RUNNER',
             tier: 'tier1',
             tokensUsed: 0,
@@ -1418,7 +1763,8 @@ class BookingFlowRunner {
                 source: 'BOOKING_FLOW_RUNNER',
                 flowId: flow.flowId,
                 stage: 'COMPLETE',
-                bookingCollected: state.bookingCollected
+                bookingCollected: state.bookingCollected,
+                smsAttempted: smsEnabled && !!customerPhone
             }
         };
     }
@@ -1537,8 +1883,10 @@ class BookingFlowRunner {
      * ========================================================================
      * HANDLE CONFIRMATION RESPONSE - Process yes/no to confirmation
      * ========================================================================
+     * V92: Added company parameter for SMS notifications on completion
+     * ========================================================================
      */
-    static handleConfirmationResponse(userInput, flow, state) {
+    static handleConfirmationResponse(userInput, flow, state, company = null) {
         const input = (userInput || '').toLowerCase().trim();
         
         // Check for confirmation
@@ -1548,7 +1896,7 @@ class BookingFlowRunner {
         if (confirmPatterns.test(input) || input.includes('yes') || input.includes('correct')) {
             // Confirmed - complete the booking
             logger.info('[BOOKING FLOW RUNNER] Confirmation received - completing booking');
-            return this.buildCompletion(flow, state);
+            return this.buildCompletion(flow, state, company);
         }
         
         if (denyPatterns.test(input) || input.includes('no') || input.includes('wrong')) {

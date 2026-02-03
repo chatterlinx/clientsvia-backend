@@ -3094,7 +3094,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             // Handle confirmation response if awaiting confirmation
             let bookingResult;
             if (bookingState.currentStepId === 'CONFIRMATION' || callState.awaitingConfirmation) {
-              bookingResult = BookingFlowRunner.handleConfirmationResponse(speechResult, flow, bookingState);
+              // V92: Pass company for SMS notifications on completion
+              bookingResult = BookingFlowRunner.handleConfirmationResponse(speechResult, flow, bookingState, company);
             } else {
               // Pass slots (with metadata) to BookingFlowRunner for confirm-vs-collect logic
               bookingResult = await BookingFlowRunner.runStep({
