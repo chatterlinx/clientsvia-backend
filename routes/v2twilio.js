@@ -3731,11 +3731,55 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       confirmedSlots: Object.keys(updatedState.confirmedSlots || {})
     };
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V92: FLOW TREE BINDING - Map runtime state to flow nodes
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Every TURN_TRACE must include flowNodeId for truth bundle compliance
+    // If path isn't in tree, emit OUT_OF_TREE_PATH warning
+    // ═══════════════════════════════════════════════════════════════════════════
+    let flowNodeId = null;
+    let flowEdgeId = null;
+    let outOfTreePath = null;
+    
+    try {
+      const TruthBundleExporter = require('../services/wiring/TruthBundleExporter');
+      
+      const runtimeState = {
+        matchSource: checkpointE.matchSource,
+        checkpoint: checkpointD ? 'CHECKPOINT_9b' : (checkpointE.llmUsed ? 'CHECKPOINT_9e' : 'CHECKPOINT_SCENARIO_MATCH'),
+        branchTaken: checkpointC.branchTaken
+      };
+      
+      const pathCheck = TruthBundleExporter.checkPathInTree(runtimeState);
+      
+      if (pathCheck.inTree) {
+        flowNodeId = pathCheck.flowNodeId;
+      } else {
+        // OUT_OF_TREE_PATH detected - this is a wiring gap!
+        flowNodeId = null;
+        outOfTreePath = pathCheck.warning;
+        
+        logger.warn('[FLOW TREE] ⚠️ OUT_OF_TREE_PATH detected', {
+          callSid,
+          turn: checkpointA.turn,
+          ...outOfTreePath
+        });
+      }
+    } catch (e) {
+      // Flow tree module not loaded - continue without
+      logger.debug('[FLOW TREE] Module not available:', e.message);
+    }
+    
     // Full turn trace object
     const turnTrace = {
       callSid,
       companyId: companyID,
       timestamp: new Date().toISOString(),
+      // V92: Flow tree binding
+      flowNodeId,
+      flowEdgeId,
+      outOfTreePath,
+      // Existing checkpoints
       checkpointA_stateLoaded: checkpointA,
       checkpointB_slotsExtracted: checkpointB,
       checkpointC_branchDecision: checkpointC,
@@ -3756,6 +3800,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         turn: checkpointA.turn,
         data: turnTrace
       }).catch(() => {});
+      
+      // V92: Log OUT_OF_TREE_PATH separately for easy filtering
+      if (outOfTreePath) {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'OUT_OF_TREE_PATH',
+          turn: checkpointA.turn,
+          data: outOfTreePath
+        }).catch(() => {});
+      }
     }
     
     // ════════════════════════════════════════════════════════════════════════════
