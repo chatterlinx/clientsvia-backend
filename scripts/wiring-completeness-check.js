@@ -128,6 +128,32 @@ const WIRING_CHECKS = [
     },
     
     // ═══════════════════════════════════════════════════════════════════
+    // V92: ADDRESS VALIDATION - Prevents garbage address storage
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'address-validation',
+        description: 'Address validation rejects questions and garbage input',
+        files: ['BookingFlowRunner.js', 'ConversationEngine.js'],
+        codePattern: /rejectQuestions|addressValidation|isQuestion|endsWith.*\?/g,
+        requiredDbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots.addressValidation.rejectQuestions',
+        requiredEdge: 'address_slot → validation_gate',
+        severity: 'critical'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // V92: TECH NAME EXCLUSION - Prevents false positive tech names
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'tech-name-exclusion',
+        description: 'Exclude common words from tech name extraction (system, unit, etc.)',
+        files: ['ConversationEngine.js'],
+        codePattern: /techNameExclude|excludeWords|techMentioned.*system/g,
+        requiredDbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.techNameExcludeWords',
+        requiredEdge: 'tech_detection → exclusion_filter',
+        severity: 'high'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
     // V92: ISSUE CAPTURE CONFIDENCE - Prevents wrong issue text in booking
     // ═══════════════════════════════════════════════════════════════════
     {

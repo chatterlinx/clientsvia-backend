@@ -4414,7 +4414,31 @@ async function processTurn({
         if (!currentSlots.address && userText) {
             const extractedAddress = SlotExtractors.extractAddress(userText);
             if (extractedAddress) {
-                if (isBookingActive || addressAsked) {
+                // ═══════════════════════════════════════════════════════════════════
+                // V92 FIX: ADDRESS VALIDATION - Reject questions and garbage input
+                // ═══════════════════════════════════════════════════════════════════
+                // WIRED: frontDesk.addressValidation.rejectQuestions
+                // Bug: "what was before? i'm not sure what you said." was stored as address
+                // ═══════════════════════════════════════════════════════════════════
+                const addressValidation = company.aiAgentSettings?.frontDeskBehavior?.bookingSlots?.addressValidation || {};
+                const rejectQuestions = addressValidation.rejectQuestions !== false; // Default true
+                
+                const isQuestion = userText.trim().endsWith('?');
+                const looksLikeGarbage = /\b(what|i'm not sure|don't know|didn't|couldn't|can you|could you|repeat|say again)\b/i.test(extractedAddress);
+                const tooShort = extractedAddress.replace(/\s/g, '').length < 5;
+                
+                const addressRejected = rejectQuestions && (isQuestion || looksLikeGarbage || tooShort);
+                
+                if (addressRejected) {
+                    log('⚠️ V92: Address REJECTED (validation failed)', {
+                        extractedAddress: extractedAddress.substring(0, 50),
+                        isQuestion,
+                        looksLikeGarbage,
+                        tooShort,
+                        reason: isQuestion ? 'IS_QUESTION' : (looksLikeGarbage ? 'GARBAGE_TEXT' : 'TOO_SHORT')
+                    });
+                    // Don't store - let the agent re-ask for address
+                } else if (isBookingActive || addressAsked) {
                     currentSlots.address = extractedAddress;
                     extractedThisTurn.address = extractedAddress;
                     log('Address extracted (booking active or asked)', { address: extractedAddress });
@@ -5138,7 +5162,27 @@ async function processTurn({
                     }
                 }
                 if (discoveryFacts.techMentioned) {
-                    session.discovery.techMentioned = discoveryFacts.techMentioned;
+                    // ═══════════════════════════════════════════════════════════════
+                    // V92 FIX: TECH NAME EXCLUSION - Filter out common false positives
+                    // ═══════════════════════════════════════════════════════════════
+                    // WIRED: discovery.techNameExcludeWords
+                    // Bug: "system was working fine" → "System" extracted as tech name
+                    // ═══════════════════════════════════════════════════════════════
+                    const techNameExcludeWords = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.techNameExcludeWords || 
+                        ['system', 'unit', 'equipment', 'machine', 'device', 'thermostat', 'furnace', 'ac', 'hvac', 'air', 'conditioner', 'heater'];
+                    
+                    const techNameLower = discoveryFacts.techMentioned.toLowerCase().trim();
+                    const isExcluded = techNameExcludeWords.some(word => techNameLower === word.toLowerCase());
+                    
+                    if (isExcluded) {
+                        log('⚠️ V92: Tech name EXCLUDED (false positive)', {
+                            techMentioned: discoveryFacts.techMentioned,
+                            reason: 'IN_EXCLUSION_LIST',
+                            exclusionList: techNameExcludeWords.slice(0, 5).join(', ') + '...'
+                        });
+                    } else {
+                        session.discovery.techMentioned = discoveryFacts.techMentioned;
+                    }
                 }
                 if (discoveryFacts.tenure) {
                     session.discovery.tenure = discoveryFacts.tenure;

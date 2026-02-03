@@ -89,6 +89,32 @@ const TIER_MVA = {
         // V92: SCENARIO SETTINGS - Critical for matching to work
         // ═══════════════════════════════════════════════════════════════════
         {
+            fieldId: 'frontDesk.addressValidation.rejectQuestions',
+            purpose: 'Reject utterances that are questions (ending with ?) as address input',
+            failureMode: 'Garbage stored as address: "what was before? i\'m not sure what you said."',
+            impact: 'data_quality',
+            priority: 1,
+            critical: true,
+            validator: (val) => val === true || val === false,
+            fixInstructions: 'Enable address validation to reject questions in booking slots',
+            nav: { tab: 'front-desk', section: 'booking-slots', field: 'addressValidation' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots.addressValidation.rejectQuestions',
+            recommendedValue: true
+        },
+        {
+            fieldId: 'discovery.techNameExcludeWords',
+            purpose: 'Words to exclude from tech name extraction (e.g., "system")',
+            failureMode: '"System" extracted as tech name from "system was working fine"',
+            impact: 'ux',
+            priority: 2,
+            critical: false,
+            validator: (val) => Array.isArray(val) && val.length >= 1,
+            fixInstructions: 'Add common false positive words to tech name exclusion list',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'techNameExcludeWords' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.techNameExcludeWords',
+            recommendedValue: ['system', 'unit', 'equipment', 'machine', 'device', 'thermostat', 'furnace', 'ac']
+        },
+        {
             fieldId: 'discovery.issueCaptureMinConfidence',
             purpose: 'Minimum confidence threshold for capturing issue from scenario tools',
             failureMode: 'Wrong issue text in booking ack (e.g., "New AC/Heating System Quote" instead of "AC issues")',
