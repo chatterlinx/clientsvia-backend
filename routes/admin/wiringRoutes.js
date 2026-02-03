@@ -774,8 +774,7 @@ router.post('/:companyId/apply', async (req, res) => {
         // V92 FIX: For deeply nested paths, find the deepest existing parent
         // and set the nested structure from there. This avoids Mongoose strict
         // mode silently dropping updates when intermediate paths don't exist.
-        
-        const pathParts = dbPath.split('.');
+        // Note: pathParts already defined above for beforeValue extraction
         let effectivePath = dbPath;
         let effectiveValue = valueToApply;
         
