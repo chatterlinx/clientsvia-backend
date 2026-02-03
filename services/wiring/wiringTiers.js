@@ -102,6 +102,32 @@ const TIER_MVA = {
             recommendedValue: true
         },
         {
+            fieldId: 'routing.emptyUtteranceGuard.enabled',
+            purpose: 'Route empty/punctuation-only input to SilenceHandler instead of LLM',
+            failureMode: '"uh," cleaned to "," triggers tier3 LLM fallback (820 tokens wasted)',
+            impact: 'cost',
+            priority: 1,
+            critical: true,
+            validator: (val) => val === true || val === false,
+            fixInstructions: 'Enable empty utterance guard to prevent filler-only LLM calls',
+            nav: { tab: 'front-desk', section: 'routing', field: 'emptyUtteranceGuard' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.routing.emptyUtteranceGuard.enabled',
+            recommendedValue: true
+        },
+        {
+            fieldId: 'booking.directIntentPatterns',
+            purpose: 'Patterns that detect direct booking intent (skip consent question)',
+            failureMode: '"how soon can you get somebody out here" not recognized as booking intent',
+            impact: 'ux',
+            priority: 1,
+            critical: true,
+            validator: (val) => Array.isArray(val) && val.length >= 5,
+            fixInstructions: 'Add direct booking patterns like "get somebody out", "how soon can you come"',
+            nav: { tab: 'front-desk', section: 'booking-flow', field: 'directIntentPatterns' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
+            recommendedValue: ['get somebody out', 'get someone out', 'how soon can you', 'when can you come', 'send someone']
+        },
+        {
             fieldId: 'discovery.clarifyingQuestions.enabled',
             purpose: 'Ask clarifying questions when issue is vague before offering to schedule',
             failureMode: 'Agent jumps to booking without understanding problem (e.g., "AC problems" → schedule)',

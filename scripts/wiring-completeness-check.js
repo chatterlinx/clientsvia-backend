@@ -128,6 +128,32 @@ const WIRING_CHECKS = [
     },
     
     // ═══════════════════════════════════════════════════════════════════
+    // V92: EMPTY UTTERANCE GUARD - Prevents filler-only LLM calls
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'empty-utterance-guard',
+        description: 'Route empty/punctuation-only input to SilenceHandler (not LLM)',
+        files: ['ConversationEngine.js'],
+        codePattern: /isPunctuationOnly|isFillerOnly|shouldTreatAsSilence|userTextAlphanumOnly/g,
+        requiredDbPath: 'aiAgentSettings.frontDeskBehavior.routing.emptyUtteranceGuard.enabled',
+        requiredEdge: 'input_normalized → filler_check → silence_handler (if filler-only)',
+        severity: 'critical'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // V92: DIRECT BOOKING INTENT - Fast-path to booking mode
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'direct-booking-intent',
+        description: 'Detect direct booking intent and skip consent question',
+        files: ['DirectBookingIntentDetector.js', 'ConversationEngine.js'],
+        codePattern: /DirectBookingIntentDetector|hasDirectIntent|directBookingIntent|get\s+somebody\s+out/g,
+        requiredDbPath: 'aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
+        requiredEdge: 'utterance → direct_intent_check → booking_mode (if matches)',
+        severity: 'high'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
     // V92: ADDRESS VALIDATION - Prevents garbage address storage
     // ═══════════════════════════════════════════════════════════════════
     {

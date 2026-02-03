@@ -4601,10 +4601,27 @@ async function processTurn({
         // use a DETERMINISTIC prompt instead of expensive LLM.
         // This saves 3-5s latency + token cost on every silence event!
         // ═══════════════════════════════════════════════════════════════════════
-        const isEmptyInput = !userText || userText.trim() === '' || userText === '[silence]';
+        // V92 FIX: Also catch FILLER-ONLY utterances that get cleaned to punctuation
+        // WIRED: emptyUtteranceGuard
+        // Bug: "uh," cleaned to "," → still triggered LLM fallback (820 tokens!)
+        // Now: Punctuation-only inputs route to silence handler (0 tokens)
+        // ═══════════════════════════════════════════════════════════════════════
+        const userTextTrimmed = (userText || '').trim();
+        const userTextAlphanumOnly = userTextTrimmed.replace(/[^a-zA-Z0-9]/g, '');
+        const isEmptyInput = !userText || userTextTrimmed === '' || userText === '[silence]';
+        const isPunctuationOnly = userTextTrimmed.length > 0 && userTextAlphanumOnly.length === 0;
+        const isFillerOnly = userTextTrimmed.length > 0 && userTextAlphanumOnly.length < 2; // Single char like "a" or empty
         
-        if (isEmptyInput) {
-            log('🔇 V87: EMPTY/SILENCE INPUT DETECTED - Using deterministic prompt (NO Tier-3!)');
+        const shouldTreatAsSilence = isEmptyInput || isPunctuationOnly || isFillerOnly;
+        
+        if (shouldTreatAsSilence) {
+            log('🔇 V92: EMPTY/SILENCE/FILLER INPUT DETECTED - Using deterministic prompt (NO Tier-3!)', {
+                userTextTrimmed: userTextTrimmed.substring(0, 20),
+                isEmptyInput,
+                isPunctuationOnly,
+                isFillerOnly,
+                alphanumLength: userTextAlphanumOnly.length
+            });
             
             // ═══════════════════════════════════════════════════════════════════════
             // FEB 2026 FIX: SMART SILENCE HANDLING

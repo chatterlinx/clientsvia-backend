@@ -49,6 +49,13 @@ const DIRECT_BOOKING_PATTERNS = [
     /\b(come|get\s+someone|have\s+someone)\s+(out|over)\s+(today|tomorrow|this\s+week|asap)/i,
     /\bavailable\s+(today|tomorrow|this\s+week)\b.*\b(appointment|service|come\s+out)/i,
     
+    // V92 FIX: "how soon can you get somebody out here" patterns
+    // These are DIRECT booking intent - caller wants to schedule, not just asking
+    /\bhow\s+(soon|fast|quickly)\s+can\s+(you|someone|somebody)\s+(come|get|be)\s+(out|over|here)/i,
+    /\bcan\s+you\s+get\s+(someone|somebody)\s+(out|over)\s*(here|today|tomorrow)?/i,
+    /\bget\s+(someone|somebody)\s+(out|over)\s+(here|to\s+me|to\s+us)/i,
+    /\bwhen\s+can\s+(you|someone|somebody)\s+(come|come\s+out|get\s+here|be\s+here)/i,
+    
     // Problem + implicit scheduling
     /\b(broken|not\s+working|stopped\s+working|won't\s+work|doesn't\s+work|isn't\s+working).*\b(need|can|help)/i,
     /\b(my|the|our)\s+(ac|air\s+conditioner|heater|furnace|plumbing|drain|toilet|sink|faucet)\s+(is|isn't|broke|broken|not)/i,

@@ -18,6 +18,10 @@
       {
         "version": "1.0.2",
         "changes": "V92: Added discovery clarification node - agent now asks clarifying questions for vague issues (e.g., 'AC problems' → 'Is it not cooling, not heating, or something else?') BEFORE offering to schedule."
+      },
+      {
+        "version": "1.0.3",
+        "changes": "V92: (1) Added EmptyUtteranceGuard - routes filler-only inputs ('uh,' → ',') to SilenceHandler instead of tier3 LLM, (2) Added DirectBookingIntentDetector patterns for 'how soon can you get somebody out here', (3) Fixed fast-path to actually trigger bookingModeLocked state transition."
       }
     ],
     "fixedInV92": [
@@ -306,6 +310,30 @@
         "position": { "x": 0, "y": 0 }
       },
       {
+        "id": "guard_emptyUtterance",
+        "label": "Empty Utterance Guard",
+        "type": "guard",
+        "description": "V92: Routes empty/punctuation-only inputs to SilenceHandler instead of LLM. Prevents 'uh,' → ',' from burning 820 tokens on tier3 fallback.",
+        "health": "NEW (V92): Saves ~$0.002/call on filler-only utterances.",
+        "config": {
+          "enabled": "routing.emptyUtteranceGuard.enabled"
+        },
+        "dependencies": ["silenceHandler"],
+        "position": { "x": 150, "y": 50 }
+      },
+      {
+        "id": "detector_directBookingIntent",
+        "label": "Direct Booking Intent Detector",
+        "type": "detector",
+        "description": "V92: Detects 'how soon can you get somebody out here' and similar patterns. Skips consent question and goes directly to booking.",
+        "health": "FIXED (V92): Now catches 'get somebody out', 'how soon can you come'.",
+        "config": {
+          "patterns": "booking.directIntentPatterns"
+        },
+        "dependencies": ["dynamicFlows_booking_intent"],
+        "position": { "x": 350, "y": 350 }
+      },
+      {
         "id": "booking_complete",
         "label": "BOOKING_COMPLETE",
         "type": "exit_point",
@@ -321,6 +349,30 @@
         "source": "call_start",
         "target": "tab_frontDesk",
         "label": "Initial Wiring"
+      },
+      {
+        "id": "e1b",
+        "source": "call_start",
+        "target": "guard_emptyUtterance",
+        "label": "V92: Check for empty/filler input first"
+      },
+      {
+        "id": "e1c",
+        "source": "guard_emptyUtterance",
+        "target": "section_discoveryConsent",
+        "label": "Has real content → Continue routing"
+      },
+      {
+        "id": "e3c",
+        "source": "section_discoveryConsent",
+        "target": "detector_directBookingIntent",
+        "label": "V92: Check for direct booking intent"
+      },
+      {
+        "id": "e3d",
+        "source": "detector_directBookingIntent",
+        "target": "dynamicFlows_booking_intent",
+        "label": "Direct intent detected → Skip consent"
       },
       {
         "id": "e2",
