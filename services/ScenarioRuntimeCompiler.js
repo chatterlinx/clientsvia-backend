@@ -96,10 +96,26 @@ function compileScenario(scenario, options = {}) {
                 .filter(t => t && typeof t === 'string')
                 .map(t => t.toLowerCase().trim()),
             
+            // V92 FIX: Keywords (fast tier-1 matching) - were schema-only!
+            keywords: (scenario.keywords || [])
+                .filter(k => k && typeof k === 'string')
+                .map(k => k.toLowerCase().trim())
+                .filter(k => k.length >= 2),
+            
+            // V92 FIX: Negative keywords - were schema-only!
+            negativeKeywords: (scenario.negativeKeywords || [])
+                .filter(k => k && typeof k === 'string')
+                .map(k => k.toLowerCase().trim())
+                .filter(k => k.length >= 2),
+            
             // Example phrases (for Tier-3 context)
             examples: scenario.exampleUserPhrases || [],
             negativeExamples: scenario.negativeUserPhrases || []
         },
+        
+        // V92 FIX: Context weight (score multiplier) - was schema-only!
+        // emergency=0.95, neutral=0.7, chitchat=0.5
+        contextWeight: typeof scenario.contextWeight === 'number' ? scenario.contextWeight : 0.7,
         
         // ====================================================================
         // REPLIES (pre-validated arrays)

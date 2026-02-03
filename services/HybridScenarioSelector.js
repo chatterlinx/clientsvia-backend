@@ -1046,12 +1046,31 @@ class HybridScenarioSelector {
         // ============================================
         // 🛡️ SAFETY: Bulletproof array access
         // ============================================
-        const safeTriggers = this.toArr(scenario.triggers);
-        const safeNegativeTriggers = this.toArr(scenario.negativeTriggers);
-        const safeRegexTriggers = this.toArr(scenario.regexTriggers);
+        // V92 FIX: Support both raw scenarios AND compiled specs
+        // Compiled specs have: scenario.triggers.normalized, scenario.triggers.keywords
+        // Raw scenarios have: scenario.triggers, scenario.keywords
+        const isCompiledSpec = scenario.triggers && typeof scenario.triggers === 'object' && !Array.isArray(scenario.triggers);
+        
+        const safeTriggers = isCompiledSpec 
+            ? this.toArr(scenario.triggers?.normalized || scenario.triggers?.original)
+            : this.toArr(scenario.triggers);
+        
+        const safeNegativeTriggers = isCompiledSpec
+            ? this.toArr(scenario.triggers?.negative)
+            : this.toArr(scenario.negativeTriggers);
+        
+        const safeRegexTriggers = isCompiledSpec
+            ? this.toArr(scenario.triggers?.regex)
+            : this.toArr(scenario.regexTriggers);
+        
         // V92 FIX: Wire keywords and negativeKeywords (were schema-only!)
-        const safeKeywords = this.toArr(scenario.keywords);
-        const safeNegativeKeywords = this.toArr(scenario.negativeKeywords);
+        const safeKeywords = isCompiledSpec
+            ? this.toArr(scenario.triggers?.keywords)
+            : this.toArr(scenario.keywords);
+        
+        const safeNegativeKeywords = isCompiledSpec
+            ? this.toArr(scenario.triggers?.negativeKeywords)
+            : this.toArr(scenario.negativeKeywords);
         
         // Skip scenario if it has NO triggers at all
         if (safeTriggers.length === 0 && safeRegexTriggers.length === 0 && safeKeywords.length === 0) {
