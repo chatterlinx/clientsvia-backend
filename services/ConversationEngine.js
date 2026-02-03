@@ -175,8 +175,35 @@ const DEFAULT_PROMPT_VARIANTS = {
 // 
 // This normalizer prevents Mongoose ValidationError from crashing the turn:
 // "discovery.urgency: `high` is not a valid enum value"
+// 
+// Real-world urgency synonyms handled:
+// - EMERGENCY: 'emergency', 'critical', 'life_threatening', 'danger'
+// - URGENT: 'high', 'asap', 'soon', 'important', 'priority'
+// - REPEAT_ISSUE: 'repeat', 'callback', 'followup', 'recurring', 'same_issue'
+// - NORMAL: 'low', 'medium', 'routine', 'standard', 'whenever'
 // ═══════════════════════════════════════════════════════════════════════════
 const VALID_URGENCY_VALUES = new Set(['normal', 'repeat_issue', 'urgent', 'emergency']);
+
+// Emergency-level keywords (life/safety concerns)
+const EMERGENCY_KEYWORDS = new Set([
+    'emergency', 'critical', 'life_threatening', 'danger', 'dangerous',
+    'gas_leak', 'gas leak', 'fire', 'smoke', 'carbon_monoxide', 'co_alarm',
+    'flooding', 'flooded', 'electrical_fire', 'sparking'
+]);
+
+// Urgent-level keywords (needs prompt attention)
+const URGENT_KEYWORDS = new Set([
+    'high', 'asap', 'soon', 'important', 'priority', 'immediate',
+    'right_away', 'today', 'now', 'quickly', 'fast',
+    'no_cooling', 'no_heat', 'no_ac', 'not_working', 'broken'
+]);
+
+// Repeat issue keywords
+const REPEAT_KEYWORDS = new Set([
+    'repeat', 'repeat_issue', 'callback', 'call_back', 
+    'followup', 'follow-up', 'follow_up', 'recurring', 'same_issue',
+    'again', 'still_broken', 'didnt_fix', 'not_fixed'
+]);
 
 function normalizeUrgency(rawUrgency) {
     if (!rawUrgency) return 'normal';
@@ -188,15 +215,24 @@ function normalizeUrgency(rawUrgency) {
         return u;
     }
     
-    // Map invalid values to valid ones
-    if (['high', 'asap', 'soon', 'critical'].includes(u)) {
+    // Check emergency keywords
+    if (EMERGENCY_KEYWORDS.has(u) || EMERGENCY_KEYWORDS.has(u.replace(/\s+/g, '_'))) {
+        return 'emergency';
+    }
+    
+    // Check urgent keywords
+    if (URGENT_KEYWORDS.has(u) || URGENT_KEYWORDS.has(u.replace(/\s+/g, '_'))) {
         return 'urgent';
     }
-    if (['low', 'medium', 'routine'].includes(u)) {
-        return 'normal';
-    }
-    if (['repeat', 'callback', 'followup', 'follow-up'].includes(u)) {
+    
+    // Check repeat issue keywords
+    if (REPEAT_KEYWORDS.has(u) || REPEAT_KEYWORDS.has(u.replace(/\s+/g, '_'))) {
         return 'repeat_issue';
+    }
+    
+    // Low/routine → normal
+    if (['low', 'medium', 'routine', 'standard', 'whenever', 'anytime'].includes(u)) {
+        return 'normal';
     }
     
     // Unknown value - default to normal (safe)
@@ -4965,7 +5001,18 @@ async function processTurn({
                 }
                 if (discoveryFacts.urgency && discoveryFacts.urgency !== 'normal') {
                     // V92 FIX: Normalize urgency to prevent Mongoose ValidationError
-                    session.discovery.urgency = normalizeUrgency(discoveryFacts.urgency);
+                    // Store both raw (for debugging) and normalized (for schema)
+                    const normalizedUrgency = normalizeUrgency(discoveryFacts.urgency);
+                    session.discovery.urgency = normalizedUrgency;
+                    session.discovery.urgencyRaw = discoveryFacts.urgency; // Debug: original value before normalization
+                    
+                    if (normalizedUrgency !== discoveryFacts.urgency) {
+                        logger.debug('[URGENCY NORMALIZED]', {
+                            raw: discoveryFacts.urgency,
+                            normalized: normalizedUrgency,
+                            sessionId: session._id?.toString()
+                        });
+                    }
                 }
                 if (discoveryFacts.techMentioned) {
                     session.discovery.techMentioned = discoveryFacts.techMentioned;
@@ -12688,6 +12735,12 @@ async function processTurn({
             wantsBooking: false,
             conversationMode: 'free',
             latencyMs: Date.now() - startTime,
+            // V92 FIX: Honest trace labels - this is a SYSTEM ERROR, not LLM fallback
+            // Makes debugging faster: "SYSTEM_ERROR_FALLBACK" ≠ "LLM_FALLBACK"
+            matchSource: 'SYSTEM_ERROR_FALLBACK',
+            tier: 'error',
+            tokensUsed: 0,
+            llmUsed: false,
             debug: {
                 debugLog,
                 error: error.message,

@@ -117,6 +117,9 @@ const conversationSessionSchema = new Schema({
             enum: ['normal', 'repeat_issue', 'urgent', 'emergency'],
             default: 'normal'
         },
+        // V92: Raw urgency value before normalization (for debugging)
+        // Stored separately so we can debug what LLM/extractor actually produced
+        urgencyRaw: { type: String, default: null },
         
         // Caller's emotional state
         mood: { 
