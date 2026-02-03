@@ -186,6 +186,19 @@ function buildDataMap(companyDoc) {
 
         if (!isDerived && dbPath && companyDoc) {
             dbValue = getPath(companyDoc, dbPath);
+            
+            // V92 DEBUG: Trace resumeBooking specifically
+            if (field.id === 'frontDesk.offRailsRecovery.bridgeBack.resumeBooking') {
+                console.log('[WIRING REPORT DEBUG] resumeBooking check:', {
+                    fieldId: field.id,
+                    dbPath,
+                    rawValue: dbValue,
+                    isNonEmptyResult: isNonEmpty(dbValue),
+                    valueType: typeof dbValue,
+                    valueKeys: dbValue && typeof dbValue === 'object' ? Object.keys(dbValue) : null
+                });
+            }
+            
             if (isNonEmpty(dbValue)) {
                 source = 'companyDoc';
                 dataMap.coverage.found++;
@@ -388,6 +401,17 @@ function buildHealth(companyDoc, derivedData = {}) {
         // Pass derivedData for derived fields
         const fieldDerivedData = isDerived ? derivedData : null;
         const status = computeFieldStatus(field, dbValue, hasRuntime, fieldDerivedData);
+        
+        // V92 DEBUG: Trace resumeBooking status
+        if (field.id === 'frontDesk.offRailsRecovery.bridgeBack.resumeBooking') {
+            console.log('[WIRING REPORT DEBUG] resumeBooking status computed:', {
+                fieldId: field.id,
+                status,
+                hasRuntime,
+                hasDbValue: isNonEmpty(dbValue),
+                dbValueType: typeof dbValue
+            });
+        }
         
         health.byStatus[status]++;
         
