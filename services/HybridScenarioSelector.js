@@ -1049,10 +1049,13 @@ class HybridScenarioSelector {
         const safeTriggers = this.toArr(scenario.triggers);
         const safeNegativeTriggers = this.toArr(scenario.negativeTriggers);
         const safeRegexTriggers = this.toArr(scenario.regexTriggers);
+        // V92 FIX: Wire keywords and negativeKeywords (were schema-only!)
+        const safeKeywords = this.toArr(scenario.keywords);
+        const safeNegativeKeywords = this.toArr(scenario.negativeKeywords);
         
         // Skip scenario if it has NO triggers at all
-        if (safeTriggers.length === 0 && safeRegexTriggers.length === 0) {
-            logger.warn('⚠️ [SCENARIO SELECTOR] Scenario has no triggers', {
+        if (safeTriggers.length === 0 && safeRegexTriggers.length === 0 && safeKeywords.length === 0) {
+            logger.warn('⚠️ [SCENARIO SELECTOR] Scenario has no triggers or keywords', {
                 scenarioId: scenario.scenarioId || scenario._id,
                 name: scenario.name
             });
@@ -1060,10 +1063,12 @@ class HybridScenarioSelector {
         }
         
         // ============================================
-        // CHECK NEGATIVE TRIGGERS FIRST
+        // CHECK NEGATIVE TRIGGERS AND KEYWORDS FIRST
         // ============================================
-        if (safeNegativeTriggers.length > 0) {
-            for (const negTrigger of safeNegativeTriggers) {
+        // V92 FIX: Also check negativeKeywords (was not wired!)
+        const allNegatives = [...safeNegativeTriggers, ...safeNegativeKeywords];
+        if (allNegatives.length > 0) {
+            for (const negTrigger of allNegatives) {
                 const safeTriggerStr = String(negTrigger || '').toLowerCase().trim();
                 if (safeTriggerStr && normalizedPhrase.includes(safeTriggerStr)) {
                     blocked = true;
@@ -1093,11 +1098,32 @@ class HybridScenarioSelector {
         }
         
         // ============================================
-        // 2. SEMANTIC SIMILARITY (PLACEHOLDER)
+        // 2. KEYWORD MATCHING (V92 - was schema-only, now wired!)
         // ============================================
-        // TODO: In future, use sentence-transformers embeddings
-        // For now, use a simple synonym/variation boost
-        breakdown.semantic = 0; // Will implement in Phase 3
+        // scenario.keywords are fast tier-1 matching keywords (positive)
+        // These boost score when found in the utterance
+        if (safeKeywords.length > 0) {
+            let keywordHits = 0;
+            for (const keyword of safeKeywords) {
+                const kw = String(keyword || '').toLowerCase().trim();
+                if (kw && (normalizedPhrase.includes(kw) || phraseTerms.includes(kw))) {
+                    keywordHits++;
+                }
+            }
+            // Normalize: 3+ keyword hits = full bonus
+            if (keywordHits > 0) {
+                breakdown.semantic = Math.min(1.0, keywordHits / 3);
+                logger.debug('🔑 [SCENARIO SELECTOR] Keywords matched', {
+                    scenarioId: scenario.scenarioId || scenario._id,
+                    name: scenario.name,
+                    keywordHits,
+                    totalKeywords: safeKeywords.length,
+                    bonus: breakdown.semantic.toFixed(2)
+                });
+            }
+        }
+        
+        // (Future: Add sentence-transformer embeddings here for true semantic matching)
         
         // ============================================
         // 3. REGEX PATTERN MATCHING
@@ -1190,6 +1216,29 @@ class HybridScenarioSelector {
                     boostedScore: safeScore.toFixed(3)
                 });
             }
+        }
+        
+        // ============================================
+        // 6. CONTEXT WEIGHT MULTIPLIER (V92 - was schema-only, now wired!)
+        // ============================================
+        // scenario.contextWeight is a multiplier on final match score
+        // emergency scenarios = 0.95, chitchat = 0.5, neutral = 0.7
+        const contextWeight = typeof scenario.contextWeight === 'number' 
+            ? scenario.contextWeight 
+            : 0.7; // Default neutral weight
+        
+        if (contextWeight !== 0.7 && contextWeight !== 1.0) {
+            const beforeWeight = safeScore;
+            safeScore = safeScore * contextWeight;
+            breakdown.contextWeightMultiplier = contextWeight;
+            
+            logger.debug('⚖️ [CONTEXT WEIGHT] Applied', {
+                scenarioId: scenario.scenarioId || scenario._id,
+                name: scenario.name,
+                contextWeight,
+                beforeWeight: beforeWeight.toFixed(3),
+                afterWeight: safeScore.toFixed(3)
+            });
         }
         
         const confidence = Math.min(Math.max(safeScore, 0), 1);
