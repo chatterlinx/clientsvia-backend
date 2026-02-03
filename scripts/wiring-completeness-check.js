@@ -145,11 +145,20 @@ function run() {
     
     if (fs.existsSync(wiringTiersPath)) {
         try {
-            // Extract field IDs from wiringTiers.js
+            // Extract field IDs and dbPaths from wiringTiers.js
             const tiersContent = fs.readFileSync(wiringTiersPath, 'utf8');
-            const fieldMatches = tiersContent.match(/id:\s*['"]([^'"]+)['"]/g) || [];
-            registryFields = fieldMatches.map(m => m.replace(/id:\s*['"]|['"]/g, ''));
-            console.log(`${colors.green}✓${colors.reset} Loaded wiring registry: ${registryFields.length} fields\n`);
+            
+            // Match fieldId entries
+            const fieldIdMatches = tiersContent.match(/fieldId:\s*['"]([^'"]+)['"]/g) || [];
+            const fieldIds = fieldIdMatches.map(m => m.replace(/fieldId:\s*['"]|['"]/g, ''));
+            
+            // Match dbPath entries (for integration paths)
+            const dbPathMatches = tiersContent.match(/dbPath:\s*['"]([^'"]+)['"]/g) || [];
+            const dbPaths = dbPathMatches.map(m => m.replace(/dbPath:\s*['"]|['"]/g, ''));
+            
+            // Combine both for comprehensive matching
+            registryFields = [...new Set([...fieldIds, ...dbPaths])];
+            console.log(`${colors.green}✓${colors.reset} Loaded wiring registry: ${registryFields.length} fields (${fieldIds.length} fieldIds, ${dbPaths.length} dbPaths)\n`);
         } catch (err) {
             console.log(`${colors.yellow}⚠${colors.reset} Could not parse wiring registry: ${err.message}\n`);
         }
@@ -226,14 +235,31 @@ function runCheck(check, registryFields) {
     result.details.push(`Found in: ${filesWithCode.map(f => `${f.file} (${f.matches}x)`).join(', ')}`);
     
     // Check if required DB path is in registry
-    const dbPathBase = check.requiredDbPath.split('.')[0];
-    const hasRegistryEntry = registryFields.some(f => 
-        f.includes(dbPathBase) || check.requiredDbPath.includes(f)
-    );
+    // Match against: exact path, partial path, or path segments
+    const requiredPath = check.requiredDbPath;
+    const pathSegments = requiredPath.split('.');
+    const pathBase = pathSegments[0];
+    const pathKey = pathSegments[pathSegments.length - 1];
+    
+    const hasRegistryEntry = registryFields.some(f => {
+        // Exact match
+        if (f === requiredPath) return true;
+        // Path contains the required path
+        if (f.includes(requiredPath)) return true;
+        // Required path contains registry entry
+        if (requiredPath.includes(f)) return true;
+        // Base path match (e.g., 'integrations' in both)
+        if (f.startsWith(pathBase + '.')) return true;
+        // Key match for booking slots (handles wildcards like bookingSlots.*)
+        if (requiredPath.includes('*') && f.includes(pathBase)) return true;
+        return false;
+    });
     
     if (!hasRegistryEntry) {
         result.status = check.severity === 'critical' ? 'violation' : 'warning';
         result.details.push(`Missing registry entry for: ${check.requiredDbPath}`);
+    } else {
+        result.details.push(`Registry entry found for: ${pathBase}`);
     }
     
     // Note the required edge for documentation

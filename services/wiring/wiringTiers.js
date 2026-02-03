@@ -443,6 +443,78 @@ const TIER_MAX = {
             dbPath: 'aiAgentSettings.dynamicFlow.companyFlows',
             // No recommendedValue - too business-specific
             requiresUserInput: true
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V92: INTEGRATIONS - API wiring for enhanced booking experience
+        // ═══════════════════════════════════════════════════════════════════
+        {
+            fieldId: 'integrations.googleCalendar.enabled',
+            purpose: 'Real-time calendar availability for time slot booking',
+            failureMode: 'Agent captures time preference but cannot verify availability',
+            impact: 'conversion',
+            priority: 4,
+            payoff: 'Reduces booking conflicts, offers real slots',
+            validator: (val) => val === true,
+            fixInstructions: 'Connect Google Calendar in Integrations tab',
+            nav: { tab: 'integrations', section: 'google-calendar', field: 'enabled' },
+            dbPath: 'integrations.googleCalendar.enabled',
+            recommendedValue: true,
+            requiresUserInput: true, // Requires OAuth connection
+            canAutoApply: false
+        },
+        {
+            fieldId: 'integrations.smsNotifications.enabled',
+            purpose: 'Sends booking confirmation and reminder SMS to customers',
+            failureMode: 'Booking completes but customer gets no confirmation',
+            impact: 'conversion',
+            priority: 4,
+            payoff: 'Increases show rate, reduces no-shows',
+            validator: (val) => val === true,
+            fixInstructions: 'Enable SMS Notifications in Integrations tab',
+            nav: { tab: 'integrations', section: 'sms-notifications', field: 'enabled' },
+            dbPath: 'integrations.smsNotifications.enabled',
+            recommendedValue: true,
+            requiresUserInput: true, // Requires Twilio config
+            canAutoApply: false
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V92: BOOKING SLOT ENHANCEMENTS - Improved name collection
+        // ═══════════════════════════════════════════════════════════════════
+        {
+            fieldId: 'frontDesk.bookingSlots.confirmSpelling',
+            purpose: 'Spells back names letter-by-letter for similar-sounding names (Mark/Marc)',
+            failureMode: 'Booking under wrong name for ambiguous pronunciations',
+            impact: 'reliability',
+            priority: 5,
+            payoff: 'Eliminates name misspelling errors',
+            validator: (val) => {
+                if (!Array.isArray(val)) return false;
+                const nameSlot = val.find(s => s.type === 'name' || s.id === 'name' || s.id === 'firstName');
+                return nameSlot && nameSlot.confirmSpelling === true;
+            },
+            fixInstructions: 'Enable "Confirm Spelling" on name slot in Booking Prompts',
+            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingSlots' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+            recommendedValue: { confirmSpelling: true, spellingConfirmPrompt: "Let me confirm the spelling: {spelled}. Is that correct?" }
+        },
+        {
+            fieldId: 'frontDesk.bookingSlots.askFullName',
+            purpose: 'Asks for last name if caller only gives first name',
+            failureMode: 'Booking under first name only, cannot identify customer',
+            impact: 'reliability',
+            priority: 5,
+            payoff: 'Complete customer records, better follow-up',
+            validator: (val) => {
+                if (!Array.isArray(val)) return false;
+                const nameSlot = val.find(s => s.type === 'name' || s.id === 'name');
+                return nameSlot && nameSlot.askFullName === true;
+            },
+            fixInstructions: 'Enable "Ask Full Name" on name slot in Booking Prompts',
+            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingSlots' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+            recommendedValue: { askFullName: true, askMissingNamePart: true, lastNameQuestion: "And what's your last name?" }
         }
     ]
 };
