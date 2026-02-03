@@ -7651,6 +7651,30 @@ Sean → Shawn, Shaun`;
                     </div>
                 </div>
                 
+                <!-- V92: Debug Logging Section -->
+                <div style="background: #0d1117; border: 1px solid #484f58; border-radius: 8px; padding: 16px; margin-top: 24px;">
+                    <h4 style="margin: 0 0 12px 0; color: #8b949e; display: flex; align-items: center; gap: 8px;">
+                        🔍 Diagnostics
+                        <span style="font-size: 10px; background: #484f58; padding: 2px 6px; border-radius: 4px; color: #c9d1d9;">V92</span>
+                    </h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                        Developer tools for tracing consent detection, booking triggers, and flow transitions. 
+                        <strong style="color: #f0883e;">Only enable during testing</strong> — increases log volume.
+                    </p>
+                    
+                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
+                        <input type="checkbox" id="fdb-dc-debugLogging" ${this.config.debugLogging ? 'checked' : ''} 
+                            style="accent-color: #f0883e; width: 20px; height: 20px;">
+                        <div>
+                            <span style="color: #c9d1d9; font-weight: 600;">📋 Enable Debug Logging</span>
+                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                Logs detailed traces for consent detection, booking mode triggers, and snap responses.
+                                Search BlackBox for <code style="background: #30363d; padding: 2px 4px; border-radius: 3px;">V92:</code> to find entries.
+                            </p>
+                        </div>
+                    </label>
+                </div>
+                
                 ${this.renderFastPathSection()}
             </div>
         `;
@@ -9359,6 +9383,10 @@ Sean → Shawn, Shaun`;
                 // Minimum fields before consent
                 minDiscoveryFieldsBeforeConsent: minFields.length > 0 ? minFields : ['issueSummary']
             };
+            
+            // V92: Debug Logging toggle (top-level setting, not under discoveryConsent)
+            this.config.debugLogging = getChecked('fdb-dc-debugLogging');
+            console.log('[FRONT DESK BEHAVIOR] 🔍 V92 Debug Logging:', this.config.debugLogging ? 'ENABLED' : 'disabled');
             console.log('[FRONT DESK BEHAVIOR] 🧠 V22 Discovery consent saved:', this.config.discoveryConsent);
             
             // Also update detectionTriggers.wantsBooking from the textarea

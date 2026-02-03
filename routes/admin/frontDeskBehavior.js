@@ -760,6 +760,20 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         }
         
         // ════════════════════════════════════════════════════════════════════════════
+        // V92: Debug Logging Toggle
+        // ════════════════════════════════════════════════════════════════════════════
+        // Enables enhanced diagnostic logging for consent detection, booking triggers,
+        // and flow transitions. Search BlackBox for "V92:" to find entries.
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.debugLogging !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.debugLogging'] = !!updates.debugLogging;
+            logger.info('[FRONT DESK BEHAVIOR] 🔍 V92 Debug Logging:', {
+                companyId,
+                enabled: !!updates.debugLogging
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
         // V22: Vocabulary Guardrails Settings
         // ════════════════════════════════════════════════════════════════════════════
         if (updates.vocabularyGuardrails) {
