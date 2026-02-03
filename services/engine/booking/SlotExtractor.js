@@ -841,11 +841,34 @@ class SlotExtractor {
             return null;
         }
         
-        // ASAP patterns
-        if (/\b(asap|as soon as possible|soon|right away|immediately|now|today)\b/.test(lowerText)) {
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92 FIX: ASAP patterns - require scheduling context for ambiguous words
+        // ═══════════════════════════════════════════════════════════════════════
+        // Bug: "but now the system is not cooling" was matching "now" as ASAP
+        // "now" in that context means temporal ("currently"), not scheduling ("send someone now")
+        //
+        // Strong ASAP indicators (always match):
+        //   - "asap", "as soon as possible", "right away", "immediately"
+        // Weak indicators (require scheduling context):
+        //   - "now", "today", "soon"
+        // ═══════════════════════════════════════════════════════════════════════
+        
+        // Strong ASAP indicators - always match
+        if (/\b(asap|as soon as possible|right away|immediately)\b/i.test(lowerText)) {
             return {
                 value: 'ASAP',
                 confidence: CONFIDENCE.UTTERANCE_HIGH,
+                source: SOURCE.UTTERANCE
+            };
+        }
+        
+        // Weak indicators - require explicit scheduling context
+        // "send someone now" = ASAP, "but now the system..." = NOT ASAP
+        const schedulingContext = /\b(send|come|get|schedule|book|dispatch|need someone|available|can someone|appointment|service call)\b/i;
+        if (schedulingContext.test(lowerText) && /\b(now|today|soon)\b/i.test(lowerText)) {
+            return {
+                value: 'ASAP',
+                confidence: CONFIDENCE.UTTERANCE_MEDIUM,
                 source: SOURCE.UTTERANCE
             };
         }
