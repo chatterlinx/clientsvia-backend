@@ -52,7 +52,8 @@ const TriggerSchema = new Schema({
             'pricing_inquiry',  // Price question
             'hours_inquiry',    // Business hours question
             'frustration',      // Customer frustration detected
-            'technician_request' // Specific technician requested
+            'technician_request', // Specific technician requested
+            'vague_issue'       // V92: Vague issue needing clarification ("not working", "problems")
         ],
         required: true
     },
