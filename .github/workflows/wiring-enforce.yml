@@ -1,0 +1,44 @@
+name: Wiring Completeness Check
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'services/engine/**'
+      - 'services/wiring/**'
+      - 'routes/v2twilio.js'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/engine/**'
+      - 'services/wiring/**'
+      - 'routes/v2twilio.js'
+
+jobs:
+  validate-wiring:
+    runs-on: ubuntu-latest
+    name: Validate Wiring Consistency
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Run Wiring Completeness Check
+        run: node scripts/wiring-completeness-check.js
+        # Default: warn mode (exits 0 even with violations)
+        # To block PRs on violations, change to:
+        # run: node scripts/wiring-completeness-check.js --fail-on-violation
+        
+      - name: Upload wiring report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiring-check-results
+          path: wiring-check-output.txt
+          retention-days: 7
+          if-no-files-found: ignore
