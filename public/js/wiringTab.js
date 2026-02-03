@@ -3252,7 +3252,7 @@
             });
         }
         
-        // Download JSON button
+        // Download JSON button - Enhanced with summary for AI analysis
         const downloadBtn = $('#wiringDownloadJson');
         console.log('[WiringTab] CHECKPOINT: Download JSON button found:', !!downloadBtn);
         bindOnce(downloadBtn, 'click', () => {
@@ -3261,13 +3261,94 @@
                 const cid = _report?.scope?.companyId || _report?.companyId || 'unknown';
                 const filename = `wiring-${cid}-${new Date().toISOString().slice(0, 10)}.json`;
                 console.log('[WiringTab] ✅ Downloading file:', filename);
-                downloadJson(filename, _report);
+                
+                // V92: Add analysis summary for AI collaboration
+                const enhanced = {
+                    ...(_report || {}),
+                    _analysisSummary: buildAnalysisSummary(_report)
+                };
+                
+                downloadJson(filename, enhanced);
                 toast(`Downloaded: ${filename}`);
             } else {
                 console.warn('[WiringTab] ⚠️ No report to download');
                 toast('No report loaded', true);
             }
         });
+        
+        // V92: Build analysis summary for AI-friendly export
+        function buildAnalysisSummary(report) {
+            if (!report) return null;
+            
+            const tiers = report.tiers || {};
+            const coverage = report.coverage || {};
+            const gaps = report.gapAnalysis || {};
+            const issues = report.issues || [];
+            
+            // Identify legacy/dead configs
+            const uiOnly = (gaps.byStatus?.UI_ONLY || []).map(g => ({
+                path: g.path || g.registryId,
+                dbPath: g.dbPath,
+                status: 'UI_ONLY',
+                isLegacy: true,
+                attention: 'Add runtime reader or remove from UI'
+            }));
+            
+            const deadRead = (gaps.byStatus?.DEAD_READ || []).map(g => ({
+                path: g.path || g.registryId,
+                dbPath: g.dbPath,
+                status: 'DEAD_READ',
+                isLegacy: true,
+                attention: 'Add to wiring registry or remove runtime reader'
+            }));
+            
+            // Identify NOT_CONFIGURED items
+            const notConfigured = issues.filter(i => i.status === 'NOT_CONFIGURED' || i.message?.includes('NOT_CONFIGURED')).map(i => ({
+                path: i.path || i.field || i.registryId,
+                tab: i.tab,
+                section: i.section,
+                status: 'NOT_CONFIGURED',
+                isLegacy: false,
+                attention: i.fix || 'Configure in UI'
+            }));
+            
+            return {
+                generatedAt: new Date().toISOString(),
+                version: '1.0.0',
+                companyId: report.scope?.companyId || report.companyId,
+                companyName: report.scope?.companyName || report.companyName,
+                
+                // Overall health
+                overallScore: tiers.overall?.percentage || coverage.overall?.percentage || 'N/A',
+                status: tiers.overall?.status || (coverage.overall?.percentage >= 90 ? 'GREEN' : coverage.overall?.percentage >= 70 ? 'YELLOW' : 'RED'),
+                
+                // Coverage breakdown
+                uiCoverage: `${coverage.ui?.percentage || 'N/A'}% (${coverage.ui?.configured || 0}/${coverage.ui?.total || 0})`,
+                dbCoverage: `${coverage.db?.percentage || 'N/A'}% (${coverage.db?.configured || 0}/${coverage.db?.total || 0})`,
+                runtimeCoverage: `${coverage.runtime?.percentage || 'N/A'}% (${coverage.runtime?.configured || 0}/${coverage.runtime?.total || 0})`,
+                
+                // Issue counts
+                totalIssues: issues.length,
+                notConfiguredCount: notConfigured.length,
+                uiOnlyCount: uiOnly.length,
+                deadReadCount: deadRead.length,
+                legacyCount: uiOnly.length + deadRead.length,
+                
+                // Detailed lists for AI analysis
+                notConfiguredItems: notConfigured,
+                uiOnlyItems: uiOnly,
+                deadReadItems: deadRead,
+                
+                // Quick fix suggestions
+                priorityFixes: [
+                    ...notConfigured.slice(0, 5).map(i => ({ priority: 'HIGH', item: i.path, action: i.attention })),
+                    ...deadRead.slice(0, 3).map(i => ({ priority: 'MEDIUM', item: i.path, action: 'Remove or wire to UI' }))
+                ],
+                
+                // For future reference
+                instructions: 'Paste this JSON back to the AI for analysis. Update _analysisSummary.version when making changes.'
+            };
+        }
         
         // Clear cache button
         // Compliance Check button
