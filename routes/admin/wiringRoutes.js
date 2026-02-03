@@ -771,15 +771,79 @@ router.post('/:companyId/apply', async (req, res) => {
         // =========================================================
         // SERVER-GENERATED PATCH (not from client!)
         // =========================================================
+        // V92 FIX: For deeply nested paths, find the deepest existing parent
+        // and set the nested structure from there. This avoids Mongoose strict
+        // mode silently dropping updates when intermediate paths don't exist.
+        
+        const pathParts = dbPath.split('.');
+        let effectivePath = dbPath;
+        let effectiveValue = valueToApply;
+        
+        // Find the deepest existing path
+        const docObj = companyDoc.toObject();
+        let deepestExistingIdx = 0;
+        let currentObj = docObj;
+        
+        for (let i = 0; i < pathParts.length - 1; i++) {
+            if (currentObj && typeof currentObj === 'object' && pathParts[i] in currentObj) {
+                currentObj = currentObj[pathParts[i]];
+                deepestExistingIdx = i + 1;
+            } else {
+                break;
+            }
+        }
+        
+        // If not all parent paths exist, build nested structure from deepest existing
+        if (deepestExistingIdx < pathParts.length - 1) {
+            console.log('[WIRING APPLY] V92: Parent path missing, building nested structure', {
+                fullPath: dbPath,
+                deepestExistingIdx,
+                deepestExisting: pathParts.slice(0, deepestExistingIdx).join('.') || '(root)',
+                missingFrom: pathParts.slice(deepestExistingIdx).join('.')
+            });
+            
+            // Build nested object from the missing parts
+            // e.g., if "a.b" exists but target is "a.b.c.d.e = value", build:
+            //   effectivePath = "a.b.c"
+            //   effectiveValue = { d: { e: value } }
+            const missingParts = pathParts.slice(deepestExistingIdx);
+            // missingParts = ['c', 'd', 'e'] where 'e' is the final key
+            
+            // Start with the value at the deepest level
+            let nestedValue = valueToApply;
+            
+            // Wrap from second-to-last up to second (index 1), leaving first for the path
+            // e.g., ['c', 'd', 'e'] -> wrap 'e' in 'd': {d: {e: value}}, skip 'c' for path
+            for (let i = missingParts.length - 1; i >= 1; i--) {
+                nestedValue = { [missingParts[i]]: nestedValue };
+            }
+            
+            // effectivePath = existing path + first missing part
+            if (deepestExistingIdx > 0) {
+                effectivePath = pathParts.slice(0, deepestExistingIdx).join('.') + '.' + missingParts[0];
+            } else {
+                effectivePath = missingParts[0];
+            }
+            effectiveValue = nestedValue;
+            
+            console.log('[WIRING APPLY] V92: Adjusted update path', {
+                originalPath: dbPath,
+                effectivePath,
+                effectiveValuePreview: JSON.stringify(effectiveValue).substring(0, 200)
+            });
+        }
+        
         const patch = {
             $set: {
-                [dbPath]: valueToApply
+                [effectivePath]: effectiveValue
             }
         };
         
         console.log('[WIRING APPLY] CHECKPOINT 8: Server-generated patch', { 
-            dbPath, 
-            valueType: typeof valueToApply 
+            dbPath,
+            effectivePath,
+            valueType: typeof effectiveValue,
+            pathWasAdjusted: effectivePath !== dbPath
         });
         
         // =========================================================
