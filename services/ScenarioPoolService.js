@@ -26,6 +26,8 @@
 const logger = require('../utils/logger');
 const Company = require('../models/v2Company');
 const GlobalInstantResponseTemplate = require('../models/GlobalInstantResponseTemplate');
+const ServiceSwitchboard = require('../models/ServiceSwitchboard');
+const ServiceCatalog = require('../models/ServiceCatalog');
 const { computeEffectiveConfigVersion } = require('../utils/effectiveConfigVersion');
 const { compileScenarioPool, fastCandidateLookup } = require('./ScenarioRuntimeCompiler');
 
@@ -291,6 +293,95 @@ class ScenarioPoolService {
             });
             
             // ========================================================
+            // 🚀 V92: LOAD SERVICE SWITCHBOARD
+            // ========================================================
+            // This tells us which services the company ACTUALLY offers
+            // Runtime can use this for:
+            // - Deterministic declines ("We don't offer X")
+            // - Service-scoped routing
+            // - Service-aware responses
+            // ========================================================
+            let serviceContext = null;
+            try {
+                const switchboard = await ServiceSwitchboard.findOne({ companyId }).lean();
+                
+                if (switchboard && switchboard.services && switchboard.services.length > 0) {
+                    // Build a quick lookup map: serviceKey -> { enabled, declineMessage, keywords, agentNotes }
+                    const enabledServices = [];
+                    const disabledServices = [];
+                    const serviceMap = {};
+                    
+                    for (const svc of switchboard.services) {
+                        const entry = {
+                            serviceKey: svc.serviceKey,
+                            enabled: svc.enabled === true,
+                            declineMessage: svc.customDeclineMessage || null,
+                            keywords: [...(svc.additionalKeywords || []), ...(svc.customKeywords || [])],
+                            agentNotes: svc.agentNotes || null,
+                            sourcePolicy: svc.sourcePolicy || 'auto',
+                            triageEnabled: svc.triageEnabled !== false,
+                            scheduling: svc.scheduling || null
+                        };
+                        
+                        serviceMap[svc.serviceKey] = entry;
+                        
+                        if (entry.enabled) {
+                            enabledServices.push(svc.serviceKey);
+                        } else {
+                            disabledServices.push(svc.serviceKey);
+                        }
+                    }
+                    
+                    // Also load catalog for default keywords and decline messages
+                    const catalog = await ServiceCatalog.findOne({ templateId: switchboard.templateId }).lean();
+                    
+                    if (catalog && catalog.services) {
+                        for (const catSvc of catalog.services) {
+                            if (serviceMap[catSvc.serviceKey]) {
+                                // Merge catalog defaults
+                                const entry = serviceMap[catSvc.serviceKey];
+                                entry.catalogName = catSvc.name;
+                                entry.catalogKeywords = catSvc.keywords || [];
+                                entry.catalogDeclineMessage = catSvc.declineMessage || null;
+                                // Merge keywords (company + catalog)
+                                entry.allKeywords = [...new Set([...entry.keywords, ...(catSvc.keywords || [])])];
+                            }
+                        }
+                    }
+                    
+                    serviceContext = {
+                        hasData: true,
+                        templateId: switchboard.templateId,
+                        enabledServices,
+                        disabledServices,
+                        serviceMap,
+                        // Quick lookup helpers
+                        isServiceEnabled: (key) => serviceMap[key]?.enabled === true,
+                        getDeclineMessage: (key) => {
+                            const svc = serviceMap[key];
+                            if (!svc) return null;
+                            return svc.declineMessage || svc.catalogDeclineMessage || `We don't currently offer ${svc.catalogName || key} services.`;
+                        }
+                    };
+                    
+                    logger.info(`✅ [SCENARIO POOL] Service Switchboard loaded: ${enabledServices.length} enabled, ${disabledServices.length} disabled`, {
+                        companyId,
+                        enabledServices: enabledServices.slice(0, 10),
+                        disabledCount: disabledServices.length
+                    });
+                } else {
+                    logger.debug(`⚪ [SCENARIO POOL] No Service Switchboard found for company`, { companyId });
+                    serviceContext = { hasData: false, enabledServices: [], disabledServices: [], serviceMap: {} };
+                }
+            } catch (switchboardError) {
+                logger.warn(`⚠️ [SCENARIO POOL] Failed to load Service Switchboard (non-critical)`, {
+                    companyId,
+                    error: switchboardError.message
+                });
+                serviceContext = { hasData: false, error: switchboardError.message };
+            }
+            
+            // ========================================================
             // 🔧 PHASE 5: CACHE RESULT IN REDIS
             // ========================================================
             const effectiveConfigVersion = computeEffectiveConfigVersion({
@@ -299,8 +390,15 @@ class ScenarioPoolService {
                 templateReferences: company.aiAgentSettings?.templateReferences || [],
                 scenarioControls: company.aiAgentSettings?.scenarioControls || [],
                 templatesMeta,
+                // V92: Include service switchboard in config version
+                // Cache invalidates when services change
+                serviceSwitchboard: serviceContext?.hasData ? {
+                    enabledCount: serviceContext.enabledServices?.length || 0,
+                    disabledCount: serviceContext.disabledServices?.length || 0,
+                    services: serviceContext.enabledServices?.slice(0, 10) || [] // First 10 for hash
+                } : null,
                 providerVersions: {
-                    scenarioPoolService: 'ScenarioPoolService:v2-compiled',
+                    scenarioPoolService: 'ScenarioPoolService:v3-switchboard',
                     hybridScenarioSelector: 'HybridScenarioSelector:v1'
                 }
             });
@@ -322,6 +420,19 @@ class ScenarioPoolService {
                 // POOL COMPOSITION: For Black Box logging and diagnostics
                 // ════════════════════════════════════════════════════════════════════
                 poolComposition: _poolComposition,
+                
+                // 🚀 V92: SERVICE CONTEXT - What services does this company offer?
+                // Use serviceContext.isServiceEnabled(key) for quick lookups
+                // Use serviceContext.getDeclineMessage(key) for deterministic declines
+                serviceContext: serviceContext ? {
+                    hasData: serviceContext.hasData,
+                    templateId: serviceContext.templateId || null,
+                    enabledServices: serviceContext.enabledServices || [],
+                    disabledServices: serviceContext.disabledServices || [],
+                    // Note: serviceMap is serializable, helper functions are not
+                    // Re-create helpers on cache load
+                    serviceMap: serviceContext.serviceMap || {}
+                } : null,
                 
                 // 🚀 NEW: Compiled runtime specs + indexes
                 compiled: {
@@ -1059,6 +1170,87 @@ class ScenarioPoolService {
             indexSize: 0,
             compileTimeMs: 0
         };
+    }
+    
+    // ========================================================================
+    // V92: SERVICE SWITCHBOARD HELPERS
+    // ========================================================================
+    // These helpers allow runtime to check service availability
+    // and get deterministic decline messages
+    // ========================================================================
+    
+    /**
+     * Check if a service is enabled for a company
+     * 
+     * @param {Object} serviceContext - From poolResult.serviceContext
+     * @param {String} serviceKey - Service key to check (e.g., "duct_cleaning")
+     * @returns {Boolean} - true if enabled or no switchboard data
+     */
+    static isServiceEnabled(serviceContext, serviceKey) {
+        if (!serviceContext || !serviceContext.hasData) {
+            return true; // Default: allow if no switchboard configured
+        }
+        
+        const service = serviceContext.serviceMap?.[serviceKey];
+        return service ? service.enabled === true : true; // Default: allow unknown services
+    }
+    
+    /**
+     * Get a deterministic decline message for a disabled service
+     * 
+     * @param {Object} serviceContext - From poolResult.serviceContext
+     * @param {String} serviceKey - Service key
+     * @returns {String|null} - Decline message or null if service enabled/unknown
+     */
+    static getServiceDeclineMessage(serviceContext, serviceKey) {
+        if (!serviceContext || !serviceContext.hasData) {
+            return null;
+        }
+        
+        const service = serviceContext.serviceMap?.[serviceKey];
+        if (!service || service.enabled === true) {
+            return null; // No decline needed
+        }
+        
+        // Return custom message or generate default
+        if (service.declineMessage) {
+            return service.declineMessage;
+        }
+        if (service.catalogDeclineMessage) {
+            return service.catalogDeclineMessage;
+        }
+        
+        // Generate default
+        const serviceName = service.catalogName || serviceKey.replace(/_/g, ' ');
+        return `We don't currently offer ${serviceName} services. Is there something else I can help you with?`;
+    }
+    
+    /**
+     * Get service context for a detected service intent
+     * Useful for routing decisions
+     * 
+     * @param {Object} serviceContext - From poolResult.serviceContext
+     * @param {String} serviceKey - Service key
+     * @returns {Object|null} - Full service context or null
+     */
+    static getServiceContext(serviceContext, serviceKey) {
+        if (!serviceContext || !serviceContext.hasData) {
+            return null;
+        }
+        return serviceContext.serviceMap?.[serviceKey] || null;
+    }
+    
+    /**
+     * Get all enabled services (for building service offerings response)
+     * 
+     * @param {Object} serviceContext - From poolResult.serviceContext
+     * @returns {Array<String>} - List of enabled service keys
+     */
+    static getEnabledServices(serviceContext) {
+        if (!serviceContext || !serviceContext.hasData) {
+            return [];
+        }
+        return serviceContext.enabledServices || [];
     }
 }
 
