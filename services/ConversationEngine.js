@@ -10791,17 +10791,62 @@ async function processTurn({
                         autoOfferIntent = 'service_consent';
                     }
                 } else {
-                    // Get empathy variant
-                    const empathyVariants = discoveryConfig.empathyVariants || DEFAULT_PROMPT_VARIANTS.empathy;
-                    const empathyLine = getVariant(empathyVariants);
+                    // ═══════════════════════════════════════════════════════════════
+                    // V92: CONTEXT-AWARE AUTO-OFFER RESPONSE
+                    // Instead of generic empathy + offer, acknowledge what caller said
+                    // ═══════════════════════════════════════════════════════════════
+                    const discovery = session.discovery || {};
+                    const callerName = currentSlots.name || currentSlots.partialName;
                     
-                    // Get offer variant
-                    const offerVariants = discoveryConfig.offerVariants || DEFAULT_PROMPT_VARIANTS.offerScheduling;
-                    const offerLine = getVariant(offerVariants);
-                    
-                    // Build natural response: Empathy + Offer
-                    autoOfferResponse = `${empathyLine} ${offerLine}`;
-                    autoOfferResponse = stripServiceEmpathyPreamble(autoOfferResponse, tradeKey, isServiceCall && !serviceFlowConfig.empathyEnabled);
+                    if (discovery.issue || discovery.techMentioned || discovery.temperature) {
+                        // Build context-aware acknowledgment
+                        const parts = [];
+                        
+                        if (callerName) {
+                            parts.push(`Got it, ${callerName}`);
+                        } else {
+                            parts.push('Got it');
+                        }
+                        
+                        // Acknowledge issue + temperature
+                        if (discovery.issue && discovery.temperature && discovery.temperature >= 80) {
+                            parts.push(`${discovery.issue} and it's ${discovery.temperature}° in the house`);
+                        } else if (discovery.issue) {
+                            parts.push(discovery.issue);
+                        }
+                        
+                        // Acknowledge tech mention and recent visit
+                        if (discovery.techMentioned && discovery.recentVisit) {
+                            parts.push(`You mentioned ${discovery.techMentioned} was out recently`);
+                        } else if (discovery.techMentioned) {
+                            parts.push(`I see ${discovery.techMentioned} was there before`);
+                        }
+                        
+                        // Acknowledge tenure
+                        if (discovery.tenure === 'longtime_customer') {
+                            parts.push(`I appreciate you being a long-time customer`);
+                        }
+                        
+                        // Join and add scheduling offer
+                        autoOfferResponse = parts.join(' — ') + '. Would you like me to schedule a technician?';
+                        
+                        log('🎯 V92: Context-aware auto-offer response built', {
+                            hasName: !!callerName,
+                            hasIssue: !!discovery.issue,
+                            hasTech: !!discovery.techMentioned,
+                            hasTemp: !!discovery.temperature
+                        });
+                    } else {
+                        // Fallback to generic empathy + offer
+                        const empathyVariants = discoveryConfig.empathyVariants || DEFAULT_PROMPT_VARIANTS.empathy;
+                        const empathyLine = getVariant(empathyVariants);
+                        
+                        const offerVariants = discoveryConfig.offerVariants || DEFAULT_PROMPT_VARIANTS.offerScheduling;
+                        const offerLine = getVariant(offerVariants);
+                        
+                        autoOfferResponse = `${empathyLine} ${offerLine}`;
+                        autoOfferResponse = stripServiceEmpathyPreamble(autoOfferResponse, tradeKey, isServiceCall && !serviceFlowConfig.empathyEnabled);
+                    }
                     session.lastAgentIntent = 'OFFER_SCHEDULE';
                 }
                 
@@ -10810,7 +10855,8 @@ async function processTurn({
                 log('🎯 V31 AUTO-OFFER: Offering scheduling after issue understood', {
                     responsePreview: autoOfferResponse?.substring(0, 60),
                     discoveryTurnCount,
-                    issue: session.discovery.issue?.substring(0, 50)
+                    issue: session.discovery.issue?.substring(0, 50),
+                    contextAware: !!(session.discovery?.issue || session.discovery?.techMentioned)
                 });
                 
                 aiLatencyMs = Date.now() - aiStartTime;
@@ -10933,7 +10979,58 @@ async function processTurn({
                         fastPathIntent = 'service_consent';
                     }
                 } else {
-                    offerScript = stripServiceEmpathyPreamble(offerScript, tradeKey, isServiceCall && !serviceFlowConfig.empathyEnabled);
+                    // ═══════════════════════════════════════════════════════════════
+                    // V92: CONTEXT-AWARE FAST-PATH RESPONSE
+                    // Instead of generic "Would you like to schedule?", acknowledge
+                    // what the caller said (issue, tech, temperature, tenure)
+                    // ═══════════════════════════════════════════════════════════════
+                    const discovery = session.discovery || {};
+                    const callerName = currentSlots.name || currentSlots.partialName;
+                    
+                    if (discovery.issue || discovery.techMentioned || discovery.temperature) {
+                        // Build context-aware acknowledgment
+                        const parts = [];
+                        
+                        if (callerName) {
+                            parts.push(`Got it, ${callerName}`);
+                        } else {
+                            parts.push('Got it');
+                        }
+                        
+                        // Acknowledge issue + temperature
+                        if (discovery.issue && discovery.temperature && discovery.temperature >= 80) {
+                            parts.push(`${discovery.issue} and it's ${discovery.temperature}° in the house`);
+                        } else if (discovery.issue) {
+                            parts.push(discovery.issue);
+                        }
+                        
+                        // Acknowledge tech mention and recent visit
+                        if (discovery.techMentioned && discovery.recentVisit) {
+                            parts.push(`You mentioned ${discovery.techMentioned} was out recently and it still isn't fixed`);
+                        } else if (discovery.techMentioned) {
+                            parts.push(`I see ${discovery.techMentioned} was there before`);
+                        } else if (discovery.recentVisit) {
+                            parts.push(`I see someone was out recently`);
+                        }
+                        
+                        // Acknowledge tenure
+                        if (discovery.tenure === 'longtime_customer') {
+                            parts.push(`I appreciate you being a long-time customer`);
+                        }
+                        
+                        // Join and add scheduling offer
+                        offerScript = parts.join(' — ') + '. Let me get you taken care of — would you like me to schedule a technician?';
+                        
+                        log('🎯 V92: Context-aware fast-path response built', {
+                            hasName: !!callerName,
+                            hasIssue: !!discovery.issue,
+                            hasTech: !!discovery.techMentioned,
+                            hasTemp: !!discovery.temperature,
+                            responsePreview: offerScript.substring(0, 80)
+                        });
+                    } else {
+                        offerScript = stripServiceEmpathyPreamble(offerScript, tradeKey, isServiceCall && !serviceFlowConfig.empathyEnabled);
+                    }
                 }
                 
                 // Determine response: one-question first, or straight to offer
