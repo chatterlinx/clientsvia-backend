@@ -252,11 +252,39 @@ class SlotExtractor {
         const currentBookingStep = context.expectingSlot || context.currentBookingStep || null;
         const confirmedSlots = context.confirmedSlots || {};
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V92 FIX: BOOKING MODE GATING
+        // ═══════════════════════════════════════════════════════════════════════════
+        // When NOT in booking mode, only extract NAME and PHONE (caller ID).
+        // Don't extract ADDRESS or TIME - these need booking consent first!
+        //
+        // Bug: "how soon can you get somebody out here" in DISCOVERY was extracting
+        // time=ASAP which blocked the direct booking intent detection.
+        //
+        // WIRED: This aligns with ConversationEngine's slot gating (line ~4395)
+        // ═══════════════════════════════════════════════════════════════════════════
+        const bookingModeLocked = context.bookingModeLocked === true;
+        const sessionMode = context.sessionMode || 'DISCOVERY';
+        const isBookingActive = bookingModeLocked || sessionMode === 'BOOKING';
+        
         // Determine which extractors should run based on current booking step
         const shouldExtract = (slotKey) => {
             // If this slot is already confirmed, don't extract (except for explicit corrections)
             if (confirmedSlots[slotKey] === true) {
                 return false;
+            }
+            
+            // V92 CRITICAL: In DISCOVERY mode, only extract name and phone
+            // Address and time require booking consent first!
+            if (!isBookingActive && !currentBookingStep) {
+                if (slotKey === 'address') {
+                    logger.debug('[SLOT EXTRACTOR] V92: Skipping address extraction (discovery mode - no booking consent)');
+                    return false;
+                }
+                if (slotKey === 'time') {
+                    logger.debug('[SLOT EXTRACTOR] V92: Skipping time extraction (discovery mode - no booking consent)');
+                    return false;
+                }
             }
             
             // Booking step gating: only extract what's relevant to current step

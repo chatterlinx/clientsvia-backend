@@ -2840,6 +2840,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       // Extract slots from current utterance
       // FEB 2026 FIX: Pass confirmedSlots to gate extraction properly
+      // V92 FIX: Pass bookingModeLocked and sessionMode to prevent premature time/address extraction
       extractedSlots = SlotExtractor.extractAll(speechResult, {
         turnCount: callState.turnCount || 1,
         callerPhone: fromNumber,
@@ -2847,7 +2848,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         company,
         expectingSlot: callState.currentBookingStep || null,
         currentBookingStep: callState.currentBookingStep || null,
-        confirmedSlots: callState.confirmedSlots || {}
+        confirmedSlots: callState.confirmedSlots || {},
+        // V92: Booking mode gating - prevents time/address extraction in discovery
+        bookingModeLocked: callState.bookingModeLocked === true,
+        sessionMode: callState.sessionMode || 'DISCOVERY'
       });
       
       // Merge new extractions with existing slots (with confidence rules)
