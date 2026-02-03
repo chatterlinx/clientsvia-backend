@@ -919,8 +919,13 @@ class BookingFlowRunner {
         // ═══════════════════════════════════════════════════════════════════════
         // If name slot has askFullName: true and askMissingNamePart: true,
         // and user only gave first name, ask for last name before advancing
+        // NOTE: Options are in step.options (from BookingFlowResolver)
         // ═══════════════════════════════════════════════════════════════════════
-        if ((fieldKey === 'name' || step.type === 'name') && step.askFullName && step.askMissingNamePart) {
+        const slotOptions = step.options || {};
+        const askFullName = slotOptions.askFullName || step.askFullName;
+        const askMissingNamePart = slotOptions.askMissingNamePart || step.askMissingNamePart;
+        
+        if ((fieldKey === 'name' || step.type === 'name') && askFullName && askMissingNamePart) {
             const nameParts = (valueToStore || '').trim().split(/\s+/);
             const hasLastName = nameParts.length >= 2;
             
@@ -931,13 +936,15 @@ class BookingFlowRunner {
                 state.askedForLastName = true;
                 
                 // Use configured lastNameQuestion or default
-                const lastNameQuestion = step.lastNameQuestion || "And what's your last name?";
+                const lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion || "And what's your last name?";
                 const ack = `Got it, ${firstName}.`;
                 
                 logger.info('[BOOKING FLOW RUNNER] V92: Asking for last name', {
                     firstName,
-                    askFullName: step.askFullName,
-                    lastNameQuestion
+                    askFullName,
+                    askMissingNamePart,
+                    lastNameQuestion,
+                    slotOptionsPresent: !!step.options
                 });
                 
                 return {
@@ -955,7 +962,8 @@ class BookingFlowRunner {
                         flowId: flow.flowId,
                         mode: 'ASK_LAST_NAME',
                         firstName,
-                        askFullName: step.askFullName
+                        askFullName,
+                        slotOptions: Object.keys(slotOptions)
                     }
                 };
             } else if (state.firstNameCollected && state.askedForLastName) {
@@ -1033,17 +1041,21 @@ class BookingFlowRunner {
      * ========================================================================
      * V92 FIX: Wire confirmPrompt, askFullName, lastNameQuestion, etc.
      * from the booking prompt tab configuration instead of hardcoded defaults
+     * NOTE: Options may be in step.options (from BookingFlowResolver)
      * ========================================================================
      */
     static buildConfirmPrompt(step, existingValue) {
         const type = step.type || step.id;
+        const options = step.options || {};
         
         // ═══════════════════════════════════════════════════════════════════
         // V92: Use slot's confirmPrompt from booking prompt tab if available
+        // Check both step.confirmPrompt and step.options.confirmPrompt
         // ═══════════════════════════════════════════════════════════════════
-        if (step.confirmPrompt) {
+        const confirmPrompt = options.confirmPrompt || step.confirmPrompt;
+        if (confirmPrompt) {
             // Replace {value} placeholder with actual value
-            return step.confirmPrompt
+            return confirmPrompt
                 .replace(/\{value\}/gi, existingValue || '')
                 .replace(/\{name\}/gi, existingValue || '')
                 .replace(/\{address\}/gi, existingValue || '')

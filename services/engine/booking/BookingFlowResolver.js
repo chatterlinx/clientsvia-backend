@@ -336,15 +336,27 @@ class BookingFlowResolver {
     
     /**
      * Extract slot-specific options for specialized handlers
+     * ═══════════════════════════════════════════════════════════════════════
+     * V92 FIX: Include ALL booking prompt tab settings
+     * These must be passed through to BookingFlowRunner so it can use them
+     * ═══════════════════════════════════════════════════════════════════════
      */
     static extractSlotOptions(slot) {
         const options = {};
         
-        // Name options
+        // ═══════════════════════════════════════════════════════════════════
+        // NAME OPTIONS - Full name handling, spelling confirmation, etc.
+        // ═══════════════════════════════════════════════════════════════════
         if (slot.type === 'name') {
             options.askFullName = slot.askFullName;
+            options.askMissingNamePart = slot.askMissingNamePart;
+            options.useFirstNameOnly = slot.useFirstNameOnly;
             options.lastNameQuestion = slot.lastNameQuestion;
             options.firstNameQuestion = slot.firstNameQuestion;
+            options.duplicateNamePartPrompt = slot.duplicateNamePartPrompt;
+            // V92: Spelling confirmation
+            options.confirmSpelling = slot.confirmSpelling;
+            options.helperNote = slot.helperNote;
         }
         
         // Phone options
@@ -366,9 +378,13 @@ class BookingFlowResolver {
             options.asapPhrase = slot.asapPhrase;
         }
         
-        // Confirmation options
+        // ═══════════════════════════════════════════════════════════════════
+        // COMMON OPTIONS - Apply to all slot types
+        // ═══════════════════════════════════════════════════════════════════
         options.confirmBack = slot.confirmBack;
         options.confirmPrompt = slot.confirmPrompt;
+        options.skipIfKnown = slot.skipIfKnown;
+        options.midCallRules = slot.midCallRules;
         
         return options;
     }
