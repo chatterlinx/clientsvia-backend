@@ -2707,6 +2707,26 @@ const SlotExtractors = {
         
         const lower = text.toLowerCase();
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V92 FIX: REJECT TIME PHRASES THAT LOOK LIKE ADDRESSES
+        // "2 weeks ago" matched as address because it's "number + words"
+        // These are CATEGORICALLY NOT addresses - reject them FIRST
+        // ═══════════════════════════════════════════════════════════════════════════
+        const TIME_PHRASE_BLOCKLIST = /\b\d+\s*(weeks?|days?|months?|years?|hours?|minutes?)\s*(ago|later|from now|back|prior|before|since|now)\b/i;
+        if (TIME_PHRASE_BLOCKLIST.test(text)) {
+            logger.debug('[SLOT EXTRACTORS] Address rejected: matches time phrase pattern', { text: text.substring(0, 50) });
+            return null;
+        }
+        
+        // Also reject if it contains obvious time context words
+        const TIME_CONTEXT_WORDS = ['yesterday', 'today', 'tomorrow', 'ago', 'since', 'later', 'earlier', 'recently', 'last week', 'last month', 'last year'];
+        for (const timeWord of TIME_CONTEXT_WORDS) {
+            if (lower.includes(timeWord)) {
+                logger.debug('[SLOT EXTRACTORS] Address rejected: contains time context word', { text: text.substring(0, 50), timeWord });
+                return null;
+            }
+        }
+        
         // Filter out common complaint phrases that might have numbers
         const complaintPhrases = ['not cooling', 'not working', 'system', 'unit', 'years old', 'degrees', 'broken', 'issue'];
         for (const phrase of complaintPhrases) {
@@ -4300,7 +4320,26 @@ async function processTurn({
             }
         }
         
-        // Extract phone
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V92 FIX: SLOT PERSISTENCE GATING
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Only persist phone/address/time slots when BOOKING IS ACTIVE or agent asked.
+        // DISCOVERY mode should NOT write booking slots from free-form speech.
+        // 
+        // Bug example: "we've had this problem like 2 weeks ago" → address = "2 weeks ago"
+        // This happened because extraction ran during DISCOVERY with no gating.
+        // 
+        // Rule: Only persist if:
+        // (a) bookingModeLocked === true, OR
+        // (b) session.mode === 'BOOKING', OR
+        // (c) agent explicitly asked for that slot (currentBookingStep matches)
+        // ═══════════════════════════════════════════════════════════════════════════
+        const isBookingActive = session.bookingModeLocked === true || 
+                               session.mode === 'BOOKING' ||
+                               session.booking?.consentGiven === true;
+        const currentStep = session.currentBookingStep || session.booking?.currentStep || null;
+        
+        // Extract phone - always allowed (phone is often from caller_id, not speech)
         if (!currentSlots.phone && userText) {
             const extractedPhone = SlotExtractors.extractPhone(userText);
             if (extractedPhone) {
@@ -4310,23 +4349,49 @@ async function processTurn({
             }
         }
         
-        // Extract address
+        // Extract address - ONLY if booking is active OR agent asked for address
+        const addressAsked = currentStep?.toLowerCase()?.includes('address') || 
+                            session.booking?.activeSlotType === 'address' ||
+                            session.booking?.askedSlots?.address === true;
         if (!currentSlots.address && userText) {
             const extractedAddress = SlotExtractors.extractAddress(userText);
             if (extractedAddress) {
-                currentSlots.address = extractedAddress;
-                extractedThisTurn.address = extractedAddress;
-                log('Address extracted', { address: extractedAddress });
+                if (isBookingActive || addressAsked) {
+                    currentSlots.address = extractedAddress;
+                    extractedThisTurn.address = extractedAddress;
+                    log('Address extracted (booking active or asked)', { address: extractedAddress });
+                } else {
+                    // Store as candidate but don't persist to slot
+                    session.candidateSlots = session.candidateSlots || {};
+                    session.candidateSlots.address = extractedAddress;
+                    log('⚠️ V92: Address candidate stored (NOT persisted - discovery mode)', { 
+                        address: extractedAddress,
+                        reason: 'SLOT_GATING_DISCOVERY_MODE'
+                    });
+                }
             }
         }
         
-        // Extract time preference
+        // Extract time preference - ONLY if booking is active OR agent asked for time
+        const timeAsked = currentStep?.toLowerCase()?.includes('time') ||
+                         session.booking?.activeSlotType === 'time' ||
+                         session.booking?.askedSlots?.time === true;
         if (!currentSlots.time && userText) {
             const extractedTime = SlotExtractors.extractTime(userText);
             if (extractedTime) {
-                currentSlots.time = extractedTime;
-                extractedThisTurn.time = extractedTime;
-                log('Time extracted', { time: extractedTime });
+                if (isBookingActive || timeAsked) {
+                    currentSlots.time = extractedTime;
+                    extractedThisTurn.time = extractedTime;
+                    log('Time extracted (booking active or asked)', { time: extractedTime });
+                } else {
+                    // Store as candidate but don't persist to slot
+                    session.candidateSlots = session.candidateSlots || {};
+                    session.candidateSlots.time = extractedTime;
+                    log('⚠️ V92: Time candidate stored (NOT persisted - discovery mode)', { 
+                        time: extractedTime,
+                        reason: 'SLOT_GATING_DISCOVERY_MODE'
+                    });
+                }
             }
         }
         

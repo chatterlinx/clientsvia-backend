@@ -176,7 +176,28 @@ const NAME_STOP_WORDS = new Set([
     'lane', 'ln', 'boulevard', 'blvd', 'court', 'ct', 'circle', 'cir',
     'way', 'place', 'pl', 'parkway', 'pkwy', 'highway', 'hwy',
     'north', 'south', 'east', 'west', 'metro', 'main', 'center',
-    'suite', 'apt', 'apartment', 'unit', 'floor', 'building'
+    'suite', 'apt', 'apartment', 'unit', 'floor', 'building',
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V92 FIX: VERBS - "it's RUNNING but not cooling" → "Running" is NOT a name!
+    // These are action/state words that should NEVER be extracted as names
+    // ═══════════════════════════════════════════════════════════════════════════
+    'running', 'cooling', 'heating', 'working', 'blowing', 'making',
+    'calling', 'trying', 'having', 'being', 'doing', 'going', 'coming',
+    'starting', 'stopping', 'turning', 'clicking', 'buzzing', 'humming',
+    'leaking', 'dripping', 'freezing', 'defrosting', 'cycling', 'shutting',
+    'broken', 'fixed', 'repaired', 'installed', 'replaced', 'checked',
+    'looked', 'told', 'called', 'scheduled', 'booked', 'confirmed',
+    // V92 FIX: HVAC/Problem descriptors - NOT names!
+    // "the system is BLANK" → "Blank" is NOT a name!
+    'blank', 'dead', 'frozen', 'stuck', 'loud', 'quiet', 'warm', 'hot', 'cold',
+    'problem', 'issue', 'trouble', 'error', 'system', 'unit', 'equipment',
+    'thermostat', 'filter', 'vent', 'duct', 'coil', 'compressor', 'condenser',
+    'furnace', 'heater', 'ac', 'hvac', 'air', 'conditioning', 'heat', 'pump',
+    // V92 FIX: Pronouns and articles that slip through
+    'its', "it's", 'they', 'them', 'their', 'we', 'our', 'us',
+    'one', 'some', 'any', 'all', 'none', 'each', 'every', 'both',
+    // V92 FIX: Negation and affirmation words
+    'nothing', 'everything', 'anything', 'something', 'never', 'always', 'ever'
 ]);
 
 /**
@@ -731,6 +752,19 @@ class SlotExtractor {
         // Use [a-zA-Z]+ instead to match any case
         // ═══════════════════════════════════════════════════════════════════════════
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V92 FIX: REJECT TIME PHRASES THAT LOOK LIKE ADDRESSES
+        // "2 weeks ago" matched as address because it's "number + words"
+        // These are CATEGORICALLY NOT addresses - reject them first
+        // ═══════════════════════════════════════════════════════════════════════════
+        const TIME_PHRASE_BLOCKLIST = /\b\d+\s*(weeks?|days?|months?|years?|hours?|minutes?)\s*(ago|later|from now|back|prior|before|since|now)\b/i;
+        const TIME_WORDS_BLOCKLIST = /\b(yesterday|today|tomorrow|ago|since|later|earlier|recently|before|after|last|next|past|week|month|year|day)\b/i;
+        
+        if (TIME_PHRASE_BLOCKLIST.test(text)) {
+            logger.debug('[SLOT EXTRACTOR] Address rejected: matches time phrase pattern', { text: text.substring(0, 50) });
+            return null;
+        }
+        
         // Complete list of street type suffixes
         const streetSuffixes = '(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|way|court|ct|circle|cir|place|pl|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|path|plaza|square|sq)';
         
@@ -739,31 +773,47 @@ class SlotExtractor {
             // "123 Main Street" / "12155 metro parkway"
             new RegExp(`(\\d{1,5}\\s+[a-zA-Z]+(?:\\s+[a-zA-Z]+)*\\s+${streetSuffixes}\\.?)`, 'i'),
             // "123 Main St, Apt 4" / "456 Oak Drive Unit 2B"
-            new RegExp(`(\\d{1,5}\\s+[a-zA-Z]+(?:\\s+[a-zA-Z]+)*\\s+${streetSuffixes}\\.?,?\\s*(?:apt|unit|suite|#)?\\s*\\d*[a-zA-Z]?)`, 'i'),
-            // Just number + two+ words (lenient but specific: "12155 Metro Parkway")
-            /(\d{1,5}\s+[a-zA-Z]{3,}(?:\s+[a-zA-Z]{3,})+)/i
+            new RegExp(`(\\d{1,5}\\s+[a-zA-Z]+(?:\\s+[a-zA-Z]+)*\\s+${streetSuffixes}\\.?,?\\s*(?:apt|unit|suite|#)?\\s*\\d*[a-zA-Z]?)`, 'i')
+            // V92 FIX: REMOVED lenient "number + words" pattern - it was matching "2 weeks ago"
+            // Addresses MUST have a street suffix to be extracted without explicit context
         ];
         
         for (const pattern of addressPatterns) {
             const match = text.match(pattern);
             if (match && match[1].length >= 10) {
+                const candidate = match[1].trim();
+                
+                // V92 FIX: Double-check the candidate doesn't contain time words
+                if (TIME_WORDS_BLOCKLIST.test(candidate)) {
+                    logger.debug('[SLOT EXTRACTOR] Address candidate rejected: contains time words', { candidate });
+                    continue;
+                }
+                
                 return {
-                    value: match[1].trim(),
+                    value: candidate,
                     confidence: CONFIDENCE.UTTERANCE_HIGH,
                     source: SOURCE.UTTERANCE
                 };
             }
         }
         
-        // If we're expecting address, be more lenient
+        // If we're expecting address, be more lenient BUT still validate
         if (context.expectingSlot === 'address') {
             // Look for number + words pattern
             const lenientMatch = text.match(/(\d{1,5}\s+[A-Za-z].*)/);
             if (lenientMatch && lenientMatch[1].length >= 8) {
+                const candidate = lenientMatch[1].trim();
+                
+                // V92 FIX: Even in lenient mode, reject obvious time phrases
+                if (TIME_WORDS_BLOCKLIST.test(candidate) || TIME_PHRASE_BLOCKLIST.test(candidate)) {
+                    logger.debug('[SLOT EXTRACTOR] Lenient address rejected: contains time words', { candidate });
+                    return null;
+                }
+                
                 // FEB 2026 FIX: Increase confidence when user is directly providing address
                 // They were asked for address and gave something that looks like one
                 return {
-                    value: lenientMatch[1].trim(),
+                    value: candidate,
                     confidence: CONFIDENCE.UTTERANCE_HIGH,  // Was UTTERANCE_LOW (0.6)
                     source: SOURCE.UTTERANCE
                 };
