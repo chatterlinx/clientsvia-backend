@@ -11272,6 +11272,95 @@ async function processTurn({
             }
             
             // ═══════════════════════════════════════════════════════════════════
+            // V92: DISCOVERY CLARIFICATION - Ask follow-up questions for vague issues
+            // ═══════════════════════════════════════════════════════════════════
+            // WIRED: discovery.clarifyingQuestions.enabled, discovery.clarifyingQuestions.vaguePatterns
+            // Before offering to schedule, check if issue is clear.
+            // If caller said "AC problems" or "not working" without specifying
+            // cooling/heating, ask a clarifying question first.
+            // ═══════════════════════════════════════════════════════════════════
+            const clarifyingQuestionsConfig = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.clarifyingQuestions || {};
+            const clarifyingEnabled = clarifyingQuestionsConfig.enabled !== false; // Default true
+            const vaguePatterns = clarifyingQuestionsConfig.vaguePatterns || [
+                'not working', 'problems', 'issues', 'something wrong', 'acting up', 
+                'broken', 'wont turn on', 'keeps shutting off', 'stops working',
+                'having trouble', 'giving me problems', 'not right'
+            ];
+            
+            // Check if caller's issue description is vague (needs clarification)
+            const discoveryIssue = session.discovery?.issue || '';
+            const userTextLower = userText.toLowerCase();
+            const issueIsVague = clarifyingEnabled && 
+                !session.discovery?.askedClarifyingQuestion && 
+                vaguePatterns.some(pattern => userTextLower.includes(pattern.toLowerCase()));
+            
+            // Check if we already have a clear issue classification
+            const hasSpecificIssue = discoveryIssue && (
+                /not cooling|no cool|ac not/i.test(discoveryIssue) ||
+                /not heating|no heat|furnace not/i.test(discoveryIssue) ||
+                /thermostat|blank|display/i.test(discoveryIssue) ||
+                /leak|water|refrigerant/i.test(discoveryIssue) ||
+                /noise|loud|rattling|grinding/i.test(discoveryIssue)
+            );
+            
+            const needsClarification = issueIsVague && !hasSpecificIssue;
+            
+            if (!aiResult && needsClarification) {
+                // Ask clarifying question instead of offering to schedule
+                const callerName = currentSlots.name || currentSlots.partialName;
+                const tradeType = (company?.trade || company?.tradeType || 'hvac').toLowerCase();
+                
+                // Build clarifying question based on trade
+                let clarifyingQuestion;
+                if (tradeType === 'hvac' || tradeType.includes('air') || tradeType.includes('heat')) {
+                    clarifyingQuestion = callerName 
+                        ? `${callerName}, is it not cooling, not heating, or something else?`
+                        : `Is it not cooling, not heating, or something else?`;
+                } else if (tradeType === 'plumbing') {
+                    clarifyingQuestion = callerName
+                        ? `${callerName}, is it a leak, a clog, or something else?`
+                        : `Is it a leak, a clog, or something else?`;
+                } else if (tradeType === 'electrical') {
+                    clarifyingQuestion = callerName
+                        ? `${callerName}, is it no power, flickering lights, or something else?`
+                        : `Is it no power, flickering lights, or something else?`;
+                } else {
+                    clarifyingQuestion = callerName
+                        ? `${callerName}, can you tell me a bit more about what's happening?`
+                        : `Can you tell me a bit more about what's happening?`;
+                }
+                
+                session.discovery.askedClarifyingQuestion = true;
+                session.lastAgentIntent = 'ASK_CLARIFICATION';
+                
+                log('🔍 V92: DISCOVERY CLARIFICATION - Asking follow-up for vague issue', {
+                    userText: userText.substring(0, 50),
+                    issueDetected: discoveryIssue,
+                    matchedPattern: vaguePatterns.find(p => userTextLower.includes(p.toLowerCase())),
+                    clarifyingQuestion: clarifyingQuestion.substring(0, 60)
+                });
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                aiResult = {
+                    reply: clarifyingQuestion,
+                    conversationMode: 'discovery',
+                    intent: 'clarification',
+                    nextGoal: 'UNDERSTAND_ISSUE',
+                    filledSlots: currentSlots,
+                    signals: { 
+                        needsClarification: true,
+                        vagueIssueDetected: true
+                    },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,  // No LLM used!
+                    fromStateMachine: true,
+                    mode: 'DISCOVERY',
+                    tier: 'tier1',
+                    matchSource: 'CLARIFICATION_QUESTION'
+                };
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════
             // V31: AUTO-OFFER SCHEDULING (if issue understood)
             // ═══════════════════════════════════════════════════════════════════
             // Once we understand the issue, don't ask more diagnostic questions.

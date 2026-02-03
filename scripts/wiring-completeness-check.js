@@ -141,6 +141,19 @@ const WIRING_CHECKS = [
     },
     
     // ═══════════════════════════════════════════════════════════════════
+    // V92: DISCOVERY CLARIFICATION - Ask follow-up questions for vague issues
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'discovery-clarification',
+        description: 'Ask clarifying questions when issue is vague (not working, problems, etc.)',
+        files: ['ConversationEngine.js'],
+        codePattern: /clarifyingQuestions|vaguePatterns|needsClarification|askClarifyingQuestion/g,
+        requiredDbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.clarifyingQuestions.enabled',
+        requiredEdge: 'vague_issue_detected → clarification_question → issue_understood → offer_schedule',
+        severity: 'high'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
     // V92: TECH NAME EXCLUSION - Prevents false positive tech names
     // ═══════════════════════════════════════════════════════════════════
     {

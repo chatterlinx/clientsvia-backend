@@ -102,6 +102,32 @@ const TIER_MVA = {
             recommendedValue: true
         },
         {
+            fieldId: 'discovery.clarifyingQuestions.enabled',
+            purpose: 'Ask clarifying questions when issue is vague before offering to schedule',
+            failureMode: 'Agent jumps to booking without understanding problem (e.g., "AC problems" → schedule)',
+            impact: 'ux',
+            priority: 1,
+            critical: true,
+            validator: (val) => val === true || val === false,
+            fixInstructions: 'Enable clarifying questions in discovery flow',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'clarifyingQuestions.enabled' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.clarifyingQuestions.enabled',
+            recommendedValue: true
+        },
+        {
+            fieldId: 'discovery.clarifyingQuestions.vaguePatterns',
+            purpose: 'Patterns that indicate vague issues requiring clarification',
+            failureMode: 'Agent offers scheduling without clarifying "not working", "problems", "issues"',
+            impact: 'ux',
+            priority: 2,
+            critical: false,
+            validator: (val) => Array.isArray(val) && val.length >= 3,
+            fixInstructions: 'Add vague issue patterns that should trigger clarification questions',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'clarifyingQuestions.vaguePatterns' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.clarifyingQuestions.vaguePatterns',
+            recommendedValue: ['not working', 'problems', 'issues', 'something wrong', 'acting up', 'broken', 'wont turn on', 'keeps shutting off']
+        },
+        {
             fieldId: 'discovery.techNameExcludeWords',
             purpose: 'Words to exclude from tech name extraction (e.g., "system")',
             failureMode: '"System" extracted as tech name from "system was working fine"',
