@@ -1550,10 +1550,28 @@ class HybridScenarioSelector {
         
         const words = normalizedPhrase.split(' ');
         
-        // Remove filler words and short words
+        // ════════════════════════════════════════════════════════════════════
+        // V92 FIX: PRESERVE IMPORTANT SHORT TERMS
+        // ════════════════════════════════════════════════════════════════════
+        // Industry-specific acronyms and abbreviations that are meaningful
+        // even though they're short (2 chars). Without this, "AC not working"
+        // loses the crucial "AC" term and matching fails badly.
+        // ════════════════════════════════════════════════════════════════════
+        const preservedTerms = new Set([
+            // HVAC
+            'ac', 'uv', 'co', 'co2', 'pm',
+            // General
+            'tv', 'pc', 'id', 'ok', 'no',
+            // Medical/Dental  
+            'er', 'or', 'iv', 'rx',
+            // Electrical
+            'dc', 'hz'
+        ]);
+        
+        // Remove filler words and short words (unless preserved)
         return words.filter(word => 
             !this.fillerWords.has(word) && 
-            word.length > 2
+            (word.length > 2 || preservedTerms.has(word))
         );
     }
     
