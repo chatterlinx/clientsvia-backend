@@ -29,10 +29,9 @@ jobs:
           node-version: '18'
           
       - name: Run Wiring Completeness Check
-        run: node scripts/wiring-completeness-check.js
-        # Default: warn mode (exits 0 even with violations)
-        # To block PRs on violations, change to:
-        # run: node scripts/wiring-completeness-check.js --fail-on-violation
+        run: node scripts/wiring-completeness-check.js --fail-on-violation
+        # FAIL MODE ENABLED: Blocks PRs with wiring violations
+        # To switch back to warn mode: remove --fail-on-violation
         
       - name: Upload wiring report
         if: always()
