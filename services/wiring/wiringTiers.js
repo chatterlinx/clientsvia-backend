@@ -89,6 +89,19 @@ const TIER_MVA = {
         // V92: SCENARIO SETTINGS - Critical for matching to work
         // ═══════════════════════════════════════════════════════════════════
         {
+            fieldId: 'frontDesk.detectionTriggers.wantsBooking',
+            purpose: 'Keywords that trigger transition from discovery to booking mode',
+            failureMode: 'Caller says "fix my AC" but agent stays in discovery instead of booking',
+            impact: 'conversion',
+            priority: 1,
+            critical: true,
+            validator: (val) => Array.isArray(val) && val.length >= 5,
+            fixInstructions: 'Add booking intent keywords in Front Desk Behavior → Detection Triggers',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'detectionTriggers' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking',
+            recommendedValue: ['fix', 'repair', 'service', 'appointment', 'schedule', 'technician', 'someone', 'come out', 'send']
+        },
+        {
             fieldId: 'scenarios.triggers',
             purpose: 'Scenario triggers enable keyword matching (BM25)',
             failureMode: 'Scenarios exist but never match - all calls fall to LLM',

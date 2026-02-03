@@ -46,6 +46,7 @@ const FILES_TO_SCAN = [
     'services/ScenarioPoolService.js',
     'services/ScenarioRuntimeCompiler.js',
     'services/ResponseEngine.js',
+    'services/HybridReceptionistLLM.js',
     'routes/v2twilio.js'
 ];
 
@@ -123,6 +124,19 @@ const WIRING_CHECKS = [
         codePattern: /consentObtained|explicitConsent|checkConsent/g,
         requiredDbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.explicitConsentRequired',
         requiredEdge: 'section_discoveryConsent → dynamicFlows_booking_intent',
+        severity: 'critical'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // V92: BOOKING MODE TRIGGERS - When to transition from discovery
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'wants-booking-triggers',
+        description: 'Keywords that trigger booking mode (fix, repair, schedule, etc.)',
+        files: ['HybridReceptionistLLM.js', 'ConversationEngine.js'],
+        codePattern: /wantsBooking|detectionTriggers|bookingIntent/g,
+        requiredDbPath: 'aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking',
+        requiredEdge: 'section_discoveryConsent → booking_mode',
         severity: 'critical'
     },
     
