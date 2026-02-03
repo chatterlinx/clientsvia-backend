@@ -24,7 +24,22 @@ const SCENARIO_SETTINGS_CATALOG = {
     version: 'V92',
     lastAudit: '2026-02-01',
     totalSettings: 60,
-    wiredCount: 22,
+    wiredCount: 25, // Updated after V92 fixes
+    
+    // ========================================================================
+    // DATA FLOW: How settings get from Blueprint/Config to Runtime
+    // ========================================================================
+    dataFlow: {
+        description: 'Settings must survive this path to be used at runtime',
+        steps: [
+            '1. UI/Blueprint → Template config (GlobalInstantResponseTemplate)',
+            '2. Company selects templates → aiAgentSettings.templateReferences',
+            '3. ScenarioPoolService.getScenarioPoolForCompany() → loads scenarios',
+            '4. ScenarioRuntimeCompiler.compileScenario() → creates runtime spec',
+            '5. HybridScenarioSelector → uses compiled spec for matching'
+        ],
+        critical: 'If a setting is not compiled in step 4, it is INVISIBLE at runtime!'
+    },
     
     // ========================================================================
     // IDENTITY & LIFECYCLE
@@ -127,23 +142,26 @@ const SCENARIO_SETTINGS_CATALOG = {
         },
         keywords: {
             status: 'WIRED',
-            wiredTo: ['HybridScenarioSelector.js:calculateScenarioScore'],
+            wiredTo: ['ScenarioRuntimeCompiler.js', 'HybridScenarioSelector.js:calculateScenarioScore'],
             description: 'Fast Tier-1 matching keywords (V92 fix)',
             wiredInVersion: 'V92',
+            compiledPath: 'spec.triggers.keywords',
             example: ['heat', 'furnace', 'cold', 'freezing']
         },
         negativeKeywords: {
             status: 'WIRED',
-            wiredTo: ['HybridScenarioSelector.js'],
+            wiredTo: ['ScenarioRuntimeCompiler.js', 'HybridScenarioSelector.js'],
             description: 'Keywords that PREVENT matching (V92 fix)',
             wiredInVersion: 'V92',
+            compiledPath: 'spec.triggers.negativeKeywords',
             example: ['cancel', 'summer', 'too much']
         },
         contextWeight: {
             status: 'WIRED',
-            wiredTo: ['HybridScenarioSelector.js'],
+            wiredTo: ['ScenarioRuntimeCompiler.js', 'HybridScenarioSelector.js'],
             description: 'Multiplier on final match score (V92 fix)',
             wiredInVersion: 'V92',
+            compiledPath: 'spec.contextWeight',
             range: [0, 1],
             examples: { emergency: 0.95, chitchat: 0.5, neutral: 0.7 }
         },
