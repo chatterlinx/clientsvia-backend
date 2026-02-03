@@ -42,7 +42,8 @@ const colors = {
 const FILES_TO_SCAN = [
     'services/engine/booking/BookingFlowRunner.js',
     'services/engine/ConversationEngine.js',
-    'services/engine/HybridScenarioSelector.js',
+    'services/HybridScenarioSelector.js',
+    'services/ScenarioPoolService.js',
     'routes/v2twilio.js'
 ];
 
@@ -121,6 +122,19 @@ const WIRING_CHECKS = [
         requiredDbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.explicitConsentRequired',
         requiredEdge: 'section_discoveryConsent → dynamicFlows_booking_intent',
         severity: 'critical'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // V92: SERVICE SWITCHBOARD - Controls which scenarios are active
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'service-switchboard',
+        description: 'Service switchboard toggles scenarios ON/OFF (global vs local)',
+        files: ['ScenarioPoolService.js', 'HybridScenarioSelector.js'],
+        codePattern: /serviceSwitchboard|isEnabledForCompany|isCompanyLocal|enabledServices/g,
+        requiredDbPath: 'aiAgentSettings.serviceSwitchboard',
+        requiredEdge: 'scenarios → scenarios_switchboard',
+        severity: 'high'
     }
 ];
 

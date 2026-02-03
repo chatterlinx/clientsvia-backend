@@ -219,6 +219,24 @@ const TIER_PRO = {
             nav: { tab: 'front-desk', section: 'escalation', field: 'transferMessage' },
             dbPath: 'aiAgentSettings.frontDeskBehavior.escalation.transferMessage',
             recommendedValue: 'Let me connect you to our team now. Please hold for just a moment.'
+        },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V92: SERVICE SWITCHBOARD - Controls which scenarios are active
+        // ═══════════════════════════════════════════════════════════════════
+        {
+            fieldId: 'dataConfig.serviceSwitchboard',
+            purpose: 'Toggles services/scenarios ON/OFF, controls global vs company-local sources',
+            failureMode: 'All scenarios enabled (no filtering), no company-specific customization',
+            impact: 'reliability',
+            priority: 3,
+            payoff: 'Fine-grained control over which scenarios respond, custom decline messages',
+            validator: (val) => val && val.services && Array.isArray(val.services),
+            fixInstructions: 'Configure Service Switchboard in Scenario Gaps → Service Switchboard',
+            nav: { tab: 'data-config', section: 'scenario-generation', field: 'serviceSwitchboard' },
+            dbPath: 'aiAgentSettings.serviceSwitchboard',
+            // No recommendedValue - requires company-specific service selection
+            requiresUserInput: true
         }
     ]
 };
