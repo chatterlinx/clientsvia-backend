@@ -5299,9 +5299,9 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         // If we asked a consent question, user said something affirmative-looking,
         // but we didn't enter booking - THIS IS A BUG we need to investigate
-        const userTextLower = (userText || '').toLowerCase().trim();
+        const userTextLowerV92 = (userText || '').toLowerCase().trim();
         const looksAffirmative = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'right', 'please', 'go ahead', 'sounds good']
-            .some(word => userTextLower.includes(word));
+            .some(word => userTextLowerV92.includes(word));
         
         if (askedConsentQuestionFlag && looksAffirmative && !shouldEnterBooking) {
             log('⚠️ V92: POTENTIAL CONSENT→BOOKING FAILURE', {
