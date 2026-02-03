@@ -8781,6 +8781,12 @@ Sean → Shawn, Shaun`;
         const renderStart = performance.now();
         const content = container.querySelector('#fdb-tab-content');
         
+        // V92 FIX: Guard against null content element (can happen during URL param navigation)
+        if (!content) {
+            console.warn(`[FRONT DESK] ⚠️ switchTab: #fdb-tab-content not found in container, skipping tab switch to: ${tabId}`);
+            return;
+        }
+        
         // Add data-section-id for deep linking from Wiring Tab
         // Maps internal tab IDs to wiring registry section IDs
         const tabToSectionId = {
