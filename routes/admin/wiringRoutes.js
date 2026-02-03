@@ -813,6 +813,19 @@ router.post('/:companyId/apply', async (req, res) => {
         const afterDoc = await Company.findById(companyId).lean();
         const afterValue = getPath(afterDoc, dbPath);
         const alreadyApplied = deepEqual(beforeValue, valueToApply) || deepEqual(afterValue, valueToApply);
+        
+        // V92 DEBUG: Trace resumeBooking specifically
+        if (fieldId.includes('resumeBooking')) {
+            console.log('[WIRING APPLY DEBUG] resumeBooking verification:', {
+                fieldId,
+                dbPath,
+                beforeValue: beforeValue ? JSON.stringify(beforeValue).substring(0, 100) : 'null',
+                afterValue: afterValue ? JSON.stringify(afterValue).substring(0, 100) : 'null',
+                valueToApply: JSON.stringify(valueToApply).substring(0, 100),
+                alreadyApplied,
+                modifiedCount: updateResult.modifiedCount
+            });
+        }
 
         if (!alreadyApplied && updateResult.modifiedCount === 0) {
             console.error('[WIRING APPLY] ❌ CHECKPOINT 9b: No changes applied (likely strict schema dropped path)', {
