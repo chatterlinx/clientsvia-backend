@@ -210,6 +210,14 @@ const conversationSessionSchema = new Schema({
         // Current step within the stage (e.g., 'ASK_NAME' within 'booking')
         currentStep: { type: String, default: null },
         
+        // V92: Track if agent asked about scheduling (for consent detection on next turn)
+        // This allows short confirmations like "Right" or "Okay" to trigger booking mode
+        askedConsentQuestion: { type: Boolean, default: false },
+        
+        // V92: Track if caller's name has been acknowledged in a response
+        // Prevents saying "Thanks for calling, Mark" multiple times
+        nameAcknowledged: { type: Boolean, default: false },
+        
         // 🆕 ENTERPRISE: Turns spent in current stage (for stuck detection)
         turnsInCurrentStage: { type: Number, default: 0 },
         

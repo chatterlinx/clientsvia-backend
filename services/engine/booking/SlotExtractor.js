@@ -162,6 +162,18 @@ const NAME_STOP_WORDS = new Set([
     // FEB 2026 #2: More false positive words found in traces
     // "as EARLY as possible" → "As Early" is NOT a name!
     // "I'm NOT sure" → "Not" is NOT a name!
+    // FEB 2026 V92: Confirmation/acknowledgment words
+    // "I'm READY" → "Ready" is NOT a name!
+    'ready', 'done', 'finished', 'okay', 'alright', 'fine', 'perfect',
+    'right', 'correct', 'understood', 'got', 'gotcha',
+    // FEB 2026 V92 #2: COMMON VERBS - "I'm HAVING issues" → "Having" is NOT a name!
+    // These verbs commonly follow "I'm" but are NOT names
+    'having', 'calling', 'looking', 'trying', 'needing', 'wanting',
+    'experiencing', 'dealing', 'getting', 'seeing', 'hearing', 'feeling',
+    'wondering', 'thinking', 'asking', 'waiting', 'sitting', 'standing',
+    'working', 'living', 'staying', 'running', 'going', 'coming',
+    // Also add common nouns that follow "I'm a/an"
+    'issues', 'issue', 'problem', 'problems', 'trouble',
     // "I'm HERE" → "Here" is NOT a name!
     'early', 'not', 'here', 'there', 'now', 'later', 'then', 'still',
     'case', 'time', 'thing', 'stuff', 'way', 'going', 'come', 'coming',
@@ -631,15 +643,76 @@ class SlotExtractor {
             }
         }
         
-        // Pattern 1: "My name is X" / "I'm X" / "This is X" / "I am X"
-        // Note: Capture group allows any case, cleanName will normalize
-        // FEB 2026 FIX: Support comma between names: "my name is mark, gonzales"
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V92 FIX: PRIORITIZED NAME PATTERNS
+        // ═══════════════════════════════════════════════════════════════════════════
+        // PROBLEM: "I'm having issues... my name is Mark" was extracting "Issues" 
+        // because "i'm" pattern matched "I'm having issues" FIRST in the text.
+        // 
+        // FIX: Search for "my name is" patterns FIRST (most explicit), then fall 
+        // back to more ambiguous patterns only if no explicit match found.
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        // PRIORITY 1: "My name is X" - Most explicit, search ANYWHERE in text
+        // Uses matchAll to find ALL occurrences and pick the best one
+        const myNameIsPatterns = [
+            // "my name is mark gonzales" OR "my name is mark, gonzales" 
+            /my\s+name\s+is\s+([a-zA-Z]+)[,\s]+([a-zA-Z]+)/gi,
+            // Single name: "my name is mark"
+            /my\s+name\s+is\s+([a-zA-Z]+)(?:\s|$|[.,!?])/gi
+        ];
+        
+        for (const pattern of myNameIsPatterns) {
+            const matches = [...text.matchAll(pattern)];
+            if (matches.length > 0) {
+                // Take the LAST match (most likely to be the final/corrected name)
+                const match = matches[matches.length - 1];
+                let name;
+                if (match[2] && !NAME_STOP_WORDS.has(match[2].toLowerCase())) {
+                    name = this.cleanName(match[1] + ' ' + match[2]);
+                } else {
+                    name = this.cleanName(match[1]);
+                }
+                
+                if (name && !NAME_STOP_WORDS.has(name.toLowerCase())) {
+                    const nameParts = name.split(/\s+/);
+                    const isSingleWord = nameParts.length === 1;
+                    const likelyFirst = isSingleWord ? isLikelyFirstName(name) : true;
+                    
+                    logger.info('[SLOT EXTRACTOR] ✅ Name matched via "my name is" (PRIORITY 1)', {
+                        raw: match[0],
+                        cleaned: name,
+                        matchCount: matches.length
+                    });
+                    
+                    const result = {
+                        value: name,
+                        confidence: CONFIDENCE.UTTERANCE_HIGH,
+                        source: SOURCE.UTTERANCE
+                    };
+                    
+                    if (isSingleWord) {
+                        result.isLikelyFirstName = likelyFirst;
+                        if (likelyFirst) {
+                            result.firstName = name;
+                        } else {
+                            result.lastName = name;
+                            result.needsFirstName = true;
+                        }
+                    } else if (nameParts.length >= 2) {
+                        result.firstName = nameParts[0];
+                        result.lastName = nameParts.slice(1).join(' ');
+                    }
+                    
+                    return result;
+                }
+            }
+        }
+        
+        // PRIORITY 2: "This is X" / "Call me X" - Less ambiguous than "I'm"
         const explicitPatterns = [
-            // "my name is mark gonzales" OR "my name is mark, gonzales" - capture both parts
-            /(?:my\s+name\s+is|i'?m|i\s+am|this\s+is|it'?s)\s+([a-zA-Z]+)[,\s]+([a-zA-Z]+)/i,
-            // Single name fallback: "my name is mark"
-            /(?:my\s+name\s+is|i'?m|i\s+am|this\s+is|it'?s)\s+([a-zA-Z]+)(?:\s|$|[.,!?])/i,
-            /(?:call\s+me|they\s+call\s+me)\s+([a-zA-Z]+)/i
+            /(?:this\s+is|call\s+me|they\s+call\s+me)\s+([a-zA-Z]+)[,\s]+([a-zA-Z]+)/i,
+            /(?:this\s+is|call\s+me|they\s+call\s+me)\s+([a-zA-Z]+)(?:\s|$|[.,!?])/i
         ];
         
         for (const pattern of explicitPatterns) {

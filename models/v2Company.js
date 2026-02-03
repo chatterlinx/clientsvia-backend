@@ -2185,6 +2185,16 @@ const companySchema = new mongoose.Schema({
             enabled: { type: Boolean, default: true },
             
             // ═══════════════════════════════════════════════════════════════
+            // V92: DEBUG LOGGING - Enhanced diagnostics for consent/booking flow
+            // ═══════════════════════════════════════════════════════════════
+            // When enabled, adds verbose logging at key checkpoints:
+            // - Consent detection (what phrases matched/didn't match)
+            // - Booking trigger decision (why it did/didn't enter booking)
+            // - Booking snap response (full response and state)
+            // Use for debugging specific company issues, disable in production
+            debugLogging: { type: Boolean, default: false },
+            
+            // ═══════════════════════════════════════════════════════════════
             // PERSONALITY SETTINGS
             // ═══════════════════════════════════════════════════════════════
             personality: {
@@ -3084,6 +3094,12 @@ const companySchema = new mongoose.Schema({
                     trim: true 
                 },
                 
+                // V92: Auto-inject consent questions into scenario responses
+                // When a scenario response implies scheduling ("We'll send a tech..."),
+                // automatically replace with consent question to avoid being pushy.
+                // Set to false if you want scenarios to control their own response text.
+                autoInjectConsentInScenarios: { type: Boolean, default: true },
+                
                 // Simple yes/confirmation words (used after consent question)
                 consentYesWords: {
                     type: [String],
@@ -3934,7 +3950,19 @@ const companySchema = new mongoose.Schema({
                     companyQnA: { type: Number, min: 0, max: 1, default: 0.8 },
                     tradeQnA: { type: Number, min: 0, max: 1, default: 0.75 },
                     templates: { type: Number, min: 0, max: 1, default: 0.7 },
-                    inHouseFallback: { type: Number, min: 0, max: 1, default: 0.5 }
+                    inHouseFallback: { type: Number, min: 0, max: 1, default: 0.5 },
+                    
+                    // V92: SCENARIO MATCHING THRESHOLDS
+                    // These control when scenarios are used vs LLM fallback
+                    
+                    // Tier-1: Use scenario reply verbatim (0 tokens)
+                    // Default 0.65 - Lower = more scenarios used directly
+                    // Higher = more falls through to LLM
+                    tier1DirectMatch: { type: Number, min: 0.4, max: 1, default: 0.65 },
+                    
+                    // Minimum confidence to include scenario as LLM context
+                    // Default 0.35 - Below this, scenario isn't even shown to LLM
+                    minScenarioContext: { type: Number, min: 0.1, max: 0.8, default: 0.35 }
                 },
                 // ☢️ NUCLEAR ELIMINATION: autoOptimization removed - legacy optimization system eliminated
         

@@ -77,7 +77,19 @@ const BlackBoxLogger = require('./BlackBoxLogger');
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V88-CALENDAR-URGENCY';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V92-DISCOVERY-CONSENT-FIX';  // <-- CHANGE THIS EACH DEPLOY
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V92: NAME STOP WORDS - Words that are NEVER valid names (for acknowledgment check)
+// ═══════════════════════════════════════════════════════════════════════════
+const NAME_STOP_WORDS_ENGINE = new Set([
+    'issues', 'issue', 'problem', 'problems', 'trouble', 'having', 'calling',
+    'is', 'are', 'was', 'were', 'be', 'been', 'am', 'the', 'a', 'an',
+    'yes', 'yeah', 'no', 'nope', 'okay', 'ok', 'sure', 'thanks', 'thank',
+    'ready', 'done', 'right', 'correct', 'wrong', 'good', 'great', 'fine',
+    'morning', 'afternoon', 'evening', 'night', 'today', 'tomorrow',
+    'customer', 'client', 'homeowner', 'resident', 'tenant', 'owner'
+]);
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
         '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
@@ -2424,9 +2436,13 @@ const ConsentDetector = {
         
         // Get UI-configured consent phrases
         const consentPhrases = detectionTriggers.wantsBooking || [];
-        // Extended yes words - includes "absolutely", "definitely", "sounds good", etc.
-        // FEB 2026 FIX: Added more natural agreement phrases
-        const consentYesWords = discoveryConsent.consentYesWords || [
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: DEFAULT CONSENT YES WORDS (ALWAYS included, can be extended by config)
+        // ═══════════════════════════════════════════════════════════════════════
+        // These are the baseline agreement words that should ALWAYS work.
+        // Company config can ADD to this list but never fully override it.
+        const DEFAULT_CONSENT_YES_WORDS = [
             'yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok', 'alright',
             'absolutely', 'definitely', 'certainly', 'of course', 'sounds good',
             'that would be great', 'let\'s do it', 'go ahead', 'perfect',
@@ -2435,6 +2451,12 @@ const ConsentDetector = {
             'i think so', 'think so', 'i agree', 'that\'d be', 'that would be',
             'right', 'right away', 'asap', 'soon as possible', 'as soon as'
         ];
+        
+        // Merge company config with defaults (defaults always included)
+        const customYesWords = Array.isArray(discoveryConsent.consentYesWords) 
+            ? discoveryConsent.consentYesWords 
+            : [];
+        const consentYesWords = [...new Set([...DEFAULT_CONSENT_YES_WORDS, ...customYesWords])];
         const requiresYesAfterPrompt = discoveryConsent.consentRequiresYesAfterPrompt !== false;
         
         // Check for explicit booking phrases from UI config
@@ -2477,6 +2499,18 @@ const ConsentDetector = {
         const lastTurns = session?.turns || [];
         const lastAssistantTurn = [...lastTurns].reverse().find(t => t.role === 'assistant');
         const lastAssistantText = (lastAssistantTurn?.content || '').toLowerCase();
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: DIAGNOSTIC LOGGING - WHY ISN'T CONSENT DETECTED?
+        // ═══════════════════════════════════════════════════════════════════════
+        const logger = require('../utils/logger');
+        logger.debug('[CONSENT CHECK] Checking consent...', {
+            userInput: textLower.substring(0, 50),
+            turnsCount: lastTurns.length,
+            lastAssistantTextPreview: lastAssistantText.substring(0, 100),
+            hasAskedConsentQuestion: session.conversationMemory?.askedConsentQuestion
+        });
+        
         // FEB 2026 FIX: Expanded booking offer detection phrases
         const askedAboutScheduling = lastAssistantText.includes('schedule') || 
                                      lastAssistantText.includes('appointment') ||
@@ -2489,6 +2523,15 @@ const ConsentDetector = {
                                      lastAssistantText.includes('book') ||       // "book a visit"
                                      session.conversationMemory?.askedConsentQuestion;
         
+        logger.debug('[CONSENT CHECK] Scheduling offer check', {
+            askedAboutScheduling,
+            hasSchedule: lastAssistantText.includes('schedule'),
+            hasBackOut: lastAssistantText.includes('back out'),
+            hasGetSomeone: lastAssistantText.includes('get someone'),
+            hasTechnician: lastAssistantText.includes('technician'),
+            hasComeOut: lastAssistantText.includes('come out')
+        });
+        
         if (askedAboutScheduling) {
             // Check for yes words anywhere in the response
             for (const yesWord of consentYesWords) {
@@ -2499,6 +2542,11 @@ const ConsentDetector = {
                     const hasNegative = negatives.some(neg => textLower.includes(neg));
                     
                     if (!hasNegative) {
+                        logger.info('[CONSENT CHECK] ✅ CONSENT DETECTED!', {
+                            matchedPhrase: yesWord,
+                            userInput: textLower,
+                            lastAssistantTextPreview: lastAssistantText.substring(0, 100)
+                        });
                         return { 
                             hasConsent: true, 
                             matchedPhrase: yesWord, 
@@ -2507,6 +2555,16 @@ const ConsentDetector = {
                     }
                 }
             }
+            logger.debug('[CONSENT CHECK] No yes word match in consent check', {
+                userInput: textLower,
+                yesWordsChecked: consentYesWords.length,
+                hasRight: textLower.includes('right'),
+                hasYes: textLower.includes('yes')
+            });
+        } else {
+            logger.debug('[CONSENT CHECK] Not checking yes words - no scheduling offer detected', {
+                lastAssistantTextPreview: lastAssistantText.substring(0, 100)
+            });
         }
         
         // ═══════════════════════════════════════════════════════════════════
@@ -5149,12 +5207,76 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         // CONSENT DETECTION - Check if caller explicitly wants to book
         // ═══════════════════════════════════════════════════════════════════════
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92 ENHANCED: PRE-CONSENT CHECK DIAGNOSTICS
+        // ═══════════════════════════════════════════════════════════════════════
+        // Log the full context BEFORE consent check runs so we can trace failures
+        const debugLogging = company.aiAgentSettings?.debugLogging === true;
+        const askedConsentQuestionFlag = session.conversationMemory?.askedConsentQuestion || false;
+        
+        log('🔍 V92: ENTERING CONSENT CHECK', {
+            sessionId: session._id?.toString(),
+            turn: session.metrics?.totalTurns || 0,
+            userInputPreview: (userText || '').substring(0, 50),
+            userInputLength: (userText || '').length,
+            // Critical flags
+            askedConsentQuestion: askedConsentQuestionFlag,
+            consentAlreadyGiven: session.booking?.consentGiven || false,
+            sessionMode: session.mode,
+            aiResultAlreadySet: !!aiResult,
+            aiResultSource: aiResult?.debug?.source || null,
+            // Session memory state (for persistence debugging)
+            conversationMemoryExists: !!session.conversationMemory,
+            conversationMemoryKeys: session.conversationMemory ? Object.keys(session.conversationMemory) : []
+        });
+        
         // V86: Skip if meta intent already handled
         if (aiResult) {
-            log('⏭️ V86: Skipping consent detection - meta intent already handled');
+            log('⏭️ V86: Skipping consent detection - meta intent already handled', {
+                aiResultSource: aiResult?.debug?.source,
+                aiResultMode: aiResult?.mode,
+                aiResultReplyPreview: (aiResult?.reply || '').substring(0, 50)
+            });
         }
         
         const consentCheck = !aiResult ? ConsentDetector.checkForConsent(userText, company, session) : { hasConsent: false };
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92 ENHANCED: POST-CONSENT CHECK DIAGNOSTICS
+        // ═══════════════════════════════════════════════════════════════════════
+        if (consentCheck.hasConsent) {
+            log('✅ V92: CONSENT DETECTED!', {
+                matchedPhrase: consentCheck.matchedPhrase,
+                reason: consentCheck.reason,
+                userInput: (userText || '').substring(0, 80),
+                askedConsentQuestion: askedConsentQuestionFlag,
+                // This is the "yes after scheduling offer" path
+                isYesAfterOffer: consentCheck.reason === 'yes_after_scheduling_offer'
+            });
+        } else if (!aiResult) {
+            // Only log "no consent" if we actually ran the check
+            log('❌ V92: NO CONSENT DETECTED', {
+                reason: consentCheck.reason || 'unknown',
+                userInputPreview: (userText || '').substring(0, 50),
+                askedConsentQuestion: askedConsentQuestionFlag,
+                // Help debug why "yes" might not have matched
+                userInputLower: (userText || '').toLowerCase().trim(),
+                containsYes: (userText || '').toLowerCase().includes('yes'),
+                containsRight: (userText || '').toLowerCase().includes('right'),
+                containsSure: (userText || '').toLowerCase().includes('sure')
+            });
+        }
+        
+        log('🔍 V92: CONSENT/BOOKING DECISION POINT', {
+            aiResultSet: !!aiResult,
+            consentCheckResult: consentCheck,
+            alreadyConsented: !!session.booking?.consentGiven,
+            directBookingIntent: directBookingIntent,
+            turnsInSession: session.turns?.length || 0,
+            sessionMode: session.mode,
+            bookingModeLocked: session.bookingFlowState?.bookingModeLocked || session.bookingModeLocked
+        });
         
         // ═══════════════════════════════════════════════════════════════════════
         // TRIGGER BOOKING: Either explicit consent OR direct booking intent
@@ -5163,6 +5285,45 @@ async function processTurn({
             consentCheck.hasConsent || 
             (directBookingIntent?.hasDirectIntent && directBookingIntent.confidence >= 0.75)
         );
+        
+        log('🔍 V92: SHOULD ENTER BOOKING?', {
+            shouldEnterBooking,
+            aiResultSet: !!aiResult,
+            notAlreadyConsented: !session.booking?.consentGiven,
+            consentHasConsent: consentCheck.hasConsent,
+            directIntentMet: directBookingIntent?.hasDirectIntent && directBookingIntent.confidence >= 0.75
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92 ENHANCED: FAILURE DETECTION - Why didn't booking trigger?
+        // ═══════════════════════════════════════════════════════════════════════
+        // If we asked a consent question, user said something affirmative-looking,
+        // but we didn't enter booking - THIS IS A BUG we need to investigate
+        const userTextLower = (userText || '').toLowerCase().trim();
+        const looksAffirmative = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'right', 'please', 'go ahead', 'sounds good']
+            .some(word => userTextLower.includes(word));
+        
+        if (askedConsentQuestionFlag && looksAffirmative && !shouldEnterBooking) {
+            log('⚠️ V92: POTENTIAL CONSENT→BOOKING FAILURE', {
+                problem: 'User gave affirmative response after consent question, but booking NOT triggered',
+                userInput: userText,
+                askedConsentQuestion: askedConsentQuestionFlag,
+                shouldEnterBooking: false,
+                // Diagnose the failure reason
+                failureReason: aiResult ? 'aiResult_already_set' 
+                    : session.booking?.consentGiven ? 'already_consented'
+                    : !consentCheck.hasConsent ? 'consent_check_failed'
+                    : 'unknown',
+                consentCheckReason: consentCheck.reason,
+                aiResultSource: aiResult?.debug?.source || null,
+                // Full state for debugging
+                sessionMode: session.mode,
+                conversationMemory: {
+                    askedConsentQuestion: session.conversationMemory?.askedConsentQuestion,
+                    nameAcknowledged: session.conversationMemory?.nameAcknowledged
+                }
+            });
+        }
         
         if (shouldEnterBooking) {
             // 🎯 BOOKING MODE TRIGGERED - Either by consent or direct intent
@@ -5371,11 +5532,39 @@ async function processTurn({
             
             aiLatencyMs = Date.now() - aiStartTime;
             
-                log('📋 BOOKING SNAP: Asking first slot immediately', {
-                    slotId,
-                    question: exactQuestion,
+                // ═══════════════════════════════════════════════════════════════
+                // V92 ENHANCED: BOOKING SNAP SUCCESS LOGGING
+                // ═══════════════════════════════════════════════════════════════
+                // This is the critical moment - booking mode has started!
+                // Log everything needed to verify the flow is working.
+                log('📋 V92: BOOKING SNAP SUCCESS - Consent→Booking transition complete!', {
+                    // The response being sent
+                    acknowledgment: ack,
+                    firstSlotQuestion: exactQuestion,
+                    fullReply: `${ack} ${exactQuestion}`,
+                    // Slot being asked
+                    firstSlotId: slotId,
+                    firstSlotType: firstMissingSlot.type,
+                    // Booking flow state
                     bookingModeLocked: true,
-                    acknowledgmentType: discovery.issue ? 'context_aware' : 'generic'
+                    bookingFlowId: bookingFlow.flowId,
+                    currentStepId: session.bookingFlowState?.currentStepId,
+                    // Slots already collected (from discovery)
+                    slotsCollectedSoFar: Object.keys(currentSlots).filter(k => currentSlots[k]),
+                    autoConfirmedSlots: Object.keys(autoConfirmedSlots),
+                    // Discovery context carried forward
+                    discoveryContext: {
+                        issue: discovery.issue || null,
+                        techMentioned: discovery.techMentioned || null,
+                        temperature: discovery.temperature || null,
+                        callerName: callerName || null
+                    },
+                    // Timing
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,
+                    // Consent details
+                    consentPhrase: session.booking?.consentPhrase,
+                    consentReason: session.booking?.consentReason
                 });
                 
                 aiResult = {
@@ -10570,7 +10759,8 @@ async function processTurn({
             //   - No LLM call = 0 tokens, ~50ms response
             //   - Log as SCENARIO_MATCHED tier1
             // ═══════════════════════════════════════════════════════════════════
-            const tier1Threshold = company.aiAgentSettings?.aiAgentLogic?.thresholds?.tier1DirectMatch ?? 0.80;
+            // V92: Company-configurable tier-1 threshold (default lowered to 0.65 for better scenario utilization)
+            const tier1Threshold = company.aiAgentSettings?.thresholds?.tier1DirectMatch ?? 0.65;
             const tier1Match = scenarioRetrieval.topMatch;
             const tier1Confidence = scenarioRetrieval.topMatchConfidence ?? 0;
             const allowTier1AutoResponse = killSwitches.disableScenarioAutoResponses !== true;
@@ -10632,19 +10822,123 @@ async function processTurn({
                 if (selectedReply && selectedReply.trim()) {
                     aiLatencyMs = Date.now() - aiStartTime;
                     
+                    // ═══════════════════════════════════════════════════════════════
+                    // V92: USE EXISTING PLACEHOLDER SYSTEM - NO HARDCODING!
+                    // ═══════════════════════════════════════════════════════════════
+                    // Scenarios already support {callerName} placeholder.
+                    // Use the centralized replacePlaceholders utility with runtime vars.
+                    //
+                    // This is MULTI-TENANT SAFE because:
+                    // - Scenarios are per-company (with {callerName} in their text)
+                    // - Placeholders come from company config
+                    // - Runtime vars (callerName) passed as additionalVars
+                    // ═══════════════════════════════════════════════════════════════
+                    
+                    // Load company-specific discovery behavior settings
+                    const discoveryBehavior = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
+                    
+                    // Company-configurable: Should we auto-inject consent questions?
+                    // Default: true (recommended for less pushy behavior)
+                    const autoInjectConsent = discoveryBehavior.autoInjectConsentInScenarios !== false;
+                    
+                    // Company-configurable: Consent question text
+                    // Default from schema: "Would you like me to schedule an appointment for you?"
+                    const consentQuestionTemplate = discoveryBehavior.consentQuestionTemplate || 
+                        "Would you like me to schedule an appointment for you?";
+                    
+                    const consentAlreadyGiven = session.booking?.consentGiven === true;
+                    const schedulingPatterns = /\b(we'?ll\s+(send|get|have|schedule)|send\s+a?\s*tech|get\s+a?\s*tech|schedule\s+a?\s*(tech|appointment|visit)|let\s+me\s+get)/i;
+                    const impliesScheduling = schedulingPatterns.test(selectedReply);
+                    
+                    let finalReply = selectedReply;
+                    let addedConsentQuestion = false;
+                    
+                    // Only modify response if company has autoInjectConsent enabled (default: true)
+                    if (autoInjectConsent && impliesScheduling && !consentAlreadyGiven) {
+                        log('🔄 V92: Scenario implies scheduling but no consent - modifying response', {
+                            companyId: company._id,
+                            autoInjectConsent,
+                            consentQuestionTemplate: consentQuestionTemplate.substring(0, 50)
+                        });
+                        
+                        // Replace scheduling phrases with company's consent question
+                        finalReply = selectedReply.replace(
+                            /\.\s*(we'?ll\s+(send|get|have|schedule)|I'?ll\s+(send|get|have|schedule)|let\s+me\s+get)[^.]*\.?$/i,
+                            '. ' + consentQuestionTemplate
+                        );
+                        
+                        // If replacement didn't work (different pattern), append consent question
+                        if (finalReply === selectedReply) {
+                            // Check if response already ends with a question
+                            if (!finalReply.trim().endsWith('?')) {
+                                finalReply = finalReply.trim() + ' ' + consentQuestionTemplate;
+                            }
+                        }
+                        
+                        addedConsentQuestion = true;
+                        
+                        // Mark that we asked the consent question
+                        session.conversationMemory = session.conversationMemory || {};
+                        session.conversationMemory.askedConsentQuestion = true;
+                        session.markModified('conversationMemory');
+                    }
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // V92: REPLACE PLACEHOLDERS USING EXISTING SYSTEM
+                    // ═══════════════════════════════════════════════════════════════
+                    // Scenarios use {callerName} placeholder - fill it with runtime data
+                    // Also handles {companyName}, {serviceAreas}, etc. from company config
+                    // ═══════════════════════════════════════════════════════════════
+                    const callerName = currentSlots.name;
+                    const runtimeVars = {};
+                    
+                    // Only set callerName if we have a valid name (not a stop word)
+                    if (callerName && !NAME_STOP_WORDS_ENGINE.has(callerName.toLowerCase())) {
+                        runtimeVars.callerName = callerName;
+                        runtimeVars.callerFirstName = callerName; // Alias for compatibility
+                        runtimeVars.name = callerName; // Another common alias
+                    }
+                    
+                    // Apply placeholder replacement (handles {callerName}, {companyName}, etc.)
+                    const { replacePlaceholders } = require('../utils/placeholderReplacer');
+                    const beforePlaceholders = finalReply;
+                    finalReply = replacePlaceholders(finalReply, company, runtimeVars);
+                    
+                    // If {callerName} wasn't replaced (no name available), clean up gracefully
+                    // Pattern: "Thanks, {callerName}." → "Thanks."
+                    // Pattern: "{callerName}, we can help" → "We can help"
+                    finalReply = finalReply
+                        .replace(/,?\s*\{callerName\}[,.]?\s*/gi, ' ')
+                        .replace(/\{callerFirstName\}/gi, '')
+                        .replace(/\{name\}/gi, '')
+                        .replace(/\s{2,}/g, ' ')
+                        .trim();
+                    
+                    const placeholdersReplaced = beforePlaceholders !== finalReply;
+                    if (placeholdersReplaced) {
+                        log('🔄 V92: Placeholders replaced in scenario response', {
+                            hadCallerName: !!runtimeVars.callerName,
+                            callerName: runtimeVars.callerName || null
+                        });
+                    }
+                    
                     log('🎯 TIER-1 SCENARIO MATCHED! (0 tokens, deterministic)', {
                         scenarioId: tier1Match.scenarioId,
                         scenarioName: tier1Match.name,
                         confidence: tier1Confidence,
-                        replyPreview: selectedReply.substring(0, 80),
-                        latencyMs: aiLatencyMs
+                        replyPreview: finalReply.substring(0, 80),
+                        latencyMs: aiLatencyMs,
+                        addedConsentQuestion,
+                        modifiedForConsent: impliesScheduling && !consentAlreadyGiven && autoInjectConsent,
+                        placeholdersReplaced,
+                        hadCallerName: !!runtimeVars.callerName
                     });
                     
                     aiResult = {
-                        reply: selectedReply,
+                        reply: finalReply,
                         conversationMode: 'discovery',
                         intent: 'scenario_matched',
-                        nextGoal: 'CONTINUE_DISCOVERY',
+                        nextGoal: addedConsentQuestion ? 'AWAIT_CONSENT' : 'CONTINUE_DISCOVERY',
                         filledSlots: currentSlots,
                         signals: {},
                         latencyMs: aiLatencyMs,
@@ -10661,7 +10955,12 @@ async function processTurn({
                             confidence: tier1Confidence,
                             threshold: tier1Threshold,
                             scenarioType: tier1Match.scenarioType,
-                            triggersUsed: tier1Match.triggers?.slice(0, 3) || []
+                            triggersUsed: tier1Match.triggers?.slice(0, 3) || [],
+                            addedConsentQuestion,
+                            autoInjectConsent,
+                            placeholdersReplaced,
+                            callerName: runtimeVars.callerName || null,
+                            originalReply: (impliesScheduling && autoInjectConsent) ? selectedReply.substring(0, 50) : null
                         }
                     };
                 } else {
@@ -11406,8 +11705,43 @@ async function processTurn({
                 }
             }
             
+            // ═══════════════════════════════════════════════════════════════
+            // V92: REPLACE PLACEHOLDERS IN LLM RESPONSES TOO
+            // ═══════════════════════════════════════════════════════════════
+            // LLM may include {callerName} from scenario examples it saw
+            // Also ensures consistency if LLM echoes template text
+            // Uses existing placeholder system - multi-tenant safe
+            // ═══════════════════════════════════════════════════════════════
+            const callerNameForLLM = currentSlots.name || currentSlots.partialName;
+            const llmRuntimeVars = {};
+            
+            if (callerNameForLLM && !NAME_STOP_WORDS_ENGINE.has(callerNameForLLM.toLowerCase())) {
+                llmRuntimeVars.callerName = callerNameForLLM;
+                llmRuntimeVars.callerFirstName = callerNameForLLM.split(' ')[0];
+                llmRuntimeVars.name = callerNameForLLM;
+            }
+            
+            const { replacePlaceholders: llmReplacePlaceholders } = require('../utils/placeholderReplacer');
+            let llmFinalReply = llmReplacePlaceholders(llmResult.reply, company, llmRuntimeVars);
+            
+            // Clean up any unreplaced placeholders gracefully
+            llmFinalReply = llmFinalReply
+                .replace(/,?\s*\{callerName\}[,.]?\s*/gi, ' ')
+                .replace(/\{callerFirstName\}/gi, '')
+                .replace(/\{name\}/gi, '')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+            
+            const llmPlaceholdersReplaced = llmFinalReply !== llmResult.reply;
+            if (llmPlaceholdersReplaced) {
+                log('🔄 V92: Placeholders replaced in LLM response', {
+                    hadCallerName: !!llmRuntimeVars.callerName,
+                    callerName: llmRuntimeVars.callerName || null
+                });
+            }
+            
             aiResult = {
-                reply: llmResult.reply,
+                reply: llmFinalReply,
                 conversationMode: 'discovery',
                 intent: llmResult.intent || 'discovery',
                 nextGoal: llmResult.nextGoal || 'UNDERSTAND_CALLER',
@@ -11433,6 +11767,9 @@ async function processTurn({
                     cheatSheetUsed: cheatSheetUsed || false,
                     cheatSheetReason: cheatSheetReason || null,
                     cheatSheetCategory: cheatSheetKnowledge?.category || null,
+                    // V92: Placeholder replacement in LLM path
+                    llmPlaceholdersReplaced,
+                    llmHadCallerName: !!llmRuntimeVars.callerName,
                     killSwitches: {
                         bookingRequiresExplicitConsent: killSwitches.bookingRequiresExplicitConsent,
                         forceLLMDiscovery: killSwitches.forceLLMDiscovery,
@@ -11968,14 +12305,24 @@ async function processTurn({
         // consent detection knows that "yes" means "yes to scheduling"
         // ═══════════════════════════════════════════════════════════════════
         const aiResponseLower = aiResponse.toLowerCase();
-        if (aiResponseLower.includes('schedule') || 
+        // V92: Match all scheduling offer phrases (must match consent detection patterns!)
+        const offeredScheduling = aiResponseLower.includes('schedule') || 
             aiResponseLower.includes('appointment') ||
             aiResponseLower.includes('technician') ||
             aiResponseLower.includes('come out') ||
-            aiResponseLower.includes('would you like me to')) {
+            aiResponseLower.includes('back out') ||      // V92: "get someone back out"
+            aiResponseLower.includes('send') ||          // V92: "send a tech"
+            aiResponseLower.includes('get someone') ||   // V92: "let me get someone"
+            aiResponseLower.includes('set up') ||        // V92: "get that set up"
+            aiResponseLower.includes('book') ||          // V92: "book a visit"
+            aiResponseLower.includes('would you like me to');
+        
+        if (offeredScheduling) {
             session.lastAgentIntent = 'OFFER_SCHEDULE';
             session.conversationMemory = session.conversationMemory || {};
             session.conversationMemory.askedConsentQuestion = true;
+            // V92: Mark the field as modified so Mongoose saves it
+            session.markModified('conversationMemory');
             log('📝 INTENT TRACKED: OFFER_SCHEDULE', { response: aiResponse.substring(0, 100) });
         } else if (session.mode === 'BOOKING') {
             session.lastAgentIntent = 'BOOKING_SLOT_QUESTION';
