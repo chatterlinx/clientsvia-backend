@@ -11667,12 +11667,59 @@ async function processTurn({
                 session.discovery.issueCapturedAtTurn = (session.metrics?.totalTurns || 0) + 1;
             }
             
-            // Step 7: Track if LLM asked the consent question
-            const askedConsent = llmResult.reply?.toLowerCase().includes('schedule') && 
-                                 llmResult.reply?.toLowerCase().includes('?');
-            if (askedConsent) {
+            // ═══════════════════════════════════════════════════════════════
+            // V92 FIX: LLM responses ALSO need consent injection!
+            // ═══════════════════════════════════════════════════════════════
+            // The old code only checked for "schedule" + "?" which missed phrases like
+            // "get a technician out there" - same patterns as Tier-1 scenarios
+            // ═══════════════════════════════════════════════════════════════
+            const discoveryBehaviorLLM = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
+            const autoInjectConsentLLM = discoveryBehaviorLLM.autoInjectConsentInScenarios !== false;
+            const consentAlreadyGivenLLM = session.booking?.consentGiven === true;
+            const alreadyAskedConsentLLM = session.conversationMemory?.askedConsentQuestion === true;
+            
+            // Same robust pattern as Tier-1 scenarios (catches "get a technician", "send someone", etc.)
+            const llmSchedulingPatterns = /\b(we'?ll\s+(send|get|have|schedule)|send\s+(a\s+)?(tech|someone)|get\s+(a\s+)?(tech|technician|someone)\s+(out|to)|schedule\s+(a\s+)?(tech|appointment|visit|service)|let\s+me\s+(get|send|schedule)|come\s+(out|take\s+a\s+look)|take\s+a\s+look)/i;
+            const llmImpliesScheduling = llmSchedulingPatterns.test(llmResult.reply || '');
+            
+            // Also check if LLM explicitly asked a scheduling question
+            const llmAskedSchedulingQuestion = (llmResult.reply || '').toLowerCase().includes('schedule') && 
+                                               (llmResult.reply || '').includes('?');
+            
+            log('🔍 V92: LLM RESPONSE CONSENT CHECK', {
+                llmReplyPreview: (llmResult.reply || '').substring(0, 80),
+                llmImpliesScheduling,
+                llmAskedSchedulingQuestion,
+                autoInjectConsentLLM,
+                consentAlreadyGivenLLM,
+                alreadyAskedConsentLLM
+            });
+            
+            // Inject consent question if LLM implies scheduling but hasn't asked yet
+            if (autoInjectConsentLLM && llmImpliesScheduling && !consentAlreadyGivenLLM && !alreadyAskedConsentLLM) {
+                const consentQuestionLLM = discoveryBehaviorLLM.consentQuestionTemplate || 
+                    "Would you like me to schedule an appointment for you?";
+                
+                // Append consent question to LLM response
+                llmResult.reply = (llmResult.reply || '').trim() + ' ' + consentQuestionLLM;
+                
                 session.conversationMemory = session.conversationMemory || {};
                 session.conversationMemory.askedConsentQuestion = true;
+                session.markModified('conversationMemory');
+                
+                log('✅ V92: CONSENT QUESTION INJECTED INTO LLM RESPONSE', {
+                    consentQuestion: consentQuestionLLM,
+                    fullReplyPreview: llmResult.reply.substring(0, 100)
+                });
+            } else if (llmAskedSchedulingQuestion && !alreadyAskedConsentLLM) {
+                // LLM organically asked about scheduling
+                session.conversationMemory = session.conversationMemory || {};
+                session.conversationMemory.askedConsentQuestion = true;
+                session.markModified('conversationMemory');
+                
+                log('✅ V92: LLM ORGANICALLY ASKED CONSENT QUESTION', {
+                    replyPreview: (llmResult.reply || '').substring(0, 80)
+                });
             }
             
             // Step 8: Store scenarios consulted for debugging
