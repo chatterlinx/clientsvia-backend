@@ -32,37 +32,77 @@ const TRUTH_BUNDLE_SCHEMA = 'TRUTH_BUNDLE_V1';
  * Generate the complete Truth Bundle
  * 
  * @param {Object} options
- * @param {string} options.companyId - Company ID for company-specific config
- * @param {Object} options.company - Company document (optional, for config values)
+ * @param {string} options.companyId - Company ID (REQUIRED for production bundles)
+ * @param {Object} options.company - Company document (REQUIRED for company-specific config)
  * @param {string} options.environment - 'production' | 'staging' | 'development'
+ * @param {boolean} options.allowDegraded - If true, allow bundle with missing wiringReport
  * @returns {Object} TRUTH_BUNDLE_V1 JSON
  */
 async function generateTruthBundle(options = {}) {
     const {
-        companyId = 'global',
+        companyId,
         company = null,
-        environment = process.env.NODE_ENV || 'development'
+        environment = process.env.NODE_ENV || 'development',
+        allowDegraded = false
     } = options;
     
     const generatedAt = new Date().toISOString();
+    const errors = [];
+    let integrity = 'COMPLETE';
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // VALIDATION: companyId is REQUIRED for non-global bundles
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!companyId) {
+        errors.push('companyId is REQUIRED - Truth Bundle must be company-specific');
+        integrity = 'INVALID';
+    }
+    
+    if (environment === 'production' && !company) {
+        errors.push('company document REQUIRED for production bundles - cannot verify config');
+        integrity = 'DEGRADED';
+    }
     
     // ═══════════════════════════════════════════════════════════════════════
     // SECTION 1: WIRING REPORT
     // ═══════════════════════════════════════════════════════════════════════
     let wiringReport = null;
+    let wiringReportAvailable = false;
+    
     if (WiringReport && typeof WiringReport.generateReport === 'function') {
         try {
             wiringReport = await WiringReport.generateReport({ companyId, company });
+            wiringReportAvailable = true;
         } catch (e) {
-            console.error('[TRUTH BUNDLE] Failed to generate wiring report:', e.message);
-            wiringReport = { error: e.message };
+            errors.push(`wiringReport generation failed: ${e.message}`);
+            wiringReport = { error: e.message, generatedAt };
+            integrity = 'DEGRADED';
         }
     } else {
-        // Fallback: minimal wiring report structure
-        wiringReport = {
-            schema: 'WIRING_REPORT_V2',
+        errors.push('wiringReport module not available - cannot verify config paths');
+        wiringReport = { 
+            error: 'Module not available',
             generatedAt,
-            note: 'Full wiring report not available - using fallback'
+            note: 'DEGRADED: Full wiring report not available'
+        };
+        integrity = 'DEGRADED';
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // FAIL HARD if degraded and not allowed
+    // ═══════════════════════════════════════════════════════════════════════
+    if (integrity !== 'COMPLETE' && !allowDegraded) {
+        return {
+            meta: {
+                schema: TRUTH_BUNDLE_SCHEMA,
+                generatedAt,
+                companyId: companyId || 'MISSING',
+                environment,
+                integrity: 'FAILED',
+                errors
+            },
+            error: 'Truth Bundle generation failed - see errors array',
+            errors
         };
     }
     
@@ -105,13 +145,16 @@ async function generateTruthBundle(options = {}) {
         meta: {
             schema: TRUTH_BUNDLE_SCHEMA,
             generatedAt,
-            companyId,
+            companyId: companyId || 'UNSPECIFIED',
             environment,
+            integrity,  // COMPLETE | DEGRADED | INVALID
+            errors: errors.length > 0 ? errors : undefined,
             hash: contentHash,
             flowTreeVersion: flowTree.version,
             nodeCount: flowTree.nodeCount,
             edgeCount: flowTree.edgeCount,
-            bindingCount: runtimeBindings.length
+            bindingCount: runtimeBindings.length,
+            wiringReportAvailable
         },
         ...bundleContent
     };

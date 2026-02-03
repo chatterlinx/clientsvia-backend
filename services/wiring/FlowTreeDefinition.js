@@ -20,7 +20,7 @@
  * ============================================================================
  */
 
-const FLOW_TREE_VERSION = '1.0.0';
+const FLOW_TREE_VERSION = '1.0.1';  // V92: Fixed consent flow + renamed turnEnd
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NODE TYPES
@@ -254,78 +254,141 @@ const NODES = [
         matchSource: 'BOOKING_COMPLETE',
         configPaths: ['frontDesk.bookingOutcome']
     },
+    // ─────────────────────────────────────────────────────────────────────────
+    // V1.0.1 FIX: Renamed from "callEnd" to "turnEnd"
+    // This is END OF TURN (response built), NOT call hangup!
+    // ─────────────────────────────────────────────────────────────────────────
     {
-        id: 'node.callEnd',
-        label: 'Call End',
+        id: 'node.turnEnd',
+        label: 'Turn End',
         type: NODE_TYPES.EXIT,
-        description: 'Call terminated',
-        checkpoint: 'CALL_END'
+        description: 'Response built, TwiML sent - end of this turn (NOT call hangup)',
+        checkpoint: 'TURN_END',
+        note: 'This node means: agent response ready. Call continues after this.'
     }
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
-// FLOW TREE EDGES
+// FLOW TREE EDGES - V1.0.1
+// ═══════════════════════════════════════════════════════════════════════════
+// FIXED in V1.0.1:
+// - Direct intent respects requireExplicitConsent
+// - Fast-path runs BEFORE consent gate (it's how we ASK for consent)
+// - Renamed callEnd → turnEnd (it's end of turn, not hangup)
 // ═══════════════════════════════════════════════════════════════════════════
 const EDGES = [
-    // Entry → Guards
+    // ─────────────────────────────────────────────────────────────────────────
+    // ENTRY → GUARDS
+    // ─────────────────────────────────────────────────────────────────────────
     { id: 'edge.1', from: 'node.callStart', to: 'node.emptyUtteranceGuard', when: 'always' },
     
     // Empty Guard branching
     { id: 'edge.2a', from: 'node.emptyUtteranceGuard', to: 'node.silenceHandler', when: 'isEmpty || isPunctuationOnly || isFillerOnly' },
     { id: 'edge.2b', from: 'node.emptyUtteranceGuard', to: 'node.slotExtraction', when: 'hasContent' },
     
-    // Slot extraction → Booking mode check
+    // ─────────────────────────────────────────────────────────────────────────
+    // SLOT EXTRACTION → BOOKING MODE CHECK
+    // ─────────────────────────────────────────────────────────────────────────
     { id: 'edge.3', from: 'node.slotExtraction', to: 'node.bookingModeCheck', when: 'always' },
     
     // Booking mode branching
     { id: 'edge.4a', from: 'node.bookingModeCheck', to: 'node.bookingRunner', when: 'bookingModeLocked === true' },
     { id: 'edge.4b', from: 'node.bookingModeCheck', to: 'node.metaIntentDetector', when: 'bookingModeLocked === false' },
     
-    // Meta intent branching
-    { id: 'edge.5a', from: 'node.metaIntentDetector', to: 'node.callEnd', when: 'humanRequest || cancel' },
+    // ─────────────────────────────────────────────────────────────────────────
+    // META INTENT → DIRECT/FAST-PATH INTENT DETECTION
+    // ─────────────────────────────────────────────────────────────────────────
+    { id: 'edge.5a', from: 'node.metaIntentDetector', to: 'node.turnEnd', when: 'humanRequest || cancel' },
     { id: 'edge.5b', from: 'node.metaIntentDetector', to: 'node.directBookingIntentDetector', when: 'noMetaIntent' },
     
-    // Direct booking intent detection
-    { id: 'edge.6a', from: 'node.directBookingIntentDetector', to: 'node.bookingTrigger', when: 'hasDirectIntent && confidence >= 0.75' },
-    { id: 'edge.6b', from: 'node.directBookingIntentDetector', to: 'node.consentGate', when: 'noDirectIntent' },
+    // ─────────────────────────────────────────────────────────────────────────
+    // DIRECT BOOKING INTENT - V1.0.1 FIX: Must respect requireExplicitConsent
+    // ─────────────────────────────────────────────────────────────────────────
+    // If consent NOT required: direct intent → booking trigger (skip consent)
+    { id: 'edge.6a', from: 'node.directBookingIntentDetector', to: 'node.bookingTrigger', when: 'hasDirectIntent && confidence >= 0.75 && requireExplicitConsent === false' },
+    // If consent IS required: direct intent → fast-path offer (ask consent)
+    { id: 'edge.6b', from: 'node.directBookingIntentDetector', to: 'node.fastPathOffer', when: 'hasDirectIntent && confidence >= 0.75 && requireExplicitConsent === true' },
+    // No direct intent → continue to fast-path check
+    { id: 'edge.6c', from: 'node.directBookingIntentDetector', to: 'node.fastPathIntentDetector', when: 'noDirectIntent' },
     
-    // Consent gate
-    { id: 'edge.7a', from: 'node.consentGate', to: 'node.bookingTrigger', when: 'hasConsent' },
-    { id: 'edge.7b', from: 'node.consentGate', to: 'node.fastPathIntentDetector', when: 'noConsent' },
+    // ─────────────────────────────────────────────────────────────────────────
+    // FAST-PATH INTENT - This is HOW we ask for consent
+    // V1.0.1 FIX: Fast-path runs BEFORE consent gate, not after
+    // ─────────────────────────────────────────────────────────────────────────
+    { id: 'edge.7a', from: 'node.fastPathIntentDetector', to: 'node.fastPathOffer', when: 'fastPathTriggered' },
+    { id: 'edge.7b', from: 'node.fastPathIntentDetector', to: 'node.consentGate', when: 'noFastPath && bookingConsentPending' },
+    { id: 'edge.7c', from: 'node.fastPathIntentDetector', to: 'node.discoveryClarification', when: 'noFastPath && !bookingConsentPending' },
     
-    // Booking trigger → Booking runner
-    { id: 'edge.8', from: 'node.bookingTrigger', to: 'node.bookingRunner', when: 'always' },
+    // ─────────────────────────────────────────────────────────────────────────
+    // CONSENT GATE - Only checked when bookingConsentPending === true
+    // This is AFTER we've offered booking (via fast-path or scenario)
+    // ─────────────────────────────────────────────────────────────────────────
+    { id: 'edge.8a', from: 'node.consentGate', to: 'node.bookingTrigger', when: 'hasConsent' },
+    { id: 'edge.8b', from: 'node.consentGate', to: 'node.discoveryClarification', when: 'noConsent' },
     
-    // Fast path detection
-    { id: 'edge.9a', from: 'node.fastPathIntentDetector', to: 'node.fastPathOffer', when: 'fastPathTriggered' },
-    { id: 'edge.9b', from: 'node.fastPathIntentDetector', to: 'node.discoveryClarification', when: 'noFastPath' },
+    // ─────────────────────────────────────────────────────────────────────────
+    // BOOKING TRIGGER → BOOKING RUNNER
+    // ─────────────────────────────────────────────────────────────────────────
+    { id: 'edge.9', from: 'node.bookingTrigger', to: 'node.bookingRunner', when: 'always' },
     
-    // Discovery clarification
-    { id: 'edge.10a', from: 'node.discoveryClarification', to: 'node.scenarioMatcher', when: 'issueClear || clarificationAsked' },
-    { id: 'edge.10b', from: 'node.discoveryClarification', to: 'node.callEnd', when: 'askClarifyingQuestion' }, // Returns response
+    // ─────────────────────────────────────────────────────────────────────────
+    // DISCOVERY CLARIFICATION - V1.0.1 FIX: Goes to turnEnd, not "call end"
+    // ─────────────────────────────────────────────────────────────────────────
+    { id: 'edge.10a', from: 'node.discoveryClarification', to: 'node.scenarioMatcher', when: 'issueClear' },
+    { id: 'edge.10b', from: 'node.discoveryClarification', to: 'node.turnEnd', when: 'askClarifyingQuestion' },
     
-    // Scenario matching
+    // ─────────────────────────────────────────────────────────────────────────
+    // SCENARIO MATCHING
+    // ─────────────────────────────────────────────────────────────────────────
     { id: 'edge.11a', from: 'node.scenarioMatcher', to: 'node.scenarioResponse', when: 'scenarioMatched' },
     { id: 'edge.11b', from: 'node.scenarioMatcher', to: 'node.llmFallback', when: 'noScenarioMatch' },
     
-    // Booking runner outcomes
+    // ─────────────────────────────────────────────────────────────────────────
+    // BOOKING RUNNER OUTCOMES
+    // ─────────────────────────────────────────────────────────────────────────
     { id: 'edge.12a', from: 'node.bookingRunner', to: 'node.bookingComplete', when: 'allSlotsCollected' },
-    { id: 'edge.12b', from: 'node.bookingRunner', to: 'node.callEnd', when: 'slotQuestionAsked' }, // Returns response
+    { id: 'edge.12b', from: 'node.bookingRunner', to: 'node.turnEnd', when: 'slotQuestionAsked' },
     
-    // Terminal edges (responses that end the turn)
-    { id: 'edge.13', from: 'node.silenceHandler', to: 'node.callEnd', when: 'always' },
-    { id: 'edge.14', from: 'node.scenarioResponse', to: 'node.callEnd', when: 'always' },
-    { id: 'edge.15', from: 'node.llmFallback', to: 'node.callEnd', when: 'always' },
-    { id: 'edge.16', from: 'node.fastPathOffer', to: 'node.callEnd', when: 'always' },
-    { id: 'edge.17', from: 'node.bookingComplete', to: 'node.callEnd', when: 'always' }
+    // ─────────────────────────────────────────────────────────────────────────
+    // TERMINAL EDGES (end of turn, response ready) - V1.0.1: All use turnEnd
+    // ─────────────────────────────────────────────────────────────────────────
+    { id: 'edge.13', from: 'node.silenceHandler', to: 'node.turnEnd', when: 'always' },
+    { id: 'edge.14', from: 'node.scenarioResponse', to: 'node.turnEnd', when: 'always' },
+    { id: 'edge.15', from: 'node.llmFallback', to: 'node.turnEnd', when: 'always' },
+    { id: 'edge.16', from: 'node.fastPathOffer', to: 'node.turnEnd', when: 'always' },
+    { id: 'edge.17', from: 'node.bookingComplete', to: 'node.turnEnd', when: 'always' }
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
-// RUNTIME BINDINGS
+// RUNTIME BINDINGS - V1.0.1
 // Maps checkpoints and matchSources to flow nodes
 // ═══════════════════════════════════════════════════════════════════════════
+// RULE: Every node must have a binding OR explicit note "purely visual"
+// If runtime cannot map to a node, emit OUT_OF_TREE_PATH
+// ═══════════════════════════════════════════════════════════════════════════
 const RUNTIME_BINDINGS = [
-    // Guards
+    // ─────────────────────────────────────────────────────────────────────────
+    // ENTRY/EXIT NODES (V1.0.1: Added missing bindings)
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+        nodeId: 'node.callStart',
+        checkpoints: ['CHECKPOINT_1', 'CALL_START'],
+        matchSources: [],
+        codePatterns: ['Starting processTurn', 'CALL_START'],
+        events: ['CALL_START']
+    },
+    {
+        nodeId: 'node.turnEnd',
+        checkpoints: ['TURN_END', 'TWIML_SENT', 'AGENT_RESPONSE_BUILT'],
+        matchSources: [],
+        codePatterns: ['TURN_COMPLETE', 'PATH_RESOLVED'],
+        events: ['TWIML_SENT', 'TURN_COMPLETE', 'AGENT_RESPONSE_BUILT'],
+        note: 'V1.0.1: This is END OF TURN, not call hangup. Call continues.'
+    },
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // GUARDS
+    // ─────────────────────────────────────────────────────────────────────────
     {
         nodeId: 'node.emptyUtteranceGuard',
         checkpoints: ['CHECKPOINT_V92_EMPTY_GUARD'],
@@ -339,7 +402,19 @@ const RUNTIME_BINDINGS = [
         codePatterns: ['SILENCE_DETERMINISTIC']
     },
     
-    // Booking mode
+    // ─────────────────────────────────────────────────────────────────────────
+    // SLOT EXTRACTION (V1.0.1: Added missing binding)
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+        nodeId: 'node.slotExtraction',
+        checkpoints: ['CHECKPOINT_8'],
+        matchSources: [],
+        codePatterns: ['Extracting slots', 'SLOTS_EXTRACTED'],
+        events: ['SLOTS_EXTRACTED']
+    },
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // BOOKING MODE
     {
         nodeId: 'node.bookingModeCheck',
         checkpoints: ['CHECKPOINT_BRANCH_DECISION'],
@@ -417,6 +492,17 @@ const RUNTIME_BINDINGS = [
         checkpoints: ['CHECKPOINT_V86_META'],
         matchSources: ['META_INTENT_TIER1'],
         codePatterns: ['metaIntentCheck', 'META_INTENT']
+    },
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // BOOKING COMPLETE (V1.0.1: Added missing binding)
+    // ─────────────────────────────────────────────────────────────────────────
+    {
+        nodeId: 'node.bookingComplete',
+        checkpoints: ['BOOKING_COMPLETE'],
+        matchSources: ['BOOKING_COMPLETE'],
+        codePatterns: ['booking finalized', 'allSlotsCollected'],
+        events: ['BOOKING_CREATED', 'BOOKING_COMPLETE']
     }
 ];
 
@@ -494,7 +580,7 @@ function exportFlowTree() {
         nodes: NODES,
         edges: EDGES,
         entryNodeId: 'node.callStart',
-        exitNodeId: 'node.callEnd',
+        exitNodeId: 'node.turnEnd',  // V1.0.1: Renamed from callEnd
         nodeCount: NODES.length,
         edgeCount: EDGES.length
     };
