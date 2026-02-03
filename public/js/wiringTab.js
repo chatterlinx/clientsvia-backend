@@ -3309,31 +3309,67 @@
                     attention: 'Configure in UI'
                 }));
             
-            // Build UI_ONLY items from coverage.uiOnlyPaths
+            // Build UI_ONLY items - combine coverage.uiOnlyPaths AND health.fields with UI_ONLY status
             const uiOnlyPaths = coverage.uiOnlyPaths || [];
-            const uiOnly = uiOnlyPaths.map(p => ({
+            const uiOnlyFromCoverage = uiOnlyPaths.map(p => ({
                 path: typeof p === 'string' ? p : p.fieldId || p.path,
                 dbPath: typeof p === 'object' ? p.dbPath : null,
                 status: 'UI_ONLY',
                 isLegacy: true,
                 attention: 'Add runtime reader or remove from UI'
             }));
+            const uiOnlyFromFields = fields
+                .filter(f => f.status === 'UI_ONLY')
+                .map(f => ({
+                    path: f.id,
+                    fieldId: f.id,
+                    label: f.label,
+                    dbPath: f.dbPath,
+                    status: 'UI_ONLY',
+                    isLegacy: true,
+                    attention: 'Add runtime reader or remove from UI'
+                }));
+            // Dedupe by path/fieldId
+            const uiOnlyMap = new Map();
+            [...uiOnlyFromCoverage, ...uiOnlyFromFields].forEach(item => {
+                const key = item.path || item.fieldId;
+                if (key && !uiOnlyMap.has(key)) uiOnlyMap.set(key, item);
+            });
+            const uiOnly = Array.from(uiOnlyMap.values());
             
-            // Build DEAD_READ items from coverage.deadReadPaths
+            // Build DEAD_READ items - combine coverage.deadReadPaths AND health.fields with DEAD_READ status
             const deadReadPaths = coverage.deadReadPaths || [];
-            const deadRead = deadReadPaths.map(p => ({
+            const deadReadFromCoverage = deadReadPaths.map(p => ({
                 path: typeof p === 'string' ? p : p.fieldId || p.path,
                 dbPath: typeof p === 'object' ? p.dbPath : null,
                 status: 'DEAD_READ',
                 isLegacy: true,
                 attention: 'Add to wiring registry or remove runtime reader'
             }));
+            const deadReadFromFields = fields
+                .filter(f => f.status === 'DEAD_READ')
+                .map(f => ({
+                    path: f.id,
+                    fieldId: f.id,
+                    label: f.label,
+                    dbPath: f.dbPath,
+                    status: 'DEAD_READ',
+                    isLegacy: true,
+                    attention: 'Add to wiring registry or remove runtime reader'
+                }));
+            // Dedupe by path/fieldId
+            const deadReadMap = new Map();
+            [...deadReadFromCoverage, ...deadReadFromFields].forEach(item => {
+                const key = item.path || item.fieldId;
+                if (key && !deadReadMap.has(key)) deadReadMap.set(key, item);
+            });
+            const deadRead = Array.from(deadReadMap.values());
             
-            // Also pull from health.byStatus for counts
+            // Use actual array lengths for counts (more accurate than byStatus which may be stale)
             const byStatus = health.byStatus || {};
-            const uiOnlyCount = byStatus.UI_ONLY || uiOnly.length;
-            const deadReadCount = byStatus.DEAD_READ || deadRead.length;
-            const notConfiguredCount = byStatus.NOT_CONFIGURED || notConfigured.length;
+            const uiOnlyCount = Math.max(byStatus.UI_ONLY || 0, uiOnly.length);
+            const deadReadCount = Math.max(byStatus.DEAD_READ || 0, deadRead.length);
+            const notConfiguredCount = Math.max(byStatus.NOT_CONFIGURED || 0, notConfigured.length);
             
             // Get nextActions from tiers for priority fixes
             const nextActions = tiers.nextActions || [];
@@ -3368,7 +3404,7 @@
             
             return {
                 generatedAt: new Date().toISOString(),
-                version: '1.2.0',
+                version: '1.3.0',
                 companyId: report.scope?.companyId,
                 companyName: report.scope?.companyName,
                 
