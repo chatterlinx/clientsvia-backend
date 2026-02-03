@@ -2344,5 +2344,53 @@ router.get('/:companyId/last-call-trace', async (req, res) => {
     }
 });
 
+// ============================================================================
+// GET /api/admin/wiring-status/scenario-settings
+// Scenario Settings Catalog - Shows all 22+ settings and wiring status
+// ============================================================================
+router.get('/scenario-settings', async (req, res) => {
+    try {
+        const { 
+            SCENARIO_SETTINGS_CATALOG, 
+            getWiringSummary, 
+            getUnwiredSettings 
+        } = require('../../services/wiring/scenarioSettingsCatalog');
+        
+        const { view = 'summary' } = req.query;
+        
+        // Full catalog
+        if (view === 'full') {
+            return res.json({
+                success: true,
+                catalog: SCENARIO_SETTINGS_CATALOG,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // Unwired settings (priority TODO)
+        if (view === 'unwired') {
+            const unwired = getUnwiredSettings();
+            return res.json({
+                success: true,
+                ...unwired,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // Summary (default)
+        const summary = getWiringSummary();
+        return res.json({
+            success: true,
+            ...summary,
+            message: `${summary.counts.wired} settings wired, ${summary.counts.schemaOnly} schema-only (not wired)`,
+            timestamp: new Date().toISOString()
+        });
+        
+    } catch (error) {
+        logger.error('[WIRING API] Scenario settings catalog error', { error: error.message });
+        return res.status(500).json({ error: error.message });
+    }
+});
+
 module.exports = router;
 
