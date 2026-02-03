@@ -558,20 +558,34 @@ class SlotExtractor {
         
         // Pattern 1: "My name is X" / "I'm X" / "This is X" / "I am X"
         // Note: Capture group allows any case, cleanName will normalize
+        // FEB 2026 FIX: Support comma between names: "my name is mark, gonzales"
         const explicitPatterns = [
-            /(?:my\s+name\s+is|i'?m|i\s+am|this\s+is|it'?s)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
+            // "my name is mark gonzales" OR "my name is mark, gonzales" - capture both parts
+            /(?:my\s+name\s+is|i'?m|i\s+am|this\s+is|it'?s)\s+([a-zA-Z]+)[,\s]+([a-zA-Z]+)/i,
+            // Single name fallback: "my name is mark"
+            /(?:my\s+name\s+is|i'?m|i\s+am|this\s+is|it'?s)\s+([a-zA-Z]+)(?:\s|$|[.,!?])/i,
             /(?:call\s+me|they\s+call\s+me)\s+([a-zA-Z]+)/i
         ];
         
         for (const pattern of explicitPatterns) {
             const match = text.match(pattern);
             if (match && match[1]) {
-                const name = this.cleanName(match[1]);
+                // Check if we captured both first and last name (pattern with comma/space)
+                let name;
+                if (match[2] && !NAME_STOP_WORDS.has(match[2].toLowerCase())) {
+                    // Two-part match: "mark, gonzales" or "mark gonzales"
+                    name = this.cleanName(match[1] + ' ' + match[2]);
+                } else {
+                    // Single part match
+                    name = this.cleanName(match[1]);
+                }
+                
                 if (name && !NAME_STOP_WORDS.has(name.toLowerCase())) {
                     logger.debug('[SLOT EXTRACTOR] Name matched via explicit pattern', {
-                        raw: match[1],
+                        raw: match[0],
                         cleaned: name,
-                        pattern: pattern.source.substring(0, 50)
+                        pattern: pattern.source.substring(0, 50),
+                        hasTwoParts: !!match[2]
                     });
                     return {
                         value: name,

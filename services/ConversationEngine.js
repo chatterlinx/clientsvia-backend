@@ -46,6 +46,7 @@ const ResponseRenderer = require('./ResponseRenderer');
 const ConversationStateMachine = require('./ConversationStateMachine');
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
+const DiscoveryExtractor = require('./engine/booking/DiscoveryExtractor');
 const DynamicFlowEngine = require('./DynamicFlowEngine');
 const GoogleCalendarService = require('./GoogleCalendarService');
 const SMSNotificationService = require('./SMSNotificationService');
@@ -4900,6 +4901,71 @@ async function processTurn({
         }
             
         // ═══════════════════════════════════════════════════════════════════════
+        // 🔍 V92: DISCOVERY EXTRACTION - Extract context BEFORE generating response
+        // ═══════════════════════════════════════════════════════════════════════
+        // This runs deterministically (0 tokens) to capture:
+        // - Issue/symptom (not cooling, 80 degrees)
+        // - Tech mention (Peter came out)
+        // - Tenure (longtime customer)
+        // - Equipment (AC system)
+        // So responses can ACKNOWLEDGE what the caller said!
+        // ═══════════════════════════════════════════════════════════════════════
+        let discoveryFacts = null;
+        if (!aiResult && userText && userText.length > 10) {
+            discoveryFacts = DiscoveryExtractor.extract(userText, {
+                trade: company?.trade || company?.tradeType,
+                techRoster: company?.employees?.map(e => e.name) || []
+            });
+            
+            if (discoveryFacts.hasDiscovery) {
+                // Store discovery facts in session
+                session.discovery = session.discovery || {};
+                if (discoveryFacts.issue && !session.discovery.issue) {
+                    session.discovery.issue = discoveryFacts.issue;
+                }
+                if (discoveryFacts.urgency && discoveryFacts.urgency !== 'normal') {
+                    session.discovery.urgency = discoveryFacts.urgency;
+                }
+                if (discoveryFacts.techMentioned) {
+                    session.discovery.techMentioned = discoveryFacts.techMentioned;
+                }
+                if (discoveryFacts.tenure) {
+                    session.discovery.tenure = discoveryFacts.tenure;
+                }
+                if (discoveryFacts.temperature) {
+                    session.discovery.temperature = discoveryFacts.temperature;
+                }
+                if (discoveryFacts.equipment?.length > 0) {
+                    session.discovery.equipment = discoveryFacts.equipment;
+                }
+                session.discovery.recentVisit = discoveryFacts.recentVisit || false;
+                
+                log('🔍 DISCOVERY EXTRACTED', {
+                    issue: discoveryFacts.issue,
+                    urgency: discoveryFacts.urgency,
+                    techMentioned: discoveryFacts.techMentioned,
+                    tenure: discoveryFacts.tenure,
+                    temperature: discoveryFacts.temperature,
+                    symptomCount: discoveryFacts.symptoms?.length || 0
+                });
+                
+                // BlackBox telemetry
+                try {
+                    await BlackBoxLogger.addEvent(session._id?.toString(), 'DISCOVERY_FACTS_EXTRACTED', {
+                        issue: discoveryFacts.issue,
+                        urgency: discoveryFacts.urgency,
+                        techMentioned: discoveryFacts.techMentioned,
+                        tenure: discoveryFacts.tenure,
+                        temperature: discoveryFacts.temperature,
+                        symptomCount: discoveryFacts.symptoms?.length || 0,
+                        equipmentCount: discoveryFacts.equipment?.length || 0,
+                        recentVisit: discoveryFacts.recentVisit
+                    });
+                } catch {}
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
         // 🎯 DIRECT BOOKING INTENT DETECTION (Feb 2026)
         // ═══════════════════════════════════════════════════════════════════════
         // Detect when caller DIRECTLY requests booking:
@@ -5101,15 +5167,62 @@ async function processTurn({
                     session.booking.meta.name.nameTrace = nameTrace;
                 }
                 
-                // Build acknowledgment + exact question
-                const ack = "Perfect! Let me get your information.";
+                // ═══════════════════════════════════════════════════════════════
+                // V92: CONTEXT-AWARE ACKNOWLEDGMENT
+                // Build acknowledgment that reflects what the caller said
+                // ═══════════════════════════════════════════════════════════════
+                let ack;
+                const discovery = session.discovery || {};
+                const callerName = currentSlots.name || currentSlots.partialName;
+                
+                if (discovery.issue || discovery.techMentioned || discovery.temperature) {
+                    // We have context - acknowledge it!
+                    const parts = [];
+                    
+                    if (callerName) {
+                        parts.push(`Got it, ${callerName}`);
+                    } else {
+                        parts.push('Got it');
+                    }
+                    
+                    // Acknowledge issue + temperature
+                    if (discovery.issue && discovery.temperature && discovery.temperature >= 80) {
+                        parts.push(`${discovery.issue} and it's ${discovery.temperature}° in the house`);
+                    } else if (discovery.issue) {
+                        parts.push(discovery.issue);
+                    }
+                    
+                    // Acknowledge tech mention and recent visit
+                    if (discovery.techMentioned && discovery.recentVisit) {
+                        parts.push(`You mentioned ${discovery.techMentioned} was out recently`);
+                    } else if (discovery.techMentioned) {
+                        parts.push(`I see ${discovery.techMentioned} was there before`);
+                    } else if (discovery.recentVisit) {
+                        parts.push(`I see someone was out recently`);
+                    }
+                    
+                    // Join and add transition
+                    ack = parts.join(' — ') + '. Let me get you taken care of.';
+                    
+                    log('🎯 V92: Context-aware acknowledgment built', {
+                        hasName: !!callerName,
+                        hasIssue: !!discovery.issue,
+                        hasTech: !!discovery.techMentioned,
+                        hasTemp: !!discovery.temperature,
+                        ack: ack.substring(0, 50)
+                    });
+                } else {
+                    // No context - use generic (rare now)
+                    ack = "Perfect! Let me get your information.";
+                }
             
             aiLatencyMs = Date.now() - aiStartTime;
             
                 log('📋 BOOKING SNAP: Asking first slot immediately', {
                     slotId,
                     question: exactQuestion,
-                    bookingModeLocked: true
+                    bookingModeLocked: true,
+                    acknowledgmentType: discovery.issue ? 'context_aware' : 'generic'
                 });
                 
                 aiResult = {

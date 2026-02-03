@@ -52,6 +52,7 @@ const BookingFlowRunner = require('./BookingFlowRunner');
 const BookingFlowResolver = require('./BookingFlowResolver');
 const SlotExtractor = require('./SlotExtractor');
 const DirectBookingIntentDetector = require('./DirectBookingIntentDetector');
+const DiscoveryExtractor = require('./DiscoveryExtractor');
 const SensitiveMasker = require('./SensitiveMasker');
 
 module.exports = {
@@ -59,6 +60,7 @@ module.exports = {
     BookingFlowResolver,
     SlotExtractor,
     DirectBookingIntentDetector,
+    DiscoveryExtractor,
     SensitiveMasker,
     
     // Re-export constants for convenience
@@ -69,6 +71,9 @@ module.exports = {
     SOURCE: SlotExtractor.SOURCE,
     DIRECT_BOOKING_PATTERNS: DirectBookingIntentDetector.DIRECT_BOOKING_PATTERNS,
     TRADE_PATTERNS: DirectBookingIntentDetector.TRADE_PATTERNS,
+    HVAC_SYMPTOM_PATTERNS: DiscoveryExtractor.HVAC_SYMPTOM_PATTERNS,
+    TECH_NAME_PATTERNS: DiscoveryExtractor.TECH_NAME_PATTERNS,
+    TENURE_PATTERNS: DiscoveryExtractor.TENURE_PATTERNS,
     ALWAYS_SENSITIVE_TYPES: SensitiveMasker.ALWAYS_SENSITIVE_TYPES,
     DEFAULT_SENSITIVE_TYPES: SensitiveMasker.DEFAULT_SENSITIVE_TYPES
 };
