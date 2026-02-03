@@ -848,7 +848,11 @@ router.post('/:companyId/apply', async (req, res) => {
         // =========================================================
         // APPLY UPDATE
         // =========================================================
-        const updateResult = await Company.updateOne(
+        // V92 FIX: Use native MongoDB collection to bypass Mongoose strict mode
+        // Mongoose strict mode silently drops updates for deeply nested paths
+        // even when the schema defines them, if parent objects don't exist.
+        const mongoose = require('mongoose');
+        const updateResult = await mongoose.connection.collection('companiesCollection').updateOne(
             { _id: new ObjectId(companyId) },
             patch
         );
