@@ -142,6 +142,17 @@ const NAME_STOP_WORDS = new Set([
     // FEB 2026: Meta-statement words (not actual names)
     // "I just TOLD you my name" → "told" is not a name!
     'told', 'said', 'gave', 'already', 'mentioned', 'repeat',
+    // FEB 2026 V92: POISON WORDS - tenure/relationship words misread as names
+    // "I am a LONGTIME customer" → "Longtime" is NOT a name!
+    'longtime', 'long-time', 'longstanding', 'regular', 'repeat', 'returning',
+    'customer', 'client', 'homeowner', 'resident', 'tenant', 'owner', 'caller',
+    'sir', 'maam', 'ma\'am', 'mr', 'mrs', 'ms', 'miss', 'mister',
+    // FEB 2026 V92: Time-related words misread as names
+    // "good MORNING" → "Morning" is NOT a name!
+    'morning', 'afternoon', 'evening', 'night', 'today', 'tomorrow',
+    // FEB 2026 V92: Business/service words misread as names
+    'service', 'appointment', 'schedule', 'scheduling', 'technician', 'tech',
+    'visit', 'company', 'business', 'help', 'support', 'assistance',
     'again', 'same', 'correct', 'wrong', 'information',
     // FEB 2026: Question words and common phrases (not names!)
     // "HOW SOON can you get here?" → "How Soon" is NOT a name!
@@ -790,31 +801,43 @@ class SlotExtractor {
         }
         
         // Morning/afternoon/evening (but ONLY if it's a time preference, not a greeting)
-        // Require context like "in the", "prefer", "works", "would be", "sometime" etc.
-        const timeContextPatterns = /\b(in the|prefer|works|would be|sometime|available|free|can do|schedule for|book for|want|need)\b/i;
-        const hasTimeContext = timeContextPatterns.test(lowerText);
+        // FEB 2026 V92 FIX: Require explicit scheduling context, NOT just long text!
+        // Bug: "I am a longtime customer" was matching "am" as a time indicator
+        // Bug: "good evening" in a long utterance was matching "evening" as a time preference
+        const timeContextPatterns = /\b(in the|prefer|works|would be|sometime|available|free|can do|schedule for|book for|want|need|around|about)\s+(morning|afternoon|evening)/i;
+        const hasExplicitTimePreference = timeContextPatterns.test(lowerText);
         
-        if (/\b(morning|am|before noon)\b/.test(lowerText) && (hasTimeContext || lowerText.length > 30)) {
-            return {
-                value: 'Morning',
-                confidence: CONFIDENCE.UTTERANCE_HIGH,
-                source: SOURCE.UTTERANCE
-            };
+        // FEB 2026 V92: Only extract time window if EXPLICITLY stated as a preference
+        // "good morning" = greeting, NOT a time preference
+        // "prefer morning" = time preference
+        // "I am a customer" does NOT contain time preference (bug fix: "am" ≠ AM time)
+        if (hasExplicitTimePreference) {
+            if (/\b(morning|before noon)\b/.test(lowerText)) {
+                return {
+                    value: 'Morning',
+                    confidence: CONFIDENCE.UTTERANCE_HIGH,
+                    source: SOURCE.UTTERANCE
+                };
+            }
+            if (/\b(afternoon|after lunch|after noon)\b/.test(lowerText)) {
+                return {
+                    value: 'Afternoon',
+                    confidence: CONFIDENCE.UTTERANCE_HIGH,
+                    source: SOURCE.UTTERANCE
+                };
+            }
+            if (/\b(evening|after work|after 5)\b/.test(lowerText)) {
+                return {
+                    value: 'Evening',
+                    confidence: CONFIDENCE.UTTERANCE_HIGH,
+                    source: SOURCE.UTTERANCE
+                };
+            }
         }
-        if (/\b(afternoon|pm|after lunch|after noon)\b/.test(lowerText) && (hasTimeContext || lowerText.length > 30)) {
-            return {
-                value: 'Afternoon',
-                confidence: CONFIDENCE.UTTERANCE_HIGH,
-                source: SOURCE.UTTERANCE
-            };
-        }
-        if (/\b(evening|night|after work|after 5)\b/.test(lowerText) && (hasTimeContext || lowerText.length > 30)) {
-            return {
-                value: 'Evening',
-                confidence: CONFIDENCE.UTTERANCE_HIGH,
-                source: SOURCE.UTTERANCE
-            };
-        }
+        
+        // FEB 2026 V92: Only match "am" when it's a time suffix (10am, 11 am), NOT the verb "I am"
+        // And only match "pm" when it's a time suffix, not a random word
+        // This is handled by the specific time pattern below (with digits)
         
         // Specific day
         const dayMatch = lowerText.match(/\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);

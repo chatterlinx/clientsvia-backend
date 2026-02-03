@@ -29,32 +29,36 @@ const logger = require('../../../utils/logger');
 // ════════════════════════════════════════════════════════════════════════════════
 // HVAC SYMPTOMS
 // ════════════════════════════════════════════════════════════════════════════════
+// IMPORTANT: urgency values MUST match ConversationSession schema enum:
+// ['normal', 'repeat_issue', 'urgent', 'emergency']
+// DO NOT use 'high' or 'medium' - they cause Mongoose ValidationError
+// ════════════════════════════════════════════════════════════════════════════════
 const HVAC_SYMPTOM_PATTERNS = [
     // Cooling issues
-    { pattern: /\b(not\s+cooling|isn't\s+cooling|won't\s+cool|doesn't\s+cool|stopped\s+cooling)\b/i, symptom: 'not cooling', urgency: 'high' },
-    { pattern: /\bno\s+(air|ac|cooling|cold\s+air)\b/i, symptom: 'no cooling', urgency: 'high' },
-    { pattern: /\b(ac|air\s+conditioning?)\s+(broken|broke|stopped|not\s+working|won't\s+work)\b/i, symptom: 'AC not working', urgency: 'high' },
-    { pattern: /\b(blowing|blows)\s+(hot|warm)\s+(air)?\b/i, symptom: 'blowing warm air', urgency: 'high' },
+    { pattern: /\b(not\s+cooling|isn't\s+cooling|won't\s+cool|doesn't\s+cool|stopped\s+cooling)\b/i, symptom: 'not cooling', urgency: 'urgent' },
+    { pattern: /\bno\s+(air|ac|cooling|cold\s+air)\b/i, symptom: 'no cooling', urgency: 'urgent' },
+    { pattern: /\b(ac|air\s+conditioning?)\s+(broken|broke|stopped|not\s+working|won't\s+work)\b/i, symptom: 'AC not working', urgency: 'urgent' },
+    { pattern: /\b(blowing|blows)\s+(hot|warm)\s+(air)?\b/i, symptom: 'blowing warm air', urgency: 'urgent' },
     
     // Heating issues
-    { pattern: /\b(not\s+heating|isn't\s+heating|won't\s+heat|doesn't\s+heat|stopped\s+heating)\b/i, symptom: 'not heating', urgency: 'high' },
+    { pattern: /\b(not\s+heating|isn't\s+heating|won't\s+heat|doesn't\s+heat|stopped\s+heating)\b/i, symptom: 'not heating', urgency: 'urgent' },
     { pattern: /\bno\s+(heat|heating)\b/i, symptom: 'no heat', urgency: 'emergency' },
-    { pattern: /\b(heater|furnace|heat\s+pump)\s+(broken|broke|stopped|not\s+working|won't\s+work)\b/i, symptom: 'heater not working', urgency: 'high' },
+    { pattern: /\b(heater|furnace|heat\s+pump)\s+(broken|broke|stopped|not\s+working|won't\s+work)\b/i, symptom: 'heater not working', urgency: 'urgent' },
     
-    // Noise issues
-    { pattern: /\b(making|makes)\s+(noise|sound|loud|strange|weird)\b/i, symptom: 'making noise', urgency: 'medium' },
-    { pattern: /\b(loud|strange|weird)\s+(noise|sound)\b/i, symptom: 'strange noise', urgency: 'medium' },
-    { pattern: /\b(clicking|banging|grinding|squealing|humming|buzzing)\b/i, symptom: 'unusual noise', urgency: 'medium' },
+    // Noise issues (normal urgency - not an emergency)
+    { pattern: /\b(making|makes)\s+(noise|sound|loud|strange|weird)\b/i, symptom: 'making noise', urgency: 'normal' },
+    { pattern: /\b(loud|strange|weird)\s+(noise|sound)\b/i, symptom: 'strange noise', urgency: 'normal' },
+    { pattern: /\b(clicking|banging|grinding|squealing|humming|buzzing)\b/i, symptom: 'unusual noise', urgency: 'normal' },
     
     // Leak issues
-    { pattern: /\b(leaking|leak|water)\s+(from|around|under)\b/i, symptom: 'leaking', urgency: 'high' },
-    { pattern: /\bwater\s+(damage|dripping|pooling)\b/i, symptom: 'water leak', urgency: 'high' },
+    { pattern: /\b(leaking|leak|water)\s+(from|around|under)\b/i, symptom: 'leaking', urgency: 'urgent' },
+    { pattern: /\bwater\s+(damage|dripping|pooling)\b/i, symptom: 'water leak', urgency: 'urgent' },
     
     // General issues
-    { pattern: /\b(won't\s+turn\s+on|doesn't\s+turn\s+on|not\s+turning\s+on)\b/i, symptom: 'won\'t turn on', urgency: 'high' },
-    { pattern: /\b(running\s+constantly|runs?\s+all\s+the\s+time|never\s+stops)\b/i, symptom: 'running constantly', urgency: 'medium' },
-    { pattern: /\b(short\s+cycling|turns?\s+on\s+and\s+off)\b/i, symptom: 'short cycling', urgency: 'medium' },
-    { pattern: /\b(frozen|freezing|ice)\b/i, symptom: 'frozen unit', urgency: 'high' }
+    { pattern: /\b(won't\s+turn\s+on|doesn't\s+turn\s+on|not\s+turning\s+on)\b/i, symptom: 'won\'t turn on', urgency: 'urgent' },
+    { pattern: /\b(running\s+constantly|runs?\s+all\s+the\s+time|never\s+stops)\b/i, symptom: 'running constantly', urgency: 'normal' },
+    { pattern: /\b(short\s+cycling|turns?\s+on\s+and\s+off)\b/i, symptom: 'short cycling', urgency: 'normal' },
+    { pattern: /\b(frozen|freezing|ice)\b/i, symptom: 'frozen unit', urgency: 'urgent' }
 ];
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -148,10 +152,12 @@ class DiscoveryExtractor {
             if (pattern.test(text)) {
                 result.symptoms.push(symptom);
                 if (!result.issue) result.issue = symptom;
-                if (urgency === 'emergency' || (urgency === 'high' && result.urgency !== 'emergency')) {
-                    result.urgency = urgency;
-                } else if (urgency === 'medium' && result.urgency === 'normal') {
-                    result.urgency = urgency;
+                // Upgrade urgency based on symptom (never downgrade)
+                // Schema enum: ['normal', 'repeat_issue', 'urgent', 'emergency']
+                if (urgency === 'emergency') {
+                    result.urgency = 'emergency';
+                } else if (urgency === 'urgent' && result.urgency !== 'emergency') {
+                    result.urgency = 'urgent';
                 }
                 result.hasDiscovery = true;
             }
@@ -164,9 +170,13 @@ class DiscoveryExtractor {
             if (temp >= 50 && temp <= 120) {
                 result.temperature = temp;
                 result.raw.temperatureRaw = tempMatch[0];
-                // High temp = high urgency
-                if (temp >= 80) result.urgency = 'high';
-                if (temp >= 90) result.urgency = 'emergency';
+                // Temperature-based urgency (schema-safe values)
+                // 80°+ = urgent, 90°+ = emergency
+                if (temp >= 90 && result.urgency !== 'emergency') {
+                    result.urgency = 'emergency';
+                } else if (temp >= 80 && result.urgency === 'normal') {
+                    result.urgency = 'urgent';
+                }
                 result.hasDiscovery = true;
             }
         }
