@@ -914,6 +914,70 @@ class BookingFlowRunner {
             geoValidated: addressValidation?.success || false
         });
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: FULL NAME HANDLING - Wire askFullName, lastNameQuestion, etc.
+        // ═══════════════════════════════════════════════════════════════════════
+        // If name slot has askFullName: true and askMissingNamePart: true,
+        // and user only gave first name, ask for last name before advancing
+        // ═══════════════════════════════════════════════════════════════════════
+        if ((fieldKey === 'name' || step.type === 'name') && step.askFullName && step.askMissingNamePart) {
+            const nameParts = (valueToStore || '').trim().split(/\s+/);
+            const hasLastName = nameParts.length >= 2;
+            
+            if (!hasLastName && !state.askedForLastName) {
+                // User only gave first name - ask for last name
+                const firstName = nameParts[0] || valueToStore;
+                state.firstNameCollected = firstName;
+                state.askedForLastName = true;
+                
+                // Use configured lastNameQuestion or default
+                const lastNameQuestion = step.lastNameQuestion || "And what's your last name?";
+                const ack = `Got it, ${firstName}.`;
+                
+                logger.info('[BOOKING FLOW RUNNER] V92: Asking for last name', {
+                    firstName,
+                    askFullName: step.askFullName,
+                    lastNameQuestion
+                });
+                
+                return {
+                    reply: `${ack} ${lastNameQuestion}`,
+                    state,
+                    isComplete: false,
+                    action: 'COLLECT_LAST_NAME',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'ASK_LAST_NAME',
+                        firstName,
+                        askFullName: step.askFullName
+                    }
+                };
+            } else if (state.firstNameCollected && state.askedForLastName) {
+                // This is the last name response - combine with first name
+                const lastName = valueToStore;
+                const fullName = `${state.firstNameCollected} ${lastName}`;
+                
+                state.bookingCollected[fieldKey] = fullName;
+                valueToStore = fullName;
+                
+                // Clear flags
+                delete state.firstNameCollected;
+                delete state.askedForLastName;
+                
+                logger.info('[BOOKING FLOW RUNNER] V92: Combined full name', {
+                    fullName,
+                    firstName: state.firstNameCollected,
+                    lastName
+                });
+            }
+        }
+        
         // Find next action
         const nextAction = this.determineNextAction(flow, state, {});
         
@@ -965,12 +1029,29 @@ class BookingFlowRunner {
     
     /**
      * ========================================================================
-     * BUILD CONFIRM PROMPT - Contextual confirmation questions
+     * BUILD CONFIRM PROMPT - Use slot config from booking prompt tab
+     * ========================================================================
+     * V92 FIX: Wire confirmPrompt, askFullName, lastNameQuestion, etc.
+     * from the booking prompt tab configuration instead of hardcoded defaults
      * ========================================================================
      */
     static buildConfirmPrompt(step, existingValue) {
         const type = step.type || step.id;
         
+        // ═══════════════════════════════════════════════════════════════════
+        // V92: Use slot's confirmPrompt from booking prompt tab if available
+        // ═══════════════════════════════════════════════════════════════════
+        if (step.confirmPrompt) {
+            // Replace {value} placeholder with actual value
+            return step.confirmPrompt
+                .replace(/\{value\}/gi, existingValue || '')
+                .replace(/\{name\}/gi, existingValue || '')
+                .replace(/\{address\}/gi, existingValue || '')
+                .replace(/\{phone\}/gi, existingValue || '')
+                .replace(/\{time\}/gi, existingValue || '');
+        }
+        
+        // Fallback to defaults if no custom prompt configured
         switch (type) {
             case 'phone':
                 return `I can send confirmations to ${existingValue}. Is this the best number to reach you?`;
