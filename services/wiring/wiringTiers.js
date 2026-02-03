@@ -89,6 +89,19 @@ const TIER_MVA = {
         // V92: SCENARIO SETTINGS - Critical for matching to work
         // ═══════════════════════════════════════════════════════════════════
         {
+            fieldId: 'discovery.issueCaptureMinConfidence',
+            purpose: 'Minimum confidence threshold for capturing issue from scenario tools',
+            failureMode: 'Wrong issue text in booking ack (e.g., "New AC/Heating System Quote" instead of "AC issues")',
+            impact: 'ux',
+            priority: 1,
+            critical: true,
+            validator: (val) => typeof val === 'number' && val >= 0.3 && val <= 1.0,
+            fixInstructions: 'Set minimum confidence for scenario-based issue capture in discovery settings',
+            nav: { tab: 'front-desk', section: 'discovery-consent', field: 'issueCaptureMinConfidence' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.issueCaptureMinConfidence',
+            recommendedValue: 0.5
+        },
+        {
             fieldId: 'frontDesk.detectionTriggers.wantsBooking',
             purpose: 'Keywords that trigger transition from discovery to booking mode',
             failureMode: 'Caller says "fix my AC" but agent stays in discovery instead of booking',

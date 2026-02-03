@@ -10716,19 +10716,27 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             // 🆕 DETERMINISTIC ISSUE CAPTURE (from scenario tools)
             // ═══════════════════════════════════════════════════════════════════
-            // If we retrieved a problem scenario, capture the issue in state even if regex keywords fail.
+            // V92 FIX: Only capture issue from scenario tools when confidence is HIGH enough.
+            // Otherwise wrong scenario titles (e.g., "New AC/Heating System Quote") get stored
+            // as the issue even when caller said something different ("AC issues").
+            // 
+            // WIRED: discovery.issueCaptureMinConfidence (default 0.5)
+            // ═══════════════════════════════════════════════════════════════════
             try {
                 const topTool = Array.isArray(scenarioRetrieval.scenarios) ? scenarioRetrieval.scenarios[0] : null;
                 const hasTool = !!(topTool?.title && topTool?.scenarioId);
                 const scenarioType = String(topTool?.scenarioType || '').toUpperCase();
                 const toolLooksLikeProblem = hasTool && !['SMALL_TALK', 'SYSTEM'].includes(scenarioType);
                 
-                if (toolLooksLikeProblem && !session.discovery?.issue) {
+                // V92: Get confidence threshold from wiring (default 0.5 = 50%)
+                const issueCaptureMinConfidence = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.issueCaptureMinConfidence ?? 0.5;
+                const toolConfidence = Number.isFinite(topTool?.confidence) ? topTool.confidence : 0;
+                const meetsConfidenceThreshold = toolConfidence >= (issueCaptureMinConfidence * 100); // confidence is 0-100 scale
+                
+                if (toolLooksLikeProblem && !session.discovery?.issue && meetsConfidenceThreshold) {
                     session.discovery = session.discovery || {};
                     session.discovery.issue = String(topTool.title).trim();
-                    session.discovery.issueConfidence = Number.isFinite(topTool.confidence)
-                        ? Math.max(0, Math.min(1, Number(topTool.confidence) / 100))
-                        : 0;
+                    session.discovery.issueConfidence = Math.max(0, Math.min(1, toolConfidence / 100));
                     session.discovery.issueCapturedAtTurn = (session.metrics?.totalTurns || 0) + 1;
                     
                     session.locks.issueCaptured = true;
@@ -10739,7 +10747,15 @@ async function processTurn({
                     log('🧷 DETERMINISTIC ISSUE CAPTURED (scenario tool)', {
                         issue: session.discovery.issue,
                         scenarioId: topTool.scenarioId,
-                        confidence: topTool.confidence
+                        confidence: toolConfidence,
+                        threshold: issueCaptureMinConfidence * 100
+                    });
+                } else if (toolLooksLikeProblem && !session.discovery?.issue && !meetsConfidenceThreshold) {
+                    log('⚠️ V92: Skipped issue capture - confidence too low', {
+                        scenarioTitle: topTool?.title,
+                        confidence: toolConfidence,
+                        threshold: issueCaptureMinConfidence * 100,
+                        reason: 'Will use caller words instead when available'
                     });
                 }
             } catch (e) {

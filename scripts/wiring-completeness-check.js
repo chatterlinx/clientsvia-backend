@@ -128,6 +128,19 @@ const WIRING_CHECKS = [
     },
     
     // ═══════════════════════════════════════════════════════════════════
+    // V92: ISSUE CAPTURE CONFIDENCE - Prevents wrong issue text in booking
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'issue-capture-confidence',
+        description: 'Issue capture requires minimum confidence from scenario matching',
+        files: ['ConversationEngine.js'],
+        codePattern: /issueCaptureMinConfidence|issueConfidence.*>=|toolLooksLikeProblem.*confidence/g,
+        requiredDbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.issueCaptureMinConfidence',
+        requiredEdge: 'scenario_retrieval → issue_capture (with confidence gate)',
+        severity: 'high'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
     // V92: BOOKING MODE TRIGGERS - When to transition from discovery
     // ═══════════════════════════════════════════════════════════════════
     {
