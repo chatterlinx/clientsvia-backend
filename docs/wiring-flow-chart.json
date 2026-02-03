@@ -14,6 +14,10 @@
       {
         "version": "1.0.1",
         "changes": "V92 FIXES APPLIED: (1) LLM consent injection now catches 'get a technician', (2) BookingFlowRunner now uses slot.options for confirmPrompt/askFullName/lastNameQuestion, (3) BookingFlowResolver extracts all slot options including confirmSpelling/askMissingNamePart."
+      },
+      {
+        "version": "1.0.2",
+        "changes": "V92: Added discovery clarification node - agent now asks clarifying questions for vague issues (e.g., 'AC problems' → 'Is it not cooling, not heating, or something else?') BEFORE offering to schedule."
       }
     ],
     "fixedInV92": [
@@ -87,8 +91,21 @@
         "type": "section",
         "description": "Consent phrases, explicit consent required. 100% complete. Includes debugLogging toggle.",
         "health": "FIXED (V92): LLM responses now inject consent question when implying scheduling.",
-        "dependencies": ["dynamicFlows_booking_intent"],
+        "dependencies": ["section_discoveryClarification", "dynamicFlows_booking_intent"],
         "position": { "x": 200, "y": 300 }
+      },
+      {
+        "id": "section_discoveryClarification",
+        "label": "Discovery Clarification",
+        "type": "section",
+        "description": "V92: Asks clarifying questions when issue is vague (e.g., 'AC problems' → 'Is it not cooling, not heating, or something else?'). Trade-specific questions for HVAC, plumbing, electrical.",
+        "health": "NEW (V92): Prevents rushing to booking without understanding the problem.",
+        "config": {
+          "enabled": "discovery.clarifyingQuestions.enabled",
+          "vaguePatterns": "discovery.clarifyingQuestions.vaguePatterns"
+        },
+        "dependencies": ["dynamicFlows_booking_intent"],
+        "position": { "x": 200, "y": 350 }
       },
       {
         "id": "section_bookingPrompts",
@@ -314,8 +331,14 @@
       {
         "id": "e3",
         "source": "section_discoveryConsent",
+        "target": "section_discoveryClarification",
+        "label": "Issue Vague? → Ask Clarification (V92)"
+      },
+      {
+        "id": "e3b",
+        "source": "section_discoveryClarification",
         "target": "dynamicFlows_booking_intent",
-        "label": "Trigger Mode Switch (Consent Required)"
+        "label": "Issue Clear → Trigger Mode Switch"
       },
       {
         "id": "e4",
