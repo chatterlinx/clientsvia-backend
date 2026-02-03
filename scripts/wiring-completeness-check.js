@@ -44,6 +44,8 @@ const FILES_TO_SCAN = [
     'services/engine/ConversationEngine.js',
     'services/HybridScenarioSelector.js',
     'services/ScenarioPoolService.js',
+    'services/ScenarioRuntimeCompiler.js',
+    'services/ResponseEngine.js',
     'routes/v2twilio.js'
 ];
 
@@ -135,6 +137,73 @@ const WIRING_CHECKS = [
         requiredDbPath: 'aiAgentSettings.serviceSwitchboard',
         requiredEdge: 'scenarios → scenarios_switchboard',
         severity: 'high'
+    },
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // V92: SCENARIO SETTINGS - Core matching & response settings (22+)
+    // ═══════════════════════════════════════════════════════════════════
+    {
+        id: 'scenario-triggers',
+        description: 'Scenario triggers for BM25 keyword matching',
+        files: ['HybridScenarioSelector.js', 'ScenarioRuntimeCompiler.js'],
+        codePattern: /\.triggers|triggerIndex|calculateBM25Score/g,
+        requiredDbPath: 'scenarios.triggers',
+        requiredEdge: 'scenarios → matching_triggers',
+        severity: 'critical'
+    },
+    {
+        id: 'scenario-regex',
+        description: 'Regex pattern matching for advanced triggers',
+        files: ['HybridScenarioSelector.js', 'ScenarioRuntimeCompiler.js'],
+        codePattern: /regexTriggers|calculateRegexScore|regexPattern/g,
+        requiredDbPath: 'scenarios.regexTriggers',
+        requiredEdge: 'scenarios → matching_regex',
+        severity: 'high'
+    },
+    {
+        id: 'scenario-negative-triggers',
+        description: 'Negative triggers that PREVENT scenario matching',
+        files: ['HybridScenarioSelector.js', 'ScenarioRuntimeCompiler.js'],
+        codePattern: /negativeTriggers|negativeKeywords|negativePenalty/g,
+        requiredDbPath: 'scenarios.negativeTriggers',
+        requiredEdge: 'scenarios → matching_negative',
+        severity: 'high'
+    },
+    {
+        id: 'scenario-replies',
+        description: 'Quick and full replies for scenarios',
+        files: ['ScenarioPoolService.js', 'ResponseEngine.js'],
+        codePattern: /quickReplies|fullReplies|selectReply|replySelection/g,
+        requiredDbPath: 'scenarios.quickReplies',
+        requiredEdge: 'scenarios → replies',
+        severity: 'critical'
+    },
+    {
+        id: 'scenario-priority',
+        description: 'Priority scoring for tie-breaking multiple matches',
+        files: ['HybridScenarioSelector.js', 'ScenarioRuntimeCompiler.js'],
+        codePattern: /\.priority|priorityScore|tieBreak/g,
+        requiredDbPath: 'scenarios.priority',
+        requiredEdge: 'scenarios → matching_priority',
+        severity: 'medium'
+    },
+    {
+        id: 'scenario-type',
+        description: 'Scenario type classification (EMERGENCY, BOOKING, FAQ, etc.)',
+        files: ['ScenarioRuntimeCompiler.js', 'HybridScenarioSelector.js'],
+        codePattern: /scenarioType|EMERGENCY|BOOKING|FAQ|TROUBLESHOOT/g,
+        requiredDbPath: 'scenarios.scenarioType',
+        requiredEdge: 'scenarios → scenario_type',
+        severity: 'high'
+    },
+    {
+        id: 'scenario-context-weight',
+        description: 'Context weight multiplier for match scoring',
+        files: ['HybridScenarioSelector.js', 'ScenarioRuntimeCompiler.js'],
+        codePattern: /contextWeight|context\.weight/g,
+        requiredDbPath: 'scenarios.contextWeight',
+        requiredEdge: 'scenarios → matching_context',
+        severity: 'medium'
     }
 ];
 

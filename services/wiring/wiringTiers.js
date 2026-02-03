@@ -84,6 +84,43 @@ const TIER_MVA = {
             // No recommendedValue - must be selected by user
             requiresUserInput: true
         },
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V92: SCENARIO SETTINGS - Critical for matching to work
+        // ═══════════════════════════════════════════════════════════════════
+        {
+            fieldId: 'scenarios.triggers',
+            purpose: 'Scenario triggers enable keyword matching (BM25)',
+            failureMode: 'Scenarios exist but never match - all calls fall to LLM',
+            impact: 'reliability',
+            priority: 1,
+            critical: true,
+            validator: (scenarios) => {
+                if (!Array.isArray(scenarios)) return false;
+                return scenarios.some(s => s.triggers && s.triggers.length > 0);
+            },
+            fixInstructions: 'Ensure scenarios have triggers array with keywords',
+            nav: { tab: 'data-config', section: 'scenario-generation', field: 'scenarios' },
+            dbPath: 'scenarios[].triggers',
+            // Validated at scenario pool level, not company level
+            requiresUserInput: true
+        },
+        {
+            fieldId: 'scenarios.quickReplies',
+            purpose: 'Quick replies enable scenario responses (voice)',
+            failureMode: 'Scenario matches but has no response to give',
+            impact: 'reliability',
+            priority: 1,
+            critical: true,
+            validator: (scenarios) => {
+                if (!Array.isArray(scenarios)) return false;
+                return scenarios.some(s => s.quickReplies && s.quickReplies.length > 0);
+            },
+            fixInstructions: 'Ensure scenarios have quickReplies array (7+ recommended)',
+            nav: { tab: 'data-config', section: 'scenario-generation', field: 'scenarios' },
+            dbPath: 'scenarios[].quickReplies',
+            requiresUserInput: true
+        },
         {
             fieldId: 'frontDesk.bookingEnabled',
             purpose: 'Master switch for booking functionality',
