@@ -3346,14 +3346,29 @@
                 impact: a.impact
             }));
             
-            // Determine overall status
-            let status = 'RED';
-            if (overallScore >= 90) status = 'GREEN';
-            else if (overallScore >= 70) status = 'YELLOW';
+            // Determine overall status - sync from scoreboard or calculate
+            // Priority: runtimeCoverage status > dbCoverage status > calculated
+            let status = runtimeCov.status || dbCov.status || 'RED';
+            if (status === 'N/A' || !status) {
+                if (overallScore >= 90) status = 'GREEN';
+                else if (overallScore >= 70) status = 'YELLOW';
+                else status = 'RED';
+            }
+            
+            // Build legacy items list (combination of UI_ONLY and DEAD_READ)
+            const legacyItems = [
+                ...uiOnly.map(i => ({ ...i, source: 'UI_ONLY' })),
+                ...deadRead.map(i => ({ ...i, source: 'DEAD_READ' }))
+            ];
+            
+            // Calculate dead config percentage properly
+            const totalFields = uiCov.value ? parseInt(uiCov.value) || 51 : 51;
+            const deadConfigCount = uiOnlyCount + deadReadCount;
+            const deadConfigPercent = totalFields > 0 ? Math.round((deadConfigCount / totalFields) * 100) : 0;
             
             return {
                 generatedAt: new Date().toISOString(),
-                version: '1.1.0',
+                version: '1.2.0',
                 companyId: report.scope?.companyId,
                 companyName: report.scope?.companyName,
                 
@@ -3366,19 +3381,20 @@
                 uiCoverage: `${uiCov.percent || 0}% (${uiCov.value || 'N/A'})`,
                 dbCoverage: `${dbCov.percent || 0}% (${dbCov.value || 'N/A'})`,
                 runtimeCoverage: `${runtimeCov.percent || 0}% (${runtimeCov.value || 'N/A'})`,
-                deadConfig: `${deadCov.value || '0 items'}`,
+                deadConfig: `${deadConfigPercent}% (${deadConfigCount} items)`,
                 
                 // Issue counts (from health.byStatus)
                 totalIssues: notConfiguredCount + uiOnlyCount + deadReadCount,
                 notConfiguredCount,
                 uiOnlyCount,
                 deadReadCount,
-                legacyCount: uiOnlyCount + deadReadCount,
+                legacyCount: legacyItems.length,
                 
                 // Detailed lists for AI analysis
                 notConfiguredItems: notConfigured,
                 uiOnlyItems: uiOnly,
                 deadReadItems: deadRead,
+                legacyItems,
                 
                 // Priority fixes from nextActions
                 priorityFixes,
