@@ -27,6 +27,7 @@
 
 const logger = require('../../../utils/logger');
 const BookingFlowResolver = require('./BookingFlowResolver');
+const AddressValidationService = require('../../AddressValidationService');
 
 /**
  * Slot extractors - deterministic extraction for each slot type
@@ -343,7 +344,7 @@ class BookingFlowRunner {
         // ═══════════════════════════════════════════════════════════════════
         // HANDLE COLLECT MODE (slot missing, need to ask)
         // ═══════════════════════════════════════════════════════════════════
-        return this.handleCollectMode(nextAction, state, flow, userInput, company, startTime);
+        return await this.handleCollectMode(nextAction, state, flow, userInput, company, startTime);
     }
     
     /**
@@ -691,7 +692,7 @@ class BookingFlowRunner {
      * HANDLE COLLECT MODE - Ask user to provide missing value
      * ========================================================================
      */
-    static handleCollectMode(action, state, flow, userInput, company, startTime) {
+    static async handleCollectMode(action, state, flow, userInput, company, startTime) {
         const { step } = action;
         const fieldKey = step.fieldKey || step.id;
         
@@ -731,10 +732,101 @@ class BookingFlowRunner {
         }
         
         // Valid input - store and advance
-        state.bookingCollected[fieldKey] = extractResult.value;
+        let valueToStore = extractResult.value;
+        let addressValidation = null;
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: GOOGLE GEO VALIDATION FOR ADDRESS
+        // ═══════════════════════════════════════════════════════════════════════
+        // When collecting address, validate with Google Maps API:
+        // - If HIGH confidence → use formatted address
+        // - If needsUnit → ask for unit number
+        // - If LOW confidence → ask for clarification
+        // ═══════════════════════════════════════════════════════════════════════
+        if ((fieldKey === 'address' || step.type === 'address') && extractResult.value) {
+            try {
+                const companyId = company?._id?.toString() || 'unknown';
+                const geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
+                
+                addressValidation = await AddressValidationService.validateAddress(
+                    extractResult.value,
+                    { companyId, enabled: geoEnabled }
+                );
+                
+                if (addressValidation.success && addressValidation.validated) {
+                    // Use the formatted address from Google
+                    valueToStore = addressValidation.formattedAddress || addressValidation.normalized || extractResult.value;
+                    
+                    // Store validation metadata for later use
+                    state.addressValidation = {
+                        raw: extractResult.value,
+                        formatted: valueToStore,
+                        confidence: addressValidation.confidence,
+                        placeId: addressValidation.placeId,
+                        location: addressValidation.location,
+                        needsUnit: addressValidation.needsUnit,
+                        unitDetection: addressValidation.unitDetection
+                    };
+                    
+                    logger.info('[BOOKING FLOW RUNNER] Address validated with Google Geo', {
+                        raw: extractResult.value,
+                        formatted: valueToStore,
+                        confidence: addressValidation.confidence,
+                        needsUnit: addressValidation.needsUnit
+                    });
+                    
+                    // If this looks like a multi-unit building and no unit was provided, ask for unit
+                    if (addressValidation.needsUnit && !state.bookingCollected?.unit) {
+                        state.bookingCollected[fieldKey] = valueToStore;
+                        state.addressNeedsUnit = true;
+                        
+                        const buildingLabel = addressValidation.unitDetection?.buildingLabel || 'building';
+                        const unitPrompt = `I found ${valueToStore}. It looks like this is a ${buildingLabel}. What's the apartment or unit number?`;
+                        
+                        return {
+                            reply: unitPrompt,
+                            state,
+                            isComplete: false,
+                            action: 'COLLECT_UNIT',
+                            currentStep: 'unit',
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                source: 'BOOKING_FLOW_RUNNER',
+                                flowId: flow.flowId,
+                                mode: 'GEO_NEEDS_UNIT',
+                                addressValidation
+                            }
+                        };
+                    }
+                } else if (addressValidation.confidence === 'LOW' || !addressValidation.success) {
+                    // Low confidence - ask for clarification
+                    logger.warn('[BOOKING FLOW RUNNER] Address validation low confidence', {
+                        raw: extractResult.value,
+                        confidence: addressValidation.confidence,
+                        reason: addressValidation.reason
+                    });
+                    
+                    // Still store but mark as needing confirmation
+                    state.addressLowConfidence = true;
+                    valueToStore = extractResult.value; // Keep raw value
+                }
+            } catch (geoError) {
+                logger.warn('[BOOKING FLOW RUNNER] Address validation error (non-blocking)', {
+                    error: geoError.message,
+                    address: extractResult.value
+                });
+                // Continue with raw value if Google validation fails
+                valueToStore = extractResult.value;
+            }
+        }
+        
+        state.bookingCollected[fieldKey] = valueToStore;
         state.confirmedSlots = state.confirmedSlots || {};
         state.confirmedSlots[fieldKey] = true; // Directly provided = confirmed
-        state.lastExtracted = { [fieldKey]: extractResult.value };
+        state.lastExtracted = { [fieldKey]: valueToStore };
         
         if (state.askCount) {
             delete state.askCount[step.id];
@@ -743,7 +835,8 @@ class BookingFlowRunner {
         logger.info('[BOOKING FLOW RUNNER] Value collected', {
             stepId: step.id,
             fieldKey,
-            value: extractResult.value
+            value: valueToStore,
+            geoValidated: addressValidation?.success || false
         });
         
         // Find next action
