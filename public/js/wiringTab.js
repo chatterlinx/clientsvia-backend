@@ -3277,73 +3277,119 @@
         });
         
         // V92: Build analysis summary for AI-friendly export
+        // FIXED: Now correctly pulls from actual report structure
         function buildAnalysisSummary(report) {
             if (!report) return null;
             
+            const scoreboard = report.scoreboard || {};
+            const health = report.health || {};
             const tiers = report.tiers || {};
             const coverage = report.coverage || {};
-            const gaps = report.gapAnalysis || {};
-            const issues = report.issues || [];
+            const fields = health.fields || [];
             
-            // Identify legacy/dead configs
-            const uiOnly = (gaps.byStatus?.UI_ONLY || []).map(g => ({
-                path: g.path || g.registryId,
-                dbPath: g.dbPath,
+            // Extract from scoreboard (actual percentages)
+            const uiCov = scoreboard.uiCoverage || {};
+            const dbCov = scoreboard.dbCoverage || {};
+            const runtimeCov = scoreboard.runtimeCoverage || {};
+            const deadCov = scoreboard.deadConfig || {};
+            
+            // Calculate overall score from tiers
+            const overallScore = tiers.overallScore || tiers.tierScores?.MVA || 0;
+            const currentTier = tiers.currentTier || 'NONE';
+            
+            // Build NOT_CONFIGURED items from health.fields
+            const notConfigured = fields
+                .filter(f => f.status === 'NOT_CONFIGURED')
+                .map(f => ({
+                    fieldId: f.id,
+                    label: f.label,
+                    dbPath: f.dbPath,
+                    status: 'NOT_CONFIGURED',
+                    isLegacy: false,
+                    attention: 'Configure in UI'
+                }));
+            
+            // Build UI_ONLY items from coverage.uiOnlyPaths
+            const uiOnlyPaths = coverage.uiOnlyPaths || [];
+            const uiOnly = uiOnlyPaths.map(p => ({
+                path: typeof p === 'string' ? p : p.fieldId || p.path,
+                dbPath: typeof p === 'object' ? p.dbPath : null,
                 status: 'UI_ONLY',
                 isLegacy: true,
                 attention: 'Add runtime reader or remove from UI'
             }));
             
-            const deadRead = (gaps.byStatus?.DEAD_READ || []).map(g => ({
-                path: g.path || g.registryId,
-                dbPath: g.dbPath,
+            // Build DEAD_READ items from coverage.deadReadPaths
+            const deadReadPaths = coverage.deadReadPaths || [];
+            const deadRead = deadReadPaths.map(p => ({
+                path: typeof p === 'string' ? p : p.fieldId || p.path,
+                dbPath: typeof p === 'object' ? p.dbPath : null,
                 status: 'DEAD_READ',
                 isLegacy: true,
                 attention: 'Add to wiring registry or remove runtime reader'
             }));
             
-            // Identify NOT_CONFIGURED items
-            const notConfigured = issues.filter(i => i.status === 'NOT_CONFIGURED' || i.message?.includes('NOT_CONFIGURED')).map(i => ({
-                path: i.path || i.field || i.registryId,
-                tab: i.tab,
-                section: i.section,
-                status: 'NOT_CONFIGURED',
-                isLegacy: false,
-                attention: i.fix || 'Configure in UI'
+            // Also pull from health.byStatus for counts
+            const byStatus = health.byStatus || {};
+            const uiOnlyCount = byStatus.UI_ONLY || uiOnly.length;
+            const deadReadCount = byStatus.DEAD_READ || deadRead.length;
+            const notConfiguredCount = byStatus.NOT_CONFIGURED || notConfigured.length;
+            
+            // Get nextActions from tiers for priority fixes
+            const nextActions = tiers.nextActions || [];
+            const priorityFixes = nextActions.slice(0, 5).map(a => ({
+                priority: a.tier === 'MVA' ? 'CRITICAL' : a.tier === 'PRO' ? 'HIGH' : 'MEDIUM',
+                fieldId: a.fieldId,
+                label: a.label,
+                purpose: a.purpose,
+                fixInstructions: a.fixInstructions,
+                impact: a.impact
             }));
+            
+            // Determine overall status
+            let status = 'RED';
+            if (overallScore >= 90) status = 'GREEN';
+            else if (overallScore >= 70) status = 'YELLOW';
             
             return {
                 generatedAt: new Date().toISOString(),
-                version: '1.0.0',
-                companyId: report.scope?.companyId || report.companyId,
-                companyName: report.scope?.companyName || report.companyName,
+                version: '1.1.0',
+                companyId: report.scope?.companyId,
+                companyName: report.scope?.companyName,
                 
-                // Overall health
-                overallScore: tiers.overall?.percentage || coverage.overall?.percentage || 'N/A',
-                status: tiers.overall?.status || (coverage.overall?.percentage >= 90 ? 'GREEN' : coverage.overall?.percentage >= 70 ? 'YELLOW' : 'RED'),
+                // Overall health (synced from scoreboard)
+                overallScore: `${overallScore}%`,
+                status,
+                currentTier,
                 
-                // Coverage breakdown
-                uiCoverage: `${coverage.ui?.percentage || 'N/A'}% (${coverage.ui?.configured || 0}/${coverage.ui?.total || 0})`,
-                dbCoverage: `${coverage.db?.percentage || 'N/A'}% (${coverage.db?.configured || 0}/${coverage.db?.total || 0})`,
-                runtimeCoverage: `${coverage.runtime?.percentage || 'N/A'}% (${coverage.runtime?.configured || 0}/${coverage.runtime?.total || 0})`,
+                // Coverage breakdown (from scoreboard)
+                uiCoverage: `${uiCov.percent || 0}% (${uiCov.value || 'N/A'})`,
+                dbCoverage: `${dbCov.percent || 0}% (${dbCov.value || 'N/A'})`,
+                runtimeCoverage: `${runtimeCov.percent || 0}% (${runtimeCov.value || 'N/A'})`,
+                deadConfig: `${deadCov.value || '0 items'}`,
                 
-                // Issue counts
-                totalIssues: issues.length,
-                notConfiguredCount: notConfigured.length,
-                uiOnlyCount: uiOnly.length,
-                deadReadCount: deadRead.length,
-                legacyCount: uiOnly.length + deadRead.length,
+                // Issue counts (from health.byStatus)
+                totalIssues: notConfiguredCount + uiOnlyCount + deadReadCount,
+                notConfiguredCount,
+                uiOnlyCount,
+                deadReadCount,
+                legacyCount: uiOnlyCount + deadReadCount,
                 
                 // Detailed lists for AI analysis
                 notConfiguredItems: notConfigured,
                 uiOnlyItems: uiOnly,
                 deadReadItems: deadRead,
                 
-                // Quick fix suggestions
-                priorityFixes: [
-                    ...notConfigured.slice(0, 5).map(i => ({ priority: 'HIGH', item: i.path, action: i.attention })),
-                    ...deadRead.slice(0, 3).map(i => ({ priority: 'MEDIUM', item: i.path, action: 'Remove or wire to UI' }))
-                ],
+                // Priority fixes from nextActions
+                priorityFixes,
+                
+                // Tier breakdown
+                tierScores: tiers.tierScores || {},
+                byTier: {
+                    MVA: tiers.byTier?.MVA ? { complete: tiers.byTier.MVA.complete, total: tiers.byTier.MVA.total, isComplete: tiers.byTier.MVA.isComplete } : null,
+                    PRO: tiers.byTier?.PRO ? { complete: tiers.byTier.PRO.complete, total: tiers.byTier.PRO.total, isComplete: tiers.byTier.PRO.isComplete } : null,
+                    MAX: tiers.byTier?.MAX ? { complete: tiers.byTier.MAX.complete, total: tiers.byTier.MAX.total, isComplete: tiers.byTier.MAX.isComplete } : null
+                },
                 
                 // For future reference
                 instructions: 'Paste this JSON back to the AI for analysis. Update _analysisSummary.version when making changes.'
