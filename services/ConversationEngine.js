@@ -167,6 +167,46 @@ const DEFAULT_PROMPT_VARIANTS = {
     // 🚫 NUKED: slots{} and reprompt{} - ALL booking prompts come from UI now
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// V92 FIX: URGENCY NORMALIZER
+// ═══════════════════════════════════════════════════════════════════════════
+// ConversationSession.discovery.urgency schema ONLY allows:
+// ['normal', 'repeat_issue', 'urgent', 'emergency']
+// 
+// This normalizer prevents Mongoose ValidationError from crashing the turn:
+// "discovery.urgency: `high` is not a valid enum value"
+// ═══════════════════════════════════════════════════════════════════════════
+const VALID_URGENCY_VALUES = new Set(['normal', 'repeat_issue', 'urgent', 'emergency']);
+
+function normalizeUrgency(rawUrgency) {
+    if (!rawUrgency) return 'normal';
+    
+    const u = String(rawUrgency).toLowerCase().trim();
+    
+    // Direct match to valid enum values
+    if (VALID_URGENCY_VALUES.has(u)) {
+        return u;
+    }
+    
+    // Map invalid values to valid ones
+    if (['high', 'asap', 'soon', 'critical'].includes(u)) {
+        return 'urgent';
+    }
+    if (['low', 'medium', 'routine'].includes(u)) {
+        return 'normal';
+    }
+    if (['repeat', 'callback', 'followup', 'follow-up'].includes(u)) {
+        return 'repeat_issue';
+    }
+    
+    // Unknown value - default to normal (safe)
+    logger.warn('[URGENCY NORMALIZER] Unknown urgency value, defaulting to normal', { 
+        rawUrgency, 
+        defaultingTo: 'normal' 
+    });
+    return 'normal';
+}
+
 /**
  * Test-only helper to validate name slot behavior deterministically.
  * Mirrors booking name extraction + askFullName handling in isolation.
@@ -4924,7 +4964,8 @@ async function processTurn({
                     session.discovery.issue = discoveryFacts.issue;
                 }
                 if (discoveryFacts.urgency && discoveryFacts.urgency !== 'normal') {
-                    session.discovery.urgency = discoveryFacts.urgency;
+                    // V92 FIX: Normalize urgency to prevent Mongoose ValidationError
+                    session.discovery.urgency = normalizeUrgency(discoveryFacts.urgency);
                 }
                 if (discoveryFacts.techMentioned) {
                     session.discovery.techMentioned = discoveryFacts.techMentioned;
@@ -11926,9 +11967,43 @@ async function processTurn({
         // Persist all session changes
         session.markModified('booking');
         session.markModified('conversationMemory');
-        await session.save();
         
-        log('CHECKPOINT 10: ✅ Session updated', { phase: newPhase, lastAgentIntent: session.lastAgentIntent });
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92 FIX: NEVER FAIL THE CALL IF DB SAVE FAILS
+        // ═══════════════════════════════════════════════════════════════════════
+        // If Mongoose validation fails (e.g., invalid enum value), the turn
+        // should NOT die and fall back to "I'm having trouble right now."
+        // The agent can still respond to the caller even if state wasn't persisted.
+        // ═══════════════════════════════════════════════════════════════════════
+        try {
+            await session.save();
+            log('CHECKPOINT 10: ✅ Session updated', { phase: newPhase, lastAgentIntent: session.lastAgentIntent });
+        } catch (saveErr) {
+            // Log the error but DO NOT throw - the call must continue
+            logger.error('[SESSION_SAVE_FAILED] Non-fatal session save error (call continues)', {
+                error: saveErr?.message,
+                errorType: saveErr?.name,
+                sessionId: session?._id?.toString(),
+                phase: newPhase
+            });
+            
+            // Add BlackBox event for monitoring
+            try {
+                await BlackBoxLogger.addEvent(session._id?.toString(), 'SESSION_SAVE_FAILED', {
+                    error: saveErr?.message,
+                    errorType: saveErr?.name,
+                    phase: newPhase,
+                    turnNumber: currentTurnNumber
+                });
+            } catch (bbErr) {
+                // Ignore BlackBox logging errors
+            }
+            
+            log('CHECKPOINT 10: ⚠️ Session save failed (non-fatal, call continues)', { 
+                error: saveErr?.message,
+                phase: newPhase 
+            });
+        }
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 10b: Update Call Center Live Progress (Enterprise Flow)
