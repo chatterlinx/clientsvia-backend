@@ -44,6 +44,31 @@ const DEFAULT_STEP_PROMPTS = {
         prompt: "What is the service address?",
         reprompt: "I want to make sure I have the right address. Can you say it one more time?"
     },
+    // ═══════════════════════════════════════════════════════════════════════
+    // V92: ADDRESS-RELATED FOLLOW-UP STEPS
+    // These are triggered conditionally by Google Geo validation
+    // ═══════════════════════════════════════════════════════════════════════
+    propertyType: {
+        prompt: "Is this a house, apartment, condo, or business location?",
+        reprompt: "Just to clarify, is this a residential home, an apartment, or a commercial location?"
+    },
+    unit: {
+        prompt: "What's the apartment or unit number?",
+        reprompt: "I didn't catch the unit number. Could you repeat that?"
+    },
+    gateAccess: {
+        prompt: "Is there a gate or secured entry to get to your location?",
+        reprompt: "Does the technician need a gate code or any special access instructions?"
+    },
+    gateCode: {
+        prompt: "What's the gate code?",
+        reprompt: "I didn't catch that. What's the gate code the technician should use?"
+    },
+    accessInstructions: {
+        prompt: "Any special instructions for the technician to get to your unit?",
+        reprompt: "Are there any access instructions or notes for the technician?"
+    },
+    // ═══════════════════════════════════════════════════════════════════════
     time: {
         prompt: "When would work best for you?",
         reprompt: "What time works best for your schedule?"
@@ -112,15 +137,33 @@ class BookingFlowResolver {
         }
         
         const aiSettings = company.aiAgentSettings || {};
-        const bookingSlots = aiSettings.bookingSlots || [];
+        const frontDeskBehavior = aiSettings.frontDeskBehavior || {};
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92 FIX: Read from CORRECT path
+        // ═══════════════════════════════════════════════════════════════════════
+        // The UI saves booking slots to: aiAgentSettings.frontDeskBehavior.bookingSlots
+        // Previously was reading from: aiAgentSettings.bookingSlots (WRONG!)
+        // Also check legacy path for backward compatibility
+        // ═══════════════════════════════════════════════════════════════════════
+        const bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
         const bookingTemplates = aiSettings.bookingTemplates || {};
         const bookingPromptsMap = aiSettings.bookingPromptsMap || new Map();
+        
+        logger.debug('[BOOKING FLOW RESOLVER] Resolving flow', {
+            companyId: company._id?.toString(),
+            hasFrontDeskSlots: !!frontDeskBehavior.bookingSlots?.length,
+            hasLegacySlots: !!aiSettings.bookingSlots?.length,
+            slotCount: bookingSlots.length,
+            slotIds: bookingSlots.map(s => s.id || s.slotId).slice(0, 10)
+        });
         
         // If no booking slots configured, use defaults
         if (bookingSlots.length === 0) {
             logger.warn('[BOOKING FLOW RESOLVER] No booking slots configured, using defaults', { 
                 companyId: company._id,
-                companyName: company.name
+                companyName: company.name,
+                checkedPaths: ['aiAgentSettings.frontDeskBehavior.bookingSlots', 'aiAgentSettings.bookingSlots']
             });
             return this.buildDefaultFlow(companyId, bookingTemplates);
         }
@@ -352,7 +395,7 @@ class BookingFlowResolver {
      */
     static buildDefaultFlow(companyId, templates = {}) {
         return {
-            flowId: `default_booking_v1`,
+            flowId: `default_booking_v2`,  // V92: Updated to v2 with conditional steps
             flowName: 'Default Booking Flow',
             steps: [
                 {
@@ -389,8 +432,74 @@ class BookingFlowResolver {
                     required: true,
                     order: 3,
                     validation: { required: true, type: 'address' },
-                    options: {}
+                    options: { useGoogleMapsValidation: true }
                 },
+                // ═══════════════════════════════════════════════════════════════════
+                // V92: CONDITIONAL ADDRESS FOLLOW-UP STEPS
+                // These only trigger when Google Geo validation detects the need
+                // ═══════════════════════════════════════════════════════════════════
+                {
+                    id: 'propertyType',
+                    fieldKey: 'propertyType',
+                    type: 'select',
+                    label: 'Property Type',
+                    prompt: DEFAULT_STEP_PROMPTS.propertyType.prompt,
+                    reprompt: DEFAULT_STEP_PROMPTS.propertyType.reprompt,
+                    required: true,
+                    order: 4,
+                    validation: { required: true, type: 'select' },
+                    options: {
+                        choices: ['house', 'apartment', 'condo', 'townhouse', 'commercial', 'mobile home', 'other']
+                    },
+                    // Only ask if Google Geo detected possible multi-unit OR ambiguous
+                    condition: { stateKey: 'addressValidation.needsUnit', equals: true }
+                },
+                {
+                    id: 'unit',
+                    fieldKey: 'unit',
+                    type: 'text',
+                    label: 'Unit/Apt Number',
+                    prompt: DEFAULT_STEP_PROMPTS.unit.prompt,
+                    reprompt: DEFAULT_STEP_PROMPTS.unit.reprompt,
+                    required: true,
+                    order: 5,
+                    validation: { required: true, type: 'text' },
+                    options: {},
+                    // Only ask if property type is apartment/condo/commercial or needsUnit is true
+                    condition: { stateKey: 'addressNeedsUnit', equals: true }
+                },
+                {
+                    id: 'gateAccess',
+                    fieldKey: 'gateAccess',
+                    type: 'yesno',
+                    label: 'Gated/Secured Entry',
+                    prompt: DEFAULT_STEP_PROMPTS.gateAccess.prompt,
+                    reprompt: DEFAULT_STEP_PROMPTS.gateAccess.reprompt,
+                    required: true,
+                    order: 6,
+                    validation: { required: true, type: 'yesno' },
+                    options: {},
+                    // Only ask for multi-unit properties
+                    condition: { 
+                        stateKey: 'collected.propertyType', 
+                        in: ['apartment', 'condo', 'townhouse', 'commercial'] 
+                    }
+                },
+                {
+                    id: 'gateCode',
+                    fieldKey: 'gateCode',
+                    type: 'text',
+                    label: 'Gate Code',
+                    prompt: DEFAULT_STEP_PROMPTS.gateCode.prompt,
+                    reprompt: DEFAULT_STEP_PROMPTS.gateCode.reprompt,
+                    required: true,
+                    order: 7,
+                    validation: { required: true, type: 'text' },
+                    options: {},
+                    // Only ask if they said there IS a gate
+                    condition: { stateKey: 'collected.gateAccess', equals: 'yes' }
+                },
+                // ═══════════════════════════════════════════════════════════════════
                 {
                     id: 'time',
                     fieldKey: 'time',
@@ -399,7 +508,7 @@ class BookingFlowResolver {
                     prompt: DEFAULT_STEP_PROMPTS.time.prompt,
                     reprompt: DEFAULT_STEP_PROMPTS.time.reprompt,
                     required: false,
-                    order: 4,
+                    order: 10,
                     validation: { required: false, type: 'time' },
                     options: {}
                 }

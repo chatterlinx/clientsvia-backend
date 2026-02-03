@@ -388,6 +388,21 @@ class BookingFlowRunner {
             const step = flow.steps[i];
             if (!step.required) continue;
             
+            // ═══════════════════════════════════════════════════════════════════════
+            // V92: CONDITIONAL STEP EVALUATION
+            // ═══════════════════════════════════════════════════════════════════════
+            // Steps can have a `condition` object that determines if they should run.
+            // Conditions check state values like addressValidation.needsUnit
+            // ═══════════════════════════════════════════════════════════════════════
+            if (step.condition && !this.evaluateCondition(step.condition, state, collected)) {
+                logger.debug('[BOOKING FLOW] Skipping conditional step', {
+                    stepId: step.id,
+                    condition: step.condition,
+                    reason: 'CONDITION_NOT_MET'
+                });
+                continue;
+            }
+            
             const fieldKey = step.fieldKey || step.id;
             const existingValue = collected[fieldKey];
             const metadata = slotMetadata[fieldKey] || slots[fieldKey];
@@ -1284,6 +1299,54 @@ class BookingFlowRunner {
                 askCount: state.askCount?.[step.id] || 0
             }
         };
+    }
+    
+    /**
+     * ========================================================================
+     * V92: EVALUATE CONDITIONAL STEP
+     * ========================================================================
+     * Checks if a step's condition is met based on current state.
+     * 
+     * Supported conditions:
+     * - { stateKey: 'addressValidation.needsUnit', equals: true }
+     * - { stateKey: 'collected.propertyType', in: ['apartment', 'condo'] }
+     * - { stateKey: 'addressNeedsUnit', equals: true }
+     * 
+     * @param {Object} condition - The condition object from step definition
+     * @param {Object} state - Current booking state
+     * @param {Object} collected - Collected slot values
+     * @returns {boolean} True if condition is met, step should run
+     */
+    static evaluateCondition(condition, state, collected) {
+        if (!condition) return true; // No condition = always run
+        
+        const { stateKey, equals, in: inArray, notNull } = condition;
+        
+        // Get the value from state or collected using dot notation
+        let value;
+        if (stateKey?.startsWith('collected.')) {
+            const key = stateKey.replace('collected.', '');
+            value = collected[key];
+        } else {
+            // Navigate nested state keys like 'addressValidation.needsUnit'
+            value = stateKey?.split('.').reduce((obj, key) => obj?.[key], state);
+        }
+        
+        // Evaluate condition type
+        if (typeof equals !== 'undefined') {
+            return value === equals;
+        }
+        
+        if (Array.isArray(inArray)) {
+            return inArray.includes(value);
+        }
+        
+        if (notNull) {
+            return value != null;
+        }
+        
+        // Default: truthy check
+        return !!value;
     }
     
     /**
