@@ -397,8 +397,10 @@ const RUNTIME_BINDINGS = [
     {
         nodeId: 'node.scenarioResponse',
         checkpoints: ['SCENARIO_RESPONSE'],
-        matchSources: ['SCENARIO_MATCHED'],
-        codePatterns: ['scenarioMatched']
+        // V92: STATE_MACHINE is used when fromStateMachine=true + tokensUsed=0
+        // This includes scenario matches, fast-path, and deterministic handlers
+        matchSources: ['SCENARIO_MATCHED', 'STATE_MACHINE', 'RULE_BASED'],
+        codePatterns: ['scenarioMatched', 'fromStateMachine']
     },
     
     // LLM
@@ -407,6 +409,14 @@ const RUNTIME_BINDINGS = [
         checkpoints: ['CHECKPOINT_9e'],
         matchSources: ['LLM_FALLBACK', 'TIER3_FALLBACK'],
         codePatterns: ['HybridReceptionistLLM', 'tier3']
+    },
+    
+    // Meta intent (universal handlers)
+    {
+        nodeId: 'node.metaIntentDetector',
+        checkpoints: ['CHECKPOINT_V86_META'],
+        matchSources: ['META_INTENT_TIER1'],
+        codePatterns: ['metaIntentCheck', 'META_INTENT']
     }
 ];
 
