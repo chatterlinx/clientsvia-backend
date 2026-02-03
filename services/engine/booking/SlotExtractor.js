@@ -540,9 +540,30 @@ class SlotExtractor {
      * ========================================================================
      * EXTRACT NAME
      * ========================================================================
+     * V92: Uses commonFirstNames list (900+ names) from company config to 
+     * determine if a single-word name is likely a first name or last name.
+     * 
+     * - If name is in commonFirstNames → isLikelyFirstName: true
+     * - If name is NOT in list → isLikelyFirstName: false (assume last name)
+     * - If list is empty → isLikelyFirstName: true (safe default)
      */
     static extractName(text, context = {}) {
         if (!text) return null;
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V92: Load commonFirstNames from company config for first/last name detection
+        // ═══════════════════════════════════════════════════════════════════════════
+        const commonFirstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        const commonFirstNamesSet = new Set(commonFirstNames.map(n => String(n).toLowerCase()));
+        const hasNameList = commonFirstNames.length > 0;
+        
+        /**
+         * Check if a single name is likely a first name based on commonFirstNames list
+         */
+        const isLikelyFirstName = (name) => {
+            if (!hasNameList) return true; // No list = assume first name (safe default)
+            return commonFirstNamesSet.has(String(name).toLowerCase());
+        };
         
         // ═══════════════════════════════════════════════════════════════════════════
         // FEB 2026 FIX: STT preprocessing lowercases everything, so patterns must
@@ -573,16 +594,38 @@ class SlotExtractor {
                     const nameParts = name.split(/\s+/);
                     const validParts = nameParts.filter(p => !NAME_STOP_WORDS.has(p.toLowerCase()));
                     if (validParts.length >= 1) {
+                        const isSingleWord = nameParts.length === 1;
+                        const likelyFirst = isSingleWord ? isLikelyFirstName(name) : true;
+                        
                         logger.debug('[SLOT EXTRACTOR] Name matched via CORRECTION pattern', {
                             raw: match[1],
                             cleaned: name,
-                            pattern: pattern.source.substring(0, 50)
+                            pattern: pattern.source.substring(0, 50),
+                            isSingleWord,
+                            likelyFirst
                         });
-                        return {
+                        
+                        const result = {
                             value: name,
                             confidence: CONFIDENCE.UTTERANCE_HIGH,
                             source: SOURCE.UTTERANCE
                         };
+                        
+                        // V92: Add first/last name metadata
+                        if (isSingleWord) {
+                            result.isLikelyFirstName = likelyFirst;
+                            if (likelyFirst) {
+                                result.firstName = name;
+                            } else {
+                                result.lastName = name;
+                                result.needsFirstName = true;
+                            }
+                        } else if (nameParts.length >= 2) {
+                            result.firstName = nameParts[0];
+                            result.lastName = nameParts.slice(1).join(' ');
+                        }
+                        
+                        return result;
                     }
                 }
             }
@@ -613,17 +656,42 @@ class SlotExtractor {
                 }
                 
                 if (name && !NAME_STOP_WORDS.has(name.toLowerCase())) {
+                    // V92: Determine if single-word name is first or last using commonFirstNames
+                    const nameParts = name.split(/\s+/);
+                    const isSingleWord = nameParts.length === 1;
+                    const likelyFirst = isSingleWord ? isLikelyFirstName(name) : true;
+                    
                     logger.debug('[SLOT EXTRACTOR] Name matched via explicit pattern', {
                         raw: match[0],
                         cleaned: name,
                         pattern: pattern.source.substring(0, 50),
-                        hasTwoParts: !!match[2]
+                        hasTwoParts: !!match[2],
+                        isSingleWord,
+                        likelyFirst,
+                        hasNameList
                     });
-                    return {
+                    
+                    const result = {
                         value: name,
                         confidence: CONFIDENCE.UTTERANCE_HIGH,
                         source: SOURCE.UTTERANCE
                     };
+                    
+                    // V92: Add first/last name metadata for single-word names
+                    if (isSingleWord) {
+                        result.isLikelyFirstName = likelyFirst;
+                        if (likelyFirst) {
+                            result.firstName = name;
+                        } else {
+                            result.lastName = name;
+                            result.needsFirstName = true;
+                        }
+                    } else if (nameParts.length >= 2) {
+                        result.firstName = nameParts[0];
+                        result.lastName = nameParts.slice(1).join(' ');
+                    }
+                    
+                    return result;
                 }
             }
         }
@@ -633,11 +701,20 @@ class SlotExtractor {
         if (greetingMatch && greetingMatch[1]) {
             const name = this.cleanName(greetingMatch[1]);
             if (name && !NAME_STOP_WORDS.has(name.toLowerCase())) {
-                return {
+                const likelyFirst = isLikelyFirstName(name);
+                const result = {
                     value: name,
                     confidence: CONFIDENCE.UTTERANCE_LOW,
-                    source: SOURCE.UTTERANCE
+                    source: SOURCE.UTTERANCE,
+                    isLikelyFirstName: likelyFirst
                 };
+                if (likelyFirst) {
+                    result.firstName = name;
+                } else {
+                    result.lastName = name;
+                    result.needsFirstName = true;
+                }
+                return result;
             }
         }
         
@@ -669,11 +746,30 @@ class SlotExtractor {
             
             if (words.length >= 1) {
                 const name = words.slice(0, 2).join(' ');
-                return {
+                const isSingleWord = words.length === 1;
+                const likelyFirst = isSingleWord ? isLikelyFirstName(words[0]) : true;
+                
+                const result = {
                     value: name,
                     confidence: CONFIDENCE.UTTERANCE_HIGH,
                     source: SOURCE.UTTERANCE
                 };
+                
+                // V92: Add first/last name metadata
+                if (isSingleWord) {
+                    result.isLikelyFirstName = likelyFirst;
+                    if (likelyFirst) {
+                        result.firstName = words[0];
+                    } else {
+                        result.lastName = words[0];
+                        result.needsFirstName = true;
+                    }
+                } else if (words.length >= 2) {
+                    result.firstName = words[0];
+                    result.lastName = words.slice(1).join(' ');
+                }
+                
+                return result;
             }
         }
         
