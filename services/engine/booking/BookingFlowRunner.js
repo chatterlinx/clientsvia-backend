@@ -289,6 +289,66 @@ class BookingFlowRunner {
             }
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V92: VALIDATE PRE-EXTRACTED ADDRESS WITH GOOGLE GEO
+        // ═══════════════════════════════════════════════════════════════════════
+        // When address comes from SlotExtractor (not handleCollectMode), we still
+        // need to validate it with Google Geo to:
+        // 1. Normalize the address
+        // 2. Detect if unit number is needed
+        // 3. Set up conditional steps for propertyType/gateAccess
+        // ═══════════════════════════════════════════════════════════════════════
+        if (slotsCollectedThisTurn.has('address') && state.bookingCollected.address && !state.addressValidation) {
+            try {
+                const companyId = company?._id?.toString() || 'unknown';
+                const geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
+                
+                const addressValidation = await AddressValidationService.validateAddress(
+                    state.bookingCollected.address,
+                    { companyId, enabled: geoEnabled }
+                );
+                
+                if (addressValidation.success && addressValidation.validated) {
+                    // Use formatted address from Google
+                    const formattedAddress = addressValidation.formattedAddress || addressValidation.normalized;
+                    if (formattedAddress) {
+                        state.bookingCollected.address = formattedAddress;
+                        if (state.slotMetadata?.address) {
+                            state.slotMetadata.address.value = formattedAddress;
+                        }
+                    }
+                    
+                    // Store validation metadata for conditional steps
+                    state.addressValidation = {
+                        raw: slots.address?.value,
+                        formatted: formattedAddress,
+                        confidence: addressValidation.confidence,
+                        placeId: addressValidation.placeId,
+                        location: addressValidation.location,
+                        needsUnit: addressValidation.needsUnit,
+                        unitDetection: addressValidation.unitDetection
+                    };
+                    
+                    // Set flag for conditional step evaluation
+                    if (addressValidation.needsUnit) {
+                        state.addressNeedsUnit = true;
+                    }
+                    
+                    logger.info('[BOOKING FLOW RUNNER] Address validated (pre-extracted)', {
+                        raw: slots.address?.value,
+                        formatted: formattedAddress,
+                        confidence: addressValidation.confidence,
+                        needsUnit: addressValidation.needsUnit
+                    });
+                }
+            } catch (geoError) {
+                logger.warn('[BOOKING FLOW RUNNER] Address validation error (non-blocking)', {
+                    error: geoError.message,
+                    address: state.bookingCollected.address
+                });
+            }
+        }
+        
         // Get current step
         const currentStep = flow.steps.find(s => s.id === state.currentStepId);
         
@@ -933,11 +993,13 @@ class BookingFlowRunner {
      * ========================================================================
      */
     static parseConfirmationResponse(input) {
-        const text = (input || '').toLowerCase().trim();
+        // V92 FIX: Strip punctuation before matching
+        // "yep." should match as "yep"
+        const text = (input || '').toLowerCase().trim().replace(/[.,!?]+$/, '');
         
         // Positive confirmations
         const positivePatterns = [
-            /^(yes|yeah|yep|yup|correct|right|sure|ok|okay|uh huh|mhm|affirmative)$/,
+            /^(yes|yeah|yep|yup|correct|right|sure|ok|okay|uh huh|mhm|affirmative|absolutely|definitely)$/,
             /\b(yes|yeah|correct|right)\b.*\b(it is|that's|is)\b/,
             /\b(that's?|it's?|is)\s+(correct|right|good|fine|perfect)\b/,
             /\b(this|that)\s+(number|one)\s+(is\s+)?(good|fine|ok|correct|works)\b/,
@@ -951,7 +1013,7 @@ class BookingFlowRunner {
         
         // Negative / denial
         const negativePatterns = [
-            /^(no|nope|nah|wrong|incorrect|negative)$/,
+            /^(no|nope|nah|wrong|incorrect|negative|nah)$/,
             /\b(no|not)\s+(correct|right|that's not)\b/,
             /\bthat's?\s+(wrong|incorrect|not right)\b/,
             /\bwrong\s+(number|address|name)\b/,
