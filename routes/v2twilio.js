@@ -2999,6 +2999,216 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
       }
       
+      // ═══════════════════════════════════════════════════════════════════════════════════
+      // 🔒 V94 P0: ABSOLUTE BOOKING GATE - RUNS FIRST, NO EXCEPTIONS
+      // ═══════════════════════════════════════════════════════════════════════════════════
+      // If bookingModeLocked === true, run BookingFlowRunner IMMEDIATELY.
+      // NOTHING ELSE RUNS FIRST:
+      // - No ConversationEngine
+      // - No scenario matching
+      // - No meta intent handlers
+      // - No urgency detection
+      // - No LLM fallback
+      // 
+      // This is the "clipboard takes over" moment. Once caller accepts booking,
+      // they get the deterministic booking prompts, line by line, until complete.
+      //
+      // The old code had: if (bookingModeLocked && !result) - making booking a FALLBACK.
+      // Now booking is a TOP-LEVEL GATE that cannot be bypassed.
+      // ═══════════════════════════════════════════════════════════════════════════════════
+      
+      if (callState?.bookingModeLocked === true) {
+        // 🔒 BOOKING GATE FIRED - Skip everything else
+        
+        // Auto-init bookingFlowState if missing (prevents "lock evaporates" bug)
+        if (!callState.bookingFlowState) {
+          logger.warn('[BOOKING GATE] bookingModeLocked=true but bookingFlowState missing - auto-initializing', {
+            callSid,
+            turnCount: callState.turnCount
+          });
+          callState.bookingFlowState = {
+            bookingModeLocked: true,
+            bookingFlowId: 'auto_init_' + callSid,
+            currentStepId: callState.currentBookingStep || 'name',
+            bookingCollected: callState.bookingCollected || {},
+            bookingState: 'ACTIVE',
+            autoInitReason: 'MISSING_STATE_ON_LOCKED_TURN'
+          };
+        }
+        
+        try {
+          const { BookingFlowRunner, BookingFlowResolver } = require('../services/engine/booking');
+          
+          tracer.step('BOOKING_GATE_ABSOLUTE', '🔒 BOOKING GATE: bookingModeLocked=true, running BookingFlowRunner FIRST');
+          
+          // 📼 BLACK BOX: Log checkpoint_booking_gate
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'CHECKPOINT_BOOKING_GATE',
+              turn: callState.turnCount,
+              data: {
+                bookingModeLocked: true,
+                bookingFlowStateExists: !!callState.bookingFlowState,
+                currentStepId: callState.bookingFlowState?.currentStepId || callState.currentBookingStep,
+                bookingCollectedKeys: Object.keys(callState.bookingCollected || {}),
+                userText: (speechResult || '').substring(0, 100),
+                gateResult: 'BOOKING_FLOW_RUNNER_WILL_EXECUTE'
+              }
+            }).catch(() => {});
+          }
+          
+          // Resolve the booking flow from company config
+          const flow = BookingFlowResolver.resolve({
+            companyId: companyID,
+            trade: callState.trade || null,
+            serviceType: callState.serviceType || null,
+            company
+          });
+          
+          // Build state from Redis callState
+          const bookingState = {
+            bookingModeLocked: true,
+            bookingFlowId: callState.bookingFlowId || flow.flowId,
+            currentStepId: callState.currentStepId || callState.currentBookingStep || flow.steps[0]?.id,
+            bookingCollected: callState.bookingCollected || {},
+            slotMetadata: callState.slotMetadata || {},
+            confirmedSlots: callState.confirmedSlots || {},
+            askCount: callState.bookingAskCount || {},
+            pendingConfirmation: callState.pendingConfirmation || null
+          };
+          
+          // Create AWConfigReader for traced config reads
+          let awReader = null;
+          if (AWConfigReader && company) {
+            try {
+              awReader = AWConfigReader.forCall({
+                callId: callSid,
+                companyId: companyID,
+                turn: callState.turnCount || 0,
+                runtimeConfig: company,
+                readerId: 'v2twilio.BookingGate',
+                awHash: callState.awHash || null,
+                traceRunId: callState.traceRunId || null
+              });
+            } catch (awErr) {
+              logger.warn('[BOOKING GATE] Failed to create AWConfigReader', { error: awErr.message });
+            }
+          }
+          
+          // Run booking flow
+          const bookingResult = await BookingFlowRunner.runStep({
+            flow,
+            state: bookingState,
+            userInput: speechResult,
+            callSid,
+            company,
+            session: { _id: callSid, mode: 'BOOKING', collectedSlots: callState.slots || {} },
+            awReader
+          });
+          
+          // Map result to expected format
+          result = {
+            text: bookingResult.reply,
+            response: bookingResult.reply,
+            action: bookingResult.action === 'COMPLETE' ? 'COMPLETE' :
+                    bookingResult.action === 'ESCALATE' ? 'transfer' : 'BOOKING',
+            shouldTransfer: bookingResult.requiresTransfer === true,
+            transferReason: bookingResult.transferReason || null,
+            matchSource: bookingResult.matchSource || 'BOOKING_FLOW_RUNNER',
+            tier: 'tier1',
+            tokensUsed: 0,
+            callState: {
+              ...callState,
+              bookingModeLocked: bookingResult.state?.bookingModeLocked !== false,
+              bookingFlowId: bookingResult.state?.bookingFlowId || flow.flowId,
+              currentStepId: bookingResult.state?.currentStepId,
+              currentBookingStep: bookingResult.state?.currentStepId,
+              bookingCollected: bookingResult.state?.bookingCollected || {},
+              slotMetadata: bookingResult.state?.slotMetadata || callState.slotMetadata || {},
+              confirmedSlots: bookingResult.state?.confirmedSlots || callState.confirmedSlots || {},
+              bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE',
+              bookingFlowState: {
+                bookingModeLocked: bookingResult.state?.bookingModeLocked !== false,
+                bookingFlowId: bookingResult.state?.bookingFlowId || flow.flowId,
+                currentStepId: bookingResult.state?.currentStepId,
+                bookingCollected: bookingResult.state?.bookingCollected || {},
+                bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE'
+              },
+              slots: callState.slots || {}
+            },
+            debug: {
+              mode: 'booking',
+              source: 'BOOKING_GATE_ABSOLUTE',
+              flowId: flow.flowId,
+              currentStep: bookingResult.state?.currentStepId,
+              isComplete: bookingResult.isComplete,
+              gateType: 'ABSOLUTE_TOP_LEVEL'
+            }
+          };
+          
+          const bookingLatencyMs = Date.now() - (callState._gateStartTime || Date.now());
+          
+          // 📼 BLACK BOX: Log booking gate success
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'BOOKING_GATE_SUCCESS',
+              turn: callState.turnCount,
+              data: {
+                latencyMs: bookingLatencyMs,
+                action: bookingResult.action,
+                currentStep: bookingResult.state?.currentStepId,
+                isComplete: bookingResult.isComplete,
+                bookingModeLocked: result.callState.bookingModeLocked,
+                responsePreview: (bookingResult.reply || '').substring(0, 100)
+              }
+            }).catch(() => {});
+          }
+          
+          logger.info('[BOOKING GATE] ✅ BookingFlowRunner executed via ABSOLUTE GATE', {
+            callSid,
+            turnCount: callState.turnCount,
+            action: bookingResult.action,
+            currentStep: bookingResult.state?.currentStepId,
+            isComplete: bookingResult.isComplete,
+            latencyMs: bookingLatencyMs
+          });
+          
+          // SKIP ALL OTHER PROCESSING - jump directly to response
+          // (result is now set, all other handlers will see result !== null)
+          
+        } catch (bookingGateErr) {
+          logger.error('[BOOKING GATE] ❌ BookingFlowRunner failed', {
+            callSid,
+            turnCount: callState.turnCount,
+            error: bookingGateErr.message,
+            stack: bookingGateErr.stack?.split('\n').slice(0, 3).join(' | ')
+          });
+          
+          // 📼 BLACK BOX: Log booking gate failure
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'BOOKING_GATE_ERROR',
+              turn: callState.turnCount,
+              data: {
+                error: bookingGateErr.message,
+                stack: bookingGateErr.stack?.split('\n').slice(0, 3).join(' | ')
+              }
+            }).catch(() => {});
+          }
+          
+          // On error, unlock booking to prevent infinite loop and fall through to ConversationEngine
+          callState.bookingModeLocked = false;
+          callState.bookingFlowState = null;
+          // result stays null, will fall through to normal processing
+        }
+      }
+      
       // ═══════════════════════════════════════════════════════════════════════════
       // 🧠 LLM-0 ENABLEMENT LOGIC (Dec 2025 Update)
       // ═══════════════════════════════════════════════════════════════════════════
@@ -3172,12 +3382,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
 
         // ════════════════════════════════════════════════════════════════════════════════════
-        // 🎯 BOOKING FLOW SHORT-CIRCUIT (Feb 2026)
+        // 🎯 BOOKING FLOW SHORT-CIRCUIT (Feb 2026) - NOW A FALLBACK
         // ════════════════════════════════════════════════════════════════════════════════════
-        // When bookingModeLocked is TRUE, skip ALL AI paths and run deterministic booking flow.
-        // This is the "clipboard takes over" moment - no scenarios, no LLM, just checklist.
+        // V94 NOTE: The ABSOLUTE BOOKING GATE above (line ~3002) should handle booking.
+        // This block is now a FALLBACK for edge cases where:
+        // - bookingModeLocked got set MID-TURN by ConversationEngine
+        // - result wasn't set by the absolute gate for some reason
+        // 
+        // In normal operation, the absolute gate runs first and this never fires.
         // ════════════════════════════════════════════════════════════════════════════════════
         if (callState?.bookingModeLocked === true && !result) {
+          logger.info('[BOOKING FALLBACK] Absolute gate missed, running fallback booking handler', {
+            callSid,
+            turnCount: callState.turnCount
+          });
           try {
             const { BookingFlowRunner, BookingFlowResolver } = require('../services/engine/booking');
             
