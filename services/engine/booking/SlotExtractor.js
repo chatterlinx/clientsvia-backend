@@ -194,6 +194,16 @@ const NAME_STOP_WORDS = new Set([
     // "my name is SMART um, and Mark" → "smart" is NOT a name!
     'smart', 'fast', 'slow', 'quick', 'nice', 'kind', 'friendly',
     'long', 'short', 'big', 'small', 'old', 'new', 'young',
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V94 FIX: INTENSIFIER ADJECTIVES - "it's SUPER hot" → "Super" is NOT a name!
+    // This was the exact bug: caller said "my name is Mark... it's super hot"
+    // and the extractor grabbed "Super" as the name, overwriting "Mark"
+    // ═══════════════════════════════════════════════════════════════════════════
+    'super', 'extremely', 'very', 'really', 'pretty', 'quite', 'fairly',
+    'totally', 'absolutely', 'completely', 'entirely', 'utterly',
+    'seriously', 'literally', 'basically', 'honestly', 'actually',
+    'terrible', 'awful', 'horrible', 'amazing', 'incredible', 'fantastic',
+    'uncomfortable', 'unbearable', 'ridiculous', 'crazy', 'insane',
     // FEB 2026 #3: Address/street components (NOT names!)
     // "12155 METRO PARKWAY" → "Metro Parkway" is NOT a name!
     'street', 'st', 'avenue', 'ave', 'road', 'rd', 'drive', 'dr',
@@ -892,22 +902,55 @@ class SlotExtractor {
             }
         }
         
-        // Pattern 3: First + Last name pattern (two words that look like names)
-        // Allow any case, filter by stop words
-        const fullNameMatch = text.match(/\b([a-zA-Z]{2,})\s+([a-zA-Z]{2,})\b/i);
-        if (fullNameMatch) {
-            const first = this.cleanName(fullNameMatch[1]);
-            const last = this.cleanName(fullNameMatch[2]);
-            if (first && last && 
-                !NAME_STOP_WORDS.has(first.toLowerCase()) && 
-                !NAME_STOP_WORDS.has(last.toLowerCase())) {
-                return {
-                    value: `${first} ${last}`,
-                    confidence: CONFIDENCE.UTTERANCE_HIGH,
-                    source: SOURCE.UTTERANCE,
-                    firstName: first,
-                    lastName: last
-                };
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V94 FIX: Pattern 3 is DISABLED for non-explicit contexts
+        // ═══════════════════════════════════════════════════════════════════════════
+        // PROBLEM: "it's super hot" was matching "Super Hot" as a two-word name
+        // and overwriting the real name "Mark" extracted from "my name is Mark".
+        //
+        // FIX: Only use fallback two-word pattern when:
+        // 1. We're explicitly expecting a name (context.expectingSlot === 'name')
+        // 2. AND the first word is in commonFirstNames (validates as a real name)
+        //
+        // Without this, we'd grab random adjective pairs as names.
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (context.expectingSlot === 'name') {
+            const fullNameMatch = text.match(/\b([a-zA-Z]{2,})\s+([a-zA-Z]{2,})\b/i);
+            if (fullNameMatch) {
+                const first = this.cleanName(fullNameMatch[1]);
+                const last = this.cleanName(fullNameMatch[2]);
+                
+                // V94: Validate first word against commonFirstNames
+                const firstLower = first?.toLowerCase();
+                const isValidFirstName = hasNameList ? commonFirstNamesSet.has(firstLower) : true;
+                
+                if (first && last && 
+                    !NAME_STOP_WORDS.has(first.toLowerCase()) && 
+                    !NAME_STOP_WORDS.has(last.toLowerCase()) &&
+                    isValidFirstName) {
+                    
+                    logger.info('[SLOT EXTRACTOR] ✅ Name matched via two-word pattern (FALLBACK - validated)', {
+                        raw: fullNameMatch[0],
+                        first,
+                        last,
+                        validatedAgainstCommonNames: isValidFirstName
+                    });
+                    
+                    return {
+                        value: `${first} ${last}`,
+                        confidence: CONFIDENCE.UTTERANCE_HIGH,
+                        source: SOURCE.UTTERANCE,
+                        firstName: first,
+                        lastName: last,
+                        candidateSource: 'fallback_two_word'
+                    };
+                } else if (first && last && !isValidFirstName) {
+                    logger.warn('[SLOT EXTRACTOR] ❌ V94: REJECTED two-word name candidate (first word not in commonFirstNames)', {
+                        rejected: `${first} ${last}`,
+                        firstWord: first,
+                        reason: 'not_in_common_first_names'
+                    });
+                }
             }
         }
         
