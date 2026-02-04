@@ -72,12 +72,13 @@ const { classifyServiceUrgency } = require('../utils/serviceUrgency');
 const { checkCompliance, buildComplianceSummary } = require('../utils/complianceChecker');
 // PromptResolver REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
 const BlackBoxLogger = require('./BlackBoxLogger');
+const AWConfigReader = require('./wiring/AWConfigReader');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V92-DISCOVERY-CONSENT-FIX';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V93-AW-CONFIG-READER';  // <-- CHANGE THIS EACH DEPLOY
 
 // ═══════════════════════════════════════════════════════════════════════════
 // V92: NAME STOP WORDS - Words that are NEVER valid names (for acknowledgment check)
@@ -3260,13 +3261,33 @@ async function processTurn({
             log('CHECKPOINT 2: ✅ Company loaded from MongoDB', { name: company.companyName });
         }
         
-        // 🔴 CRITICAL DEBUG: Verify commonFirstNames is loaded
-        const _cfn = company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        // ═══════════════════════════════════════════════════════════════════
+        // STEP 1.1: CREATE AW CONFIG READER (Phase 6 - Registry Gate)
+        // ═══════════════════════════════════════════════════════════════════
+        // The AWConfigReader is THE SINGLE CHOKEPOINT for all config reads.
+        // Every read is validated against the AW registry and logged to Raw Events.
+        // This enables the AW ⇄ RE marriage: instant debugging, zero guessing.
+        // ═══════════════════════════════════════════════════════════════════
+        const awReader = AWConfigReader.forCall({
+            callId: callSid || `test-${Date.now()}`,
+            companyId: companyId.toString(),
+            turn: 0, // Will be updated as turns progress
+            runtimeConfig: company,
+            readerId: 'ConversationEngine.processTurn'
+        });
+        log('CHECKPOINT 2.05: ✅ AWConfigReader initialized', {
+            enforcementMode: awReader.enforcementMode,
+            registeredPaths: AWConfigReader.getRegisteredPaths().length
+        });
+        
+        // 🔴 CRITICAL DEBUG: Verify commonFirstNames is loaded (via AWConfigReader)
+        const _cfn = awReader.getArray('frontDesk.commonFirstNames');
         log('CHECKPOINT 2.1: 👤 COMMON_FIRST_NAMES_LOADED', {
             count: _cfn.length,
             sample: _cfn.slice(0, 10).join(', '),
             hasMarkLower: _cfn.map(n => String(n).toLowerCase()).includes('mark'),
-            source: companyFromCache ? 'REDIS' : 'MONGODB'
+            source: companyFromCache ? 'REDIS' : 'MONGODB',
+            readViaAW: true
         });
         
         // ═══════════════════════════════════════════════════════════════════
@@ -3616,7 +3637,9 @@ async function processTurn({
         // - Fast response
         // - Clean transfer behavior
         // - No LLM needed
-        const escalationCfg = company.aiAgentSettings?.frontDeskBehavior?.escalation || {};
+        // 🔌 AW MIGRATION: Using AWConfigReader for traced config reads
+        awReader.setReaderId('ConversationEngine.escalationIntercept');
+        const escalationCfg = awReader.getObject('frontDesk.escalation');
         const escalationEnabled = escalationCfg.enabled !== false;
         const escalationPhrases = Array.isArray(escalationCfg.triggerPhrases) ? escalationCfg.triggerPhrases : [];
         if (escalationEnabled && escalationPhrases.length > 0) {
@@ -4279,13 +4302,15 @@ async function processTurn({
                 session.booking?.activeSlot === 'name' ||
                 (nameSlotAsked && !currentSlots.name && !currentSlots.partialName)
             );
-            const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
-            const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
+            // 🔌 AW MIGRATION: Using AWConfigReader for traced config reads
+            awReader.setReaderId('ConversationEngine.slotExtraction.name');
+            const stopWordsEnabled = awReader.get('slotExtraction.nameStopWords.enabled', true) !== false;
+            const customStopWords = stopWordsEnabled ? awReader.getArray('slotExtraction.nameStopWords.custom') : [];
             let extractedName = SlotExtractors.extractName(userText, { 
                 expectingName, 
-                customStopWords: stopWordsEnabled ? customStopWords : []
+                customStopWords
             });
-            log('🔍 V36 Extraction result:', extractedName || '(none)', { expectingName, nameSlotAsked, customStopWordsCount: customStopWords.length });
+            log('🔍 V36 Extraction result (via AW):', extractedName || '(none)', { expectingName, nameSlotAsked, customStopWordsCount: customStopWords.length });
             
             // ═══════════════════════════════════════════════════════════════════
             // V29 FIX: Context-aware name extraction
@@ -5521,7 +5546,9 @@ async function processTurn({
                 let exactQuestion = getSlotPromptVariant(firstMissingSlot, slotId, askedCount);
                 
                 // Loop prevention (UI-controlled): rephrase intro if we're repeating the same slot too many times
-                const lp = company.aiAgentSettings?.frontDeskBehavior?.loopPrevention || {};
+                // 🔌 AW MIGRATION: Using AWConfigReader for traced config reads
+                awReader.setReaderId('ConversationEngine.loopPrevention.bookingSnap');
+                const lp = awReader.getObject('frontDesk.loopPrevention');
                 const lpEnabled = lp.enabled !== false;
                 const maxSame = typeof lp.maxSameQuestion === 'number' ? lp.maxSameQuestion : 2;
                 // V59 NUKE: UI-configured rephrase intro ONLY
@@ -5670,23 +5697,29 @@ async function processTurn({
         
         // ═══════════════════════════════════════════════════════════════════════
         // V22 KILL SWITCHES - Read from company config (UI-controlled)
+        // 🔌 AW MIGRATION: Using AWConfigReader for traced config reads
         // ═══════════════════════════════════════════════════════════════════════
-        const discoveryConsent = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
-        const autoReplyAllowedScenarioTypes = Array.isArray(discoveryConsent.autoReplyAllowedScenarioTypes)
-            ? discoveryConsent.autoReplyAllowedScenarioTypes.map(t => (t || '').toString().trim().toUpperCase()).filter(Boolean)
-            : [];
+        awReader.setReaderId('ConversationEngine.killSwitches');
+        const bookingRequiresConsentAW = awReader.get('frontDesk.discoveryConsent.bookingRequiresExplicitConsent', true);
+        const forceLLMDiscoveryAW = awReader.get('frontDesk.discoveryConsent.forceLLMDiscovery', true);
+        const disableScenarioAutoResponsesAW = awReader.get('frontDesk.discoveryConsent.disableScenarioAutoResponses', true);
+        const autoReplyAllowedTypesRaw = awReader.getArray('frontDesk.discoveryConsent.autoReplyAllowedScenarioTypes');
+        const autoReplyAllowedScenarioTypes = autoReplyAllowedTypesRaw
+            .map(t => (t || '').toString().trim().toUpperCase())
+            .filter(Boolean);
+        
         const killSwitches = {
             // If true: Booking REQUIRES explicit consent (default: true)
-            bookingRequiresConsent: discoveryConsent.bookingRequiresExplicitConsent !== false,
+            bookingRequiresConsent: bookingRequiresConsentAW !== false,
             // If true: LLM ALWAYS speaks during discovery (default: true)
-            forceLLMDiscovery: discoveryConsent.forceLLMDiscovery !== false,
+            forceLLMDiscovery: forceLLMDiscoveryAW !== false,
             // If true: Scenarios are context only by default (exceptions may be allowed via allowlist)
-            disableScenarioAutoResponses: discoveryConsent.disableScenarioAutoResponses !== false,
+            disableScenarioAutoResponses: disableScenarioAutoResponsesAW !== false,
             // Consent Split: types allowed to be used verbatim before consent (trade-agnostic)
             autoReplyAllowedScenarioTypes
         };
         
-        log('CHECKPOINT 9a: 🔒 Kill switches loaded', killSwitches);
+        log('CHECKPOINT 9a: 🔒 Kill switches loaded (via AW)', killSwitches);
         
         // ═══════════════════════════════════════════════════════════════════════
         // BOOKING SNAP CHECK - If we already have a response from consent snap, skip AI
@@ -13321,6 +13354,26 @@ async function processTurn({
             } catch (learnErr) {
                 // Non-blocking
                 log('⚠️ Customer learning extraction failed (non-fatal)', { error: learnErr.message });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // EMIT AW SUMMARIES (Phase 6e/6f - instant debugging)
+        // ═══════════════════════════════════════════════════════════════════
+        // At end of turn, emit:
+        // - AW_READ_SUMMARY: per-turn summary (quick view)
+        // - AW_CALL_SUMMARY: cumulative call summary (the money shot)
+        //   Includes unread-but-wired and read-but-unwired for "why didn't it trigger?"
+        if (awReader) {
+            if (typeof awReader.emitSummary === 'function') {
+                awReader.emitSummary().catch(err => {
+                    log('⚠️ AW_READ_SUMMARY emission failed (non-fatal)', { error: err.message });
+                });
+            }
+            if (typeof awReader.emitCallSummary === 'function') {
+                awReader.emitCallSummary().catch(err => {
+                    log('⚠️ AW_CALL_SUMMARY emission failed (non-fatal)', { error: err.message });
+                });
             }
         }
         

@@ -1,11 +1,19 @@
 /**
  * ============================================================================
- * WIRING REGISTRY V2 - SOURCE OF TRUTH
+ * AGENT WIRING (AW) REGISTRY - THE ONLY SOURCE OF TRUTH
  * ============================================================================
  * 
- * This registry defines EVERY capability the platform claims to support.
- * Each node answers:
+ * THE NON-NEGOTIABLE CONTRACT:
+ * If a field / rule / prompt / switch / flow step is not in this registry:
+ *   - Runtime MUST NOT read it
+ *   - Raw Events (RE) MUST NOT claim it happened
  * 
+ * This is enforced via:
+ *   - One registry (this file)
+ *   - One runtime reader map (runtimeReaders.map.js)
+ *   - One tracer (CONFIG_READ events in RE)
+ * 
+ * Each node answers:
  *   1. Where is this configured? (UI path)
  *   2. Where is it stored? (DB collection + field path)
  *   3. Where is it read? (runtime readers map)
@@ -18,21 +26,24 @@
  *   ⚠️ PARTIAL - some subfields ok, others missing
  *   🔴 MISCONFIGURED - enabled but invalid data
  *   ⬜ NOT_CONFIGURED - optional feature not set
- *   🟣 UI_ONLY - exists in UI but no runtime read
- *   🟠 DEAD_READ - runtime reads but UI doesn't expose
+ *   🟣 UI_ONLY - exists in UI but no runtime read (MUST ELIMINATE)
+ *   🟠 DEAD_READ - runtime reads but UI doesn't expose (UNACCEPTABLE)
  *   🧨 TENANT_RISK - unscoped / global when should be company
  * 
  * RULES:
  *   - If a tab exists in UI but not here → wiring failure
  *   - If a field is here but not in UI → dead read
  *   - Update this when adding ANY new feature
+ *   - UI_ONLY and DEAD_READ must be driven to ZERO (or explicitly allowlisted)
  * 
  * ============================================================================
  */
 
 const { RUNTIME_READERS_MAP } = require('./runtimeReaders.map');
 
-const WIRING_SCHEMA_VERSION = 'WIRING_REGISTRY_V2.0';
+const AW_REGISTRY_VERSION = 'AW_REGISTRY_V2.0';
+// Backward compat alias
+const WIRING_SCHEMA_VERSION = AW_REGISTRY_VERSION;
 
 /**
  * VALIDATORS - Reusable validation functions
@@ -873,13 +884,22 @@ const wiringRegistryV2 = {
         // ---------------------------------------------------------------------
         // INTEGRATIONS TAB (Company Profile → Configuration)
         // ---------------------------------------------------------------------
+        // ⚠️ DEPRECATED: Google Calendar + SMS integrations are UI_ONLY poison.
+        // These fields exist in UI but runtime readers don't match registry IDs.
+        // DECISION (Feb 2026): Hide UI until properly wired with CONFIG_READ traces.
+        // When ready to wire: add proper runtime readers, add CONFIG_READ checkpoints,
+        // then remove deprecated flag.
+        // ---------------------------------------------------------------------
         {
             id: 'tab.integrations',
             label: 'Integrations',
-            description: 'Third-party integrations (Google Calendar, SMS)',
+            description: 'Third-party integrations (Google Calendar, SMS) - DEPRECATED',
             ui: { tabId: 'integrations', navSelector: '[data-tab="configuration"]' },
             db: { collection: 'companies', basePath: 'googleCalendar' },
             scope: 'company',
+            deprecated: true,
+            deprecatedReason: 'UI_ONLY fields - runtime readers not properly wired to registry. Hidden until fixed.',
+            deprecatedAt: '2026-02-04',
             sections: [
                 // GOOGLE CALENDAR
                 {
@@ -1199,9 +1219,10 @@ const wiringRegistryV2 = {
     // =========================================================================
     infrastructure: [
         {
-            id: 'infra.redis',
-            label: 'Redis Cache',
-            description: 'Scenario pool caching',
+            // ID must match runtimeReaders.map.js key for proper wiring detection
+            id: 'infra.scenarioPoolCache',
+            label: 'Scenario Pool Cache (Redis)',
+            description: 'Caches scenario pool per company for 5 minutes',
             runtime: RUNTIME_READERS_MAP['infra.scenarioPoolCache'],
             cacheKey: 'scenario-pool:{companyId}',
             cacheTTL: 300,
@@ -1290,7 +1311,8 @@ function getKillSwitchFields() {
 
 module.exports = {
     wiringRegistryV2,
-    WIRING_SCHEMA_VERSION,
+    AW_REGISTRY_VERSION,
+    WIRING_SCHEMA_VERSION, // Backward compat alias
     VALIDATORS,
     getAllFields,
     getCriticalFields,

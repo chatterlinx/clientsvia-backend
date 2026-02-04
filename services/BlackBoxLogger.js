@@ -48,9 +48,42 @@ function truncate(text, maxLen = 40) {
 /**
  * Initialize a new call recording
  * Call this at the START of /voice endpoint, test console, SMS, or web chat
+ * 
+ * AW ⇄ RE MARRIAGE (Phase 4):
+ * The CALL_START event now includes correlation keys for Agent Wiring:
+ * - awHash: SHA256 of effectiveConfig at call start (proves which config was used)
+ * - traceRunId: Unique ID for this call session (for log correlation)
+ * - runtimeCommitSha: Git SHA of deployed code (proves which code ran)
+ * - effectiveConfigVersion: Company's ECV if available
+ * 
+ * A year from now, you can line up AW export + RE export and instantly see:
+ * - What config was in effect
+ * - What code was deployed
+ * - What the agent checked
+ * - What it skipped and why
  */
-async function initCall({ callId, companyId, from, to, source = 'voice', customerId, customerContext, sessionSnapshot }) {
+async function initCall({ 
+  callId, 
+  companyId, 
+  from, 
+  to, 
+  source = 'voice', 
+  customerId, 
+  customerContext, 
+  sessionSnapshot,
+  // AW ⇄ RE correlation keys (Phase 4)
+  awHash = null,
+  traceRunId = null,
+  runtimeCommitSha = null,
+  effectiveConfigVersion = null
+}) {
   const now = new Date();
+  
+  // Generate traceRunId if not provided (unique per call for log correlation)
+  const finalTraceRunId = traceRunId || `tr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  
+  // Get runtime commit SHA from environment if not provided
+  const finalRuntimeSha = runtimeCommitSha || process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null;
   
   try {
     const recording = await BlackBoxRecording.create({
@@ -62,6 +95,11 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
       startedAt: now,
       customerId: customerId || null,
       customerContext: customerContext || {},
+      // AW ⇄ RE correlation (stored at recording level for easy querying)
+      awHash: awHash || null,
+      traceRunId: finalTraceRunId,
+      runtimeCommitSha: finalRuntimeSha,
+      effectiveConfigVersion: effectiveConfigVersion || null,
       sessionSnapshot: sessionSnapshot || {
         phase: 'greeting',
         mode: 'DISCOVERY',
@@ -89,7 +127,12 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
           to,
           source,
           customerId: customerId || null,
-          isReturning: customerContext?.isReturning || false
+          isReturning: customerContext?.isReturning || false,
+          // AW ⇄ RE correlation in CALL_START event
+          awHash: awHash || null,
+          traceRunId: finalTraceRunId,
+          runtimeCommitSha: finalRuntimeSha,
+          effectiveConfigVersion: effectiveConfigVersion || null
         }
       }],
       transcript: {
@@ -102,7 +145,10 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
       callId,
       companyId: companyId.toString(),
       from,
-      source
+      source,
+      // AW ⇄ RE correlation logged for debugging
+      traceRunId: finalTraceRunId,
+      awHash: awHash ? awHash.substring(0, 12) + '...' : null
     });
     
     return recording;
@@ -122,11 +168,28 @@ async function initCall({ callId, companyId, from, to, source = 'voice', custome
 /**
  * Ensure a call recording exists (idempotent).
  */
-async function ensureCall({ callId, companyId, from, to, source = 'voice', customerId, customerContext, sessionSnapshot }) {
+async function ensureCall({ 
+  callId, 
+  companyId, 
+  from, 
+  to, 
+  source = 'voice', 
+  customerId, 
+  customerContext, 
+  sessionSnapshot,
+  // AW ⇄ RE correlation keys (Phase 4)
+  awHash = null,
+  traceRunId = null,
+  runtimeCommitSha = null,
+  effectiveConfigVersion = null
+}) {
   try {
     const existing = await BlackBoxRecording.findOne({ callId, companyId }).lean();
     if (existing) return existing;
-    return await initCall({ callId, companyId, from, to, source, customerId, customerContext, sessionSnapshot });
+    return await initCall({ 
+      callId, companyId, from, to, source, customerId, customerContext, sessionSnapshot,
+      awHash, traceRunId, runtimeCommitSha, effectiveConfigVersion
+    });
   } catch (error) {
     logger.error('[BLACK BOX] Failed to ensure recording (non-fatal)', {
       callId,

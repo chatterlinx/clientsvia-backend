@@ -27,10 +27,22 @@
  * - Explicit utterance slots are 0.9 confidence
  * - Confirmed slots are 1.0 confidence
  * 
+ * AW INTEGRATION (Phase 6b):
+ * Config reads go through AWConfigReader when available in context.
+ * This enables CONFIG_READ tracing and AW ⇄ RE marriage.
+ * 
  * ============================================================================
  */
 
 const logger = require('../../../utils/logger');
+
+// AWConfigReader for traced config reads (Phase 6b)
+let AWConfigReader;
+try {
+    AWConfigReader = require('../../wiring/AWConfigReader');
+} catch (e) {
+    logger.warn('[SLOT EXTRACTOR] AWConfigReader not available - direct config access');
+}
 
 /**
  * Confidence thresholds
@@ -640,9 +652,18 @@ class SlotExtractor {
         if (!text) return null;
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // V92: Load commonFirstNames from company config for first/last name detection
+        // V93: Load commonFirstNames via AWConfigReader (AW ⇄ RE marriage)
+        // If awReader is passed in context, use it for traced config reads.
+        // Otherwise fall back to direct access (backward compat).
         // ═══════════════════════════════════════════════════════════════════════════
-        const commonFirstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        let commonFirstNames = [];
+        if (context.awReader && typeof context.awReader.getArray === 'function') {
+            context.awReader.setReaderId('SlotExtractor.extractName');
+            commonFirstNames = context.awReader.getArray('frontDesk.commonFirstNames');
+        } else {
+            // Fallback: direct access (no tracing)
+            commonFirstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        }
         const commonFirstNamesSet = new Set(commonFirstNames.map(n => String(n).toLowerCase()));
         const hasNameList = commonFirstNames.length > 0;
         

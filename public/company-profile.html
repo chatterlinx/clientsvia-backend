@@ -488,10 +488,48 @@
                                 </div>
                                 
                                 <!-- ════════════════════════════════════════════════════════════════════════════════
-                                     GOOGLE CALENDAR INTEGRATION - V88 (Jan 2026)
-                                     Real-time availability checking + automatic appointment booking
+                                     INTEGRATIONS ROADMAP - Placeholder while features are being wired
                                      ════════════════════════════════════════════════════════════════════════════════ -->
-                                <div class="config-block mt-6" id="google-calendar-section">
+                                <div class="config-block mt-6" id="integrations-roadmap-section">
+                                    <div class="bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg p-6">
+                                        <div class="flex items-start">
+                                            <div class="flex-shrink-0">
+                                                <i class="fas fa-road text-slate-400 text-2xl"></i>
+                                            </div>
+                                            <div class="ml-4">
+                                                <h3 class="text-lg font-semibold text-slate-700">
+                                                    <i class="fas fa-calendar-alt text-blue-500 mr-2"></i>Google Calendar
+                                                    <span class="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">Coming Q2 2026</span>
+                                                </h3>
+                                                <p class="mt-1 text-sm text-slate-600">Real-time availability checking and automatic appointment creation.</p>
+                                                
+                                                <h3 class="text-lg font-semibold text-slate-700 mt-4">
+                                                    <i class="fas fa-sms text-green-500 mr-2"></i>SMS Notifications
+                                                    <span class="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded-full">Coming Q2 2026</span>
+                                                </h3>
+                                                <p class="mt-1 text-sm text-slate-600">Booking confirmations and appointment reminders via SMS.</p>
+                                                
+                                                <div class="mt-4 p-3 bg-white rounded border border-slate-200">
+                                                    <p class="text-xs text-slate-500">
+                                                        <i class="fas fa-info-circle text-blue-400 mr-1"></i>
+                                                        <strong>Why hidden?</strong> These integrations exist in the database but aren't yet connected to the 
+                                                        <a href="/control-plane-v2.html?tab=agent-wiring" class="text-blue-600 hover:underline">Agent Wiring (AW)</a> 
+                                                        registry. Once CONFIG_READ traces are implemented, they'll appear here with full diagnostic support.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- ════════════════════════════════════════════════════════════════════════════════
+                                     GOOGLE CALENDAR INTEGRATION - DEPRECATED (Feb 2026)
+                                     Reason: UI_ONLY fields - runtime not properly wired to Agent Wiring registry
+                                     Status: Hidden until CONFIG_READ traces are implemented
+                                     Roadmap: Q2 2026 when AW ⇄ RE marriage is complete
+                                     ════════════════════════════════════════════════════════════════════════════════ -->
+                                <div class="config-block mt-6" id="google-calendar-section" style="display: none;">
+                                    <!-- DEPRECATED: This section is hidden until Google Calendar is properly wired -->
                                     <div class="flex justify-between items-center mb-3">
                                         <h3 class="font-semibold text-gray-700">
                                             <i class="fab fa-google text-blue-600 mr-2"></i>Google Calendar Integration
@@ -744,10 +782,12 @@
                                 </div>
                                 
                                 <!-- ════════════════════════════════════════════════════════════════════════════════
-                                     SMS NOTIFICATIONS - V88 (Jan 2026)
-                                     Booking confirmations and appointment reminders via SMS
+                                     SMS NOTIFICATIONS - DEPRECATED (Feb 2026)
+                                     Reason: UI_ONLY fields - runtime not properly wired to Agent Wiring registry
+                                     Status: Hidden until CONFIG_READ traces are implemented
+                                     Roadmap: Q2 2026 when AW ⇄ RE marriage is complete
                                      ════════════════════════════════════════════════════════════════════════════════ -->
-                                <div class="config-block mt-6" id="sms-notifications-section">
+                                <div class="config-block mt-6" id="sms-notifications-section" style="display: none;">
                                     <div class="flex justify-between items-center mb-3">
                                         <h3 class="font-semibold text-gray-700">
                                             <i class="fas fa-sms text-green-600 mr-2"></i>SMS Notifications

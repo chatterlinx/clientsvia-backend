@@ -87,6 +87,14 @@ try {
 // 🚨 EMERGENCY Enforcement - Ensure EMERGENCY scenarios stop routing and escalate
 const EmergencyEnforcement = require('./EmergencyEnforcement');
 
+// 🔌 AWConfigReader for traced config reads (Phase 6c)
+let AWConfigReader;
+try {
+    AWConfigReader = require('./wiring/AWConfigReader');
+} catch (e) {
+    logger.warn('[INTELLIGENT ROUTER] AWConfigReader not available');
+}
+
 class IntelligentRouter {
     constructor() {
         this.config = {
@@ -175,12 +183,22 @@ class IntelligentRouter {
         const startTime = Date.now();
         const routingId = `${callId}-${Date.now()}`;
         
+        // 🔌 AW MIGRATION: Create or use AWConfigReader for traced config reads
+        const awReader = context.awReader || (AWConfigReader && company ? AWConfigReader.forCall({
+            callId,
+            companyId: company._id?.toString() || 'unknown',
+            turn: context.turn || 0,
+            runtimeConfig: company,
+            readerId: 'IntelligentRouter.route'
+        }) : null);
+        
         logger.info('🎯 [INTELLIGENT ROUTER] Starting 3-tier cascade', {
             routingId,
             callId,
             templateId: template._id,
             templateName: template.name,
-            callerInput: callerInput.substring(0, 100)
+            callerInput: callerInput.substring(0, 100),
+            hasAWReader: !!awReader
         });
         
         // Get template-specific thresholds
@@ -277,7 +295,14 @@ class IntelligentRouter {
             if (ServiceIntentDetector && company?._id) {
                 try {
                     // Build services config from company settings
-                    const companyServices = company.aiAgentSettings?.services || {};
+                    // 🔌 AW MIGRATION: Read via AWConfigReader when available
+                    let companyServices;
+                    if (awReader) {
+                        awReader.setReaderId('IntelligentRouter.serviceIntentDetection');
+                        companyServices = awReader.getObject('routing.services');
+                    } else {
+                        companyServices = company.aiAgentSettings?.services || {};
+                    }
                     const servicesConfig = { services: {} };
                     
                     // Build config from template categories
@@ -380,7 +405,14 @@ class IntelligentRouter {
             
             if (FlowEngine && company?._id) {
                 try {
-                    const callFlowConfig = company?.aiAgentSettings?.callFlowEngine;
+                    // 🔌 AW MIGRATION: Read callFlowEngine config via AWConfigReader
+                    let callFlowConfig;
+                    if (awReader) {
+                        awReader.setReaderId('IntelligentRouter.flowEngine');
+                        callFlowConfig = awReader.getObject('callFlowEngine');
+                    } else {
+                        callFlowConfig = company?.aiAgentSettings?.callFlowEngine;
+                    }
                     
                     if (callFlowConfig?.enabled) {
                         const flowStartTime = Date.now();

@@ -1,20 +1,28 @@
 /**
  * ============================================================================
- * WIRING REPORT BUILDER - Generates truth from actual config
+ * AGENT WIRING (AW) REPORT BUILDER - Generates truth from actual config
  * ============================================================================
  * 
- * This builds the wiring report by checking ACTUAL database values against
- * the wiring registry definitions.
+ * This builds the AW report by checking ACTUAL database values against
+ * the AW registry definitions.
+ * 
+ * THE NON-NEGOTIABLE CONTRACT:
+ * If a field is not in the AW registry, it cannot appear in this report.
+ * If it's not in this report, the agent cannot use it.
  * 
  * RULES:
  * 1. Never hardcode status - always compute from real data
  * 2. Check Redis cache status for debugging
  * 3. Include infrastructure health
  * 4. Report critical issues prominently
+ * 5. UI_ONLY and DEAD_READ must be flagged until eliminated
  * 
  * ============================================================================
  */
 
+// ⚠️ MIGRATION NOTE: This builder uses v1 registry for backward compat.
+// wiringReportGenerator.v2.js is the canonical report generator using wiringRegistry.v2.js
+// TODO: Migrate this builder to use v2 registry structure, then delete v1.
 const { wiringRegistryV1, WIRING_SCHEMA_VERSION } = require('./wiringRegistry.v1');
 // promptPacks migration REMOVED Jan 2026 - nuked
 const logger = require('../../utils/logger');

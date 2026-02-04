@@ -1,7 +1,22 @@
 /**
  * ============================================================================
- * WIRING REGISTRY V1.2 - PRODUCTION GRADE (Jan 2026 Audit Complete)
+ * ⚠️ DEPRECATED: WIRING REGISTRY V1.2 - USE wiringRegistry.v2.js INSTEAD
  * ============================================================================
+ * 
+ * STATUS: DEPRECATED as of Feb 2026
+ * REASON: Agent Wiring (AW) consolidation - v2 is now the ONLY source of truth
+ * MIGRATION: wiringReportBuilder.js should migrate to use v2 + wiringReportGenerator.v2.js
+ * 
+ * THE NON-NEGOTIABLE RULE:
+ * If a field is not in wiringRegistry.v2.js, it does not exist to the agent.
+ * 
+ * This v1 file is kept temporarily for backward compatibility with 
+ * wiringReportBuilder.js. It will be removed once the builder is migrated.
+ * 
+ * DO NOT ADD NEW FIELDS HERE - Add them to wiringRegistry.v2.js instead.
+ * 
+ * ============================================================================
+ * ORIGINAL DESCRIPTION (preserved for reference):
  * 
  * This file defines EXACTLY what "wired" means for every component.
  * 
@@ -10,13 +25,6 @@
  * 2. Every UI tab must be represented
  * 3. Consumers must be REAL service/engine names that EXIST in /services/
  * 4. Trace keys must be emitted by real code
- * 
- * AUDIT CHANGES (Jan 18, 2026):
- * - Removed phantom services (CallProtectionEngine, TransferRouter, etc.)
- * - Mapped to ACTUAL services that exist
- * - Removed deleted tabs (companyContacts - merged into transfers)
- * - Removed unimplemented features (QA Dashboard, GoldenAutofillEngine)
- * - All expectedConsumers now reference real .js files
  * 
  * ============================================================================
  */

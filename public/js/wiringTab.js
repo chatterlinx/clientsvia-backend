@@ -1,19 +1,23 @@
 /**
  * ============================================================================
- * WIRING TAB - Enterprise Wiring Visualization
+ * AGENT WIRING (AW) - Enterprise Single Source of Truth
  * ============================================================================
  * 
- * Single source of truth UI for platform wiring status.
+ * THE NON-NEGOTIABLE CONTRACT:
+ * If a field / rule / prompt / switch / flow step is not represented in AW:
+ *   - Runtime must not read it
+ *   - Raw Events (RE) must never claim it happened
+ * 
+ * This is married to Raw Events (RE) for instant debugging forever.
  * 
  * Features:
- * - Scoreboard (health, issues count)
- * - Special checks (templates, scenarios, redis, booking)
- * - Issues list with fixes
- * - Tree view (expandable)
- * - Diagram view (boxes)
- * - Guardrails panel
- * - Export (JSON, Markdown)
- * - Search & Focus
+ * - Executive Snapshot (10-second truth)
+ * - Field Registry (single table, auditable)
+ * - Gap & Drift Center (UI_ONLY / DEAD_READ elimination)
+ * - Kill Switches (critical toggles)
+ * - Evidence Mode (AW ⇄ RE marriage)
+ * - Action Queue (prioritized fixes)
+ * - Export (AW Pack + RE Pack)
  * 
  * ============================================================================
  */
@@ -3317,10 +3321,12 @@
                 // SECTION 1: META INFORMATION
                 // ═══════════════════════════════════════════════════════════════════
                 _meta: {
-                    schema: 'WIRING_FULL_EXPORT_V1',
+                    schema: 'AW_EXPORT_V1',
+                    // Backward compat alias for old parsers
+                    _legacySchema: 'WIRING_FULL_EXPORT_V1',
                     exportedAt: now,
-                    exportedBy: 'WiringTab.exportFull',
-                    version: '1.0.0',
+                    exportedBy: 'AgentWiring.exportFull',
+                    version: '2.0.0',
                     companyId: cid,
                     companyName: _report?.scope?.companyName || null,
                     environment: _report?.scope?.environment || 'production',
@@ -3336,7 +3342,7 @@
                         'effectiveConfig', 'runtimeBindings', 'noTenantBleedProof',
                         'uiState', 'rawReport'
                     ],
-                    instructions: 'This JSON contains EVERYTHING from the Wiring tab. Each section is documented with its purpose.'
+                    instructions: 'This JSON contains EVERYTHING from Agent Wiring (AW). If it is not here, it does not exist. Each section is documented with its purpose.'
                 },
                 
                 // ═══════════════════════════════════════════════════════════════════

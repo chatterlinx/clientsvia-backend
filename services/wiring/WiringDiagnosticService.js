@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * WIRING DIAGNOSTIC SERVICE - Evidence-First Flight Recorder
+ * AGENT WIRING (AW) DIAGNOSTIC SERVICE - Evidence-First Flight Recorder
  * ============================================================================
  * 
  * THIS IS NOT A HEURISTIC GUESSING SERVICE.
@@ -8,12 +8,15 @@
  * This service analyzes ACTUAL debugSnapshot evidence from test responses
  * and produces DETERMINISTIC diagnoses using a Failure→Node mapping table.
  * 
+ * MARRIED TO RAW EVENTS (RE):
+ * Every diagnosis references exact AW paths and can be traced back to RE evidence.
+ * 
  * Every diagnostic item MUST include:
- * - nodeId: Exact wiring registry node
+ * - nodeId: Exact AW registry node
  * - evidence: Raw values observed
  * - rule: Why this value is problematic
  * - fix: Exact action to take
- * - deepLink: URL to that section
+ * - deepLink: URL to that section in Agent Wiring tab
  * 
  * ============================================================================
  */
@@ -318,7 +321,7 @@ function runDiagnosis(evidence, companyId) {
                     rule: rule.getDynamicRule ? rule.getDynamicRule(evidence) : rule.rule,
                     fix: rule.fix,
                     dbPath: rule.dbPath,
-                    deepLink: `/control-plane-v2.html?companyId=${companyId}&tab=wiring&section=${rule.deepLinkSection}`,
+                    deepLink: `/control-plane-v2.html?companyId=${companyId}&tab=agent-wiring&section=${rule.deepLinkSection}`,
                     evidence: extractRelevantEvidence(evidence, rule.id)
                 });
             }

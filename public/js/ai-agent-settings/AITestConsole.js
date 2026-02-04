@@ -12,6 +12,16 @@
  * ============================================================================
  */
 
+/**
+ * Normalize tab keys for backward compatibility.
+ * Legacy "wiring" → canonical "agent-wiring"
+ */
+function normalizeTabKey(tab) {
+    if (!tab) return tab;
+    if (tab === 'wiring') return 'agent-wiring';
+    return tab;
+}
+
 class AITestConsole {
     constructor(companyId) {
         // Robust companyId derivation:
@@ -733,7 +743,7 @@ class AITestConsole {
                             </button>
                             <button id="tab-wiring" onclick="window.aiTestConsole.switchTab('wiring')" 
                                 style="flex: 1; padding: 10px; background: transparent; border: none; color: #8b949e; cursor: pointer; font-size: 12px;">
-                                🔌 Wiring
+                                🔌 Agent Wiring
                             </button>
                         </div>
                         
@@ -2240,26 +2250,32 @@ ${separator}`;
 
     /**
      * Switch between analysis, failures, and wiring tabs
+     * Note: Internal tab key 'wiring' is kept for DOM IDs, but normalized for routing
      */
     switchTab(tab) {
-        // Reset all tabs
+        // Normalize for backward compat (external callers may still use 'wiring')
+        const normalizedTab = normalizeTabKey(tab);
+        // Map canonical 'agent-wiring' back to internal DOM key 'wiring'
+        const internalTab = normalizedTab === 'agent-wiring' ? 'wiring' : normalizedTab;
+        
+        // Reset all tabs (internal DOM uses 'wiring' for IDs)
         const tabs = ['analysis', 'failures', 'wiring'];
         const colors = { analysis: '#58a6ff', failures: '#f85149', wiring: '#38bdf8' };
         
         tabs.forEach(t => {
             const btn = document.getElementById(`tab-${t}`);
             if (btn) {
-                btn.style.background = tab === t ? '#161b22' : 'transparent';
-                btn.style.color = tab === t ? colors[t] : '#8b949e';
-                btn.style.borderBottom = tab === t ? `2px solid ${colors[t]}` : 'none';
+                btn.style.background = internalTab === t ? '#161b22' : 'transparent';
+                btn.style.color = internalTab === t ? colors[t] : '#8b949e';
+                btn.style.borderBottom = internalTab === t ? `2px solid ${colors[t]}` : 'none';
             }
         });
         
-        if (tab === 'analysis') {
+        if (internalTab === 'analysis') {
             this.updateAnalysis();
-        } else if (tab === 'failures') {
+        } else if (internalTab === 'failures') {
             this.loadFailureReport();
-        } else if (tab === 'wiring') {
+        } else if (internalTab === 'wiring') {
             this.loadWiringDiagnostics();
         }
     }
@@ -2794,14 +2810,14 @@ ${separator}`;
         const modal = document.getElementById('ai-test-console-modal');
         if (modal) modal.remove();
         
-        // Switch to Wiring tab in Control Plane
+        // Switch to Agent Wiring (AW) tab in Control Plane
         if (typeof switchTab === 'function') {
-            switchTab('wiring');
+            switchTab('agent-wiring');
         } else if (window.switchTab) {
-            window.switchTab('wiring');
+            window.switchTab('agent-wiring');
         } else {
             // Fallback: navigate with query param
-            window.location.href = `/control-plane-v2.html?companyId=${this.companyId}&tab=wiring`;
+            window.location.href = `/control-plane-v2.html?companyId=${this.companyId}&tab=agent-wiring`;
         }
     }
 

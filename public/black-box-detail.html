@@ -1837,6 +1837,9 @@
                     <button onclick="copyRawEvents()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">
                         📋 Copy All Events
                     </button>
+                    <button onclick="downloadRawEvents()" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                        💾 Download JSON
+                    </button>
                     <span style="color: #94a3b8; font-size: 13px;">${events.length} events</span>
                 </div>
                 <div style="background: #0f172a; border-radius: 8px; padding: 16px; overflow: auto; max-height: 600px;">
@@ -1871,6 +1874,39 @@
             navigator.clipboard.writeText(json).then(() => {
                 alert('✅ Raw events copied to clipboard!');
             });
+        }
+
+        function downloadRawEvents() {
+            const events = recording.events || [];
+            const json = JSON.stringify(events, null, 2);
+            
+            // Create a blob with the JSON data
+            const blob = new Blob([json], { type: 'application/json' });
+            
+            // Create a download link
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            // Generate filename with call ID and timestamp
+            const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+            a.download = `raw-events-${callId}-${timestamp}.json`;
+            
+            // Trigger download
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Optional: Show confirmation
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '✅ Downloaded!';
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+            }, 2000);
         }
 
         // ═══════════════════════════════════════════════════════════════════

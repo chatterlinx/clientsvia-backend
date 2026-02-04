@@ -1,12 +1,18 @@
 /**
  * ============================================================================
- * WIRING ROUTES - API endpoints for Wiring Tab
+ * AGENT WIRING (AW) ROUTES - API endpoints for Agent Wiring Tab
  * ============================================================================
  * 
+ * THE NON-NEGOTIABLE CONTRACT:
+ * These endpoints serve the Agent Wiring truth. If it's not returned here,
+ * the agent cannot use it and Raw Events cannot claim it happened.
+ * 
  * Endpoints:
- * - GET  /api/admin/wiring-status/:companyId    - Full wiring report
+ * - GET  /api/admin/wiring-status/:companyId    - Full AW report
  * - GET  /api/admin/wiring-status/:companyId/health - Quick health check
  * - POST /api/admin/wiring-status/:companyId/clear-cache - Clear scenario cache
+ * 
+ * Note: Route paths kept as 'wiring-status' for backward compatibility.
  * 
  * ============================================================================
  */

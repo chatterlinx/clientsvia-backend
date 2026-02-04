@@ -29,6 +29,10 @@ const Schema = mongoose.Schema;
 // ============================================================================
 const EVENT_TYPES = [
   'CALL_START',
+  'CONFIG_READ',              // 🔌 AW config read (Phase 3 - AW ⇄ RE marriage)
+  'AW_VIOLATION',             // 🚨 Registry gate violation (Phase 6 - enforcement)
+  'AW_READ_SUMMARY',          // 📊 Config read summary per turn (Phase 6e)
+  'AW_CALL_SUMMARY',          // 📊 Config read summary per call (Phase 6f - the money shot)
   'GREETING_SENT',
   'GATHER_PARTIAL',           // Optional: partial STT results
   'GATHER_FINAL',             // Final STT text from caller
@@ -93,6 +97,38 @@ const BlackBoxRecordingSchema = new Schema({
     required: true,
     index: true,
     ref: 'v2Company'
+  },
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🆕 PHASE 4: AW ⇄ RE CORRELATION (Agent Wiring Marriage)
+  // ─────────────────────────────────────────────────────────────────────────
+  // These fields enable instant correlation between Agent Wiring exports and
+  // Raw Events. A year from now, you can line them up and see:
+  // - What config was in effect (awHash)
+  // - What code was deployed (runtimeCommitSha)
+  // - Unique trace ID for log correlation (traceRunId)
+  // ─────────────────────────────────────────────────────────────────────────
+  awHash: {
+    type: String,
+    default: null,
+    index: true,
+    description: 'SHA256 hash of effectiveConfig at call start - proves which config was used'
+  },
+  traceRunId: {
+    type: String,
+    default: null,
+    index: true,
+    description: 'Unique ID for this call session - for log correlation'
+  },
+  runtimeCommitSha: {
+    type: String,
+    default: null,
+    description: 'Git SHA of deployed code - proves which code ran'
+  },
+  effectiveConfigVersion: {
+    type: String,
+    default: null,
+    description: 'Company ECV at call start'
   },
   
   // ─────────────────────────────────────────────────────────────────────────

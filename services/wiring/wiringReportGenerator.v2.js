@@ -1,10 +1,19 @@
 /**
  * ============================================================================
- * WIRING REPORT GENERATOR V2 - Source of Truth Report Builder
+ * AGENT WIRING (AW) REPORT GENERATOR - THE CANONICAL SOURCE OF TRUTH
  * ============================================================================
  * 
+ * THIS IS THE ONLY AUTHORIZED REPORT GENERATOR FOR AGENT WIRING.
+ * 
+ * Uses: wiringRegistry.v2.js (the ONLY registry)
+ *       runtimeReaders.map.js (proves runtime reads)
+ * 
+ * THE NON-NEGOTIABLE CONTRACT:
+ * If a field is not in wiringRegistry.v2.js, it does not exist to the agent.
+ * If it's not in this report, runtime must not read it.
+ * 
  * Generates the complete wiring report with:
- *   - meta: version, timestamp
+ *   - meta: version, timestamp, awHash, traceRunId
  *   - scope: companyID, tradeKey, environment
  *   - uiMap: what exists in UI
  *   - dataMap: what exists in DB

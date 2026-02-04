@@ -31,6 +31,14 @@ const AddressValidationService = require('../../AddressValidationService');
 const GoogleCalendarService = require('../../GoogleCalendarService');
 const SMSNotificationService = require('../../SMSNotificationService');
 
+// 🔌 AWConfigReader for traced config reads (Phase 6d)
+let AWConfigReader;
+try {
+    AWConfigReader = require('../../wiring/AWConfigReader');
+} catch (e) {
+    logger.warn('[BOOKING FLOW RUNNER] AWConfigReader not available');
+}
+
 /**
  * Slot extractors - deterministic extraction for each slot type
  */
@@ -298,15 +306,25 @@ class BookingFlowRunner {
      *     debug: { ... }
      * }
      */
-    static async runStep({ flow, state, userInput, company, session, callSid, slots = {} }) {
+    static async runStep({ flow, state, userInput, company, session, callSid, slots = {}, awReader: passedAwReader = null }) {
         const startTime = Date.now();
+        
+        // 🔌 AW MIGRATION: Create or use AWConfigReader for traced config reads
+        const awReader = passedAwReader || (AWConfigReader && company ? AWConfigReader.forCall({
+            callId: callSid || 'booking-step',
+            companyId: company._id?.toString() || 'unknown',
+            turn: session?.metrics?.totalTurns || 0,
+            runtimeConfig: company,
+            readerId: 'BookingFlowRunner.runStep'
+        }) : null);
         
         logger.info('[BOOKING FLOW RUNNER] Running step', {
             flowId: flow?.flowId,
             currentStepId: state?.currentStepId,
             hasUserInput: !!userInput,
             inputPreview: userInput?.substring(0, 50),
-            existingSlots: Object.keys(slots || {})
+            existingSlots: Object.keys(slots || {}),
+            hasAWReader: !!awReader
         });
         
         // Validate inputs
@@ -364,7 +382,14 @@ class BookingFlowRunner {
         if (slotsCollectedThisTurn.has('address') && state.bookingCollected.address && !state.addressValidation) {
             try {
                 const companyId = company?._id?.toString() || 'unknown';
-                const geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
+                // 🔌 AW MIGRATION: Read address verification config via AWConfigReader
+                let geoEnabled;
+                if (awReader) {
+                    awReader.setReaderId('BookingFlowRunner.addressValidation.preExtracted');
+                    geoEnabled = awReader.get('booking.addressVerification.enabled', true) !== false;
+                } else {
+                    geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
+                }
                 
                 const addressValidation = await AddressValidationService.validateAddress(
                     state.bookingCollected.address,
@@ -949,7 +974,14 @@ class BookingFlowRunner {
         if ((fieldKey === 'address' || step.type === 'address') && extractResult.value) {
             try {
                 const companyId = company?._id?.toString() || 'unknown';
-                const geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
+                // 🔌 AW MIGRATION: Read address verification config via AWConfigReader
+                let geoEnabled;
+                if (awReader) {
+                    awReader.setReaderId('BookingFlowRunner.addressValidation.collect');
+                    geoEnabled = awReader.get('booking.addressVerification.enabled', true) !== false;
+                } else {
+                    geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
+                }
                 
                 addressValidation = await AddressValidationService.validateAddress(
                     extractResult.value,
