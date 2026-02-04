@@ -2501,20 +2501,26 @@
             <span id="wiringFocusPill" class="w-pill">Focus: none</span>
           </div>
           <div class="w-toolbar-right">
-            <!-- V92: COMPREHENSIVE EXPORT - Export everything on this page -->
-            <button id="wiringExportFull" class="w-btn" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; font-weight: 700; padding: 10px 16px; border: none; border-radius: 8px;" title="Export EVERYTHING on this page as JSON (comprehensive wiring config)">
-              📦 Export Full Config
+            <!-- ═══════════════════════════════════════════════════════════════════════
+                 V93: WORLD-CLASS TOOLBAR - Clean, focused, no legacy chaos
+                 Primary: Download AW Export (the one source of truth)
+                 Secondary: View controls + Cache management
+                 ═══════════════════════════════════════════════════════════════════════ -->
+            
+            <!-- PRIMARY ACTION: The one export that matters -->
+            <button id="wiringExportFull" class="w-btn" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; font-weight: 700; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px;" title="Download complete AW truth bundle (effectiveConfig, fieldRegistry, gapAnalysis, tiers, everything)">
+              ⬇️ Download AW Export
             </button>
+            
+            <!-- VIEW CONTROLS -->
             <button id="wiringExpandAll" class="w-btn">Expand All</button>
             <button id="wiringCollapseAll" class="w-btn">Collapse All</button>
             <button id="wiringClearFocus" class="w-btn">Clear Focus</button>
-            <button id="wiringComplianceCheck" class="w-btn" title="Scan code for hardcoded values that should come from config">🔍 Code Compliance</button>
+            
+            <!-- DIAGNOSTICS -->
+            <button id="wiringComplianceCheck" class="w-btn" title="Scan code for hardcoded values that should come from config">⚡ Code Compliance</button>
             <button id="wiringClearCache" class="w-btn danger">Clear Redis Cache</button>
             <button id="wiringReload" class="w-btn primary">🔄 Reload</button>
-            <button id="wiringCopyJson" class="w-btn">Copy JSON</button>
-            <button id="wiringCopyMd" class="w-btn">Copy MD</button>
-            <button id="wiringDownloadJson" class="w-btn">⬇️ Download</button>
-            <button id="wiringPasteValidate" class="w-btn">Paste JSON + Validate</button>
           </div>
         </div>
         
