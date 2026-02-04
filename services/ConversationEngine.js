@@ -7361,10 +7361,47 @@ async function processTurn({
                             source: spellingConfigV45.source
                         });
                         
+                        // ═══════════════════════════════════════════════════════════════════
+                        // V94: SPELLING_VARIANT_CHECK trace event (AW ⇄ RE marriage)
+                        // Logs decision for why spelling confirmation did/didn't fire
+                        // ═══════════════════════════════════════════════════════════════════
+                        const spellingDecision = !spellingEnabledV45 ? 'SKIP' :
+                                                 nameMeta.askedSpellingVariant ? 'SKIP' :
+                                                 (nameMeta.spellingAsksCount || 0) >= (spellingConfigV45.maxAsksPerCall || 1) ? 'SKIP' :
+                                                 'CHECK';
+                        const spellingSkipReason = !globalSpellingEnabled ? 'disabled_global' :
+                                                   !slotLevelSpellingEnabled ? 'disabled_slot' :
+                                                   nameMeta.askedSpellingVariant ? 'already_asked' :
+                                                   (nameMeta.spellingAsksCount || 0) >= (spellingConfigV45.maxAsksPerCall || 1) ? 'maxed_out' :
+                                                   null;
+                        
                         if (shouldCheckSpellingV45) {
                             const commonFirstNamesV45 = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
                             // V67 FIX: Pass slot-level enabled flag to override global disabled
                             const variantV45 = findSpellingVariant(nameToConfirm, spellingConfigV45, commonFirstNamesV45, slotLevelSpellingEnabled);
+                            
+                            // ═══════════════════════════════════════════════════════════════════
+                            // V94: Emit SPELLING_VARIANT_CHECK to Raw Events (Black Box)
+                            // This is the trace that proves why spelling did/didn't fire
+                            // ═══════════════════════════════════════════════════════════════════
+                            const spellingCheckData = {
+                                slot: 'name',
+                                value: nameToConfirm,
+                                variantsFound: variantV45?.hasVariant ? [variantV45.optionA, variantV45.optionB].filter(v => v.toLowerCase() !== nameToConfirm.toLowerCase()) : [],
+                                globalEnabled: globalSpellingEnabled,
+                                slotEnabled: slotLevelSpellingEnabled,
+                                nameLocked: !!(currentSlots?.name && extractedSlotsMeta?.name?.nameLocked),
+                                decision: variantV45?.hasVariant ? 'ASK' : 'SKIP',
+                                reason: variantV45?.hasVariant ? null : 'no_variants',
+                                mode: spellingConfigV45.mode || '1_char_only',
+                                source: spellingConfigV45.source || 'curated_list',
+                                asksCount: nameMeta.spellingAsksCount || 0,
+                                maxAsks: spellingConfigV45.maxAsksPerCall || 1
+                            };
+                            
+                            if (BlackBoxLogger && callId) {
+                                BlackBoxLogger.logEvent(callId, 'SPELLING_VARIANT_CHECK', spellingCheckData, { turn: turnCount });
+                            }
                             
                             // V68 DEBUG: Capture for response snapshot
                             spellingVariantDebugData = {
@@ -7435,6 +7472,26 @@ async function processTurn({
                                 });
                             }
                         } else {
+                            // ═══════════════════════════════════════════════════════════════════
+                            // V94: Emit SPELLING_VARIANT_CHECK for SKIP case (AW ⇄ RE marriage)
+                            // ═══════════════════════════════════════════════════════════════════
+                            if (BlackBoxLogger && callId) {
+                                BlackBoxLogger.logEvent(callId, 'SPELLING_VARIANT_CHECK', {
+                                    slot: 'name',
+                                    value: nameToConfirm,
+                                    variantsFound: [],
+                                    globalEnabled: globalSpellingEnabled,
+                                    slotEnabled: slotLevelSpellingEnabled,
+                                    nameLocked: !!(currentSlots?.name && extractedSlotsMeta?.name?.nameLocked),
+                                    decision: 'SKIP',
+                                    reason: spellingSkipReason || 'disabled',
+                                    mode: spellingConfigV45?.mode || '1_char_only',
+                                    source: spellingConfigV45?.source || 'curated_list',
+                                    asksCount: nameMeta.spellingAsksCount || 0,
+                                    maxAsks: spellingConfigV45?.maxAsksPerCall || 1
+                                }, { turn: turnCount });
+                            }
+                            
                             // Spelling variants disabled or already checked - proceed with normal confirm
                             nameMeta.lastConfirmed = true;
                             const confirmText = confirmBackTemplate.replace('{value}', nameToConfirm);

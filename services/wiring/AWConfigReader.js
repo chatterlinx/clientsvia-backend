@@ -275,7 +275,18 @@ const AW_PATH_MAPPINGS = {
     'frontDesk.bookingOutcome': 'aiAgentSettings.frontDeskBehavior.bookingOutcome',
     'frontDesk.bookingAbortPhrases': 'aiAgentSettings.frontDeskBehavior.bookingAbortPhrases',
     'frontDesk.commonFirstNames': 'aiAgentSettings.frontDeskBehavior.commonFirstNames',
+    
+    // Name Spelling Variants (V94 - Mark with K or Marc with C?)
     'frontDesk.nameSpellingVariants': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants',
+    'frontDesk.nameSpellingVariants.enabled': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.enabled',
+    'frontDesk.nameSpellingVariants.mode': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.mode',
+    'frontDesk.nameSpellingVariants.script': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.script',
+    'frontDesk.nameSpellingVariants.maxAsksPerCall': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.maxAsksPerCall',
+    'frontDesk.nameSpellingVariants.source': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.source',
+    'frontDesk.nameSpellingVariants.variantGroups': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.variantGroups',
+    'frontDesk.nameSpellingVariants.precomputedVariantMap': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.precomputedVariantMap',
+    'frontDesk.bookingSlots.name.confirmSpelling': 'aiAgentSettings.frontDeskBehavior.bookingSlots[name].confirmSpelling',
+    
     'frontDesk.addressValidation': 'aiAgentSettings.frontDeskBehavior.bookingSlots.addressValidation',
     'booking.addressVerification': 'aiAgentSettings.frontDesk.booking.addressVerification',
     'booking.addressVerification': 'aiAgentSettings.frontDesk.booking.addressVerification',

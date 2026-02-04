@@ -537,6 +537,97 @@ const wiringRegistryV2 = {
                     ]
                 },
 
+                // ═══════════════════════════════════════════════════════════════════
+                // NAME SPELLING VARIANTS (Mark with K or Marc with C?)
+                // V94: Asks caller to confirm spelling for names with common variants
+                // REQUIRES BOTH: global enabled + slot-level confirmSpelling
+                // ═══════════════════════════════════════════════════════════════════
+                {
+                    id: 'frontDesk.nameSpellingVariants',
+                    label: 'Name Spelling Variants',
+                    description: 'Confirm spelling for names like Mark/Marc, Brian/Bryan, Eric/Erik',
+                    critical: false,
+                    tier: 'ADVANCED',
+                    ui: {
+                        sectionId: 'nameSpellingVariants',
+                        path: 'Front Desk → Booking Prompts → Name Spelling Variants'
+                    },
+                    fields: [
+                        {
+                            id: 'frontDesk.nameSpellingVariants.enabled',
+                            label: 'Spelling Confirmation Enabled',
+                            ui: { inputId: 'fdb-spelling-enabled', path: 'Front Desk → Booking Prompts → Name Spelling Variants → Enable' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.enabled' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.nameSpellingVariants.enabled'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: false,
+                            notes: 'Global master switch. OFF by default — only enable for dental/medical/membership where exact spelling matters.'
+                        },
+                        {
+                            id: 'frontDesk.nameSpellingVariants.mode',
+                            label: 'Variant Mode',
+                            ui: { inputId: 'spelling-mode', path: 'Front Desk → Booking Prompts → Name Spelling Variants → Mode' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.mode' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.nameSpellingVariants.mode'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: '1_char_only',
+                            notes: 'Options: 1_char_only (Mark/Marc, Eric/Erik), any_variant (includes Steven/Stephen, Sean/Shawn)'
+                        },
+                        {
+                            id: 'frontDesk.nameSpellingVariants.script',
+                            label: 'Spelling Prompt Template',
+                            ui: { inputId: 'fdb-spelling-script', path: 'Front Desk → Booking Prompts → Name Spelling Variants → Script' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.script' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.nameSpellingVariants.script'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?',
+                            notes: 'Placeholders: {optionA}, {optionB} = name options, {letterA}, {letterB} = differing letters'
+                        },
+                        {
+                            id: 'frontDesk.nameSpellingVariants.maxAsksPerCall',
+                            label: 'Max Asks Per Call',
+                            ui: { inputId: 'fdb-spelling-max-asks', path: 'Front Desk → Booking Prompts → Name Spelling Variants → Max Asks' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.maxAsksPerCall' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.nameSpellingVariants.maxAsksPerCall'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 1,
+                            notes: 'Recommended: 1. Set to 0 for unlimited (not recommended).'
+                        },
+                        {
+                            id: 'frontDesk.nameSpellingVariants.source',
+                            label: 'Variant Source',
+                            ui: { inputId: 'spelling-source', path: 'Front Desk → Booking Prompts → Name Spelling Variants → Source' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.source' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.nameSpellingVariants.source'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'curated_list',
+                            notes: 'Options: curated_list (manual groups), auto_scan (from commonFirstNames list)'
+                        },
+                        {
+                            id: 'frontDesk.bookingSlots.name.confirmSpelling',
+                            label: 'Confirm Spelling (Name Slot)',
+                            ui: { inputId: 'slot-confirmSpelling', path: 'Front Desk → Booking Prompts → Name Slot → Confirm Spelling' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.bookingSlots[name].confirmSpelling' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.bookingSlots.name.confirmSpelling'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: false,
+                            notes: 'SLOT-LEVEL toggle. Must be ON together with global nameSpellingVariants.enabled for spelling to fire.'
+                        }
+                    ]
+                },
+
                 // ADDRESS VERIFICATION POLICY (Google Geocode + completeness gating)
                 {
                     id: 'frontDesk.addressVerification',

@@ -394,6 +394,148 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // FRONT DESK - NAME SPELLING VARIANTS (Mark with K or Marc with C?)
+    // =========================================================================
+    // V94: These fields control spelling confirmation for names with variants.
+    // BOTH global and slot-level must be enabled for the feature to fire.
+    // =========================================================================
+    
+    'frontDesk.nameSpellingVariants': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'findSpellingVariant',
+                line: 1637,
+                description: 'Parent object for spelling variant configuration',
+                checkpoint: 'SPELLING_VARIANT_CHECK',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants',
+        scope: 'company',
+        defaultValue: { enabled: false, mode: '1_char_only', maxAsksPerCall: 1 }
+    },
+    
+    'frontDesk.nameSpellingVariants.enabled': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'findSpellingVariant',
+                line: 1640,
+                description: 'Global master switch for spelling confirmation (Mark/Marc)',
+                checkpoint: 'SPELLING_VARIANT_CHECK',
+                required: false
+            },
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 7133,
+                description: 'Checked before asking spelling variant question',
+                checkpoint: 'BOOKING_NAME_SPELLING',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.enabled',
+        scope: 'company',
+        defaultValue: false,
+        notes: 'OFF by default - only enable for dental/medical/membership where exact spelling matters'
+    },
+    
+    'frontDesk.nameSpellingVariants.mode': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'findSpellingVariant',
+                line: 1721,
+                description: 'Determines which variants trigger spelling questions',
+                checkpoint: 'SPELLING_VARIANT_CHECK',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.mode',
+        scope: 'company',
+        defaultValue: '1_char_only',
+        notes: 'Options: 1_char_only (Mark/Marc), any_variant (includes Steven/Stephen)'
+    },
+    
+    'frontDesk.nameSpellingVariants.script': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 7400,
+                description: 'Template for spelling confirmation prompt',
+                checkpoint: 'BOOKING_NAME_SPELLING',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.script',
+        scope: 'company',
+        defaultValue: 'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?',
+        notes: 'Placeholders: {optionA}, {optionB} = names, {letterA}, {letterB} = differing letters'
+    },
+    
+    'frontDesk.nameSpellingVariants.maxAsksPerCall': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'findSpellingVariant',
+                line: 1645,
+                description: 'Limits spelling questions per call to avoid annoyance',
+                checkpoint: 'SPELLING_VARIANT_CHECK',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.maxAsksPerCall',
+        scope: 'company',
+        defaultValue: 1,
+        notes: 'Recommended: 1. Set to 0 for unlimited.'
+    },
+    
+    'frontDesk.nameSpellingVariants.source': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'findSpellingVariant',
+                line: 1700,
+                description: 'Where variant groups come from: curated_list or auto_scan',
+                checkpoint: 'SPELLING_VARIANT_CHECK',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.source',
+        scope: 'company',
+        defaultValue: 'curated_list',
+        notes: 'Options: curated_list (manual), auto_scan (from commonFirstNames)'
+    },
+    
+    // Slot-level spelling confirmation (on name slot)
+    'frontDesk.bookingSlots.name.confirmSpelling': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 7135,
+                description: 'Slot-level toggle for spelling confirmation on name slot',
+                checkpoint: 'BOOKING_NAME_SPELLING',
+                required: false
+            },
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'findSpellingVariant',
+                line: 1641,
+                description: 'Both global AND slot-level must be true for spelling to fire',
+                checkpoint: 'SPELLING_VARIANT_CHECK',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.bookingSlots[name].confirmSpelling',
+        scope: 'company',
+        defaultValue: false,
+        notes: 'Must be enabled TOGETHER with global nameSpellingVariants.enabled'
+    },
+
+    // =========================================================================
     // FRONT DESK - NAME PARSING (Last-name-first support)
     // =========================================================================
     'booking.nameParsing': {

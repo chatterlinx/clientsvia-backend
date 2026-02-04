@@ -69,6 +69,8 @@ const EVENT_TYPES = [
   'BOOKING_SLOT_FILLED',      // Customer provided booking info
   'BOOKING_OVERRIDDEN',       // ⚠️ Another module hijacked booking
   'BOOKING_COMPLETE',         // Booking finished successfully
+  'SLOTS_EXTRACTED',          // 📝 V94: Slot extraction results (name, phone, address)
+  'SPELLING_VARIANT_CHECK',   // ✏️ V94: Name spelling confirmation decision (Mark/Marc)
   'AGENT_RESPONSE_BUILT',     // Full response text ready
   'AGENT_RESPONSE_VALIDATED', // ResponseValidator verdict
   'TTS_GENERATED',            // TTS complete with timing
