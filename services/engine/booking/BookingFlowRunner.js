@@ -399,9 +399,10 @@ class BookingFlowRunner {
                     geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
                 }
                 
+                // V93: Pass callId for GEO_LOOKUP events in Raw Events
                 const addressValidation = await AddressValidationService.validateAddress(
                     state.bookingCollected.address,
-                    { companyId, enabled: geoEnabled }
+                    { companyId, callId: callSid, enabled: geoEnabled }
                 );
                 
                 if (addressValidation.success && addressValidation.validated) {
@@ -991,9 +992,10 @@ class BookingFlowRunner {
                     geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
                 }
                 
+                // V93: Pass callId for GEO_LOOKUP events in Raw Events
                 addressValidation = await AddressValidationService.validateAddress(
                     extractResult.value,
-                    { companyId, enabled: geoEnabled }
+                    { companyId, callId: callSid, enabled: geoEnabled }
                 );
                 
                 if (addressValidation.success && addressValidation.validated) {

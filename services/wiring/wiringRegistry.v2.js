@@ -607,6 +607,56 @@ const wiringRegistryV2 = {
                     ]
                 },
 
+                // GOOGLE GEO INTEGRATION (V93 - for address validation)
+                {
+                    id: 'frontDesk.googleGeo',
+                    label: 'Google Geo Integration',
+                    description: 'Google Geocoding API for address validation and normalization',
+                    critical: false,
+                    ui: {
+                        sectionId: 'googleGeo',
+                        path: 'Front Desk → Integrations → Google Geo'
+                    },
+                    fields: [
+                        {
+                            id: 'integrations.googleGeo.enabled',
+                            label: 'Google Geo Enabled',
+                            ui: { inputId: 'googleGeoEnabled', path: 'Integrations → Google Geo → Enabled' },
+                            db: { path: 'integrations.googleGeo.enabled' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleGeo.enabled'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'Master switch for Google Geocoding validation'
+                        },
+                        {
+                            id: 'integrations.googleGeo.verificationMode',
+                            label: 'Verification Mode',
+                            ui: { inputId: 'googleGeoMode', path: 'Integrations → Google Geo → Mode' },
+                            db: { path: 'integrations.googleGeo.verificationMode' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleGeo.verificationMode'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'SOFT',
+                            notes: 'STRICT = block on low confidence, SOFT = warn only'
+                        },
+                        {
+                            id: 'integrations.googleGeo.minConfidence',
+                            label: 'Minimum Confidence',
+                            ui: { inputId: 'googleGeoMinConfidence', path: 'Integrations → Google Geo → Min Confidence' },
+                            db: { path: 'integrations.googleGeo.minConfidence' },
+                            runtime: RUNTIME_READERS_MAP['integrations.googleGeo.minConfidence'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'MEDIUM',
+                            notes: 'Minimum confidence threshold: HIGH | MEDIUM | LOW'
+                        }
+                    ]
+                },
+
                 // BOOKING CONTINUITY (NO HIDDEN FEATURES)
                 {
                     id: 'frontDesk.bookingContinuity',

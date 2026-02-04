@@ -34,6 +34,8 @@ const EVENT_TYPES = [
   'AW_TURN_SUMMARY',          // 📊 Config read summary per turn (V93 naming - was AW_READ_SUMMARY)
   'AW_CALL_SUMMARY',          // 📊 Config read summary per call (Phase 6f - the money shot)
   'ADDRESS_VALIDATION_RESULT', // 🏠 Address verification result (V93 - city/state/unit gating)
+  'GEO_LOOKUP_REQUEST',       // 🌍 Google Geo lookup initiated (V93 - hashed query)
+  'GEO_LOOKUP_RESULT',        // 🌍 Google Geo lookup result (V93 - confidence + components)
   'GREETING_SENT',
   'GATHER_PARTIAL',           // Optional: partial STT results
   'GATHER_FINAL',             // Final STT text from caller

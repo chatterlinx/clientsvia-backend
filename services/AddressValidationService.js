@@ -2,6 +2,7 @@
  * AddressValidationService.js
  * ═══════════════════════════════════════════════════════════════════════════════
  * V35: Google Maps Address Validation Service
+ * V93: Now with AW ⇄ RE evidence events for debugging
  * 
  * PURPOSE: Silent background validation - does NOT drive conversation
  * - Validates addresses using Google Geocoding API
@@ -13,10 +14,23 @@
  * - Never block the conversation waiting for validation
  * - Never ask city/ZIP if already provided
  * - Only confirm when confidence is low or unit is needed
+ * 
+ * V93 AW ⇄ RE EVIDENCE EVENTS:
+ * - GEO_LOOKUP_REQUEST: Before API call (hashed query)
+ * - GEO_LOOKUP_RESULT: After parsing (confidence, components, missing)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 const logger = require('../utils/logger');
+const crypto = require('crypto');
+
+// 🔌 BlackBoxLogger for GEO evidence events (V93)
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('./BlackBoxLogger');
+} catch (e) {
+    logger.warn('[ADDRESS VALIDATION] BlackBoxLogger not available');
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -46,44 +60,92 @@ const RANGE_INTERPOLATED = 'RANGE_INTERPOLATED';
 
 /**
  * Validate an address using Google Geocoding API
+ * V93: Now emits GEO_LOOKUP_REQUEST and GEO_LOOKUP_RESULT events for AW ⇄ RE marriage
  * 
  * @param {string} rawAddress - The raw address from user input
  * @param {Object} options - Validation options
  * @param {string} options.companyId - Company ID for logging
+ * @param {string} options.callId - Call ID for RE events (V93)
  * @param {boolean} options.enabled - Whether Google Maps validation is enabled
  * @returns {Object} Validation result with normalized address and confidence
  */
 async function validateAddress(rawAddress, options = {}) {
-    const { companyId = 'unknown', enabled = true } = options;
+    const { companyId = 'unknown', callId = null, enabled = true } = options;
     
     const log = (msg, data = {}) => {
         logger.debug(`[ADDRESS VALIDATION] ${msg}`, { companyId, ...data });
     };
     
+    // Helper to emit RE events (V93)
+    const emitEvent = (type, data) => {
+        if (BlackBoxLogger?.logEvent && callId) {
+            BlackBoxLogger.logEvent({
+                callId,
+                companyId,
+                type,
+                data
+            }).catch(() => {}); // Non-blocking
+        }
+    };
+    
     // Return early if disabled or no API key
     if (!enabled) {
         log('⏭️ Validation disabled for this company');
+        emitEvent('GEO_LOOKUP_RESULT', {
+            status: 'SKIPPED',
+            reason: 'disabled',
+            raw: rawAddress
+        });
         return createSkippedResult(rawAddress, 'disabled');
     }
     
     if (!GOOGLE_MAPS_API_KEY) {
         log('⚠️ Google Maps API key not configured');
+        emitEvent('GEO_LOOKUP_RESULT', {
+            status: 'SKIPPED',
+            reason: 'no_api_key',
+            raw: rawAddress
+        });
         return createSkippedResult(rawAddress, 'no_api_key');
     }
     
     if (!rawAddress || rawAddress.trim().length < 5) {
         log('⚠️ Address too short for validation', { rawAddress });
+        emitEvent('GEO_LOOKUP_RESULT', {
+            status: 'SKIPPED',
+            reason: 'too_short',
+            raw: rawAddress
+        });
         return createSkippedResult(rawAddress, 'too_short');
     }
     
     try {
         log('🔍 Validating address', { rawAddress });
         
+        // V93: Emit GEO_LOOKUP_REQUEST (hash the address for privacy)
+        const addressHash = crypto.createHash('sha256').update(rawAddress).digest('hex').substring(0, 12);
+        emitEvent('GEO_LOOKUP_REQUEST', {
+            addressHash,
+            provider: 'google_geocode',
+            rawLength: rawAddress.length
+        });
+        
         // Call Google Geocoding API
+        const startTime = Date.now();
         const response = await callGeocodingAPI(rawAddress);
+        const latencyMs = Date.now() - startTime;
         
         if (!response || response.status !== 'OK' || !response.results?.length) {
             log('❌ Google Maps returned no results', { status: response?.status });
+            
+            // V93: Emit failure event
+            emitEvent('GEO_LOOKUP_RESULT', {
+                status: 'FAILED',
+                reason: response?.status || 'NO_RESULTS',
+                addressHash,
+                latencyMs
+            });
+            
             return createFailedResult(rawAddress, response?.status || 'NO_RESULTS');
         }
         
@@ -91,12 +153,42 @@ async function validateAddress(rawAddress, options = {}) {
         const result = response.results[0];
         const parsed = parseGeocodingResult(result);
         
+        // V93: Determine what's missing for RE evidence
+        const hasCity = !!(parsed.components.city || parsed.components.locality);
+        const hasState = !!(parsed.components.state || parsed.components.stateShort);
+        const hasZip = !!parsed.components.zip;
+        const hasUnit = !!parsed.components.unit;
+        
+        const missing = [];
+        if (!hasCity) missing.push('city');
+        if (!hasState) missing.push('state');
+        if (!hasZip) missing.push('zip');
+        if (!hasUnit && parsed.needsUnit) missing.push('unit');
+        
         log('✅ Address validated', {
             normalized: parsed.normalized,
             confidence: parsed.confidence,
             needsUnit: parsed.needsUnit,
             buildingType: parsed.unitDetection?.buildingType,
-            buildingLabel: parsed.unitDetection?.buildingLabel
+            buildingLabel: parsed.unitDetection?.buildingLabel,
+            missing
+        });
+        
+        // V93: Emit GEO_LOOKUP_RESULT with full evidence
+        emitEvent('GEO_LOOKUP_RESULT', {
+            status: 'SUCCESS',
+            confidence: parsed.confidence,
+            addressHash,
+            normalizedPreview: parsed.normalized?.substring(0, 30) + '...',
+            hasCity,
+            hasState,
+            hasZip,
+            hasUnit,
+            missing,
+            needsUnit: parsed.needsUnit,
+            buildingType: parsed.unitDetection?.buildingType,
+            placeIdHash: result.place_id?.substring(0, 8),
+            latencyMs
         });
         
         return {
@@ -110,11 +202,25 @@ async function validateAddress(rawAddress, options = {}) {
             needsUnit: parsed.needsUnit,
             unitDetection: parsed.unitDetection, // Full building type info
             placeId: result.place_id,
-            formattedAddress: result.formatted_address
+            formattedAddress: result.formatted_address,
+            // V93: Include parsed components for upstream gating
+            hasCity,
+            hasState,
+            hasZip,
+            hasUnit,
+            missing
         };
         
     } catch (error) {
         log('❌ Validation error', { error: error.message });
+        
+        // V93: Emit error event
+        emitEvent('GEO_LOOKUP_RESULT', {
+            status: 'ERROR',
+            error: error.message,
+            raw: rawAddress
+        });
+        
         return createFailedResult(rawAddress, 'API_ERROR', error.message);
     }
 }

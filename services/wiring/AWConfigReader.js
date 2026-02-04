@@ -294,6 +294,12 @@ const AW_PATH_MAPPINGS = {
     'booking.nameParsing.acceptLastNameOnly': 'aiAgentSettings.frontDeskBehavior.booking.nameParsing.acceptLastNameOnly',
     'booking.nameParsing.lastNameOnlyPrompt': 'aiAgentSettings.frontDeskBehavior.booking.nameParsing.lastNameOnlyPrompt',
     
+    // Google Geo Integration (V93)
+    'integrations.googleGeo': 'integrations.googleGeo',
+    'integrations.googleGeo.enabled': 'integrations.googleGeo.enabled',
+    'integrations.googleGeo.verificationMode': 'integrations.googleGeo.verificationMode',
+    'integrations.googleGeo.minConfidence': 'integrations.googleGeo.minConfidence',
+    
     // ─────────────────────────────────────────────────────────────────────────
     // SLOT EXTRACTION - Name stop words, merge rules, confidence thresholds
     // ─────────────────────────────────────────────────────────────────────────

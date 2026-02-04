@@ -564,6 +564,54 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // INTEGRATIONS - GOOGLE GEO (V93)
+    // =========================================================================
+    'integrations.googleGeo.enabled': {
+        readers: [
+            {
+                file: 'services/AddressValidationService.js',
+                function: 'validateAddress',
+                line: 80,
+                description: 'Master switch for Google Geocoding validation',
+                required: false
+            }
+        ],
+        dbPath: 'company.integrations.googleGeo.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+
+    'integrations.googleGeo.verificationMode': {
+        readers: [
+            {
+                file: 'services/AddressValidationService.js',
+                function: 'validateAddress',
+                line: 85,
+                description: 'Verification mode: STRICT (block on low confidence) | SOFT (warn only)',
+                required: false
+            }
+        ],
+        dbPath: 'company.integrations.googleGeo.verificationMode',
+        scope: 'company',
+        defaultValue: 'SOFT'
+    },
+
+    'integrations.googleGeo.minConfidence': {
+        readers: [
+            {
+                file: 'services/AddressValidationService.js',
+                function: 'validateAddress',
+                line: 90,
+                description: 'Minimum confidence threshold (HIGH | MEDIUM | LOW)',
+                required: false
+            }
+        ],
+        dbPath: 'company.integrations.googleGeo.minConfidence',
+        scope: 'company',
+        defaultValue: 'MEDIUM'
+    },
+
+    // =========================================================================
     // FRONT DESK - BOOKING CONTINUITY (NO HIDDEN FEATURES)
     // =========================================================================
     'frontDesk.offRailsRecovery.bridgeBack.resumeBooking': {
