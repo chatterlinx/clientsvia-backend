@@ -252,6 +252,10 @@ const AW_PATH_MAPPINGS = {
     'frontDesk.discoveryConsent.forceLLMDiscovery': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.forceLLMDiscovery',
     'frontDesk.discoveryConsent.disableScenarioAutoResponses': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses',
     'frontDesk.discoveryConsent.bookingRequiresExplicitConsent': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.bookingRequiresExplicitConsent',
+    
+    // V94: Booking Intent Detection (CRITICAL MVA)
+    'frontDesk.detectionTriggers.wantsBooking': 'aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking',
+    'booking.directIntentPatterns': 'aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
     'frontDesk.discoveryConsent.consentPhrases': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.consentPhrases',
     'frontDesk.discoveryConsent.autoReplyAllowedScenarioTypes': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.autoReplyAllowedScenarioTypes',
     'frontDesk.discoveryConsent.techNameExcludeWords': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.techNameExcludeWords',

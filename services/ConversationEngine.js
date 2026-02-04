@@ -2408,6 +2408,7 @@ function getDefaultFinalScript(mode) {
 // ═══════════════════════════════════════════════════════════════════════════
 // Uses ONLY UI-configured phrases from detectionTriggers.wantsBooking[]
 // Does NOT use hardcoded regex (broken/fix/need help are DISCOVERY, not consent)
+// V94: Now uses AWConfigReader for traced reads (CONFIG_READ events)
 // ═══════════════════════════════════════════════════════════════════════════
 const ConsentDetector = {
     /**
@@ -2415,28 +2416,43 @@ const ConsentDetector = {
      * @param {string} text - User input
      * @param {Object} company - Company config with detectionTriggers
      * @param {Object} session - Session with consent state
+     * @param {Object} [awReader] - V94: AWConfigReader for traced config reads
      * @returns {Object} { hasConsent, matchedPhrase, reason }
      */
-    checkForConsent(text, company, session) {
+    checkForConsent(text, company, session, awReader = null) {
         if (!text || typeof text !== 'string') {
             return { hasConsent: false, matchedPhrase: null, reason: 'no_input' };
         }
         
         const textLower = text.toLowerCase().trim();
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V94: Use AWConfigReader for traced reads (CONFIG_READ events)
+        // This enables AW ⇄ RE marriage for consent detection
+        // ═══════════════════════════════════════════════════════════════════════
+        let requiresExplicitConsent, consentPhrases;
+        
+        if (awReader && typeof awReader.get === 'function') {
+            awReader.setReaderId('ConsentDetector.checkForConsent');
+            requiresExplicitConsent = awReader.get('frontDesk.discoveryConsent.bookingRequiresExplicitConsent', true);
+            consentPhrases = awReader.getArray('frontDesk.detectionTriggers.wantsBooking');
+        } else {
+            // Fallback: direct access (no tracing)
+            const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
+            const discoveryConsent = frontDesk.discoveryConsent || {};
+            const detectionTriggers = frontDesk.detectionTriggers || {};
+            requiresExplicitConsent = discoveryConsent.bookingRequiresExplicitConsent !== false;
+            consentPhrases = detectionTriggers.wantsBooking || [];
+        }
+        
+        // Also read from company for other values not yet in AWConfigReader
         const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
         const discoveryConsent = frontDesk.discoveryConsent || {};
-        const detectionTriggers = frontDesk.detectionTriggers || {};
-        
-        // Check if consent is required (default: true for Option 1)
-        const requiresExplicitConsent = discoveryConsent.bookingRequiresExplicitConsent !== false;
         
         if (!requiresExplicitConsent) {
             // Legacy mode: consent not required (not recommended)
             return { hasConsent: true, matchedPhrase: 'legacy_mode', reason: 'consent_not_required' };
         }
-        
-        // Get UI-configured consent phrases
-        const consentPhrases = detectionTriggers.wantsBooking || [];
         
         // ═══════════════════════════════════════════════════════════════════════
         // V92: DEFAULT CONSENT YES WORDS (ALWAYS included, can be extended by config)
@@ -5326,7 +5342,8 @@ async function processTurn({
             });
         }
         
-        const consentCheck = !aiResult ? ConsentDetector.checkForConsent(userText, company, session) : { hasConsent: false };
+        // V94: Pass awReader for traced config reads (CONFIG_READ events)
+        const consentCheck = !aiResult ? ConsentDetector.checkForConsent(userText, company, session, awReader) : { hasConsent: false };
         
         // ═══════════════════════════════════════════════════════════════════════
         // V92 ENHANCED: POST-CONSENT CHECK DIAGNOSTICS
