@@ -3138,6 +3138,26 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               serviceType: callState.serviceType || null,
               company
             });
+
+            // 📼 BLACK BOX: Log booking flow resolution source (truth vs fallback)
+            if (BlackBoxLogger) {
+              const resolution = flow?.resolution || {};
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'BOOKING_FLOW_RESOLVED',
+                turn: turnCount,
+                data: {
+                  flowId: flow?.flowId || null,
+                  source: resolution.source || flow?.source || 'unknown',
+                  status: resolution.status || 'UNKNOWN',
+                  slotCount: resolution.slotCount ?? flow?.steps?.length ?? null,
+                  checkedPaths: resolution.checkedPaths || null,
+                  hasFrontDeskSlots: resolution.hasFrontDeskSlots ?? null,
+                  hasLegacySlots: resolution.hasLegacySlots ?? null
+                }
+              }).catch(() => {});
+            }
             
             // Build state from Redis callState
             const bookingState = {

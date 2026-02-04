@@ -1452,6 +1452,22 @@ class BookingFlowRunner {
             }
         }
         
+        // 🚫 Address plausibility guard: reject junk when not validated
+        if ((fieldKey === 'address' || step.type === 'address') && extractResult.value) {
+            const validated = addressValidation?.validated === true || state.addressValidation?.validated === true;
+            const plausible = looksLikeAddress(extractResult.value);
+            if (!validated && !plausible) {
+                state.askCount = state.askCount || {};
+                state.askCount[step.id] = (state.askCount[step.id] || 0) + 1;
+                logger.warn('[BOOKING FLOW RUNNER] Address rejected: not plausible and not validated', {
+                    input: extractResult.value,
+                    validated,
+                    askCount: state.askCount[step.id]
+                });
+                return this.repromptStep(step, state, flow, 'address_not_plausible');
+            }
+        }
+        
         state.bookingCollected[fieldKey] = valueToStore;
         state.confirmedSlots = state.confirmedSlots || {};
         state.confirmedSlots[fieldKey] = true; // Directly provided = confirmed

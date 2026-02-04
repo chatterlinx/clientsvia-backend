@@ -149,6 +149,10 @@ class BookingFlowResolver {
         const bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
         const bookingTemplates = aiSettings.bookingTemplates || {};
         const bookingPromptsMap = aiSettings.bookingPromptsMap || new Map();
+        const checkedPaths = [
+            'aiAgentSettings.frontDeskBehavior.bookingSlots',
+            'aiAgentSettings.bookingSlots'
+        ];
         
         logger.debug('[BOOKING FLOW RESOLVER] Resolving flow', {
             companyId: company._id?.toString(),
@@ -163,9 +167,18 @@ class BookingFlowResolver {
             logger.warn('[BOOKING FLOW RESOLVER] No booking slots configured, using defaults', { 
                 companyId: company._id,
                 companyName: company.name,
-                checkedPaths: ['aiAgentSettings.frontDeskBehavior.bookingSlots', 'aiAgentSettings.bookingSlots']
+                checkedPaths
             });
-            return this.buildDefaultFlow(companyId, bookingTemplates);
+            const defaultFlow = this.buildDefaultFlow(companyId, bookingTemplates);
+            defaultFlow.resolution = {
+                source: 'default',
+                status: 'DEFAULT_FALLBACK',
+                checkedPaths,
+                slotCount: 0,
+                hasFrontDeskSlots: false,
+                hasLegacySlots: false
+            };
+            return defaultFlow;
         }
         
         // Build flow from UI-configured booking slots
@@ -185,7 +198,15 @@ class BookingFlowResolver {
             source: 'company_config',
             trade: trade || null,
             serviceType: serviceType || null,
-            companyId: company._id?.toString() || companyId
+            companyId: company._id?.toString() || companyId,
+            resolution: {
+                source: 'company_config',
+                status: 'OK',
+                checkedPaths,
+                slotCount: bookingSlots.length,
+                hasFrontDeskSlots: !!frontDeskBehavior.bookingSlots?.length,
+                hasLegacySlots: !!aiSettings.bookingSlots?.length
+            }
         };
         
         logger.info('[BOOKING FLOW RESOLVER] Flow resolved', {
@@ -393,7 +414,7 @@ class BookingFlowResolver {
      * Generate a flow ID for tracking
      */
     static generateFlowId(company, trade, serviceType) {
-        const companySlug = (company.slug || company.name || 'unknown')
+        const companySlug = (company.slug || company.name || company.companyName || 'unknown')
             .toLowerCase()
             .replace(/[^a-z0-9]/g, '_')
             .substring(0, 20);
