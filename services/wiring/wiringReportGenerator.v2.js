@@ -34,9 +34,87 @@ const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
 const { seedCompanyBaseFields } = require('./companySeeder');
 
+// ============================================================================
+// V94: LEGACY BRIDGES - Checks legacy paths when canonical path is empty
+// ============================================================================
+// This matches AWConfigReader.js LEGACY_BRIDGES so the report shows the same
+// status that runtime will resolve to.
+// ============================================================================
+// V94: Helper to find address slot with various key formats
+// Handles: id='address', type='address', slotId='address', id='serviceAddress'
+function findAddressSlot(slots) {
+    if (!Array.isArray(slots)) return undefined;
+    return slots.find(s => 
+        s.type === 'address' || 
+        s.id === 'address' || 
+        s.slotId === 'address' ||
+        s.id === 'serviceAddress' ||
+        s.slotId === 'serviceAddress' ||
+        (s.label && s.label.toLowerCase().includes('address'))
+    );
+}
+
+const LEGACY_BRIDGES = {
+    'booking.addressVerification.enabled': {
+        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+        legacyExtractor: (slots) => {
+            const addressSlot = findAddressSlot(slots);
+            return addressSlot?.useGoogleMapsValidation;
+        },
+        legacyDescription: 'bookingSlots[address].useGoogleMapsValidation'
+    },
+    'booking.addressVerification.requireUnitQuestion': {
+        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+        legacyExtractor: (slots) => {
+            const addressSlot = findAddressSlot(slots);
+            if (!addressSlot?.unitNumberMode) return undefined;
+            return addressSlot.unitNumberMode !== 'never';
+        },
+        legacyDescription: 'bookingSlots[address].unitNumberMode !== "never"'
+    },
+    'booking.addressVerification.unitQuestionMode': {
+        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+        legacyExtractor: (slots) => {
+            const addressSlot = findAddressSlot(slots);
+            return addressSlot?.unitNumberMode;
+        },
+        legacyDescription: 'bookingSlots[address].unitNumberMode'
+    },
+    'booking.addressVerification.unitTypePrompt': {
+        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+        legacyExtractor: (slots) => {
+            const addressSlot = findAddressSlot(slots);
+            return addressSlot?.unitNumberPrompt;
+        },
+        legacyDescription: 'bookingSlots[address].unitNumberPrompt'
+    }
+};
+
+/**
+ * V94: Check legacy bridge for a field
+ * Returns { value, source } or null if no legacy value found
+ */
+function checkLegacyBridge(fieldId, companyDoc) {
+    const bridge = LEGACY_BRIDGES[fieldId];
+    if (!bridge) return null;
+    
+    const legacyData = getPath(companyDoc, bridge.legacyPath);
+    if (legacyData === undefined) return null;
+    
+    const legacyValue = bridge.legacyExtractor(legacyData);
+    if (legacyValue === undefined) return null;
+    
+    return {
+        value: legacyValue,
+        source: 'legacy_bridge',
+        legacyDescription: bridge.legacyDescription
+    };
+}
+
 // Status codes
 const STATUS = {
     WIRED: 'WIRED',              // ✅ Full end-to-end
+    WIRED_LEGACY: 'WIRED_LEGACY', // 🔶 V94: Wired via legacy bridge (works, but needs migration)
     PARTIAL: 'PARTIAL',          // ⚠️ Some subfields missing
     MISCONFIGURED: 'MISCONFIGURED', // 🔴 Enabled but invalid
     NOT_CONFIGURED: 'NOT_CONFIGURED', // ⬜ Optional not set
@@ -74,8 +152,13 @@ function isNonEmpty(val) {
 
 /**
  * Compute status for a field
+ * @param {Object} field - Field definition from registry
+ * @param {*} dbValue - Value from database (canonical or legacy)
+ * @param {boolean} hasRuntime - Whether runtime readers exist
+ * @param {Object|null} derivedData - Data for derived fields
+ * @param {boolean} isLegacyBridge - V94: True if value came from legacy bridge
  */
-function computeFieldStatus(field, dbValue, hasRuntime, derivedData = null) {
+function computeFieldStatus(field, dbValue, hasRuntime, derivedData = null, isLegacyBridge = false) {
     const hasDbValue = isNonEmpty(dbValue);
     const hasUi = !!field.ui;
     
@@ -114,6 +197,11 @@ function computeFieldStatus(field, dbValue, hasRuntime, derivedData = null) {
                 return STATUS.MISCONFIGURED;
             }
         }
+    }
+    
+    // V94: If value came from legacy bridge, mark it explicitly
+    if (isLegacyBridge) {
+        return STATUS.WIRED_LEGACY;
     }
     
     return STATUS.WIRED;
@@ -211,11 +299,26 @@ function buildDataMap(companyDoc) {
             if (isNonEmpty(dbValue)) {
                 source = 'companyDoc';
                 dataMap.coverage.found++;
-            } else if (field.defaultValue !== undefined) {
-                dbValue = field.defaultValue;
-                source = 'default';
             } else {
-                dataMap.coverage.missing++;
+                // V94: Check legacy bridge before falling back to default
+                const legacyResult = checkLegacyBridge(field.id, companyDoc);
+                if (legacyResult && isNonEmpty(legacyResult.value)) {
+                    dbValue = legacyResult.value;
+                    source = legacyResult.source;
+                    dataMap.coverage.found++;
+                    // Log for debugging
+                    logger.debug('[WIRING REPORT] V94: Using legacy bridge value', {
+                        fieldId: field.id,
+                        dbPath,
+                        legacyDescription: legacyResult.legacyDescription,
+                        value: legacyResult.value
+                    });
+                } else if (field.defaultValue !== undefined) {
+                    dbValue = field.defaultValue;
+                    source = 'default';
+                } else {
+                    dataMap.coverage.missing++;
+                }
             }
             dataMap.coverage.total++;
         } else if (isDerived) {
@@ -357,6 +460,7 @@ function buildHealth(companyDoc, derivedData = {}) {
         overall: 'GREEN',
         byStatus: {
             [STATUS.WIRED]: 0,
+            [STATUS.WIRED_LEGACY]: 0,  // V94: Wired via legacy bridge (needs migration)
             [STATUS.PARTIAL]: 0,
             [STATUS.MISCONFIGURED]: 0,
             [STATUS.NOT_CONFIGURED]: 0,
@@ -400,16 +504,29 @@ function buildHealth(companyDoc, derivedData = {}) {
         let dbPath = null;
         let dbValue = undefined;
         
+        let isLegacyBridge = false;
+        let legacyDescription = null;
+        
         if (!isDerived) {
             dbPath = field.db?.path;
             dbValue = dbPath && companyDoc ? getPath(companyDoc, dbPath) : undefined;
+            
+            // V94: Check legacy bridge if canonical path is empty
+            if (!isNonEmpty(dbValue)) {
+                const legacyResult = checkLegacyBridge(field.id, companyDoc);
+                if (legacyResult && isNonEmpty(legacyResult.value)) {
+                    dbValue = legacyResult.value;
+                    isLegacyBridge = true;
+                    legacyDescription = legacyResult.legacyDescription;
+                }
+            }
         }
         
         const hasRuntime = hasRuntimeReaders(field.id);
         
         // Pass derivedData for derived fields
         const fieldDerivedData = isDerived ? derivedData : null;
-        const status = computeFieldStatus(field, dbValue, hasRuntime, fieldDerivedData);
+        const status = computeFieldStatus(field, dbValue, hasRuntime, fieldDerivedData, isLegacyBridge);
         
         // V92 DEBUG: Trace resumeBooking status
         if (field.id === 'frontDesk.offRailsRecovery.bridgeBack.resumeBooking') {
@@ -425,6 +542,20 @@ function buildHealth(companyDoc, derivedData = {}) {
         health.byStatus[status]++;
         
         // Build detailed field entry
+        // V94: Determine source with legacy bridge awareness
+        let source;
+        if (isDerived) {
+            source = 'GLOBAL_TEMPLATE_DERIVED';
+        } else if (isLegacyBridge) {
+            source = 'legacy_bridge';
+        } else if (isNonEmpty(dbValue)) {
+            source = 'companyDoc';
+        } else if (field.defaultValue !== undefined) {
+            source = 'default';
+        } else {
+            source = 'not_set';
+        }
+        
         const fieldEntry = {
             id: field.id,
             label: field.label,
@@ -436,8 +567,11 @@ function buildHealth(companyDoc, derivedData = {}) {
             dbPath: isDerived ? null : (field.db?.path || null),
             currentValue: isDerived ? `${derivedData?.scenarioCount || 0} scenarios from ${derivedData?.templateCount || 0} templates` : dbValue,
             defaultValue: field.defaultValue,
-            source: isDerived ? 'GLOBAL_TEMPLATE_DERIVED' : (isNonEmpty(dbValue) ? 'companyDoc' : (field.defaultValue !== undefined ? 'default' : 'not_set')),
-            isDerived: isDerived || false
+            source,
+            isDerived: isDerived || false,
+            // V94: Legacy bridge info (so operators know this needs migration)
+            isLegacyBridge: isLegacyBridge || false,
+            legacySource: legacyDescription || null
         };
         
         health.fields.push(fieldEntry);
@@ -532,7 +666,8 @@ function buildHealth(companyDoc, derivedData = {}) {
     for (const field of health.fields) {
         if (field.required) {
             health.requiredCoverage.total++;
-            if (field.status === STATUS.WIRED) {
+            // V94: WIRED_LEGACY counts as wired (it works, just needs migration)
+            if (field.status === STATUS.WIRED || field.status === STATUS.WIRED_LEGACY) {
                 health.requiredCoverage.wired++;
             } else if (field.status === STATUS.NOT_CONFIGURED || field.status === STATUS.MISCONFIGURED) {
                 health.requiredCoverage.missing++;
@@ -546,7 +681,8 @@ function buildHealth(companyDoc, derivedData = {}) {
             }
         } else {
             health.optionalCoverage.total++;
-            if (field.status === STATUS.WIRED || field.status === STATUS.PARTIAL) {
+            // V94: WIRED_LEGACY counts as configured (it works, just needs migration)
+            if (field.status === STATUS.WIRED || field.status === STATUS.WIRED_LEGACY || field.status === STATUS.PARTIAL) {
                 health.optionalCoverage.configured++;
             } else {
                 health.optionalCoverage.notConfigured++;
@@ -629,7 +765,15 @@ function buildDiff(companyDoc) {
     // UI vs DB
     for (const field of allFields) {
         const dbPath = field.db?.path;
-        const dbValue = dbPath && companyDoc ? getPath(companyDoc, dbPath) : undefined;
+        let dbValue = dbPath && companyDoc ? getPath(companyDoc, dbPath) : undefined;
+        
+        // V94: Check legacy bridge
+        if (!isNonEmpty(dbValue)) {
+            const legacyResult = checkLegacyBridge(field.id, companyDoc);
+            if (legacyResult && isNonEmpty(legacyResult.value)) {
+                dbValue = legacyResult.value;
+            }
+        }
         
         if (!isNonEmpty(dbValue) && field.required) {
             diff.uiVsDb.push({
@@ -646,7 +790,15 @@ function buildDiff(companyDoc) {
     for (const field of allFields) {
         const hasRuntime = runtimeFieldIds.has(field.id);
         const dbPath = field.db?.path;
-        const dbValue = dbPath && companyDoc ? getPath(companyDoc, dbPath) : undefined;
+        let dbValue = dbPath && companyDoc ? getPath(companyDoc, dbPath) : undefined;
+        
+        // V94: Check legacy bridge
+        if (!isNonEmpty(dbValue)) {
+            const legacyResult = checkLegacyBridge(field.id, companyDoc);
+            if (legacyResult && isNonEmpty(legacyResult.value)) {
+                dbValue = legacyResult.value;
+            }
+        }
         
         if (isNonEmpty(dbValue) && !hasRuntime) {
             diff.dbVsRuntime.push({

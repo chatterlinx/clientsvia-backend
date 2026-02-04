@@ -454,6 +454,22 @@ const AW_PATH_MAPPINGS = {
 // This allows gradual migration from old slot-level configs to new AW paths.
 // If legacy is used, emit LEGACY_PATH_USED warning so we can track migration progress.
 // ============================================================================
+// ─────────────────────────────────────────────────────────────────────────
+// V94: Helper to find address slot with various key formats
+// Handles: id='address', type='address', slotId='address', id='serviceAddress'
+// ─────────────────────────────────────────────────────────────────────────
+function findAddressSlot(slots) {
+    if (!Array.isArray(slots)) return undefined;
+    return slots.find(s => 
+        s.type === 'address' || 
+        s.id === 'address' || 
+        s.slotId === 'address' ||
+        s.id === 'serviceAddress' ||
+        s.slotId === 'serviceAddress' ||
+        (s.label && s.label.toLowerCase().includes('address'))
+    );
+}
+
 const LEGACY_BRIDGES = {
     // ─────────────────────────────────────────────────────────────────────────
     // Address Verification: New AW paths → Legacy slot-level configs
@@ -462,9 +478,7 @@ const LEGACY_BRIDGES = {
     'booking.addressVerification.enabled': {
         legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
         legacyExtractor: (slots) => {
-            // Find address slot and check useGoogleMapsValidation
-            if (!Array.isArray(slots)) return undefined;
-            const addressSlot = slots.find(s => (s.slotId || s.id || s.type) === 'address');
+            const addressSlot = findAddressSlot(slots);
             return addressSlot?.useGoogleMapsValidation;
         },
         legacyDescription: 'bookingSlots[address].useGoogleMapsValidation',
@@ -474,9 +488,7 @@ const LEGACY_BRIDGES = {
     'booking.addressVerification.requireUnitQuestion': {
         legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
         legacyExtractor: (slots) => {
-            if (!Array.isArray(slots)) return undefined;
-            const addressSlot = slots.find(s => (s.slotId || s.id || s.type) === 'address');
-            // Legacy: unitNumberMode !== 'never' means ask unit question
+            const addressSlot = findAddressSlot(slots);
             if (!addressSlot?.unitNumberMode) return undefined;
             return addressSlot.unitNumberMode !== 'never';
         },
@@ -487,8 +499,7 @@ const LEGACY_BRIDGES = {
     'booking.addressVerification.unitQuestionMode': {
         legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
         legacyExtractor: (slots) => {
-            if (!Array.isArray(slots)) return undefined;
-            const addressSlot = slots.find(s => (s.slotId || s.id || s.type) === 'address');
+            const addressSlot = findAddressSlot(slots);
             return addressSlot?.unitNumberMode;
         },
         legacyDescription: 'bookingSlots[address].unitNumberMode',
@@ -498,8 +509,7 @@ const LEGACY_BRIDGES = {
     'booking.addressVerification.unitTypePrompt': {
         legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
         legacyExtractor: (slots) => {
-            if (!Array.isArray(slots)) return undefined;
-            const addressSlot = slots.find(s => (s.slotId || s.id || s.type) === 'address');
+            const addressSlot = findAddressSlot(slots);
             return addressSlot?.unitNumberPrompt;
         },
         legacyDescription: 'bookingSlots[address].unitNumberPrompt',
