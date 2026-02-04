@@ -2490,6 +2490,192 @@
         <div id="wiringNextActions"></div>
         
         <!-- ═══════════════════════════════════════════════════════════════════
+             V93: ONBOARDING COCKPIT - Critical 12 Fields for Day-1 Setup
+             This is NOT another settings page. It's a guided wizard that:
+             1. Writes to real config paths
+             2. Emits CONFIG_WRITE events to Raw Events
+             3. Shows diff vs template
+             ═══════════════════════════════════════════════════════════════════ -->
+        <div id="wiringOnboardingCockpit" class="w-panel" style="margin-bottom: 16px; border: 2px solid #22d3ee; background: linear-gradient(135deg, rgba(34, 211, 238, 0.05) 0%, rgba(6, 182, 212, 0.02) 100%);">
+          <div class="w-panel-title" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleOnboardingCockpit()">
+            <span>🚀 Onboarding Cockpit <span style="color: #94a3b8; font-weight: 400; font-size: 12px;">(Critical 12 Fields)</span></span>
+            <span id="cockpitToggleIcon" style="font-size: 18px;">▼</span>
+          </div>
+          
+          <div id="cockpitContent" style="display: block; padding: 16px 0;">
+            <!-- Company Setup -->
+            <div class="cockpit-section">
+              <h4 style="color: #22d3ee; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Company Setup</h4>
+              <div class="cockpit-grid">
+                <div class="cockpit-field">
+                  <label>Trade Template</label>
+                  <select id="cockpit_tradeTemplate" onchange="cockpitFieldChanged('tradeTemplate', this.value)">
+                    <option value="hvac">HVAC</option>
+                    <option value="plumbing">Plumbing</option>
+                    <option value="electrical">Electrical</option>
+                    <option value="general">General Contractor</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div class="cockpit-field">
+                  <label>Service Areas</label>
+                  <input type="text" id="cockpit_serviceAreas" placeholder="Fort Myers, Cape Coral, Naples" onchange="cockpitFieldChanged('serviceAreas', this.value)" />
+                </div>
+                <div class="cockpit-field">
+                  <label>Business Hours</label>
+                  <input type="text" id="cockpit_businessHours" placeholder="8am-5pm Mon-Fri" onchange="cockpitFieldChanged('businessHours', this.value)" />
+                </div>
+              </div>
+            </div>
+            
+            <!-- Booking -->
+            <div class="cockpit-section" style="margin-top: 16px;">
+              <h4 style="color: #f97316; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Booking</h4>
+              <div class="cockpit-grid">
+                <div class="cockpit-field">
+                  <label>Booking Enabled</label>
+                  <select id="cockpit_bookingEnabled" onchange="cockpitFieldChanged('bookingEnabled', this.value === 'true')">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="cockpit-field">
+                  <label>Required Fields</label>
+                  <select id="cockpit_requiredFields" onchange="cockpitFieldChanged('requiredFields', this.value)">
+                    <option value="name_phone">Name + Phone</option>
+                    <option value="name_phone_address">Name + Phone + Address</option>
+                    <option value="all">All Fields</option>
+                  </select>
+                </div>
+                <div class="cockpit-field">
+                  <label>Require City</label>
+                  <select id="cockpit_requireCity" onchange="cockpitFieldChanged('booking.addressVerification.requireCity', this.value === 'true')">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="cockpit-field">
+                  <label>Require State</label>
+                  <select id="cockpit_requireState" onchange="cockpitFieldChanged('booking.addressVerification.requireState', this.value === 'true')">
+                    <option value="false">No (infer from city)</option>
+                    <option value="true">Yes (multi-state business)</option>
+                  </select>
+                </div>
+                <div class="cockpit-field">
+                  <label>Ask Unit Question</label>
+                  <select id="cockpit_requireUnitQuestion" onchange="cockpitFieldChanged('booking.addressVerification.requireUnitQuestion', this.value === 'true')">
+                    <option value="true">Yes ("House or apartment?")</option>
+                    <option value="false">No</option>
+                  </select>
+                </div>
+                <div class="cockpit-field">
+                  <label>First-Name Dictionary</label>
+                  <select id="cockpit_firstNameDictEnabled" onchange="cockpitFieldChanged('firstNameDictEnabled', this.value === 'true')">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Routing -->
+            <div class="cockpit-section" style="margin-top: 16px;">
+              <h4 style="color: #a855f7; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Routing</h4>
+              <div class="cockpit-grid">
+                <div class="cockpit-field">
+                  <label>Emergency Detection</label>
+                  <select id="cockpit_emergencyDetection" onchange="cockpitFieldChanged('emergencyDetection', this.value === 'true')">
+                    <option value="true">Enabled</option>
+                    <option value="false">Disabled</option>
+                  </select>
+                </div>
+                <div class="cockpit-field">
+                  <label>Transfer to Service</label>
+                  <input type="text" id="cockpit_transferService" placeholder="+1234567890" onchange="cockpitFieldChanged('transferService', this.value)" />
+                </div>
+              </div>
+            </div>
+            
+            <!-- Voice -->
+            <div class="cockpit-section" style="margin-top: 16px;">
+              <h4 style="color: #22c55e; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Voice</h4>
+              <div class="cockpit-grid">
+                <div class="cockpit-field">
+                  <label>Voice Provider</label>
+                  <select id="cockpit_voiceProvider" onchange="cockpitFieldChanged('voiceProvider', this.value)">
+                    <option value="elevenlabs">ElevenLabs</option>
+                    <option value="twilio">Twilio</option>
+                    <option value="google">Google TTS</option>
+                  </select>
+                </div>
+                <div class="cockpit-field" style="grid-column: span 2;">
+                  <label>Default Greeting</label>
+                  <input type="text" id="cockpit_greeting" placeholder="Thank you for calling [Company]..." onchange="cockpitFieldChanged('greeting', this.value)" />
+                </div>
+              </div>
+            </div>
+            
+            <!-- Proof Actions -->
+            <div class="cockpit-section" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #2a2a2e;">
+              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <button id="cockpitSaveAll" class="w-btn primary" onclick="saveCockpitConfig()" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); padding: 10px 24px;">
+                  💾 Save All Changes
+                </button>
+                <button id="cockpitTestCall" class="w-btn" onclick="openTestConsoleFromCockpit()" style="padding: 10px 20px;">
+                  📞 Run Test Call
+                </button>
+                <button id="cockpitExportAW" class="w-btn" onclick="document.getElementById('wiringExportFull').click()" style="padding: 10px 20px;">
+                  ⬇️ Export AW
+                </button>
+                <button id="cockpitExportRE" class="w-btn" onclick="window.open('/black-box-detail.html?companyId=' + getSelectedCompanyId(), '_blank')" style="padding: 10px 20px;">
+                  ⬇️ Export RE
+                </button>
+              </div>
+              <div id="cockpitStatus" style="margin-top: 12px; font-size: 12px; color: #94a3b8;"></div>
+            </div>
+          </div>
+        </div>
+        
+        <style>
+          .cockpit-section { }
+          .cockpit-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 12px; 
+          }
+          .cockpit-field { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 4px; 
+          }
+          .cockpit-field label { 
+            font-size: 11px; 
+            color: #94a3b8; 
+            text-transform: uppercase; 
+            letter-spacing: 0.3px; 
+          }
+          .cockpit-field input, .cockpit-field select { 
+            background: #1e1e24; 
+            border: 1px solid #3a3a44; 
+            border-radius: 6px; 
+            padding: 8px 10px; 
+            color: #e5e7eb; 
+            font-size: 13px; 
+          }
+          .cockpit-field input:focus, .cockpit-field select:focus { 
+            border-color: #22d3ee; 
+            outline: none; 
+          }
+          .cockpit-field.changed input, .cockpit-field.changed select {
+            border-color: #f97316;
+            background: rgba(249, 115, 22, 0.1);
+          }
+          @media (max-width: 800px) {
+            .cockpit-grid { grid-template-columns: repeat(2, 1fr); }
+          }
+        </style>
+        
+        <!-- ═══════════════════════════════════════════════════════════════════
              EXECUTIVE HEALTH BANNER
              ═══════════════════════════════════════════════════════════════════ -->
         <div id="wiringExecutiveBanner"></div>

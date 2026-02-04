@@ -26,6 +26,8 @@ const { DEFAULT_FRONT_DESK_CONFIG } = require('../../config/frontDeskPrompt');
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVersion');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
+// V93: BlackBoxLogger for CONFIG_WRITE events (AW ⇄ RE marriage)
+const BlackBoxLogger = require('../../services/BlackBoxLogger');
 
 // ============================================================================
 // DEFAULT VALUES (Shown in UI, can be customized per company)
@@ -982,6 +984,60 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         // 🚫 V36: Name stop words enabled toggle
         if (updates.nameStopWordsEnabled !== undefined) {
             updateObj['aiAgentSettings.frontDeskBehavior.nameStopWordsEnabled'] = updates.nameStopWordsEnabled;
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🏠 V93: Address Verification Policy (AW Onboarding Cockpit)
+        // Controls whether agent asks for missing city/state/unit during booking
+        // These are saved to aiAgentSettings.frontDesk.booking.addressVerification
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.addressVerification) {
+            const av = updates.addressVerification;
+            if (av.enabled !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.booking.addressVerification.enabled'] = av.enabled;
+            }
+            if (av.requireCity !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireCity'] = av.requireCity;
+            }
+            if (av.requireState !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireState'] = av.requireState;
+            }
+            if (av.requireZip !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireZip'] = av.requireZip;
+            }
+            if (av.requireUnitQuestion !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion'] = av.requireUnitQuestion;
+            }
+            if (av.unitQuestionMode !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode'] = av.unitQuestionMode;
+            }
+            if (av.missingCityStatePrompt !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.booking.addressVerification.missingCityStatePrompt'] = av.missingCityStatePrompt;
+            }
+            if (av.unitTypePrompt !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt'] = av.unitTypePrompt;
+            }
+            logger.info('[FRONT DESK BEHAVIOR] 🏠 V93 Saving addressVerification:', {
+                companyId,
+                changes: Object.keys(av)
+            });
+            
+            // V93: Emit CONFIG_WRITE to Raw Events for AW ⇄ RE proof
+            try {
+                await BlackBoxLogger.logEvent({
+                    companyId,
+                    type: 'CONFIG_WRITE',
+                    data: {
+                        source: 'OnboardingCockpit',
+                        section: 'addressVerification',
+                        paths: Object.keys(av).map(k => `booking.addressVerification.${k}`),
+                        changedBy: req.user?.email || 'admin',
+                        timestamp: new Date().toISOString()
+                    }
+                });
+            } catch (bbErr) {
+                logger.warn('[FRONT DESK BEHAVIOR] CONFIG_WRITE event failed', { error: bbErr.message });
+            }
         }
         
         updateObj['aiAgentSettings.frontDeskBehavior.lastUpdated'] = new Date();

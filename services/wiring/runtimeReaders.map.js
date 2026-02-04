@@ -473,6 +473,7 @@ const RUNTIME_READERS_MAP = {
         defaultValue: true
     },
 
+    // V93: Default false - don't ask state unless offered or business requires
     'booking.addressVerification.requireState': {
         readers: [
             {
@@ -485,7 +486,7 @@ const RUNTIME_READERS_MAP = {
         ],
         dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireState',
         scope: 'company',
-        defaultValue: true
+        defaultValue: false // V93: Don't ask state unless business requires (geo can infer from city)
     },
 
     'booking.addressVerification.requireZip': {
