@@ -3713,12 +3713,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     } : null;
     
     // Checkpoint E: Scenario/LLM path (only if not booking)
+    // V92 FIX: HONEST matchSource - if scenarioId is null, it's NOT a scenario match!
+    const scenarioSelected = result?.debug?.scenarioName || result?.debug?.scenarioId || null;
+    let rawMatchSource = result?.matchSource || 'unknown';
+    
+    // V92: If matchSource claims SCENARIO_MATCHED but there's no scenarioId, that's dishonest
+    // This was causing confusion: response "Don't worry..." labeled as SCENARIO_MATCHED with null scenarioId
+    if ((rawMatchSource === 'SCENARIO_MATCHED' || rawMatchSource === 'SCENARIO_MATCH') && !scenarioSelected) {
+      logger.warn('[V92] matchSource claims SCENARIO_MATCHED but scenarioId is null - correcting to DEFAULT_DISCOVERY', {
+        originalMatchSource: rawMatchSource,
+        debugScenarioId: result?.debug?.scenarioId,
+        debugScenarioName: result?.debug?.scenarioName
+      });
+      rawMatchSource = 'DEFAULT_DISCOVERY';  // Honest label
+    }
+    
     const checkpointE = branchTaken === 'NORMAL_ROUTING' ? {
       tier: result?.tier || 'unknown',
-      scenarioSelected: result?.debug?.scenarioName || result?.debug?.scenarioId || null,
+      scenarioSelected,
       scenarioConfidence: result?.debug?.confidence || null,
       llmUsed: result?.tier === 'tier3' || result?.matchSource === 'LLM_FALLBACK',
-      matchSource: result?.matchSource || 'unknown',
+      matchSource: rawMatchSource,
       tokensUsed: result?.tokensUsed || result?.debug?.tokensUsed || 0
     } : null;
     

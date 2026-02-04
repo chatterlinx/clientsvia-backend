@@ -474,7 +474,9 @@ const RUNTIME_BINDINGS = [
         checkpoints: ['SCENARIO_RESPONSE'],
         // V92: STATE_MACHINE is used when fromStateMachine=true + tokensUsed=0
         // This includes scenario matches, fast-path, and deterministic handlers
-        matchSources: ['SCENARIO_MATCHED', 'STATE_MACHINE', 'RULE_BASED'],
+        // V92 FIX: Added DEFAULT_DISCOVERY for when no scenario actually matched but
+        // a canned discovery response was used (e.g., "Don't worry, let's figure it out")
+        matchSources: ['SCENARIO_MATCHED', 'STATE_MACHINE', 'RULE_BASED', 'DEFAULT_DISCOVERY'],
         codePatterns: ['scenarioMatched', 'fromStateMachine']
     },
     

@@ -205,6 +205,15 @@ const NAME_STOP_WORDS = new Set([
     'problem', 'issue', 'trouble', 'error', 'system', 'unit', 'equipment',
     'thermostat', 'filter', 'vent', 'duct', 'coil', 'compressor', 'condenser',
     'furnace', 'heater', 'ac', 'hvac', 'air', 'conditioning', 'heat', 'pump',
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V92 FIX: TEMPERATURE/MEASUREMENT WORDS - NOT names!
+    // "it's 80 DEGREES IN the house" → "Degrees In" is NOT a name!
+    // This was the exact bug: caller said "80 degrees in the house" and 
+    // NER extracted "Degrees In" as a name, overwriting the real name "Mark"
+    // ═══════════════════════════════════════════════════════════════════════════
+    'degrees', 'degree', 'fahrenheit', 'celsius', 'temperature', 'temp',
+    'percent', 'percentage', 'humidity', 'pressure', 'psi',
+    'inside', 'outside', 'indoor', 'outdoor', 'house', 'home', 'room', 'upstairs', 'downstairs',
     // V92 FIX: Pronouns and articles that slip through
     'its', "it's", 'they', 'them', 'their', 'we', 'our', 'us',
     'one', 'some', 'any', 'all', 'none', 'each', 'every', 'both',
@@ -423,9 +432,10 @@ class SlotExtractor {
      * 
      * 1. Never overwrite `confirmed=true` unless isCorrection
      * 2. If isCorrection → overwrite and mark correctedByCaller
-     * 3. If new confidence > existing → overwrite
-     * 4. If similar confidence but different values → keep existing, mark conflict
-     * 5. Track history for debugging
+     * 3. V92 NAME PROTECTION: Never overwrite high-confidence name unless explicit name phrase
+     * 4. If new confidence > existing → overwrite
+     * 5. If similar confidence but different values → keep existing, mark conflict
+     * 6. Track history for debugging
      * 
      * SLOT SHAPE (canonical):
      * - value: string | object
@@ -484,6 +494,45 @@ class SlotExtractor {
                     };
                 }
                 continue;
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V92 RULE 1.5: NAME SLOT PROTECTION
+            // ═══════════════════════════════════════════════════════════════════════════
+            // If we already have a name with confidence >= 0.8, NEVER overwrite it
+            // unless the new extraction contains explicit name phrases like:
+            //   - "my name is X"
+            //   - "this is X"
+            //   - "it's X calling"
+            // OR it's marked as a correction
+            //
+            // BUG FIXED: "80 degrees in the house" was extracting "Degrees In" as a name
+            // and overwriting the correct name "Mark"
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (key === 'name' && existing.confidence >= 0.8 && !newSlot.isCorrection) {
+                // Check if new extraction has explicit name intent
+                const hasExplicitNamePhrase = newSlot.extractedViaExplicitPhrase === true;
+                
+                if (!hasExplicitNamePhrase) {
+                    logger.warn('[SLOT EXTRACTOR] V92: BLOCKED name overwrite (no explicit name phrase)', {
+                        existingName: existing.value,
+                        existingConfidence: existing.confidence,
+                        rejectedCandidate: newSlot.value,
+                        rejectedConfidence: newSlot.confidence,
+                        reason: 'high_confidence_name_already_exists'
+                    });
+                    // Keep existing, record the rejected candidate in history
+                    merged[key] = {
+                        ...existing,
+                        history: [...(existing.history || []), {
+                            value: newSlot.value,
+                            confidence: newSlot.confidence,
+                            turn: newSlot.turn,
+                            reason: 'V92_blocked_no_explicit_phrase'
+                        }]
+                    };
+                    continue;
+                }
             }
             
             // RULE 2: If new slot is a correction, overwrite
@@ -648,7 +697,8 @@ class SlotExtractor {
                         const result = {
                             value: name,
                             confidence: CONFIDENCE.UTTERANCE_HIGH,
-                            source: SOURCE.UTTERANCE
+                            source: SOURCE.UTTERANCE,
+                            extractedViaExplicitPhrase: true  // V92: Correction = explicit name statement
                         };
                         
                         // V92: Add first/last name metadata
@@ -716,7 +766,8 @@ class SlotExtractor {
                     const result = {
                         value: name,
                         confidence: CONFIDENCE.UTTERANCE_HIGH,
-                        source: SOURCE.UTTERANCE
+                        source: SOURCE.UTTERANCE,
+                        extractedViaExplicitPhrase: true  // V92: Marks this as explicit name statement
                     };
                     
                     if (isSingleWord) {
@@ -775,7 +826,8 @@ class SlotExtractor {
                     const result = {
                         value: name,
                         confidence: CONFIDENCE.UTTERANCE_HIGH,
-                        source: SOURCE.UTTERANCE
+                        source: SOURCE.UTTERANCE,
+                        extractedViaExplicitPhrase: true  // V92: "this is X" = explicit name statement
                     };
                     
                     // V92: Add first/last name metadata for single-word names
