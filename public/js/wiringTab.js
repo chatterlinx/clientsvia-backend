@@ -2155,6 +2155,236 @@
         focusNode(nodeId);
         renderInspector();
     }
+    
+    // ========================================================================
+    // V93: WIRING INVENTORY TABLE - The Ghost Buster
+    // Master list of EVERYTHING in the platform
+    // ========================================================================
+    
+    function renderWiringInventory() {
+        const el = $('#wiringInventoryTable');
+        if (!el || !_report) {
+            if (el) el.innerHTML = '';
+            return;
+        }
+        
+        // Get all fields from the report
+        const fields = _report.uiMap?.fields || [];
+        const coverage = _report.coverage || {};
+        const runtimeBindings = _report.runtimeBindings || {};
+        
+        // Build inventory from fields + coverage analysis
+        const inventory = [];
+        
+        // Add all fields from registry
+        fields.forEach(f => {
+            const awPath = f.id;
+            const uiStatus = determineUIStatus(f);
+            const runtimeStatus = determineRuntimeStatus(awPath, coverage, runtimeBindings);
+            const lastEvidence = getLastEvidence(awPath, runtimeBindings);
+            const uiLocation = getUILocation(f);
+            
+            inventory.push({
+                awPath,
+                label: f.label || awPath,
+                uiStatus,
+                runtimeStatus,
+                lastEvidence,
+                uiLocation,
+                deprecated: f.deprecated || false,
+                notes: buildNotes(f, coverage)
+            });
+        });
+        
+        // Add dead reads (runtime reads not in registry)
+        const deadReads = coverage.deadReadPaths || [];
+        deadReads.forEach(path => {
+            if (!inventory.find(i => i.awPath === path)) {
+                inventory.push({
+                    awPath: path,
+                    label: path,
+                    uiStatus: 'DEAD_READ',
+                    runtimeStatus: 'READ',
+                    lastEvidence: null,
+                    uiLocation: null,
+                    deprecated: false,
+                    notes: '⚠️ Runtime reads this but no registry entry'
+                });
+            }
+        });
+        
+        // Sort: problems first, then alphabetical
+        inventory.sort((a, b) => {
+            const statusOrder = { 'DEAD_READ': 0, 'UI_ONLY': 1, 'HIDDEN': 2, 'DEPRECATED': 3, 'WIRED': 4 };
+            const aOrder = statusOrder[a.uiStatus] ?? 5;
+            const bOrder = statusOrder[b.uiStatus] ?? 5;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.awPath.localeCompare(b.awPath);
+        });
+        
+        // Count by status
+        const counts = {
+            wired: inventory.filter(i => i.uiStatus === 'WIRED').length,
+            uiOnly: inventory.filter(i => i.uiStatus === 'UI_ONLY').length,
+            deadRead: inventory.filter(i => i.uiStatus === 'DEAD_READ').length,
+            deprecated: inventory.filter(i => i.deprecated).length,
+            total: inventory.length
+        };
+        
+        el.innerHTML = `
+            <div class="w-panel">
+                <div class="w-panel-title" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>📋 Wiring Inventory <span style="color: #6e7681; font-weight: 400; font-size: 12px;">(${counts.total} fields)</span></span>
+                    <div style="display: flex; gap: 8px; font-size: 11px;">
+                        <span style="color: #22c55e;">✓ ${counts.wired} wired</span>
+                        <span style="color: #f97316;">⚠ ${counts.uiOnly} UI_ONLY</span>
+                        <span style="color: #ef4444;">🔴 ${counts.deadRead} DEAD_READ</span>
+                        <span style="color: #6e7681;">📦 ${counts.deprecated} deprecated</span>
+                    </div>
+                </div>
+                
+                <div style="overflow-x: auto; margin-top: 12px;">
+                    <table class="w-inventory-table" style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="background: #1e1e24; text-align: left;">
+                                <th style="padding: 8px; border-bottom: 1px solid #2a2a2e;">AW Path</th>
+                                <th style="padding: 8px; border-bottom: 1px solid #2a2a2e; width: 100px;">UI Status</th>
+                                <th style="padding: 8px; border-bottom: 1px solid #2a2a2e; width: 100px;">Runtime</th>
+                                <th style="padding: 8px; border-bottom: 1px solid #2a2a2e; width: 140px;">Last Evidence</th>
+                                <th style="padding: 8px; border-bottom: 1px solid #2a2a2e; width: 120px;">Where in UI</th>
+                                <th style="padding: 8px; border-bottom: 1px solid #2a2a2e;">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${inventory.slice(0, 100).map(i => renderInventoryRow(i)).join('')}
+                            ${inventory.length > 100 ? `
+                                <tr>
+                                    <td colspan="6" style="padding: 12px; text-align: center; color: #6e7681;">
+                                        ... and ${inventory.length - 100} more fields. Use search to filter.
+                                    </td>
+                                </tr>
+                            ` : ''}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    function renderInventoryRow(item) {
+        const statusColors = {
+            'WIRED': '#22c55e',
+            'UI_ONLY': '#f97316',
+            'DEAD_READ': '#ef4444',
+            'HIDDEN': '#6e7681',
+            'DEPRECATED': '#6e7681'
+        };
+        const runtimeColors = {
+            'READ': '#22c55e',
+            'NOT_READ': '#f97316',
+            'DEAD_READ': '#ef4444'
+        };
+        
+        const uiColor = statusColors[item.uiStatus] || '#6e7681';
+        const rtColor = runtimeColors[item.runtimeStatus] || '#6e7681';
+        
+        return `
+            <tr style="border-bottom: 1px solid #1e1e24; ${item.uiStatus === 'DEAD_READ' ? 'background: rgba(239, 68, 68, 0.1);' : ''}">
+                <td style="padding: 8px; font-family: monospace; color: #e5e7eb;">
+                    ${esc(item.awPath)}
+                    ${item.deprecated ? '<span style="color: #6e7681; font-size: 10px;"> (deprecated)</span>' : ''}
+                </td>
+                <td style="padding: 8px;">
+                    <span style="color: ${uiColor}; font-weight: 600;">${item.uiStatus}</span>
+                </td>
+                <td style="padding: 8px;">
+                    <span style="color: ${rtColor};">${item.runtimeStatus}</span>
+                </td>
+                <td style="padding: 8px; font-size: 10px; color: #94a3b8;">
+                    ${item.lastEvidence ? formatEvidence(item.lastEvidence) : '—'}
+                </td>
+                <td style="padding: 8px;">
+                    ${item.uiLocation ? `<a href="#" onclick="navigateToFix('${item.uiLocation.tab}', '${item.uiLocation.section}', '${item.awPath}'); return false;" style="color: #22d3ee; text-decoration: none;">${esc(item.uiLocation.label || 'Go →')}</a>` : '—'}
+                </td>
+                <td style="padding: 8px; color: #94a3b8; font-size: 11px;">
+                    ${item.notes ? esc(item.notes) : ''}
+                </td>
+            </tr>
+        `;
+    }
+    
+    function determineUIStatus(field) {
+        if (field.deprecated) return 'DEPRECATED';
+        if (field.hidden) return 'HIDDEN';
+        
+        // Check if runtime reads this
+        const coverage = _report?.coverage || {};
+        const uiOnlyPaths = coverage.uiOnlyPaths || [];
+        
+        if (uiOnlyPaths.includes(field.id)) return 'UI_ONLY';
+        
+        return 'WIRED';
+    }
+    
+    function determineRuntimeStatus(awPath, coverage, runtimeBindings) {
+        const deadReads = coverage.deadReadPaths || [];
+        if (deadReads.includes(awPath)) return 'DEAD_READ';
+        
+        const uiOnly = coverage.uiOnlyPaths || [];
+        if (uiOnly.includes(awPath)) return 'NOT_READ';
+        
+        // Check if there's a reader
+        const binding = runtimeBindings[awPath];
+        if (binding?.readers?.length > 0) return 'READ';
+        
+        return 'NOT_READ';
+    }
+    
+    function getLastEvidence(awPath, runtimeBindings) {
+        const binding = runtimeBindings[awPath];
+        if (!binding) return null;
+        
+        return {
+            readerId: binding.readers?.[0]?.function || binding.readers?.[0]?.file || null,
+            file: binding.readers?.[0]?.file || null
+        };
+    }
+    
+    function formatEvidence(evidence) {
+        if (!evidence) return '—';
+        if (evidence.readerId) {
+            return `<span title="${esc(evidence.file || '')}">${esc(evidence.readerId)}</span>`;
+        }
+        return '—';
+    }
+    
+    function getUILocation(field) {
+        if (!field.ui) return null;
+        
+        return {
+            tab: field.ui.tabId || field.scope || 'frontDesk',
+            section: field.ui.sectionId || field.ui.path?.split(' → ')[1] || '',
+            label: field.ui.path ? field.ui.path.split(' → ').pop() : 'Go →'
+        };
+    }
+    
+    function buildNotes(field, coverage) {
+        const notes = [];
+        
+        if (field.deprecated) {
+            notes.push(`📦 Deprecated: ${field.deprecatedReason || 'legacy'}`);
+        }
+        
+        if (coverage.uiOnlyPaths?.includes(field.id)) {
+            notes.push('⚠️ UI writes but runtime never reads');
+        }
+        
+        if (field.notes) {
+            notes.push(field.notes);
+        }
+        
+        return notes.join(' | ');
+    }
 
     function renderInspector() {
         const el = $('#wiringInspector');
@@ -2326,66 +2556,124 @@
     
     // ========================================================================
     // V93: EVIDENCE HEADER - Proves page is looking at TRUTH
+    // Sources from the SAME object that powers the export (not UI state)
     // ========================================================================
     
+    const STALE_THRESHOLD_MINUTES = 10; // Report older than this = STALE
+    let _evidenceState = { verified: false, stale: false }; // Track for disabling buttons
+    
     function renderEvidenceHeader() {
-        const ecvEl = document.getElementById('evidenceECV');
-        const hashEl = document.getElementById('evidenceAwHash');
-        const genEl = document.getElementById('evidenceGeneratedAt');
-        const verifiedEl = document.getElementById('evidenceVerified');
+        const headerEl = document.getElementById('wiringEvidenceHeader');
+        if (!headerEl) return;
+        
+        // Reset state
+        _evidenceState = { verified: false, stale: false };
         
         if (!_report) {
-            if (ecvEl) ecvEl.textContent = '—';
-            if (hashEl) hashEl.textContent = '—';
-            if (genEl) genEl.textContent = '—';
-            if (verifiedEl) {
-                verifiedEl.textContent = '⚠ UNVERIFIED';
-                verifiedEl.style.background = '#3a2a1e';
-                verifiedEl.style.color = '#f97316';
-            }
+            headerEl.innerHTML = renderEvidenceHeaderHTML(null, null, null, null, 'UNVERIFIED');
             return;
         }
         
-        // Extract evidence from report
-        const meta = _report._meta || _report.metadata || {};
-        const ecv = meta.effectiveConfigVersion || _report.derivedData?.effectiveConfigVersion || _report.scope?.effectiveConfigVersion || null;
-        const awHash = meta.awHash || meta.configHash || null;
+        // ─────────────────────────────────────────────────────────────────────
+        // SOURCE FROM EXPORT META (same as download export)
+        // ─────────────────────────────────────────────────────────────────────
+        const meta = _report._meta || {};
+        const derivedData = _report.derivedData || {};
+        const scope = _report.scope || {};
+        
+        // Priority: _meta > derivedData > scope (matches export builder)
+        const ecv = meta.effectiveConfigVersion || derivedData.effectiveConfigVersion || scope.effectiveConfigVersion || null;
+        const awHash = meta.awHash || meta.configHash || derivedData.awHash || null;
+        const runtimeSha = meta.runtimeCommitSha || derivedData.runtimeCommitSha || null;
         const genAt = meta.generatedAt || meta.timestamp || null;
+        const companyId = meta.companyId || scope.companyId || _currentCompanyId || null;
         
-        // Check if verified (all evidence present)
-        const isVerified = !!(ecv && awHash && genAt);
+        // ─────────────────────────────────────────────────────────────────────
+        // VERIFICATION RULES
+        // ─────────────────────────────────────────────────────────────────────
+        const hasAllRequired = !!(ecv && awHash && genAt);
         
-        if (ecvEl) {
-            ecvEl.textContent = ecv ? `v${ecv}` : '—';
-            ecvEl.style.color = ecv ? '#22d3ee' : '#ef4444';
+        // Check staleness (older than threshold)
+        let isStale = false;
+        if (genAt) {
+            const genDate = new Date(genAt);
+            const ageMinutes = (Date.now() - genDate.getTime()) / (1000 * 60);
+            isStale = ageMinutes > STALE_THRESHOLD_MINUTES;
         }
         
-        if (hashEl) {
-            hashEl.textContent = awHash ? awHash.substring(0, 12) + '...' : '—';
-            hashEl.style.color = awHash ? '#f97316' : '#ef4444';
+        // Determine status
+        let status = 'UNVERIFIED';
+        if (hasAllRequired) {
+            status = isStale ? 'STALE' : 'VERIFIED';
         }
         
-        if (genEl) {
-            if (genAt) {
-                const d = new Date(genAt);
-                genEl.textContent = d.toLocaleTimeString() + ' ' + d.toLocaleDateString();
+        _evidenceState = { 
+            verified: status === 'VERIFIED', 
+            stale: isStale,
+            ecv,
+            awHash,
+            runtimeSha,
+            genAt,
+            companyId
+        };
+        
+        headerEl.innerHTML = renderEvidenceHeaderHTML(ecv, awHash, runtimeSha, genAt, status, companyId);
+        
+        // Gray out action buttons if not verified
+        updateActionButtonsState();
+    }
+    
+    function renderEvidenceHeaderHTML(ecv, awHash, runtimeSha, genAt, status, companyId) {
+        const statusColors = {
+            'VERIFIED': { bg: '#1e3a3a', color: '#22c55e', icon: '✓' },
+            'STALE': { bg: '#3a3a1e', color: '#eab308', icon: '⏱' },
+            'UNVERIFIED': { bg: '#3a2a1e', color: '#f97316', icon: '⚠' }
+        };
+        const s = statusColors[status] || statusColors['UNVERIFIED'];
+        
+        const formatTime = (ts) => {
+            if (!ts) return '—';
+            const d = new Date(ts);
+            return d.toLocaleTimeString() + ' ' + d.toLocaleDateString();
+        };
+        
+        return `
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <span style="color: #6e7681;">ECV:</span>
+                <span style="color: ${ecv ? '#22d3ee' : '#ef4444'}; font-family: monospace;">${ecv ? 'v' + ecv : '—'}</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <span style="color: #6e7681;">AW Hash:</span>
+                <span style="color: ${awHash ? '#f97316' : '#ef4444'}; font-family: monospace;">${awHash ? awHash.substring(0, 12) + '...' : '—'}</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <span style="color: #6e7681;">Runtime:</span>
+                <span style="color: ${runtimeSha ? '#a855f7' : '#6e7681'}; font-family: monospace;">${runtimeSha ? runtimeSha.substring(0, 8) : '—'}</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <span style="color: #6e7681;">Generated:</span>
+                <span style="color: ${genAt ? '#94a3b8' : '#ef4444'}; font-family: monospace;">${formatTime(genAt)}</span>
+            </div>
+            <div style="margin-left: auto; padding: 4px 12px; border-radius: 4px; font-weight: 600; background: ${s.bg}; color: ${s.color};">
+                ${s.icon} ${status}
+            </div>
+        `;
+    }
+    
+    function updateActionButtonsState() {
+        // Disable "Apply Recommended" buttons if not verified
+        const applyButtons = document.querySelectorAll('.w-nba-apply');
+        applyButtons.forEach(btn => {
+            if (!_evidenceState.verified) {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.title = 'Cannot apply: Evidence not verified (refresh AW report)';
             } else {
-                genEl.textContent = '—';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.title = 'Apply recommended fix (emits CONFIG_WRITE)';
             }
-            genEl.style.color = genAt ? '#94a3b8' : '#ef4444';
-        }
-        
-        if (verifiedEl) {
-            if (isVerified) {
-                verifiedEl.textContent = '✓ VERIFIED';
-                verifiedEl.style.background = '#1e3a3a';
-                verifiedEl.style.color = '#22c55e';
-            } else {
-                verifiedEl.textContent = '⚠ UNVERIFIED';
-                verifiedEl.style.background = '#3a2a1e';
-                verifiedEl.style.color = '#f97316';
-            }
-        }
+        });
     }
     
     // ========================================================================
@@ -2825,6 +3113,9 @@
         renderSpecialChecks();        // Source-of-truth checks
         renderIssues();               // Full issues list
         renderGuardrails();           // Tenant safety
+        
+        // === V93: WIRING INVENTORY TABLE (Ghost Buster - always visible) ===
+        renderWiringInventory();      // Master list of everything
         
         // === WIRING TREE (always visible - operational) ===
         renderTree();                 // Field tree view
