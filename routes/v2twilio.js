@@ -1220,6 +1220,7 @@ router.post('/voice', async (req, res) => {
     // This proves which config was used and enables AW ⇄ RE correlation.
     // ════════════════════════════════════════════════════════════════════════════
     const awProof = computeAwProof(company);
+    const traceRunId = `tr-${req.body.CallSid || Date.now()}`;
     
     if (BlackBoxLogger) {
       try {
@@ -1237,7 +1238,7 @@ router.post('/voice', async (req, res) => {
           // V94: AW ⇄ RE correlation keys (proves which config was used)
           awHash: awProof.awHash,
           effectiveConfigVersion: awProof.effectiveConfigVersion,
-          traceRunId: `tr-${req.body.CallSid?.substring(0, 8) || Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+          traceRunId
         });
         
         logger.info('[BLACK BOX] ✅ V94: Call initialized with AW proof', {
@@ -2756,6 +2757,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         };
       }
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V94: Ensure single call identity (traceRunId + awHash) across all events
+    // ═══════════════════════════════════════════════════════════════════════════
+    const awProofForTurn = computeAwProof(company);
+    const traceRunIdForTurn = callState.traceRunId || `tr-${callSid || Date.now()}`;
+    callState.traceRunId = traceRunIdForTurn;
+    callState.awHash = callState.awHash || awProofForTurn.awHash;
+    callState.effectiveConfigVersion = callState.effectiveConfigVersion || awProofForTurn.effectiveConfigVersion;
     
     // Increment turn count
     callState.turnCount = (callState.turnCount || 0) + 1;
@@ -2947,7 +2957,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // FIX: LLM-0 is now DEFAULT ON for all voice calls.
       // Only explicitly disabled for specific use cases (after-hours, DTMF menus)
       // ═══════════════════════════════════════════════════════════════════════════
-      const bookingInProgress = !!(callState?.bookingModeLocked && callState?.bookingState);
+      const bookingInProgress = callState?.bookingModeLocked === true || callState?.bookingState === 'ACTIVE';
+      const routingPath = bookingInProgress ? 'BOOKING_FLOW_RUNNER' : 'HybridReceptionistLLM';
       
       // ═══════════════════════════════════════════════════════════════════════════
       // 🚀 LLM-0 IS NOW ALWAYS ON - Dec 2025 SIMPLIFICATION
@@ -2972,7 +2983,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             bookingModeLocked: !!callState?.bookingModeLocked,
             bookingState: callState?.bookingState || null,
             currentBookingStep: callState?.currentBookingStep || null,
-            path: 'HybridReceptionistLLM'
+            path: routingPath
           }
         }).catch(() => {});
       }
@@ -3154,7 +3165,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   companyId: companyID,
                   turn: callState?.totalTurns || callState?.turnCount || 0,
                   runtimeConfig: company,
-                  readerId: 'v2twilio.BookingFlowRunner'
+                  readerId: 'v2twilio.BookingFlowRunner',
+                  awHash: callState?.awHash || null,
+                  traceRunId: callState?.traceRunId || null
                 });
               } catch (awErr) {
                 logger.warn('[V2TWILIO] Failed to create AWConfigReader for booking flow', { 
@@ -3292,7 +3305,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         
         const useHybridPath = company?.aiAgentSettings?.callFlowEngine?.enabled !== false; // Default ON
         const hybridStartTime = Date.now();
-        let usedPath = result ? 'vendor' : 'legacy';
+        let usedPath = result
+          ? ((bookingInProgress || result?.matchSource === 'BOOKING_FLOW_RUNNER' || result?.matchSource === 'BOOKING_SNAP')
+              ? 'booking'
+              : 'vendor')
+          : 'legacy';
         
         if (useHybridPath && !result) {
           try {

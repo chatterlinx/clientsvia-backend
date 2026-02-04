@@ -130,16 +130,22 @@ const SlotExtractors = {
         
         const text = input.toLowerCase().trim();
         
+        // 🚫 Guard: never treat an address-like utterance as time
+        if (looksLikeAddress(text)) {
+            logger.debug('[BOOKING FLOW RUNNER] Time rejected: looks like address', { text: text.substring(0, 60) });
+            return null;
+        }
+        
         // ASAP patterns
         if (/\b(asap|as soon as possible|soon|right away|immediately|now)\b/.test(text)) {
             return 'ASAP';
         }
         
-        // Morning/afternoon/evening
-        if (/\b(morning|am|before noon)\b/.test(text)) {
+        // Explicit time of day preferences (non-greeting)
+        if (/\b(morning|before noon)\b/.test(text)) {
             return 'Morning';
         }
-        if (/\b(afternoon|pm|after lunch)\b/.test(text)) {
+        if (/\b(afternoon|after lunch)\b/.test(text)) {
             return 'Afternoon';
         }
         if (/\b(evening|night|after work|after 5)\b/.test(text)) {
@@ -147,13 +153,21 @@ const SlotExtractors = {
         }
         
         // Day patterns
-        const dayMatch = text.match(/\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+        const dayMatch = text.match(/\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|next week|this week)\b/i);
         if (dayMatch) {
             return titleCase(dayMatch[1]);
         }
         
-        // If we got something, return it as-is
-        if (text.length > 2) {
+        // Specific time patterns
+        if (/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(text)) {
+            return input.trim();
+        }
+        if (/\b(at|around)\s+\d{1,2}(?::\d{2})?\b/i.test(text)) {
+            return input.trim();
+        }
+        
+        // Explicit preference indicators
+        if (/\b(prefer|works|available|free|sometime|anytime|no preference|whenever)\b/i.test(text)) {
             return input.trim();
         }
         
@@ -195,6 +209,26 @@ const SlotExtractors = {
 /**
  * Helper functions
  */
+const STATE_PATTERN = /\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
+const ZIP_PATTERN = /\b\d{5}(?:-\d{4})?\b/;
+const UNIT_PATTERN = /\b(?:apt|apartment|unit|suite|ste|#)\s*[\w\-]+/i;
+const STREET_SUFFIX_PATTERN = /\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|court|ct|boulevard|blvd|way|place|pl|circle|cir|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|loop|alley|aly|path|crossing|xing|square|sq|plaza|plz|commons|point|pt|ridge|run|pass|grove|park|estates|meadow|meadows|valley|hills|heights|view|vista|landing|springs|creek|glen|cove|bay|beach|shore|pointe)\b/i;
+
+function looksLikeAddress(text) {
+    if (!text) return false;
+    const hasNumber = /\b\d{1,6}\b/.test(text);
+    return hasNumber && STREET_SUFFIX_PATTERN.test(text);
+}
+
+function detectAddressParts(rawAddress) {
+    const text = (rawAddress || '').toString().toLowerCase();
+    return {
+        hasCity: STATE_PATTERN.test(text) || (rawAddress || '').includes(','),
+        hasState: STATE_PATTERN.test(text),
+        hasZip: ZIP_PATTERN.test(text),
+        hasUnit: UNIT_PATTERN.test(text)
+    };
+}
 function isStopWord(word) {
     const stopWords = new Set([
         'is', 'are', 'was', 'were', 'be', 'been', 'am',
@@ -998,30 +1032,29 @@ class BookingFlowRunner {
                     { companyId, callId: callSid, enabled: geoEnabled }
                 );
                 
+                // ═══════════════════════════════════════════════════════════════
+                // V93: ADDRESS COMPLETENESS POLICY (always read, even if geo skipped)
+                // ═══════════════════════════════════════════════════════════════
+                let requireCity = true, requireState = true, requireZip = false;
+                let requireUnitQuestion = true, unitQuestionMode = 'house_or_unit';
+                let missingCityStatePrompt = "Got it — what city and state is that in?";
+                let unitTypePrompt = "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?";
+                
+                if (awReader) {
+                    awReader.setReaderId('BookingFlowRunner.addressCompleteness');
+                    requireCity = awReader.get('booking.addressVerification.requireCity', true) !== false;
+                    requireState = awReader.get('booking.addressVerification.requireState', true) !== false;
+                    requireZip = awReader.get('booking.addressVerification.requireZip', false) === true;
+                    requireUnitQuestion = awReader.get('booking.addressVerification.requireUnitQuestion', true) !== false;
+                    unitQuestionMode = awReader.get('booking.addressVerification.unitQuestionMode', 'house_or_unit');
+                    missingCityStatePrompt = awReader.get('booking.addressVerification.missingCityStatePrompt', missingCityStatePrompt);
+                    unitTypePrompt = awReader.get('booking.addressVerification.unitTypePrompt', unitTypePrompt);
+                }
+                
+                // Use the formatted address when available, otherwise raw
+                valueToStore = addressValidation.formattedAddress || addressValidation.normalized || extractResult.value;
+                
                 if (addressValidation.success && addressValidation.validated) {
-                    // Use the formatted address from Google
-                    valueToStore = addressValidation.formattedAddress || addressValidation.normalized || extractResult.value;
-                    
-                    // ═══════════════════════════════════════════════════════════════
-                    // V93: ADDRESS COMPLETENESS GATING (city/state/unit enforcement)
-                    // ═══════════════════════════════════════════════════════════════
-                    // Read address verification policy via AWConfigReader
-                    let requireCity = true, requireState = true, requireZip = false;
-                    let requireUnitQuestion = true, unitQuestionMode = 'house_or_unit';
-                    let missingCityStatePrompt = "Got it — what city and state is that in?";
-                    let unitTypePrompt = "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?";
-                    
-                    if (awReader) {
-                        awReader.setReaderId('BookingFlowRunner.addressCompleteness');
-                        requireCity = awReader.get('booking.addressVerification.requireCity', true) !== false;
-                        requireState = awReader.get('booking.addressVerification.requireState', true) !== false;
-                        requireZip = awReader.get('booking.addressVerification.requireZip', false) === true;
-                        requireUnitQuestion = awReader.get('booking.addressVerification.requireUnitQuestion', true) !== false;
-                        unitQuestionMode = awReader.get('booking.addressVerification.unitQuestionMode', 'house_or_unit');
-                        missingCityStatePrompt = awReader.get('booking.addressVerification.missingCityStatePrompt', missingCityStatePrompt);
-                        unitTypePrompt = awReader.get('booking.addressVerification.unitTypePrompt', unitTypePrompt);
-                    }
-                    
                     // Parse address components from Google response
                     const components = addressValidation.components || {};
                     const hasCity = !!(components.locality || components.sublocality || components.postal_town);
@@ -1068,7 +1101,8 @@ class BookingFlowRunner {
                                 hasState,
                                 hasZip,
                                 hasUnit,
-                                placeId: addressValidation.placeId
+                                placeId: addressValidation.placeId,
+                                status: 'VALIDATED'
                             }
                         }).catch(() => {}); // Non-blocking
                     }
@@ -1173,17 +1207,136 @@ class BookingFlowRunner {
                         hasState,
                         hasUnit
                     });
-                } else if (addressValidation.confidence === 'LOW' || !addressValidation.success) {
-                    // Low confidence - ask for clarification
-                    logger.warn('[BOOKING FLOW RUNNER] Address validation low confidence', {
-                        raw: extractResult.value,
-                        confidence: addressValidation.confidence,
-                        reason: addressValidation.reason
-                    });
+                } else {
+                    // Fallback gating when geo is skipped or fails
+                    const fallbackParts = detectAddressParts(extractResult.value);
+                    const hasCity = fallbackParts.hasCity;
+                    const hasState = fallbackParts.hasState;
+                    const hasZip = fallbackParts.hasZip;
+                    const hasUnit = fallbackParts.hasUnit || !!state.bookingCollected?.unit;
                     
-                    // Still store but mark as needing confirmation
-                    state.addressLowConfidence = true;
-                    valueToStore = extractResult.value; // Keep raw value
+                    const missing = [];
+                    if (requireCity && !hasCity) missing.push('city');
+                    if (requireState && !hasState) missing.push('state');
+                    if (requireZip && !hasZip) missing.push('zip');
+                    
+                    state.addressValidation = {
+                        raw: extractResult.value,
+                        formatted: valueToStore,
+                        confidence: addressValidation.confidence,
+                        placeId: addressValidation.placeId || null,
+                        location: addressValidation.location || null,
+                        needsUnit: addressValidation.needsUnit || false,
+                        unitDetection: addressValidation.unitDetection || null,
+                        components: null,
+                        missing,
+                        hasCity,
+                        hasState,
+                        hasZip,
+                        hasUnit,
+                        validated: false,
+                        skipped: !!addressValidation.skipped,
+                        skipReason: addressValidation.skipReason || addressValidation.failReason || null
+                    };
+                    
+                    if (BlackBoxLogger?.logEvent && callSid) {
+                        BlackBoxLogger.logEvent({
+                            callId: callSid,
+                            companyId: companyId,
+                            type: 'ADDRESS_VALIDATION_RESULT',
+                            turn: state.turn || 0,
+                            data: {
+                                raw: extractResult.value,
+                                normalizedPreview: valueToStore,
+                                confidence: addressValidation.confidence,
+                                missing,
+                                hasCity,
+                                hasState,
+                                hasZip,
+                                hasUnit,
+                                status: addressValidation.skipped ? 'SKIPPED' : (addressValidation.success ? 'UNVALIDATED' : 'FAILED'),
+                                skipReason: addressValidation.skipReason || addressValidation.failReason || null
+                            }
+                        }).catch(() => {});
+                    }
+                    
+                    if (missing.length > 0) {
+                        state.bookingCollected[fieldKey] = valueToStore;
+                        state.addressIncomplete = true;
+                        state.addressMissing = missing;
+                        
+                        logger.warn('[BOOKING FLOW RUNNER] V93: Address incomplete (no geo), asking for missing components', {
+                            missing,
+                            address: valueToStore
+                        });
+                        
+                        return {
+                            reply: missingCityStatePrompt,
+                            state,
+                            isComplete: false,
+                            action: 'COLLECT_CITY_STATE',
+                            currentStep: 'city_state',
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                source: 'BOOKING_FLOW_RUNNER',
+                                flowId: flow.flowId,
+                                mode: 'ADDRESS_INCOMPLETE_FALLBACK',
+                                missing,
+                                addressValidation: state.addressValidation
+                            }
+                        };
+                    }
+                    
+                    const alreadyAskedUnit = state.addressUnitAsked === true;
+                    const shouldAskUnit = (
+                        requireUnitQuestion &&
+                        !alreadyAskedUnit &&
+                        !hasUnit &&
+                        (unitQuestionMode === 'always_ask' ||
+                         (unitQuestionMode === 'house_or_unit') ||
+                         (unitQuestionMode === 'smart' && addressValidation.needsUnit))
+                    );
+                    
+                    if (shouldAskUnit) {
+                        state.bookingCollected[fieldKey] = valueToStore;
+                        state.addressNeedsUnit = true;
+                        state.addressUnitAsked = true;
+                        
+                        logger.info('[BOOKING FLOW RUNNER] V93: Asking unit question (no geo) per policy', {
+                            address: valueToStore,
+                            unitQuestionMode
+                        });
+                        
+                        return {
+                            reply: unitTypePrompt,
+                            state,
+                            isComplete: false,
+                            action: 'COLLECT_UNIT',
+                            currentStep: 'unit',
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                source: 'BOOKING_FLOW_RUNNER',
+                                flowId: flow.flowId,
+                                mode: 'UNIT_REQUIRED_FALLBACK',
+                                addressValidation: state.addressValidation
+                            }
+                        };
+                    }
+                    
+                    if (addressValidation.confidence === 'LOW' || !addressValidation.success) {
+                        logger.warn('[BOOKING FLOW RUNNER] Address validation low confidence or failed', {
+                            raw: extractResult.value,
+                            confidence: addressValidation.confidence,
+                            reason: addressValidation.reason || addressValidation.failReason || addressValidation.skipReason
+                        });
+                        state.addressLowConfidence = true;
+                    }
                 }
             } catch (geoError) {
                 logger.warn('[BOOKING FLOW RUNNER] Address validation error (non-blocking)', {

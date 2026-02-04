@@ -551,7 +551,7 @@ class AWConfigReader {
         
         // AW ⇄ RE correlation keys (for every CONFIG_READ)
         this.awHash = awHash || this._computeAwHash();
-        this.traceRunId = traceRunId || `tr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        this.traceRunId = traceRunId || (callId ? `tr-${callId}` : `tr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
         
         // Track reads for this call (for debugging/analysis)
         this.reads = [];
