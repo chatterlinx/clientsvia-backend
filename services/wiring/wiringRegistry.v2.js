@@ -545,8 +545,6 @@ const wiringRegistryV2 = {
                             validators: [],
                             defaultValue: false, // Don't ask unless business requires - geo can infer from city
                             notes: 'Only enable for multi-state businesses. Geo infers state from city most of the time.'
-                            defaultValue: true,
-                            notes: 'Do not confirm address until state is captured'
                         },
                         {
                             id: 'booking.addressVerification.requireZip',
