@@ -77,6 +77,28 @@ async function getRedis() {
 }
 
 // ============================================================================
+// 🔌 V94: AW TRUTH PROOF - Compute awHash + effectiveConfigVersion at CALL_START
+// ============================================================================
+// This ensures Raw Events can prove which config was used during the call.
+// Without this, AW and RE cannot be correlated (ghost mode).
+// ============================================================================
+function computeAwProof(company) {
+    try {
+        const aiAgentSettings = company?.aiAgentSettings || {};
+        const configStr = JSON.stringify(aiAgentSettings);
+        const awHash = 'sha256:' + crypto.createHash('sha256').update(configStr).digest('hex').substring(0, 16);
+        const effectiveConfigVersion = company?.effectiveConfigVersion || 
+                                       company?.aiAgentSettings?.effectiveConfigVersion || 
+                                       company?.updatedAt?.toISOString() || 
+                                       null;
+        return { awHash, effectiveConfigVersion };
+    } catch (e) {
+        logger.warn('[AW PROOF] Failed to compute', { error: e.message });
+        return { awHash: null, effectiveConfigVersion: null };
+    }
+}
+
+// ============================================================================
 // V69: RECOVERY MESSAGE HELPER - Human-like random variant selection
 // ============================================================================
 // Instead of robotic "connection is choppy", use natural phrases like:
@@ -1186,6 +1208,11 @@ router.post('/voice', async (req, res) => {
     // ════════════════════════════════════════════════════════════════════════════
     // 📼 BLACK BOX: Initialize call recording
     // ════════════════════════════════════════════════════════════════════════════
+    // V94: Compute AW proof (awHash + effectiveConfigVersion) for CALL_START
+    // This proves which config was used and enables AW ⇄ RE correlation.
+    // ════════════════════════════════════════════════════════════════════════════
+    const awProof = computeAwProof(company);
+    
     if (BlackBoxLogger) {
       try {
         await BlackBoxLogger.initCall({
@@ -1198,7 +1225,17 @@ router.post('/voice', async (req, res) => {
             isReturning: callContext.isReturning || false,
             totalCalls: callContext.customerContext.totalCalls || 1,
             customerName: callContext.customerContext.name || null
-          } : null
+          } : null,
+          // V94: AW ⇄ RE correlation keys (proves which config was used)
+          awHash: awProof.awHash,
+          effectiveConfigVersion: awProof.effectiveConfigVersion,
+          traceRunId: `tr-${req.body.CallSid?.substring(0, 8) || Date.now()}-${Math.random().toString(36).substr(2, 5)}`
+        });
+        
+        logger.info('[BLACK BOX] ✅ V94: Call initialized with AW proof', {
+          callId: req.body.CallSid,
+          awHash: awProof.awHash,
+          effectiveConfigVersion: awProof.effectiveConfigVersion
         });
       } catch (bbErr) {
         // Non-blocking: Don't let black box failures kill the call
