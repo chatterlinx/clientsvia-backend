@@ -49,6 +49,22 @@ const DIRECT_BOOKING_PATTERNS = [
     /\b(come|get\s+someone|have\s+someone)\s+(out|over)\s+(today|tomorrow|this\s+week|asap)/i,
     /\bavailable\s+(today|tomorrow|this\s+week)\b.*\b(appointment|service|come\s+out)/i,
     
+    // V94 FIX: Urgency phrases that indicate booking intent
+    // "as soon as possible" / "ASAP" / "right away" / "immediately" / "soonest"
+    // These indicate the caller WANTS scheduling, not just preference capture
+    /\bas\s+soon\s+as\s+possible\b/i,
+    /\basap\b/i,
+    /\bright\s+(away|now)\b/i,
+    /\bimmediately\b/i,
+    /\bsoonest\b/i,
+    /\bearliest\s+(available|time|slot|appointment)\b/i,
+    /\bfirst\s+available\b/i,
+    /\bnext\s+available\b/i,
+    /\bget\s+(somebody|someone)\s+(out|here|over)/i,
+    /\bsend\s+(somebody|someone)\s+(out|here|over)/i,
+    /\bneed\s+(somebody|someone)\s+(out|here|over)/i,
+    /\bwant\s+(somebody|someone)\s+(out|here|over)/i,
+    
     // V92 FIX: "how soon can you get somebody out here" patterns
     // These are DIRECT booking intent - caller wants to schedule, not just asking
     /\bhow\s+(soon|fast|quickly)\s+can\s+(you|someone|somebody)\s+(come|get|be)\s+(out|over|here)/i,

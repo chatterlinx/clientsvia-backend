@@ -2529,8 +2529,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   let sttProcessResult = null;
   try {
     // Get template ID for this company
-    const company = await Company.findById(companyID).select('aiAgentSettings.templateReferences aiAgentSettings.llm0Controls.recoveryMessages').lean();
-    const templateId = company?.aiAgentSettings?.templateReferences?.[0]?.templateId;
+    // 📛 FEB 2026 FIX: Renamed to sttCompany to avoid TDZ conflict with outer `let company` at line ~2846
+    // The original `const company` here caused ReferenceError: Cannot access 'company' before initialization
+    const sttCompany = await Company.findById(companyID).select('aiAgentSettings.templateReferences aiAgentSettings.llm0Controls.recoveryMessages').lean();
+    const templateId = sttCompany?.aiAgentSettings?.templateReferences?.[0]?.templateId;
     
     if (templateId && speechResult) {
       sttProcessResult = await STTPreprocessor.process(speechResult, templateId, {
@@ -2851,6 +2853,55 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     try {
       // Load company and check LLM-0 feature flag
       company = await Company.findById(companyID).lean();
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 🛡️ FEB 2026 FIX: HARD GUARD - Company must exist before proceeding
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Without this guard, downstream code crashes with TDZ errors or null refs.
+      // If company is null, log error and return safe recovery (NOT auto-transfer).
+      // ═══════════════════════════════════════════════════════════════════════════
+      if (!company) {
+        logger.error('[PIPELINE ERROR] Company not found - cannot process turn', {
+          companyId: companyID,
+          callSid,
+          speechResult: speechResult?.substring(0, 100)
+        });
+        
+        // 📼 BLACK BOX: Log the critical error
+        if (BlackBoxLogger) {
+          await BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'PIPELINE_ERROR',
+            data: {
+              error: 'Company not found in database',
+              errorType: 'COMPANY_NOT_FOUND',
+              phase: 'v2-agent-respond-company-load',
+              speechResult: speechResult?.substring(0, 200),
+              recovery: 'SAFE_RETRY_PROMPT'
+            }
+          }).catch(() => {});
+        }
+        
+        // Return a safe retry prompt - NOT "connecting you to our team" (that requires transfer config)
+        const twiml = new twilio.twiml.VoiceResponse();
+        const safeRecovery = "I'm sorry, I didn't quite catch that. Could you please say that again?";
+        twiml.say(safeRecovery);
+        
+        // Set up gather to let caller retry
+        const gather = twiml.gather({
+          input: 'speech',
+          action: `/api/twilio/v2-agent-respond/${companyID}`,
+          method: 'POST',
+          timeout: 5,
+          speechTimeout: '3',
+          speechModel: 'phone_call'
+        });
+        gather.say('');
+        
+        res.type('text/xml');
+        return res.send(twiml.toString());
+      }
       
       // ═══════════════════════════════════════════════════════════════════════════
       // V94: Ensure single call identity (traceRunId + awHash) across all events
@@ -3799,10 +3850,24 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       )
     };
     
-    // Checkpoint C: Booking short-circuit decision
+    // Checkpoint C1: Booking intent detection (V94 - runs BEFORE meta intents)
+    // This is the new early detection that catches "as soon as possible" before
+    // REPAIR_CONVERSATION or other meta intents can intercept it
+    const checkpointC_bookingIntent = result?.bookingIntentTrace || {
+      requiresExplicitConsent: null,
+      intentMatched: null,
+      intentConfidence: null,
+      consentPending: null,
+      consentMatched: null,
+      branchTaken: 'NO_TRACE'
+    };
+    
+    // Checkpoint C2: Booking short-circuit decision (original checkpoint C)
     const branchTaken = result?.debug?.source === 'BOOKING_FLOW_RUNNER' ? 'BOOKING_RUNNER' :
                         result?.matchSource === 'AFTER_HOURS_FLOW' ? 'AFTER_HOURS' :
                         result?.matchSource === 'VENDOR_FLOW' ? 'VENDOR' :
+                        result?.matchSource === 'BOOKING_CONSENT_QUESTION' ? 'BOOKING_CONSENT_QUESTION' :
+                        result?.matchSource === 'BOOKING_DIRECT_INTENT_TRIGGERED' ? 'BOOKING_DIRECT_INTENT' :
                         'NORMAL_ROUTING';
     const checkpointC = {
       bookingModeLocked: !!result?.callState?.bookingModeLocked || !!callState?.bookingModeLocked,
@@ -3906,6 +3971,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Existing checkpoints
       checkpointA_stateLoaded: checkpointA,
       checkpointB_slotsExtracted: checkpointB,
+      // V94: New booking intent checkpoint (runs BEFORE meta intents)
+      checkpointC_bookingIntent,
       checkpointC_branchDecision: checkpointC,
       checkpointD_bookingRunner: checkpointD,
       checkpointE_scenarioLLM: checkpointE,

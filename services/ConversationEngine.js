@@ -4774,6 +4774,251 @@ async function processTurn({
             }
             // Skip all other processing if aiResult was set
         }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // 🎯 V94 P0: BOOKING INTENT GATE - RUNS BEFORE META INTENTS!
+        // ═══════════════════════════════════════════════════════════════════════
+        // CRITICAL FIX: Booking intent detection MUST run FIRST so that:
+        // - "as soon as possible" → triggers booking, not REPAIR_CONVERSATION
+        // - "i said i need service" → triggers booking, not REPAIR_CONVERSATION
+        // 
+        // The meta intent patterns (especially REPAIR_CONVERSATION with /i said/)
+        // were catching booking utterances before booking detection could run.
+        //
+        // Now booking intent runs FIRST with highest priority!
+        // ═══════════════════════════════════════════════════════════════════════
+        const { DirectBookingIntentDetector, ConsentDetector } = require('./engine/booking');
+        
+        // AW wiring: Read config for explicit consent requirement
+        const bookingRequiresExplicitConsent = awReader 
+            ? awReader.get('frontDesk.discoveryConsent.bookingRequiresExplicitConsent')
+            : (company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.bookingRequiresExplicitConsent ?? false);
+        
+        // Early booking intent detection (before meta intents can intercept)
+        let earlyBookingIntent = null;
+        let earlyConsentCheck = null;
+        let bookingConsentPending = session.booking?.consentPending || false;
+        
+        if (!aiResult && userText && userText.length > 3) {
+            // 1. Check for DIRECT booking intent (highest priority)
+            earlyBookingIntent = DirectBookingIntentDetector.detect(userText, {
+                trade: company?.trade || company?.tradeType,
+                company
+            });
+            
+            // 2. Check for consent (yes/yeah/sure to a consent question)
+            earlyConsentCheck = ConsentDetector.checkForConsent(userText, company, session, awReader);
+            
+            const alreadyConsented = session.booking?.consentGiven === true;
+            const inBookingMode = String(session?.mode || '').toUpperCase() === 'BOOKING' || session.bookingModeLocked;
+            
+            // Log early booking intent check for trace
+            log('🎯 V94: EARLY BOOKING INTENT CHECK (before meta)', {
+                hasDirectIntent: earlyBookingIntent?.hasDirectIntent,
+                directConfidence: earlyBookingIntent?.confidence,
+                directReason: earlyBookingIntent?.reason,
+                directPattern: earlyBookingIntent?.matchedPattern?.substring(0, 50),
+                hasConsent: earlyConsentCheck?.hasConsent,
+                consentReason: earlyConsentCheck?.reason,
+                bookingRequiresExplicitConsent,
+                alreadyConsented,
+                inBookingMode,
+                bookingConsentPending,
+                userTextPreview: userText.substring(0, 60)
+            });
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // DECISION TREE:
+            // 1. If already in booking mode → skip (let booking runner handle)
+            // 2. If already consented → skip (let booking runner handle)
+            // 3. If consent given now (responded YES to consent question) → enter booking
+            // 4. If direct booking intent detected:
+            //    a. If explicit consent required AND confidence < 0.9 → ask consent question
+            //    b. Otherwise → enter booking directly
+            // ═══════════════════════════════════════════════════════════════════
+            
+            if (!inBookingMode && !alreadyConsented) {
+                // Case 3: User responded YES to a consent question we asked
+                if (bookingConsentPending && earlyConsentCheck.hasConsent) {
+                    log('✅ V94: CONSENT GIVEN (after pending question) → ENTER BOOKING', {
+                        consentPhrase: earlyConsentCheck.matchedPhrase
+                    });
+                    
+                    session.booking = session.booking || {};
+                    session.booking.consentGiven = true;
+                    session.booking.consentTurn = session.metrics?.totalTurns || 0;
+                    session.booking.consentReason = 'YES_AFTER_CONSENT_QUESTION';
+                    session.booking.consentPhrase = earlyConsentCheck.matchedPhrase || userText;
+                    session.booking.consentPending = false;
+                    session.bookingModeLocked = true;
+                    session.mode = 'BOOKING';
+                    
+                    // Don't set aiResult here - let booking flow runner handle next turn
+                    // But DO mark that booking was triggered so meta intents don't intercept
+                    // Actually, we should respond with first booking prompt
+                    
+                    // BlackBox trace
+                    if (BlackBoxLogger) {
+                        BlackBoxLogger.logEvent({
+                            callId: session._id?.toString(),
+                            companyId,
+                            type: 'BOOKING_CONSENT_GRANTED',
+                            turn: session.metrics?.totalTurns || 0,
+                            data: {
+                                trigger: 'YES_AFTER_CONSENT_QUESTION',
+                                consentPhrase: earlyConsentCheck.matchedPhrase,
+                                bookingRequiresExplicitConsent,
+                                userText: userText.substring(0, 100)
+                            }
+                        }).catch(() => {});
+                    }
+                }
+                // Case 4a: Direct booking intent detected, but consent required
+                else if (earlyBookingIntent.hasDirectIntent && bookingRequiresExplicitConsent && earlyBookingIntent.confidence < 0.95) {
+                    log('⏸️ V94: BOOKING INTENT DETECTED but explicit consent required → ASK CONSENT', {
+                        confidence: earlyBookingIntent.confidence,
+                        reason: earlyBookingIntent.reason
+                    });
+                    
+                    session.booking = session.booking || {};
+                    session.booking.consentPending = true;
+                    session.booking.intentDetectedTurn = session.metrics?.totalTurns || 0;
+                    session.booking.intentReason = earlyBookingIntent.reason;
+                    bookingConsentPending = true;
+                    
+                    // Get consent question from config or use default
+                    const consentQuestion = awReader 
+                        ? awReader.get('frontDesk.discoveryConsent.consentQuestion')
+                        : (company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.consentQuestion 
+                            || "Would you like me to schedule a technician to come out?");
+                    
+                    aiResult = {
+                        reply: consentQuestion,
+                        conversationMode: session.mode || 'DISCOVERY',
+                        filledSlots: currentSlots,
+                        signals: { bookingConsentPending: true },
+                        latencyMs: Date.now() - aiStartTime,
+                        tokensUsed: 0,
+                        fromStateMachine: true,
+                        matchSource: 'BOOKING_CONSENT_QUESTION',
+                        tier: 'tier1',
+                        mode: session.mode || 'DISCOVERY',
+                        debug: {
+                            source: 'BOOKING_CONSENT_QUESTION',
+                            intentConfidence: earlyBookingIntent.confidence,
+                            intentReason: earlyBookingIntent.reason,
+                            bookingRequiresExplicitConsent
+                        }
+                    };
+                    
+                    session.conversationMemory = session.conversationMemory || {};
+                    session.conversationMemory.askedConsentQuestion = true;
+                    
+                    // BlackBox trace
+                    if (BlackBoxLogger) {
+                        BlackBoxLogger.logEvent({
+                            callId: session._id?.toString(),
+                            companyId,
+                            type: 'BOOKING_CONSENT_QUESTION_ASKED',
+                            turn: session.metrics?.totalTurns || 0,
+                            data: {
+                                intentConfidence: earlyBookingIntent.confidence,
+                                intentReason: earlyBookingIntent.reason,
+                                consentQuestion,
+                                bookingRequiresExplicitConsent
+                            }
+                        }).catch(() => {});
+                    }
+                    
+                    log('⏸️ V94: CONSENT QUESTION SENT (instant Tier-1)', { reply: consentQuestion });
+                }
+                // Case 4b: Direct booking intent with high confidence OR consent not required → ENTER BOOKING
+                else if (earlyBookingIntent.hasDirectIntent && earlyBookingIntent.confidence >= 0.75) {
+                    const skipConsent = !bookingRequiresExplicitConsent || earlyBookingIntent.confidence >= 0.95;
+                    
+                    if (skipConsent) {
+                        log('✅ V94: DIRECT BOOKING INTENT (high confidence) → ENTER BOOKING', {
+                            confidence: earlyBookingIntent.confidence,
+                            reason: earlyBookingIntent.reason,
+                            skipConsentBecause: !bookingRequiresExplicitConsent ? 'consentNotRequired' : 'highConfidence'
+                        });
+                        
+                        session.booking = session.booking || {};
+                        session.booking.consentGiven = true;
+                        session.booking.consentTurn = session.metrics?.totalTurns || 0;
+                        session.booking.consentReason = 'DIRECT_BOOKING_INTENT';
+                        session.booking.consentPhrase = earlyBookingIntent.matchedPattern || userText;
+                        session.bookingModeLocked = true;
+                        session.mode = 'BOOKING';
+                        
+                        // BlackBox trace
+                        if (BlackBoxLogger) {
+                            BlackBoxLogger.logEvent({
+                                callId: session._id?.toString(),
+                                companyId,
+                                type: 'BOOKING_DIRECT_INTENT_TRIGGERED',
+                                turn: session.metrics?.totalTurns || 0,
+                                data: {
+                                    trigger: 'DIRECT_BOOKING_INTENT',
+                                    confidence: earlyBookingIntent.confidence,
+                                    reason: earlyBookingIntent.reason,
+                                    pattern: earlyBookingIntent.matchedPattern,
+                                    userText: userText.substring(0, 100)
+                                }
+                            }).catch(() => {});
+                        }
+                        
+                        // Don't set aiResult - let booking flow runner pick up on this turn
+                    }
+                }
+                // Case 3 alt: User gives consent but we never asked (spontaneous "yes schedule me")
+                else if (earlyConsentCheck.hasConsent && !bookingConsentPending) {
+                    // Check if this looks like spontaneous booking consent
+                    const looksLikeSpontaneousBookingRequest = /\b(yes|yeah|sure|ok|okay).*(schedule|book|appointment|come\s+out|send)/i.test(userText);
+                    
+                    if (looksLikeSpontaneousBookingRequest) {
+                        log('✅ V94: SPONTANEOUS BOOKING CONSENT → ENTER BOOKING', {
+                            consentPhrase: earlyConsentCheck.matchedPhrase,
+                            userText: userText.substring(0, 60)
+                        });
+                        
+                        session.booking = session.booking || {};
+                        session.booking.consentGiven = true;
+                        session.booking.consentTurn = session.metrics?.totalTurns || 0;
+                        session.booking.consentReason = 'SPONTANEOUS_CONSENT';
+                        session.booking.consentPhrase = earlyConsentCheck.matchedPhrase || userText;
+                        session.bookingModeLocked = true;
+                        session.mode = 'BOOKING';
+                        
+                        // BlackBox trace
+                        if (BlackBoxLogger) {
+                            BlackBoxLogger.logEvent({
+                                callId: session._id?.toString(),
+                                companyId,
+                                type: 'BOOKING_SPONTANEOUS_CONSENT',
+                                turn: session.metrics?.totalTurns || 0,
+                                data: {
+                                    trigger: 'SPONTANEOUS_CONSENT',
+                                    consentPhrase: earlyConsentCheck.matchedPhrase,
+                                    userText: userText.substring(0, 100)
+                                }
+                            }).catch(() => {});
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Store early booking intent check results for trace output
+        const earlyBookingIntentTrace = {
+            requiresExplicitConsent: bookingRequiresExplicitConsent,
+            intentMatched: earlyBookingIntent?.hasDirectIntent || false,
+            intentConfidence: earlyBookingIntent?.confidence || 0,
+            intentPattern: earlyBookingIntent?.matchedPattern?.substring(0, 50) || null,
+            consentPending: bookingConsentPending,
+            consentMatched: earlyConsentCheck?.hasConsent || false,
+            branchTaken: aiResult?.debug?.source || (session.bookingModeLocked ? 'BOOKING_TRIGGERED' : 'CONTINUE_TO_META_INTENT')
+        };
             
         // ═══════════════════════════════════════════════════════════════════════
         // V86 P0: UNIVERSAL META INTENT INTERCEPTOR
@@ -4786,6 +5031,7 @@ async function processTurn({
         //
         // This runs BEFORE mode-specific handlers to catch all cases.
         // V87: Skip if silence handler already handled this turn
+        // V94: Skip if booking intent already handled this turn!
         // ═══════════════════════════════════════════════════════════════════════
         const metaIntentCheck = aiResult ? null : (() => {
             const lowerText = (userText || '').toLowerCase().trim();
@@ -4860,13 +5106,20 @@ async function processTurn({
             
             // === V87 P0: YOU DIDN'T ANSWER / REPAIR BEHAVIOR ===
             // Caller is frustrated - need fast deterministic recovery
+            // V94 FIX: Made patterns MORE SPECIFIC to avoid matching booking intent
+            // OLD: /\bi\s+(just\s+)?(asked|said|told)\b/i matched "i said as soon as possible"
+            // NEW: Require frustration indicators (didn't, again, already, etc.)
             const repairPatterns = [
                 /\byou\b.*\bdidn'?t\b.*\b(answer|respond|help|listen)\b/i,
                 /\bthat'?s\b.*\bnot\b.*\b(what i|what I)\b.*\b(asked|said|meant)\b/i,
                 /\blisten\b.*\b(to me|to what)\b/i,
-                /\bi\s+(just\s+)?(asked|said|told)\b/i,
+                // V94 FIX: Must have frustration marker, not just "i said/asked/told"
+                /\bi\s+(just|already)\s+(asked|said|told)\s+(you|that)\b/i,  // "i already told you", "i just said that"
+                /\bi\s+(asked|said|told)\s+(you|that)\s+(already|before|earlier)\b/i,  // "i said that already"
                 /\bcan you\b.*\b(hear|understand)\b.*\bme\b/i,
-                /\byou'?re\b.*\bnot\b.*\b(listening|hearing|understanding)\b/i
+                /\byou'?re\b.*\bnot\b.*\b(listening|hearing|understanding)\b/i,
+                /\bi\s+said\b.*\bdidn'?t\s+(you|hear)\b/i,  // "i said... didn't you hear?"
+                /\bwhy\b.*\bi\s+have\s+to\s+repeat\b/i  // "why do i have to repeat"
             ];
             
             // Check patterns
@@ -5281,24 +5534,22 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         // 🎯 DIRECT BOOKING INTENT DETECTION (Feb 2026)
         // ═══════════════════════════════════════════════════════════════════════
-        // Detect when caller DIRECTLY requests booking:
-        // - "I need to schedule a repair"
-        // - "Can someone come out today?"
-        // - "My AC broke, need help"
-        // 
-        // Skip the "would you like me to schedule?" question - go straight to booking!
+        // V94 NOTE: Early booking intent detection now runs BEFORE meta intents!
+        // This section uses the early detection results (earlyBookingIntent)
+        // and only re-runs if early detection didn't happen.
         // ═══════════════════════════════════════════════════════════════════════
-        const { DirectBookingIntentDetector } = require('./engine/booking');
         
-        let directBookingIntent = null;
-        if (!aiResult && !session.booking?.consentGiven) {
+        // Use early detection results if available (V94 - runs before meta intent)
+        let directBookingIntent = earlyBookingIntent;
+        if (!directBookingIntent && !aiResult && !session.booking?.consentGiven) {
+            // Fallback: run detection if early check didn't run (shouldn't normally happen)
             directBookingIntent = DirectBookingIntentDetector.detect(userText, {
                 trade: company?.trade || company?.tradeType,
                 company
             });
             
-            if (directBookingIntent.hasDirectIntent) {
-                log('🎯 DIRECT BOOKING INTENT DETECTED - Skipping consent question', {
+            if (directBookingIntent?.hasDirectIntent) {
+                log('🎯 DIRECT BOOKING INTENT DETECTED (late check)', {
                     confidence: directBookingIntent.confidence,
                     reason: directBookingIntent.reason,
                     pattern: directBookingIntent.matchedPattern
@@ -5334,16 +5585,18 @@ async function processTurn({
         });
         
         // V86: Skip if meta intent already handled
+        // V94: Also skip if early booking intent detection already handled
         if (aiResult) {
-            log('⏭️ V86: Skipping consent detection - meta intent already handled', {
+            log('⏭️ V86: Skipping consent detection - already handled', {
                 aiResultSource: aiResult?.debug?.source,
                 aiResultMode: aiResult?.mode,
                 aiResultReplyPreview: (aiResult?.reply || '').substring(0, 50)
             });
         }
         
-        // V94: Pass awReader for traced config reads (CONFIG_READ events)
-        const consentCheck = !aiResult ? ConsentDetector.checkForConsent(userText, company, session, awReader) : { hasConsent: false };
+        // V94: Use early consent check results if available (runs before meta intent)
+        // Only re-run if early check didn't run (shouldn't normally happen)
+        const consentCheck = earlyConsentCheck || (!aiResult ? ConsentDetector.checkForConsent(userText, company, session, awReader) : { hasConsent: false });
         
         // ═══════════════════════════════════════════════════════════════════════
         // V92 ENHANCED: POST-CONSENT CHECK DIAGNOSTICS
@@ -12934,7 +13187,15 @@ async function processTurn({
             // On next turn, if bookingModeLocked === true, the booking flow runner
             // will take over (no scenarios, no LLM, just the checklist).
             // ═══════════════════════════════════════════════════════════════════
-            bookingFlowState: aiResult?.bookingFlowState || session.bookingFlowState || null
+            bookingFlowState: aiResult?.bookingFlowState || session.bookingFlowState || null,
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // 🎯 V94: BOOKING INTENT TRACE (for TURN_TRACE diagnostic)
+            // ═══════════════════════════════════════════════════════════════════
+            // Captures early booking intent/consent detection results for tracing
+            // why booking did or didn't trigger on this turn.
+            // ═══════════════════════════════════════════════════════════════════
+            bookingIntentTrace: earlyBookingIntentTrace || null
         };
 
         // V93: Allow deterministic mid-call rules (and other protocols) to request transfer in a visible way
