@@ -2758,15 +2758,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // V94: Ensure single call identity (traceRunId + awHash) across all events
-    // ═══════════════════════════════════════════════════════════════════════════
-    const awProofForTurn = computeAwProof(company);
-    const traceRunIdForTurn = callState.traceRunId || `tr-${callSid || Date.now()}`;
-    callState.traceRunId = traceRunIdForTurn;
-    callState.awHash = callState.awHash || awProofForTurn.awHash;
-    callState.effectiveConfigVersion = callState.effectiveConfigVersion || awProofForTurn.effectiveConfigVersion;
-    
     // Increment turn count
     callState.turnCount = (callState.turnCount || 0) + 1;
     
@@ -2860,6 +2851,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     try {
       // Load company and check LLM-0 feature flag
       company = await Company.findById(companyID).lean();
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // V94: Ensure single call identity (traceRunId + awHash) across all events
+      // ═══════════════════════════════════════════════════════════════════════════
+      const awProofForTurn = computeAwProof(company);
+      const traceRunIdForTurn = callState.traceRunId || `tr-${callSid || Date.now()}`;
+      callState.traceRunId = traceRunIdForTurn;
+      callState.awHash = callState.awHash || awProofForTurn.awHash;
+      callState.effectiveConfigVersion = callState.effectiveConfigVersion || awProofForTurn.effectiveConfigVersion;
+      
       const adminSettings = await AdminSettings.findOne({}).lean();
       
       // 🧠 LOAD LLM-0 CONTROLS (Dec 2025) - Configurable brain behavior

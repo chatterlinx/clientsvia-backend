@@ -245,8 +245,9 @@ class BookingFlowResolver {
             const slotId = slot.slotId || slot.id || slot.type;
             const slotType = slot.type || slotId;
             
-            // Get prompt from various sources (priority order)
-            const prompt = this.getSlotPrompt(slot, slotId, slotType, bookingPromptsMap, company);
+            // Get prompt from various sources (priority order) WITH SOURCE TRACKING
+            // V94: Track exactly where each prompt came from for BOOKING_PROMPT_RESOLVED event
+            const promptResult = this.getSlotPromptWithSource(slot, slotId, slotType, bookingPromptsMap, company);
             const reprompt = this.getSlotReprompt(slot, slotId, slotType, bookingPromptsMap, company);
             
             steps.push({
@@ -254,13 +255,16 @@ class BookingFlowResolver {
                 fieldKey: slotId,
                 type: slotType,
                 label: slot.label || slotType,
-                prompt,
+                prompt: promptResult.prompt,
                 reprompt,
                 required: slot.required !== false, // Default to required
                 order: slot.order || steps.length + 1,
                 validation: this.buildValidation(slot, slotType),
                 // Slot-specific options (for specialized handlers)
-                options: this.extractSlotOptions(slot)
+                options: this.extractSlotOptions(slot),
+                // V94: Source tracking for BOOKING_PROMPT_RESOLVED event
+                promptSource: promptResult.source,
+                promptPath: promptResult.path
             });
         }
         
@@ -268,32 +272,64 @@ class BookingFlowResolver {
     }
     
     /**
-     * Get the primary prompt for a slot
+     * Get the primary prompt for a slot WITH SOURCE TRACKING
+     * Returns { prompt, source } for V94 BOOKING_PROMPT_RESOLVED event
      */
-    static getSlotPrompt(slot, slotId, slotType, bookingPromptsMap, company) {
-        // 1. Direct slot question
+    static getSlotPromptWithSource(slot, slotId, slotType, bookingPromptsMap, company) {
+        // 1. Direct slot question (Booking Prompt tab writes here)
         if (slot.question && slot.question !== '/* USE UI CONFIG */') {
-            return slot.question;
+            return { 
+                prompt: slot.question, 
+                source: 'bookingPromptTab:slot.question',
+                path: `frontDeskBehavior.bookingSlots[${slotId}].question`
+            };
         }
         
         // 2. Booking prompts map (key format: "booking:{slotId}:question")
         if (bookingPromptsMap instanceof Map) {
             const mapPrompt = bookingPromptsMap.get(`booking:${slotId}:question`);
-            if (mapPrompt) return mapPrompt;
+            if (mapPrompt) {
+                return { 
+                    prompt: mapPrompt, 
+                    source: 'bookingPromptsMap',
+                    path: `aiAgentSettings.bookingPromptsMap['booking:${slotId}:question']`
+                };
+            }
         } else if (typeof bookingPromptsMap === 'object') {
             const mapPrompt = bookingPromptsMap[`booking:${slotId}:question`];
-            if (mapPrompt) return mapPrompt;
+            if (mapPrompt) {
+                return { 
+                    prompt: mapPrompt, 
+                    source: 'bookingPromptsMap',
+                    path: `aiAgentSettings.bookingPromptsMap['booking:${slotId}:question']`
+                };
+            }
         }
         
-        // 3. Legacy bookingPrompts object
+        // 3. Legacy bookingPrompts object (GHOST LEGACY - deprecated)
         const legacyPrompts = company.aiAgentSettings?.bookingPrompts || {};
         const legacyKey = `ask${slotType.charAt(0).toUpperCase() + slotType.slice(1)}`;
         if (legacyPrompts[legacyKey]) {
-            return legacyPrompts[legacyKey];
+            return { 
+                prompt: legacyPrompts[legacyKey], 
+                source: 'legacy_bookingPrompts',
+                path: `aiAgentSettings.bookingPrompts.${legacyKey}`
+            };
         }
         
-        // 4. Default fallback
-        return DEFAULT_STEP_PROMPTS[slotType]?.prompt || `What is your ${slotType}?`;
+        // 4. Default fallback (hardcoded defaults - no UI config)
+        return { 
+            prompt: DEFAULT_STEP_PROMPTS[slotType]?.prompt || `What is your ${slotType}?`,
+            source: 'defaults',
+            path: 'DEFAULT_STEP_PROMPTS'
+        };
+    }
+    
+    /**
+     * Get the primary prompt for a slot (backward compatible)
+     */
+    static getSlotPrompt(slot, slotId, slotType, bookingPromptsMap, company) {
+        return this.getSlotPromptWithSource(slot, slotId, slotType, bookingPromptsMap, company).prompt;
     }
     
     /**

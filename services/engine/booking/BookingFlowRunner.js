@@ -383,6 +383,59 @@ class BookingFlowRunner {
             state.companyId = company._id.toString();
         }
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V94: BOOKING_PROMPT_RESOLVED - Prove where booking config came from
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This event is emitted ONCE when booking mode starts. It proves:
+        // 1. Which config paths were read (Booking Prompt tab vs legacy)
+        // 2. The exact slot configuration being used
+        // 3. The resolution status (company_config vs default fallback)
+        // 
+        // This ends the "ghost legacy" debugging problem - you can now see in raw
+        // events exactly where the booking prompts came from.
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (!state.flowResolutionEmitted && BlackBoxLogger && callSid && company?._id) {
+            state.flowResolutionEmitted = true;
+            
+            const resolution = flow.resolution || {};
+            const stepSources = (flow.steps || []).map(step => ({
+                slotId: step.id || step.fieldKey,
+                promptSource: step.promptSource || 'unknown',
+                hasCustomPrompt: !!(step.prompt && step.prompt !== step.defaultPrompt),
+                required: step.required
+            }));
+            
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: company._id.toString(),
+                type: 'BOOKING_PROMPT_RESOLVED',
+                turn: session?.metrics?.totalTurns || 0,
+                data: {
+                    source: resolution.source || flow.source || 'unknown',
+                    status: resolution.status || 'OK',
+                    flowId: flow.flowId,
+                    slotCount: flow.steps?.length || 0,
+                    resolvedPaths: resolution.checkedPaths || [],
+                    hasFrontDeskSlots: resolution.hasFrontDeskSlots || false,
+                    hasLegacySlots: resolution.hasLegacySlots || false,
+                    stepSources,
+                    // Include first 3 slot prompts for quick verification
+                    promptSamples: (flow.steps || []).slice(0, 3).map(s => ({
+                        slot: s.id || s.fieldKey,
+                        prompt: (s.prompt || '').substring(0, 100)
+                    }))
+                }
+            }).catch(err => {
+                logger.warn('[BOOKING FLOW RUNNER] Failed to emit BOOKING_PROMPT_RESOLVED', { error: err.message });
+            });
+            
+            logger.info('[BOOKING FLOW RUNNER] V94: BOOKING_PROMPT_RESOLVED emitted', {
+                flowId: flow.flowId,
+                source: resolution.source || flow.source,
+                slotCount: flow.steps?.length || 0
+            });
+        }
+        
         // ═══════════════════════════════════════════════════════════════════
         // MERGE PRE-EXTRACTED SLOTS INTO BOOKING COLLECTED
         // ═══════════════════════════════════════════════════════════════════
