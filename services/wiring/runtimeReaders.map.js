@@ -223,6 +223,44 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // V94: BOOKING INTENT DETECTION (CRITICAL MVA REQUIREMENT)
+    // Without these, agent cannot detect "fix my AC" or "not cooling" as booking intent
+    // =========================================================================
+    'frontDesk.detectionTriggers.wantsBooking': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'ConsentDetector.checkConsent',
+                line: 2439,
+                description: 'Keywords that trigger booking mode (e.g., "fix", "repair", "not cooling")',
+                required: true,
+                critical: true,
+                checkpoint: 'CONSENT_DETECTION'
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking',
+        scope: 'company',
+        defaultValue: ['fix', 'repair', 'service', 'appointment', 'schedule', 'technician', 'someone', 'come out', 'send', 'broken', 'not working', 'not cooling', 'not heating']
+    },
+
+    'booking.directIntentPatterns': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'detectDirectBookingIntent',
+                line: 2500,
+                description: 'Phrases that skip consent and go directly to booking (e.g., "get somebody out")',
+                required: true,
+                critical: true,
+                checkpoint: 'DIRECT_BOOKING_INTENT'
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
+        scope: 'company',
+        defaultValue: ['get somebody out', 'get someone out', 'how soon can you', 'when can you come', 'send someone', 'send a tech', 'need someone out', 'come out today', 'come out tomorrow']
+    },
+
+    // =========================================================================
     // FRONT DESK - BOOKING SLOTS
     // =========================================================================
     'frontDesk.bookingSlots': {

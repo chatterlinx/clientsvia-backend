@@ -304,6 +304,56 @@ const wiringRegistryV2 = {
                             required: false,
                             validators: [],
                             defaultValue: ['FAQ', 'TROUBLESHOOT', 'EMERGENCY']
+                        },
+                        // ═══════════════════════════════════════════════════════════════════════════
+                        // V94: BOOKING INTENT DETECTION (CRITICAL MVA REQUIREMENT)
+                        // Without these, agent cannot detect "fix my AC" as booking intent
+                        // ═══════════════════════════════════════════════════════════════════════════
+                        {
+                            id: 'frontDesk.detectionTriggers.wantsBooking',
+                            label: 'Booking Intent Keywords',
+                            ui: { inputId: 'wantsBookingKeywords', path: 'Front Desk → Discovery & Consent → Booking Intent Keywords' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.detectionTriggers.wantsBooking'],
+                            scope: 'company',
+                            required: true,
+                            critical: true,
+                            tier: 'MVA',
+                            validators: [VALIDATORS.isNonEmptyArray],
+                            defaultValue: ['fix', 'repair', 'service', 'appointment', 'schedule', 'technician', 'someone', 'come out', 'send', 'broken', 'not working', 'not cooling', 'not heating'],
+                            notes: 'Keywords that trigger booking mode. Without these, agent stays in discovery even when caller clearly needs service.'
+                        }
+                    ]
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════════════
+                // V94: DIRECT BOOKING INTENT PATTERNS (CRITICAL MVA REQUIREMENT)
+                // Detects "get somebody out here" as immediate booking (skip consent)
+                // ═══════════════════════════════════════════════════════════════════════════
+                {
+                    id: 'frontDesk.bookingIntentDetection',
+                    label: 'Booking Intent Detection',
+                    description: 'Patterns that detect direct booking intent (skip consent question)',
+                    critical: true,
+                    tier: 'MVA',
+                    ui: {
+                        sectionId: 'booking-intent-detection',
+                        path: 'Front Desk → Booking Intent Detection'
+                    },
+                    fields: [
+                        {
+                            id: 'booking.directIntentPatterns',
+                            label: 'Direct Booking Patterns',
+                            ui: { inputId: 'directIntentPatterns', path: 'Front Desk → Booking → Direct Intent Patterns' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns' },
+                            runtime: RUNTIME_READERS_MAP['booking.directIntentPatterns'],
+                            scope: 'company',
+                            required: true,
+                            critical: true,
+                            tier: 'MVA',
+                            validators: [VALIDATORS.isNonEmptyArray],
+                            defaultValue: ['get somebody out', 'get someone out', 'how soon can you', 'when can you come', 'send someone', 'send a tech', 'need someone out', 'come out today', 'come out tomorrow'],
+                            notes: 'Phrases that indicate caller wants immediate booking (skip consent question). E.g., "how soon can you get somebody out here"'
                         }
                     ]
                 },
