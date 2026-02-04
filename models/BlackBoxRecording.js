@@ -31,6 +31,7 @@ const EVENT_TYPES = [
   'CALL_START',
   'CONFIG_READ',              // 🔌 AW config read (Phase 3 - AW ⇄ RE marriage)
   'CONFIG_WRITE',             // ✏️ AW config write (V93 - Onboarding Cockpit)
+  'LEGACY_PATH_USED',         // ⚠️ V93 GhostBuster - legacy path was used instead of AW path
   'AW_VIOLATION',             // 🚨 Registry gate violation (Phase 6 - enforcement)
   'AW_TURN_SUMMARY',          // 📊 Config read summary per turn (V93 naming - was AW_READ_SUMMARY)
   'AW_CALL_SUMMARY',          // 📊 Config read summary per call (Phase 6f - the money shot)

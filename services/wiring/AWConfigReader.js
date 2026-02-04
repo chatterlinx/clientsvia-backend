@@ -433,6 +433,66 @@ const AW_PATH_MAPPINGS = {
 };
 
 // ============================================================================
+// V93: LEGACY BRIDGES (GhostBuster)
+// ============================================================================
+// When a new AW path doesn't exist in DB, check legacy paths.
+// This allows gradual migration from old slot-level configs to new AW paths.
+// If legacy is used, emit LEGACY_PATH_USED warning so we can track migration progress.
+// ============================================================================
+const LEGACY_BRIDGES = {
+    // ─────────────────────────────────────────────────────────────────────────
+    // Address Verification: New AW paths → Legacy slot-level configs
+    // UI writes to bookingSlots[address].* but we read from booking.addressVerification.*
+    // ─────────────────────────────────────────────────────────────────────────
+    'booking.addressVerification.enabled': {
+        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+        legacyExtractor: (slots) => {
+            // Find address slot and check useGoogleMapsValidation
+            if (!Array.isArray(slots)) return undefined;
+            const addressSlot = slots.find(s => (s.slotId || s.id || s.type) === 'address');
+            return addressSlot?.useGoogleMapsValidation;
+        },
+        legacyDescription: 'bookingSlots[address].useGoogleMapsValidation',
+        migrationNote: 'Move to booking.addressVerification.enabled via AW Cockpit'
+    },
+    
+    'booking.addressVerification.requireUnitQuestion': {
+        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+        legacyExtractor: (slots) => {
+            if (!Array.isArray(slots)) return undefined;
+            const addressSlot = slots.find(s => (s.slotId || s.id || s.type) === 'address');
+            // Legacy: unitNumberMode !== 'never' means ask unit question
+            if (!addressSlot?.unitNumberMode) return undefined;
+            return addressSlot.unitNumberMode !== 'never';
+        },
+        legacyDescription: 'bookingSlots[address].unitNumberMode !== "never"',
+        migrationNote: 'Move to booking.addressVerification.requireUnitQuestion'
+    },
+    
+    'booking.addressVerification.unitQuestionMode': {
+        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+        legacyExtractor: (slots) => {
+            if (!Array.isArray(slots)) return undefined;
+            const addressSlot = slots.find(s => (s.slotId || s.id || s.type) === 'address');
+            return addressSlot?.unitNumberMode;
+        },
+        legacyDescription: 'bookingSlots[address].unitNumberMode',
+        migrationNote: 'Move to booking.addressVerification.unitQuestionMode'
+    },
+    
+    'booking.addressVerification.unitTypePrompt': {
+        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+        legacyExtractor: (slots) => {
+            if (!Array.isArray(slots)) return undefined;
+            const addressSlot = slots.find(s => (s.slotId || s.id || s.type) === 'address');
+            return addressSlot?.unitNumberPrompt;
+        },
+        legacyDescription: 'bookingSlots[address].unitNumberPrompt',
+        migrationNote: 'Move to booking.addressVerification.unitTypePrompt'
+    }
+};
+
+// ============================================================================
 // AWCONFIGREADER CLASS
 // ============================================================================
 
@@ -643,30 +703,88 @@ class AWConfigReader {
     
     /**
      * Resolve value from runtime config using AW path mapping
+     * V93: Now includes LEGACY_BRIDGES fallback for gradual migration
      * @private
      */
     _resolveValue(awPath) {
-        // Get the mapped path or use a smart fallback
+        // ─────────────────────────────────────────────────────────────────────
+        // STEP 1: Try the canonical AW path mapping first
+        // ─────────────────────────────────────────────────────────────────────
         const runtimePath = AW_PATH_MAPPINGS[awPath];
         
         if (runtimePath) {
-            return getByPath(this.runtimeConfig, runtimePath);
+            const value = getByPath(this.runtimeConfig, runtimePath);
+            if (value !== undefined) return value;
         }
         
         // Fallback: Try common patterns
-        // 1. Try as-is (for direct property access)
         let value = getByPath(this.runtimeConfig, awPath);
         if (value !== undefined) return value;
         
-        // 2. Try prefixed with aiAgentSettings.frontDeskBehavior
         value = getByPath(this.runtimeConfig, `aiAgentSettings.frontDeskBehavior.${awPath}`);
         if (value !== undefined) return value;
         
-        // 3. Try prefixed with aiAgentSettings
         value = getByPath(this.runtimeConfig, `aiAgentSettings.${awPath}`);
         if (value !== undefined) return value;
         
+        // ─────────────────────────────────────────────────────────────────────
+        // STEP 2: V93 LEGACY BRIDGE (GhostBuster)
+        // If canonical path returned undefined, check if there's a legacy bridge
+        // ─────────────────────────────────────────────────────────────────────
+        const bridge = LEGACY_BRIDGES[awPath];
+        if (bridge) {
+            const legacyData = getByPath(this.runtimeConfig, bridge.legacyPath);
+            if (legacyData !== undefined) {
+                const legacyValue = bridge.legacyExtractor(legacyData);
+                if (legacyValue !== undefined) {
+                    // ⚠️ LEGACY PATH USED - emit warning for tracking
+                    this._emitLegacyWarning(awPath, bridge);
+                    return legacyValue;
+                }
+            }
+        }
+        
         return undefined;
+    }
+    
+    /**
+     * Emit LEGACY_PATH_USED warning to Raw Events
+     * This helps track which legacy paths are still being used
+     * @private
+     */
+    _emitLegacyWarning(awPath, bridge) {
+        if (!this.tracingEnabled || !this.callId || !this.companyId) return;
+        
+        const warning = {
+            type: 'LEGACY_PATH_USED',
+            ts: new Date().toISOString(),
+            turn: this.turn,
+            data: {
+                awPath,
+                legacyPath: bridge.legacyDescription,
+                migrationNote: bridge.migrationNote,
+                readerId: this.readerId,
+                traceRunId: this.traceRunId
+            }
+        };
+        
+        // Log locally
+        logger.warn('[AW CONFIG READER] ⚠️ LEGACY_PATH_USED', warning.data);
+        
+        // Emit to Black Box
+        if (BlackBoxLogger?.logEvent) {
+            try {
+                BlackBoxLogger.logEvent({
+                    callId: this.callId,
+                    companyId: this.companyId,
+                    type: 'LEGACY_PATH_USED',
+                    turn: this.turn,
+                    data: warning.data
+                }).catch(() => {}); // Silent fail
+            } catch (err) {
+                // Silent fail
+            }
+        }
     }
     
     /**
