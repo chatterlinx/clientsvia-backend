@@ -663,6 +663,69 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
                     askMissingNamePart: s.askMissingNamePart  // Log this specifically
                 }))
             });
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // V94: CANONICAL PATH WRITES (Phase B - End legacy bridge dependency)
+            // ═══════════════════════════════════════════════════════════════════════
+            // When UI saves address slot settings, ALSO write to canonical AW paths
+            // so runtime doesn't need legacy bridges and AW shows WIRED (not WIRED_LEGACY)
+            // ═══════════════════════════════════════════════════════════════════════
+            const addressSlot = updates.bookingSlots.find(s => 
+                s.type === 'address' || 
+                s.id === 'address' || 
+                s.slotId === 'address' ||
+                s.id === 'serviceAddress'
+            );
+            
+            if (addressSlot) {
+                // Address Verification canonical paths
+                if (addressSlot.useGoogleMapsValidation !== undefined) {
+                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.enabled'] = addressSlot.useGoogleMapsValidation === true;
+                    logger.info('[FRONT DESK BEHAVIOR] V94: Writing canonical booking.addressVerification.enabled', {
+                        companyId,
+                        value: addressSlot.useGoogleMapsValidation === true,
+                        source: 'addressSlot.useGoogleMapsValidation'
+                    });
+                }
+                
+                if (addressSlot.unitNumberMode !== undefined) {
+                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode'] = addressSlot.unitNumberMode;
+                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion'] = addressSlot.unitNumberMode !== 'never';
+                    logger.info('[FRONT DESK BEHAVIOR] V94: Writing canonical addressVerification unit settings', {
+                        companyId,
+                        unitQuestionMode: addressSlot.unitNumberMode,
+                        requireUnitQuestion: addressSlot.unitNumberMode !== 'never'
+                    });
+                }
+                
+                if (addressSlot.unitNumberPrompt !== undefined) {
+                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt'] = addressSlot.unitNumberPrompt;
+                }
+                
+                if (addressSlot.googleMapsValidationMode !== undefined) {
+                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.provider'] = 'google_geocode';
+                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.validationMode'] = addressSlot.googleMapsValidationMode;
+                }
+                
+                // Set requireCity/requireState defaults (user can override later via Cockpit)
+                if (addressSlot.useGoogleMapsValidation === true) {
+                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireCity'] = true;
+                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireState'] = false;
+                }
+            }
+            
+            // Name slot canonical paths
+            const nameSlot = updates.bookingSlots.find(s => 
+                s.type === 'name' || 
+                s.id === 'name' || 
+                s.slotId === 'name'
+            );
+            
+            if (nameSlot) {
+                if (nameSlot.confirmSpelling !== undefined) {
+                    updateObj['aiAgentSettings.frontDesk.bookingSlots.name.confirmSpelling'] = nameSlot.confirmSpelling === true;
+                }
+            }
         }
 
         // 🏷️ Vendor / Supplier Handling (Call Center directory)
@@ -1105,6 +1168,61 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             beforeCompanyDoc: beforeCompany,
             afterCompanyDoc: afterCompany
         });
+
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // V94: CONFIG_WRITE - Emit to Raw Events for AW ⇄ RE marriage (Phase B proof)
+        // ═══════════════════════════════════════════════════════════════════════════════
+        // This allows AW/Raw Events to prove that UI saved specific canonical paths
+        // Non-blocking - never let event logging break the save
+        // ═══════════════════════════════════════════════════════════════════════════════
+        try {
+            // Convert updateObj keys to AW canonical paths for visibility
+            const awPaths = Object.keys(updateObj).map(dbPath => {
+                // Map DB paths back to AW canonical paths
+                if (dbPath.startsWith('aiAgentSettings.frontDesk.booking.')) {
+                    return dbPath.replace('aiAgentSettings.frontDesk.', '');
+                }
+                if (dbPath.startsWith('aiAgentSettings.frontDeskBehavior.')) {
+                    return 'frontDesk.' + dbPath.replace('aiAgentSettings.frontDeskBehavior.', '');
+                }
+                if (dbPath.startsWith('aiAgentSettings.')) {
+                    return dbPath.replace('aiAgentSettings.', '');
+                }
+                return dbPath;
+            });
+            
+            // Only emit if we have paths to report
+            if (awPaths.length > 0) {
+                await BlackBoxLogger.logEvent(null, 'CONFIG_WRITE', {
+                    source: 'FrontDeskBehaviorManager',
+                    companyId,
+                    paths: awPaths,
+                    pathCount: awPaths.length,
+                    // Highlight canonical AW paths (the important ones)
+                    canonicalPaths: awPaths.filter(p => 
+                        p.startsWith('booking.addressVerification.') ||
+                        p.startsWith('frontDesk.detectionTriggers.') ||
+                        p.startsWith('frontDesk.nameSpellingVariants.') ||
+                        p.startsWith('frontDesk.bookingSlots.')
+                    ),
+                    changedBy: req.user?.email || 'admin',
+                    effectiveConfigVersion: auditEntry?.effectiveConfigVersionAfter || null,
+                    requestId: auditEntry?.request?.requestId || null
+                }, { companyId });
+                
+                logger.info('[FRONT DESK BEHAVIOR] V94: CONFIG_WRITE emitted to Raw Events', {
+                    companyId,
+                    pathCount: awPaths.length,
+                    canonicalCount: awPaths.filter(p => p.startsWith('booking.') || p.startsWith('frontDesk.')).length
+                });
+            }
+        } catch (configWriteErr) {
+            // Never let CONFIG_WRITE emission break the save
+            logger.warn('[FRONT DESK BEHAVIOR] V94: CONFIG_WRITE emit failed (non-fatal)', {
+                companyId,
+                error: configWriteErr.message
+            });
+        }
 
         // ════════════════════════════════════════════════════════════════════════════
         // 🔒 DRIFT DETECTION: Save lastSavedEffectiveConfigVersion after successful write
