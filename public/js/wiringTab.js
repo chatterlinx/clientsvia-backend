@@ -3252,6 +3252,438 @@
             });
         }
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V92: COMPREHENSIVE EXPORT - Export EVERYTHING on this page
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This captures ALL data visible on the Wiring tab in a single JSON file.
+        // Use this for:
+        // - Complete platform state documentation
+        // - AI analysis of wiring configuration
+        // - Debugging and troubleshooting
+        // - Configuration backup/restore
+        // ═══════════════════════════════════════════════════════════════════════════
+        const exportFullBtn = $('#wiringExportFull');
+        console.log('[WiringTab] CHECKPOINT: Export Full Config button found:', !!exportFullBtn);
+        bindOnce(exportFullBtn, 'click', async () => {
+            console.log('[WiringTab] 📦 BUTTON CLICKED: Export Full Config');
+            
+            if (!_report) {
+                toast('No report loaded - please reload first', true);
+                return;
+            }
+            
+            exportFullBtn.disabled = true;
+            const originalText = exportFullBtn.innerHTML;
+            exportFullBtn.innerHTML = '⏳ Building...';
+            
+            try {
+                // Build comprehensive export
+                const fullExport = buildComprehensiveExport();
+                
+                // Calculate size
+                const jsonStr = JSON.stringify(fullExport, null, 2);
+                const sizeKB = Math.round(jsonStr.length / 1024);
+                const sizeMB = (sizeKB / 1024).toFixed(2);
+                
+                console.log('[WiringTab] 📦 Full export built:', { 
+                    sizeKB, 
+                    sizeMB: sizeMB + 'MB',
+                    sections: Object.keys(fullExport).length 
+                });
+                
+                // Show modal with options
+                showExportModal(fullExport, jsonStr, sizeKB);
+                
+                toast(`Export ready: ${sizeKB > 1024 ? sizeMB + 'MB' : sizeKB + 'KB'}`);
+            } catch (e) {
+                console.error('[WiringTab] ❌ Export Full Config FAILED:', e);
+                toast(e.message || 'Export failed', true);
+            } finally {
+                exportFullBtn.disabled = false;
+                exportFullBtn.innerHTML = originalText;
+            }
+        });
+        
+        /**
+         * V92: Build COMPREHENSIVE export of ALL wiring page data
+         * This captures EVERYTHING visible on the Wiring tab
+         */
+        function buildComprehensiveExport() {
+            const now = new Date().toISOString();
+            const cid = _report?.scope?.companyId || _report?.companyId || 'unknown';
+            
+            return {
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 1: META INFORMATION
+                // ═══════════════════════════════════════════════════════════════════
+                _meta: {
+                    schema: 'WIRING_FULL_EXPORT_V1',
+                    exportedAt: now,
+                    exportedBy: 'WiringTab.exportFull',
+                    version: '1.0.0',
+                    companyId: cid,
+                    companyName: _report?.scope?.companyName || null,
+                    environment: _report?.scope?.environment || 'production',
+                    tradeKey: _report?.scope?.tradeKey || null,
+                    tradeKeySource: _report?.scope?.tradeKeySource || null,
+                    effectiveConfigVersion: _report?.scope?.effectiveConfigVersion || null,
+                    reportGeneratedAt: _report?.meta?.generatedAt || null,
+                    reportGenerationTimeMs: _report?.meta?.generationTimeMs || null,
+                    sections: [
+                        'meta', 'analysisSummary', 'tiers', 'health', 'scoreboard',
+                        'coverage', 'fieldRegistry', 'killSwitches', 'specialChecks',
+                        'gapAnalysis', 'actionQueue', 'guardrails', 'scopeProof',
+                        'effectiveConfig', 'runtimeBindings', 'noTenantBleedProof',
+                        'uiState', 'rawReport'
+                    ],
+                    instructions: 'This JSON contains EVERYTHING from the Wiring tab. Each section is documented with its purpose.'
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 2: ANALYSIS SUMMARY (AI-friendly overview)
+                // ═══════════════════════════════════════════════════════════════════
+                analysisSummary: buildAnalysisSummary(_report),
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 3: PERFORMANCE TIERS (MVA, Production, Full Potential)
+                // ═══════════════════════════════════════════════════════════════════
+                tiers: {
+                    _description: 'Performance tier breakdown showing what requirements are met',
+                    currentTier: _report?.tiers?.currentTier || null,
+                    overallScore: _report?.tiers?.overallScore || 0,
+                    tierScores: _report?.tiers?.tierScores || {},
+                    byTier: _report?.tiers?.byTier || {},
+                    nextActions: _report?.tiers?.nextActions || [],
+                    tierDefinitions: {
+                        MVA: { name: 'Minimum Viable Agent', description: 'Agent can run without breaking' },
+                        PRO: { name: 'Production Grade', description: 'Ready for real business' },
+                        MAX: { name: 'Full Potential', description: 'Top performance, lowest failure, highest conversion' }
+                    }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 4: HEALTH STATUS (Overall health + field-level status)
+                // ═══════════════════════════════════════════════════════════════════
+                health: {
+                    _description: 'Overall platform health and per-field status',
+                    overall: _report?.health?.overall || 'UNKNOWN',
+                    byStatus: _report?.health?.byStatus || {},
+                    criticalIssues: _report?.health?.criticalIssues || [],
+                    warnings: _report?.health?.warnings || [],
+                    fields: _report?.health?.fields || [],
+                    fieldCount: (_report?.health?.fields || []).length,
+                    requiredCoverage: _report?.health?.requiredCoverage || {},
+                    optionalCoverage: _report?.health?.optionalCoverage || {},
+                    goldenBlueprint: _report?.health?.goldenBlueprint || {}
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 5: SCOREBOARD (Dashboard metrics)
+                // ═══════════════════════════════════════════════════════════════════
+                scoreboard: {
+                    _description: 'Dashboard scoreboard metrics for quick overview',
+                    ...(_report?.scoreboard || {})
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 6: COVERAGE ANALYSIS
+                // ═══════════════════════════════════════════════════════════════════
+                coverage: {
+                    _description: 'Coverage analysis: what is configured vs what runtime reads',
+                    ...(_report?.coverage || {}),
+                    uiOnlyPaths: _report?.coverage?.uiOnlyPaths || [],
+                    deadReadPaths: _report?.coverage?.deadReadPaths || [],
+                    runtimePaths: _report?.coverage?.runtimePaths || [],
+                    registryPaths: _report?.coverage?.registryPaths || []
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 7: FIELD REGISTRY (All wired fields)
+                // ═══════════════════════════════════════════════════════════════════
+                fieldRegistry: {
+                    _description: 'All fields in the wiring registry with their status',
+                    fields: (_report?.health?.fields || []).map(f => ({
+                        id: f.id,
+                        label: f.label,
+                        status: f.status,
+                        tier: f.tier,
+                        category: f.category,
+                        dbPath: f.dbPath,
+                        runtimeBound: f.runtimeBound,
+                        currentValue: f.currentValue,
+                        defaultValue: f.defaultValue,
+                        purpose: f.purpose,
+                        failureMode: f.failureMode,
+                        uiPath: f.uiPath
+                    })),
+                    totalFields: (_report?.health?.fields || []).length,
+                    byStatus: _report?.health?.byStatus || {},
+                    byTier: {
+                        MVA: (_report?.health?.fields || []).filter(f => f.tier === 'MVA').length,
+                        PRO: (_report?.health?.fields || []).filter(f => f.tier === 'PRO').length,
+                        MAX: (_report?.health?.fields || []).filter(f => f.tier === 'MAX').length
+                    }
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 8: KILL SWITCHES (Feature flags)
+                // ═══════════════════════════════════════════════════════════════════
+                killSwitches: {
+                    _description: 'Active kill switches / feature flags that modify behavior',
+                    ...(_report?.effectiveConfig?.killSwitches || {}),
+                    _count: Object.keys(_report?.effectiveConfig?.killSwitches || {}).length
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 9: SPECIAL CHECKS (Templates, Scenarios, Redis, Booking)
+                // ═══════════════════════════════════════════════════════════════════
+                specialChecks: {
+                    _description: 'Status of critical subsystems: templates, scenarios, redis, booking',
+                    ...(_report?.specialChecks || {}),
+                    derivedData: _report?.derivedData || {}
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 10: GAP ANALYSIS (Diff between expected and actual)
+                // ═══════════════════════════════════════════════════════════════════
+                gapAnalysis: {
+                    _description: 'Gap analysis showing misconfigured, UI-only, and dead-read paths',
+                    diff: _report?.diff || {},
+                    misconfigured: (_report?.health?.criticalIssues || []).map(i => ({
+                        id: i.fieldId,
+                        label: i.label,
+                        reason: i.reason,
+                        fix: i.fix,
+                        uiPath: i.uiPath
+                    })),
+                    uiOnly: (_report?.coverage?.uiOnlyPaths || []),
+                    deadRead: (_report?.coverage?.deadReadPaths || []),
+                    notConfigured: (_report?.health?.fields || [])
+                        .filter(f => f.status === 'NOT_CONFIGURED')
+                        .map(f => ({ id: f.id, label: f.label, dbPath: f.dbPath }))
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 11: ACTION QUEUE (Prioritized fixes)
+                // ═══════════════════════════════════════════════════════════════════
+                actionQueue: {
+                    _description: 'Prioritized list of fixes to improve platform health',
+                    nextActions: _report?.tiers?.nextActions || [],
+                    criticalFirst: (_report?.health?.criticalIssues || []).slice(0, 10),
+                    warningsNext: (_report?.health?.warnings || []).slice(0, 10)
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 12: GUARDRAILS (Safety validations)
+                // ═══════════════════════════════════════════════════════════════════
+                guardrails: {
+                    _description: 'Guardrail checks for safety and compliance',
+                    guardrails: _report?.guardrails || [],
+                    guardrailScan: _report?.guardrailScan || [],
+                    violations: (_report?.guardrailScan || []).filter(g => g.status === 'VIOLATION'),
+                    warnings: (_report?.guardrailScan || []).filter(g => g.status === 'WARN'),
+                    passes: (_report?.guardrailScan || []).filter(g => g.status === 'PASS')
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 13: SCOPE PROOF (Company isolation verification)
+                // ═══════════════════════════════════════════════════════════════════
+                scopeProof: {
+                    _description: 'Proof that this config is scoped to the correct company',
+                    ...(_report?.scope || {}),
+                    noTenantBleedProof: _report?.noTenantBleedProof || null
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 14: EFFECTIVE CONFIG (Merged configuration)
+                // ═══════════════════════════════════════════════════════════════════
+                effectiveConfig: {
+                    _description: 'The effective (merged) configuration being used at runtime',
+                    ..._report?.effectiveConfig || {}
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 15: RUNTIME BINDINGS (How config maps to runtime)
+                // ═══════════════════════════════════════════════════════════════════
+                runtimeBindings: {
+                    _description: 'How configuration paths bind to runtime code',
+                    runtimeMap: _report?.runtimeMap || {},
+                    readers: _report?.runtimeMap?.readers || [],
+                    checkpoints: _report?.runtimeMap?.checkpoints || []
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 16: TENANT SAFETY (No-bleed verification)
+                // ═══════════════════════════════════════════════════════════════════
+                noTenantBleedProof: {
+                    _description: 'Verification that no cross-tenant data contamination exists',
+                    ...(_report?.noTenantBleedProof || {})
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 17: UI STATE (Current UI state for debugging)
+                // ═══════════════════════════════════════════════════════════════════
+                uiState: {
+                    _description: 'Current UI state of the Wiring tab',
+                    viewMode: _viewMode,
+                    searchTerm: _searchTerm,
+                    selectedNodeId: _selectedNodeId,
+                    focusedNodeId: _focusedNodeId,
+                    expandedNodesCount: _expandedNodes.size,
+                    initialized: _initialized,
+                    lastLoad: _lastLoad
+                },
+                
+                // ═══════════════════════════════════════════════════════════════════
+                // SECTION 18: RAW REPORT (Complete unmodified report)
+                // ═══════════════════════════════════════════════════════════════════
+                rawReport: {
+                    _description: 'Complete unmodified wiring report as received from server',
+                    ..._report
+                }
+            };
+        }
+        
+        /**
+         * V92: Show export modal with copy/download options
+         */
+        function showExportModal(data, jsonStr, sizeKB) {
+            // Remove existing modal
+            const existing = document.getElementById('wiring-export-modal');
+            if (existing) existing.remove();
+            
+            const sizeMB = (sizeKB / 1024).toFixed(2);
+            const sizeText = sizeKB > 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
+            
+            const modal = document.createElement('div');
+            modal.id = 'wiring-export-modal';
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.85); z-index: 10000;
+                display: flex; align-items: center; justify-content: center;
+                padding: 20px;
+            `;
+            
+            modal.innerHTML = `
+                <div style="background: #1e293b; border-radius: 16px; max-width: 700px; width: 100%; max-height: 90vh; overflow: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+                    <div style="padding: 24px; border-bottom: 1px solid #334155;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <h2 style="font-size: 20px; font-weight: 700; color: #f8fafc; margin: 0;">📦 Full Wiring Config Export</h2>
+                                <p style="color: #94a3b8; margin: 8px 0 0 0; font-size: 14px;">
+                                    Complete export of ALL data from this Wiring tab
+                                </p>
+                            </div>
+                            <button id="wiring-export-close" style="background: transparent; border: none; color: #94a3b8; font-size: 24px; cursor: pointer; padding: 8px;">&times;</button>
+                        </div>
+                    </div>
+                    
+                    <div style="padding: 24px;">
+                        <!-- Stats -->
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
+                            <div style="background: #0f172a; padding: 16px; border-radius: 10px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: 700; color: #f97316;">${sizeText}</div>
+                                <div style="font-size: 12px; color: #94a3b8;">File Size</div>
+                            </div>
+                            <div style="background: #0f172a; padding: 16px; border-radius: 10px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: 700; color: #3b82f6;">${Object.keys(data).length}</div>
+                                <div style="font-size: 12px; color: #94a3b8;">Sections</div>
+                            </div>
+                            <div style="background: #0f172a; padding: 16px; border-radius: 10px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: 700; color: #10b981;">${(data.fieldRegistry?.totalFields || 0)}</div>
+                                <div style="font-size: 12px; color: #94a3b8;">Fields</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sections List -->
+                        <div style="background: #0f172a; border-radius: 10px; padding: 16px; margin-bottom: 24px;">
+                            <div style="font-size: 14px; font-weight: 600; color: #f8fafc; margin-bottom: 12px;">📋 Included Sections</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                                ${data._meta.sections.map(s => `
+                                    <span style="background: #334155; color: #e2e8f0; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-family: monospace;">${s}</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                        
+                        <!-- Warning for large files -->
+                        ${sizeKB > 500 ? `
+                            <div style="background: #422006; border: 1px solid #f97316; border-radius: 10px; padding: 16px; margin-bottom: 24px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 24px;">⚠️</span>
+                                    <div>
+                                        <div style="font-weight: 600; color: #fed7aa;">Large file - Download recommended</div>
+                                        <div style="font-size: 13px; color: #fdba74;">This export is ${sizeText}. Copying to clipboard may not work in all browsers.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- Actions -->
+                        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                            <button id="wiring-export-download" style="flex: 1; min-width: 200px; padding: 14px 24px; background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <span>⬇️</span> Download JSON File
+                            </button>
+                            <button id="wiring-export-copy" style="flex: 1; min-width: 200px; padding: 14px 24px; background: #3b82f6; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <span>📋</span> Copy to Clipboard
+                            </button>
+                        </div>
+                        
+                        <!-- Filename -->
+                        <div style="margin-top: 16px; text-align: center;">
+                            <code style="background: #0f172a; padding: 8px 16px; border-radius: 6px; font-size: 12px; color: #94a3b8;">
+                                wiring-full-${data._meta.companyId}-${new Date().toISOString().slice(0, 10)}.json
+                            </code>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Close button
+            document.getElementById('wiring-export-close').addEventListener('click', () => modal.remove());
+            
+            // Click outside to close
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.remove();
+            });
+            
+            // Download button
+            document.getElementById('wiring-export-download').addEventListener('click', () => {
+                const filename = `wiring-full-${data._meta.companyId}-${new Date().toISOString().slice(0, 10)}.json`;
+                downloadJson(filename, data);
+                toast(`Downloaded: ${filename}`);
+            });
+            
+            // Copy button
+            document.getElementById('wiring-export-copy').addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(jsonStr);
+                    toast('Copied to clipboard!');
+                    document.getElementById('wiring-export-copy').innerHTML = '<span>✅</span> Copied!';
+                    setTimeout(() => {
+                        const btn = document.getElementById('wiring-export-copy');
+                        if (btn) btn.innerHTML = '<span>📋</span> Copy to Clipboard';
+                    }, 2000);
+                } catch (e) {
+                    // Fallback for large content
+                    try {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = jsonStr;
+                        textarea.style.position = 'fixed';
+                        textarea.style.opacity = '0';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textarea);
+                        toast('Copied to clipboard (fallback)!');
+                    } catch (e2) {
+                        toast('Copy failed - file too large. Please download instead.', true);
+                    }
+                }
+            });
+        }
+        
         // Download JSON button - Enhanced with summary for AI analysis
         const downloadBtn = $('#wiringDownloadJson');
         console.log('[WiringTab] CHECKPOINT: Download JSON button found:', !!downloadBtn);
