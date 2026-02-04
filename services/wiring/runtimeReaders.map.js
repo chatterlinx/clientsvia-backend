@@ -356,6 +356,214 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // FRONT DESK - NAME PARSING (Last-name-first support)
+    // =========================================================================
+    'booking.nameParsing': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 1900,
+                description: 'Name parsing configuration (last-name-first support)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.nameParsing',
+        scope: 'company',
+        defaultValue: { acceptLastNameOnly: false }
+    },
+
+    'booking.nameParsing.acceptLastNameOnly': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 1905,
+                description: 'Accept "My name is Smith" as lastName without firstName (prompts for first)',
+                required: false
+            },
+            {
+                file: 'services/engine/booking/SlotExtractor.js',
+                function: 'extractName',
+                line: 300,
+                description: 'If single name given and not in commonFirstNames, treat as lastName',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.nameParsing.acceptLastNameOnly',
+        scope: 'company',
+        defaultValue: true
+    },
+
+    'booking.nameParsing.lastNameOnlyPrompt': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 1910,
+                description: 'Prompt when lastName captured without firstName',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.nameParsing.lastNameOnlyPrompt',
+        scope: 'company',
+        defaultValue: "Thanks — and what's your first name?"
+    },
+
+    // =========================================================================
+    // FRONT DESK - ADDRESS VERIFICATION POLICY (Google Geocode + completeness gating)
+    // =========================================================================
+    'booking.addressVerification': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 500,
+                description: 'Address verification policy object',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification',
+        scope: 'company',
+        defaultValue: { enabled: true, provider: 'google_geocode' }
+    },
+
+    'booking.addressVerification.enabled': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 505,
+                description: 'Master switch for address verification (must be true to enforce completeness)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+
+    'booking.addressVerification.provider': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 510,
+                description: 'Geocoding provider (google_geocode | none)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.provider',
+        scope: 'company',
+        defaultValue: 'google_geocode'
+    },
+
+    'booking.addressVerification.requireCity': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 515,
+                description: 'Require city before confirming address',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireCity',
+        scope: 'company',
+        defaultValue: true
+    },
+
+    'booking.addressVerification.requireState': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 520,
+                description: 'Require state before confirming address',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireState',
+        scope: 'company',
+        defaultValue: true
+    },
+
+    'booking.addressVerification.requireZip': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 525,
+                description: 'Require ZIP code before confirming address (optional)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireZip',
+        scope: 'company',
+        defaultValue: false
+    },
+
+    'booking.addressVerification.requireUnitQuestion': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 530,
+                description: 'Always ask "Is this a house or unit/suite?" even if no apt mentioned',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion',
+        scope: 'company',
+        defaultValue: true
+    },
+
+    'booking.addressVerification.unitQuestionMode': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 535,
+                description: 'Unit question mode: house_or_unit | always_ask | smart',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode',
+        scope: 'company',
+        defaultValue: 'house_or_unit'
+    },
+
+    'booking.addressVerification.missingCityStatePrompt': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 540,
+                description: 'Prompt when city/state missing from address',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.missingCityStatePrompt',
+        scope: 'company',
+        defaultValue: "Got it — what city and state is that in?"
+    },
+
+    'booking.addressVerification.unitTypePrompt': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'runStep',
+                line: 545,
+                description: 'Prompt to ask about house vs unit',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt',
+        scope: 'company',
+        defaultValue: "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?"
+    },
+
+    // =========================================================================
     // FRONT DESK - BOOKING CONTINUITY (NO HIDDEN FEATURES)
     // =========================================================================
     'frontDesk.offRailsRecovery.bridgeBack.resumeBooking': {

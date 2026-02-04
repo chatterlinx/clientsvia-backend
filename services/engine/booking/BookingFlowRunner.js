@@ -39,6 +39,14 @@ try {
     logger.warn('[BOOKING FLOW RUNNER] AWConfigReader not available');
 }
 
+// 🔌 BlackBoxLogger for ADDRESS_VALIDATION_RESULT events (V93)
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('../../BlackBoxLogger');
+} catch (e) {
+    logger.warn('[BOOKING FLOW RUNNER] BlackBoxLogger not available');
+}
+
 /**
  * Slot extractors - deterministic extraction for each slot type
  */
@@ -992,7 +1000,40 @@ class BookingFlowRunner {
                     // Use the formatted address from Google
                     valueToStore = addressValidation.formattedAddress || addressValidation.normalized || extractResult.value;
                     
-                    // Store validation metadata for later use
+                    // ═══════════════════════════════════════════════════════════════
+                    // V93: ADDRESS COMPLETENESS GATING (city/state/unit enforcement)
+                    // ═══════════════════════════════════════════════════════════════
+                    // Read address verification policy via AWConfigReader
+                    let requireCity = true, requireState = true, requireZip = false;
+                    let requireUnitQuestion = true, unitQuestionMode = 'house_or_unit';
+                    let missingCityStatePrompt = "Got it — what city and state is that in?";
+                    let unitTypePrompt = "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?";
+                    
+                    if (awReader) {
+                        awReader.setReaderId('BookingFlowRunner.addressCompleteness');
+                        requireCity = awReader.get('booking.addressVerification.requireCity', true) !== false;
+                        requireState = awReader.get('booking.addressVerification.requireState', true) !== false;
+                        requireZip = awReader.get('booking.addressVerification.requireZip', false) === true;
+                        requireUnitQuestion = awReader.get('booking.addressVerification.requireUnitQuestion', true) !== false;
+                        unitQuestionMode = awReader.get('booking.addressVerification.unitQuestionMode', 'house_or_unit');
+                        missingCityStatePrompt = awReader.get('booking.addressVerification.missingCityStatePrompt', missingCityStatePrompt);
+                        unitTypePrompt = awReader.get('booking.addressVerification.unitTypePrompt', unitTypePrompt);
+                    }
+                    
+                    // Parse address components from Google response
+                    const components = addressValidation.components || {};
+                    const hasCity = !!(components.locality || components.sublocality || components.postal_town);
+                    const hasState = !!(components.administrative_area_level_1);
+                    const hasZip = !!(components.postal_code);
+                    const hasUnit = !!(components.subpremise || state.bookingCollected?.unit);
+                    
+                    // Determine what's missing
+                    const missing = [];
+                    if (requireCity && !hasCity) missing.push('city');
+                    if (requireState && !hasState) missing.push('state');
+                    if (requireZip && !hasZip) missing.push('zip');
+                    
+                    // Store validation metadata for later use (including missing components)
                     state.addressValidation = {
                         raw: extractResult.value,
                         formatted: valueToStore,
@@ -1000,26 +1041,112 @@ class BookingFlowRunner {
                         placeId: addressValidation.placeId,
                         location: addressValidation.location,
                         needsUnit: addressValidation.needsUnit,
-                        unitDetection: addressValidation.unitDetection
+                        unitDetection: addressValidation.unitDetection,
+                        components,
+                        missing,
+                        hasCity,
+                        hasState,
+                        hasZip,
+                        hasUnit
                     };
                     
-                    logger.info('[BOOKING FLOW RUNNER] Address validated with Google Geo', {
+                    // Emit ADDRESS_VALIDATION_RESULT for debugging (V93)
+                    if (BlackBoxLogger?.logEvent && callSid) {
+                        BlackBoxLogger.logEvent({
+                            callId: callSid,
+                            companyId: companyId,
+                            type: 'ADDRESS_VALIDATION_RESULT',
+                            turn: state.turn || 0,
+                            data: {
+                                raw: extractResult.value,
+                                normalizedPreview: valueToStore,
+                                confidence: addressValidation.confidence,
+                                missing,
+                                hasCity,
+                                hasState,
+                                hasZip,
+                                hasUnit,
+                                placeId: addressValidation.placeId
+                            }
+                        }).catch(() => {}); // Non-blocking
+                    }
+                    
+                    logger.info('[BOOKING FLOW RUNNER] V93 Address validation result', {
                         raw: extractResult.value,
                         formatted: valueToStore,
                         confidence: addressValidation.confidence,
+                        missing,
+                        hasCity,
+                        hasState,
+                        hasUnit,
                         needsUnit: addressValidation.needsUnit
                     });
                     
-                    // If this looks like a multi-unit building and no unit was provided, ask for unit
-                    if (addressValidation.needsUnit && !state.bookingCollected?.unit) {
+                    // ═══════════════════════════════════════════════════════════════
+                    // GATE 1: Missing city/state - ask follow-up BEFORE confirmation
+                    // ═══════════════════════════════════════════════════════════════
+                    if (missing.length > 0) {
                         state.bookingCollected[fieldKey] = valueToStore;
-                        state.addressNeedsUnit = true;
+                        state.addressIncomplete = true;
+                        state.addressMissing = missing;
                         
-                        const buildingLabel = addressValidation.unitDetection?.buildingLabel || 'building';
-                        const unitPrompt = `I found ${valueToStore}. It looks like this is a ${buildingLabel}. What's the apartment or unit number?`;
+                        logger.warn('[BOOKING FLOW RUNNER] V93: Address incomplete, asking for missing components', {
+                            missing,
+                            address: valueToStore
+                        });
                         
                         return {
-                            reply: unitPrompt,
+                            reply: missingCityStatePrompt,
+                            state,
+                            isComplete: false,
+                            action: 'COLLECT_CITY_STATE',
+                            currentStep: 'city_state',
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                source: 'BOOKING_FLOW_RUNNER',
+                                flowId: flow.flowId,
+                                mode: 'ADDRESS_INCOMPLETE',
+                                missing,
+                                addressValidation: state.addressValidation
+                            }
+                        };
+                    }
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // GATE 2: Unit question (house_or_unit mode)
+                    // ═══════════════════════════════════════════════════════════════
+                    // If requireUnitQuestion and not yet asked, ask now
+                    const alreadyAskedUnit = state.addressUnitAsked === true;
+                    const shouldAskUnit = (
+                        requireUnitQuestion && 
+                        !alreadyAskedUnit && 
+                        !hasUnit &&
+                        (unitQuestionMode === 'always_ask' || 
+                         (unitQuestionMode === 'house_or_unit') ||
+                         (unitQuestionMode === 'smart' && addressValidation.needsUnit))
+                    );
+                    
+                    if (shouldAskUnit) {
+                        state.bookingCollected[fieldKey] = valueToStore;
+                        state.addressNeedsUnit = true;
+                        state.addressUnitAsked = true;
+                        
+                        // Use Google's hint if available, otherwise use policy prompt
+                        const prompt = addressValidation.needsUnit
+                            ? `I found ${valueToStore}. It looks like this might be a ${addressValidation.unitDetection?.buildingLabel || 'building'}. What's the apartment or unit number?`
+                            : unitTypePrompt;
+                        
+                        logger.info('[BOOKING FLOW RUNNER] V93: Asking unit question per policy', {
+                            address: valueToStore,
+                            unitQuestionMode,
+                            needsUnit: addressValidation.needsUnit
+                        });
+                        
+                        return {
+                            reply: prompt,
                             state,
                             isComplete: false,
                             action: 'COLLECT_UNIT',
@@ -1032,10 +1159,18 @@ class BookingFlowRunner {
                                 source: 'BOOKING_FLOW_RUNNER',
                                 flowId: flow.flowId,
                                 mode: 'GEO_NEEDS_UNIT',
-                                addressValidation
+                                addressValidation: state.addressValidation
                             }
                         };
                     }
+                    
+                    // Address is complete - proceed with flow
+                    logger.info('[BOOKING FLOW RUNNER] V93: Address complete, proceeding', {
+                        address: valueToStore,
+                        hasCity,
+                        hasState,
+                        hasUnit
+                    });
                 } else if (addressValidation.confidence === 'LOW' || !addressValidation.success) {
                     // Low confidence - ask for clarification
                     logger.warn('[BOOKING FLOW RUNNER] Address validation low confidence', {

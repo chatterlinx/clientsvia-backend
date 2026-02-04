@@ -278,7 +278,21 @@ const AW_PATH_MAPPINGS = {
     'frontDesk.nameSpellingVariants': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants',
     'frontDesk.addressValidation': 'aiAgentSettings.frontDeskBehavior.bookingSlots.addressValidation',
     'booking.addressVerification': 'aiAgentSettings.frontDesk.booking.addressVerification',
+    'booking.addressVerification': 'aiAgentSettings.frontDesk.booking.addressVerification',
     'booking.addressVerification.enabled': 'aiAgentSettings.frontDesk.booking.addressVerification.enabled',
+    'booking.addressVerification.provider': 'aiAgentSettings.frontDesk.booking.addressVerification.provider',
+    'booking.addressVerification.requireCity': 'aiAgentSettings.frontDesk.booking.addressVerification.requireCity',
+    'booking.addressVerification.requireState': 'aiAgentSettings.frontDesk.booking.addressVerification.requireState',
+    'booking.addressVerification.requireZip': 'aiAgentSettings.frontDesk.booking.addressVerification.requireZip',
+    'booking.addressVerification.requireUnitQuestion': 'aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion',
+    'booking.addressVerification.unitQuestionMode': 'aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode',
+    'booking.addressVerification.missingCityStatePrompt': 'aiAgentSettings.frontDesk.booking.addressVerification.missingCityStatePrompt',
+    'booking.addressVerification.unitTypePrompt': 'aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt',
+    
+    // Name Parsing (last-name-first support)
+    'booking.nameParsing': 'aiAgentSettings.frontDeskBehavior.booking.nameParsing',
+    'booking.nameParsing.acceptLastNameOnly': 'aiAgentSettings.frontDeskBehavior.booking.nameParsing.acceptLastNameOnly',
+    'booking.nameParsing.lastNameOnlyPrompt': 'aiAgentSettings.frontDeskBehavior.booking.nameParsing.lastNameOnlyPrompt',
     
     // ─────────────────────────────────────────────────────────────────────────
     // SLOT EXTRACTION - Name stop words, merge rules, confidence thresholds

@@ -450,6 +450,163 @@ const wiringRegistryV2 = {
                     ]
                 },
 
+                // NAME PARSING (Last-name-first support)
+                {
+                    id: 'frontDesk.nameParsing',
+                    label: 'Name Parsing',
+                    description: 'How names are parsed (supports last-name-first callers like "My name is Smith")',
+                    critical: true,
+                    ui: {
+                        sectionId: 'nameParsing',
+                        path: 'Front Desk → Booking → Name Parsing'
+                    },
+                    fields: [
+                        {
+                            id: 'booking.nameParsing.acceptLastNameOnly',
+                            label: 'Accept Last Name Only',
+                            ui: { inputId: 'acceptLastNameOnly', path: 'Front Desk → Booking → Name Parsing → Accept Last Name Only' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.booking.nameParsing.acceptLastNameOnly' },
+                            runtime: RUNTIME_READERS_MAP['booking.nameParsing.acceptLastNameOnly'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'If caller says "My name is Smith" and Smith is not in commonFirstNames, treat as lastName and prompt for firstName'
+                        },
+                        {
+                            id: 'booking.nameParsing.lastNameOnlyPrompt',
+                            label: 'Last Name Only Prompt',
+                            ui: { inputId: 'lastNameOnlyPrompt', path: 'Front Desk → Booking → Name Parsing → Last Name Only Prompt' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.booking.nameParsing.lastNameOnlyPrompt' },
+                            runtime: RUNTIME_READERS_MAP['booking.nameParsing.lastNameOnlyPrompt'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: "Thanks — and what's your first name?"
+                        }
+                    ]
+                },
+
+                // ADDRESS VERIFICATION POLICY (Google Geocode + completeness gating)
+                {
+                    id: 'frontDesk.addressVerification',
+                    label: 'Address Verification Policy',
+                    description: 'Controls address completeness enforcement (city, state, unit questions)',
+                    critical: true,
+                    ui: {
+                        sectionId: 'addressVerification',
+                        path: 'Front Desk → Booking → Address Verification'
+                    },
+                    fields: [
+                        {
+                            id: 'booking.addressVerification.enabled',
+                            label: 'Address Verification Enabled',
+                            ui: { inputId: 'addressVerificationEnabled', path: 'Front Desk → Booking → Address Verification → Enabled' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.enabled' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.enabled'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'Master switch for address completeness enforcement'
+                        },
+                        {
+                            id: 'booking.addressVerification.provider',
+                            label: 'Geocoding Provider',
+                            ui: { inputId: 'addressVerificationProvider', path: 'Front Desk → Booking → Address Verification → Provider' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.provider' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.provider'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'google_geocode',
+                            notes: 'Geocoding provider: google_geocode | none'
+                        },
+                        {
+                            id: 'booking.addressVerification.requireCity',
+                            label: 'Require City',
+                            ui: { inputId: 'requireCity', path: 'Front Desk → Booking → Address Verification → Require City' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.requireCity' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.requireCity'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'Do not confirm address until city is captured'
+                        },
+                        {
+                            id: 'booking.addressVerification.requireState',
+                            label: 'Require State',
+                            ui: { inputId: 'requireState', path: 'Front Desk → Booking → Address Verification → Require State' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.requireState' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.requireState'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'Do not confirm address until state is captured'
+                        },
+                        {
+                            id: 'booking.addressVerification.requireZip',
+                            label: 'Require ZIP',
+                            ui: { inputId: 'requireZip', path: 'Front Desk → Booking → Address Verification → Require ZIP' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.requireZip' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.requireZip'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: false,
+                            notes: 'Do not confirm address until ZIP is captured (optional)'
+                        },
+                        {
+                            id: 'booking.addressVerification.requireUnitQuestion',
+                            label: 'Require Unit Question',
+                            ui: { inputId: 'requireUnitQuestion', path: 'Front Desk → Booking → Address Verification → Require Unit Question' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.requireUnitQuestion'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'Always ask "Is this a house or unit?" even if no apt/suite mentioned'
+                        },
+                        {
+                            id: 'booking.addressVerification.unitQuestionMode',
+                            label: 'Unit Question Mode',
+                            ui: { inputId: 'unitQuestionMode', path: 'Front Desk → Booking → Address Verification → Unit Question Mode' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.unitQuestionMode'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: 'house_or_unit',
+                            notes: 'Unit question mode: house_or_unit | always_ask | smart'
+                        },
+                        {
+                            id: 'booking.addressVerification.missingCityStatePrompt',
+                            label: 'Missing City/State Prompt',
+                            ui: { inputId: 'missingCityStatePrompt', path: 'Front Desk → Booking → Address Verification → Missing City/State Prompt' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.missingCityStatePrompt' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.missingCityStatePrompt'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: "Got it — what city and state is that in?"
+                        },
+                        {
+                            id: 'booking.addressVerification.unitTypePrompt',
+                            label: 'Unit Type Prompt',
+                            ui: { inputId: 'unitTypePrompt', path: 'Front Desk → Booking → Address Verification → Unit Type Prompt' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification.unitTypePrompt'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?"
+                        }
+                    ]
+                },
+
                 // BOOKING CONTINUITY (NO HIDDEN FEATURES)
                 {
                     id: 'frontDesk.bookingContinuity',

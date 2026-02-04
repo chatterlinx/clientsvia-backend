@@ -33,6 +33,7 @@ const EVENT_TYPES = [
   'AW_VIOLATION',             // 🚨 Registry gate violation (Phase 6 - enforcement)
   'AW_TURN_SUMMARY',          // 📊 Config read summary per turn (V93 naming - was AW_READ_SUMMARY)
   'AW_CALL_SUMMARY',          // 📊 Config read summary per call (Phase 6f - the money shot)
+  'ADDRESS_VALIDATION_RESULT', // 🏠 Address verification result (V93 - city/state/unit gating)
   'GREETING_SENT',
   'GATHER_PARTIAL',           // Optional: partial STT results
   'GATHER_FINAL',             // Final STT text from caller
