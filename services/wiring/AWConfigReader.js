@@ -730,14 +730,15 @@ class AWConfigReader {
     }
     
     /**
-     * Emit AW_READ_SUMMARY event to Black Box (call at end of turn)
+     * Emit AW_TURN_SUMMARY event to Black Box (call at end of turn)
+     * V93: Renamed from AW_READ_SUMMARY for clarity (turn-level vs call-level)
      * This makes debugging instant without scrolling 400 events.
      */
     async emitSummary() {
         const summary = this.getReadsSummary();
         
         const event = {
-            type: 'AW_READ_SUMMARY',
+            type: 'AW_TURN_SUMMARY',
             ts: new Date().toISOString(),
             turn: this.turn,
             data: {
@@ -765,18 +766,18 @@ class AWConfigReader {
                 await BlackBoxLogger.logEvent({
                     callId: this.callId,
                     companyId: this.companyId,
-                    type: 'AW_READ_SUMMARY',
+                    type: 'AW_TURN_SUMMARY',
                     turn: this.turn,
                     data: event.data
                 });
                 
-                logger.info('[AW CONFIG READER] 📊 AW_READ_SUMMARY emitted', {
+                logger.info('[AW CONFIG READER] 📊 AW_TURN_SUMMARY emitted', {
                     callId: this.callId,
                     totalReads: summary.totalReads,
                     violations: summary.violations
                 });
             } catch (err) {
-                logger.warn('[AW CONFIG READER] Failed to emit AW_READ_SUMMARY', {
+                logger.warn('[AW CONFIG READER] Failed to emit AW_TURN_SUMMARY', {
                     error: err.message
                 });
             }

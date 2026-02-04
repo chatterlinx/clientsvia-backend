@@ -27,7 +27,7 @@
  * ============================================================================
  */
 
-const { wiringRegistryV2, getAllFields, getCriticalFields, getKillSwitchFields, VALIDATORS } = require('./wiringRegistry.v2');
+const { wiringRegistryV2, getAllFields, getActiveFields, getDeprecatedFields, getCriticalFields, getKillSwitchFields, VALIDATORS } = require('./wiringRegistry.v2');
 const { RUNTIME_READERS_MAP, hasRuntimeReaders, analyzeCoverage } = require('./runtimeReaders.map');
 const { evaluateTiers, getTierDefinitions } = require('./wiringTiers');
 const Company = require('../../models/v2Company');
@@ -1128,9 +1128,12 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
     const noTenantBleedProof = buildNoTenantBleedProof(companyDoc, companyId, derivedData);
     const diagrams = buildDiagrams(companyDoc, health);
     
-    // Calculate coverage scores
-    const uiPaths = getAllFields().map(f => f.id);
+    // Calculate coverage scores (V93: exclude deprecated fields)
+    const uiPaths = getActiveFields().map(f => f.id);
     const coverage = analyzeCoverage(uiPaths);
+    
+    // V93: Get deprecated fields for separate bucket (not counted in coverage)
+    const deprecatedFields = getDeprecatedFields();
     
     const report = {
         // META
@@ -1217,11 +1220,18 @@ async function generateWiringReport({ companyId, tradeKey = null, environment = 
             scenarioPoolError: derivedData.scenarioPoolError || null
         },
         
-        // COVERAGE ANALYSIS
+        // COVERAGE ANALYSIS (V93: deprecated fields excluded from counts)
         coverage: {
             ...coverage,
             uiOnlyPaths: coverage.uiOnlyPaths.slice(0, 20), // Limit for readability
-            deadReadPaths: coverage.deadReadPaths.slice(0, 20)
+            deadReadPaths: coverage.deadReadPaths.slice(0, 20),
+            // V93: Deprecated fields in separate bucket (not pollution health)
+            deprecatedCount: deprecatedFields.length,
+            deprecatedPaths: deprecatedFields.map(f => ({
+                id: f.id,
+                reason: f.deprecatedReason,
+                deprecatedAt: f.deprecatedAt
+            }))
         },
         
         // TIER SYSTEM - Prescriptive Build Guide

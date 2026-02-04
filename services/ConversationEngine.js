@@ -13358,16 +13358,16 @@ async function processTurn({
         }
         
         // ═══════════════════════════════════════════════════════════════════
-        // EMIT AW SUMMARIES (Phase 6e/6f - instant debugging)
+        // EMIT AW SUMMARIES (V93 - instant debugging)
         // ═══════════════════════════════════════════════════════════════════
         // At end of turn, emit:
-        // - AW_READ_SUMMARY: per-turn summary (quick view)
+        // - AW_TURN_SUMMARY: per-turn summary (quick view)
         // - AW_CALL_SUMMARY: cumulative call summary (the money shot)
         //   Includes unread-but-wired and read-but-unwired for "why didn't it trigger?"
         if (awReader) {
             if (typeof awReader.emitSummary === 'function') {
                 awReader.emitSummary().catch(err => {
-                    log('⚠️ AW_READ_SUMMARY emission failed (non-fatal)', { error: err.message });
+                    log('⚠️ AW_TURN_SUMMARY emission failed (non-fatal)', { error: err.message });
                 });
             }
             if (typeof awReader.emitCallSummary === 'function') {

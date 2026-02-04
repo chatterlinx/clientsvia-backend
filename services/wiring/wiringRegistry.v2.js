@@ -333,6 +333,68 @@ const wiringRegistryV2 = {
                     ]
                 },
                 
+                // SLOT EXTRACTION (Name parsing, stop words - prevents "Degrees In" bug)
+                {
+                    id: 'frontDesk.slotExtraction',
+                    label: 'Slot Extraction',
+                    description: 'Name parsing, stop words, and extraction rules (critical for V92 name protection)',
+                    critical: true,
+                    ui: {
+                        sectionId: 'slotExtraction',
+                        path: 'Front Desk → Slot Extraction'
+                    },
+                    fields: [
+                        {
+                            id: 'frontDesk.commonFirstNames',
+                            label: 'Common First Names',
+                            ui: { inputId: 'commonFirstNames', path: 'Front Desk → Slot Extraction → Common First Names' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.commonFirstNames' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.commonFirstNames'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: [],
+                            notes: 'Used by name extraction to recognize common first names vs noise (e.g., trade terms)'
+                        },
+                        {
+                            id: 'slotExtraction.nameStopWords',
+                            label: 'Name Stop Words',
+                            ui: { inputId: 'nameStopWords', path: 'Front Desk → Slot Extraction → Name Stop Words' },
+                            db: { path: 'aiAgentSettings.nameStopWords' },
+                            runtime: RUNTIME_READERS_MAP['slotExtraction.nameStopWords'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: { enabled: true, custom: [] },
+                            notes: 'Parent object for name stop words configuration'
+                        },
+                        {
+                            id: 'slotExtraction.nameStopWords.enabled',
+                            label: 'Name Stop Words Enabled',
+                            ui: { inputId: 'nameStopWordsEnabled', path: 'Front Desk → Slot Extraction → Stop Words Enabled' },
+                            db: { path: 'aiAgentSettings.nameStopWords.enabled' },
+                            runtime: RUNTIME_READERS_MAP['slotExtraction.nameStopWords.enabled'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'Master switch for name stop words filtering (prevents "Degrees In" bug)'
+                        },
+                        {
+                            id: 'slotExtraction.nameStopWords.custom',
+                            label: 'Custom Stop Words',
+                            ui: { inputId: 'nameStopWordsCustom', path: 'Front Desk → Slot Extraction → Custom Stop Words' },
+                            db: { path: 'aiAgentSettings.nameStopWords.custom' },
+                            runtime: RUNTIME_READERS_MAP['slotExtraction.nameStopWords.custom'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: [],
+                            notes: 'Custom stop words to filter from name extraction (company-specific noise)'
+                        }
+                    ]
+                },
+                
                 // BOOKING PROMPTS
                 {
                     id: 'frontDesk.bookingPrompts',
@@ -1278,16 +1340,34 @@ const wiringRegistryV2 = {
 
 /**
  * Get all fields from the registry (flattened)
+ * @param {Object} options
+ * @param {boolean} options.includeDeprecated - Include deprecated tabs/fields (default: true for backward compat)
  */
-function getAllFields() {
+function getAllFields(options = {}) {
+    const { includeDeprecated = true } = options;
     const fields = [];
     for (const tab of wiringRegistryV2.tabs) {
+        // V93: Skip deprecated tabs unless explicitly requested
+        if (!includeDeprecated && tab.deprecated === true) {
+            continue;
+        }
         for (const section of (tab.sections || [])) {
+            // Skip deprecated sections
+            if (!includeDeprecated && section.deprecated === true) {
+                continue;
+            }
             for (const field of (section.fields || [])) {
+                // Skip deprecated fields
+                if (!includeDeprecated && field.deprecated === true) {
+                    continue;
+                }
                 fields.push({
                     ...field,
                     tabId: tab.id,
-                    sectionId: section.id
+                    sectionId: section.id,
+                    // Mark if parent tab or section is deprecated
+                    _tabDeprecated: tab.deprecated === true,
+                    _sectionDeprecated: section.deprecated === true
                 });
             }
         }
@@ -1296,17 +1376,76 @@ function getAllFields() {
 }
 
 /**
+ * Get active fields only (excludes deprecated)
+ * V93: Use this for coverage calculations
+ */
+function getActiveFields() {
+    return getAllFields({ includeDeprecated: false });
+}
+
+/**
+ * Get deprecated fields only (for reporting in separate bucket)
+ */
+function getDeprecatedFields() {
+    const deprecated = [];
+    for (const tab of wiringRegistryV2.tabs) {
+        if (tab.deprecated === true) {
+            // Entire tab is deprecated - collect all its fields
+            for (const section of (tab.sections || [])) {
+                for (const field of (section.fields || [])) {
+                    deprecated.push({
+                        ...field,
+                        tabId: tab.id,
+                        sectionId: section.id,
+                        deprecatedReason: tab.deprecatedReason || 'Tab deprecated',
+                        deprecatedAt: tab.deprecatedAt
+                    });
+                }
+            }
+        } else {
+            // Check for deprecated sections or fields within non-deprecated tab
+            for (const section of (tab.sections || [])) {
+                if (section.deprecated === true) {
+                    for (const field of (section.fields || [])) {
+                        deprecated.push({
+                            ...field,
+                            tabId: tab.id,
+                            sectionId: section.id,
+                            deprecatedReason: section.deprecatedReason || 'Section deprecated',
+                            deprecatedAt: section.deprecatedAt
+                        });
+                    }
+                } else {
+                    for (const field of (section.fields || [])) {
+                        if (field.deprecated === true) {
+                            deprecated.push({
+                                ...field,
+                                tabId: tab.id,
+                                sectionId: section.id,
+                                deprecatedReason: field.deprecatedReason || 'Field deprecated',
+                                deprecatedAt: field.deprecatedAt
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return deprecated;
+}
+
+/**
  * Get critical fields that block operation if missing
  */
 function getCriticalFields() {
-    return getAllFields().filter(f => f.critical);
+    return getActiveFields().filter(f => f.critical);
 }
 
 /**
  * Get kill switch fields
  */
 function getKillSwitchFields() {
-    return getAllFields().filter(f => f.killSwitch);
+    return getActiveFields().filter(f => f.killSwitch);
 }
 
 module.exports = {
@@ -1315,6 +1454,8 @@ module.exports = {
     WIRING_SCHEMA_VERSION, // Backward compat alias
     VALIDATORS,
     getAllFields,
+    getActiveFields,       // V93: Excludes deprecated - use for coverage calculations
+    getDeprecatedFields,   // V93: Get deprecated fields for separate bucket
     getCriticalFields,
     getKillSwitchFields
 };

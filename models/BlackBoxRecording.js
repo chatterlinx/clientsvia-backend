@@ -31,7 +31,7 @@ const EVENT_TYPES = [
   'CALL_START',
   'CONFIG_READ',              // 🔌 AW config read (Phase 3 - AW ⇄ RE marriage)
   'AW_VIOLATION',             // 🚨 Registry gate violation (Phase 6 - enforcement)
-  'AW_READ_SUMMARY',          // 📊 Config read summary per turn (Phase 6e)
+  'AW_TURN_SUMMARY',          // 📊 Config read summary per turn (V93 naming - was AW_READ_SUMMARY)
   'AW_CALL_SUMMARY',          // 📊 Config read summary per call (Phase 6f - the money shot)
   'GREETING_SENT',
   'GATHER_PARTIAL',           // Optional: partial STT results

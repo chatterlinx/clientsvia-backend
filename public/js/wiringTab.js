@@ -3332,7 +3332,8 @@
                     environment: _report?.scope?.environment || 'production',
                     tradeKey: _report?.scope?.tradeKey || null,
                     tradeKeySource: _report?.scope?.tradeKeySource || null,
-                    effectiveConfigVersion: _report?.scope?.effectiveConfigVersion || null,
+                    // V93: Pull ECV from derivedData first (where it actually lives), fallback to scope
+                    effectiveConfigVersion: _report?.derivedData?.effectiveConfigVersion || _report?.scope?.effectiveConfigVersion || null,
                     reportGeneratedAt: _report?.meta?.generatedAt || null,
                     reportGenerationTimeMs: _report?.meta?.generationTimeMs || null,
                     sections: [

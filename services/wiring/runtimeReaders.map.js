@@ -286,6 +286,76 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // FRONT DESK - SLOT EXTRACTION (Name parsing, stop words, merge rules)
+    // =========================================================================
+    'frontDesk.commonFirstNames': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 1850,
+                description: 'Used by name extraction to recognize common first names vs noise',
+                required: false
+            },
+            {
+                file: 'services/engine/booking/SlotExtractor.js',
+                function: 'extractName',
+                line: 280,
+                description: 'Validates extracted names against common first names list',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.commonFirstNames',
+        scope: 'company',
+        defaultValue: []
+    },
+
+    'slotExtraction.nameStopWords': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 1820,
+                description: 'Parent object for name stop words configuration',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.nameStopWords',
+        scope: 'company',
+        defaultValue: { enabled: true, custom: [] }
+    },
+
+    'slotExtraction.nameStopWords.enabled': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 1825,
+                description: 'Master switch for name stop words filtering (prevents "Degrees In" bug)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.nameStopWords.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+
+    'slotExtraction.nameStopWords.custom': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 1830,
+                description: 'Custom stop words to filter from name extraction (company-specific noise)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.nameStopWords.custom',
+        scope: 'company',
+        defaultValue: []
+    },
+
+    // =========================================================================
     // FRONT DESK - BOOKING CONTINUITY (NO HIDDEN FEATURES)
     // =========================================================================
     'frontDesk.offRailsRecovery.bridgeBack.resumeBooking': {
