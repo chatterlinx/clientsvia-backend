@@ -2163,15 +2163,33 @@
     
     function renderWiringInventory() {
         const el = $('#wiringInventoryTable');
-        if (!el || !_report) {
-            if (el) el.innerHTML = '';
+        if (!el) {
+            console.warn('[WiringTab] wiringInventoryTable element not found');
             return;
         }
         
-        // Get all fields from the report
-        const fields = _report.uiMap?.fields || [];
+        if (!_report) {
+            el.innerHTML = `
+                <div class="w-panel">
+                    <div class="w-panel-title">📋 Wiring Inventory</div>
+                    <div style="padding: 20px; text-align: center; color: #6e7681;">
+                        Loading report data...
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        // Get all fields from the report - try multiple sources
+        const fields = _report.uiMap?.fields || _report.fieldRegistry || [];
         const coverage = _report.coverage || {};
         const runtimeBindings = _report.runtimeBindings || {};
+        
+        console.log('[WiringTab] Inventory data:', { 
+            fieldsCount: fields.length, 
+            coverageKeys: Object.keys(coverage),
+            hasDeadReads: (coverage.deadReadPaths || []).length
+        });
         
         // Build inventory from fields + coverage analysis
         const inventory = [];
@@ -2230,6 +2248,23 @@
             deprecated: inventory.filter(i => i.deprecated).length,
             total: inventory.length
         };
+        
+        // If no data, show helpful message
+        if (inventory.length === 0) {
+            el.innerHTML = `
+                <div class="w-panel">
+                    <div class="w-panel-title">📋 Wiring Inventory <span style="color: #6e7681; font-weight: 400; font-size: 12px;">(Ghost Buster)</span></div>
+                    <div style="padding: 20px; text-align: center; color: #6e7681;">
+                        <div style="font-size: 32px; margin-bottom: 12px;">📭</div>
+                        <div>No field registry data available.</div>
+                        <div style="font-size: 11px; margin-top: 8px;">
+                            Check if <code>uiMap.fields</code> or <code>fieldRegistry</code> exists in the AW export.
+                        </div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
         
         el.innerHTML = `
             <div class="w-panel">
@@ -2794,14 +2829,17 @@
             'transfer-calls': 'Transfer Calls'
         };
         
+        // V93: Limit to Top 5 only (as requested)
+        const top5Actions = nextActions.slice(0, 5);
+        
         el.innerHTML = `
           <div class="w-next-actions-panel">
             <div class="w-next-actions-header">
               <div class="w-next-actions-title">🎯 Next Best Actions</div>
-              <div class="w-next-actions-subtitle">Fix these to reach MAX performance</div>
+              <div class="w-next-actions-subtitle">Top ${top5Actions.length} fixes to reach MAX performance</div>
             </div>
             <div class="w-next-actions-list">
-              ${nextActions.map((action, idx) => {
+              ${top5Actions.map((action, idx) => {
                 const nav = action.nav || {};
                 const navTab = nav.tab || '';
                 const navSection = nav.section || '';
