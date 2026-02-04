@@ -519,7 +519,43 @@ class SlotExtractor {
             }
             
             // ═══════════════════════════════════════════════════════════════════════════
-            // V92 RULE 1.5: NAME SLOT PROTECTION
+            // V94 RULE 1: NAME LOCK (HARD PROTECTION)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // If the existing name was extracted from an EXPLICIT pattern ("my name is X",
+            // "this is X", etc.), it is LOCKED and cannot be overwritten UNLESS:
+            //   1. The new slot is an explicit correction ("actually it's John")
+            //   2. The new slot is ALSO from an explicit pattern (allows re-statement)
+            //
+            // This prevents ALL future adjective/verb collisions like:
+            // "Super", "Freezing", "Terrible", "Insane", etc.
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (key === 'name' && existing.nameLocked === true && !newSlot.isCorrection) {
+                // Only allow overwrite if new slot is also from explicit pattern
+                if (!newSlot.extractedViaExplicitPhrase) {
+                    logger.warn('[SLOT EXTRACTOR] ❌ V94: REJECTED - NAME IS LOCKED', {
+                        lockedName: existing.value,
+                        lockedVia: existing.patternSource || 'explicit_pattern',
+                        rejectedCandidate: newSlot.value,
+                        rejectedPatternSource: newSlot.patternSource || 'fallback',
+                        rejectedReason: 'nameLocked'
+                    });
+                    // Keep existing locked name, record rejection in history
+                    merged[key] = {
+                        ...existing,
+                        rejectedCandidates: [...(existing.rejectedCandidates || []), {
+                            value: newSlot.value,
+                            confidence: newSlot.confidence,
+                            turn: newSlot.turn,
+                            rejectedReason: 'nameLocked',
+                            patternSource: newSlot.patternSource || 'unknown'
+                        }]
+                    };
+                    continue;
+                }
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V92 RULE 1.5: NAME SLOT PROTECTION (fallback for unlocked names)
             // ═══════════════════════════════════════════════════════════════════════════
             // If we already have a name with confidence >= 0.8, NEVER overwrite it
             // unless the new extraction contains explicit name phrases like:
@@ -536,21 +572,21 @@ class SlotExtractor {
                 const hasExplicitNamePhrase = newSlot.extractedViaExplicitPhrase === true;
                 
                 if (!hasExplicitNamePhrase) {
-                    logger.warn('[SLOT EXTRACTOR] V92: BLOCKED name overwrite (no explicit name phrase)', {
+                    logger.warn('[SLOT EXTRACTOR] ❌ V92: REJECTED - HIGH CONFIDENCE NAME EXISTS', {
                         existingName: existing.value,
                         existingConfidence: existing.confidence,
                         rejectedCandidate: newSlot.value,
                         rejectedConfidence: newSlot.confidence,
-                        reason: 'high_confidence_name_already_exists'
+                        rejectedReason: 'high_confidence_name_exists'
                     });
                     // Keep existing, record the rejected candidate in history
                     merged[key] = {
                         ...existing,
-                        history: [...(existing.history || []), {
+                        rejectedCandidates: [...(existing.rejectedCandidates || []), {
                             value: newSlot.value,
                             confidence: newSlot.confidence,
                             turn: newSlot.turn,
-                            reason: 'V92_blocked_no_explicit_phrase'
+                            rejectedReason: 'high_confidence_name_exists'
                         }]
                     };
                     continue;
@@ -783,22 +819,41 @@ class SlotExtractor {
                     name = this.cleanName(match[1]);
                 }
                 
+                // V94: Check for stop words and log rejection
+                if (name && NAME_STOP_WORDS.has(name.toLowerCase())) {
+                    logger.warn('[SLOT EXTRACTOR] ❌ V94: REJECTED "my name is" candidate (stopWord)', {
+                        rejected: name,
+                        raw: match[0],
+                        rejectedReason: 'stopWord'
+                    });
+                    // Continue to next pattern
+                }
+                
                 if (name && !NAME_STOP_WORDS.has(name.toLowerCase())) {
                     const nameParts = name.split(/\s+/);
                     const isSingleWord = nameParts.length === 1;
                     const likelyFirst = isSingleWord ? isLikelyFirstName(name) : true;
                     
-                    logger.info('[SLOT EXTRACTOR] ✅ Name matched via "my name is" (PRIORITY 1)', {
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    // V94: EXPLICIT PATTERN = LOCKED NAME
+                    // Once extracted from "my name is X", the name is LOCKED.
+                    // Future candidates will be rejected unless explicit correction.
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    logger.info('[SLOT EXTRACTOR] ✅ V94 NAME LOCKED via "my name is" (PRIORITY 1)', {
                         raw: match[0],
                         cleaned: name,
-                        matchCount: matches.length
+                        matchCount: matches.length,
+                        patternSource: 'explicit_my_name_is',
+                        locked: true
                     });
                     
                     const result = {
                         value: name,
                         confidence: CONFIDENCE.UTTERANCE_HIGH,
                         source: SOURCE.UTTERANCE,
-                        extractedViaExplicitPhrase: true  // V92: Marks this as explicit name statement
+                        extractedViaExplicitPhrase: true,  // V92: Marks this as explicit name statement
+                        patternSource: 'explicit_my_name_is',  // V94: Track which pattern matched
+                        nameLocked: true  // V94: HARD LOCK - refuse overwrites unless correction
                     };
                     
                     if (isSingleWord) {
@@ -844,21 +899,28 @@ class SlotExtractor {
                     const isSingleWord = nameParts.length === 1;
                     const likelyFirst = isSingleWord ? isLikelyFirstName(name) : true;
                     
-                    logger.debug('[SLOT EXTRACTOR] Name matched via explicit pattern', {
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    // V94: EXPLICIT PATTERN = LOCKED NAME
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    logger.info('[SLOT EXTRACTOR] ✅ V94 NAME LOCKED via explicit pattern (PRIORITY 2)', {
                         raw: match[0],
                         cleaned: name,
                         pattern: pattern.source.substring(0, 50),
                         hasTwoParts: !!match[2],
                         isSingleWord,
                         likelyFirst,
-                        hasNameList
+                        hasNameList,
+                        patternSource: 'explicit_this_is',
+                        locked: true
                     });
                     
                     const result = {
                         value: name,
                         confidence: CONFIDENCE.UTTERANCE_HIGH,
                         source: SOURCE.UTTERANCE,
-                        extractedViaExplicitPhrase: true  // V92: "this is X" = explicit name statement
+                        extractedViaExplicitPhrase: true,  // V92: "this is X" = explicit name statement
+                        patternSource: 'explicit_this_is',  // V94: Track which pattern matched
+                        nameLocked: true  // V94: HARD LOCK - refuse overwrites unless correction
                     };
                     
                     // V92: Add first/last name metadata for single-word names
@@ -924,16 +986,32 @@ class SlotExtractor {
                 const firstLower = first?.toLowerCase();
                 const isValidFirstName = hasNameList ? commonFirstNamesSet.has(firstLower) : true;
                 
-                if (first && last && 
-                    !NAME_STOP_WORDS.has(first.toLowerCase()) && 
-                    !NAME_STOP_WORDS.has(last.toLowerCase()) &&
-                    isValidFirstName) {
-                    
+                // V94: Check stop words first and log rejection
+                const firstIsStopWord = NAME_STOP_WORDS.has(first?.toLowerCase());
+                const lastIsStopWord = NAME_STOP_WORDS.has(last?.toLowerCase());
+                
+                if (firstIsStopWord || lastIsStopWord) {
+                    logger.warn('[SLOT EXTRACTOR] ❌ V94: REJECTED two-word candidate (stopWord)', {
+                        rejected: `${first} ${last}`,
+                        firstWord: first,
+                        lastWord: last,
+                        firstIsStopWord,
+                        lastIsStopWord,
+                        rejectedReason: 'stopWord'
+                    });
+                } else if (!isValidFirstName) {
+                    logger.warn('[SLOT EXTRACTOR] ❌ V94: REJECTED two-word candidate (not in commonFirstNames)', {
+                        rejected: `${first} ${last}`,
+                        firstWord: first,
+                        rejectedReason: 'notInCommonFirstNames'
+                    });
+                } else if (first && last && isValidFirstName) {
                     logger.info('[SLOT EXTRACTOR] ✅ Name matched via two-word pattern (FALLBACK - validated)', {
                         raw: fullNameMatch[0],
                         first,
                         last,
-                        validatedAgainstCommonNames: isValidFirstName
+                        validatedAgainstCommonNames: isValidFirstName,
+                        patternSource: 'fallback_two_word'
                     });
                     
                     return {
@@ -942,14 +1020,8 @@ class SlotExtractor {
                         source: SOURCE.UTTERANCE,
                         firstName: first,
                         lastName: last,
-                        candidateSource: 'fallback_two_word'
+                        patternSource: 'fallback_two_word'  // V94: Track source
                     };
-                } else if (first && last && !isValidFirstName) {
-                    logger.warn('[SLOT EXTRACTOR] ❌ V94: REJECTED two-word name candidate (first word not in commonFirstNames)', {
-                        rejected: `${first} ${last}`,
-                        firstWord: first,
-                        reason: 'not_in_common_first_names'
-                    });
                 }
             }
         }
