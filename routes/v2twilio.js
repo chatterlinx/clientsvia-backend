@@ -66,6 +66,14 @@ const { getSharedRedisClient, isRedisConfigured } = require('../services/redisCl
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const crypto = require('crypto');
 
+// 🔌 V94: AWConfigReader for traced config reads in BookingFlowRunner (Phase B)
+let AWConfigReader;
+try {
+    AWConfigReader = require('../services/wiring/AWConfigReader');
+} catch (e) {
+    logger.warn('[V2TWILIO] AWConfigReader not available - BookingFlowRunner will use direct config access');
+}
+
 // Helper: Get Redis client safely (returns null if unavailable)
 async function getRedis() {
   if (!isRedisConfigured()) return null;
@@ -3132,6 +3140,30 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               pendingConfirmation: callState.pendingConfirmation || null
             };
             
+            // ═══════════════════════════════════════════════════════════════════
+            // V94: Create AWConfigReader for traced config reads in BookingFlowRunner
+            // ═══════════════════════════════════════════════════════════════════
+            // This enables CONFIG_READ events for address verification settings
+            // and ensures booking flow reads are visible in Raw Events (AW ⇄ RE).
+            // ═══════════════════════════════════════════════════════════════════
+            let awReader = null;
+            if (AWConfigReader && company) {
+              try {
+                awReader = AWConfigReader.forCall({
+                  callId: callSid,
+                  companyId: companyID,
+                  turn: callState?.totalTurns || callState?.turnCount || 0,
+                  runtimeConfig: company,
+                  readerId: 'v2twilio.BookingFlowRunner'
+                });
+              } catch (awErr) {
+                logger.warn('[V2TWILIO] Failed to create AWConfigReader for booking flow', { 
+                  callSid, 
+                  error: awErr.message 
+                });
+              }
+            }
+            
             // Handle confirmation response if awaiting confirmation
             let bookingResult;
             if (bookingState.currentStepId === 'CONFIRMATION' || callState.awaitingConfirmation) {
@@ -3139,13 +3171,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               bookingResult = BookingFlowRunner.handleConfirmationResponse(speechResult, flow, bookingState, company);
             } else {
               // Pass slots (with metadata) to BookingFlowRunner for confirm-vs-collect logic
+              // V94: Pass awReader for traced config reads (address verification, etc.)
               bookingResult = await BookingFlowRunner.runStep({
                 flow,
                 state: bookingState,
                 userInput: speechResult,
                 company,
                 callSid,
-                slots: callState.slots || {}  // 🎯 Pre-extracted slots with confidence
+                slots: callState.slots || {},  // 🎯 Pre-extracted slots with confidence
+                awReader  // 🔌 V94: For CONFIG_READ tracing in booking flow
               });
             }
             
