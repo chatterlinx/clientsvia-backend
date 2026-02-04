@@ -9398,13 +9398,24 @@ async function processTurn({
                     let googleMapsConfirmNeeded = false;
                     let unitDetectionResult = null;
                     
-                    // V66: Log when Google Maps validation is DISABLED so user knows why
-                    if (!addressSlotConfig?.useGoogleMapsValidation) {
-                        log('🗺️ GOOGLE MAPS: DISABLED - Enable in UI: Booking Prompts → Address → "Enable Google Maps validation"', {
+                    // ═══════════════════════════════════════════════════════════════════
+                    // V93: ADDRESS VERIFICATION via AW-wired config
+                    // Primary: booking.addressVerification.enabled (new AW path)
+                    // Fallback: addressSlotConfig?.useGoogleMapsValidation (legacy)
+                    // ═══════════════════════════════════════════════════════════════════
+                    awReader.setReaderId('ConversationEngine.addressValidation');
+                    const geoEnabled = awReader.get('booking.addressVerification.enabled', true) !== false;
+                    const useGoogleMapsLegacy = addressSlotConfig?.useGoogleMapsValidation === true;
+                    const shouldValidateAddress = geoEnabled || useGoogleMapsLegacy;
+                    
+                    // V93: Log when validation is DISABLED (so user knows why no GEO events)
+                    if (!shouldValidateAddress) {
+                        log('🗺️ GOOGLE GEO: DISABLED - Enable via AW or legacy slot config', {
+                            geoEnabled,
+                            legacyEnabled: useGoogleMapsLegacy,
                             addressSlotConfig: {
                                 useGoogleMapsValidation: addressSlotConfig?.useGoogleMapsValidation,
-                                unitNumberMode: addressSlotConfig?.unitNumberMode,
-                                addressConfirmLevel: addressSlotConfig?.addressConfirmLevel
+                                unitNumberMode: addressSlotConfig?.unitNumberMode
                             }
                         });
                         // Log to Black Box for diagnostics
@@ -9414,31 +9425,36 @@ async function processTurn({
                             type: 'ADDRESS_VALIDATION_SKIPPED',
                             data: {
                                 reason: 'disabled_in_config',
-                                howToEnable: 'Go to Control Plane → Front Desk → Booking Prompts → Address slot → Enable "Google Maps validation"',
-                                addressCollected: extractedThisTurn.address,
-                                unitDetectionSkipped: true,
-                                gateCodeDetectionSkipped: true,
-                                buildingTypeDetectionSkipped: true
+                                howToEnable: 'AW: Set booking.addressVerification.enabled = true, OR legacy: Enable "Google Maps validation" in Booking Prompts',
+                                geoEnabledAW: geoEnabled,
+                                legacyEnabled: useGoogleMapsLegacy,
+                                addressCollected: extractedThisTurn.address
                             }
                         }).catch(() => {});
                     }
                     
-                    if (addressSlotConfig?.useGoogleMapsValidation) {
+                    if (shouldValidateAddress) {
                         try {
-                            log('🗺️ GOOGLE MAPS: Validating address...', { raw: extractedThisTurn.address });
+                            log('🗺️ GOOGLE MAPS: Validating address (V93 AW-wired)...', { 
+                                raw: extractedThisTurn.address,
+                                geoEnabled,
+                                legacyEnabled: useGoogleMapsLegacy
+                            });
                             try {
                                 await BlackBoxLogger.logEvent({
                                     callId: session._id?.toString(),
                                     companyId,
                                     type: 'ADDRESS_VALIDATION_STARTED',
                                     data: {
-                                        addressCollected: extractedThisTurn.address
+                                        addressCollected: extractedThisTurn.address,
+                                        configSource: geoEnabled ? 'AW' : 'legacy_slot'
                                     }
                                 });
                             } catch {}
+                            // V93: Pass callId for GEO_LOOKUP events in Raw Events
                             googleMapsResult = await AddressValidationService.validateAddress(
                                 extractedThisTurn.address,
-                                { companyId, enabled: true }
+                                { companyId, callId: session._id?.toString(), enabled: true }
                             );
                             
                             if (googleMapsResult.success && googleMapsResult.validated) {

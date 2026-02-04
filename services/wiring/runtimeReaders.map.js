@@ -436,6 +436,13 @@ const RUNTIME_READERS_MAP = {
                 line: 505,
                 description: 'Master switch for address verification (must be true to enforce completeness)',
                 required: false
+            },
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processTurn',
+                line: 9432,
+                description: 'V93: LLM path also reads this for geo validation in discovery mode',
+                required: false
             }
         ],
         dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.enabled',
