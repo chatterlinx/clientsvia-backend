@@ -2325,6 +2325,70 @@
     }
     
     // ========================================================================
+    // V93: EVIDENCE HEADER - Proves page is looking at TRUTH
+    // ========================================================================
+    
+    function renderEvidenceHeader() {
+        const ecvEl = document.getElementById('evidenceECV');
+        const hashEl = document.getElementById('evidenceAwHash');
+        const genEl = document.getElementById('evidenceGeneratedAt');
+        const verifiedEl = document.getElementById('evidenceVerified');
+        
+        if (!_report) {
+            if (ecvEl) ecvEl.textContent = '—';
+            if (hashEl) hashEl.textContent = '—';
+            if (genEl) genEl.textContent = '—';
+            if (verifiedEl) {
+                verifiedEl.textContent = '⚠ UNVERIFIED';
+                verifiedEl.style.background = '#3a2a1e';
+                verifiedEl.style.color = '#f97316';
+            }
+            return;
+        }
+        
+        // Extract evidence from report
+        const meta = _report._meta || _report.metadata || {};
+        const ecv = meta.effectiveConfigVersion || _report.derivedData?.effectiveConfigVersion || _report.scope?.effectiveConfigVersion || null;
+        const awHash = meta.awHash || meta.configHash || null;
+        const genAt = meta.generatedAt || meta.timestamp || null;
+        
+        // Check if verified (all evidence present)
+        const isVerified = !!(ecv && awHash && genAt);
+        
+        if (ecvEl) {
+            ecvEl.textContent = ecv ? `v${ecv}` : '—';
+            ecvEl.style.color = ecv ? '#22d3ee' : '#ef4444';
+        }
+        
+        if (hashEl) {
+            hashEl.textContent = awHash ? awHash.substring(0, 12) + '...' : '—';
+            hashEl.style.color = awHash ? '#f97316' : '#ef4444';
+        }
+        
+        if (genEl) {
+            if (genAt) {
+                const d = new Date(genAt);
+                genEl.textContent = d.toLocaleTimeString() + ' ' + d.toLocaleDateString();
+            } else {
+                genEl.textContent = '—';
+            }
+            genEl.style.color = genAt ? '#94a3b8' : '#ef4444';
+        }
+        
+        if (verifiedEl) {
+            if (isVerified) {
+                verifiedEl.textContent = '✓ VERIFIED';
+                verifiedEl.style.background = '#1e3a3a';
+                verifiedEl.style.color = '#22c55e';
+            } else {
+                verifiedEl.textContent = '⚠ UNVERIFIED';
+                verifiedEl.style.background = '#3a2a1e';
+                verifiedEl.style.color = '#f97316';
+            }
+        }
+    }
+    
+    // ========================================================================
     // TIER SYSTEM - Prescriptive Build Guide (not passive report)
     // ========================================================================
     
@@ -2742,25 +2806,27 @@
             }
         }
         
-        console.log('[WiringTab] 🎨 renderAll() - Prescriptive Build Guide');
+        console.log('[WiringTab] 🎨 renderAll() - V93 Operator Cockpit Layout');
         
-        // === TIER SYSTEM (First thing you see - "What tier am I? What's next?") ===
-        renderTierProgress();         // MVA → PRO → MAX progress
+        // === V93: EVIDENCE HEADER (proves truth) ===
+        renderEvidenceHeader();       // ECV, awHash, generatedAt
+        
+        // === V93: NEXT ACTIONS (below cockpit, visible) ===
         renderNextActions();          // Top 5 prioritized fixes with payoff
         
-        // === EXECUTIVE LAYER ===
+        // === V93: DIAGNOSTICS (inside accordion, collapsed by default) ===
+        // These render into the collapsed accordion container
+        renderTierProgress();         // MVA → PRO → MAX progress
         renderExecutiveBanner();      // Big status banner
         renderScoreboard();           // Quick metrics tiles
-        
-        // === OPERATIONAL LAYER (What needs attention) ===
         renderKillSwitches();         // Kill switch status
         renderGapAnalysis();          // Registry vs DB vs Runtime gaps
-        renderActionQueue();          // Prioritized fixes (legacy, now superseded by NextActions)
-        
-        // === DETAIL LAYER (Deep dive) ===
+        renderActionQueue();          // Prioritized fixes
         renderSpecialChecks();        // Source-of-truth checks
         renderIssues();               // Full issues list
         renderGuardrails();           // Tenant safety
+        
+        // === WIRING TREE (always visible - operational) ===
         renderTree();                 // Field tree view
         renderInspector();            // Selected node details
         renderDiagrams();             // Mermaid visualizations
@@ -2771,7 +2837,7 @@
         
         updateFocusPill();
         
-        console.log('[WiringTab] ✅ Dashboard rendered (V93: Cockpit loaded)');
+        console.log('[WiringTab] ✅ Dashboard rendered (V93: Operator Cockpit Layout)');
     }
     
     function updateFocusPill() {

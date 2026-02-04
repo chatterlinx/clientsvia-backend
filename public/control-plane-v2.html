@@ -2484,10 +2484,11 @@
         <div id="wiringToast" class="w-toast ok"></div>
         
         <!-- ═══════════════════════════════════════════════════════════════════
-             TIER SYSTEM - Prescriptive Build Guide (First thing you see)
+             V93: ONBOARDING COCKPIT - THE HERO SECTION
+             This is what users see first. It's the "sales demo control panel."
+             Everything operational goes here.
              ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringTierProgress"></div>
-        <div id="wiringNextActions"></div>
+        <!-- COCKPIT IS NOW FIRST - moved from below tier blocks -->
         
         <!-- ═══════════════════════════════════════════════════════════════════
              V93: ONBOARDING COCKPIT - Critical 12 Fields for Day-1 Setup
@@ -2676,36 +2677,49 @@
         </style>
         
         <!-- ═══════════════════════════════════════════════════════════════════
-             EXECUTIVE HEALTH BANNER
+             V93: EVIDENCE HEADER - Proves the page is looking at TRUTH
+             If any field is missing → show UNVERIFIED
              ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringExecutiveBanner"></div>
+        <div id="wiringEvidenceHeader" class="w-evidence-header" style="display: flex; flex-wrap: wrap; gap: 16px; padding: 12px 16px; background: #0d1117; border: 1px solid #2a2a2e; border-radius: 8px; margin-bottom: 16px; font-size: 12px;">
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <span style="color: #6e7681;">ECV:</span>
+            <span id="evidenceECV" style="color: #22d3ee; font-family: monospace;">—</span>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <span style="color: #6e7681;">AW Hash:</span>
+            <span id="evidenceAwHash" style="color: #f97316; font-family: monospace;">—</span>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <span style="color: #6e7681;">Generated:</span>
+            <span id="evidenceGeneratedAt" style="color: #94a3b8; font-family: monospace;">—</span>
+          </div>
+          <div id="evidenceVerified" style="margin-left: auto; padding: 4px 10px; border-radius: 4px; font-weight: 600; background: #1e3a3a; color: #22c55e;">
+            ✓ VERIFIED
+          </div>
+        </div>
         
-        <!-- Toolbar -->
+        <!-- ═══════════════════════════════════════════════════════════════════
+             V93: NEXT BEST ACTIONS - Do this next to improve agent (Top 5)
+             This sells the platform - visible near top
+             ═══════════════════════════════════════════════════════════════════ -->
+        <div id="wiringNextActions"></div>
+        
+        <!-- ═══════════════════════════════════════════════════════════════════
+             TOOLBAR - Search + Actions
+             ═══════════════════════════════════════════════════════════════════ -->
         <div class="w-toolbar">
           <div class="w-toolbar-left">
             <input type="text" id="wiringSearch" class="w-search" placeholder="Search tabs, sections, nodes..." />
             <span id="wiringFocusPill" class="w-pill">Focus: none</span>
           </div>
           <div class="w-toolbar-right">
-            <!-- ═══════════════════════════════════════════════════════════════════════
-                 V93: WORLD-CLASS TOOLBAR - Clean, focused, no legacy chaos
-                 Primary: Download AW Export (the one source of truth)
-                 Secondary: View controls + Cache management
-                 ═══════════════════════════════════════════════════════════════════════ -->
-            
-            <!-- PRIMARY ACTION: The one export that matters -->
-            <button id="wiringExportFull" class="w-btn" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; font-weight: 700; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px;" title="Download complete AW truth bundle (effectiveConfig, fieldRegistry, gapAnalysis, tiers, everything)">
+            <button id="wiringExportFull" class="w-btn" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; font-weight: 700; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px;" title="Download complete AW truth bundle">
               ⬇️ Download AW Export
             </button>
-            
-            <!-- VIEW CONTROLS -->
             <button id="wiringExpandAll" class="w-btn">Expand All</button>
             <button id="wiringCollapseAll" class="w-btn">Collapse All</button>
             <button id="wiringClearFocus" class="w-btn">Clear Focus</button>
-            
-            <!-- DIAGNOSTICS -->
-            <button id="wiringComplianceCheck" class="w-btn" title="Scan code for hardcoded values that should come from config">⚡ Code Compliance</button>
-            <button id="wiringClearCache" class="w-btn danger">Clear Redis Cache</button>
+            <button id="wiringClearCache" class="w-btn danger">Clear Cache</button>
             <button id="wiringReload" class="w-btn primary">🔄 Reload</button>
           </div>
         </div>
@@ -2715,34 +2729,62 @@
           Loading wiring report...
         </div>
         
-        <!-- Scoreboard -->
-        <div id="wiringScoreboard"></div>
-        
         <!-- ═══════════════════════════════════════════════════════════════════
-             KILL SWITCHES - Critical toggles that affect behavior
+             V93: DIAGNOSTICS ACCORDION - Collapsed by default
+             Analysis, not operation. Scoreboard + Coverage + Legacy/Ghosts
              ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringKillSwitches"></div>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             GAP ANALYSIS - The heart of diagnostics
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringGapAnalysis"></div>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             ACTION QUEUE - Prioritized fixes
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringActionQueue"></div>
-        
-        <!-- Special Checks (Critical) -->
-        <div id="wiringSpecialChecks"></div>
-        
-        <!-- Issues & Guardrails in 2-column grid -->
-        <div class="w-grid-2">
-          <div id="wiringIssues"></div>
-          <div id="wiringGuardrails"></div>
+        <div id="wiringDiagnosticsAccordion" class="w-panel" style="margin-bottom: 16px;">
+          <div class="w-panel-title" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDiagnosticsAccordion()">
+            <span>📊 Diagnostics <span style="color: #6e7681; font-weight: 400; font-size: 12px;">(Performance Tier, Coverage, Legacy)</span></span>
+            <span id="diagnosticsToggleIcon" style="font-size: 18px;">▶</span>
+          </div>
+          <div id="diagnosticsContent" style="display: none; padding-top: 16px;">
+            <!-- Tier Progress (moved from top) -->
+            <div id="wiringTierProgress"></div>
+            
+            <!-- Scoreboard -->
+            <div id="wiringScoreboard"></div>
+            
+            <!-- Executive Banner -->
+            <div id="wiringExecutiveBanner"></div>
+            
+            <!-- Kill Switches -->
+            <div id="wiringKillSwitches"></div>
+            
+            <!-- Gap Analysis -->
+            <div id="wiringGapAnalysis"></div>
+            
+            <!-- Action Queue -->
+            <div id="wiringActionQueue"></div>
+            
+            <!-- Special Checks -->
+            <div id="wiringSpecialChecks"></div>
+            
+            <!-- Issues & Guardrails -->
+            <div class="w-grid-2">
+              <div id="wiringIssues"></div>
+              <div id="wiringGuardrails"></div>
+            </div>
+          </div>
         </div>
         
-        <!-- Tree View -->
+        <script>
+          function toggleDiagnosticsAccordion() {
+            const content = document.getElementById('diagnosticsContent');
+            const icon = document.getElementById('diagnosticsToggleIcon');
+            if (content.style.display === 'none') {
+              content.style.display = 'block';
+              icon.textContent = '▼';
+            } else {
+              content.style.display = 'none';
+              icon.textContent = '▶';
+            }
+          }
+        </script>
+        
+        <!-- ═══════════════════════════════════════════════════════════════════
+             WIRING TREE - Field inventory (operational, always visible)
+             ═══════════════════════════════════════════════════════════════════ -->
         <div id="wiringTree"></div>
 
         <!-- Node Inspector (Source of Truth) -->
