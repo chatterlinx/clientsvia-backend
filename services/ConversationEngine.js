@@ -4853,9 +4853,15 @@ async function processTurn({
                     session.bookingModeLocked = true;
                     session.mode = 'BOOKING';
                     
-                    // Don't set aiResult here - let booking flow runner handle next turn
-                    // But DO mark that booking was triggered so meta intents don't intercept
-                    // Actually, we should respond with first booking prompt
+                    // 🔒 CRITICAL: Set bookingFlowState for Redis persistence!
+                    // Without this, v2twilio.js won't save bookingModeLocked and next turn won't trigger booking
+                    session.bookingFlowState = {
+                        bookingModeLocked: true,
+                        bookingFlowId: 'early_consent_trigger',
+                        currentStepId: 'name', // Start with first slot
+                        bookingCollected: { ...currentSlots },
+                        bookingState: 'ACTIVE'
+                    };
                     
                     // BlackBox trace
                     if (BlackBoxLogger) {
@@ -4951,6 +4957,15 @@ async function processTurn({
                         session.bookingModeLocked = true;
                         session.mode = 'BOOKING';
                         
+                        // 🔒 CRITICAL: Set bookingFlowState for Redis persistence!
+                        session.bookingFlowState = {
+                            bookingModeLocked: true,
+                            bookingFlowId: 'direct_intent_trigger',
+                            currentStepId: 'name',
+                            bookingCollected: { ...currentSlots },
+                            bookingState: 'ACTIVE'
+                        };
+                        
                         // BlackBox trace
                         if (BlackBoxLogger) {
                             BlackBoxLogger.logEvent({
@@ -4989,6 +5004,15 @@ async function processTurn({
                         session.booking.consentPhrase = earlyConsentCheck.matchedPhrase || userText;
                         session.bookingModeLocked = true;
                         session.mode = 'BOOKING';
+                        
+                        // 🔒 CRITICAL: Set bookingFlowState for Redis persistence!
+                        session.bookingFlowState = {
+                            bookingModeLocked: true,
+                            bookingFlowId: 'spontaneous_consent_trigger',
+                            currentStepId: 'name',
+                            bookingCollected: { ...currentSlots },
+                            bookingState: 'ACTIVE'
+                        };
                         
                         // BlackBox trace
                         if (BlackBoxLogger) {
