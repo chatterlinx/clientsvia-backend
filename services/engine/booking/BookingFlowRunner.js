@@ -1275,7 +1275,7 @@ class BookingFlowRunner {
         // - Address completion ("What city and state?")
         // ═══════════════════════════════════════════════════════════════════
         if (nextAction.mode === 'COLLECT_DETAILS') {
-            return this.handleCollectDetailsMode(nextAction, state, flow, userInput, company, startTime);
+            return await this.handleCollectDetailsMode(nextAction, state, flow, userInput, company, startTime);
         }
         
         // ═══════════════════════════════════════════════════════════════════
@@ -1829,7 +1829,7 @@ class BookingFlowRunner {
      * more details or clarification about the existing value.
      * ========================================================================
      */
-    static handleCollectDetailsMode(action, state, flow, userInput, company, startTime) {
+    static async handleCollectDetailsMode(action, state, flow, userInput, company, startTime) {
         const { step, existingValue, metadata, detailReason } = action;
         const fieldKey = step.fieldKey || step.id;
         const slotOptions = step.options || {};
@@ -2174,34 +2174,82 @@ class BookingFlowRunner {
                 };
             }
             
-            // User provided city/state
+            // User provided city/state - now validate with Google Geo
             const cityState = userInput.trim();
             const fullAddress = `${state.streetAddressCollected}, ${cityState}`;
             
-            safeSetSlot(state, fieldKey, fullAddress, {
-                source: 'combined_street_city_state',
-                confidence: 0.9
+            // V96r: Call Google Geo validation for building type detection
+            let geoEnabled = true;
+            if (company?.aiAgentSettings?.frontDeskBehavior?.booking?.addressVerification) {
+                geoEnabled = company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.enabled !== false;
+            }
+            
+            const addressValidation = await AddressValidationService.validateAddress(
+                fullAddress,
+                { companyId: company?._id?.toString(), callId: null, enabled: geoEnabled }
+            );
+            
+            // Use formatted address from Google if available
+            const normalizedAddress = addressValidation.formattedAddress || addressValidation.normalized || fullAddress;
+            
+            safeSetSlot(state, fieldKey, normalizedAddress, {
+                source: 'combined_street_city_state_geo_validated',
+                confidence: addressValidation.confidence === 'HIGH' ? 0.95 : 0.9
             });
+            
+            // Store validation metadata
+            state.addressValidation = {
+                raw: fullAddress,
+                formatted: normalizedAddress,
+                confidence: addressValidation.confidence,
+                placeId: addressValidation.placeId,
+                location: addressValidation.location,
+                needsUnit: addressValidation.needsUnit,
+                unitDetection: addressValidation.unitDetection,
+                components: addressValidation.components
+            };
             
             delete state.streetAddressCollected;
             delete state.askedForCityState;
             
-            logger.info('[BOOKING FLOW RUNNER] V96r: Address completed with city/state', {
-                fullAddress
+            logger.info('[BOOKING FLOW RUNNER] V96r: Address validated with Google Geo', {
+                fullAddress,
+                normalized: normalizedAddress,
+                confidence: addressValidation.confidence,
+                needsUnit: addressValidation.needsUnit,
+                buildingType: addressValidation.unitDetection?.buildingType
             });
             
-            // Check if we need to ask about unit type
+            // V96r: Use Google Geo's needsUnit detection for smart unit prompts
             const unitMode = slotOptions.unitNumberMode || 'smart';
-            if (unitMode !== 'never' && !state.askedAboutUnit) {
-                const unitPrompt = slotOptions.unitNumberPrompt || 
-                    step.options?.unitNumberPrompt || 
-                    "Is there an apartment or unit number?";
+            const shouldAskUnit = (
+                unitMode !== 'never' && 
+                !state.askedAboutUnit &&
+                (unitMode === 'always_ask' || 
+                 unitMode === 'house_or_unit' ||
+                 (unitMode === 'smart' && addressValidation.needsUnit))
+            );
+            
+            if (shouldAskUnit) {
+                // Use building-type-aware prompt if Google detected it
+                let unitPrompt;
+                if (addressValidation.needsUnit && addressValidation.unitDetection?.buildingLabel) {
+                    unitPrompt = `I found ${normalizedAddress}. It looks like this might be ${addressValidation.unitDetection.buildingLabel}. What's the apartment or unit number?`;
+                } else if (unitMode === 'house_or_unit') {
+                    unitPrompt = slotOptions.unitTypePrompt || 
+                        step.options?.unitTypePrompt || 
+                        "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?";
+                } else {
+                    unitPrompt = slotOptions.unitNumberPrompt || 
+                        step.options?.unitNumberPrompt || 
+                        "Is there an apartment or unit number?";
+                }
                 
                 state.askedAboutUnit = true;
-                state.addressWithCityState = fullAddress;
+                state.addressWithCityState = normalizedAddress;
                 
                 return {
-                    reply: `${cityState}. ${unitPrompt}`,
+                    reply: unitPrompt,
                     state,
                     isComplete: false,
                     action: 'COLLECT_UNIT',
@@ -2213,8 +2261,10 @@ class BookingFlowRunner {
                     debug: {
                         source: 'BOOKING_FLOW_RUNNER',
                         flowId: flow.flowId,
-                        mode: 'COLLECT_DETAILS_UNIT',
-                        fullAddress
+                        mode: 'COLLECT_DETAILS_UNIT_GEO',
+                        fullAddress: normalizedAddress,
+                        needsUnit: addressValidation.needsUnit,
+                        buildingType: addressValidation.unitDetection?.buildingType
                     }
                 };
             }
