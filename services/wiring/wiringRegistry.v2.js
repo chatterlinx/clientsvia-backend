@@ -511,6 +511,20 @@ const wiringRegistryV2 = {
                         path: 'Front Desk → Booking → Name Parsing'
                     },
                     fields: [
+                        // V96j: Parent object field (runtime reads this directly)
+                        {
+                            id: 'booking.nameParsing',
+                            label: 'Name Parsing Config (Parent)',
+                            description: 'Parent object containing all name parsing settings',
+                            ui: { inputId: 'nameParsingConfig', path: 'Front Desk → Booking → Name Parsing' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.booking.nameParsing' },
+                            runtime: RUNTIME_READERS_MAP['booking.nameParsing'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: { acceptLastNameOnly: false },
+                            notes: 'Parent config object - runtime often reads this whole object'
+                        },
                         {
                             id: 'booking.nameParsing.acceptLastNameOnly',
                             label: 'Accept Last Name Only',
@@ -553,6 +567,20 @@ const wiringRegistryV2 = {
                         path: 'Front Desk → Booking Prompts → Name Spelling Variants'
                     },
                     fields: [
+                        // V96j: Parent object field (runtime reads this directly)
+                        {
+                            id: 'frontDesk.nameSpellingVariants',
+                            label: 'Name Spelling Variants Config (Parent)',
+                            description: 'Parent object containing all spelling variant settings',
+                            ui: { inputId: 'nameSpellingVariantsConfig', path: 'Front Desk → Booking Prompts → Name Spelling Variants' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.nameSpellingVariants'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: { enabled: false, mode: '1_char_only', maxAsksPerCall: 1 },
+                            notes: 'Parent config object - runtime often reads this whole object'
+                        },
                         {
                             id: 'frontDesk.nameSpellingVariants.enabled',
                             label: 'Spelling Confirmation Enabled',
@@ -639,6 +667,20 @@ const wiringRegistryV2 = {
                         path: 'Front Desk → Booking → Address Verification'
                     },
                     fields: [
+                        // V96j: Parent object field (runtime reads this directly)
+                        {
+                            id: 'booking.addressVerification',
+                            label: 'Address Verification Config (Parent)',
+                            description: 'Parent object containing all address verification settings',
+                            ui: { inputId: 'addressVerificationConfig', path: 'Front Desk → Booking → Address Verification' },
+                            db: { path: 'aiAgentSettings.frontDesk.booking.addressVerification' },
+                            runtime: RUNTIME_READERS_MAP['booking.addressVerification'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: { enabled: true, provider: 'google_geocode' },
+                            notes: 'Parent config object - runtime often reads this whole object'
+                        },
                         {
                             id: 'booking.addressVerification.enabled',
                             label: 'Address Verification Enabled',
@@ -1621,6 +1663,80 @@ const wiringRegistryV2 = {
             db: { collection: null, basePath: null },
             scope: 'company',
             sections: []
+        },
+        
+        // ---------------------------------------------------------------------
+        // INFRASTRUCTURE TAB (V96j)
+        // ---------------------------------------------------------------------
+        {
+            id: 'tab.infra',
+            label: 'Infrastructure',
+            description: 'Platform infrastructure settings (strict mode, tracing, caching)',
+            ui: { tabId: 'infrastructure', navSelector: '[data-tab="infrastructure"]' },
+            db: { collection: 'companies', basePath: 'aiAgentSettings.infra' },
+            scope: 'company',
+            sections: [
+                // ═══════════════════════════════════════════════════════════════
+                // V96j: STRICT CONFIG REGISTRY (Nuke Clean Sweep)
+                // ═══════════════════════════════════════════════════════════════
+                {
+                    id: 'infra.strictConfig',
+                    label: 'Strict Config Registry',
+                    description: 'Enforcement mode for config registry validation',
+                    fields: [
+                        {
+                            id: 'infra.strictConfigRegistry',
+                            label: 'Strict Config Registry',
+                            description: 'When enabled, any DEAD_READ (runtime reads config path not in registry) emits CONFIG_REGISTRY_VIOLATION. Enable for specific companies to catch legacy readers.',
+                            db: { path: 'aiAgentSettings.infra.strictConfigRegistry' },
+                            runtime: RUNTIME_READERS_MAP['infra.strictConfigRegistry'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: false
+                        },
+                        {
+                            id: 'infra.strictConfigRegistry.blockDeadReads',
+                            label: 'Block Dead Reads',
+                            description: 'When strict mode is enabled AND this is true, DEAD_READs return undefined instead of reading the unregistered path.',
+                            db: { path: 'aiAgentSettings.infra.strictConfigRegistry.blockDeadReads' },
+                            runtime: RUNTIME_READERS_MAP['infra.strictConfigRegistry.blockDeadReads'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: false
+                        },
+                        {
+                            id: 'infra.strictConfigRegistry.allowlist',
+                            label: 'Dead Read Allowlist',
+                            description: 'Array of AW paths that are allowed to be read even if not in registry (for gradual migration).',
+                            db: { path: 'aiAgentSettings.infra.strictConfigRegistry.allowlist' },
+                            runtime: RUNTIME_READERS_MAP['infra.strictConfigRegistry.allowlist'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: []
+                        }
+                    ]
+                },
+                // ═══════════════════════════════════════════════════════════════
+                // Scenario Pool Cache
+                // ═══════════════════════════════════════════════════════════════
+                {
+                    id: 'infra.caching',
+                    label: 'Caching',
+                    description: 'Redis cache settings',
+                    fields: [
+                        {
+                            id: 'infra.scenarioPoolCache',
+                            label: 'Scenario Pool Cache',
+                            description: 'Caches scenario pool per company for 5 minutes',
+                            db: { path: null }, // Redis-based, no DB path
+                            runtime: RUNTIME_READERS_MAP['infra.scenarioPoolCache'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: null
+                        }
+                    ]
+                }
+            ]
         }
     ],
     
