@@ -233,6 +233,14 @@ const NAME_STOP_WORDS = new Set([
     // "the system is BLANK" → "Blank" is NOT a name!
     'blank', 'dead', 'frozen', 'stuck', 'loud', 'quiet', 'warm', 'hot', 'cold',
     'problem', 'issue', 'trouble', 'error', 'system', 'unit', 'equipment',
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FEB 2026 V96m FIX: WATER/LEAK WORDS - NOT names!
+    // BUG: "that is water leakage" was extracting "Water Leakage" as a name
+    // because "water" and "leakage" weren't in stop words.
+    // ═══════════════════════════════════════════════════════════════════════════
+    'water', 'leakage', 'leak', 'leaking', 'leaks', 'leaked',
+    'flooding', 'flooded', 'flood', 'dripping', 'drip', 'drips',
+    'moisture', 'condensation', 'puddle', 'wet', 'damp', 'soggy',
     'thermostat', 'filter', 'vent', 'duct', 'coil', 'compressor', 'condenser',
     'furnace', 'heater', 'ac', 'hvac', 'air', 'conditioning', 'heat', 'pump',
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1123,12 +1131,23 @@ class SlotExtractor {
         //
         // Now correction patterns are VERY specific and only match explicit name corrections.
         // ═══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V96m FIX: CORRECTION PATTERNS - EXTREMELY RESTRICTIVE
+        // ═══════════════════════════════════════════════════════════════════════════
+        // BUG (FEB 2026): "i'm seeing that is water leakage" was extracting "Water Leakage"
+        // because the old pattern /(?:that\s+is)\s+([a-zA-Z]+\s+[a-zA-Z]+)/i was too broad.
+        //
+        // FIX: Only match corrections that are CLEARLY name corrections:
+        // - Must follow with ", and" or be at END of sentence
+        // - Must NOT have continuing phrases after the "name"
+        // - REMOVED the unrestricted two-word pattern entirely
+        // ═══════════════════════════════════════════════════════════════════════════
         const correctionPatterns = [
-            // "that's Mark Gonzales" / "actually Mark" / "I mean Mark" - EXPLICIT corrections only
-            // NOTE: "it's" REMOVED - too ambiguous, matches "it's currently not working"
-            // NOTE: End-of-sentence "that's X" REMOVED - too broad, matches "I see that there is X"
-            /(?:that'?s|that\s+is|actually|i\s+mean|well\s+that'?s)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*[.,]?\s*(?:and|$)/i,
-            /(?:that'?s|that\s+is|actually|i\s+mean)\s+([a-zA-Z]+\s+[a-zA-Z]+)/i
+            // "that's Mark Gonzales, and..." OR "that's Mark Gonzales." (end of sentence)
+            // The (?:,?\s*and|[.!?]?\s*$) ensures it's followed by "and" or sentence end
+            /(?:that'?s|that\s+is|actually|i\s+mean|well\s+that'?s)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*(?:,?\s*and|[.!?]?\s*$)/i
+            // REMOVED: /(?:that'?s|that\s+is|actually|i\s+mean)\s+([a-zA-Z]+\s+[a-zA-Z]+)/i
+            // This pattern was WAY too broad - matched "that is water leakage in my garage"
         ];
         
         for (const pattern of correctionPatterns) {
