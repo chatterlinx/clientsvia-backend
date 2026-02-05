@@ -144,6 +144,7 @@ class BookingFlowResolver {
         // ═══════════════════════════════════════════════════════════════════════
         
         let bookingSlots, bookingTemplates, bookingBehavior, bookingOutcome, bookingPrompts;
+        let aiSettings, frontDeskBehavior; // Hoisted for use in logging later
         
         if (awReader && typeof awReader.get === 'function') {
             // V96j: Traced reads through AWConfigReader
@@ -154,6 +155,10 @@ class BookingFlowResolver {
             bookingBehavior = awReader.getObject('frontDesk.bookingBehavior') || {};
             bookingOutcome = awReader.getObject('frontDesk.bookingOutcome') || {};
             bookingPrompts = awReader.getObject('frontDesk.bookingPrompts') || {};
+            
+            // For logging references below
+            aiSettings = company.aiAgentSettings || {};
+            frontDeskBehavior = aiSettings.frontDeskBehavior || {};
             
             logger.debug('[BOOKING FLOW RESOLVER] V96j: Using AWConfigReader for traced reads', {
                 companyId: company._id?.toString(),
@@ -166,8 +171,8 @@ class BookingFlowResolver {
                 companyId: company._id?.toString()
             });
             
-            const aiSettings = company.aiAgentSettings || {};
-            const frontDeskBehavior = aiSettings.frontDeskBehavior || {};
+            aiSettings = company.aiAgentSettings || {};
+            frontDeskBehavior = aiSettings.frontDeskBehavior || {};
             
             bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
             bookingTemplates = frontDeskBehavior.bookingTemplates || aiSettings.bookingTemplates || {};

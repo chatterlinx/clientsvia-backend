@@ -2763,6 +2763,20 @@ class BookingFlowRunner {
         const collected = state.bookingCollected || {};
         
         // ═══════════════════════════════════════════════════════════════════════
+        // V96k: RECOMPUTE confirmedSlots FROM CANONICAL slots
+        // ═══════════════════════════════════════════════════════════════════════
+        // NEVER carry forward a stale confirmedSlots array. The trace contradiction
+        // proves we were doing that before. Rebuild it from canonical state only.
+        // ═══════════════════════════════════════════════════════════════════════
+        const canonicalSlots = state.slots || {};
+        state.confirmedSlots = {};
+        for (const key of Object.keys(canonicalSlots)) {
+            if (canonicalSlots[key] && canonicalSlots[key].v) {
+                state.confirmedSlots[key] = true;
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
         // V96k: CONFIRMATION INVARIANT CHECK
         // ═══════════════════════════════════════════════════════════════════════
         // "If currentStepId === CONFIRMATION then every required slot must pass validator.
@@ -2773,6 +2787,32 @@ class BookingFlowRunner {
         // V96k: Using checkConfirmationInvariant module (no throws - graceful rewind)
         // ═══════════════════════════════════════════════════════════════════════
         const rewindInfo = checkConfirmationInvariant(state, flow);
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96k: BOOKING_CONFIRMATION_GUARD TRACE EVENT (requested by user)
+        // ═══════════════════════════════════════════════════════════════════════
+        // Emit this smoking gun trace so we can see exactly why it did/didn't
+        // ask the time prompt in raw-events.
+        // ═══════════════════════════════════════════════════════════════════════
+        const timeValue = collected.time || state.slots?.time?.v || null;
+        const timeValid = !rewindInfo || rewindInfo.invalidSlot !== 'time';
+        
+        if (BlackBoxLogger?.logEvent) {
+            BlackBoxLogger.logEvent({
+                callId: state.callId || 'unknown',
+                companyId: state.companyId || 'unknown',
+                type: 'BOOKING_CONFIRMATION_GUARD',
+                data: {
+                    timeValue,
+                    timeValid,
+                    whyInvalid: rewindInfo?.invalidSlot === 'time' ? rewindInfo.reason : null,
+                    forcedNextStep: rewindInfo ? rewindInfo.stepId : null,
+                    allSlots: Object.keys(collected),
+                    requiredSlots: flow.steps.filter(s => s.required).map(s => s.fieldKey)
+                }
+            }).catch(() => {});
+        }
+        
         if (rewindInfo) {
             logger.error('[BOOKING FLOW RUNNER] ❌ V96k: CONFIRMATION INVARIANT VIOLATION', {
                 invalidSlot: rewindInfo.invalidSlot,
