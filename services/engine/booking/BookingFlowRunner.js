@@ -53,14 +53,24 @@ try {
 const SlotExtractors = {
     /**
      * Extract name from user input
+     * V96e: REMOVED "it's|its" pattern - caused "it's currently" → "Currently" bug
      */
     name: (input, step, context = {}) => {
         if (!input) return null;
         
         const text = input.trim();
         
-        // Pattern: "My name is X" / "This is X" / "I'm X"
-        const nameMatch = text.match(/(?:my name is|this is|i'm|i am|it's|its)\s+(.+)/i);
+        // V96e: Early rejection if input looks like a phone number
+        if (looksLikePhone(text)) {
+            logger.warn('[BOOKING FLOW RUNNER] ❌ V96e: Rejected phone-shaped input as name source', { 
+                text: text.substring(0, 30) 
+            });
+            return null;
+        }
+        
+        // Pattern: "My name is X" / "This is X" / "I'm X" / "Call me X"
+        // V96e: REMOVED "it's|its" - too ambiguous, causes "it's currently" bug
+        const nameMatch = text.match(/(?:my name is|this is|i'm|i am|call me)\s+(.+)/i);
         if (nameMatch) {
             return cleanName(nameMatch[1]);
         }
@@ -230,15 +240,35 @@ function detectAddressParts(rawAddress) {
     };
 }
 function isStopWord(word) {
+    // V96e: Comprehensive stop words - sync with SlotExtractor.NAME_STOP_WORDS
     const stopWords = new Set([
         'is', 'are', 'was', 'were', 'be', 'been', 'am',
         'the', 'my', 'its', "it's", 'a', 'an', 'name', 'last', 'first',
         'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'no', 'nope',
         'hi', 'hello', 'hey', 'please', 'thanks', 'thank', 'you',
         'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for', 'with',
-        'got', 'two', 'there', 'uh', 'um', 'yup', 'so', 'well', 'just'
+        'got', 'two', 'there', 'uh', 'um', 'yup', 'so', 'well', 'just',
+        // V96e: Adverbs and state words that caused "currently" as name bug
+        'currently', 'presently', 'actually', 'basically', 'usually', 'normally',
+        'typically', 'generally', 'still', 'already', 'always', 'never', 'ever',
+        'now', 'today', 'recently', 'sometimes', 'often', 'really', 'very',
+        'nothing', 'everything', 'anything', 'something',
+        // Service/trade words
+        'service', 'services', 'repair', 'repairs', 'maintenance', 'conditioning',
+        'air', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical'
     ]);
     return stopWords.has(word);
+}
+
+/**
+ * V96e: Check if string looks like a phone number
+ * Used to prevent ANI/phone contamination into name fields
+ */
+function looksLikePhone(str) {
+    if (!str) return false;
+    const digitsOnly = str.replace(/\D/g, '');
+    const digitRatio = digitsOnly.length / str.length;
+    return digitRatio > 0.5 && digitsOnly.length >= 7;
 }
 
 function titleCase(str) {
@@ -248,12 +278,27 @@ function titleCase(str) {
 
 function cleanName(name) {
     if (!name) return null;
-    return name
+    
+    // V96e: Reject phone-shaped strings early
+    if (looksLikePhone(name)) {
+        logger.warn('[BOOKING FLOW RUNNER] ❌ V96e: Rejected phone-shaped string as name', { name });
+        return null;
+    }
+    
+    const cleaned = name
         .split(/\s+/)
         .filter(w => !isStopWord(w.toLowerCase()) && w.length > 1)
         .map(w => titleCase(w.replace(/[^A-Za-z\-'\.]/g, '')))
         .join(' ')
         .trim() || null;
+    
+    // V96e: Final validation - must have at least one letter
+    if (cleaned && !/[a-zA-Z]/.test(cleaned)) {
+        logger.warn('[BOOKING FLOW RUNNER] ❌ V96e: Rejected name with no letters', { cleaned });
+        return null;
+    }
+    
+    return cleaned;
 }
 
 /**
