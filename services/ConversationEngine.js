@@ -4077,11 +4077,31 @@ async function processTurn({
         // CRITICAL: v2twilio.js extracts slots and stores them in Redis (callState.slots).
         // Session.collectedSlots is from MongoDB and may not have these slots yet.
         // Merge them here so BOOKING_SNAP sees all collected slots.
+        // 
+        // V95 FIX: For critical identity slots (name, phone), preExtractedSlots 
+        // should OVERRIDE session values because v2twilio's SlotExtractor has 
+        // validation rules that prevent extracting invalid values.
         // ════════════════════════════════════════════════════════════════════
+        const CRITICAL_OVERRIDE_SLOTS = new Set(['name', 'phone', 'partialName']);
+        
         if (preExtractedSlots && Object.keys(preExtractedSlots).length > 0) {
             session.collectedSlots = session.collectedSlots || {};
             for (const [key, value] of Object.entries(preExtractedSlots)) {
-                if (value && !session.collectedSlots[key]) {
+                if (!value) continue;
+                
+                const shouldOverride = CRITICAL_OVERRIDE_SLOTS.has(key);
+                const existingValue = session.collectedSlots[key];
+                
+                if (shouldOverride && existingValue !== value) {
+                    // Critical slot - allow override with better value
+                    log('🎯 V95: PRE-EXTRACTED CRITICAL SLOT OVERRIDE', { 
+                        key, 
+                        oldValue: existingValue?.substring?.(0, 20) || existingValue,
+                        newValue: value?.substring?.(0, 20) || value
+                    });
+                    session.collectedSlots[key] = value;
+                } else if (!existingValue) {
+                    // Non-critical slot - only set if not already present
                     session.collectedSlots[key] = value;
                     log('🎯 PRE-EXTRACTED SLOT MERGED', { key, value: typeof value === 'string' ? value.substring(0, 20) : value });
                 }
@@ -5741,12 +5761,37 @@ async function processTurn({
                 company
             });
             
+            // ═══════════════════════════════════════════════════════════════════
+            // V95 FIX: Use preExtractedSlots for CORRECT slot values
+            // ═══════════════════════════════════════════════════════════════════
+            // BUG: currentSlots was getting corrupted with "Air Conditioning" 
+            // instead of "Mark" from "my name is Mark and air conditioning issues".
+            // preExtractedSlots comes from v2twilio's SlotExtractor which correctly
+            // extracts names using validation rules.
+            // 
+            // Priority: preExtractedSlots > currentSlots for name/phone slots
+            // ═══════════════════════════════════════════════════════════════════
+            const correctSlots = {
+                ...currentSlots,
+                // Override with preExtractedSlots values (these are validated by SlotExtractor)
+                ...(preExtractedSlots || {})
+            };
+            
+            log('🎯 V95: Merging slots for booking', {
+                currentSlotsName: currentSlots.name,
+                preExtractedName: preExtractedSlots?.name,
+                finalName: correctSlots.name,
+                currentSlotsPhone: currentSlots.phone,
+                preExtractedPhone: preExtractedSlots?.phone,
+                finalPhone: correctSlots.phone
+            });
+            
             // Set booking lock state - this will be saved to Redis by v2twilio.js
             session.bookingFlowState = {
                 bookingModeLocked: true,
                 bookingFlowId: bookingFlow.flowId,
                 currentStepId: bookingFlow.steps[0]?.id || 'name',
-                bookingCollected: { ...currentSlots },
+                bookingCollected: { ...correctSlots },  // V95: Use correctly extracted slots
                 bookingState: 'ACTIVE'
             };
             
@@ -5869,9 +5914,11 @@ async function processTurn({
                 // V92: CONTEXT-AWARE ACKNOWLEDGMENT
                 // Build acknowledgment that reflects what the caller said
                 // ═══════════════════════════════════════════════════════════════
+                // V95 FIX: Use correctSlots (preExtractedSlots override) for name
+                // This prevents "Got it, Air Conditioning" when caller said "Mark"
                 let ack;
                 const discovery = session.discovery || {};
-                const callerName = currentSlots.name || currentSlots.partialName;
+                const callerName = correctSlots.name || correctSlots.partialName;
                 
                 if (discovery.issue || discovery.techMentioned || discovery.temperature) {
                     // We have context - acknowledge it!
@@ -5956,7 +6003,7 @@ async function processTurn({
                     conversationMode: 'booking',
                     intent: 'booking',
                     nextGoal: `COLLECT_${slotId.toUpperCase()}`,
-                    filledSlots: currentSlots,
+                    filledSlots: correctSlots,  // V95 FIX: Use correctSlots (preExtractedSlots override)
                     signals: { 
                         wantsBooking: true,
                         consentGiven: true,
@@ -5977,7 +6024,12 @@ async function processTurn({
                         step: slotId,
                         firstSlotQuestion: exactQuestion,
                         bookingModeLocked: true,
-                        bookingFlowId: bookingFlow.flowId
+                        bookingFlowId: bookingFlow.flowId,
+                        v95Fix: {
+                            currentSlotsName: currentSlots.name,
+                            preExtractedName: preExtractedSlots?.name,
+                            finalName: correctSlots.name
+                        }
                     }
                 };
             }

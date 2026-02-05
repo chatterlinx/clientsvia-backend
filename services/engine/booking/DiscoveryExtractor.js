@@ -87,6 +87,33 @@ const COMMON_TECH_NAMES = new Set([
 ]);
 
 // ════════════════════════════════════════════════════════════════════════════════
+// V95 FIX: Stop words that should NOT be extracted as tech names
+// ════════════════════════════════════════════════════════════════════════════════
+// BUG: "would like somebody to come out" was extracting "Somebody" as tech name.
+// These are common words that match the pattern but aren't actual names.
+// ════════════════════════════════════════════════════════════════════════════════
+const TECH_NAME_STOP_WORDS = new Set([
+    // Pronouns and common words
+    'somebody', 'someone', 'anybody', 'anyone', 'everybody', 'everyone', 'nobody',
+    'something', 'anything', 'everything', 'nothing',
+    'they', 'them', 'their', 'theirs', 'themselves',
+    'you', 'your', 'yours', 'yourself', 'yourselves',
+    'she', 'her', 'hers', 'herself',
+    'him', 'himself',
+    'myself', 'ourselves', 'itself',
+    // Generic references
+    'guy', 'man', 'woman', 'person', 'people', 'tech', 'technician', 'worker',
+    'employee', 'staff', 'team', 'crew', 'service', 'professional',
+    // Scheduling words
+    'today', 'tomorrow', 'morning', 'afternoon', 'evening', 'soon', 'asap', 'now',
+    // Actions
+    'help', 'come', 'came', 'check', 'look', 'fix', 'repair', 'service', 'install',
+    // Filler words
+    'the', 'and', 'that', 'this', 'there', 'here', 'where', 'when', 'what', 'who',
+    'how', 'why', 'just', 'only', 'also', 'really', 'very', 'much', 'more', 'less'
+]);
+
+// ════════════════════════════════════════════════════════════════════════════════
 // TENURE/RELATIONSHIP PATTERNS
 // ════════════════════════════════════════════════════════════════════════════════
 const TENURE_PATTERNS = [
@@ -192,6 +219,16 @@ class DiscoveryExtractor {
             const match = utterance.match(pattern);
             if (match && match[1]) {
                 const potentialName = match[1].toLowerCase();
+                
+                // V95 FIX: Skip stop words (e.g., "somebody", "anyone")
+                if (TECH_NAME_STOP_WORDS.has(potentialName)) {
+                    logger.debug('[DISCOVERY EXTRACTOR] Skipped stop word as tech name', { 
+                        potentialName,
+                        pattern: pattern.toString()
+                    });
+                    continue;
+                }
+                
                 // Verify it looks like a name (not a common word)
                 if (allTechNames.has(potentialName) || 
                     (potentialName.length >= 3 && /^[a-z]+$/i.test(potentialName))) {
