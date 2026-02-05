@@ -259,7 +259,12 @@ class DirectBookingIntentDetector {
         const configuredPatterns = this._getConfiguredPatterns(context);
         
         // V96k: Trace event for debugging pattern reads
-        const BlackBoxLogger = require('../../../utils/BlackBoxLogger');
+        let BlackBoxLogger;
+        try {
+            BlackBoxLogger = require('../../BlackBoxLogger');
+        } catch (e) {
+            // BlackBoxLogger not available - skip tracing
+        }
         if (BlackBoxLogger?.emit) {
             BlackBoxLogger.emit('DIRECT_INTENT_PATTERNS_READ', {
                 patternCount: configuredPatterns?.length || 0,
