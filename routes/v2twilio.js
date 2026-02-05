@@ -2977,7 +2977,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       // Merge new extractions with existing slots (with confidence rules)
       // V96g: Track merge decisions for turn trace
+      // V96i FIX: Declare outside if block so it's always defined
       let slotMergeDecisions = [];
+      
       if (Object.keys(extractedSlots).length > 0) {
         const mergedSlots = SlotExtractor.mergeSlots(callState.slots, extractedSlots);
         
@@ -2987,37 +2989,42 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         callState.slots = mergedSlots;
         
         // 📼 BLACK BOX: Log slot extraction with FULL merge decision trace
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
-            callId: callSid,
-            companyId: companyID,
-            type: 'SLOTS_MERGED',
-            turn: callState.turnCount,
-            data: {
-              extracted: Object.fromEntries(
-                Object.entries(extractedSlots).map(([k, v]) => [k, { 
-                  value: k === 'phone' ? '***MASKED***' : v.value, 
-                  confidence: v.confidence, 
-                  source: v.source,
-                  patternSource: v.patternSource,
-                  nameLocked: v.nameLocked
-                }])
-              ),
-              mergeDecisions: mergeDecisions,  // V96g: Full audit trail
-              totalSlots: Object.keys(callState.slots).length,
-              currentSlotValues: Object.fromEntries(
-                Object.entries(callState.slots)
-                  .filter(([k]) => !k.startsWith('_'))  // Exclude internal keys
-                  .map(([k, v]) => [k, {
-                    value: k === 'phone' ? '***MASKED***' : v?.value,
-                    confidence: v?.confidence,
-                    confirmed: v?.confirmed,
-                    immutable: v?.immutable,
+        // V96i: Wrapped in try/catch - tracing must NEVER crash the call
+        try {
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'SLOTS_MERGED',
+              turn: callState.turnCount,
+              data: {
+                extracted: Object.fromEntries(
+                  Object.entries(extractedSlots || {}).map(([k, v]) => [k, { 
+                    value: k === 'phone' ? '***MASKED***' : v?.value, 
+                    confidence: v?.confidence, 
+                    source: v?.source,
+                    patternSource: v?.patternSource,
                     nameLocked: v?.nameLocked
                   }])
-              )
-            }
-          }).catch(() => {});
+                ),
+                mergeDecisions: slotMergeDecisions || [],  // V96g: Full audit trail
+                totalSlots: Object.keys(callState.slots || {}).length,
+                currentSlotValues: Object.fromEntries(
+                  Object.entries(callState.slots || {})
+                    .filter(([k]) => !k.startsWith('_'))  // Exclude internal keys
+                    .map(([k, v]) => [k, {
+                      value: k === 'phone' ? '***MASKED***' : v?.value,
+                      confidence: v?.confidence,
+                      confirmed: v?.confirmed,
+                      immutable: v?.immutable,
+                      nameLocked: v?.nameLocked
+                    }])
+                )
+              }
+            }).catch(() => {});
+          }
+        } catch (traceErr) {
+          logger.warn('[TRACE ERROR] SLOTS_MERGED trace failed (call continues)', { error: traceErr.message });
         }
         
         logger.info('[SLOT EXTRACTOR] Slots extracted pre-routing', {
@@ -4212,7 +4219,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         ])
       ),
       // V96g: Full merge decision audit trail
-      mergeDecisions: slotMergeDecisions
+      mergeDecisions: slotMergeDecisions || []
     };
     
     // Checkpoint C1: Booking intent detection (V94 - runs BEFORE meta intents)
