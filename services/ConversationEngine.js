@@ -4944,10 +4944,12 @@ async function processTurn({
                     bookingConsentPending = true;
                     
                     // Get consent question from config or use default
-                    const consentQuestion = awReader 
+                    // V96n FIX: Default must apply AFTER awReader.get() returns, not as alt branch
+                    // BUG: When awReader returned undefined, default wasn't used → "I'm sorry, could you repeat"
+                    const consentQuestion = (awReader 
                         ? awReader.get('frontDesk.discoveryConsent.consentQuestion')
-                        : (company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.consentQuestion 
-                            || "Would you like me to schedule a technician to come out?");
+                        : company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.consentQuestion)
+                        || "Would you like me to schedule a technician to come out?";
                     
                     aiResult = {
                         reply: consentQuestion,
