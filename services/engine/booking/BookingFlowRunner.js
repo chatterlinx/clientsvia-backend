@@ -1267,6 +1267,18 @@ class BookingFlowRunner {
         }
         
         // ═══════════════════════════════════════════════════════════════════
+        // V96r: HANDLE COLLECT_DETAILS MODE - slot has value but needs prompts
+        // ═══════════════════════════════════════════════════════════════════
+        // This mode triggers when a pre-filled slot needs detailed prompts like:
+        // - Spelling confirmation ("Mark with a K or a C?")
+        // - Last name collection ("And what's your last name?")
+        // - Address completion ("What city and state?")
+        // ═══════════════════════════════════════════════════════════════════
+        if (nextAction.mode === 'COLLECT_DETAILS') {
+            return this.handleCollectDetailsMode(nextAction, state, flow, userInput, company, startTime);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
         // HANDLE COLLECT MODE (slot missing, need to ask)
         // ═══════════════════════════════════════════════════════════════════
         return await this.handleCollectMode(nextAction, state, flow, userInput, company, startTime);
@@ -1470,12 +1482,82 @@ class BookingFlowRunner {
             // If caller said "my name is Mark" (confidence 0.9, source: utterance),
             // don't ask them to confirm it again - that's annoying!
             // Only ask for confirmation on low-confidence or caller_id slots.
+            // 
+            // V96r FIX: BUT DON'T skip if slot needs detailed prompts!
+            // - confirmSpelling: must spell check names like Mark/Marc
+            // - askFullName + askMissingNamePart: must get last name if only first given
+            // - Address slots: must ask for city/state/unit per config
             // ═══════════════════════════════════════════════════════════════════════
             const isUtteranceSource = metadata?.source === 'utterance';
             const hasHighConfidence = metadata?.confidence >= AUTO_CONFIRM_THRESHOLD;
+            const slotOptions = step.options || {};
+            
+            // V96r: Check if this slot needs detailed prompts BEFORE auto-confirming
+            let needsDetailedPrompts = false;
+            let detailedPromptReason = null;
+            
+            if (fieldKey === 'name' || step.type === 'name') {
+                // Check spelling confirmation requirement
+                const confirmSpelling = slotOptions.confirmSpelling || step.confirmSpelling;
+                if (confirmSpelling && existingValue && needsSpellingCheck(existingValue)) {
+                    needsDetailedPrompts = true;
+                    detailedPromptReason = 'SPELLING_CHECK_REQUIRED';
+                }
+                
+                // Check full name requirement
+                const askFullName = slotOptions.askFullName || step.askFullName;
+                const askMissingNamePart = slotOptions.askMissingNamePart || step.askMissingNamePart;
+                if (askFullName && askMissingNamePart && existingValue) {
+                    const nameParts = existingValue.trim().split(/\s+/);
+                    if (nameParts.length < 2) {
+                        needsDetailedPrompts = true;
+                        detailedPromptReason = 'LAST_NAME_REQUIRED';
+                    }
+                }
+            }
+            
+            if (fieldKey === 'address' || step.type === 'address') {
+                // Check address completeness requirements
+                const requireCity = slotOptions.requireCity !== false; // Default true
+                const requireState = slotOptions.requireState !== false;
+                const unitMode = slotOptions.unitNumberMode || 'smart';
+                
+                // V96r: If address verification features are enabled, don't auto-confirm
+                // Let the address flow handle city/state/unit prompts
+                if (existingValue && (requireCity || requireState || unitMode !== 'never')) {
+                    // Check if address is likely incomplete (no city/state detected)
+                    const hasComma = existingValue.includes(',');
+                    const statePattern = /\b[A-Z]{2}\b|\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new\s+hampshire|new\s+jersey|new\s+mexico|new\s+york|north\s+carolina|north\s+dakota|ohio|oklahoma|oregon|pennsylvania|rhode\s+island|south\s+carolina|south\s+dakota|tennessee|texas|utah|vermont|virginia|washington|west\s+virginia|wisconsin|wyoming)\b/i;
+                    const hasState = statePattern.test(existingValue);
+                    
+                    if (!hasComma && !hasState) {
+                        needsDetailedPrompts = true;
+                        detailedPromptReason = 'ADDRESS_INCOMPLETE_NEEDS_CITY_STATE';
+                    }
+                }
+            }
             
             if (metadata?.confirmed === true || (isUtteranceSource && hasHighConfidence)) {
-                // Auto-confirm and skip
+                // V96r: Don't auto-confirm if detailed prompts are needed
+                if (needsDetailedPrompts) {
+                    logger.info('[BOOKING FLOW] V96r: NOT auto-confirming - needs detailed prompts', {
+                        fieldKey,
+                        existingValue: existingValue?.substring?.(0, 30),
+                        reason: detailedPromptReason,
+                        confirmSpelling: slotOptions.confirmSpelling,
+                        askFullName: slotOptions.askFullName
+                    });
+                    // Return this step for detailed processing instead of skipping
+                    return {
+                        step,
+                        mode: 'COLLECT_DETAILS',
+                        existingValue,
+                        metadata,
+                        detailReason: detailedPromptReason
+                    };
+                }
+                
+                // Auto-confirm and skip (no detailed prompts needed)
                 state.confirmedSlots = state.confirmedSlots || {};
                 state.confirmedSlots[fieldKey] = true;
                 logger.debug('[BOOKING FLOW] Auto-confirming high-confidence slot', {
@@ -1731,6 +1813,453 @@ class BookingFlowRunner {
                 userInput
             }
         };
+    }
+    
+    /**
+     * ========================================================================
+     * V96r: HANDLE COLLECT DETAILS MODE - Slot has value but needs prompts
+     * ========================================================================
+     * 
+     * This mode is triggered when a pre-filled slot needs additional prompts:
+     * - SPELLING_CHECK_REQUIRED: Name like "Mark" needs "Mark with a K or a C?"
+     * - LAST_NAME_REQUIRED: Only first name given, need last name
+     * - ADDRESS_INCOMPLETE_NEEDS_CITY_STATE: Street only, need city/state
+     * 
+     * Unlike CONFIRM mode (yes/no), this mode asks specific questions to get
+     * more details or clarification about the existing value.
+     * ========================================================================
+     */
+    static handleCollectDetailsMode(action, state, flow, userInput, company, startTime) {
+        const { step, existingValue, metadata, detailReason } = action;
+        const fieldKey = step.fieldKey || step.id;
+        const slotOptions = step.options || {};
+        
+        logger.info('[BOOKING FLOW RUNNER] V96r: COLLECT_DETAILS mode', {
+            stepId: step.id,
+            fieldKey,
+            existingValue: existingValue?.substring?.(0, 30),
+            detailReason,
+            hasUserInput: !!userInput
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // SPELLING CHECK HANDLING
+        // ═══════════════════════════════════════════════════════════════════════
+        if (detailReason === 'SPELLING_CHECK_REQUIRED' && (fieldKey === 'name' || step.type === 'name')) {
+            // First entry - ask spelling question
+            if (!userInput || userInput.trim() === '' || !state.spellingQuestionAsked) {
+                const nameToSpell = existingValue;
+                const firstName = nameToSpell?.split?.(/\s+/)?.[0] || nameToSpell;
+                
+                // Find the spelling variant group for this name
+                const nameLower = firstName?.toLowerCase?.() || '';
+                let variants = [];
+                for (const group of SIMILAR_NAME_GROUPS) {
+                    if (group.includes(nameLower)) {
+                        variants = group.filter(v => v !== nameLower);
+                        break;
+                    }
+                }
+                
+                let spellingPrompt;
+                if (variants.length > 0) {
+                    // Use configured prompt or build one with variants
+                    const primaryVariant = variants[0];
+                    const currentSpelling = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+                    const altSpelling = primaryVariant.charAt(0).toUpperCase() + primaryVariant.slice(1).toLowerCase();
+                    
+                    spellingPrompt = slotOptions.spellingVariantPrompt 
+                        ? slotOptions.spellingVariantPrompt
+                            .replace('{optionA}', currentSpelling)
+                            .replace('{optionB}', altSpelling)
+                        : `Just to confirm — is that ${currentSpelling} or ${altSpelling}?`;
+                } else {
+                    // Spell out letter by letter for short names
+                    const spelled = firstName.toUpperCase().split('').join(' - ');
+                    spellingPrompt = `Let me confirm the spelling: ${spelled}. Is that correct?`;
+                }
+                
+                state.spellingQuestionAsked = true;
+                state.pendingSpellingConfirm = {
+                    fieldKey,
+                    value: existingValue,
+                    firstName,
+                    step: step.id
+                };
+                
+                return {
+                    reply: spellingPrompt,
+                    state,
+                    isComplete: false,
+                    action: 'CONFIRM_SPELLING',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'COLLECT_DETAILS_SPELLING',
+                        firstName,
+                        variants
+                    }
+                };
+            }
+            
+            // User responded to spelling question
+            const spellingResponse = userInput.toLowerCase().trim();
+            const pendingSpelling = state.pendingSpellingConfirm;
+            
+            // Check if they confirmed or provided a correction
+            const isYes = /^(yes|yeah|yep|correct|right|that's right|that is correct|exactly)$/i.test(spellingResponse);
+            const isNo = /^(no|nope|nah|incorrect|wrong)$/i.test(spellingResponse);
+            
+            if (isYes || isNo) {
+                // Confirmed spelling (or will correct below)
+                state.spellingConfirmed = true;
+                delete state.spellingQuestionAsked;
+                delete state.pendingSpellingConfirm;
+                
+                // Now check if we also need last name
+                const askFullName = slotOptions.askFullName || step.askFullName;
+                const askMissingNamePart = slotOptions.askMissingNamePart || step.askMissingNamePart;
+                const nameParts = existingValue.trim().split(/\s+/);
+                
+                if (askFullName && askMissingNamePart && nameParts.length < 2) {
+                    // Still need last name
+                    const lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion || "And what's your last name?";
+                    const ack = isYes ? 'Perfect.' : 'Got it.';
+                    
+                    state.firstNameCollected = nameParts[0];
+                    state.askedForLastName = true;
+                    
+                    return {
+                        reply: `${ack} ${lastNameQuestion}`,
+                        state,
+                        isComplete: false,
+                        action: 'COLLECT_LAST_NAME',
+                        currentStep: step.id,
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            source: 'BOOKING_FLOW_RUNNER',
+                            flowId: flow.flowId,
+                            mode: 'COLLECT_DETAILS_LAST_NAME',
+                            firstName: nameParts[0]
+                        }
+                    };
+                }
+                
+                // Spelling confirmed, no last name needed - mark as confirmed and continue
+                markSlotConfirmed(state, fieldKey);
+                
+                const nextAction = this.determineNextAction(flow, state, {});
+                if (!nextAction) {
+                    return this.buildConfirmation(flow, state);
+                }
+                
+                state.currentStepId = nextAction.step.id;
+                const ack = 'Perfect.';
+                const nextPrompt = nextAction.mode === 'CONFIRM'
+                    ? this.buildConfirmPrompt(nextAction.step, nextAction.existingValue)
+                    : (nextAction.step.prompt || `What is your ${nextAction.step.label || nextAction.step.id}?`);
+                
+                return {
+                    reply: `${ack} ${nextPrompt}`,
+                    state,
+                    isComplete: false,
+                    action: 'CONTINUE',
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'SPELLING_CONFIRMED_CONTINUE',
+                        nextStep: nextAction.step.id
+                    }
+                };
+            }
+            
+            // User might have provided a corrected spelling (e.g., "Marc" instead of "Mark")
+            // Extract the spelling from their response
+            const possibleName = spellingResponse.replace(/[^a-zA-Z\s-]/g, '').trim();
+            if (possibleName.length >= 2 && possibleName.length <= 30) {
+                // Use the new spelling
+                const correctedName = possibleName.charAt(0).toUpperCase() + possibleName.slice(1).toLowerCase();
+                const fullCorrectedName = existingValue.replace(/^\S+/, correctedName);
+                
+                safeSetSlot(state, fieldKey, fullCorrectedName, {
+                    source: 'spelling_correction',
+                    confidence: 0.95
+                });
+                
+                state.spellingConfirmed = true;
+                delete state.spellingQuestionAsked;
+                delete state.pendingSpellingConfirm;
+                
+                logger.info('[BOOKING FLOW RUNNER] V96r: Spelling corrected', {
+                    original: existingValue,
+                    corrected: fullCorrectedName
+                });
+                
+                // Check if we need last name
+                const askFullName = slotOptions.askFullName || step.askFullName;
+                const askMissingNamePart = slotOptions.askMissingNamePart || step.askMissingNamePart;
+                const nameParts = fullCorrectedName.trim().split(/\s+/);
+                
+                if (askFullName && askMissingNamePart && nameParts.length < 2) {
+                    const lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion || "And what's your last name?";
+                    state.firstNameCollected = nameParts[0];
+                    state.askedForLastName = true;
+                    
+                    return {
+                        reply: `Got it, ${correctedName}. ${lastNameQuestion}`,
+                        state,
+                        isComplete: false,
+                        action: 'COLLECT_LAST_NAME',
+                        currentStep: step.id,
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            source: 'BOOKING_FLOW_RUNNER',
+                            flowId: flow.flowId,
+                            mode: 'SPELLING_CORRECTED_NEED_LAST_NAME'
+                        }
+                    };
+                }
+                
+                // Proceed to next step
+                markSlotConfirmed(state, fieldKey);
+                const nextAction = this.determineNextAction(flow, state, {});
+                if (!nextAction) {
+                    return this.buildConfirmation(flow, state);
+                }
+                
+                state.currentStepId = nextAction.step.id;
+                const nextPrompt = nextAction.mode === 'CONFIRM'
+                    ? this.buildConfirmPrompt(nextAction.step, nextAction.existingValue)
+                    : (nextAction.step.prompt || `What is your ${nextAction.step.label || nextAction.step.id}?`);
+                
+                return {
+                    reply: `Got it, ${correctedName}. ${nextPrompt}`,
+                    state,
+                    isComplete: false,
+                    action: 'CONTINUE',
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'SPELLING_CORRECTED_CONTINUE'
+                    }
+                };
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // LAST NAME COLLECTION HANDLING
+        // ═══════════════════════════════════════════════════════════════════════
+        if (detailReason === 'LAST_NAME_REQUIRED' && (fieldKey === 'name' || step.type === 'name')) {
+            // First entry - ask for last name
+            if (!userInput || userInput.trim() === '' || !state.askedForLastName) {
+                const firstName = existingValue?.split?.(/\s+/)?.[0] || existingValue;
+                const lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion || "And what's your last name?";
+                
+                state.firstNameCollected = firstName;
+                state.askedForLastName = true;
+                
+                return {
+                    reply: `Got it, ${firstName}. ${lastNameQuestion}`,
+                    state,
+                    isComplete: false,
+                    action: 'COLLECT_LAST_NAME',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'COLLECT_DETAILS_LAST_NAME',
+                        firstName
+                    }
+                };
+            }
+            
+            // User provided last name
+            const lastName = userInput.trim().replace(/^(it's|its|my last name is|last name)\s*/i, '').trim();
+            const fullName = `${state.firstNameCollected} ${lastName}`;
+            
+            safeSetSlot(state, fieldKey, fullName, {
+                source: 'combined_first_last',
+                confidence: 0.95
+            });
+            markSlotConfirmed(state, fieldKey);
+            
+            delete state.firstNameCollected;
+            delete state.askedForLastName;
+            
+            logger.info('[BOOKING FLOW RUNNER] V96r: Full name collected', {
+                fullName
+            });
+            
+            // Continue to next step
+            const nextAction = this.determineNextAction(flow, state, {});
+            if (!nextAction) {
+                return this.buildConfirmation(flow, state);
+            }
+            
+            state.currentStepId = nextAction.step.id;
+            const nextPrompt = nextAction.mode === 'CONFIRM'
+                ? this.buildConfirmPrompt(nextAction.step, nextAction.existingValue)
+                : (nextAction.step.prompt || `What is your ${nextAction.step.label || nextAction.step.id}?`);
+            
+            return {
+                reply: `Perfect, ${fullName}. ${nextPrompt}`,
+                state,
+                isComplete: false,
+                action: 'CONTINUE',
+                matchSource: 'BOOKING_FLOW_RUNNER',
+                tier: 'tier1',
+                tokensUsed: 0,
+                latencyMs: Date.now() - startTime,
+                debug: {
+                    source: 'BOOKING_FLOW_RUNNER',
+                    flowId: flow.flowId,
+                    mode: 'LAST_NAME_COLLECTED_CONTINUE',
+                    fullName
+                }
+            };
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // ADDRESS COMPLETION HANDLING
+        // ═══════════════════════════════════════════════════════════════════════
+        if (detailReason === 'ADDRESS_INCOMPLETE_NEEDS_CITY_STATE' && (fieldKey === 'address' || step.type === 'address')) {
+            // First entry - ask for city/state
+            if (!userInput || userInput.trim() === '' || !state.askedForCityState) {
+                const cityStatePrompt = slotOptions.missingCityStatePrompt || 
+                    step.options?.missingCityStatePrompt || 
+                    "Got it — what city and state is that in?";
+                
+                state.streetAddressCollected = existingValue;
+                state.askedForCityState = true;
+                
+                return {
+                    reply: cityStatePrompt,
+                    state,
+                    isComplete: false,
+                    action: 'COLLECT_CITY_STATE',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'COLLECT_DETAILS_CITY_STATE',
+                        streetAddress: existingValue
+                    }
+                };
+            }
+            
+            // User provided city/state
+            const cityState = userInput.trim();
+            const fullAddress = `${state.streetAddressCollected}, ${cityState}`;
+            
+            safeSetSlot(state, fieldKey, fullAddress, {
+                source: 'combined_street_city_state',
+                confidence: 0.9
+            });
+            
+            delete state.streetAddressCollected;
+            delete state.askedForCityState;
+            
+            logger.info('[BOOKING FLOW RUNNER] V96r: Address completed with city/state', {
+                fullAddress
+            });
+            
+            // Check if we need to ask about unit type
+            const unitMode = slotOptions.unitNumberMode || 'smart';
+            if (unitMode !== 'never' && !state.askedAboutUnit) {
+                const unitPrompt = slotOptions.unitNumberPrompt || 
+                    step.options?.unitNumberPrompt || 
+                    "Is there an apartment or unit number?";
+                
+                state.askedAboutUnit = true;
+                state.addressWithCityState = fullAddress;
+                
+                return {
+                    reply: `${cityState}. ${unitPrompt}`,
+                    state,
+                    isComplete: false,
+                    action: 'COLLECT_UNIT',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'COLLECT_DETAILS_UNIT',
+                        fullAddress
+                    }
+                };
+            }
+            
+            // Address complete - continue
+            markSlotConfirmed(state, fieldKey);
+            const nextAction = this.determineNextAction(flow, state, {});
+            if (!nextAction) {
+                return this.buildConfirmation(flow, state);
+            }
+            
+            state.currentStepId = nextAction.step.id;
+            const nextPrompt = nextAction.mode === 'CONFIRM'
+                ? this.buildConfirmPrompt(nextAction.step, nextAction.existingValue)
+                : (nextAction.step.prompt || `What is your ${nextAction.step.label || nextAction.step.id}?`);
+            
+            return {
+                reply: `Got it, ${fullAddress}. ${nextPrompt}`,
+                state,
+                isComplete: false,
+                action: 'CONTINUE',
+                matchSource: 'BOOKING_FLOW_RUNNER',
+                tier: 'tier1',
+                tokensUsed: 0,
+                latencyMs: Date.now() - startTime,
+                debug: {
+                    source: 'BOOKING_FLOW_RUNNER',
+                    flowId: flow.flowId,
+                    mode: 'ADDRESS_COMPLETED_CONTINUE',
+                    fullAddress
+                }
+            };
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // FALLBACK - Shouldn't reach here, but handle gracefully
+        // ═══════════════════════════════════════════════════════════════════════
+        logger.warn('[BOOKING FLOW RUNNER] V96r: Unhandled COLLECT_DETAILS reason', {
+            detailReason,
+            fieldKey,
+            existingValue
+        });
+        
+        // Fall back to standard confirm mode
+        return this.handleConfirmMode(action, state, flow, userInput, startTime);
     }
     
     /**
