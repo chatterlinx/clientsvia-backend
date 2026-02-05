@@ -44,6 +44,14 @@ try {
     logger.warn('[SLOT EXTRACTOR] AWConfigReader not available - direct config access');
 }
 
+// V96g: BlackBoxLogger for slot extraction tracing
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('../../BlackBoxLogger');
+} catch (e) {
+    logger.warn('[SLOT EXTRACTOR] BlackBoxLogger not available - tracing disabled');
+}
+
 /**
  * Confidence thresholds
  */
@@ -553,6 +561,49 @@ class SlotExtractor {
             });
         }
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V96g: EMIT SLOTS_EXTRACTED EVENT TO BLACK BOX
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This provides deep visibility into WHY slots were/weren't extracted.
+        // Every slot extraction decision is now visible in raw-events.
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (BlackBoxLogger && context.callId && context.companyId) {
+            const extractionTrace = {
+                utterance: text.substring(0, 100),
+                turnCount,
+                currentBookingStep,
+                bookingModeLocked,
+                sessionMode,
+                isBookingActive,
+                isCorrection,
+                isGreetingOnly,
+                extractedSlots: Object.fromEntries(
+                    Object.entries(extracted).map(([k, v]) => [k, {
+                        value: k === 'phone' ? '***MASKED***' : v.value,
+                        confidence: v.confidence,
+                        source: v.source,
+                        patternSource: v.patternSource,
+                        nameLocked: v.nameLocked,
+                        extractedViaExplicitPhrase: v.extractedViaExplicitPhrase
+                    }])
+                ),
+                slotsSkipped: {
+                    address: !shouldExtract('address') ? 'skipped_discovery_mode' : null,
+                    time: !shouldExtract('time') ? 'skipped_discovery_mode' : null,
+                    name: !shouldExtract('name') ? 'skipped_step_gating' : null
+                },
+                confirmedSlotsProtected: Object.keys(confirmedSlots).filter(k => confirmedSlots[k] === true)
+            };
+            
+            BlackBoxLogger.logEvent({
+                callId: context.callId,
+                companyId: context.companyId,
+                type: 'SLOTS_EXTRACTED',
+                turn: turnCount,
+                data: extractionTrace
+            }).catch(() => {}); // Silent fail - never let tracing kill the call
+        }
+        
         return extracted;
     }
     
@@ -586,6 +637,9 @@ class SlotExtractor {
         const merged = { ...existingSlots };
         const now = new Date().toISOString();
         
+        // V96g: Track merge decisions for tracing
+        const mergeDecisions = [];
+        
         for (const [key, newSlot] of Object.entries(newSlots)) {
             const existing = merged[key];
             
@@ -607,6 +661,14 @@ class SlotExtractor {
                         confidence: newSlot.confidence,
                         reason: 'failed_identity_validation'
                     });
+                    // V96g: Track rejection decision
+                    mergeDecisions.push({
+                        slot: key,
+                        action: 'REJECTED',
+                        reason: 'failed_identity_validation',
+                        rejectedValue: newSlot.value,
+                        source: newSlot.source
+                    });
                     // Skip this contaminated slot entirely
                     continue;
                 }
@@ -619,6 +681,15 @@ class SlotExtractor {
             
             if (!existing) {
                 // No existing slot - add new one with full metadata
+                // V96g: Track new slot addition
+                mergeDecisions.push({
+                    slot: key,
+                    action: 'ADDED',
+                    reason: 'new_slot',
+                    value: key === 'phone' ? '***MASKED***' : newSlot.value,
+                    confidence: newSlot.confidence,
+                    source: newSlot.source
+                });
                 merged[key] = {
                     ...newSlot,
                     confirmed: newSlot.confirmed || false,
@@ -645,6 +716,15 @@ class SlotExtractor {
                         newValue: newSlot.value,
                         correctionPhrase: true
                     });
+                    // V96g: Track correction acceptance
+                    mergeDecisions.push({
+                        slot: key,
+                        action: 'UNLOCKED_AND_UPDATED',
+                        reason: 'explicit_correction_unlocked_immutable',
+                        oldValue: existing.value,
+                        newValue: newSlot.value,
+                        wasImmutable: true
+                    });
                     merged[key] = {
                         ...newSlot,
                         confirmed: false,
@@ -664,6 +744,15 @@ class SlotExtractor {
                     logger.debug('[SLOT EXTRACTOR] ⛔ V96e: Rejected change to IMMUTABLE slot', {
                         key,
                         immutableValue: existing.value,
+                        rejectedValue: newSlot.value,
+                        confirmedAt: existing.confirmedAt
+                    });
+                    // V96g: Track immutable rejection
+                    mergeDecisions.push({
+                        slot: key,
+                        action: 'REJECTED',
+                        reason: 'immutable_slot_protected',
+                        protectedValue: existing.value,
                         rejectedValue: newSlot.value,
                         confirmedAt: existing.confirmedAt
                     });
@@ -730,6 +819,16 @@ class SlotExtractor {
                         rejectedPatternSource: newSlot.patternSource || 'secondary',
                         rejectedReason: 'primary_name_locked'
                     });
+                    // V96g: Track primary name lock rejection
+                    mergeDecisions.push({
+                        slot: key,
+                        action: 'REJECTED',
+                        reason: 'primary_name_locked',
+                        protectedValue: existing.value,
+                        protectedPattern: existing.patternSource,
+                        rejectedValue: newSlot.value,
+                        rejectedPattern: newSlot.patternSource || 'secondary'
+                    });
                     // Keep existing locked name, record rejection in history
                     merged[key] = {
                         ...existing,
@@ -752,6 +851,16 @@ class SlotExtractor {
                         rejectedCandidate: newSlot.value,
                         rejectedPatternSource: newSlot.patternSource || 'fallback',
                         rejectedReason: 'nameLocked'
+                    });
+                    // V96g: Track nameLocked rejection
+                    mergeDecisions.push({
+                        slot: key,
+                        action: 'REJECTED',
+                        reason: 'name_locked',
+                        protectedValue: existing.value,
+                        protectedPattern: existing.patternSource || 'explicit_pattern',
+                        rejectedValue: newSlot.value,
+                        rejectedPattern: newSlot.patternSource || 'fallback'
                     });
                     merged[key] = {
                         ...existing,
@@ -792,6 +901,16 @@ class SlotExtractor {
                         rejectedConfidence: newSlot.confidence,
                         rejectedReason: 'high_confidence_name_exists'
                     });
+                    // V96g: Track high confidence rejection
+                    mergeDecisions.push({
+                        slot: key,
+                        action: 'REJECTED',
+                        reason: 'high_confidence_name_exists',
+                        protectedValue: existing.value,
+                        protectedConfidence: existing.confidence,
+                        rejectedValue: newSlot.value,
+                        rejectedConfidence: newSlot.confidence
+                    });
                     // Keep existing, record the rejected candidate in history
                     merged[key] = {
                         ...existing,
@@ -810,6 +929,14 @@ class SlotExtractor {
             if (newSlot.isCorrection) {
                 logger.info('[SLOT EXTRACTOR] Overwriting slot due to correction', {
                     key,
+                    oldValue: existing.value,
+                    newValue: newSlot.value
+                });
+                // V96g: Track correction acceptance
+                mergeDecisions.push({
+                    slot: key,
+                    action: 'ACCEPTED',
+                    reason: 'explicit_correction',
                     oldValue: existing.value,
                     newValue: newSlot.value
                 });
@@ -833,6 +960,16 @@ class SlotExtractor {
             if (newSlot.confidence > existing.confidence) {
                 logger.info('[SLOT EXTRACTOR] Overwriting slot with higher confidence', {
                     key,
+                    oldValue: existing.value,
+                    oldConfidence: existing.confidence,
+                    newValue: newSlot.value,
+                    newConfidence: newSlot.confidence
+                });
+                // V96g: Track higher confidence acceptance
+                mergeDecisions.push({
+                    slot: key,
+                    action: 'ACCEPTED',
+                    reason: 'higher_confidence',
                     oldValue: existing.value,
                     oldConfidence: existing.confidence,
                     newValue: newSlot.value,
@@ -866,6 +1003,16 @@ class SlotExtractor {
                     newValue: newSlot.value,
                     newConfidence: newSlot.confidence
                 });
+                // V96g: Track conflict
+                mergeDecisions.push({
+                    slot: key,
+                    action: 'CONFLICT',
+                    reason: 'similar_confidence_different_value',
+                    keptValue: existing.value,
+                    keptConfidence: existing.confidence,
+                    conflictValue: newSlot.value,
+                    conflictConfidence: newSlot.confidence
+                });
                 merged[key] = {
                     ...existing,
                     conflict: true,
@@ -879,9 +1026,22 @@ class SlotExtractor {
                         reason: 'conflict_not_merged'
                     }]
                 };
+            } else if (!valuesDiffer || newSlot.confidence <= existing.confidence) {
+                // V96g: Track kept existing (lower/equal confidence or same value)
+                mergeDecisions.push({
+                    slot: key,
+                    action: 'KEPT_EXISTING',
+                    reason: valuesDiffer ? 'lower_confidence' : 'same_value',
+                    keptValue: existing.value,
+                    keptConfidence: existing.confidence,
+                    attemptedValue: newSlot.value,
+                    attemptedConfidence: newSlot.confidence
+                });
             }
-            // Else: keep existing (new confidence is lower or equal)
         }
+        
+        // V96g: Return merge decisions for tracing
+        merged._mergeDecisions = mergeDecisions;
         
         return merged;
     }

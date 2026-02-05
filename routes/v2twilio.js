@@ -2850,6 +2850,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     let slotKeysBefore = [];
     let extractedSlots = {};
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V96h: TURN_DECISION_TRACE_V1 - Mode & ownership tracking
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Capture state BEFORE any processing for accurate before/after comparison.
+    // This is the "single pane of glass" for debugging turn decisions.
+    // ═══════════════════════════════════════════════════════════════════════════
+    let modeBefore = callState?.sessionMode || 'DISCOVERY';
+    let bookingModeLockedBefore = callState?.bookingModeLocked === true;
+    let modeOwner = 'UNKNOWN';  // Will be set based on which responder handles the turn
+    let ownerGateApplied = false;
+    let ownerBypassedReason = null;
+    let configProvenanceReads = {};  // Track resolvedFrom for critical configs
+    let turnAwReader = null;  // V96h: Outer-scope AWConfigReader for trace
+    
     try {
       // Load company and check LLM-0 feature flag
       company = await Company.findById(companyID).lean();
@@ -2962,21 +2976,46 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       });
       
       // Merge new extractions with existing slots (with confidence rules)
+      // V96g: Track merge decisions for turn trace
+      let slotMergeDecisions = [];
       if (Object.keys(extractedSlots).length > 0) {
-        callState.slots = SlotExtractor.mergeSlots(callState.slots, extractedSlots);
+        const mergedSlots = SlotExtractor.mergeSlots(callState.slots, extractedSlots);
         
-        // 📼 BLACK BOX: Log slot extraction
+        // V96g: Extract merge decisions before assigning back
+        slotMergeDecisions = mergedSlots._mergeDecisions || [];
+        delete mergedSlots._mergeDecisions;  // Remove internal tracking property
+        callState.slots = mergedSlots;
+        
+        // 📼 BLACK BOX: Log slot extraction with FULL merge decision trace
         if (BlackBoxLogger) {
           BlackBoxLogger.logEvent({
             callId: callSid,
             companyId: companyID,
-            type: 'SLOTS_EXTRACTED',
+            type: 'SLOTS_MERGED',
             turn: callState.turnCount,
             data: {
               extracted: Object.fromEntries(
-                Object.entries(extractedSlots).map(([k, v]) => [k, { value: v.value, confidence: v.confidence, source: v.source }])
+                Object.entries(extractedSlots).map(([k, v]) => [k, { 
+                  value: k === 'phone' ? '***MASKED***' : v.value, 
+                  confidence: v.confidence, 
+                  source: v.source,
+                  patternSource: v.patternSource,
+                  nameLocked: v.nameLocked
+                }])
               ),
-              totalSlots: Object.keys(callState.slots).length
+              mergeDecisions: mergeDecisions,  // V96g: Full audit trail
+              totalSlots: Object.keys(callState.slots).length,
+              currentSlotValues: Object.fromEntries(
+                Object.entries(callState.slots)
+                  .filter(([k]) => !k.startsWith('_'))  // Exclude internal keys
+                  .map(([k, v]) => [k, {
+                    value: k === 'phone' ? '***MASKED***' : v?.value,
+                    confidence: v?.confidence,
+                    confirmed: v?.confirmed,
+                    immutable: v?.immutable,
+                    nameLocked: v?.nameLocked
+                  }])
+              )
             }
           }).catch(() => {});
         }
@@ -3019,6 +3058,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       if (callState?.bookingModeLocked === true) {
         // 🔒 BOOKING GATE FIRED - Skip everything else
+        
+        // V96h: Track mode ownership for TURN_DECISION_TRACE_V1
+        modeOwner = 'BOOKING_FLOW_RUNNER';
+        ownerGateApplied = true;
         
         // Auto-init bookingFlowState if missing (prevents "lock evaporates" bug)
         if (!callState.bookingFlowState) {
@@ -3080,6 +3123,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           };
           
           // Create AWConfigReader for traced config reads
+          // V96h: Also store in outer scope for TURN_DECISION_TRACE_V1
           let awReader = null;
           if (AWConfigReader && company) {
             try {
@@ -3092,6 +3136,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 awHash: callState.awHash || null,
                 traceRunId: callState.traceRunId || null
               });
+              turnAwReader = awReader;  // V96h: Store in outer scope for trace
             } catch (awErr) {
               logger.warn('[BOOKING GATE] Failed to create AWConfigReader', { error: awErr.message });
             }
@@ -3459,6 +3504,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   awHash: callState?.awHash || null,
                   traceRunId: callState?.traceRunId || null
                 });
+                turnAwReader = awReader;  // V96h: Store in outer scope for trace
               } catch (awErr) {
                 logger.warn('[V2TWILIO] Failed to create AWConfigReader for booking flow', { 
                   callSid, 
@@ -3710,6 +3756,54 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                     lastCheckpoint: engineResult.debug?.lastCheckpoint,
                     stackPreview: engineResult.debug?.stackPreview,
                     latencyMs: engineResult.latencyMs
+                  }
+                }).catch(() => {});
+              }
+            }
+            
+            // V96h: Track mode ownership for TURN_DECISION_TRACE_V1
+            modeOwner = engineResult.requiresTransfer === true ? 'TRANSFER_HANDLER' :
+                        engineResult.conversationMode === 'complete' ? 'BOOKING_FLOW_RUNNER' :
+                        'DISCOVERY_ENGINE';
+            ownerGateApplied = modeOwner !== 'DISCOVERY_ENGINE';  // Gate was applied if not discovery
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V96i: BOOKING GATE VIOLATION DETECTION
+            // ═══════════════════════════════════════════════════════════════════════════
+            // If ConversationEngine just set bookingModeLocked=true but responded with
+            // STATE_MACHINE, that means the booking prompts are NOT coming from 
+            // BookingFlowRunner. This is a gate violation that must be logged.
+            // 
+            // The CORRECT behavior: BookingFlowRunner should have spoken FIRST.
+            // If we're here with bookingModeLocked=true, something bypassed the gate.
+            // ═══════════════════════════════════════════════════════════════════════════
+            const engineSetBookingLock = engineResult.bookingFlowState?.bookingModeLocked === true ||
+                                         engineResult.signals?.bookingModeLocked === true;
+            const engineUsedStateMachine = engineResult.fromStateMachine === true ||
+                                           engineResult.debug?.source?.includes('STATE_MACHINE');
+            
+            if (engineSetBookingLock && engineUsedStateMachine) {
+              logger.warn('[BOOKING GATE VIOLATION] ⚠️ ConversationEngine used STATE_MACHINE while booking locked!', {
+                callSid,
+                turnCount: callState.turnCount,
+                bookingModeLocked: engineResult.bookingFlowState?.bookingModeLocked,
+                responseSource: engineResult.debug?.source,
+                expected: 'BookingFlowRunner should have handled this turn',
+                violation: 'STATE_MACHINE_WHILE_BOOKING_LOCKED'
+              });
+              
+              if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'BOOKING_GATE_VIOLATION',
+                  turn: callState.turnCount,
+                  data: {
+                    violation: 'STATE_MACHINE_WHILE_BOOKING_LOCKED',
+                    bookingModeLocked: true,
+                    responseSource: engineResult.debug?.source,
+                    responsePreview: (engineResult.reply || '').substring(0, 100),
+                    explanation: 'ConversationEngine responded with STATE_MACHINE while booking was supposed to be locked. BookingFlowRunner gate was bypassed.'
                   }
                 }).catch(() => {});
               }
@@ -4038,15 +4132,52 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // F. State saved (what persists for next turn)
     // ════════════════════════════════════════════════════════════════════════════
     
-    // Build slot values summary (masked for sensitive data)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V96h: PII MASKING for TURN_DECISION_TRACE_V1 (production-safe)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Masking strategy:
+    // - phone: last 4 digits only (***1234)
+    // - email: first char + *** + domain (j***@example.com)
+    // - address: partial (*** Main St, City)
+    // - ssn/account: always ****
+    // - names: keep full (not PII in context of debugging)
+    // ═══════════════════════════════════════════════════════════════════════════
     const maskSlotValue = (key, slot) => {
       if (!slot?.value) return null;
-      const sensitive = ['phone', 'email', 'ssn', 'account'];
-      if (sensitive.some(s => key.toLowerCase().includes(s))) {
-        const val = String(slot.value);
+      const val = String(slot.value);
+      const keyLower = key.toLowerCase();
+      
+      // Phone: last 4 only
+      if (keyLower.includes('phone')) {
         return val.length > 4 ? '***' + val.slice(-4) : '****';
       }
-      return slot.value;
+      
+      // Email: mask middle
+      if (keyLower.includes('email')) {
+        const atIndex = val.indexOf('@');
+        if (atIndex > 0) {
+          return val[0] + '***' + val.slice(atIndex);
+        }
+        return '****';
+      }
+      
+      // Address: keep street type and city, mask number and street name
+      if (keyLower.includes('address')) {
+        // "123 Main Street, Denver" → "*** Main St, Denver"
+        // Simple approach: mask first word if it's numeric
+        const parts = val.split(' ');
+        if (parts.length > 0 && /^\d+$/.test(parts[0])) {
+          parts[0] = '***';
+        }
+        return parts.join(' ');
+      }
+      
+      // SSN/Account: always mask
+      if (keyLower.includes('ssn') || keyLower.includes('account')) {
+        return '****';
+      }
+      
+      return val;
     };
     
     // Checkpoint A: State loaded
@@ -4074,10 +4205,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             value: maskSlotValue(k, v), 
             confidence: v?.confidence || 0, 
             source: v?.source || 'unknown',
-            needsConfirmation: v?.needsConfirmation || false
+            needsConfirmation: v?.needsConfirmation || false,
+            patternSource: v?.patternSource || 'unknown',
+            nameLocked: v?.nameLocked || false
           }
         ])
-      )
+      ),
+      // V96g: Full merge decision audit trail
+      mergeDecisions: slotMergeDecisions
     };
     
     // Checkpoint C1: Booking intent detection (V94 - runs BEFORE meta intents)
@@ -4230,6 +4365,122 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           type: 'OUT_OF_TREE_PATH',
           turn: checkpointA.turn,
           data: outOfTreePath
+        }).catch(() => {});
+      }
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // V96h: TURN_DECISION_TRACE_V1 - Single Pane of Glass
+      // ═══════════════════════════════════════════════════════════════════════════
+      // This is THE canonical event for debugging any turn. It tells you:
+      // - Mode before/after (what changed?)
+      // - Who owned the turn (modeOwner)?
+      // - Why was that branch taken (branchReason)?
+      // - What config values drove the decision (configReads)?
+      // - What intent signals were detected (wantsBooking, consent)?
+      // - What slots were extracted, merged, and what's final?
+      // - Who generated the response (responder)?
+      // ═══════════════════════════════════════════════════════════════════════════
+      const modeAfter = result?.callState?.sessionMode || callState?.sessionMode || modeBefore;
+      const bookingModeLockedAfter = !!result?.callState?.bookingModeLocked || !!callState?.bookingModeLocked;
+      
+      // Build intent signals from booking intent trace
+      const intentSignals = {
+        wantsBooking: checkpointC_bookingIntent.intentMatched ? {
+          matched: true,
+          pattern: checkpointC_bookingIntent.intentMatched,
+          confidence: checkpointC_bookingIntent.intentConfidence
+        } : { matched: false },
+        consent: checkpointC_bookingIntent.requiresExplicitConsent !== null ? {
+          required: checkpointC_bookingIntent.requiresExplicitConsent,
+          pending: checkpointC_bookingIntent.consentPending,
+          matched: checkpointC_bookingIntent.consentMatched,
+          pattern: checkpointC_bookingIntent.consentMatched || null
+        } : null
+      };
+      
+      // Build slots section with masked values
+      const finalSlotState = {};
+      for (const [key, slot] of Object.entries(callState.slots || {})) {
+        if (slot && !key.startsWith('_')) {
+          finalSlotState[key] = {
+            valueMasked: maskSlotValue(key, slot),
+            confidence: slot.confidence,
+            confirmed: slot.confirmed || false,
+            immutable: slot.immutable || false,
+            nameLocked: slot.nameLocked || false,
+            confirmedAt: slot.confirmedAt || null
+          };
+        }
+      }
+      
+      // Build extracted slots with masked values
+      const extractedSlotsMasked = {};
+      for (const [key, slot] of Object.entries(extractedSlots || {})) {
+        extractedSlotsMasked[key] = {
+          valueMasked: maskSlotValue(key, slot),
+          confidence: slot.confidence,
+          source: slot.patternSource || slot.source || 'unknown'
+        };
+      }
+      
+      // Determine branch reason
+      let branchReason = 'UNKNOWN';
+      if (branchTaken === 'BOOKING_RUNNER') {
+        branchReason = bookingModeLockedBefore ? 'bookingModeLocked_from_prior_turn' : 'booking_consent_granted';
+      } else if (branchTaken === 'BOOKING_DIRECT_INTENT') {
+        branchReason = 'wantsBooking + consentSatisfied';
+      } else if (branchTaken === 'BOOKING_CONSENT_QUESTION') {
+        branchReason = 'wantsBooking + consentPending';
+      } else if (branchTaken === 'NORMAL_ROUTING') {
+        branchReason = 'discovery_mode_no_booking_signal';
+      } else if (branchTaken === 'AFTER_HOURS') {
+        branchReason = 'after_hours_schedule_match';
+      } else if (branchTaken === 'VENDOR') {
+        branchReason = 'vendor_flow_triggered';
+      }
+      
+      const decisionTrace = {
+        _format: 'TURN_DECISION_TRACE_V1',
+        turn: checkpointA.turn,
+        modeBefore,
+        modeAfter,
+        bookingModeLocked: {
+          before: bookingModeLockedBefore,
+          after: bookingModeLockedAfter
+        },
+        modeOwner,
+        ownerGateApplied,
+        ownerBypassedReason,
+        branch: {
+          taken: branchTaken,
+          reason: branchReason
+        },
+        configReads: turnAwReader?.getCriticalConfigReads?.() || configProvenanceReads,
+        intentSignals,
+        slots: {
+          extracted: extractedSlotsMasked,
+          mergeDecisions: slotMergeDecisions,
+          final: finalSlotState
+        },
+        responder: {
+          matchSource: checkpointE?.matchSource || result?.matchSource || branchTaken,
+          scenarioId: checkpointE?.scenarioSelected || null,
+          tier: checkpointE?.tier || (branchTaken === 'BOOKING_RUNNER' ? 'deterministic' : 'unknown'),
+          responsePreview: (result?.text || result?.response || '').substring(0, 100)
+        }
+      };
+      
+      // V96h: Check trace level before emitting detailed trace
+      // Default to 'normal' which includes TURN_DECISION_TRACE_V1
+      const traceLevel = company?.aiAgentSettings?.traceLevel || 'normal';
+      
+      if (traceLevel !== 'off') {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'TURN_DECISION_TRACE_V1',
+          turn: checkpointA.turn,
+          data: decisionTrace
         }).catch(() => {});
       }
     }

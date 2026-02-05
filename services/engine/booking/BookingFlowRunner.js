@@ -66,10 +66,42 @@ try {
 const IDENTITY_SLOTS = new Set(['name', 'firstName', 'lastName', 'partialName', 'fullName']);
 
 function safeSetSlot(state, slotName, value, options = {}) {
-    const { source = 'unknown', confidence = 0.8, isCorrection = false, callSid = null } = options;
+    const { source = 'unknown', confidence = 0.8, isCorrection = false } = options;
+    
+    // V96h: Get trace context from state for SLOT_WRITE_FIREWALL events
+    const traceCallSid = state?._traceContext?.callSid;
+    const traceCompanyId = state?._traceContext?.companyId;
+    const traceLevel = state?._traceContext?.traceLevel || 'normal';
+    
+    // V96h: Helper to emit SLOT_WRITE_FIREWALL event (only in 'debug' trace level)
+    const emitFirewallEvent = (accepted, reason, valueMasked) => {
+        // SLOT_WRITE_FIREWALL only emits when traceLevel is 'debug'
+        if (traceLevel !== 'debug') return;
+        
+        if (BlackBoxLogger?.logEvent && traceCallSid && traceCompanyId) {
+            BlackBoxLogger.logEvent({
+                callId: traceCallSid,
+                companyId: traceCompanyId,
+                type: 'SLOT_WRITE_FIREWALL',
+                data: {
+                    writer: 'BookingFlowRunner.safeSetSlot',
+                    slot: slotName,
+                    valueMasked: slotName === 'phone' 
+                        ? '***' + String(valueMasked || '').slice(-4)
+                        : (typeof valueMasked === 'string' ? valueMasked.substring(0, 30) : valueMasked),
+                    accepted,
+                    reason,
+                    source,
+                    confidence,
+                    isCorrection
+                }
+            }).catch(() => {});
+        }
+    };
     
     if (!value) {
         logger.debug('[SAFE SET SLOT] Skipped null/empty value', { slotName, source });
+        emitFirewallEvent(false, 'empty_value', null);
         return { accepted: false, reason: 'empty_value' };
     }
     
@@ -87,6 +119,7 @@ function safeSetSlot(state, slotName, value, options = {}) {
                 source,
                 reason: 'failed_identity_validation'
             });
+            emitFirewallEvent(false, 'failed_identity_validation', value);
             return { accepted: false, reason: 'failed_identity_validation', rejectedValue: value };
         }
         
@@ -102,6 +135,7 @@ function safeSetSlot(state, slotName, value, options = {}) {
                 rejectedValue: value,
                 confirmedAt: existingMeta.confirmedAt
             });
+            emitFirewallEvent(false, 'immutable_slot_protected', value);
             return { 
                 accepted: false, 
                 reason: 'immutable_slot', 
@@ -134,6 +168,9 @@ function safeSetSlot(state, slotName, value, options = {}) {
         confidence,
         wasOverwrite: !!previousValue && previousValue !== value
     });
+    
+    // V96h: Emit firewall event for accepted writes too
+    emitFirewallEvent(true, previousValue ? 'overwrite' : 'new_slot', value);
     
     return { accepted: true, value, previousValue };
 }
@@ -510,6 +547,13 @@ class BookingFlowRunner {
      */
     static async runStep({ flow, state, userInput, company, session, callSid, slots = {}, awReader: passedAwReader = null }) {
         const startTime = Date.now();
+        
+        // V96h: Store callSid, companyId, and traceLevel in state for SLOT_WRITE_FIREWALL tracing
+        state._traceContext = {
+            callSid: callSid || state._traceContext?.callSid,
+            companyId: company?._id?.toString() || state._traceContext?.companyId,
+            traceLevel: company?.aiAgentSettings?.traceLevel || state._traceContext?.traceLevel || 'normal'
+        };
         
         // 🔌 AW MIGRATION: Create or use AWConfigReader for traced config reads
         const awReader = passedAwReader || (AWConfigReader && company ? AWConfigReader.forCall({

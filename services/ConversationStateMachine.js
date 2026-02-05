@@ -695,7 +695,15 @@ class ConversationStateMachine {
                 tokensUsed: 0,
                 source: 'STATE_MACHINE_DISCOVERY',
                 discoveryComplete: true,
-                discovery: this.discovery
+                discovery: this.discovery,
+                // V96i: Set lock when transitioning TO booking
+                bookingFlowState: {
+                    bookingModeLocked: true,
+                    bookingFlowId: 'state_machine_booking',
+                    currentStepId: BOOKING_STEPS.ASK_NAME,
+                    bookingCollected: {},
+                    bookingState: 'STARTING'
+                }
             };
         }
         
@@ -749,7 +757,15 @@ class ConversationStateMachine {
                 tokensUsed: 0,
                 source: 'STATE_MACHINE_TRIAGE',
                 triageComplete: true,
-                triageState: this.triage
+                triageState: this.triage,
+                // V96i: Set lock when transitioning TO booking from triage
+                bookingFlowState: {
+                    bookingModeLocked: true,
+                    bookingFlowId: 'state_machine_booking',
+                    currentStepId: BOOKING_STEPS.ASK_NAME,
+                    bookingCollected: {},
+                    bookingState: 'STARTING'
+                }
             };
         }
         
@@ -783,7 +799,15 @@ class ConversationStateMachine {
             nextStep: BOOKING_STEPS.ASK_NAME,
             tokensUsed: 0,
             source: 'STATE_MACHINE_TRIAGE',
-            triageComplete: true
+            triageComplete: true,
+            // V96i: Set lock when transitioning TO booking from triage
+            bookingFlowState: {
+                bookingModeLocked: true,
+                bookingFlowId: 'state_machine_booking',
+                currentStepId: BOOKING_STEPS.ASK_NAME,
+                bookingCollected: {},
+                bookingState: 'STARTING'
+            }
         };
     }
     
@@ -829,7 +853,16 @@ class ConversationStateMachine {
                 tokensUsed: 0,
                 source: 'STATE_MACHINE_BOOKING',
                 slotsCollected: this.booking.collectedSlots,
-                bookingComplete: true
+                bookingComplete: true,
+                // V96i: CRITICAL - Signal booking lock for Redis persistence
+                // Without this, v2twilio.js won't save bookingModeLocked and the gate never fires
+                bookingFlowState: {
+                    bookingModeLocked: true,
+                    bookingFlowId: 'state_machine_booking',
+                    currentStepId: 'confirmation',
+                    bookingCollected: this.booking.collectedSlots || {},
+                    bookingState: 'CONFIRMING'
+                }
             };
         }
         
@@ -876,7 +909,17 @@ class ConversationStateMachine {
             tokensUsed: 0,
             source: 'STATE_MACHINE_BOOKING',
             slotsCollected: this.booking.collectedSlots,
-            missingSlots: this.booking.missingSlots
+            missingSlots: this.booking.missingSlots,
+            // V96i: CRITICAL - Signal booking lock for Redis persistence
+            // Without this, v2twilio.js won't save bookingModeLocked and the gate never fires
+            bookingFlowState: {
+                bookingModeLocked: true,
+                bookingFlowId: 'state_machine_booking',
+                currentStepId: this.flow.currentStep || 'collecting',
+                bookingCollected: this.booking.collectedSlots || {},
+                missingSlots: this.booking.missingSlots || [],
+                bookingState: 'COLLECTING'
+            }
         };
     }
     
@@ -988,7 +1031,15 @@ class ConversationStateMachine {
                 nextStage: STAGES.COMPLETE,
                 tokensUsed: 0,
                 source: 'STATE_MACHINE_CONFIRMATION',
-                outcome: 'booked'
+                outcome: 'booked',
+                // V96i: Maintain lock through confirmation (unlocks on COMPLETE)
+                bookingFlowState: {
+                    bookingModeLocked: false, // Booking complete, unlock
+                    bookingFlowId: 'state_machine_booking',
+                    currentStepId: 'complete',
+                    bookingCollected: this.booking.collectedSlots || {},
+                    bookingState: 'COMPLETE'
+                }
             };
         }
         
@@ -1012,7 +1063,15 @@ class ConversationStateMachine {
             response: "I just want to make sure I have everything right. Does that all sound correct?",
             nextStage: STAGES.CONFIRMATION,
             tokensUsed: 0,
-            source: 'STATE_MACHINE_CONFIRMATION'
+            source: 'STATE_MACHINE_CONFIRMATION',
+            // V96i: Maintain lock during confirmation stage
+            bookingFlowState: {
+                bookingModeLocked: true,
+                bookingFlowId: 'state_machine_booking',
+                currentStepId: 'confirming',
+                bookingCollected: this.booking.collectedSlots || {},
+                bookingState: 'CONFIRMING'
+            }
         };
     }
     

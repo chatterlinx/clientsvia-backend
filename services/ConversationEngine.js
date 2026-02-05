@@ -13205,6 +13205,35 @@ async function processTurn({
             }
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96i: ENSURE bookingFlowState for ALL booking responses
+        // ═══════════════════════════════════════════════════════════════════════
+        // Without this, inline booking handlers that don't explicitly set 
+        // bookingFlowState will fail to lock the booking mode in Redis.
+        // This was causing the booking gate bypass bug.
+        // ═══════════════════════════════════════════════════════════════════════
+        let finalBookingFlowState = aiResult?.bookingFlowState || session.bookingFlowState || null;
+        
+        const isBookingMode = aiResult?.mode === 'BOOKING' || 
+                              aiResult?.conversationMode === 'booking' ||
+                              session.mode === 'BOOKING';
+        
+        if (isBookingMode && !finalBookingFlowState?.bookingModeLocked) {
+            finalBookingFlowState = {
+                bookingModeLocked: true,
+                bookingFlowId: 'conversation_engine_booking',
+                currentStepId: aiResult?.debug?.source || 'collecting',
+                bookingCollected: { ...session.collectedSlots, ...(aiResult?.filledSlots || {}) },
+                bookingState: session.phase === 'complete' ? 'COMPLETE' : 'COLLECTING'
+            };
+            log('V96i: ⚡ Auto-created bookingFlowState for booking response', {
+                source: aiResult?.debug?.source,
+                mode: aiResult?.mode,
+                conversationMode: aiResult?.conversationMode,
+                sessionMode: session.mode
+            });
+        }
+        
         const response = {
             success: true,
             reply: aiResponse,
@@ -13224,8 +13253,9 @@ async function processTurn({
             // This is passed back to v2twilio.js to persist to Redis.
             // On next turn, if bookingModeLocked === true, the booking flow runner
             // will take over (no scenarios, no LLM, just the checklist).
+            // V96i: Now guaranteed to exist for all booking responses.
             // ═══════════════════════════════════════════════════════════════════
-            bookingFlowState: aiResult?.bookingFlowState || session.bookingFlowState || null,
+            bookingFlowState: finalBookingFlowState,
             
             // ═══════════════════════════════════════════════════════════════════
             // 🎯 V94: BOOKING INTENT TRACE (for TURN_TRACE diagnostic)

@@ -415,6 +415,12 @@ const AW_PATH_MAPPINGS = {
     'infra.scenarioPoolCache': 'aiAgentSettings.scenarioPoolCache',
     'infra.debugLogging': 'aiAgentSettings.debugLogging',
     
+    // V96h: Trace Level for TURN_DECISION_TRACE_V1
+    // off = no detailed trace events
+    // normal = TURN_DECISION_TRACE_V1 only (default)
+    // debug = TURN_DECISION_TRACE_V1 + SLOT_WRITE_FIREWALL + verbose config reads
+    'infra.traceLevel': 'aiAgentSettings.traceLevel',
+    
     // ─────────────────────────────────────────────────────────────────────────
     // ROUTING - Services, Cheat Sheet
     // ─────────────────────────────────────────────────────────────────────────
@@ -868,6 +874,44 @@ class AWConfigReader {
      */
     getViolations() {
         return [...this.violations];
+    }
+    
+    /**
+     * V96h: Get critical config reads with provenance for TURN_DECISION_TRACE_V1
+     * Returns the config reads that directly affect agent behavior branching
+     */
+    getCriticalConfigReads() {
+        const criticalPaths = [
+            'booking.requiresExplicitConsent',
+            'booking.directIntentPatterns',
+            'frontDesk.bookingPrompts',
+            'frontDesk.bookingSlots',
+            'frontDesk.discoveryConsent.required',
+            'frontDesk.discoveryConsent.patterns',
+            'frontDesk.aiName',
+            'frontDesk.companyName',
+            'aiAgentSettings.callFlowEngine.enabled'
+        ];
+        
+        const result = {};
+        
+        for (const read of this.reads) {
+            const awPath = read.data?.awPath;
+            if (awPath && criticalPaths.some(cp => awPath.startsWith(cp) || cp.startsWith(awPath))) {
+                // Only keep first read of each path (most relevant)
+                if (!result[awPath]) {
+                    result[awPath] = {
+                        value: read.data.valueType === 'object' 
+                            ? '[object]' 
+                            : (read.data.valuePreview || read.data.value),
+                        resolvedFrom: read.data.resolvedFrom || 'unknown',
+                        reader: read.data.readerId
+                    };
+                }
+            }
+        }
+        
+        return result;
     }
     
     /**
