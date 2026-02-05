@@ -262,6 +262,100 @@ const NAME_STOP_WORDS = new Set([
 
 /**
  * ============================================================================
+ * V96e: IDENTITY SLOT VALIDATORS
+ * ============================================================================
+ * 
+ * Comprehensive validation to prevent identity slot contamination.
+ * These validators ensure:
+ * 1. Phone numbers can NEVER be names
+ * 2. Names must pass structural validation
+ * 3. Typed fields cannot cross-contaminate
+ * 
+ * This is the PERMANENT fix for the "ANI → lastName" and similar bugs.
+ * ============================================================================
+ */
+const IdentityValidators = {
+    /**
+     * Check if a string looks like a phone number
+     * Used to prevent ANI/phone from contaminating name fields
+     */
+    looksLikePhone(str) {
+        if (!str) return false;
+        const digitsOnly = str.replace(/\D/g, '');
+        // If >50% digits and has 7+ digits, it's phone-shaped
+        const digitRatio = digitsOnly.length / str.length;
+        return digitRatio > 0.5 && digitsOnly.length >= 7;
+    },
+    
+    /**
+     * Check if a string is valid as a name component
+     * Rejects: phone numbers, pure digits, too short, special chars
+     */
+    isValidNameComponent(str) {
+        if (!str || typeof str !== 'string') return false;
+        
+        const cleaned = str.trim();
+        
+        // Too short
+        if (cleaned.length < 2) return false;
+        
+        // Too long for a name (probably an address or sentence)
+        if (cleaned.length > 50) return false;
+        
+        // Mostly digits (phone number shaped)
+        if (this.looksLikePhone(cleaned)) {
+            logger.warn('[IDENTITY VALIDATOR] ❌ Rejected phone-shaped string as name', { value: cleaned });
+            return false;
+        }
+        
+        // Contains special characters that names don't have
+        if (/[#$%^&*()+=\[\]{}|\\<>?/~`@]/.test(cleaned)) return false;
+        
+        // Is a stop word
+        if (NAME_STOP_WORDS.has(cleaned.toLowerCase())) return false;
+        
+        // All digits
+        if (/^\d+$/.test(cleaned)) return false;
+        
+        // Must have at least one letter
+        if (!/[a-zA-Z]/.test(cleaned)) return false;
+        
+        return true;
+    },
+    
+    /**
+     * Validate and sanitize a name value
+     * Returns sanitized name or null if invalid
+     */
+    sanitizeName(value) {
+        if (!value || typeof value !== 'string') return null;
+        
+        // Split into parts and validate each
+        const parts = value.trim().split(/\s+/);
+        const validParts = parts.filter(p => this.isValidNameComponent(p));
+        
+        if (validParts.length === 0) {
+            logger.warn('[IDENTITY VALIDATOR] ❌ No valid name parts', { original: value, parts });
+            return null;
+        }
+        
+        // Reconstruct with valid parts only
+        return validParts.join(' ');
+    },
+    
+    /**
+     * Check if a phone number is valid
+     */
+    isValidPhone(str) {
+        if (!str) return false;
+        const digits = str.replace(/\D/g, '');
+        // Must have 10-15 digits (US phone to international)
+        return digits.length >= 10 && digits.length <= 15;
+    }
+};
+
+/**
+ * ============================================================================
  * SLOT EXTRACTOR CLASS
  * ============================================================================
  */
@@ -495,6 +589,31 @@ class SlotExtractor {
         for (const [key, newSlot] of Object.entries(newSlots)) {
             const existing = merged[key];
             
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V96e: IDENTITY FIELD VALIDATION - Reject contaminated values EARLY
+            // ═══════════════════════════════════════════════════════════════════════════
+            // This is the PERMANENT guard against:
+            // - Phone numbers becoming names
+            // - ANI/caller ID leaking into lastName  
+            // - Non-name strings (adverbs, service types) contaminating name fields
+            // ═══════════════════════════════════════════════════════════════════════════
+            if ((key === 'name' || key === 'firstName' || key === 'lastName' || key === 'partialName') && newSlot.value) {
+                const validatedName = IdentityValidators.sanitizeName(newSlot.value);
+                if (!validatedName) {
+                    logger.warn('[SLOT EXTRACTOR] ❌ V96e: REJECTED contaminated identity slot', {
+                        key,
+                        rejectedValue: newSlot.value,
+                        source: newSlot.source,
+                        confidence: newSlot.confidence,
+                        reason: 'failed_identity_validation'
+                    });
+                    // Skip this contaminated slot entirely
+                    continue;
+                }
+                // Use sanitized value
+                newSlot.value = validatedName;
+            }
+            
             // Add updatedAt to new slot
             newSlot.updatedAt = now;
             
@@ -507,6 +626,48 @@ class SlotExtractor {
                     conflict: false,
                     history: []
                 };
+                continue;
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // RULE 0: V96e IMMUTABILITY CHECK (strongest protection)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // If a slot is marked immutable (caller confirmed it), it CANNOT be changed
+            // unless the caller EXPLICITLY corrects it with a correction phrase.
+            // This is the PERMANENT fix for "confirmed name still gets overwritten".
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (existing.immutable === true) {
+                if (newSlot.isCorrection && newSlot.extractedViaExplicitPhrase) {
+                    // Caller explicitly corrected with "actually my name is X"
+                    logger.info('[SLOT EXTRACTOR] ⚠️ V96e: Unlocking immutable slot due to EXPLICIT correction', {
+                        key,
+                        oldValue: existing.value,
+                        newValue: newSlot.value,
+                        correctionPhrase: true
+                    });
+                    merged[key] = {
+                        ...newSlot,
+                        confirmed: false,
+                        immutable: false,  // V96e: Correction removes immutability
+                        needsConfirmation: true,
+                        correctedByCaller: true,
+                        conflict: false,
+                        history: [...(existing.history || []), { 
+                            value: existing.value, 
+                            confidence: existing.confidence,
+                            turn: existing.turn,
+                            reason: 'unlocked_by_explicit_correction',
+                            confirmedAt: existing.confirmedAt
+                        }]
+                    };
+                } else {
+                    logger.debug('[SLOT EXTRACTOR] ⛔ V96e: Rejected change to IMMUTABLE slot', {
+                        key,
+                        immutableValue: existing.value,
+                        rejectedValue: newSlot.value,
+                        confirmedAt: existing.confirmedAt
+                    });
+                }
                 continue;
             }
             
@@ -748,6 +909,17 @@ class SlotExtractor {
      */
     static extractName(text, context = {}) {
         if (!text) return null;
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V96e: EARLY REJECTION - If text looks like a phone number, don't extract name
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Prevents ANI/phone contamination into name fields
+        if (IdentityValidators.looksLikePhone(text)) {
+            logger.warn('[SLOT EXTRACTOR] ❌ V96e: Rejecting phone-shaped text as name source', {
+                text: text.substring(0, 30)
+            });
+            return null;
+        }
         
         // ═══════════════════════════════════════════════════════════════════════════
         // V93: Load commonFirstNames via AWConfigReader (AW ⇄ RE marriage)
@@ -1439,12 +1611,30 @@ class SlotExtractor {
      */
     static cleanName(name) {
         if (!name) return null;
-        return name
+        
+        // V96e: Early rejection if phone-shaped
+        if (IdentityValidators.looksLikePhone(name)) {
+            logger.warn('[SLOT EXTRACTOR] ❌ V96e: cleanName rejected phone-shaped input', { name });
+            return null;
+        }
+        
+        const cleaned = name
             .split(/\s+/)
             .filter(w => !NAME_STOP_WORDS.has(w.toLowerCase()) && w.length > 1)
             .map(w => this.titleCase(w.replace(/[^A-Za-z\-'\.]/g, '')))
             .join(' ')
             .trim() || null;
+        
+        // V96e: Final validation - ensure result is a valid name component
+        if (cleaned && !IdentityValidators.isValidNameComponent(cleaned.split(/\s+/)[0])) {
+            logger.warn('[SLOT EXTRACTOR] ❌ V96e: cleanName rejected invalid result', { 
+                original: name, 
+                cleaned 
+            });
+            return null;
+        }
+        
+        return cleaned;
     }
     
     static titleCase(str) {
@@ -1474,13 +1664,19 @@ class SlotExtractor {
     static confirmSlot(slots, slotKey, turnCount) {
         if (!slots[slotKey]) return slots;
         
+        // V96e: Add confirmedAt timestamp for sticky slots
+        // Once a slot is confirmed, it becomes immutable unless explicitly corrected
+        const now = new Date().toISOString();
+        
         return {
             ...slots,
             [slotKey]: {
                 ...slots[slotKey],
                 confirmed: true,
                 confidence: CONFIDENCE.CONFIRMED,
-                confirmedAtTurn: turnCount
+                confirmedAtTurn: turnCount,
+                confirmedAt: now,  // V96e: Timestamp for immutability tracking
+                immutable: true    // V96e: Flag to prevent accidental overwrites
             }
         };
     }

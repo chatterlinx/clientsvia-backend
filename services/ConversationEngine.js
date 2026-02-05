@@ -4138,6 +4138,10 @@ async function processTurn({
                 'coming', 'waiting', 'hoping', 'thinking', 'wondering', 'needing',
                 'wanting', 'asking', 'dealing', 'experiencing', 'just', 'some',
                 'issues', 'problems', 'trouble', 'great', 'fine', 'good', 'bad',
+                // V96e: Adverbs and state words that contaminated names
+                'currently', 'presently', 'actually', 'basically', 'usually', 'normally',
+                'typically', 'generally', 'still', 'already', 'always', 'never', 'ever',
+                'now', 'today', 'recently', 'sometimes', 'often', 'really', 'very',
                 // Service/trade words
                 'service', 'services', 'repair', 'repairs', 'maintenance', 'conditioning',
                 'air', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
