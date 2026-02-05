@@ -147,7 +147,12 @@ class BookingFlowResolver {
         // Also check legacy path for backward compatibility
         // ═══════════════════════════════════════════════════════════════════════
         const bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
-        const bookingTemplates = aiSettings.bookingTemplates || {};
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96j FIX: Read bookingTemplates from CORRECT location
+        // UI saves to: frontDeskBehavior.bookingTemplates
+        // Legacy path: aiAgentSettings.bookingTemplates
+        // ═══════════════════════════════════════════════════════════════════════
+        const bookingTemplates = frontDeskBehavior.bookingTemplates || aiSettings.bookingTemplates || {};
         const bookingPromptsMap = aiSettings.bookingPromptsMap || new Map();
         
         // ═══════════════════════════════════════════════════════════════════════
@@ -202,19 +207,37 @@ class BookingFlowResolver {
         
         // ═══════════════════════════════════════════════════════════════════════
         // V96j: Read confirmation/completion templates from MULTIPLE sources
-        // Priority: bookingBehavior (Booking tab) > bookingOutcome > bookingTemplates > hardcoded
+        // Priority: bookingBehavior > bookingOutcome > bookingPrompts (legacy) > bookingTemplates > hardcoded
         // ═══════════════════════════════════════════════════════════════════════
+        // Also check frontDeskBehavior.bookingPrompts.confirmTemplate (UI writes here)
+        const bookingPrompts = frontDeskBehavior.bookingPrompts || {};
+        
         const confirmationTemplate = 
             bookingBehavior.confirmationPrompt ||
             bookingOutcome.confirmationPrompt ||
             bookingOutcome.scripts?.final_confirmation ||
+            bookingPrompts.confirmTemplate ||  // V96j FIX: UI saves here
             bookingTemplates.confirmTemplate;
         
         const completionTemplate = 
             bookingBehavior.completionPrompt ||
             bookingOutcome.completionPrompt ||
             bookingOutcome.scripts?.booking_complete ||
+            bookingPrompts.completeTemplate ||  // V96j FIX: UI saves here
             bookingTemplates.completeTemplate;
+        
+        // V96j: Log template resolution for debugging
+        logger.debug('[BOOKING FLOW RESOLVER] Template sources', {
+            companyId: company._id?.toString(),
+            confirmationSource: confirmationTemplate 
+                ? (bookingBehavior.confirmationPrompt ? 'bookingBehavior' :
+                   bookingOutcome.confirmationPrompt ? 'bookingOutcome' :
+                   bookingOutcome.scripts?.final_confirmation ? 'bookingOutcome.scripts' :
+                   bookingPrompts.confirmTemplate ? 'bookingPrompts' :
+                   bookingTemplates.confirmTemplate ? 'bookingTemplates' : 'unknown')
+                : 'hardcoded',
+            confirmationTemplatePreview: confirmationTemplate?.substring(0, 60) || 'NONE'
+        });
         
         const flow = {
             flowId,
@@ -226,7 +249,8 @@ class BookingFlowResolver {
             confirmationTemplateSource: confirmationTemplate 
                 ? (bookingBehavior.confirmationPrompt ? 'bookingBehavior' : 
                    bookingOutcome.confirmationPrompt || bookingOutcome.scripts?.final_confirmation ? 'bookingOutcome' :
-                   'bookingTemplates')
+                   bookingPrompts.confirmTemplate ? 'bookingPrompts' :
+                   bookingTemplates.confirmTemplate ? 'bookingTemplates' : 'config_unknown')
                 : 'hardcoded_default',
             completionTemplate: completionTemplate ||
                 "Your appointment has been scheduled. Is there anything else I can help you with?",

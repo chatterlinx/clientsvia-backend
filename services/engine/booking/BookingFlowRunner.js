@@ -2347,6 +2347,10 @@ class BookingFlowRunner {
         state.askCount = state.askCount || {};
         state.askCount[step.id] = (state.askCount[step.id] || 0) + 1;
         
+        // V96j: Track prompt source for SPEAKER_OWNER trace
+        const promptSource = step.promptSource || 
+            (step.prompt ? 'step.prompt:custom' : 'step.prompt:default_fallback');
+        
         return {
             reply: prompt,
             state,
@@ -2361,7 +2365,10 @@ class BookingFlowRunner {
                 source: 'BOOKING_FLOW_RUNNER',
                 flowId: flow.flowId,
                 currentStep: step.id,
-                askCount: state.askCount[step.id]
+                askCount: state.askCount[step.id],
+                // V96j: Exact prompt source (user directive #5)
+                promptSource,
+                promptPath: step.promptPath || `flow.steps[${step.id}].prompt`
             }
         };
     }
@@ -2374,6 +2381,11 @@ class BookingFlowRunner {
     static repromptStep(step, state, flow, reason) {
         const reprompt = step.reprompt || 
             `I didn't quite catch that. ${step.prompt || `What is your ${step.label || step.id}?`}`;
+        
+        // V96j: Track prompt source for SPEAKER_OWNER trace
+        const promptSource = step.reprompt 
+            ? (step.promptSource || 'step.reprompt:custom')
+            : 'step.reprompt:default_fallback';
         
         return {
             reply: reprompt,
@@ -2391,6 +2403,9 @@ class BookingFlowRunner {
                 flowId: flow.flowId,
                 currentStep: step.id,
                 repromptReason: reason,
+                // V96j: Exact prompt source (user directive #5)
+                promptSource,
+                promptPath: step.promptPath || `flow.steps[${step.id}].reprompt`,
                 askCount: state.askCount?.[step.id] || 0
             }
         };
@@ -2476,10 +2491,16 @@ class BookingFlowRunner {
                 source: 'BOOKING_FLOW_RUNNER',
                 flowId: flow.flowId,
                 stage: 'CONFIRMATION',
+                currentStep: 'CONFIRMATION',
                 bookingCollected: collected,
                 // V96j: Track template source
                 confirmationTemplateSource: templateSource,
-                isHardcodedTemplate: isHardcoded
+                isHardcodedTemplate: isHardcoded,
+                // V96j: Exact prompt source (user directive #5)
+                promptSource: `booking.confirmationTemplate:${templateSource}`,
+                promptPath: templateSource === 'hardcoded_default' 
+                    ? 'BookingFlowRunner:hardcoded_default'
+                    : `flow.confirmationTemplate:${templateSource}`
             }
         };
     }
@@ -2492,6 +2513,9 @@ class BookingFlowRunner {
      * ========================================================================
      */
     static buildCompletion(flow, state, company = null) {
+        // V96j: Track completion template source
+        const completionTemplateSource = flow.completionTemplateSource || 
+            (flow.completionTemplate ? 'config' : 'hardcoded_default');
         const completion = flow.completionTemplate ||
             "Your appointment has been scheduled. Is there anything else I can help you with?";
         
@@ -2571,8 +2595,15 @@ class BookingFlowRunner {
                 source: 'BOOKING_FLOW_RUNNER',
                 flowId: flow.flowId,
                 stage: 'COMPLETE',
+                currentStep: 'COMPLETE',
                 bookingCollected: state.bookingCollected,
-                smsAttempted: smsEnabled && !!customerPhone
+                smsAttempted: smsEnabled && !!customerPhone,
+                // V96j: Exact prompt source (user directive #5)
+                completionTemplateSource,
+                promptSource: `booking.completionTemplate:${completionTemplateSource}`,
+                promptPath: completionTemplateSource === 'hardcoded_default'
+                    ? 'BookingFlowRunner:hardcoded_default'
+                    : `flow.completionTemplate:${completionTemplateSource}`
             }
         };
     }

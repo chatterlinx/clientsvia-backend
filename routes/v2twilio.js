@@ -4781,6 +4781,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           responseOwner = 'FALLBACK';
         }
         
+        // V96j: Determine exact prompt source (user directive #5)
+        let promptSource = 'UNKNOWN';
+        if (result.debug?.confirmationTemplateSource) {
+          promptSource = `booking.confirmationTemplate:${result.debug.confirmationTemplateSource}`;
+        } else if (result.debug?.promptSource) {
+          promptSource = result.debug.promptSource;
+        } else if (result.debug?.currentStep) {
+          promptSource = `booking.step:${result.debug.currentStep}`;
+        } else if (result.scenarioId) {
+          promptSource = `scenario:${result.scenarioId}`;
+        } else if (result.matchSource === 'LLM_FALLBACK' || result.tier === 'tier3') {
+          promptSource = 'LLM_DYNAMIC';
+        } else if (result.matchSource === 'SCENARIO_MATCH' || result.matchSource === 'SCENARIO_MATCHED') {
+          promptSource = `scenario:${result.scenarioId || result.debug?.scenarioId || 'matched'}`;
+        }
+        
         BlackBoxLogger.logEvent({
           callId: callSid,
           companyId: companyID,
@@ -4795,6 +4811,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             fromStateMachine: !!result.fromStateMachine,
             mode: result.mode || result.callState?.sessionMode || 'UNKNOWN',
             responsePreview: (result.response || result.text || '').substring(0, 100),
+            // V96j: Exact prompt source (user directive #5)
+            promptSource,
+            isHardcodedTemplate: result.debug?.isHardcodedTemplate || false,
             callsite: result.debug?.source ? `ConversationEngine:${result.debug.source}` : 
                       result.matchSource === 'BOOKING_FLOW_RUNNER' ? 'BookingFlowRunner' :
                       'v2twilio:UNKNOWN'
