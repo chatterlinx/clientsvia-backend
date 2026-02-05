@@ -2432,22 +2432,29 @@ const ConsentDetector = {
         // ═══════════════════════════════════════════════════════════════════════
         let requiresExplicitConsent, consentPhrases;
         
+        // V96j: All config reads via AWConfigReader for single config gate compliance
+        let consentYesWordsCustom = [];
+        let requiresYesAfterPrompt = true;
+        
         if (awReader && typeof awReader.get === 'function') {
             awReader.setReaderId('ConsentDetector.checkForConsent');
             requiresExplicitConsent = awReader.get('frontDesk.discoveryConsent.bookingRequiresExplicitConsent', true);
             consentPhrases = awReader.getArray('frontDesk.detectionTriggers.wantsBooking');
+            consentYesWordsCustom = awReader.getArray('frontDesk.discoveryConsent.consentYesWords');
+            requiresYesAfterPrompt = awReader.get('frontDesk.discoveryConsent.consentRequiresYesAfterPrompt', true) !== false;
         } else {
-            // Fallback: direct access (no tracing)
+            // Fallback: direct access (no tracing) - V96j: Log warning for DEAD_READ tracking
+            logger.warn('[CONSENT DETECTOR] ⚠️ No AWConfigReader - using fallback (untraced reads)', {
+                callId: session?.callId || 'unknown'
+            });
             const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
             const discoveryConsent = frontDesk.discoveryConsent || {};
             const detectionTriggers = frontDesk.detectionTriggers || {};
             requiresExplicitConsent = discoveryConsent.bookingRequiresExplicitConsent !== false;
             consentPhrases = detectionTriggers.wantsBooking || [];
+            consentYesWordsCustom = Array.isArray(discoveryConsent.consentYesWords) ? discoveryConsent.consentYesWords : [];
+            requiresYesAfterPrompt = discoveryConsent.consentRequiresYesAfterPrompt !== false;
         }
-        
-        // Also read from company for other values not yet in AWConfigReader
-        const frontDesk = company.aiAgentSettings?.frontDeskBehavior || {};
-        const discoveryConsent = frontDesk.discoveryConsent || {};
         
         if (!requiresExplicitConsent) {
             // Legacy mode: consent not required (not recommended)
@@ -2469,12 +2476,9 @@ const ConsentDetector = {
             'right', 'right away', 'asap', 'soon as possible', 'as soon as'
         ];
         
-        // Merge company config with defaults (defaults always included)
-        const customYesWords = Array.isArray(discoveryConsent.consentYesWords) 
-            ? discoveryConsent.consentYesWords 
-            : [];
-        const consentYesWords = [...new Set([...DEFAULT_CONSENT_YES_WORDS, ...customYesWords])];
-        const requiresYesAfterPrompt = discoveryConsent.consentRequiresYesAfterPrompt !== false;
+        // V96j: Use consentYesWordsCustom already read via AWConfigReader above
+        const consentYesWords = [...new Set([...DEFAULT_CONSENT_YES_WORDS, ...consentYesWordsCustom])];
+        // Note: requiresYesAfterPrompt already set above via AWConfigReader
         
         // Check for explicit booking phrases from UI config
         for (const phrase of consentPhrases) {

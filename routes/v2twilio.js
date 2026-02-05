@@ -4386,6 +4386,61 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       branchTaken
     };
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V96j: BOOKING_ROUTING_INVARIANT_VIOLATION DETECTION
+    // ═══════════════════════════════════════════════════════════════════════════
+    // THE INVARIANT:
+    //   If bookingModeLocked === true, then branchTaken MUST be BOOKING_RUNNER
+    //   
+    // VIOLATION:
+    //   bookingModeLocked=true but branchTaken=NORMAL_ROUTING means:
+    //   1. The booking gate was bypassed (split brain)
+    //   2. Something else generated the response while booking was locked
+    //   3. BookingFlowRunner never ran or returned null
+    //
+    // This is a CRITICAL violation that must be investigated immediately.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const isRoutingInvariantViolation = 
+      (checkpointC.bookingModeLocked === true) && 
+      (branchTaken === 'NORMAL_ROUTING');
+    
+    if (isRoutingInvariantViolation) {
+      logger.error('[V96j] 🚨 BOOKING_ROUTING_INVARIANT_VIOLATION DETECTED', {
+        callSid,
+        turn: checkpointA?.turn || 1,
+        bookingModeLocked: true,
+        branchTaken,
+        expectedBranch: 'BOOKING_RUNNER',
+        actualResponseOwner: result?.matchSource || result?.debug?.source || 'UNKNOWN',
+        responsePreview: (result?.text || result?.response || '').substring(0, 80),
+        explanation: 'bookingModeLocked=true but BookingFlowRunner did NOT generate the response. Split brain detected.'
+      });
+      
+      // Emit to Black Box for alerting/analysis
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'BOOKING_ROUTING_INVARIANT_VIOLATION',
+          turn: checkpointA?.turn || 1,
+          data: {
+            bookingModeLocked: true,
+            branchTaken,
+            expectedBranch: 'BOOKING_RUNNER',
+            actualResponseOwner: result?.matchSource || result?.debug?.source || 'UNKNOWN',
+            responsePreview: (result?.text || result?.response || '').substring(0, 100),
+            possibleCauses: [
+              'BookingFlowRunner returned null (check for errors)',
+              'ConversationEngine bypassed the booking gate',
+              'Absolute booking gate never executed',
+              'bookingModeLocked was set by ConversationEngine after gate check'
+            ],
+            remediation: 'Ensure BookingFlowRunner always executes when bookingModeLocked=true and always returns a valid response.'
+          }
+        }).catch(() => {});
+      }
+    }
+    
     // Checkpoint D: Booking runner decision (only if booking branch)
     const bookingSlotKey = result?.debug?.fieldKey || result?.debug?.slotToConfirm || result?.debug?.confirmedField || null;
     const checkpointD = branchTaken === 'BOOKING_RUNNER' ? {

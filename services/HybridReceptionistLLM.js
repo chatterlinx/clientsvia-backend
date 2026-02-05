@@ -385,6 +385,125 @@ class HybridReceptionistLLM {
     }
     
     /**
+     * ========================================================================
+     * V96j: BOOKING CLAIM GUARDRAIL
+     * ========================================================================
+     * 
+     * THE RULE: LLM cannot CLAIM booking is happening unless bookingModeLocked === true.
+     * 
+     * FORBIDDEN WHEN NOT IN BOOKING MODE:
+     * - "Let me get you scheduled"
+     * - "I'll schedule you"
+     * - "I'm scheduling"
+     * - "Your appointment has been scheduled"
+     * - "I've scheduled"
+     * 
+     * ALLOWED INSTEAD:
+     * - "Would you like me to schedule...?"
+     * - "Can I schedule a technician...?"
+     * 
+     * WHY THIS MATTERS:
+     * If LLM says "I'll schedule you" but bookingModeLocked is false, the
+     * customer thinks booking is happening but it's NOT. Slots won't be
+     * collected properly, and the customer will get frustrated.
+     * 
+     * ========================================================================
+     */
+    static applyBookingClaimGuardrail(reply, options = {}) {
+        const { bookingModeLocked = false, callId = 'unknown', companyId = 'unknown' } = options;
+        
+        if (!reply || typeof reply !== 'string') return { reply, changed: false, violation: false };
+        
+        // If we ARE in booking mode, LLM can claim booking - no guardrail needed
+        if (bookingModeLocked === true) {
+            return { reply, changed: false, violation: false };
+        }
+        
+        // Phrases that claim booking is happening (NOT questions/offers)
+        const bookingClaimPatterns = [
+            /\b(let me|I'll|i will|i'm going to|I am going to)\s+(get you|have you|get someone)\s+(scheduled|booked|set up)/i,
+            /\b(let me|I'll|i will)\s+(schedule|book|set up)\s+(you|a|an|the|that)/i,
+            /\bi('m| am)\s+(scheduling|booking|setting up)\b/i,
+            /\b(your|the)\s+appointment\s+(has been|is|was)\s+(scheduled|booked|confirmed)/i,
+            /\bi('ve| have)\s+(scheduled|booked|set up)\b/i,
+            /\bwe('ve| have)\s+(scheduled|booked|got you scheduled)/i,
+            /\blet me get your (info|information) (and|to) (get|have) (you|someone)/i
+        ];
+        
+        let violated = false;
+        let violatingPhrase = null;
+        
+        for (const pattern of bookingClaimPatterns) {
+            const match = reply.match(pattern);
+            if (match) {
+                violated = true;
+                violatingPhrase = match[0];
+                break;
+            }
+        }
+        
+        if (!violated) {
+            return { reply, changed: false, violation: false };
+        }
+        
+        // VIOLATION DETECTED - Log it loudly
+        logger.error('[V96j] 🚨 BOOKING_CLAIM_VIOLATION: LLM claimed booking without bookingModeLocked!', {
+            callId,
+            companyId,
+            bookingModeLocked,
+            violatingPhrase,
+            replyPreview: reply.substring(0, 100)
+        });
+        
+        // Try to emit to BlackBox if available
+        try {
+            const BlackBoxLogger = require('./BlackBoxLogger');
+            if (BlackBoxLogger?.logEvent) {
+                BlackBoxLogger.logEvent({
+                    callId,
+                    companyId,
+                    type: 'BOOKING_CLAIM_VIOLATION',
+                    data: {
+                        bookingModeLocked: false,
+                        violatingPhrase,
+                        replyPreview: reply.substring(0, 150),
+                        remediation: 'LLM must ask for consent (Would you like me to schedule?) instead of claiming booking'
+                    }
+                }).catch(() => {});
+            }
+        } catch (e) {
+            // BlackBox not available - continue
+        }
+        
+        // FIX THE REPLY: Replace booking claims with consent questions
+        let fixedReply = reply;
+        
+        // Replace "Let me get you scheduled" → "Would you like me to schedule a technician?"
+        fixedReply = fixedReply.replace(/let me (get you|have you) scheduled/gi, 
+            'Would you like me to schedule a technician?');
+        fixedReply = fixedReply.replace(/let me (schedule|book|set up) (you|a|an|that)/gi, 
+            'Would you like me to schedule');
+        fixedReply = fixedReply.replace(/I('ll| will) (get you|have you) scheduled/gi, 
+            'Would you like me to schedule a technician?');
+        fixedReply = fixedReply.replace(/I('ll| will) schedule (you|a|an|the)/gi, 
+            'Would you like me to schedule');
+        fixedReply = fixedReply.replace(/let me get your (info|information).*(scheduled|booked)/gi,
+            'Would you like me to schedule a technician to come out?');
+        
+        const changed = fixedReply !== reply;
+        
+        if (changed) {
+            logger.warn('[V96j] Booking claim guardrail rewrote LLM output', {
+                callId,
+                original: reply.substring(0, 80),
+                fixed: fixedReply.substring(0, 80)
+            });
+        }
+        
+        return { reply: fixedReply, changed, violation: true, violatingPhrase };
+    }
+    
+    /**
      * Process a turn with full conversation context
      * 
      * @param {Object} params
@@ -395,6 +514,7 @@ class HybridReceptionistLLM {
      * @param {Array} params.conversationHistory - Array of {role, content} turns
      * @param {string} params.userInput - What the caller just said
      * @param {Object} params.behaviorConfig - UI config for personality/prompts
+     * @param {boolean} params.bookingModeLocked - V96j: Whether booking mode is locked
      * @returns {Promise<Object>} Structured response with reply, slots, signals
      */
     static async processConversation({
@@ -826,8 +946,9 @@ ACKNOWLEDGE this context naturally:
 2. Use the scenario knowledge above to provide helpful information
 3. Do NOT ask for name/phone/address until caller explicitly wants to book
 4. If caller describes a problem, acknowledge it and offer relevant guidance
-5. Only ask "Would you like me to schedule an appointment?" after understanding their issue
-6. Output JSON: {"slot":"none","ack":"your natural response using scenario knowledge"}`;
+5. Only ask "Would you like me to schedule an appointment?" after understanding their issue - do NOT claim you're already scheduling
+6. V96j RULE: NEVER say "Let me get you scheduled" or "I'll schedule you" - instead ASK: "Would you like me to schedule...?"
+7. Output JSON: {"slot":"none","ack":"your natural response using scenario knowledge"}`;
 
             } else {
                 // ════════════════════════════════════════════════════════════════
@@ -1169,11 +1290,30 @@ ACKNOWLEDGE this context naturally:
                 }
             };
             
+            // Apply all guardrails in order: vocabulary → forbidden phrases → booking claim
+            let guardedReply = this.applyVocabularyGuardrailsToReply(finalReply, company).reply;
+            guardedReply = this.applyForbiddenPhrasesToReply(guardedReply, company).reply;
+            
+            // V96j: Apply booking claim guardrail (LLM cannot claim booking unless locked)
+            const bookingModeLocked = callContext?.bookingModeLocked || 
+                                     behaviorConfig?.bookingModeLocked || 
+                                     currentMode === 'booking';
+            const claimGuard = this.applyBookingClaimGuardrail(guardedReply, {
+                bookingModeLocked,
+                callId,
+                companyId
+            });
+            if (claimGuard.violation) {
+                debugInfo.bookingClaimViolation = {
+                    violatingPhrase: claimGuard.violatingPhrase,
+                    bookingModeLocked,
+                    fixed: claimGuard.changed
+                };
+            }
+            guardedReply = claimGuard.reply;
+            
             const result = {
-                reply: this.applyForbiddenPhrasesToReply(
-                    this.applyVocabularyGuardrailsToReply(finalReply, company).reply,
-                    company
-                ).reply,
+                reply: guardedReply,
                 conversationMode,
                 needsInfo: collectingSlot || 'none',
                 nextGoal: collectingSlot ? `ASK_${collectingSlot.toUpperCase()}` : 'CONTINUE',
@@ -1181,6 +1321,8 @@ ACKNOWLEDGE this context naturally:
                 latencyMs,
                 tokensUsed: response.usage?.total_tokens || 0,
                 llmqnaUsed: !!collectingSlot,
+                // V96j: Signal if there was a booking claim violation
+                bookingClaimViolation: claimGuard.violation || false,
                 // 🔍 COMPREHENSIVE DEBUG
                 debug: debugInfo
             };
@@ -1489,8 +1631,9 @@ RULES:
 10. Keep responses under 2 sentences
 11. NEVER make up, assume, or hallucinate data (times, dates, prices, etc.) - ONLY use what caller explicitly said
 12. If NEED list is not empty, keep collecting - do NOT confirm appointment until ALL required slots are filled
-13. ⚠️ CRITICAL: NEVER say "let me check the schedule/availability/calendar" - you do NOT have calendar access. Instead say: "I can get you scheduled - what day works best for you?" or "Let me get your info and we'll confirm the earliest available time"
-${forbidden ? `14. Never say: ${forbidden}` : ''}
+13. ⚠️ CRITICAL: NEVER say "let me check the schedule/availability/calendar" - you do NOT have calendar access.
+14. ⚠️ V96j CRITICAL: When caller describes a problem, FIRST acknowledge then ASK if they want service - do NOT claim you're scheduling. Say "Would you like me to schedule a technician?" NOT "Let me get you scheduled."
+${forbidden ? `15. Never say: ${forbidden}` : ''}
 ${lastAgentResponse ? `- You just said: "${lastAgentResponse.substring(0, 40)}..." - don't repeat` : ''}
 
 Examples:
@@ -1498,7 +1641,7 @@ User: "good morning"
 {"slot":"none","ack":"Good morning! How can I help you today?"}
 
 User: "My AC is broken"
-{"slot":"${firstMissingSlot}","ack":"I'm sorry to hear that! Let me get you scheduled."}
+{"slot":"none","ack":"I'm sorry to hear that! Would you like me to schedule a technician to come take a look?"}
 
 User: "yeah you guys were here yesterday"
 {"slot":"none","ack":"I see we were out yesterday. I apologize if the issue wasn't fully resolved. What's happening now?"}
@@ -1507,7 +1650,10 @@ User: "and they did some work on the unit"
 {"slot":"none","ack":"I understand. Please tell me what's going on now so I can help."}
 
 User: "now it's not working at all"
-{"slot":"${firstMissingSlot}","ack":"I'm so sorry to hear that. Let me get a technician back out there."}
+{"slot":"none","ack":"I'm so sorry to hear that. Would you like me to send a technician back out?"}
+
+User: "yes please" (after being offered scheduling)
+{"slot":"${firstMissingSlot}","ack":"Perfect, let me get your information."}
 
 User: "This is John"
 {"slot":"phone","ack":"Thanks, John!"}
