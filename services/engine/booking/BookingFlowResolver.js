@@ -130,54 +130,63 @@ class BookingFlowResolver {
      *     source: 'company_config' | 'default'
      * }
      */
-    static resolve({ companyId, trade, serviceType, company }) {
+    static resolve({ companyId, trade, serviceType, company, awReader }) {
         if (!company) {
             logger.warn('[BOOKING FLOW RESOLVER] No company provided, using defaults', { companyId });
             return this.buildDefaultFlow(companyId);
         }
         
-        const aiSettings = company.aiAgentSettings || {};
-        const frontDeskBehavior = aiSettings.frontDeskBehavior || {};
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96j: Use AWConfigReader for ALL config reads (single-gate compliance)
+        // ═══════════════════════════════════════════════════════════════════════
+        // If awReader is provided, use it for traced reads.
+        // Fall back to direct access only if not provided (legacy callers).
+        // ═══════════════════════════════════════════════════════════════════════
         
-        // ═══════════════════════════════════════════════════════════════════════
-        // V92 FIX: Read from CORRECT path
-        // ═══════════════════════════════════════════════════════════════════════
-        // The UI saves booking slots to: aiAgentSettings.frontDeskBehavior.bookingSlots
-        // Previously was reading from: aiAgentSettings.bookingSlots (WRONG!)
-        // Also check legacy path for backward compatibility
-        // ═══════════════════════════════════════════════════════════════════════
-        const bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
-        // ═══════════════════════════════════════════════════════════════════════
-        // V96j FIX: Read bookingTemplates from CORRECT location
-        // UI saves to: frontDeskBehavior.bookingTemplates
-        // Legacy path: aiAgentSettings.bookingTemplates
-        // ═══════════════════════════════════════════════════════════════════════
-        const bookingTemplates = frontDeskBehavior.bookingTemplates || aiSettings.bookingTemplates || {};
-        const bookingPromptsMap = aiSettings.bookingPromptsMap || new Map();
+        let bookingSlots, bookingTemplates, bookingBehavior, bookingOutcome, bookingPrompts;
         
-        // ═══════════════════════════════════════════════════════════════════════
-        // V96j: Read booking behavior options from frontDeskBehavior (Booking Prompt tab)
-        // ═══════════════════════════════════════════════════════════════════════
-        // These control how BookingFlowRunner behaves:
-        // - confirmationPrompt: Custom final confirmation message (replaces hardcoded)
-        // - completionPrompt: Custom completion message after booking
-        // - enforcePromptOrder: If true, always ask questions in order even if slots filled
-        // - confirmIfPreFilled: If true, ask to confirm pre-filled slots (from discovery/caller ID)
-        // - alwaysAskEvenIfFilled: Array of slots to always ask even if pre-filled
-        // ═══════════════════════════════════════════════════════════════════════
-        const bookingBehavior = frontDeskBehavior.bookingBehavior || {};
-        const bookingOutcome = frontDeskBehavior.bookingOutcome || {};
+        if (awReader && typeof awReader.get === 'function') {
+            // V96j: Traced reads through AWConfigReader
+            awReader.setReaderId('BookingFlowResolver.resolve');
+            
+            bookingSlots = awReader.getArray('frontDesk.bookingSlots');
+            bookingTemplates = awReader.getObject('frontDesk.bookingTemplates') || {};
+            bookingBehavior = awReader.getObject('frontDesk.bookingBehavior') || {};
+            bookingOutcome = awReader.getObject('frontDesk.bookingOutcome') || {};
+            bookingPrompts = awReader.getObject('frontDesk.bookingPrompts') || {};
+            
+            logger.debug('[BOOKING FLOW RESOLVER] V96j: Using AWConfigReader for traced reads', {
+                companyId: company._id?.toString(),
+                slotCount: bookingSlots?.length || 0,
+                hasTemplates: Object.keys(bookingTemplates).length > 0
+            });
+        } else {
+            // Fallback: Direct access (legacy - no tracing)
+            logger.warn('[BOOKING FLOW RESOLVER] ⚠️ No AWConfigReader - using direct access (untraced)', {
+                companyId: company._id?.toString()
+            });
+            
+            const aiSettings = company.aiAgentSettings || {};
+            const frontDeskBehavior = aiSettings.frontDeskBehavior || {};
+            
+            bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
+            bookingTemplates = frontDeskBehavior.bookingTemplates || aiSettings.bookingTemplates || {};
+            bookingBehavior = frontDeskBehavior.bookingBehavior || {};
+            bookingOutcome = frontDeskBehavior.bookingOutcome || {};
+            bookingPrompts = frontDeskBehavior.bookingPrompts || {};
+        }
+        
+        const bookingPromptsMap = company.aiAgentSettings?.bookingPromptsMap || new Map();
         const checkedPaths = [
-            'aiAgentSettings.frontDeskBehavior.bookingSlots',
-            'aiAgentSettings.bookingSlots'
+            'frontDesk.bookingSlots (via AWConfigReader)',
+            'aiAgentSettings.frontDeskBehavior.bookingSlots'
         ];
         
         logger.debug('[BOOKING FLOW RESOLVER] Resolving flow', {
             companyId: company._id?.toString(),
-            hasFrontDeskSlots: !!frontDeskBehavior.bookingSlots?.length,
-            hasLegacySlots: !!aiSettings.bookingSlots?.length,
-            slotCount: bookingSlots.length,
-            slotIds: bookingSlots.map(s => s.id || s.slotId).slice(0, 10)
+            slotCount: bookingSlots?.length || 0,
+            slotIds: (bookingSlots || []).map(s => s.id || s.slotId).slice(0, 10),
+            usedAwReader: !!(awReader && typeof awReader.get === 'function')
         });
         
         // If no booking slots configured, use defaults
@@ -209,8 +218,7 @@ class BookingFlowResolver {
         // V96j: Read confirmation/completion templates from MULTIPLE sources
         // Priority: bookingBehavior > bookingOutcome > bookingPrompts (legacy) > bookingTemplates > hardcoded
         // ═══════════════════════════════════════════════════════════════════════
-        // Also check frontDeskBehavior.bookingPrompts.confirmTemplate (UI writes here)
-        const bookingPrompts = frontDeskBehavior.bookingPrompts || {};
+        // Note: bookingPrompts already read above via AWConfigReader (if available)
         
         const confirmationTemplate = 
             bookingBehavior.confirmationPrompt ||

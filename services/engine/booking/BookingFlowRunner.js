@@ -32,6 +32,11 @@ const AddressValidationService = require('../../AddressValidationService');
 const GoogleCalendarService = require('../../GoogleCalendarService');
 const SMSNotificationService = require('../../SMSNotificationService');
 
+// V96k: Clean validation modules (extracted from monolithic runner)
+const { validateSlotValue } = require('./BookingSlotValidator');
+const { sanitizeBookingState } = require('./BookingSlotSanitizer');
+const { checkConfirmationInvariant } = require('./BookingInvariants');
+
 // 🔌 AWConfigReader for traced config reads (Phase 6d)
 let AWConfigReader;
 try {
@@ -77,8 +82,84 @@ try {
 const IDENTITY_SLOTS = new Set(['name', 'firstName', 'lastName', 'partialName', 'fullName']);
 const IDENTITY_SLOTS_FOR_FIREWALL = ['name', 'firstName', 'lastName', 'partialName', 'phone', 'address'];
 
+/**
+ * ============================================================================
+ * V96j: CANONICAL SLOT STORE
+ * ============================================================================
+ * 
+ * state.slots is the SINGLE canonical slot store. Structure:
+ * {
+ *     name: { value: "Mark", confidence: 0.95, source: "stt", confirmedAt: "..." },
+ *     phone: { value: "555-1234", confidence: 0.9, source: "caller_id" },
+ *     ...
+ * }
+ * 
+ * bookingCollected is a LEGACY ALIAS - it provides a simplified view:
+ * { name: "Mark", phone: "555-1234", ... }
+ * 
+ * All new code should use state.slots. The bookingCollected view is for
+ * backward compatibility only and will be deprecated.
+ * ============================================================================
+ */
+
+/**
+ * Create a bookingCollected-compatible view from state.slots
+ * This is a READ-ONLY alias - writes must go through safeSetSlot!
+ */
+function createBookingCollectedView(state) {
+    const view = {};
+    const slots = state.slots || {};
+    for (const [key, slot] of Object.entries(slots)) {
+        if (slot && typeof slot === 'object' && slot.value !== undefined) {
+            view[key] = slot.value;
+        } else if (slot !== undefined && typeof slot !== 'object') {
+            // Handle legacy flat values
+            view[key] = slot;
+        }
+    }
+    return view;
+}
+
+/**
+ * Sync bookingCollected to canonical slots (for backward compatibility writes)
+ * Call this after any legacy code writes to bookingCollected directly
+ */
+function syncBookingCollectedToSlots(state, source = 'legacy_sync') {
+    if (!state.bookingCollected) return;
+    state.slots = state.slots || {};
+    
+    for (const [key, value] of Object.entries(state.bookingCollected)) {
+        if (value !== undefined && !state.slots[key]) {
+            state.slots[key] = {
+                value,
+                confidence: 0.7,  // Lower confidence for legacy sync
+                source,
+                syncedAt: new Date().toISOString()
+            };
+        }
+    }
+}
+
+/**
+ * ============================================================================
+ * V96k: VALIDATE SLOT VALUE AGAINST TYPE
+ * ============================================================================
+ * 
+ * This is the FIRST LINE OF DEFENSE against slot contamination.
+ * Before ANY slot write happens, we validate that the value makes sense
+ * for the slot type.
+ * 
+ * VALIDATION RULES:
+ * - time: Must match time patterns, must NOT contain street tokens or match address
+ * - name: Must NOT look like a phone number
+ * - phone: Must contain enough digits
+ * - address: Must contain street-like tokens
+ * 
+ * @returns {{ valid: boolean, reason?: string }}
+ */
+
 function safeSetSlot(state, slotName, value, options = {}) {
-    const { source = 'unknown', confidence = 0.8, isCorrection = false } = options;
+    const { source = 'unknown', confidence = 0.8, isCorrection = false, bypassStepGate = false } = options;
     
     // V96h: Get trace context from state for SLOT_WRITE_FIREWALL events
     const traceCallSid = state?._traceContext?.callSid;
@@ -89,6 +170,112 @@ function safeSetSlot(state, slotName, value, options = {}) {
     if (!value) {
         logger.debug('[SAFE SET SLOT] Skipped null/empty value', { slotName, source });
         return { accepted: false, reason: 'empty_value' };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V96k: HARD TYPE VALIDATION - Prevent contamination at write-time
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Before allowing ANY write, validate that the value makes sense for the slot type.
+    // This is the first line of defense against slot contamination.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const typeValidation = validateSlotValue(slotName, value, state);
+    if (!typeValidation.valid) {
+        logger.warn('[SAFE SET SLOT] ❌ V96k: TYPE VALIDATION FAILED - Rejected write', {
+            slotName,
+            value: typeof value === 'string' ? value.substring(0, 50) : value,
+            reason: typeValidation.reason,
+            source,
+            callSid: traceCallSid
+        });
+        
+        // Emit SLOT_TYPE_VALIDATION_FAILED event
+        if (BlackBoxLogger && traceCallSid && traceCompanyId) {
+            BlackBoxLogger.logEvent({
+                callId: traceCallSid,
+                companyId: traceCompanyId,
+                turn: traceTurn,
+                type: 'SLOT_TYPE_VALIDATION_FAILED',
+                data: {
+                    slot: slotName,
+                    attemptedValue: typeof value === 'string' ? value.substring(0, 50) : value,
+                    reason: typeValidation.reason,
+                    source,
+                    action: 'REJECTED_WRITE'
+                }
+            }).catch(() => {});
+        }
+        
+        return {
+            accepted: false,
+            reason: typeValidation.reason,
+            validationFailed: true
+        };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V96j: STEP-GATED SLOT WRITES
+    // ═══════════════════════════════════════════════════════════════════════════
+    // When in booking mode with a current step, only allow writes to the CURRENT
+    // step's slot. This prevents "slot contamination" where the runner jumps ahead
+    // because data was extracted from an utterance that wasn't answering that slot.
+    //
+    // Example: If current step = 'address', do NOT allow writes to 'time' even if
+    // the user said "3pm". That's contamination - wait until we ASK for time.
+    //
+    // Exceptions:
+    // - bypassStepGate = true (explicit pre-fill from caller ID, etc.)
+    // - isCorrection = true (user explicitly correcting a slot)
+    // - Slot already has value (allow updates to current slot)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const currentStepId = state?.currentStepId;
+    const inBookingMode = state?.bookingModeLocked === true;
+    
+    if (inBookingMode && currentStepId && !bypassStepGate && !isCorrection) {
+        // Get the field key for the current step
+        const currentFieldKey = currentStepId.replace('_collect', '').replace('_confirm', '');
+        
+        // If slotName doesn't match current step's field, reject
+        // Allow common aliases (name matches firstName/lastName/partialName)
+        const nameAliases = ['name', 'firstName', 'lastName', 'partialName', 'fullName'];
+        const isNameRelated = nameAliases.includes(slotName) && nameAliases.includes(currentFieldKey);
+        const isCurrentSlot = slotName === currentFieldKey || isNameRelated;
+        
+        if (!isCurrentSlot) {
+            // V96j: STEP_GATE_VIOLATION - Rejected write to non-current slot
+            logger.warn('[SAFE SET SLOT] ⛔ STEP_GATE_VIOLATION: Rejected write to non-current slot', {
+                rejectedSlot: slotName,
+                currentStep: currentStepId,
+                expectedSlot: currentFieldKey,
+                attemptedValue: typeof value === 'string' ? value.substring(0, 30) : value,
+                source,
+                callSid: traceCallSid
+            });
+            
+            // Log to BlackBox for auditing
+            if (BlackBoxLogger && traceCallSid && traceCompanyId) {
+                BlackBoxLogger.logEvent({
+                    callId: traceCallSid,
+                    companyId: traceCompanyId,
+                    turn: traceTurn,
+                    eventType: 'STEP_GATE_VIOLATION',
+                    eventData: {
+                        rejectedSlot: slotName,
+                        currentStep: currentStepId,
+                        expectedSlot: currentFieldKey,
+                        attemptedValue: typeof value === 'string' ? value.substring(0, 20) : '[non-string]',
+                        source,
+                        reason: 'slot_not_current_step'
+                    }
+                });
+            }
+            
+            return { 
+                accepted: false, 
+                reason: 'step_gate_violation',
+                currentStep: currentStepId,
+                expectedSlot: currentFieldKey
+            };
+        }
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -141,34 +328,42 @@ function safeSetSlot(state, slotName, value, options = {}) {
             };
         }
         
-        // Firewall accepted - sync back to bookingCollected
-        const previousValue = state.bookingCollected?.[slotName];
-        state.bookingCollected = state.bookingCollected || {};
-        state.bookingCollected[slotName] = slotsProxy[slotName]?.value || value;
+        // V96j: Write to CANONICAL slots store first
+        const finalValue = slotsProxy[slotName]?.value || value;
+        const previousValue = state.slots?.[slotName]?.value || state.bookingCollected?.[slotName];
         
-        // Update metadata
-        state.slotMetadata = state.slotMetadata || {};
-        state.slotMetadata[slotName] = {
-            ...(state.slotMetadata[slotName] || {}),
-            value: state.bookingCollected[slotName],
+        state.slots = state.slots || {};
+        state.slots[slotName] = {
+            value: finalValue,
             source: slotsProxy[slotName]?.source || source,
             confidence: slotsProxy[slotName]?.confidence || confidence,
             updatedAt: new Date().toISOString(),
-            previousValue: previousValue !== state.bookingCollected[slotName] ? previousValue : undefined,
-            writer: 'BookingFlowRunner.safeSetSlot'
+            previousValue: previousValue !== finalValue ? previousValue : undefined,
+            writer: 'BookingFlowRunner.safeSetSlot',
+            firewallAccepted: true
+        };
+        
+        // Sync to bookingCollected for backward compatibility
+        state.bookingCollected = state.bookingCollected || {};
+        state.bookingCollected[slotName] = finalValue;
+        
+        // Update legacy metadata for backward compat
+        state.slotMetadata = state.slotMetadata || {};
+        state.slotMetadata[slotName] = {
+            ...(state.slotMetadata[slotName] || {}),
+            ...state.slots[slotName]
         };
         
         logger.info('[SAFE SET SLOT] ✅ Identity slot accepted via firewall', {
             slotName,
-            value: typeof state.bookingCollected[slotName] === 'string' 
-                ? state.bookingCollected[slotName].substring(0, 30) 
-                : state.bookingCollected[slotName],
+            value: typeof finalValue === 'string' ? finalValue.substring(0, 30) : finalValue,
             source,
             confidence,
-            wasOverwrite: !!previousValue && previousValue !== state.bookingCollected[slotName]
+            wasOverwrite: !!previousValue && previousValue !== finalValue,
+            canonicalStore: 'slots'
         });
         
-        return { accepted: true, value: state.bookingCollected[slotName], previousValue };
+        return { accepted: true, value: finalValue, previousValue };
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -210,21 +405,30 @@ function safeSetSlot(state, slotName, value, options = {}) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // WRITE THE SLOT (non-identity or fallback)
+    // V96j: WRITE TO CANONICAL SLOTS STORE (non-identity or fallback)
     // ═══════════════════════════════════════════════════════════════════════════
-    const previousValue = state.bookingCollected?.[slotName];
-    state.bookingCollected = state.bookingCollected || {};
-    state.bookingCollected[slotName] = value;
+    const previousValue = state.slots?.[slotName]?.value || state.bookingCollected?.[slotName];
     
-    // Update metadata
-    state.slotMetadata = state.slotMetadata || {};
-    state.slotMetadata[slotName] = {
-        ...(state.slotMetadata[slotName] || {}),
+    // Write to canonical store
+    state.slots = state.slots || {};
+    state.slots[slotName] = {
         value,
         source,
         confidence,
         updatedAt: new Date().toISOString(),
-        previousValue: previousValue !== value ? previousValue : undefined
+        previousValue: previousValue !== value ? previousValue : undefined,
+        writer: 'BookingFlowRunner.safeSetSlot'
+    };
+    
+    // Sync to bookingCollected for backward compatibility
+    state.bookingCollected = state.bookingCollected || {};
+    state.bookingCollected[slotName] = value;
+    
+    // Update legacy metadata for backward compat
+    state.slotMetadata = state.slotMetadata || {};
+    state.slotMetadata[slotName] = {
+        ...(state.slotMetadata[slotName] || {}),
+        ...state.slots[slotName]
     };
     
     logger.info('[SAFE SET SLOT] ✅ ACCEPTED slot write', {
@@ -232,7 +436,8 @@ function safeSetSlot(state, slotName, value, options = {}) {
         value: typeof value === 'string' ? value.substring(0, 30) : value,
         source,
         confidence,
-        wasOverwrite: !!previousValue && previousValue !== value
+        wasOverwrite: !!previousValue && previousValue !== value,
+        canonicalStore: 'slots'
     });
     
     return { accepted: true, value, previousValue };
@@ -242,8 +447,22 @@ function safeSetSlot(state, slotName, value, options = {}) {
  * V96f: Mark a slot as confirmed (immutable until explicit correction)
  */
 function markSlotConfirmed(state, slotName) {
-    if (!state.bookingCollected[slotName]) return;
+    // V96j: Check canonical slots store first, then bookingCollected for backward compat
+    const hasValue = state.slots?.[slotName]?.value || state.bookingCollected?.[slotName];
+    if (!hasValue) return;
     
+    // Update canonical slots store
+    state.slots = state.slots || {};
+    if (state.slots[slotName]) {
+        state.slots[slotName] = {
+            ...state.slots[slotName],
+            confirmed: true,
+            immutable: true,
+            confirmedAt: new Date().toISOString()
+        };
+    }
+    
+    // Update legacy metadata for backward compat
     state.slotMetadata = state.slotMetadata || {};
     state.slotMetadata[slotName] = {
         ...(state.slotMetadata[slotName] || {}),
@@ -255,7 +474,7 @@ function markSlotConfirmed(state, slotName) {
     state.confirmedSlots = state.confirmedSlots || {};
     state.confirmedSlots[slotName] = true;
     
-    logger.info('[SAFE SET SLOT] 🔒 Slot marked CONFIRMED (immutable)', { slotName });
+    logger.info('[SAFE SET SLOT] 🔒 Slot marked CONFIRMED (immutable)', { slotName, canonicalStore: 'slots' });
 }
 
 /**
@@ -611,13 +830,6 @@ class BookingFlowRunner {
     static async runStep({ flow, state, userInput, company, session, callSid, slots = {}, awReader: passedAwReader = null }) {
         const startTime = Date.now();
         
-        // V96h: Store callSid, companyId, and traceLevel in state for SLOT_WRITE_FIREWALL tracing
-        state._traceContext = {
-            callSid: callSid || state._traceContext?.callSid,
-            companyId: company?._id?.toString() || state._traceContext?.companyId,
-            traceLevel: company?.aiAgentSettings?.traceLevel || state._traceContext?.traceLevel || 'normal'
-        };
-        
         // 🔌 AW MIGRATION: Create or use AWConfigReader for traced config reads
         const awReader = passedAwReader || (AWConfigReader && company ? AWConfigReader.forCall({
             callId: callSid || 'booking-step',
@@ -626,6 +838,18 @@ class BookingFlowRunner {
             runtimeConfig: company,
             readerId: 'BookingFlowRunner.runStep'
         }) : null);
+        
+        // V96h: Store callSid, companyId, and traceLevel in state for SLOT_WRITE_FIREWALL tracing
+        // V96j: Read traceLevel via AWConfigReader if available for single-gate compliance
+        let traceLevel = state._traceContext?.traceLevel || 'normal';
+        if (awReader && typeof awReader.get === 'function') {
+            traceLevel = awReader.get('infra.traceLevel', 'normal');
+        }
+        state._traceContext = {
+            callSid: callSid || state._traceContext?.callSid,
+            companyId: company?._id?.toString() || state._traceContext?.companyId,
+            traceLevel
+        };
         
         logger.info('[BOOKING FLOW RUNNER] Running step', {
             flowId: flow?.flowId,
@@ -718,10 +942,12 @@ class BookingFlowRunner {
             for (const [key, slotData] of Object.entries(slots)) {
                 if (slotData?.value && !state.bookingCollected[key]) {
                     // V96f: Use safeSetSlot for identity slots, direct for others
+                    // V96j: Pre-extracted slots bypass step gate (they're initial fills, not mid-booking)
                     if (IDENTITY_SLOTS.has(key)) {
                         const setResult = safeSetSlot(state, key, slotData.value, {
                             source: slotData.source || 'pre_extracted',
-                            confidence: slotData.confidence || 0.8
+                            confidence: slotData.confidence || 0.8,
+                            bypassStepGate: true  // V96j: Pre-fills are exempt from step gate
                         });
                         if (!setResult.accepted) {
                             logger.warn('[BOOKING FLOW RUNNER] V96f: Pre-extracted identity slot rejected', {
@@ -732,6 +958,14 @@ class BookingFlowRunner {
                             continue;
                         }
                     } else {
+                        // V96j: Non-identity pre-extracted slots also write to canonical store
+                        state.slots = state.slots || {};
+                        state.slots[key] = {
+                            value: slotData.value,
+                            ...(slotData || {}),
+                            source: slotData.source || 'pre_extracted',
+                            bypassedStepGate: true
+                        };
                         state.bookingCollected[key] = slotData.value;
                         state.slotMetadata = state.slotMetadata || {};
                         state.slotMetadata[key] = slotData;
@@ -762,11 +996,16 @@ class BookingFlowRunner {
                 const companyId = company?._id?.toString() || 'unknown';
                 // 🔌 AW MIGRATION: Read address verification config via AWConfigReader
                 let geoEnabled;
-                if (awReader) {
+                if (awReader && typeof awReader.get === 'function') {
                     awReader.setReaderId('BookingFlowRunner.addressValidation.preExtracted');
                     geoEnabled = awReader.get('booking.addressVerification.enabled', true) !== false;
                 } else {
-                    geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
+                    // V96j: Warn about untraced config read
+                    logger.warn('[BOOKING FLOW RUNNER] ⚠️ No AWConfigReader for addressVerification.enabled - untraced read', {
+                        callSid: state._traceContext?.callSid
+                    });
+                    const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
+                    geoEnabled = frontDesk?.booking?.addressVerification?.enabled !== false;
                 }
                 
                 // V93: Pass callId for GEO_LOOKUP events in Raw Events
@@ -780,9 +1019,11 @@ class BookingFlowRunner {
                     const formattedAddress = addressValidation.formattedAddress || addressValidation.normalized;
                     if (formattedAddress) {
                         // V96j: Route through safeSetSlot for unified firewall protection
+                        // Note: bypassStepGate=true because this is a validation/normalization of the same slot
                         safeSetSlot(state, 'address', formattedAddress, {
                             source: 'google_geocoding_formatted',
-                            confidence: addressValidation.confidence || 0.95
+                            confidence: addressValidation.confidence || 0.95,
+                            bypassStepGate: true  // V96j: Geocoding updates same slot
                         });
                     }
                     
@@ -930,6 +1171,8 @@ class BookingFlowRunner {
             logger.info('[BOOKING FLOW RUNNER] All slots ready - building final confirmation', {
                 collected: state.bookingCollected
             });
+            
+            // V96k: buildConfirmation now handles invariant check internally (no throws)
             return this.buildConfirmation(flow, state);
         }
         
@@ -953,6 +1196,32 @@ class BookingFlowRunner {
     
     /**
      * ========================================================================
+     * V96k: VALIDATE SLOT SANITY
+     * ========================================================================
+     * 
+     * This is the nuclear option to prevent slot contamination bugs.
+     * Before we calculate the next step, validate that every slot value makes
+     * sense for its slot type.
+     * 
+     * VALIDATION RULES:
+     * 1. time slot must NOT contain street tokens (parkway, st, ave, rd, etc.)
+     * 2. time slot must NOT match the current address string (exact or near)
+     * 3. time slot MUST match allowed forms: morning/afternoon/evening, time ranges,
+     *    asap/today/tomorrow, or actual date/time patterns
+     * 
+     * If a slot fails validation:
+     * - Set it to null
+     * - Remove from confirmedSlots
+     * - Set currentStepId to that slot (force re-collection)
+     * - Emit BOOKING_SLOT_SANITY_FIX event for auditing
+     * 
+     * This implements the "must-do guardrails" from the AI analyst:
+     * "If time fails validation ⇒ set time = null, set currentStepId = 'time', 
+     *  do not allow CONFIRMATION."
+     * ========================================================================
+     */
+    /**
+     * ========================================================================
      * DETERMINE NEXT ACTION - Confirm vs Collect decision
      * ========================================================================
      * 
@@ -961,12 +1230,24 @@ class BookingFlowRunner {
      * - COLLECT: Slot missing - ask user to provide it
      * - SKIP: Slot confirmed (confidence = 1.0) - move to next
      * 
+     * V96k: SLOT SANITY VALIDATION ADDED
+     * Before step calculation, we validate all slots to ensure contamination hasn't occurred.
+     * Example: time="12155 metro parkway" is invalid - it looks like an address!
+     * 
      * @returns {Object|null} { step, mode: 'CONFIRM'|'COLLECT', existingValue }
      */
     static determineNextAction(flow, state, slots = {}) {
         const collected = state.bookingCollected || {};
         const slotMetadata = state.slotMetadata || {};
         const confirmedSlots = state.confirmedSlots || new Set();
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V96k: SANITY SWEEP ON ALL SLOTS BEFORE STEP CALCULATION (via module)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This prevents "time slot contamination" bugs where address data ends up
+        // in the time field, causing the system to think all slots are filled.
+        // ═══════════════════════════════════════════════════════════════════════════
+        sanitizeBookingState(state, flow);
         
         // ═══════════════════════════════════════════════════════════════════════════
         // FEB 2026 FIX: Track current step position to prevent going backwards
@@ -1435,11 +1716,16 @@ class BookingFlowRunner {
                 const companyId = company?._id?.toString() || 'unknown';
                 // 🔌 AW MIGRATION: Read address verification config via AWConfigReader
                 let geoEnabled;
-                if (awReader) {
+                if (awReader && typeof awReader.get === 'function') {
                     awReader.setReaderId('BookingFlowRunner.addressValidation.collect');
                     geoEnabled = awReader.get('booking.addressVerification.enabled', true) !== false;
                 } else {
-                    geoEnabled = company?.aiAgentSettings?.frontDesk?.booking?.addressVerification?.enabled !== false;
+                    // V96j: Warn about untraced config read
+                    logger.warn('[BOOKING FLOW RUNNER] ⚠️ No AWConfigReader for addressVerification.enabled - untraced read', {
+                        callSid: state._traceContext?.callSid
+                    });
+                    const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
+                    geoEnabled = frontDesk?.booking?.addressVerification?.enabled !== false;
                 }
                 
                 // V93: Pass callId for GEO_LOOKUP events in Raw Events
@@ -2227,28 +2513,62 @@ class BookingFlowRunner {
      * ========================================================================
      * INITIALIZE STATE
      * ========================================================================
+     * V96j: state.slots is now the CANONICAL slot store.
+     * - bookingCollected is aliased for backward compatibility
+     * - slotMetadata is merged into slots (slots[key].confirmedAt, etc.)
+     * ========================================================================
      */
     static initializeState(state, flow, slots = {}) {
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V96j: Initialize slots as canonical store FIRST
+        // ═══════════════════════════════════════════════════════════════════════════
+        const canonicalSlots = state?.slots || {};
+        
+        // Merge passed-in slots (pre-extracted) into canonical store
+        if (slots && Object.keys(slots).length > 0) {
+            for (const [key, slotData] of Object.entries(slots)) {
+                if (slotData && !canonicalSlots[key]) {
+                    canonicalSlots[key] = slotData;
+                }
+            }
+        }
+        
+        // Migrate legacy bookingCollected into canonical slots if not already there
+        if (state?.bookingCollected) {
+            for (const [key, value] of Object.entries(state.bookingCollected)) {
+                if (value !== undefined && !canonicalSlots[key]) {
+                    canonicalSlots[key] = {
+                        value,
+                        confidence: state?.slotMetadata?.[key]?.confidence || 0.7,
+                        source: state?.slotMetadata?.[key]?.source || 'legacy_migration',
+                        migratedAt: new Date().toISOString()
+                    };
+                }
+            }
+        }
+        
         const initialized = {
             bookingModeLocked: true,
             bookingFlowId: flow.flowId,
             currentStepId: state?.currentStepId || flow.steps[0]?.id,
-            bookingCollected: state?.bookingCollected || {},
-            slotMetadata: state?.slotMetadata || {},
+            // V96j: slots is canonical, bookingCollected is derived for compatibility
+            slots: canonicalSlots,
+            bookingCollected: createBookingCollectedView({ slots: canonicalSlots }),
+            slotMetadata: state?.slotMetadata || {},  // Keep for extended metadata
             confirmedSlots: state?.confirmedSlots || {},
             askCount: state?.askCount || {},
             startedAt: state?.startedAt || new Date().toISOString(),
-            ...state
+            ...state,
+            // Ensure slots isn't overwritten by spread
+            slots: canonicalSlots
         };
         
-        // Merge slot metadata from pre-extracted slots
-        if (slots && Object.keys(slots).length > 0) {
-            for (const [key, slotData] of Object.entries(slots)) {
-                if (slotData && !initialized.slotMetadata[key]) {
-                    initialized.slotMetadata[key] = slotData;
-                }
-            }
-        }
+        // Log slot unification for debugging
+        logger.debug('[BOOKING FLOW RUNNER] State initialized with canonical slots', {
+            slotCount: Object.keys(canonicalSlots).length,
+            slotKeys: Object.keys(canonicalSlots),
+            legacyBookingCollectedKeys: Object.keys(state?.bookingCollected || {})
+        });
         
         return initialized;
     }
@@ -2441,6 +2761,61 @@ class BookingFlowRunner {
      */
     static buildConfirmation(flow, state) {
         const collected = state.bookingCollected || {};
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96k: CONFIRMATION INVARIANT CHECK
+        // ═══════════════════════════════════════════════════════════════════════
+        // "If currentStepId === CONFIRMATION then every required slot must pass validator.
+        //  If not, emit BOOKING_STATE_INVALID and rewind to the first invalid slot."
+        // 
+        // This is the nuclear safety check - if we got to CONFIRMATION but have
+        // invalid data (e.g. time="12155 metro parkway"), reject and rewind.
+        // V96k: Using checkConfirmationInvariant module (no throws - graceful rewind)
+        // ═══════════════════════════════════════════════════════════════════════
+        const rewindInfo = checkConfirmationInvariant(state, flow);
+        if (rewindInfo) {
+            logger.error('[BOOKING FLOW RUNNER] ❌ V96k: CONFIRMATION INVARIANT VIOLATION', {
+                invalidSlot: rewindInfo.invalidSlot,
+                invalidValue: rewindInfo.invalidValue,
+                reason: rewindInfo.reason,
+                action: 'REWIND_VIA_STATE_UPDATE'
+            });
+            
+            // Rewind via state update (no throw - safe)
+            state.currentStepId = rewindInfo.stepId;
+            state.awaitingConfirmation = false;
+            
+            // Re-calculate next action after rewind
+            const rewindAction = this.determineNextAction(flow, state, {});
+            if (!rewindAction) {
+                // Shouldn't happen, but handle gracefully
+                logger.warn('[BOOKING FLOW RUNNER] No action after invariant rewind');
+                return this.buildErrorResponse('Unable to determine next step after validation', state);
+            }
+            
+            // Ask the rewound step's prompt
+            if (rewindAction.mode === 'COLLECT') {
+                const rewindStep = rewindAction.step;
+                return {
+                    reply: rewindStep.prompt || `What is your ${rewindAction.step.fieldKey}?`,
+                    state,
+                    isComplete: false,
+                    action: 'COLLECT',
+                    currentStep: rewindStep.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'deterministic',
+                    tokensUsed: 0,
+                    latencyMs: 0,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'REWOUND_AFTER_INVARIANT_VIOLATION',
+                        rewindedFrom: 'CONFIRMATION',
+                        invalidSlot: rewindInfo.invalidSlot
+                    }
+                };
+            }
+        }
         
         // V96j: Track template source for debugging
         const templateSource = flow.confirmationTemplateSource || 
