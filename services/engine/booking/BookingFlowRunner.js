@@ -2555,7 +2555,10 @@ class BookingFlowRunner {
             slots: canonicalSlots,
             bookingCollected: createBookingCollectedView({ slots: canonicalSlots }),
             slotMetadata: state?.slotMetadata || {},  // Keep for extended metadata
-            confirmedSlots: state?.confirmedSlots || {},
+            // V96k: DO NOT carry forward confirmedSlots from previous state
+            // This prevents "time pre-confirmed" bugs where contaminated data
+            // from discovery mode gets treated as confirmed in booking mode
+            confirmedSlots: {},
             askCount: state?.askCount || {},
             startedAt: state?.startedAt || new Date().toISOString(),
             ...state,

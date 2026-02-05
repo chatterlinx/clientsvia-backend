@@ -145,6 +145,10 @@ class BookingFlowResolver {
         
         let bookingSlots, bookingTemplates, bookingBehavior, bookingOutcome, bookingPrompts;
         let aiSettings, frontDeskBehavior; // Hoisted for use in logging later
+
+        // Initialize defaults to prevent undefined reference errors
+        aiSettings = company.aiAgentSettings || {};
+        frontDeskBehavior = aiSettings.frontDeskBehavior || {};
         
         if (awReader && typeof awReader.get === 'function') {
             // V96j: Traced reads through AWConfigReader
