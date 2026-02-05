@@ -17,6 +17,7 @@
  * 
  * Run with: node scripts/fix-direct-intent-patterns.js --dry-run
  * Apply with: node scripts/fix-direct-intent-patterns.js --apply
+ * Check with: node scripts/fix-direct-intent-patterns.js --check
  * 
  * ============================================================================
  */
@@ -114,6 +115,13 @@ async function run(dryRun) {
             console.log(`directIntentPatterns: ${typeof currentPatterns} (invalid type)`);
         }
         console.log('');
+
+        // If check-only mode, exit here
+        if (checkOnly) {
+            const isConfigured = Array.isArray(currentPatterns) && currentPatterns.length > 0;
+            console.log(`✅ CHECK RESULT: ${isConfigured ? 'CONFIGURED' : 'MISCONFIGURED'}`);
+            process.exit(isConfigured ? 0 : 1);
+        }
 
         // ====================================================================
         // SHOW NEW STATE
@@ -220,5 +228,6 @@ async function run(dryRun) {
 // Parse arguments
 const args = process.argv.slice(2);
 const dryRun = !args.includes('--apply');
+const checkOnly = args.includes('--check');
 
 run(dryRun);
