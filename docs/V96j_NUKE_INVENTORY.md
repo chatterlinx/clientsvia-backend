@@ -88,6 +88,10 @@ ctx.slots.* = (BookingNameHandler.js: multiple)
 - [x] Added booking behavior options: enforcePromptOrder, confirmIfPreFilled, alwaysAskEvenIfFilled
 - [x] BookingFlowResolver reads templates from multiple config paths with source tracking
 - [x] Logging added for hardcoded vs configured templates
+- [x] **FEB 5 FIX**: BookingFlowResolver now reads confirmTemplate from correct UI path (frontDeskBehavior.bookingTemplates, frontDeskBehavior.bookingPrompts)
+- [x] **FEB 5 FIX**: SPEAKER_OWNER_TRACE_V1 now includes `promptSource` field showing exact origin of each response
+- [x] **FEB 5 FIX**: BookingFlowRunner askStep/repromptStep/buildConfirmation/buildCompletion include promptSource in debug
+- [x] **FEB 5 FIX**: branchTaken now correctly shows BOOKING_RUNNER (not NORMAL_ROUTING) when booking gate active
 
 ### Remaining Work
 - [ ] Review BookingNameHandler.js slot writes (CONFIRMED UNUSED - safe to deprecate)
@@ -133,12 +137,16 @@ ctx.slots.* = (BookingNameHandler.js: multiple)
 }
 ```
 
-### Template Source Priority
-1. `bookingBehavior.confirmationPrompt` (Booking Prompt tab)
+### Template Source Priority (V96j Feb 5 FIX)
+1. `bookingBehavior.confirmationPrompt` (Booking Prompt tab - new field)
 2. `bookingOutcome.confirmationPrompt`
 3. `bookingOutcome.scripts.final_confirmation`
-4. `bookingTemplates.confirmTemplate`
-5. Hardcoded default (last resort)
+4. `frontDeskBehavior.bookingPrompts.confirmTemplate` (UI writes here!)
+5. `frontDeskBehavior.bookingTemplates.confirmTemplate` (UI also writes here!)
+6. Hardcoded default (last resort - logged with warning)
+
+**FIX APPLIED**: BookingFlowResolver was reading from `aiAgentSettings.bookingTemplates` 
+but the UI saves to `frontDeskBehavior.bookingTemplates`. Now reads from correct path.
 
 ---
 
@@ -147,7 +155,10 @@ ctx.slots.* = (BookingNameHandler.js: multiple)
 After fixes, verify with test call:
 
 1. [ ] `SPEAKER_OWNER_TRACE_V1` shows `responseOwner: BOOKING_FLOW_RUNNER` when locked
-2. [ ] No `IDENTITY_CONTRACT_VIOLATION` events in normal flow
+2. [ ] `SPEAKER_OWNER_TRACE_V1` shows `promptSource: booking.step:name` (or relevant step) - NOT "UNKNOWN"
+3. [ ] `branchTaken` shows `BOOKING_RUNNER` (not `NORMAL_ROUTING`) when booking gate active
+4. [ ] Confirmation message comes from config (check `promptSource: booking.confirmationTemplate:bookingPrompts` or `bookingTemplates`)
+5. [ ] No `IDENTITY_CONTRACT_VIOLATION` events in normal flow
 3. [ ] No `BOOKING_SNAP` appears in any matchSource
 4. [ ] Name slot cannot be contaminated with non-name values
 5. [ ] ConversationEngine does not speak when `bookingModeLocked=true`
