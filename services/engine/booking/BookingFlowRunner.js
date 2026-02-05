@@ -188,23 +188,27 @@ function safeSetSlot(state, slotName, value, options = {}) {
             callSid: traceCallSid
         });
         
-        // Emit SLOT_TYPE_VALIDATION_FAILED event
+        // Emit SLOT_WRITE_TRACE for type validation failure
         if (BlackBoxLogger && traceCallSid && traceCompanyId) {
             BlackBoxLogger.logEvent({
                 callId: traceCallSid,
                 companyId: traceCompanyId,
                 turn: traceTurn,
-                type: 'SLOT_TYPE_VALIDATION_FAILED',
+                type: 'SLOT_WRITE_TRACE',
                 data: {
-                    slot: slotName,
-                    attemptedValue: typeof value === 'string' ? value.substring(0, 50) : value,
+                    writer: 'BookingFlowRunner.safeSetSlot',
+                    slotName,
+                    value: typeof value === 'string' ? value.substring(0, 50) : value,
+                    accepted: false,
                     reason: typeValidation.reason,
                     source,
-                    action: 'REJECTED_WRITE'
+                    confidence,
+                    isCorrection,
+                    bypassStepGate
                 }
             }).catch(() => {});
         }
-        
+
         return {
             accepted: false,
             reason: typeValidation.reason,
@@ -321,9 +325,31 @@ function safeSetSlot(state, slotName, value, options = {}) {
                 reason: firewallResult.reason,
                 writer: 'BookingFlowRunner'
             });
-            return { 
-                accepted: false, 
-                reason: firewallResult.reason, 
+
+            // Emit SLOT_WRITE_TRACE for firewall rejection
+            if (BlackBoxLogger && traceCallSid && traceCompanyId) {
+                BlackBoxLogger.logEvent({
+                    callId: traceCallSid,
+                    companyId: traceCompanyId,
+                    turn: traceTurn,
+                    type: 'SLOT_WRITE_TRACE',
+                    data: {
+                        writer: 'BookingFlowRunner.safeSetSlot',
+                        slotName,
+                        value: typeof value === 'string' ? value.substring(0, 50) : value,
+                        accepted: false,
+                        reason: firewallResult.reason,
+                        source,
+                        confidence,
+                        isCorrection,
+                        bypassStepGate
+                    }
+                }).catch(() => {});
+            }
+
+            return {
+                accepted: false,
+                reason: firewallResult.reason,
                 currentValue: state.bookingCollected?.[slotName]
             };
         }
@@ -346,7 +372,29 @@ function safeSetSlot(state, slotName, value, options = {}) {
         // Sync to bookingCollected for backward compatibility
         state.bookingCollected = state.bookingCollected || {};
         state.bookingCollected[slotName] = finalValue;
-        
+
+        // Emit SLOT_WRITE_TRACE event for debugging
+        if (BlackBoxLogger && traceCallSid && traceCompanyId) {
+            BlackBoxLogger.logEvent({
+                callId: traceCallSid,
+                companyId: traceCompanyId,
+                turn: traceTurn,
+                type: 'SLOT_WRITE_TRACE',
+                data: {
+                    writer: 'BookingFlowRunner.safeSetSlot',
+                    slotName,
+                    value: typeof finalValue === 'string' ? finalValue.substring(0, 50) : finalValue,
+                    accepted: true,
+                    reason: 'successful_write',
+                    source,
+                    confidence,
+                    isCorrection,
+                    bypassStepGate,
+                    previousValue: previousValue !== finalValue ? (typeof previousValue === 'string' ? previousValue.substring(0, 50) : previousValue) : null
+                }
+            }).catch(() => {});
+        }
+
         // Update legacy metadata for backward compat
         state.slotMetadata = state.slotMetadata || {};
         state.slotMetadata[slotName] = {
@@ -859,7 +907,37 @@ class BookingFlowRunner {
             existingSlots: Object.keys(slots || {}),
             hasAWReader: !!awReader
         });
-        
+
+        // Emit BOOKING_STEP_STATE event for debugging
+        const traceCallSid = state?._traceContext?.callSid;
+        const traceCompanyId = state?._traceContext?.companyId;
+        const traceTurn = state?._traceContext?.turn || 0;
+
+        if (BlackBoxLogger && traceCallSid && traceCompanyId) {
+            BlackBoxLogger.logEvent({
+                callId: traceCallSid,
+                companyId: traceCompanyId,
+                turn: traceTurn,
+                type: 'BOOKING_STEP_STATE',
+                data: {
+                    currentStepId: state?.currentStepId,
+                    expectedSlot: state?.currentStepId?.replace('_collect', '')?.replace('_confirm', ''),
+                    filledSlots: Object.keys(state?.bookingCollected || {}),
+                    confirmedSlots: Object.keys(state?.confirmedSlots || {}),
+                    slotsSnapshot: Object.entries(state?.slots || {}).map(([key, slot]) => ({
+                        slot: key,
+                        value: typeof slot?.value === 'string' ? slot.value.substring(0, 30) : slot?.value,
+                        confidence: slot?.confidence,
+                        source: slot?.source
+                    })),
+                    hasUserInput: !!userInput,
+                    userInputPreview: userInput?.substring(0, 50),
+                    flowId: flow?.flowId,
+                    totalSteps: flow?.steps?.length || 0
+                }
+            }).catch(() => {});
+        }
+
         // Validate inputs
         if (!flow || !flow.steps || flow.steps.length === 0) {
             logger.error('[BOOKING FLOW RUNNER] Invalid flow - no steps', { flowId: flow?.flowId });

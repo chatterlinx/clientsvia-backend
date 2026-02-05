@@ -125,7 +125,28 @@ const TIER_MVA = {
             fixInstructions: 'Add direct booking patterns like "get somebody out", "how soon can you come"',
             nav: { tab: 'front-desk', section: 'booking-flow', field: 'directIntentPatterns' },
             dbPath: 'aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
-            recommendedValue: ['get somebody out', 'get someone out', 'how soon can you', 'when can you come', 'send someone']
+            recommendedValue: [
+                // Explicit service requests
+                'get somebody out',
+                'get someone out',
+                'get a tech out',
+                'get a technician out',
+                'send someone',
+                'send somebody out',
+                'send a tech',
+                'need someone out',
+                // Timing/urgency requests
+                'when can you come',
+                'can you come out',
+                'how soon can you',
+                'come out today',
+                'come out tomorrow',
+                // Urgency indicators
+                'asap',
+                'soonest',
+                'earliest',
+                'first available'
+            ]
         },
         {
             fieldId: 'discovery.clarifyingQuestions.enabled',

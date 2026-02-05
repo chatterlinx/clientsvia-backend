@@ -4831,9 +4831,11 @@ async function processTurn({
         
         if (!aiResult && userText && userText.length > 3) {
             // 1. Check for DIRECT booking intent (highest priority)
+            // V96k FIX: Pass awReader so patterns are read from company config with tracing
             earlyBookingIntent = DirectBookingIntentDetector.detect(userText, {
                 trade: company?.trade || company?.tradeType,
-                company
+                company,
+                awReader
             });
             
             // 2. Check for consent (yes/yeah/sure to a consent question)
@@ -5597,9 +5599,11 @@ async function processTurn({
         let directBookingIntent = earlyBookingIntent;
         if (!directBookingIntent && !aiResult && !session.booking?.consentGiven) {
             // Fallback: run detection if early check didn't run (shouldn't normally happen)
+            // V96k FIX: Pass awReader so patterns are read from company config with tracing
             directBookingIntent = DirectBookingIntentDetector.detect(userText, {
                 trade: company?.trade || company?.tradeType,
-                company
+                company,
+                awReader
             });
             
             if (directBookingIntent?.hasDirectIntent) {

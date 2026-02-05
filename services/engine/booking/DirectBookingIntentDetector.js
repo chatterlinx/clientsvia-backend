@@ -257,6 +257,20 @@ class DirectBookingIntentDetector {
         // check those first. This ensures UI config takes priority over defaults.
         // ═══════════════════════════════════════════════════════════════════════
         const configuredPatterns = this._getConfiguredPatterns(context);
+        
+        // V96k: Trace event for debugging pattern reads
+        const BlackBoxLogger = require('../../../utils/BlackBoxLogger');
+        if (BlackBoxLogger?.emit) {
+            BlackBoxLogger.emit('DIRECT_INTENT_PATTERNS_READ', {
+                patternCount: configuredPatterns?.length || 0,
+                patterns: configuredPatterns?.slice(0, 5) || [],  // First 5 for brevity
+                hasAwReader: !!context.awReader,
+                hasCompany: !!context.company,
+                source: context.awReader ? 'awReader' : (context.company ? 'company_fallback' : 'none'),
+                inputText: text?.substring(0, 50)
+            });
+        }
+        
         if (configuredPatterns && configuredPatterns.length > 0) {
             for (const patternStr of configuredPatterns) {
                 try {
@@ -341,6 +355,7 @@ class DirectBookingIntentDetector {
      */
     static _getConfiguredPatterns(context) {
         const patterns = [];
+        let source = 'none';
         
         // Try BookingConfigResolver first (preferred)
         if (context.bookingConfigResolver) {
@@ -348,19 +363,31 @@ class DirectBookingIntentDetector {
                 const intentPatterns = context.bookingConfigResolver.getIntentPatterns();
                 if (intentPatterns?.configured?.length > 0) {
                     patterns.push(...intentPatterns.configured);
+                    source = 'bookingConfigResolver';
+                    logger.debug('[DIRECT BOOKING] V96k: Patterns from BookingConfigResolver', { count: intentPatterns.configured.length });
                 }
             } catch (e) {
                 logger.debug('[DIRECT BOOKING] BookingConfigResolver not available', { error: e.message });
             }
         }
         
-        // Try AWConfigReader
-        if (context.awReader && typeof context.awReader.get === 'function') {
+        // Try AWConfigReader (V96k: This is the primary path now that awReader is passed)
+        if (patterns.length === 0 && context.awReader && typeof context.awReader.get === 'function') {
             try {
                 const wantsBooking = context.awReader.getArray('frontDesk.detectionTriggers.wantsBooking');
                 const directPatterns = context.awReader.getArray('booking.directIntentPatterns');
-                if (wantsBooking?.length > 0) patterns.push(...wantsBooking);
-                if (directPatterns?.length > 0) patterns.push(...directPatterns);
+                if (wantsBooking?.length > 0) {
+                    patterns.push(...wantsBooking);
+                    source = 'awReader:wantsBooking';
+                }
+                if (directPatterns?.length > 0) {
+                    patterns.push(...directPatterns);
+                    source = patterns.length > wantsBooking?.length ? 'awReader:directIntentPatterns' : source;
+                }
+                logger.debug('[DIRECT BOOKING] V96k: Patterns from AWConfigReader', { 
+                    wantsBookingCount: wantsBooking?.length || 0, 
+                    directPatternsCount: directPatterns?.length || 0 
+                });
             } catch (e) {
                 logger.debug('[DIRECT BOOKING] AWConfigReader patterns not available', { error: e.message });
             }
@@ -373,7 +400,17 @@ class DirectBookingIntentDetector {
             const directPatterns = frontDesk.bookingFlow?.directIntentPatterns || [];
             if (wantsBooking?.length > 0) patterns.push(...wantsBooking);
             if (directPatterns?.length > 0) patterns.push(...directPatterns);
+            if (patterns.length > 0) {
+                source = 'company_fallback';
+                logger.debug('[DIRECT BOOKING] V96k: Patterns from company fallback', { 
+                    wantsBookingCount: wantsBooking?.length || 0, 
+                    directPatternsCount: directPatterns?.length || 0 
+                });
+            }
         }
+        
+        // Store source for tracing
+        patterns._source = source;
         
         return patterns.filter(Boolean);
     }

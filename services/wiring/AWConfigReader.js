@@ -1083,14 +1083,47 @@ class AWConfigReader {
                     turn: this.turn,
                     data: event.data
                 });
-                
+
+                // Emit CONFIG_READ_SUMMARY with detailed list of all config reads this turn
+                const configReadSummary = {
+                    type: 'CONFIG_READ_SUMMARY',
+                    ts: new Date().toISOString(),
+                    turn: this.turn,
+                    data: {
+                        configKeysRead: this.reads.map(read => ({
+                            path: read.data.awPath,
+                            resolvedFrom: read.data.resolvedFrom || 'unknown',
+                            valueHash: read.data.valueHash || 'unknown',
+                            length: Array.isArray(read.data.value) ? read.data.value.length :
+                                   typeof read.data.value === 'string' ? read.data.value.length :
+                                   typeof read.data.value === 'object' ? Object.keys(read.data.value || {}).length : 0
+                        })),
+                        totalReads: summary.totalReads,
+                        uniquePaths: summary.uniquePaths,
+                        awHash: this.awHash,
+                        traceRunId: this.traceRunId
+                    }
+                };
+
+                await BlackBoxLogger.logEvent({
+                    callId: this.callId,
+                    companyId: this.companyId,
+                    type: 'CONFIG_READ_SUMMARY',
+                    turn: this.turn,
+                    data: configReadSummary.data
+                });
+
                 logger.info('[AW CONFIG READER] 📊 AW_TURN_SUMMARY emitted', {
                     callId: this.callId,
                     totalReads: summary.totalReads,
                     violations: summary.violations
                 });
+                logger.info('[AW CONFIG READER] 🔍 CONFIG_READ_SUMMARY emitted', {
+                    callId: this.callId,
+                    configKeys: summary.uniquePaths
+                });
             } catch (err) {
-                logger.warn('[AW CONFIG READER] Failed to emit AW_TURN_SUMMARY', {
+                logger.warn('[AW CONFIG READER] Failed to emit summary events', {
                     error: err.message
                 });
             }

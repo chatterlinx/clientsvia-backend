@@ -257,7 +257,16 @@ const RUNTIME_READERS_MAP = {
         ],
         dbPath: 'company.aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
         scope: 'company',
-        defaultValue: ['get somebody out', 'get someone out', 'how soon can you', 'when can you come', 'send someone', 'send a tech', 'need someone out', 'come out today', 'come out tomorrow']
+        defaultValue: [
+            // Explicit service requests
+            'get somebody out', 'get someone out', 'get a tech out', 'get a technician out',
+            'send someone', 'send somebody out', 'send a tech', 'need someone out',
+            // Timing/urgency requests
+            'when can you come', 'can you come out', 'how soon can you',
+            'come out today', 'come out tomorrow',
+            // Urgency indicators
+            'asap', 'soonest', 'earliest', 'first available'
+        ]
     },
 
     // =========================================================================
