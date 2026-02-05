@@ -101,6 +101,69 @@ ctx.slots.* = (BookingNameHandler.js: multiple)
 
 ---
 
+## V96j: STRICT CONFIG REGISTRY (Feb 5 - Nuke Clean Sweep)
+
+### New Config Paths (per-company enforcement)
+
+```javascript
+// Enable strict mode for Penguin Air only:
+db.companies.updateOne(
+  { _id: ObjectId("68e3f77a9d623b8058c700c4") },
+  { $set: { 
+    "aiAgentSettings.infra.strictConfigRegistry": true,
+    // Optional: block reads to unregistered paths entirely
+    "aiAgentSettings.infra.strictConfigRegistry.blockDeadReads": false,
+    // Optional: allowlist paths during gradual migration
+    "aiAgentSettings.infra.strictConfigRegistry.allowlist": []
+  }}
+)
+```
+
+### New Events
+
+| Event | When | What It Means |
+|-------|------|---------------|
+| `CONFIG_REGISTRY_VIOLATION` | Runtime reads unregistered path | DEAD_READ detected - legacy reader bypassing Control Plane |
+| `BOOKING_VOICE_COLLISION` | Non-BookingFlowRunner speaks when `bookingModeLocked=true` | Multiple booking systems alive - "split brain" bug |
+
+### How to Use
+
+1. **Enable strict mode for one company** (Penguin Air recommended)
+2. **Run 3-5 test calls** through the full booking flow
+3. **Check Raw Events** for `CONFIG_REGISTRY_VIOLATION` events
+4. **For each DEAD_READ**:
+   - If the path should be registered: add to `wiringRegistry.v2.js`
+   - If the reader is legacy: remove or migrate the code
+   - Temporary escape: add to allowlist
+5. **Check for `BOOKING_VOICE_COLLISION`** - each one is a bug where ConversationEngine or another module spoke when it shouldn't have
+
+### Expected DEAD_READ Paths (from screenshot)
+
+These were flagged in the wiring audit and need resolution:
+
+| Path | Status | Action Needed |
+|------|--------|---------------|
+| `booking.addressVerification` | DEAD_READ | Already has LEGACY_BRIDGE - migration in progress |
+| `booking.nameParsing` | DEAD_READ | Already has LEGACY_BRIDGE - migration in progress |
+| `frontDesk.nameSpellingVariants` | DEAD_READ | Has full AW path - check reader location |
+| `infra.scenarioPoolCache` | DEAD_READ | Infrastructure path - add to registry |
+| `integrations.googleCalendar.*` | DEAD_READ | Integration paths - add to registry or remove |
+| `integrations.smsNotifications.*` | DEAD_READ | Integration paths - add to registry or remove |
+
+### Expected WIRED + NOT_READ Paths
+
+These are configured in UI but runtime never reads them:
+
+| Path | Likely Cause |
+|------|--------------|
+| `booking.addressVerification.enabled` | Runtime reads parent object instead |
+| `booking.directIntentPatterns` | Runtime reads different path |
+| `booking.addressVerification.requireCity` etc | Runtime reads parent object |
+
+**Fix**: Change runtime code to use AWConfigReader.get() with the exact wired path
+
+---
+
 ## V96j BOOKING CONFIGURATION OPTIONS
 
 ### New Config Paths (in frontDeskBehavior)
@@ -159,6 +222,8 @@ After fixes, verify with test call:
 3. [ ] `branchTaken` shows `BOOKING_RUNNER` (not `NORMAL_ROUTING`) when booking gate active
 4. [ ] Confirmation message comes from config (check `promptSource: booking.confirmationTemplate:bookingPrompts` or `bookingTemplates`)
 5. [ ] No `IDENTITY_CONTRACT_VIOLATION` events in normal flow
+6. [ ] No `BOOKING_VOICE_COLLISION` events when `bookingModeLocked=true`
+7. [ ] (With strict mode) No `CONFIG_REGISTRY_VIOLATION` events for expected paths
 3. [ ] No `BOOKING_SNAP` appears in any matchSource
 4. [ ] Name slot cannot be contaminated with non-name values
 5. [ ] ConversationEngine does not speak when `bookingModeLocked=true`
