@@ -4324,7 +4324,26 @@ async function processTurn({
                                    nameSlotCheck?.nameOptions?.askFullName === true || nameSlotCheck?.nameOptions?.askFullName === 'true' ||
                                    nameSlotCheck?.nameOptions?.requireFullName === true || nameSlotCheck?.nameOptions?.requireFullName === 'true';
 
-        if (userText) {
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96n FIX: TRUST PRE-EXTRACTED SLOTS - DO NOT RE-EXTRACT!
+        // ═══════════════════════════════════════════════════════════════════════
+        // BUG (FEB 2026): preExtractedSlots from v2twilio correctly had name="Mark",
+        // but internal extraction on "my name is Mark... air conditioning problems"
+        // was extracting "Air Conditioning" and overwriting the correct value.
+        //
+        // FIX: If preExtractedSlots.name exists and currentSlots.name matches it,
+        // SKIP internal extraction entirely. The external SlotExtractor already
+        // validated this name using proper patterns.
+        // ═══════════════════════════════════════════════════════════════════════
+        const hasValidPreExtractedName = preExtractedSlots?.name && 
+            currentSlots.name === preExtractedSlots.name;
+        
+        if (hasValidPreExtractedName) {
+            log('📝 V96n: TRUSTING pre-extracted name from v2twilio - skipping internal extraction', {
+                name: currentSlots.name,
+                reason: 'preExtractedSlots matched currentSlots'
+            });
+        } else if (userText) {
             const userTextLower = userText.toLowerCase();
             const isExplicitNameStatement = /my name is|name is|i'm called|call me/i.test(userText);
             
@@ -11437,14 +11456,51 @@ async function processTurn({
                     // Scenarios use {callerName} placeholder - fill it with runtime data
                     // Also handles {companyName}, {serviceAreas}, etc. from company config
                     // ═══════════════════════════════════════════════════════════════
-                    const callerName = currentSlots.name;
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // V96n FIX: PRIORITY ORDER FOR CALLER NAME
+                    // ═══════════════════════════════════════════════════════════════
+                    // BUG (FEB 2026): currentSlots.name had "Air Conditioning" instead 
+                    // of "Mark" because internal extraction corrupted the value.
+                    // 
+                    // FIX: Use preExtractedSlots.name FIRST if available, as it was
+                    // validated by v2twilio's SlotExtractor.
+                    // ═══════════════════════════════════════════════════════════════
+                    const callerName = preExtractedSlots?.name || currentSlots.name;
                     const runtimeVars = {};
                     
-                    // Only set callerName if we have a valid name (not a stop word)
-                    if (callerName && !NAME_STOP_WORDS_ENGINE.has(callerName.toLowerCase())) {
+                    // ═══════════════════════════════════════════════════════════════
+                    // V96n: ENHANCED NAME VALIDATION - Block service/trade words
+                    // ═══════════════════════════════════════════════════════════════
+                    // Additional check beyond NAME_STOP_WORDS_ENGINE to catch:
+                    // - "Air Conditioning" (contains 'air' and 'conditioning')
+                    // - "HVAC Service" (contains 'hvac' and 'service')
+                    // ═══════════════════════════════════════════════════════════════
+                    const SERVICE_WORDS_FOR_NAME_CHECK = new Set([
+                        'air', 'conditioning', 'conditioner', 'ac', 'hvac', 'heating', 'cooling',
+                        'plumbing', 'electrical', 'service', 'services', 'repair', 'repairs',
+                        'maintenance', 'unit', 'system', 'technician', 'tech', 'appointment',
+                        'problem', 'problems', 'issue', 'issues', 'trouble'
+                    ]);
+                    
+                    const isValidCallerName = (name) => {
+                        if (!name) return false;
+                        if (NAME_STOP_WORDS_ENGINE.has(name.toLowerCase())) return false;
+                        // Check if ANY word in the name is a service word
+                        const nameWords = name.toLowerCase().split(/\s+/);
+                        return !nameWords.some(w => SERVICE_WORDS_FOR_NAME_CHECK.has(w));
+                    };
+                    
+                    // Only set callerName if we have a valid name
+                    if (isValidCallerName(callerName)) {
                         runtimeVars.callerName = callerName;
                         runtimeVars.callerFirstName = callerName; // Alias for compatibility
                         runtimeVars.name = callerName; // Another common alias
+                    } else if (callerName) {
+                        log('🚨 V96n: BLOCKED invalid name from placeholder:', {
+                            blockedName: callerName,
+                            reason: 'contains_service_word_or_stop_word'
+                        });
                     }
                     
                     // Apply placeholder replacement (handles {callerName}, {companyName}, etc.)
