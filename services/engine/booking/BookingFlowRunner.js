@@ -27,6 +27,7 @@
 
 const logger = require('../../../utils/logger');
 const BookingFlowResolver = require('./BookingFlowResolver');
+const SlotExtractor = require('./SlotExtractor');  // V96f: Single source of truth for slot extraction
 const AddressValidationService = require('../../AddressValidationService');
 const GoogleCalendarService = require('../../GoogleCalendarService');
 const SMSNotificationService = require('../../SMSNotificationService');
@@ -48,43 +49,157 @@ try {
 }
 
 /**
+ * ============================================================================
+ * V96f: SAFE SLOT WRITE FIREWALL
+ * ============================================================================
+ * 
+ * ALL slot writes MUST go through this function. This is the single point of
+ * enforcement for:
+ * - Phone-shaped string rejection for name fields
+ * - Stop word rejection
+ * - Immutability protection for confirmed slots
+ * - Audit logging for accept/reject decisions
+ * 
+ * RULE: No direct assignment to bookingCollected.name/firstName/lastName.
+ * ============================================================================
+ */
+const IDENTITY_SLOTS = new Set(['name', 'firstName', 'lastName', 'partialName', 'fullName']);
+
+function safeSetSlot(state, slotName, value, options = {}) {
+    const { source = 'unknown', confidence = 0.8, isCorrection = false, callSid = null } = options;
+    
+    if (!value) {
+        logger.debug('[SAFE SET SLOT] Skipped null/empty value', { slotName, source });
+        return { accepted: false, reason: 'empty_value' };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // IDENTITY SLOT VALIDATION (name, firstName, lastName, etc.)
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (IDENTITY_SLOTS.has(slotName)) {
+        // Use SlotExtractor's IdentityValidators via cleanName
+        const validated = SlotExtractor.cleanName ? SlotExtractor.cleanName(value) : value;
+        
+        if (!validated) {
+            logger.warn('[SAFE SET SLOT] ❌ REJECTED identity slot (failed validation)', {
+                slotName,
+                rejectedValue: value,
+                source,
+                reason: 'failed_identity_validation'
+            });
+            return { accepted: false, reason: 'failed_identity_validation', rejectedValue: value };
+        }
+        
+        // Use validated value
+        value = validated;
+        
+        // Check immutability - confirmed slots cannot be changed unless explicit correction
+        const existingMeta = state.slotMetadata?.[slotName];
+        if (existingMeta?.immutable === true && !isCorrection) {
+            logger.warn('[SAFE SET SLOT] ⛔ REJECTED change to IMMUTABLE slot', {
+                slotName,
+                immutableValue: state.bookingCollected[slotName],
+                rejectedValue: value,
+                confirmedAt: existingMeta.confirmedAt
+            });
+            return { 
+                accepted: false, 
+                reason: 'immutable_slot', 
+                currentValue: state.bookingCollected[slotName] 
+            };
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // WRITE THE SLOT
+    // ═══════════════════════════════════════════════════════════════════════════
+    const previousValue = state.bookingCollected[slotName];
+    state.bookingCollected[slotName] = value;
+    
+    // Update metadata
+    state.slotMetadata = state.slotMetadata || {};
+    state.slotMetadata[slotName] = {
+        ...(state.slotMetadata[slotName] || {}),
+        value,
+        source,
+        confidence,
+        updatedAt: new Date().toISOString(),
+        previousValue: previousValue !== value ? previousValue : undefined
+    };
+    
+    logger.info('[SAFE SET SLOT] ✅ ACCEPTED slot write', {
+        slotName,
+        value: typeof value === 'string' ? value.substring(0, 30) : value,
+        source,
+        confidence,
+        wasOverwrite: !!previousValue && previousValue !== value
+    });
+    
+    return { accepted: true, value, previousValue };
+}
+
+/**
+ * V96f: Mark a slot as confirmed (immutable until explicit correction)
+ */
+function markSlotConfirmed(state, slotName) {
+    if (!state.bookingCollected[slotName]) return;
+    
+    state.slotMetadata = state.slotMetadata || {};
+    state.slotMetadata[slotName] = {
+        ...(state.slotMetadata[slotName] || {}),
+        confirmed: true,
+        immutable: true,
+        confirmedAt: new Date().toISOString()
+    };
+    
+    state.confirmedSlots = state.confirmedSlots || {};
+    state.confirmedSlots[slotName] = true;
+    
+    logger.info('[SAFE SET SLOT] 🔒 Slot marked CONFIRMED (immutable)', { slotName });
+}
+
+/**
  * Slot extractors - deterministic extraction for each slot type
  */
 const SlotExtractors = {
     /**
      * Extract name from user input
-     * V96e: REMOVED "it's|its" pattern - caused "it's currently" → "Currently" bug
+     * V96f: DELEGATE TO MAIN SlotExtractor - Single source of truth
+     * 
+     * This ensures all name extraction goes through the same validation:
+     * - Phone-shaped rejection
+     * - Stop word filtering
+     * - Pattern hierarchy (PRIMARY vs SECONDARY)
      */
     name: (input, step, context = {}) => {
         if (!input) return null;
         
-        const text = input.trim();
+        // V96f: Use the main SlotExtractor for name extraction
+        // This ensures consistent validation across the entire platform
+        const result = SlotExtractor.extractName(input, context);
         
-        // V96e: Early rejection if input looks like a phone number
-        if (looksLikePhone(text)) {
-            logger.warn('[BOOKING FLOW RUNNER] ❌ V96e: Rejected phone-shaped input as name source', { 
-                text: text.substring(0, 30) 
+        if (result) {
+            // SlotExtractor returns { value, confidence, ... } object
+            const name = result.value || result;
+            logger.debug('[BOOKING FLOW RUNNER] Name extracted via SlotExtractor', {
+                input: input.substring(0, 30),
+                extracted: name,
+                patternSource: result.patternSource
             });
-            return null;
+            return typeof name === 'string' ? name : null;
         }
         
-        // Pattern: "My name is X" / "This is X" / "I'm X" / "Call me X"
-        // V96e: REMOVED "it's|its" - too ambiguous, causes "it's currently" bug
-        const nameMatch = text.match(/(?:my name is|this is|i'm|i am|call me)\s+(.+)/i);
-        if (nameMatch) {
-            return cleanName(nameMatch[1]);
-        }
-        
-        // Pattern: "X Y" (first last) or just "X"
-        // Filter out common filler words
+        // Fallback: simple word extraction for direct name responses
+        // (when user just says "Mark" in response to "What's your name?")
+        const text = input.trim();
         const words = text.split(/\s+/)
             .filter(w => !isStopWord(w.toLowerCase()))
             .filter(w => /^[A-Za-z][A-Za-z\-'\.]*$/.test(w));
         
         if (words.length === 0) return null;
         
-        // Return cleaned name
-        return words.map(w => titleCase(w)).join(' ');
+        // Run through cleanName for final validation
+        return cleanName(words.join(' '));
     },
     
     /**
@@ -495,9 +610,25 @@ class BookingFlowRunner {
         if (slots && Object.keys(slots).length > 0) {
             for (const [key, slotData] of Object.entries(slots)) {
                 if (slotData?.value && !state.bookingCollected[key]) {
-                    state.bookingCollected[key] = slotData.value;
-                    state.slotMetadata = state.slotMetadata || {};
-                    state.slotMetadata[key] = slotData;
+                    // V96f: Use safeSetSlot for identity slots, direct for others
+                    if (IDENTITY_SLOTS.has(key)) {
+                        const setResult = safeSetSlot(state, key, slotData.value, {
+                            source: slotData.source || 'pre_extracted',
+                            confidence: slotData.confidence || 0.8
+                        });
+                        if (!setResult.accepted) {
+                            logger.warn('[BOOKING FLOW RUNNER] V96f: Pre-extracted identity slot rejected', {
+                                key,
+                                reason: setResult.reason,
+                                value: slotData.value
+                            });
+                            continue;
+                        }
+                    } else {
+                        state.bookingCollected[key] = slotData.value;
+                        state.slotMetadata = state.slotMetadata || {};
+                        state.slotMetadata[key] = slotData;
+                    }
                     slotsCollectedThisTurn.add(key);
                     logger.info('[BOOKING FLOW RUNNER] Merged pre-extracted slot', {
                         key,
@@ -629,7 +760,18 @@ class BookingFlowRunner {
                 };
             } else if (confirmResult.newValue) {
                 // User provided a corrected name
-                state.bookingCollected[fieldKey] = confirmResult.newValue;
+                // V96f: Use safeSetSlot for identity field protection
+                const setResult = safeSetSlot(state, fieldKey, confirmResult.newValue, {
+                    source: 'spelling_correction',
+                    confidence: 0.95,
+                    isCorrection: true
+                });
+                if (!setResult.accepted) {
+                    logger.warn('[BOOKING FLOW RUNNER] V96f: Spelling correction rejected', {
+                        fieldKey,
+                        reason: setResult.reason
+                    });
+                }
                 state.spellingConfirmed = true;
                 delete state.pendingSpellingConfirm;
                 
@@ -992,9 +1134,15 @@ class BookingFlowRunner {
             };
         } else if (confirmResult.newValue) {
             // User provided a new value - use it
-            state.bookingCollected[fieldKey] = confirmResult.newValue;
-            state.confirmedSlots = state.confirmedSlots || {};
-            state.confirmedSlots[fieldKey] = true;
+            // V96f: Use safeSetSlot for identity field protection
+            const setResult = safeSetSlot(state, fieldKey, confirmResult.newValue, {
+                source: 'user_correction_during_confirm',
+                confidence: 0.95,
+                isCorrection: true
+            });
+            if (setResult.accepted) {
+                markSlotConfirmed(state, fieldKey);
+            }
             delete state.pendingConfirmation;
             
             logger.info('[BOOKING FLOW RUNNER] User provided new value during confirm', {
@@ -1566,9 +1714,28 @@ class BookingFlowRunner {
             }
         }
         
-        state.bookingCollected[fieldKey] = valueToStore;
-        state.confirmedSlots = state.confirmedSlots || {};
-        state.confirmedSlots[fieldKey] = true; // Directly provided = confirmed
+        // V96f: Use safeSetSlot for identity fields, direct write for others
+        if (IDENTITY_SLOTS.has(fieldKey)) {
+            const setResult = safeSetSlot(state, fieldKey, valueToStore, {
+                source: 'direct_collection',
+                confidence: 0.9
+            });
+            if (setResult.accepted) {
+                markSlotConfirmed(state, fieldKey);
+            } else {
+                logger.warn('[BOOKING FLOW RUNNER] V96f: Identity slot rejected during collection', {
+                    fieldKey,
+                    reason: setResult.reason,
+                    value: valueToStore
+                });
+                return this.repromptStep(step, state, flow, `invalid_${fieldKey}`);
+            }
+        } else {
+            // Non-identity slots (address, time, etc.) - direct write
+            state.bookingCollected[fieldKey] = valueToStore;
+            state.confirmedSlots = state.confirmedSlots || {};
+            state.confirmedSlots[fieldKey] = true;
+        }
         state.lastExtracted = { [fieldKey]: valueToStore };
         
         if (state.askCount) {
@@ -1639,8 +1806,20 @@ class BookingFlowRunner {
                 const lastName = valueToStore;
                 const fullName = `${state.firstNameCollected} ${lastName}`;
                 
-                state.bookingCollected[fieldKey] = fullName;
-                valueToStore = fullName;
+                // V96f: Use safeSetSlot for combined name
+                const setResult = safeSetSlot(state, fieldKey, fullName, {
+                    source: 'combined_first_last',
+                    confidence: 0.95
+                });
+                if (setResult.accepted) {
+                    markSlotConfirmed(state, fieldKey);
+                    valueToStore = fullName;
+                } else {
+                    logger.warn('[BOOKING FLOW RUNNER] V96f: Combined name rejected', {
+                        fullName,
+                        reason: setResult.reason
+                    });
+                }
                 
                 // Clear flags
                 delete state.firstNameCollected;
