@@ -2849,6 +2849,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     let slotsBefore = {};
     let slotKeysBefore = [];
     let extractedSlots = {};
+    let slotMergeDecisions = [];  // V96i: Declare at outer scope so trace code can access it
     
     // ═══════════════════════════════════════════════════════════════════════════
     // V96h: TURN_DECISION_TRACE_V1 - Mode & ownership tracking
@@ -2977,8 +2978,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       // Merge new extractions with existing slots (with confidence rules)
       // V96g: Track merge decisions for turn trace
-      // V96i FIX: Declare outside if block so it's always defined
-      let slotMergeDecisions = [];
+      // V96i FIX: slotMergeDecisions declared at outer scope (line ~2852)
       
       if (Object.keys(extractedSlots).length > 0) {
         const mergedSlots = SlotExtractor.mergeSlots(callState.slots, extractedSlots);
@@ -4187,40 +4187,53 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       return val;
     };
     
-    // Checkpoint A: State loaded
-    const checkpointA = {
-      turn: callState.turnCount || 1,
-      bookingModeLocked: !!callState.bookingModeLocked,
-      currentBookingStep: callState.currentBookingStep || null,
-      slotsSummary: Object.fromEntries(
-        Object.entries(slotsBefore || {}).map(([k, v]) => [k, maskSlotValue(k, v)])
-      )
-    };
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V96i: TRACE BLOCK - Wrapped in try/catch so it can NEVER crash the call
+    // Rule: Tracing can fail; the call cannot.
+    // ═══════════════════════════════════════════════════════════════════════════
+    let checkpointA = null;
+    let checkpointB = null;
     
-    // Checkpoint B: SlotExtractor ran
-    const slotsAfter = callState.slots || {};
-    const slotKeysAfter = Object.keys(slotsAfter);
-    const slotDelta = slotKeysAfter.filter(k => !slotKeysBefore.includes(k));
-    const checkpointB = {
-      slotsBefore: slotKeysBefore,
-      slotsAfter: slotKeysAfter,
-      delta: slotDelta,
-      extractedCandidates: Object.fromEntries(
-        Object.entries(extractedSlots || {}).map(([k, v]) => [
-          k, 
-          { 
-            value: maskSlotValue(k, v), 
-            confidence: v?.confidence || 0, 
-            source: v?.source || 'unknown',
-            needsConfirmation: v?.needsConfirmation || false,
-            patternSource: v?.patternSource || 'unknown',
-            nameLocked: v?.nameLocked || false
-          }
-        ])
-      ),
-      // V96g: Full merge decision audit trail
-      mergeDecisions: slotMergeDecisions || []
-    };
+    try {
+      // Checkpoint A: State loaded
+      checkpointA = {
+        turn: callState?.turnCount || 1,
+        bookingModeLocked: !!callState?.bookingModeLocked,
+        currentBookingStep: callState?.currentBookingStep || null,
+        slotsSummary: Object.fromEntries(
+          Object.entries(slotsBefore || {}).map(([k, v]) => [k, maskSlotValue(k, v)])
+        )
+      };
+      
+      // Checkpoint B: SlotExtractor ran
+      const slotsAfter = callState?.slots || {};
+      const slotKeysAfter = Object.keys(slotsAfter);
+      const slotDelta = slotKeysAfter.filter(k => !(slotKeysBefore || []).includes(k));
+      checkpointB = {
+        slotsBefore: slotKeysBefore || [],
+        slotsAfter: slotKeysAfter,
+        delta: slotDelta,
+        extractedCandidates: Object.fromEntries(
+          Object.entries(extractedSlots || {}).map(([k, v]) => [
+            k, 
+            { 
+              value: maskSlotValue(k, v), 
+              confidence: v?.confidence || 0, 
+              source: v?.source || 'unknown',
+              needsConfirmation: v?.needsConfirmation || false,
+              patternSource: v?.patternSource || 'unknown',
+              nameLocked: v?.nameLocked || false
+            }
+          ])
+        ),
+        // V96g: Full merge decision audit trail
+        mergeDecisions: slotMergeDecisions || []
+      };
+    } catch (traceInitErr) {
+      logger.warn('[TRACE ERROR] Checkpoint A/B construction failed (call continues)', { error: traceInitErr.message });
+      checkpointA = { turn: callState?.turnCount || 1, error: traceInitErr.message };
+      checkpointB = { error: traceInitErr.message };
+    }
     
     // Checkpoint C1: Booking intent detection (V94 - runs BEFORE meta intents)
     // This is the new early detection that catches "as soon as possible" before
@@ -4322,7 +4335,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         
         logger.warn('[FLOW TREE] ⚠️ OUT_OF_TREE_PATH detected', {
           callSid,
-          turn: checkpointA.turn,
+          turn: checkpointA?.turn || 1,
           ...outOfTreePath
         });
       }
@@ -4355,28 +4368,30 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     logger.info('[TURN TRACE] 📊 Full turn verification', turnTrace);
     
     // 📼 BLACK BOX: Log comprehensive turn trace for debugging
-    if (BlackBoxLogger) {
-      BlackBoxLogger.logEvent({
-        callId: callSid,
-        companyId: companyID,
-        type: 'TURN_TRACE',
-        turn: checkpointA.turn,
-        data: turnTrace
-      }).catch(() => {});
-      
-      // V92: Log OUT_OF_TREE_PATH separately for easy filtering
-      if (outOfTreePath) {
+    // V96i: Wrapped in try/catch - tracing must NEVER crash the call
+    try {
+      if (BlackBoxLogger) {
         BlackBoxLogger.logEvent({
           callId: callSid,
           companyId: companyID,
-          type: 'OUT_OF_TREE_PATH',
-          turn: checkpointA.turn,
-          data: outOfTreePath
+          type: 'TURN_TRACE',
+          turn: checkpointA?.turn || 1,
+          data: turnTrace
         }).catch(() => {});
-      }
-      
-      // ═══════════════════════════════════════════════════════════════════════════
-      // V96h: TURN_DECISION_TRACE_V1 - Single Pane of Glass
+        
+        // V92: Log OUT_OF_TREE_PATH separately for easy filtering
+        if (outOfTreePath) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'OUT_OF_TREE_PATH',
+            turn: checkpointA?.turn || 1,
+            data: outOfTreePath
+          }).catch(() => {});
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V96h: TURN_DECISION_TRACE_V1 - Single Pane of Glass
       // ═══════════════════════════════════════════════════════════════════════════
       // This is THE canonical event for debugging any turn. It tells you:
       // - Mode before/after (what changed?)
@@ -4448,7 +4463,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       const decisionTrace = {
         _format: 'TURN_DECISION_TRACE_V1',
-        turn: checkpointA.turn,
+        turn: checkpointA?.turn || 1,
         modeBefore,
         modeAfter,
         bookingModeLocked: {
@@ -4466,7 +4481,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         intentSignals,
         slots: {
           extracted: extractedSlotsMasked,
-          mergeDecisions: slotMergeDecisions,
+          mergeDecisions: slotMergeDecisions || [],  // V96i: Safe fallback
           final: finalSlotState
         },
         responder: {
@@ -4486,10 +4501,17 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           callId: callSid,
           companyId: companyID,
           type: 'TURN_DECISION_TRACE_V1',
-          turn: checkpointA.turn,
+          turn: checkpointA?.turn || 1,
           data: decisionTrace
         }).catch(() => {});
       }
+    }
+    } catch (traceBlockErr) {
+      // V96i: Trace errors must NEVER crash the call
+      logger.warn('[TRACE ERROR] TURN_TRACE/TURN_DECISION_TRACE_V1 failed (call continues)', { 
+        error: traceBlockErr.message,
+        stack: traceBlockErr.stack?.split('\n').slice(0, 3).join(' | ')
+      });
     }
     
     // ════════════════════════════════════════════════════════════════════════════
