@@ -240,7 +240,24 @@ const NAME_STOP_WORDS = new Set([
     'its', "it's", 'they', 'them', 'their', 'we', 'our', 'us',
     'one', 'some', 'any', 'all', 'none', 'each', 'every', 'both',
     // V92 FIX: Negation and affirmation words
-    'nothing', 'everything', 'anything', 'something', 'never', 'always', 'ever'
+    'nothing', 'everything', 'anything', 'something', 'never', 'always', 'ever',
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V96 FIX: ADVERBS AND STATE WORDS - NOT names!
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BUG: "it's currently not working" was extracting "Currently" as a name
+    // because the correction pattern "it's X" matched and "currently" wasn't
+    // in the stop words list. The user said "my name is Mark" but the system
+    // extracted "Currently" instead.
+    // ═══════════════════════════════════════════════════════════════════════════
+    'currently', 'presently', 'usually', 'normally', 'typically', 'generally',
+    'occasionally', 'sometimes', 'often', 'rarely', 'frequently', 'constantly',
+    'definitely', 'certainly', 'probably', 'possibly', 'likely', 'unlikely',
+    'apparently', 'obviously', 'clearly', 'simply', 'merely', 'just',
+    'finally', 'eventually', 'immediately', 'suddenly', 'gradually', 'slowly',
+    'quickly', 'lately', 'recently', 'formerly', 'previously', 'originally',
+    // V96: More state/situation words
+    'still', 'already', 'yet', 'anymore', 'either', 'neither', 'also', 'too',
+    'even', 'almost', 'nearly', 'barely', 'hardly', 'only', 'mostly', 'mainly'
 ]);
 
 /**
