@@ -536,18 +536,54 @@ class SlotExtractor {
             }
             
             // ═══════════════════════════════════════════════════════════════════════════
-            // V94 RULE 1: NAME LOCK (HARD PROTECTION)
+            // V96 RULE 1: NAME LOCK (HARD PROTECTION) - ENHANCED
             // ═══════════════════════════════════════════════════════════════════════════
-            // If the existing name was extracted from an EXPLICIT pattern ("my name is X",
-            // "this is X", etc.), it is LOCKED and cannot be overwritten UNLESS:
-            //   1. The new slot is an explicit correction ("actually it's John")
-            //   2. The new slot is ALSO from an explicit pattern (allows re-statement)
+            // If the existing name was extracted from a PRIMARY explicit pattern 
+            // ("my name is X", "this is X", "call me X"), it is LOCKED and cannot be 
+            // overwritten by SECONDARY patterns ("it's X", "that's X").
             //
-            // This prevents ALL future adjective/verb collisions like:
-            // "Super", "Freezing", "Terrible", "Insane", etc.
+            // Pattern hierarchy:
+            //   PRIMARY (cannot be overwritten by secondary):
+            //     - "my name is X" (patternSource: 'explicit_my_name_is')
+            //     - "this is X" / "call me X" (patternSource: 'explicit_this_is')
+            //   
+            //   SECONDARY (can override unlocked names, but NOT primary locks):
+            //     - "it's X" / "that's X" (patternSource: 'correction' or undefined)
+            //
+            // This prevents: "my name is Mark... it's currently not working" from
+            // overwriting "Mark" with "Currently" even though both set 
+            // extractedViaExplicitPhrase: true.
             // ═══════════════════════════════════════════════════════════════════════════
+            const PRIMARY_PATTERNS = new Set(['explicit_my_name_is', 'explicit_this_is']);
+            
             if (key === 'name' && existing.nameLocked === true && !newSlot.isCorrection) {
-                // Only allow overwrite if new slot is also from explicit pattern
+                const existingIsPrimary = PRIMARY_PATTERNS.has(existing.patternSource);
+                const newIsPrimary = PRIMARY_PATTERNS.has(newSlot.patternSource);
+                
+                // If existing is from PRIMARY pattern, only allow override by another PRIMARY
+                if (existingIsPrimary && !newIsPrimary) {
+                    logger.warn('[SLOT EXTRACTOR] ❌ V96: REJECTED - PRIMARY NAME LOCK', {
+                        lockedName: existing.value,
+                        lockedVia: existing.patternSource,
+                        rejectedCandidate: newSlot.value,
+                        rejectedPatternSource: newSlot.patternSource || 'secondary',
+                        rejectedReason: 'primary_name_locked'
+                    });
+                    // Keep existing locked name, record rejection in history
+                    merged[key] = {
+                        ...existing,
+                        rejectedCandidates: [...(existing.rejectedCandidates || []), {
+                            value: newSlot.value,
+                            confidence: newSlot.confidence,
+                            turn: newSlot.turn,
+                            rejectedReason: 'primary_name_locked',
+                            patternSource: newSlot.patternSource || 'unknown'
+                        }]
+                    };
+                    continue;
+                }
+                
+                // Original V94 check: Non-explicit can never override locked
                 if (!newSlot.extractedViaExplicitPhrase) {
                     logger.warn('[SLOT EXTRACTOR] ❌ V94: REJECTED - NAME IS LOCKED', {
                         lockedName: existing.value,
@@ -556,7 +592,6 @@ class SlotExtractor {
                         rejectedPatternSource: newSlot.patternSource || 'fallback',
                         rejectedReason: 'nameLocked'
                     });
-                    // Keep existing locked name, record rejection in history
                     merged[key] = {
                         ...existing,
                         rejectedCandidates: [...(existing.rejectedCandidates || []), {
@@ -745,15 +780,23 @@ class SlotExtractor {
         // ═══════════════════════════════════════════════════════════════════════════
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // FEB 2026 FIX #2: CORRECTION PATTERNS TAKE PRIORITY!
+        // FEB 2026 FIX #2: CORRECTION PATTERNS (SECONDARY PRIORITY)
+        // ═══════════════════════════════════════════════════════════════════════════
         // When someone says "my name is X um, and mark that's Mark Gonzales"
         // The "that's Mark Gonzales" is the REAL name, not "X"
-        // Check for self-correction patterns FIRST
+        // 
+        // V96 FIX: REMOVED "it's" from correction patterns!
+        // BUG: "it's currently not working" was extracting "Currently" as a name
+        // because the pattern "it's X" matched and "currently" passed (before V96c).
+        // Even with V96c stop words, "it's" is too ambiguous for name correction.
+        // 
+        // Now only "that's X" / "actually X" / "I mean X" are valid correction patterns.
         // ═══════════════════════════════════════════════════════════════════════════
         const correctionPatterns = [
-            // "that's Mark Gonzales" / "it's Mark" / "actually Mark" / "I mean Mark"
-            /(?:that'?s|that\s+is|it'?s|actually|i\s+mean|well\s+it'?s)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*[.,]?\s*(?:and|$)/i,
-            /(?:that'?s|that\s+is|it'?s|actually|i\s+mean)\s+([a-zA-Z]+\s+[a-zA-Z]+)/i,
+            // "that's Mark Gonzales" / "actually Mark" / "I mean Mark" - EXPLICIT corrections only
+            // NOTE: "it's" REMOVED - too ambiguous, matches "it's currently not working"
+            /(?:that'?s|that\s+is|actually|i\s+mean|well\s+that'?s)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*[.,]?\s*(?:and|$)/i,
+            /(?:that'?s|that\s+is|actually|i\s+mean)\s+([a-zA-Z]+\s+[a-zA-Z]+)/i,
             // "[anything] that's X" at end of sentence - the correction is most likely the real name
             /that'?s\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*[.!?,]*\s*$/i
         ];
@@ -782,7 +825,9 @@ class SlotExtractor {
                             value: name,
                             confidence: CONFIDENCE.UTTERANCE_HIGH,
                             source: SOURCE.UTTERANCE,
-                            extractedViaExplicitPhrase: true  // V92: Correction = explicit name statement
+                            extractedViaExplicitPhrase: true,  // V92: Correction = explicit name statement
+                            patternSource: 'correction',  // V96: SECONDARY pattern - cannot override PRIMARY locks
+                            nameLocked: false  // V96: Corrections don't lock (user might correct again)
                         };
                         
                         // V92: Add first/last name metadata
