@@ -813,49 +813,79 @@ class ConversationStateMachine {
     }
     
     /**
+     * V96j: Helper to safely write a slot through IdentitySlotFirewall
+     * Adapts the simple collectedSlots format to the firewall's expected structure
+     */
+    _safeWriteSlot(slotName, value, source = 'extracted') {
+        if (!value) return { accepted: false, reason: 'empty_value' };
+        
+        // Create a proxy slots object in the format the firewall expects
+        const slotsProxy = {};
+        if (this.booking.collectedSlots[slotName]) {
+            slotsProxy[slotName] = {
+                value: this.booking.collectedSlots[slotName],
+                confidence: 0.8
+            };
+        }
+        
+        const result = safeSetIdentitySlot(
+            slotsProxy,
+            slotName,
+            value,
+            {
+                writer: 'ConversationStateMachine._safeWriteSlot',
+                callsite: 'ConversationStateMachine',
+                confidence: 0.8,
+                source
+            }
+        );
+        
+        if (result.accepted) {
+            // Sync back to simple format
+            this.booking.collectedSlots[slotName] = slotsProxy[slotName]?.value || value;
+        } else {
+            logger.warn('[STATE MACHINE] ❌ Slot write rejected by firewall', {
+                slot: slotName,
+                value: typeof value === 'string' ? value.substring(0, 30) : value,
+                reason: result.reason
+            });
+        }
+        
+        return result;
+    }
+    
+    /**
      * BOOKING STAGE - Fixed slot questions from UI config
      * Uses missingSlots[] for deterministic collection
      */
     _handleBooking(input, inputLower, extracted) {
         // ═══════════════════════════════════════════════════════════════════════════
-        // V96i: Use IdentitySlotFirewall for all identity slot writes
+        // V96j: Route ALL slot writes through IdentitySlotFirewall
         // This prevents contamination (e.g., "Air Conditioning" as name)
         // ═══════════════════════════════════════════════════════════════════════════
-        const writerMeta = {
-            writer: 'ConversationStateMachine._handleBooking',
-            callsite: 'ConversationStateMachine:_handleBooking',
-            // Note: In a real implementation, we'd pass callId/companyId/turn from constructor
-        };
         
         // Update slots from extracted data (handle both name and partialName)
         if (extracted.name) {
-            // V96i: Validate name before writing
-            const nameValidation = validateName(extracted.name);
-            if (nameValidation.valid) {
-                this.booking.collectedSlots.name = extracted.name;
-            } else {
-                logger.warn('[STATE MACHINE] ❌ Name rejected by firewall', {
-                    value: extracted.name,
-                    reason: nameValidation.reason
-                });
-            }
+            const result = this._safeWriteSlot('name', extracted.name, 'extracted_name');
+            // Don't set partialName if full name was accepted
         } else if (extracted.partialName && !this.booking.collectedSlots.name) {
-            // V96i: Validate partial name before writing
-            const nameValidation = validateName(extracted.partialName);
-            if (nameValidation.valid) {
-                this.booking.collectedSlots.name = extracted.partialName;
+            const result = this._safeWriteSlot('name', extracted.partialName, 'extracted_partial');
+            if (result.accepted) {
                 this.booking.partialName = extracted.partialName;
-            } else {
-                logger.warn('[STATE MACHINE] ❌ Partial name rejected by firewall', {
-                    value: extracted.partialName,
-                    reason: nameValidation.reason
-                });
             }
         }
-        // Phone, address, time don't need name validation
-        if (extracted.phone) this.booking.collectedSlots.phone = extracted.phone;
-        if (extracted.address) this.booking.collectedSlots.address = extracted.address;
-        if (extracted.time) this.booking.collectedSlots.time = extracted.time;
+        
+        // Phone, address, time also go through firewall
+        if (extracted.phone) {
+            this._safeWriteSlot('phone', extracted.phone, 'extracted');
+        }
+        if (extracted.address) {
+            this._safeWriteSlot('address', extracted.address, 'extracted');
+        }
+        if (extracted.time && !this.booking.collectedSlots.time) {
+            // Time is not an identity slot, write directly
+            this.booking.collectedSlots.time = extracted.time;
+        }
         
         // Recompute missing slots
         this._computeMissingSlots();
@@ -1555,49 +1585,40 @@ class ConversationStateMachine {
     
     _updateFromExtracted(extracted) {
         // ═══════════════════════════════════════════════════════════════════════════
-        // V96i: Use IdentitySlotFirewall validation for name slots
+        // V96j: Route ALL slot writes through IdentitySlotFirewall
         // This prevents contamination (e.g., "Air Conditioning" as name)
         // ═══════════════════════════════════════════════════════════════════════════
         
         // Handle name - accept either full name or partialName (first name only)
         if (!this.booking.collectedSlots.name) {
             if (extracted.name) {
-                // V96i: Validate name before writing
-                const nameValidation = validateName(extracted.name);
-                if (nameValidation.valid) {
-                    this.booking.collectedSlots.name = extracted.name;
+                const result = this._safeWriteSlot('name', extracted.name, 'update_extracted_name');
+                if (result.accepted) {
                     logger.info('[STATE MACHINE V2] 📝 Name collected', { name: extracted.name });
-                } else {
-                    logger.warn('[STATE MACHINE V2] ❌ Name rejected by firewall', {
-                        value: extracted.name,
-                        reason: nameValidation.reason
-                    });
                 }
             } else if (extracted.partialName) {
-                // V96i: Validate partial name before writing
-                const nameValidation = validateName(extracted.partialName);
-                if (nameValidation.valid) {
-                    this.booking.collectedSlots.name = extracted.partialName;
+                const result = this._safeWriteSlot('name', extracted.partialName, 'update_extracted_partial');
+                if (result.accepted) {
                     this.booking.partialName = extracted.partialName;
                     logger.info('[STATE MACHINE V2] 📝 Partial name accepted as name', { partialName: extracted.partialName });
-                } else {
-                    logger.warn('[STATE MACHINE V2] ❌ Partial name rejected by firewall', {
-                        value: extracted.partialName,
-                        reason: nameValidation.reason
-                    });
                 }
             }
         }
         
-        // Phone, address, time don't need name validation
+        // Phone and address go through firewall
         if (extracted.phone && !this.booking.collectedSlots.phone) {
-            this.booking.collectedSlots.phone = extracted.phone;
-            logger.info('[STATE MACHINE V2] 📝 Phone collected', { phone: extracted.phone });
+            const result = this._safeWriteSlot('phone', extracted.phone, 'update_extracted');
+            if (result.accepted) {
+                logger.info('[STATE MACHINE V2] 📝 Phone collected', { phone: extracted.phone });
+            }
         }
         if (extracted.address && !this.booking.collectedSlots.address) {
-            this.booking.collectedSlots.address = extracted.address;
-            logger.info('[STATE MACHINE V2] 📝 Address collected', { address: extracted.address });
+            const result = this._safeWriteSlot('address', extracted.address, 'update_extracted');
+            if (result.accepted) {
+                logger.info('[STATE MACHINE V2] 📝 Address collected', { address: extracted.address });
+            }
         }
+        // Time is not an identity slot, write directly
         if (extracted.time && !this.booking.collectedSlots.time) {
             this.booking.collectedSlots.time = extracted.time;
             logger.info('[STATE MACHINE V2] 📝 Time collected', { time: extracted.time });

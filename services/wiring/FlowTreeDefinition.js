@@ -104,7 +104,10 @@ const NODES = [
         type: NODE_TYPES.ROUTER,
         description: 'Deterministic slot collection (no LLM)',
         checkpoint: 'CHECKPOINT_9b',
-        matchSource: 'BOOKING_SNAP',
+        // V96j: Changed from BOOKING_SNAP to BOOKING_FLOW_RUNNER
+        // BOOKING_SNAP was a legacy "snapshot responder" that caused slot contamination.
+        // BookingFlowRunner is the deterministic replacement.
+        matchSource: 'BOOKING_FLOW_RUNNER',
         configPaths: [
             'frontDesk.bookingSlots',
             'frontDesk.askFullName',
@@ -424,7 +427,8 @@ const RUNTIME_BINDINGS = [
     {
         nodeId: 'node.bookingRunner',
         checkpoints: ['CHECKPOINT_9b', 'checkpointD_bookingRunner'],
-        matchSources: ['BOOKING_SNAP', 'BOOKING_FLOW_RUNNER'],
+        // V96j: Removed BOOKING_SNAP (legacy ghost). Only BOOKING_FLOW_RUNNER is valid.
+        matchSources: ['BOOKING_FLOW_RUNNER'],
         codePatterns: ['BookingFlowRunner']
     },
     

@@ -149,6 +149,19 @@ class BookingFlowResolver {
         const bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
         const bookingTemplates = aiSettings.bookingTemplates || {};
         const bookingPromptsMap = aiSettings.bookingPromptsMap || new Map();
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96j: Read booking behavior options from frontDeskBehavior (Booking Prompt tab)
+        // ═══════════════════════════════════════════════════════════════════════
+        // These control how BookingFlowRunner behaves:
+        // - confirmationPrompt: Custom final confirmation message (replaces hardcoded)
+        // - completionPrompt: Custom completion message after booking
+        // - enforcePromptOrder: If true, always ask questions in order even if slots filled
+        // - confirmIfPreFilled: If true, ask to confirm pre-filled slots (from discovery/caller ID)
+        // - alwaysAskEvenIfFilled: Array of slots to always ask even if pre-filled
+        // ═══════════════════════════════════════════════════════════════════════
+        const bookingBehavior = frontDeskBehavior.bookingBehavior || {};
+        const bookingOutcome = frontDeskBehavior.bookingOutcome || {};
         const checkedPaths = [
             'aiAgentSettings.frontDeskBehavior.bookingSlots',
             'aiAgentSettings.bookingSlots'
@@ -187,14 +200,43 @@ class BookingFlowResolver {
         // Generate flow ID
         const flowId = this.generateFlowId(company, trade, serviceType);
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96j: Read confirmation/completion templates from MULTIPLE sources
+        // Priority: bookingBehavior (Booking tab) > bookingOutcome > bookingTemplates > hardcoded
+        // ═══════════════════════════════════════════════════════════════════════
+        const confirmationTemplate = 
+            bookingBehavior.confirmationPrompt ||
+            bookingOutcome.confirmationPrompt ||
+            bookingOutcome.scripts?.final_confirmation ||
+            bookingTemplates.confirmTemplate;
+        
+        const completionTemplate = 
+            bookingBehavior.completionPrompt ||
+            bookingOutcome.completionPrompt ||
+            bookingOutcome.scripts?.booking_complete ||
+            bookingTemplates.completeTemplate;
+        
         const flow = {
             flowId,
             flowName: `${company.name || 'Company'} Booking Flow`,
             steps,
-            confirmationTemplate: bookingTemplates.confirmTemplate || 
+            // V96j: Use resolved templates, with explicit source tracking
+            confirmationTemplate: confirmationTemplate || 
                 "Let me confirm: I have {name} at {phone}, service address {address}. Is that correct?",
-            completionTemplate: bookingTemplates.completeTemplate ||
+            confirmationTemplateSource: confirmationTemplate 
+                ? (bookingBehavior.confirmationPrompt ? 'bookingBehavior' : 
+                   bookingOutcome.confirmationPrompt || bookingOutcome.scripts?.final_confirmation ? 'bookingOutcome' :
+                   'bookingTemplates')
+                : 'hardcoded_default',
+            completionTemplate: completionTemplate ||
                 "Your appointment has been scheduled. Is there anything else I can help you with?",
+            completionTemplateSource: completionTemplate ? 'config' : 'hardcoded_default',
+            // V96j: Booking behavior options from Booking Prompt tab
+            enforcePromptOrder: bookingBehavior.enforcePromptOrder === true,
+            confirmIfPreFilled: bookingBehavior.confirmIfPreFilled !== false, // Default true for backward compat
+            alwaysAskEvenIfFilled: Array.isArray(bookingBehavior.alwaysAskEvenIfFilled) 
+                ? bookingBehavior.alwaysAskEvenIfFilled 
+                : [],
             source: 'company_config',
             trade: trade || null,
             serviceType: serviceType || null,
@@ -588,8 +630,14 @@ class BookingFlowResolver {
             ],
             confirmationTemplate: templates.confirmTemplate ||
                 "Let me confirm: I have {name} at {phone}, service address {address}. Is that correct?",
+            confirmationTemplateSource: templates.confirmTemplate ? 'config' : 'hardcoded_default',
             completionTemplate: templates.completeTemplate ||
                 "Your appointment has been scheduled. Is there anything else I can help you with?",
+            completionTemplateSource: templates.completeTemplate ? 'config' : 'hardcoded_default',
+            // V96j: Default behavior options (can be overridden in company config)
+            enforcePromptOrder: false,
+            confirmIfPreFilled: true, // Default: ask to confirm pre-filled slots
+            alwaysAskEvenIfFilled: [],
             source: 'default',
             companyId
         };

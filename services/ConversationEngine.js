@@ -6202,6 +6202,55 @@ async function processTurn({
         // MODE-BASED ROUTING (THE CORE OF OPTION 1)
         // ═══════════════════════════════════════════════════════════════════════
         else if (session.mode === 'BOOKING' && canEnterBooking) BOOKING_MODE: {
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V96j: BOOKING MODE OWNERSHIP GUARD - CRITICAL FIX
+            // ═══════════════════════════════════════════════════════════════════════════
+            // If bookingModeLocked is ALREADY TRUE, BookingFlowRunner should have handled
+            // this turn. ConversationEngine must NOT compete by generating booking responses.
+            // 
+            // This is the "two engines steering the car" fix. When bookingModeLocked=true,
+            // the ONLY speaker should be BookingFlowRunner (via v2twilio.js top-level gate).
+            // 
+            // If we got here with bookingModeLocked=true, it means:
+            // - Either the top-level gate failed (error case)
+            // - Or this is the turn where consent was JUST given (set bookingFlowState and return)
+            // 
+            // DO NOT generate booking questions here when locked - let BookingFlowRunner own it.
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (session.bookingModeLocked === true) {
+                log('⚠️ V96j: BOOKING_MODE block skipped - bookingModeLocked=true, deferring to BookingFlowRunner', {
+                    bookingModeLocked: true,
+                    sessionMode: session.mode,
+                    reason: 'SINGLE_OWNER_ENFORCEMENT'
+                });
+                
+                // Return a signal that booking is locked - caller should run BookingFlowRunner
+                // We don't generate text here - the top-level gate will handle it
+                aiResult = {
+                    text: null,  // No response from ConversationEngine when locked
+                    reply: null,
+                    mode: 'BOOKING',
+                    action: 'defer_to_booking_runner',
+                    bookingFlowState: session.bookingFlowState || {
+                        bookingModeLocked: true,
+                        bookingFlowId: session.bookingFlowId || 'deferred',
+                        currentStepId: session.currentBookingStep || 'name',
+                        bookingCollected: currentSlots,
+                        bookingState: 'ACTIVE'
+                    },
+                    fromStateMachine: false,
+                    signals: {
+                        deferToBookingRunner: true,
+                        bookingModeLocked: true
+                    },
+                    debug: {
+                        source: 'BOOKING_MODE_DEFERRED_V96j',
+                        reason: 'bookingModeLocked=true, ConversationEngine yielding to BookingFlowRunner'
+                    }
+                };
+                break BOOKING_MODE;
+            }
+            
             // ═══════════════════════════════════════════════════════════════════
             // BOOKING MODE - Deterministic clipboard (consent already given)
             // ═══════════════════════════════════════════════════════════════════

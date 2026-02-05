@@ -48,9 +48,17 @@ try {
     logger.warn('[BOOKING FLOW RUNNER] BlackBoxLogger not available');
 }
 
+// 🔌 V96j: IdentitySlotFirewall for unified identity slot protection
+let IdentitySlotFirewall;
+try {
+    IdentitySlotFirewall = require('../../../utils/IdentitySlotFirewall');
+} catch (e) {
+    logger.warn('[BOOKING FLOW RUNNER] IdentitySlotFirewall not available');
+}
+
 /**
  * ============================================================================
- * V96f: SAFE SLOT WRITE FIREWALL
+ * V96j: SAFE SLOT WRITE FIREWALL (UNIFIED WITH IdentitySlotFirewall)
  * ============================================================================
  * 
  * ALL slot writes MUST go through this function. This is the single point of
@@ -60,10 +68,14 @@ try {
  * - Immutability protection for confirmed slots
  * - Audit logging for accept/reject decisions
  * 
+ * V96j CHANGE: Identity slots (name, firstName, lastName, etc.) are now routed
+ * through the global IdentitySlotFirewall for unified protection and tracing.
+ * 
  * RULE: No direct assignment to bookingCollected.name/firstName/lastName.
  * ============================================================================
  */
 const IDENTITY_SLOTS = new Set(['name', 'firstName', 'lastName', 'partialName', 'fullName']);
+const IDENTITY_SLOTS_FOR_FIREWALL = ['name', 'firstName', 'lastName', 'partialName', 'phone', 'address'];
 
 function safeSetSlot(state, slotName, value, options = {}) {
     const { source = 'unknown', confidence = 0.8, isCorrection = false } = options;
@@ -72,43 +84,98 @@ function safeSetSlot(state, slotName, value, options = {}) {
     const traceCallSid = state?._traceContext?.callSid;
     const traceCompanyId = state?._traceContext?.companyId;
     const traceLevel = state?._traceContext?.traceLevel || 'normal';
-    
-    // V96h: Helper to emit SLOT_WRITE_FIREWALL event (only in 'debug' trace level)
-    const emitFirewallEvent = (accepted, reason, valueMasked) => {
-        // SLOT_WRITE_FIREWALL only emits when traceLevel is 'debug'
-        if (traceLevel !== 'debug') return;
-        
-        if (BlackBoxLogger?.logEvent && traceCallSid && traceCompanyId) {
-            BlackBoxLogger.logEvent({
-                callId: traceCallSid,
-                companyId: traceCompanyId,
-                type: 'SLOT_WRITE_FIREWALL',
-                data: {
-                    writer: 'BookingFlowRunner.safeSetSlot',
-                    slot: slotName,
-                    valueMasked: slotName === 'phone' 
-                        ? '***' + String(valueMasked || '').slice(-4)
-                        : (typeof valueMasked === 'string' ? valueMasked.substring(0, 30) : valueMasked),
-                    accepted,
-                    reason,
-                    source,
-                    confidence,
-                    isCorrection
-                }
-            }).catch(() => {});
-        }
-    };
+    const traceTurn = state?._traceContext?.turn || 0;
     
     if (!value) {
         logger.debug('[SAFE SET SLOT] Skipped null/empty value', { slotName, source });
-        emitFirewallEvent(false, 'empty_value', null);
         return { accepted: false, reason: 'empty_value' };
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // IDENTITY SLOT VALIDATION (name, firstName, lastName, etc.)
+    // V96j: Route identity slots through IdentitySlotFirewall
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (IdentitySlotFirewall && IDENTITY_SLOTS_FOR_FIREWALL.includes(slotName)) {
+        // Prepare slots object for firewall (it expects a different shape)
+        // The firewall writes to a slots object with { value, confidence, source, ... }
+        // We need to sync this with bookingCollected which is simpler
+        const slotsProxy = {};
+        
+        // Copy existing slot if any
+        if (state.bookingCollected?.[slotName]) {
+            slotsProxy[slotName] = {
+                value: state.bookingCollected[slotName],
+                confidence: state.slotMetadata?.[slotName]?.confidence || 0,
+                immutable: state.slotMetadata?.[slotName]?.immutable,
+                confirmed: state.slotMetadata?.[slotName]?.confirmed,
+                nameLocked: state.slotMetadata?.[slotName]?.nameLocked
+            };
+        }
+        
+        // Call the global firewall
+        const firewallResult = IdentitySlotFirewall.safeSetIdentitySlot(
+            slotsProxy,
+            slotName,
+            value,
+            {
+                writer: 'BookingFlowRunner.extractSlotFromUtterance',
+                callsite: 'BookingFlowRunner.safeSetSlot',
+                confidence,
+                source,
+                callId: traceCallSid,
+                companyId: traceCompanyId,
+                turn: traceTurn,
+                forceOverwrite: isCorrection
+            }
+        );
+        
+        if (!firewallResult.accepted) {
+            logger.info('[SAFE SET SLOT] ❌ Firewall rejected identity slot write', {
+                slotName,
+                reason: firewallResult.reason,
+                writer: 'BookingFlowRunner'
+            });
+            return { 
+                accepted: false, 
+                reason: firewallResult.reason, 
+                currentValue: state.bookingCollected?.[slotName]
+            };
+        }
+        
+        // Firewall accepted - sync back to bookingCollected
+        const previousValue = state.bookingCollected?.[slotName];
+        state.bookingCollected = state.bookingCollected || {};
+        state.bookingCollected[slotName] = slotsProxy[slotName]?.value || value;
+        
+        // Update metadata
+        state.slotMetadata = state.slotMetadata || {};
+        state.slotMetadata[slotName] = {
+            ...(state.slotMetadata[slotName] || {}),
+            value: state.bookingCollected[slotName],
+            source: slotsProxy[slotName]?.source || source,
+            confidence: slotsProxy[slotName]?.confidence || confidence,
+            updatedAt: new Date().toISOString(),
+            previousValue: previousValue !== state.bookingCollected[slotName] ? previousValue : undefined,
+            writer: 'BookingFlowRunner.safeSetSlot'
+        };
+        
+        logger.info('[SAFE SET SLOT] ✅ Identity slot accepted via firewall', {
+            slotName,
+            value: typeof state.bookingCollected[slotName] === 'string' 
+                ? state.bookingCollected[slotName].substring(0, 30) 
+                : state.bookingCollected[slotName],
+            source,
+            confidence,
+            wasOverwrite: !!previousValue && previousValue !== state.bookingCollected[slotName]
+        });
+        
+        return { accepted: true, value: state.bookingCollected[slotName], previousValue };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Non-identity slots: Original validation logic
     // ═══════════════════════════════════════════════════════════════════════════
     if (IDENTITY_SLOTS.has(slotName)) {
+        // Fallback for when IdentitySlotFirewall is not available
         // Use SlotExtractor's IdentityValidators via cleanName
         const validated = SlotExtractor.cleanName ? SlotExtractor.cleanName(value) : value;
         
@@ -119,7 +186,6 @@ function safeSetSlot(state, slotName, value, options = {}) {
                 source,
                 reason: 'failed_identity_validation'
             });
-            emitFirewallEvent(false, 'failed_identity_validation', value);
             return { accepted: false, reason: 'failed_identity_validation', rejectedValue: value };
         }
         
@@ -135,7 +201,6 @@ function safeSetSlot(state, slotName, value, options = {}) {
                 rejectedValue: value,
                 confirmedAt: existingMeta.confirmedAt
             });
-            emitFirewallEvent(false, 'immutable_slot_protected', value);
             return { 
                 accepted: false, 
                 reason: 'immutable_slot', 
@@ -145,9 +210,10 @@ function safeSetSlot(state, slotName, value, options = {}) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // WRITE THE SLOT
+    // WRITE THE SLOT (non-identity or fallback)
     // ═══════════════════════════════════════════════════════════════════════════
-    const previousValue = state.bookingCollected[slotName];
+    const previousValue = state.bookingCollected?.[slotName];
+    state.bookingCollected = state.bookingCollected || {};
     state.bookingCollected[slotName] = value;
     
     // Update metadata
@@ -168,9 +234,6 @@ function safeSetSlot(state, slotName, value, options = {}) {
         confidence,
         wasOverwrite: !!previousValue && previousValue !== value
     });
-    
-    // V96h: Emit firewall event for accepted writes too
-    emitFirewallEvent(true, previousValue ? 'overwrite' : 'new_slot', value);
     
     return { accepted: true, value, previousValue };
 }
@@ -716,10 +779,11 @@ class BookingFlowRunner {
                     // Use formatted address from Google
                     const formattedAddress = addressValidation.formattedAddress || addressValidation.normalized;
                     if (formattedAddress) {
-                        state.bookingCollected.address = formattedAddress;
-                        if (state.slotMetadata?.address) {
-                            state.slotMetadata.address.value = formattedAddress;
-                        }
+                        // V96j: Route through safeSetSlot for unified firewall protection
+                        safeSetSlot(state, 'address', formattedAddress, {
+                            source: 'google_geocoding_formatted',
+                            confidence: addressValidation.confidence || 0.95
+                        });
                     }
                     
                     // Store validation metadata for conditional steps
@@ -947,9 +1011,54 @@ class BookingFlowRunner {
             const existingValue = collected[fieldKey];
             const metadata = slotMetadata[fieldKey] || slots[fieldKey];
             
+            // ═══════════════════════════════════════════════════════════════════════
+            // V96j: Extract flow behavior options
+            // ═══════════════════════════════════════════════════════════════════════
+            const enforcePromptOrder = flow.enforcePromptOrder === true;
+            const confirmIfPreFilled = flow.confirmIfPreFilled !== false; // Default true
+            const alwaysAskEvenIfFilled = Array.isArray(flow.alwaysAskEvenIfFilled) 
+                ? flow.alwaysAskEvenIfFilled 
+                : [];
+            const shouldAlwaysAsk = alwaysAskEvenIfFilled.includes(fieldKey) || 
+                                    alwaysAskEvenIfFilled.includes(step.type);
+            
             // Already confirmed by user - skip
             if (confirmedSlots.has?.(fieldKey) || state.confirmedSlots?.[fieldKey]) {
                 continue;
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // V96j: ENFORCE PROMPT ORDER - Always ask if configured
+            // ═══════════════════════════════════════════════════════════════════════
+            // If enforcePromptOrder is true, OR this slot is in alwaysAskEvenIfFilled,
+            // we should ask the question even if we already have a value.
+            // This ensures the script is followed exactly as configured in Booking tab.
+            // ═══════════════════════════════════════════════════════════════════════
+            if (enforcePromptOrder || shouldAlwaysAsk) {
+                // Even with a value, ask the question (slot will be pre-filled but confirmed)
+                if (!existingValue) {
+                    return {
+                        step,
+                        mode: 'COLLECT',
+                        existingValue: null
+                    };
+                }
+                // Value exists - ask to confirm or re-ask depending on config
+                if (confirmIfPreFilled || shouldAlwaysAsk) {
+                    logger.debug('[BOOKING FLOW] V96j: Asking to confirm per enforcePromptOrder/alwaysAsk', {
+                        fieldKey,
+                        existingValue,
+                        enforcePromptOrder,
+                        shouldAlwaysAsk
+                    });
+                    return {
+                        step,
+                        mode: 'CONFIRM',
+                        existingValue,
+                        metadata,
+                        reason: enforcePromptOrder ? 'ENFORCE_PROMPT_ORDER' : 'ALWAYS_ASK_CONFIG'
+                    };
+                }
             }
             
             // ═══════════════════════════════════════════════════════════════════════
@@ -977,6 +1086,23 @@ class BookingFlowRunner {
                     mode: 'COLLECT',
                     existingValue: null
                 };
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // V96j: RESPECT confirmIfPreFilled option
+            // ═══════════════════════════════════════════════════════════════════════
+            // If confirmIfPreFilled is false, skip confirmation for pre-filled slots
+            // This allows callers to flow through faster when they've already given info
+            // ═══════════════════════════════════════════════════════════════════════
+            if (!confirmIfPreFilled) {
+                // Don't ask to confirm - just accept the value and move on
+                state.confirmedSlots = state.confirmedSlots || {};
+                state.confirmedSlots[fieldKey] = true;
+                logger.debug('[BOOKING FLOW] V96j: Auto-confirming per confirmIfPreFilled=false', {
+                    fieldKey,
+                    existingValue
+                });
+                continue;
             }
             
             // ═══════════════════════════════════════════════════════════════════════
@@ -2294,13 +2420,33 @@ class BookingFlowRunner {
      * ========================================================================
      * BUILD CONFIRMATION - All required data collected
      * ========================================================================
+     * V96j: Now reads confirmationTemplate from Booking Prompt tab config
+     * and logs the source for debugging
+     * ========================================================================
      */
     static buildConfirmation(flow, state) {
         const collected = state.bookingCollected || {};
         
+        // V96j: Track template source for debugging
+        const templateSource = flow.confirmationTemplateSource || 
+            (flow.confirmationTemplate ? 'config' : 'hardcoded_default');
+        const isHardcoded = templateSource === 'hardcoded_default';
+        
         // Build confirmation message from template
         let confirmation = flow.confirmationTemplate || 
             "Let me confirm: I have {name} at {phone}, service address {address}. Is that correct?";
+        
+        // V96j: Log where the confirmation prompt came from
+        logger.info('[BOOKING FLOW RUNNER] Building final confirmation', {
+            templateSource,
+            isHardcoded,
+            templatePreview: confirmation.substring(0, 80),
+            collected: Object.keys(collected)
+        });
+        
+        if (isHardcoded) {
+            logger.warn('[BOOKING FLOW RUNNER] ⚠️ Using HARDCODED confirmation template - consider adding confirmationPrompt to bookingBehavior config');
+        }
         
         // Replace placeholders - strip trailing punctuation to avoid double periods
         confirmation = confirmation.replace(/\{(\w+)\}/g, (match, key) => {
@@ -2330,7 +2476,10 @@ class BookingFlowRunner {
                 source: 'BOOKING_FLOW_RUNNER',
                 flowId: flow.flowId,
                 stage: 'CONFIRMATION',
-                bookingCollected: collected
+                bookingCollected: collected,
+                // V96j: Track template source
+                confirmationTemplateSource: templateSource,
+                isHardcodedTemplate: isHardcoded
             }
         };
     }

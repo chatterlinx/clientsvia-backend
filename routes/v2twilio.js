@@ -3648,8 +3648,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         
         const useHybridPath = company?.aiAgentSettings?.callFlowEngine?.enabled !== false; // Default ON
         const hybridStartTime = Date.now();
+        // V96j: Removed BOOKING_SNAP reference (deprecated legacy ghost)
         let usedPath = result
-          ? ((bookingInProgress || result?.matchSource === 'BOOKING_FLOW_RUNNER' || result?.matchSource === 'BOOKING_SNAP')
+          ? ((bookingInProgress || result?.matchSource === 'BOOKING_FLOW_RUNNER')
               ? 'booking'
               : 'vendor')
           : 'legacy';
@@ -3706,7 +3707,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             // 🎯 FEB 2026 FIX: Pass pre-extracted slots to ConversationEngine
             // ═══════════════════════════════════════════════════════════════════
             // CRITICAL: Without this, slots extracted in v2twilio (stored in Redis)
-            // are NOT visible to ConversationEngine's BOOKING_SNAP logic.
+            // are NOT visible to ConversationEngine's booking logic.
             // This caused "What's your name?" to be asked even when name was collected.
             // ═══════════════════════════════════════════════════════════════════
             const preExtractedSlots = {};
@@ -3816,12 +3817,116 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               }
             }
             
-            // Map ConversationEngine result to expected format
-            result = {
-              text: engineResult.reply,
-              response: engineResult.reply,
-              // If ConversationEngine requests a transfer, honor it (Twilio handles transfer separately)
-              action: engineResult.requiresTransfer === true ? 'transfer' :
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V96j: DEFER TO BOOKING RUNNER SIGNAL HANDLING
+            // ═══════════════════════════════════════════════════════════════════════════
+            // If ConversationEngine returns deferToBookingRunner=true, it means:
+            // - bookingModeLocked was already true when ConversationEngine ran
+            // - ConversationEngine correctly refused to generate a booking response
+            // - We must now run BookingFlowRunner to generate the actual response
+            // 
+            // This is a safety net for when ConversationEngine is called while locked
+            // (shouldn't happen but provides defense in depth).
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (engineResult.signals?.deferToBookingRunner === true) {
+              logger.info('[V96j] ConversationEngine deferred to BookingFlowRunner - running booking gate now', {
+                callSid,
+                turnCount: callState.turnCount,
+                reason: engineResult.debug?.reason
+              });
+              
+              // Update callState with bookingFlowState from ConversationEngine
+              if (engineResult.bookingFlowState) {
+                callState.bookingModeLocked = true;
+                callState.bookingFlowState = engineResult.bookingFlowState;
+              }
+              
+              try {
+                const { BookingFlowRunner, BookingFlowResolver } = require('../services/engine/booking');
+                
+                // Resolve the booking flow from company config
+                const deferredFlow = BookingFlowResolver.resolve({
+                  companyId: companyID,
+                  trade: callState.trade || null,
+                  serviceType: callState.serviceType || null,
+                  company
+                });
+                
+                // Build state from Redis callState
+                const deferredBookingState = {
+                  bookingModeLocked: true,
+                  bookingFlowId: callState.bookingFlowId || deferredFlow.flowId,
+                  currentStepId: callState.currentStepId || callState.currentBookingStep || deferredFlow.steps[0]?.id,
+                  bookingCollected: callState.bookingCollected || {},
+                  slotMetadata: callState.slotMetadata || {},
+                  confirmedSlots: callState.confirmedSlots || {},
+                  askCount: callState.bookingAskCount || {},
+                  pendingConfirmation: callState.pendingConfirmation || null
+                };
+                
+                // Run booking flow
+                const deferredResult = await BookingFlowRunner.runStep({
+                  flow: deferredFlow,
+                  state: deferredBookingState,
+                  userInput: speechResult,
+                  callSid,
+                  company,
+                  session: { _id: callSid, mode: 'BOOKING', collectedSlots: callState.slots || {} }
+                });
+                
+                // Map to result format
+                result = {
+                  text: deferredResult.reply,
+                  response: deferredResult.reply,
+                  action: deferredResult.action || 'BOOKING',
+                  matchSource: 'BOOKING_FLOW_RUNNER',
+                  tier: 'tier0',
+                  bookingFlowState: deferredResult.state,
+                  callState: {
+                    ...callState,
+                    ...(deferredResult.state || {}),
+                    bookingModeLocked: true
+                  },
+                  debug: {
+                    source: 'BOOKING_FLOW_RUNNER',
+                    reason: 'V96j_DEFERRED_FROM_CONVERSATION_ENGINE',
+                    flowId: deferredFlow.flowId,
+                    currentStep: deferredResult.state?.currentStepId
+                  }
+                };
+                
+                // Log successful deferred execution
+                if (BlackBoxLogger) {
+                  BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId: companyID,
+                    type: 'BOOKING_RUNNER_DEFERRED_EXECUTION',
+                    turn: turnCount,
+                    data: {
+                      reason: 'ConversationEngine deferred to BookingFlowRunner',
+                      flowId: deferredFlow.flowId,
+                      responsePreview: (deferredResult.reply || '').substring(0, 100)
+                    }
+                  }).catch(() => {});
+                }
+              } catch (deferErr) {
+                logger.error('[V96j] BookingFlowRunner deferred execution failed', {
+                  callSid,
+                  error: deferErr.message,
+                  stack: deferErr.stack?.substring(0, 500)
+                });
+                // Fall through to use ConversationEngine result as fallback
+              }
+            }
+            
+            // Only map ConversationEngine result if result wasn't set by deferred booking runner
+            if (!result) {
+              // Map ConversationEngine result to expected format
+              result = {
+                text: engineResult.reply,
+                response: engineResult.reply,
+                // If ConversationEngine requests a transfer, honor it (Twilio handles transfer separately)
+                action: engineResult.requiresTransfer === true ? 'transfer' :
                       (engineResult.conversationMode === 'complete' ? 'COMPLETE' : 
                        engineResult.wantsBooking ? 'BOOKING' : 'DISCOVERY'),
               transferTarget: engineResult.requiresTransfer === true
@@ -3887,6 +3992,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 bookingFlowId: engineResult.bookingFlowState?.bookingFlowId || null
               }
             };
+            }  // End of if (!result) - V96j defer handling
             
             const hybridLatencyMs = Date.now() - hybridStartTime;
             
@@ -4625,6 +4731,59 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       willHangup: Boolean(result.shouldHangup),
       timestamp: new Date().toISOString()
     });
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V96j: SPEAKER_OWNER_TRACE_V1 - THE ONLY TRACE THAT MATTERS
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This trace ends all debugging arguments about "who spoke?"
+    // It shows exactly which code path generated the outbound response.
+    // ═══════════════════════════════════════════════════════════════════════════
+    try {
+      if (BlackBoxLogger) {
+        // Determine responseOwner based on result properties
+        let responseOwner = 'UNKNOWN';
+        if (result.matchSource === 'BOOKING_FLOW_RUNNER' || result.debug?.source === 'BOOKING_FLOW_RUNNER') {
+          responseOwner = 'BOOKING_FLOW_RUNNER';
+        } else if (result.matchSource === 'BOOKING_SNAP' || result.debug?.source === 'BOOKING_SNAP') {
+          responseOwner = 'BOOKING_SNAP'; // Ghost - should never appear after fix
+        } else if (result.fromStateMachine && (result.debug?.source?.includes('BOOKING') || result.mode === 'BOOKING')) {
+          responseOwner = 'CONVERSATION_ENGINE_BOOKING_MODE';
+        } else if (result.fromStateMachine) {
+          responseOwner = 'STATE_MACHINE';
+        } else if (result.matchSource === 'SCENARIO_MATCHED' || result.matchSource === 'SCENARIO_MATCH') {
+          responseOwner = 'SCENARIO_ENGINE';
+        } else if (result.matchSource === 'LLM_FALLBACK' || result.tier === 'tier3') {
+          responseOwner = 'HYBRID_LLM';
+        } else if (result.matchSource === 'SILENCE_HANDLER') {
+          responseOwner = 'SILENCE_HANDLER';
+        } else {
+          responseOwner = 'FALLBACK';
+        }
+        
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'SPEAKER_OWNER_TRACE_V1',
+          turn: turnCount,
+          data: {
+            turn: turnCount,
+            bookingModeLocked: !!callState?.bookingModeLocked,
+            branchTaken: result.debug?.source || result.matchSource || 'UNKNOWN',
+            responseOwner,
+            matchSource: result.matchSource || 'UNKNOWN',
+            fromStateMachine: !!result.fromStateMachine,
+            mode: result.mode || result.callState?.sessionMode || 'UNKNOWN',
+            responsePreview: (result.response || result.text || '').substring(0, 100),
+            callsite: result.debug?.source ? `ConversationEngine:${result.debug.source}` : 
+                      result.matchSource === 'BOOKING_FLOW_RUNNER' ? 'BookingFlowRunner' :
+                      'v2twilio:UNKNOWN'
+          }
+        }).catch(() => {});
+      }
+    } catch (traceErr) {
+      // Trace errors must never crash the call
+      logger.warn('[TRACE ERROR] SPEAKER_OWNER_TRACE_V1 failed (call continues)', { error: traceErr.message });
+    }
     
     // 📼 BLACK BOX V2: Log agent response with full source tracking
     if (BlackBoxLogger) {
