@@ -5811,225 +5811,181 @@ async function processTurn({
                 bookingFlowId: bookingFlow.flowId
             });
             
-            // ═══════════════════════════════════════════════════════════════════
-            // BOOKING SNAP: Return first booking question IMMEDIATELY
-            // ═══════════════════════════════════════════════════════════════════
-            // This is the "clipboard snap" - we don't let LLM freestyle anymore.
-            // We use the EXACT question from the booking panel.
-            // ═══════════════════════════════════════════════════════════════════
-            const bookingConfigSnap = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
-            const bookingSlotsSnap = bookingConfigSnap.slots || [];
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V96 FIX: BookingFlowRunner speaks FIRST when booking triggers
+            // ═══════════════════════════════════════════════════════════════════════════
+            // PROBLEM: BOOKING_SNAP was a "shortcut" that built its own response when
+            // booking intent was detected. This caused:
+            // 1. Questions not coming from Booking Prompt tab
+            // 2. Slot corruption (e.g., "Got it, Air Conditioning" instead of "Mark")
+            // 3. Random question order
+            //
+            // FIX: When bookingModeLocked flips TRUE, BookingFlowRunner must be the
+            // ONLY voice. No BOOKING_SNAP. No hybrid routing. No interceptors.
+            //
+            // This ensures the Booking Prompt tab is used from the FIRST booking turn.
+            // ═══════════════════════════════════════════════════════════════════════════
+            const { BookingFlowRunner } = require('./engine/booking');
             
-            // ═══════════════════════════════════════════════════════════════════
-            // FEB 2026 FIX: Auto-confirm high-confidence slots from discovery
-            // ═══════════════════════════════════════════════════════════════════
-            // When caller said "my name is Mark" during discovery (confidence 0.9),
-            // mark that slot as confirmed so BookingFlowRunner doesn't go back to it.
-            // This prevents: "What's your name?" when we already have it.
-            // ═══════════════════════════════════════════════════════════════════
-            const AUTO_CONFIRM_THRESHOLD = 0.85;
-            const autoConfirmedSlots = {};
-            
-            // Find first required slot that's not collected, and auto-confirm high-confidence slots
-            let firstMissingSlot = null;
-            for (const slot of bookingSlotsSnap) {
-                if (!slot.required) continue;
-                
-                const slotId = slot.slotId || slot.id || slot.type;
-                const existingValue = currentSlots[slotId] || currentSlots[slot.type];
-                
-                if (existingValue) {
-                    // Slot is collected - check if we should auto-confirm
-                    // Get metadata from session or preExtractedSlots
-                    const slotMeta = session.collectedSlotsMeta?.[slotId] || 
-                                    preExtractedSlots?.[slotId] ||
-                                    { confidence: 0.9, source: 'utterance' }; // Default for discovery slots
-                    
-                    const isHighConfidence = slotMeta.confidence >= AUTO_CONFIRM_THRESHOLD;
-                    const isUtterance = slotMeta.source === 'utterance';
-                    
-                    if (isHighConfidence || isUtterance) {
-                        autoConfirmedSlots[slotId] = true;
-                        log(`🎯 BOOKING SNAP: Auto-confirmed ${slotId}`, {
-                            value: existingValue?.substring?.(0, 20) || existingValue,
-                            confidence: slotMeta.confidence,
-                            source: slotMeta.source
-                        });
-                    }
-                } else if (!firstMissingSlot) {
-                    // First missing slot found
-                    firstMissingSlot = slot;
+            // Build slots object with metadata for BookingFlowRunner
+            // V95: Use correctSlots which has preExtractedSlots override
+            const slotsForRunner = {};
+            for (const [key, value] of Object.entries(correctSlots)) {
+                if (value) {
+                    slotsForRunner[key] = {
+                        value,
+                        confidence: preExtractedSlots?.[key]?.confidence || 0.9,
+                        source: preExtractedSlots?.[key]?.source || 'discovery'
+                    };
                 }
             }
             
-            // Add auto-confirmed slots to booking flow state
-            session.bookingFlowState.confirmedSlots = {
-                ...(session.bookingFlowState.confirmedSlots || {}),
-                ...autoConfirmedSlots
-            };
+            log('🔒 V96: Calling BookingFlowRunner as FIRST booking response', {
+                flowId: bookingFlow.flowId,
+                slotsCount: Object.keys(slotsForRunner).length,
+                slotsKeys: Object.keys(slotsForRunner),
+                nameValue: slotsForRunner.name?.value
+            });
             
-            if (firstMissingSlot) {
-                const slotId = firstMissingSlot.slotId || firstMissingSlot.id || firstMissingSlot.type;
-                session.booking.currentSlotId = slotId;
+            // Build context-aware acknowledgment BEFORE calling runner
+            // This is the discovery acknowledgment that leads into booking
+            const discovery = session.discovery || {};
+            const callerName = correctSlots.name || correctSlots.partialName;
+            let contextAck = '';
+            
+            if (discovery.issue || discovery.techMentioned || discovery.temperature) {
+                const parts = [];
                 
-                // Update booking flow state with current step
-                session.bookingFlowState.currentStepId = slotId;
-                
-                // ═══════════════════════════════════════════════════════════════
-                // V31: Use prompt variant for natural phrasing
-                // ═══════════════════════════════════════════════════════════════
-                // Track asked count for rotation
-                session.booking.meta = session.booking.meta || {};
-                session.booking.meta[slotId] = session.booking.meta[slotId] || {};
-                const askedCount = session.booking.meta[slotId].askedCount || 0;
-                
-                // Get variant (UI-configured or fallback)
-                let exactQuestion = getSlotPromptVariant(firstMissingSlot, slotId, askedCount);
-                
-                // Loop prevention (UI-controlled): rephrase intro if we're repeating the same slot too many times
-                // 🔌 AW MIGRATION: Using AWConfigReader for traced config reads
-                awReader.setReaderId('ConversationEngine.loopPrevention.bookingSnap');
-                const lp = awReader.getObject('frontDesk.loopPrevention');
-                const lpEnabled = lp.enabled !== false;
-                const maxSame = typeof lp.maxSameQuestion === 'number' ? lp.maxSameQuestion : 2;
-                // V59 NUKE: UI-configured rephrase intro ONLY
-                const rephraseIntro = (lp.rephraseIntro || getMissingConfigPrompt('rephrase_intro', 'loopPrevention')).toString();
-                if (lpEnabled && askedCount >= maxSame) {
-                    exactQuestion = `${rephraseIntro}${exactQuestion}`.replace(/\s{2,}/g, ' ').trim();
-                    log('🔁 LOOP PREVENTION: Rephrasing intro applied (booking snap)', { slotId, askedCount, maxSame });
-                }
-                session.booking.currentSlotQuestion = exactQuestion;
-                session.booking.meta[slotId].askedCount = askedCount + 1;
-
-                if (firstMissingSlot.type === 'name' || slotId === 'name') {
-                    session.booking.meta.name = session.booking.meta.name || {};
-                    const nameTrace = session.booking.meta.name.nameTrace || {};
-                    nameTrace.lastPromptTurn = (session.metrics?.totalTurns || 0) + 1;
-                    nameTrace.lastPromptType = 'name_prompt';
-                    nameTrace.lastPromptText = exactQuestion;
-                    session.booking.meta.name.nameTrace = nameTrace;
-                }
-                
-                // ═══════════════════════════════════════════════════════════════
-                // V92: CONTEXT-AWARE ACKNOWLEDGMENT
-                // Build acknowledgment that reflects what the caller said
-                // ═══════════════════════════════════════════════════════════════
-                // V95 FIX: Use correctSlots (preExtractedSlots override) for name
-                // This prevents "Got it, Air Conditioning" when caller said "Mark"
-                let ack;
-                const discovery = session.discovery || {};
-                const callerName = correctSlots.name || correctSlots.partialName;
-                
-                if (discovery.issue || discovery.techMentioned || discovery.temperature) {
-                    // We have context - acknowledge it!
-                    const parts = [];
-                    
-                    if (callerName) {
-                        parts.push(`Got it, ${callerName}`);
-                    } else {
-                        parts.push('Got it');
-                    }
-                    
-                    // Acknowledge issue + temperature
-                    if (discovery.issue && discovery.temperature && discovery.temperature >= 80) {
-                        parts.push(`${discovery.issue} and it's ${discovery.temperature}° in the house`);
-                    } else if (discovery.issue) {
-                        parts.push(discovery.issue);
-                    }
-                    
-                    // Acknowledge tech mention and recent visit
-                    if (discovery.techMentioned && discovery.recentVisit) {
-                        parts.push(`You mentioned ${discovery.techMentioned} was out recently`);
-                    } else if (discovery.techMentioned) {
-                        parts.push(`I see ${discovery.techMentioned} was there before`);
-                    } else if (discovery.recentVisit) {
-                        parts.push(`I see someone was out recently`);
-                    }
-                    
-                    // Join and add transition
-                    ack = parts.join(' — ') + '. Let me get you taken care of.';
-                    
-                    log('🎯 V92: Context-aware acknowledgment built', {
-                        hasName: !!callerName,
-                        hasIssue: !!discovery.issue,
-                        hasTech: !!discovery.techMentioned,
-                        hasTemp: !!discovery.temperature,
-                        ack: ack.substring(0, 50)
-                    });
+                if (callerName) {
+                    parts.push(`Got it, ${callerName}`);
                 } else {
-                    // No context - use generic (rare now)
-                    ack = "Perfect! Let me get your information.";
+                    parts.push('Got it');
                 }
+                
+                if (discovery.issue && discovery.temperature && discovery.temperature >= 80) {
+                    parts.push(`${discovery.issue} and it's ${discovery.temperature}° in the house`);
+                } else if (discovery.issue) {
+                    parts.push(discovery.issue);
+                }
+                
+                if (discovery.techMentioned && discovery.recentVisit) {
+                    parts.push(`You mentioned ${discovery.techMentioned} was out recently`);
+                } else if (discovery.techMentioned) {
+                    parts.push(`I see ${discovery.techMentioned} was there before`);
+                } else if (discovery.recentVisit) {
+                    parts.push(`I see someone was out recently`);
+                }
+                
+                contextAck = parts.join(' — ') + '. Let me get you taken care of. ';
+            } else {
+                contextAck = "Perfect! Let me get your information. ";
+            }
             
-            aiLatencyMs = Date.now() - aiStartTime;
-            
-                // ═══════════════════════════════════════════════════════════════
-                // V92 ENHANCED: BOOKING SNAP SUCCESS LOGGING
-                // ═══════════════════════════════════════════════════════════════
-                // This is the critical moment - booking mode has started!
-                // Log everything needed to verify the flow is working.
-                log('📋 V92: BOOKING SNAP SUCCESS - Consent→Booking transition complete!', {
-                    // The response being sent
-                    acknowledgment: ack,
-                    firstSlotQuestion: exactQuestion,
-                    fullReply: `${ack} ${exactQuestion}`,
-                    // Slot being asked
-                    firstSlotId: slotId,
-                    firstSlotType: firstMissingSlot.type,
-                    // Booking flow state
-                    bookingModeLocked: true,
-                    bookingFlowId: bookingFlow.flowId,
+            try {
+                // Call BookingFlowRunner directly - this uses Booking Prompt tab
+                const bookingRunnerResult = await BookingFlowRunner.runStep({
+                    flow: bookingFlow,
+                    state: session.bookingFlowState,
+                    userInput: '', // First entry - no user input yet for this step
+                    company,
+                    session,
+                    callSid: session._id?.toString() || companyId,
+                    slots: slotsForRunner,
+                    awReader
+                });
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                
+                // Update session state from runner result
+                if (bookingRunnerResult.state) {
+                    session.bookingFlowState = {
+                        ...session.bookingFlowState,
+                        ...bookingRunnerResult.state,
+                        bookingModeLocked: true
+                    };
+                }
+                
+                // Build final reply: context acknowledgment + runner's booking question
+                const runnerReply = bookingRunnerResult.reply || '';
+                const finalReply = `${contextAck}${runnerReply}`.trim();
+                
+                log('📋 V96: BookingFlowRunner SUCCESS - First booking response', {
+                    contextAck: contextAck.substring(0, 50),
+                    runnerReply: runnerReply.substring(0, 100),
+                    finalReply: finalReply.substring(0, 150),
                     currentStepId: session.bookingFlowState?.currentStepId,
-                    // Slots already collected (from discovery)
-                    slotsCollectedSoFar: Object.keys(currentSlots).filter(k => currentSlots[k]),
-                    autoConfirmedSlots: Object.keys(autoConfirmedSlots),
-                    // Discovery context carried forward
-                    discoveryContext: {
-                        issue: discovery.issue || null,
-                        techMentioned: discovery.techMentioned || null,
-                        temperature: discovery.temperature || null,
-                        callerName: callerName || null
-                    },
-                    // Timing
-                    latencyMs: aiLatencyMs,
-                    tokensUsed: 0,
-                    // Consent details
-                    consentPhrase: session.booking?.consentPhrase,
-                    consentReason: session.booking?.consentReason
+                    bookingCollected: Object.keys(session.bookingFlowState?.bookingCollected || {}),
+                    isComplete: bookingRunnerResult.isComplete,
+                    latencyMs: aiLatencyMs
                 });
                 
                 aiResult = {
-                    reply: `${ack} ${exactQuestion}`,
+                    reply: finalReply,
                     conversationMode: 'booking',
                     intent: 'booking',
-                    nextGoal: `COLLECT_${slotId.toUpperCase()}`,
-                    filledSlots: correctSlots,  // V95 FIX: Use correctSlots (preExtractedSlots override)
+                    nextGoal: `COLLECT_${session.bookingFlowState?.currentStepId?.toUpperCase() || 'SLOT'}`,
+                    filledSlots: correctSlots,
                     signals: { 
                         wantsBooking: true,
                         consentGiven: true,
                         bookingJustStarted: true,
-                        bookingModeLocked: true  // 🔒 Signal to v2twilio.js
+                        bookingModeLocked: true
                     },
                     latencyMs: aiLatencyMs,
-                    tokensUsed: 0,  // 🎯 0 tokens - deterministic!
+                    tokensUsed: 0,
                     fromStateMachine: true,
                     mode: 'BOOKING',
-                    matchSource: 'BOOKING_SNAP',
+                    matchSource: 'BOOKING_FLOW_RUNNER_FIRST',  // V96: New source identifier
                     tier: 'tier1',
-                    // 🔒 Booking flow state for Redis persistence
                     bookingFlowState: session.bookingFlowState,
                     debug: {
-                        source: 'BOOKING_SNAP',
+                        source: 'BOOKING_FLOW_RUNNER_FIRST',
                         stage: 'booking',
-                        step: slotId,
-                        firstSlotQuestion: exactQuestion,
+                        step: session.bookingFlowState?.currentStepId,
+                        runnerAction: bookingRunnerResult.action,
                         bookingModeLocked: true,
                         bookingFlowId: bookingFlow.flowId,
-                        v95Fix: {
-                            currentSlotsName: currentSlots.name,
-                            preExtractedName: preExtractedSlots?.name,
-                            finalName: correctSlots.name
-                        }
+                        v96Fix: 'BookingFlowRunner speaks first, no BOOKING_SNAP'
+                    }
+                };
+                
+            } catch (runnerErr) {
+                // Fallback: If BookingFlowRunner fails, use a safe generic prompt
+                log('⚠️ V96: BookingFlowRunner failed, using safe fallback', {
+                    error: runnerErr.message,
+                    stack: runnerErr.stack?.substring(0, 200)
+                });
+                
+                aiLatencyMs = Date.now() - aiStartTime;
+                
+                // Get first step prompt from booking config as fallback
+                const bookingConfigFallback = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+                const firstSlot = (bookingConfigFallback.slots || []).find(s => s.required);
+                const fallbackQuestion = firstSlot?.prompt || "What's the best phone number to reach you at?";
+                
+                aiResult = {
+                    reply: `${contextAck}${fallbackQuestion}`,
+                    conversationMode: 'booking',
+                    intent: 'booking',
+                    nextGoal: 'COLLECT_SLOT',
+                    filledSlots: correctSlots,
+                    signals: { 
+                        wantsBooking: true,
+                        consentGiven: true,
+                        bookingJustStarted: true,
+                        bookingModeLocked: true
+                    },
+                    latencyMs: aiLatencyMs,
+                    tokensUsed: 0,
+                    fromStateMachine: true,
+                    mode: 'BOOKING',
+                    matchSource: 'BOOKING_RUNNER_FALLBACK',
+                    tier: 'tier1',
+                    bookingFlowState: session.bookingFlowState,
+                    debug: {
+                        source: 'BOOKING_RUNNER_FALLBACK',
+                        error: runnerErr.message,
+                        bookingModeLocked: true
                     }
                 };
             }
