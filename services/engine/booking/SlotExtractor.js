@@ -1117,20 +1117,18 @@ class SlotExtractor {
         // When someone says "my name is X um, and mark that's Mark Gonzales"
         // The "that's Mark Gonzales" is the REAL name, not "X"
         // 
-        // V96 FIX: REMOVED "it's" from correction patterns!
-        // BUG: "it's currently not working" was extracting "Currently" as a name
-        // because the pattern "it's X" matched and "currently" passed (before V96c).
-        // Even with V96c stop words, "it's" is too ambiguous for name correction.
-        // 
-        // Now only "that's X" / "actually X" / "I mean X" are valid correction patterns.
+        // V96k FIX: Made correction patterns much more restrictive!
+        // BUG: "I'm seeing that there is water leakage" was extracting "water leakage" as a name
+        // because the pattern "that's X" at end of sentence was too broad.
+        //
+        // Now correction patterns are VERY specific and only match explicit name corrections.
         // ═══════════════════════════════════════════════════════════════════════════
         const correctionPatterns = [
             // "that's Mark Gonzales" / "actually Mark" / "I mean Mark" - EXPLICIT corrections only
             // NOTE: "it's" REMOVED - too ambiguous, matches "it's currently not working"
+            // NOTE: End-of-sentence "that's X" REMOVED - too broad, matches "I see that there is X"
             /(?:that'?s|that\s+is|actually|i\s+mean|well\s+that'?s)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*[.,]?\s*(?:and|$)/i,
-            /(?:that'?s|that\s+is|actually|i\s+mean)\s+([a-zA-Z]+\s+[a-zA-Z]+)/i,
-            // "[anything] that's X" at end of sentence - the correction is most likely the real name
-            /that'?s\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s*[.!?,]*\s*$/i
+            /(?:that'?s|that\s+is|actually|i\s+mean)\s+([a-zA-Z]+\s+[a-zA-Z]+)/i
         ];
         
         for (const pattern of correctionPatterns) {
