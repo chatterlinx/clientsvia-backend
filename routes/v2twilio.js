@@ -3192,7 +3192,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             },
             debug: {
               mode: 'booking',
-              source: 'BOOKING_GATE_ABSOLUTE',
+              // V96j FIX: Must be 'BOOKING_FLOW_RUNNER' for branchTaken check to work
+              source: 'BOOKING_FLOW_RUNNER',
               flowId: flow.flowId,
               currentStep: bookingResult.state?.currentStepId,
               isComplete: bookingResult.isComplete,
@@ -3226,11 +3227,18 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             action: bookingResult.action,
             currentStep: bookingResult.state?.currentStepId,
             isComplete: bookingResult.isComplete,
-            latencyMs: bookingLatencyMs
+            latencyMs: bookingLatencyMs,
+            responsePreview: (bookingResult.reply || '').substring(0, 80)
           });
           
-          // SKIP ALL OTHER PROCESSING - jump directly to response
-          // (result is now set, all other handlers will see result !== null)
+          // ═══════════════════════════════════════════════════════════════════
+          // V96j: BOOKING GATE HANDLED - Mark that we should skip all other processing
+          // ═══════════════════════════════════════════════════════════════════
+          // Set this flag so downstream code knows booking gate already responded.
+          // This is defense-in-depth - the !result checks should work, but this
+          // makes it explicit and traceable.
+          // ═══════════════════════════════════════════════════════════════════
+          callState._bookingGateHandled = true;
           
         } catch (bookingGateErr) {
           logger.error('[BOOKING GATE] ❌ BookingFlowRunner failed', {
@@ -3655,7 +3663,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               : 'vendor')
           : 'legacy';
         
-        if (useHybridPath && !result) {
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V96j: BOOKING GATE BYPASS PROTECTION
+        // ═══════════════════════════════════════════════════════════════════════════
+        // If booking gate already handled this turn, DO NOT run ConversationEngine.
+        // This is defense-in-depth on top of the !result check.
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (callState?._bookingGateHandled && result) {
+          logger.info('[V96j] Skipping ConversationEngine - booking gate already handled', {
+            callSid,
+            matchSource: result?.matchSource,
+            debugSource: result?.debug?.source
+          });
+        } else if (useHybridPath && !result) {
           try {
             usedPath = 'hybrid';
             tracer.step('HYBRID_PATH_START', '🚀 Fast hybrid path - bypassing slow decideNextStep');
@@ -4354,7 +4374,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     };
     
     // Checkpoint C2: Booking short-circuit decision (original checkpoint C)
-    const branchTaken = result?.debug?.source === 'BOOKING_FLOW_RUNNER' ? 'BOOKING_RUNNER' :
+    // V96j FIX: Check BOTH debug.source AND matchSource for BOOKING_FLOW_RUNNER
+    const branchTaken = (result?.debug?.source === 'BOOKING_FLOW_RUNNER' || result?.matchSource === 'BOOKING_FLOW_RUNNER') ? 'BOOKING_RUNNER' :
                         result?.matchSource === 'AFTER_HOURS_FLOW' ? 'AFTER_HOURS' :
                         result?.matchSource === 'VENDOR_FLOW' ? 'VENDOR' :
                         result?.matchSource === 'BOOKING_CONSENT_QUESTION' ? 'BOOKING_CONSENT_QUESTION' :
