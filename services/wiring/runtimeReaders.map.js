@@ -601,6 +601,7 @@ const RUNTIME_READERS_MAP = {
 
     // =========================================================================
     // FRONT DESK - ADDRESS VERIFICATION POLICY (Google Geocode + completeness gating)
+    // V97 FIX: Unified path under frontDeskBehavior for consistency
     // =========================================================================
     'booking.addressVerification': {
         readers: [
@@ -612,7 +613,9 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification',
+        // V97: Canonical path is frontDeskBehavior.booking.addressVerification
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification',
         scope: 'company',
         defaultValue: { enabled: true, provider: 'google_geocode' }
     },
@@ -634,7 +637,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.enabled',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.enabled',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.enabled',
         scope: 'company',
         defaultValue: true
     },
@@ -649,7 +653,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.provider',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.provider',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.provider',
         scope: 'company',
         defaultValue: 'google_geocode'
     },
@@ -664,7 +669,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireCity',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.requireCity',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireCity',
         scope: 'company',
         defaultValue: true
     },
@@ -680,7 +686,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireState',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.requireState',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireState',
         scope: 'company',
         defaultValue: false // V93: Don't ask state unless business requires (geo can infer from city)
     },
@@ -695,7 +702,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireZip',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.requireZip',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireZip',
         scope: 'company',
         defaultValue: false
     },
@@ -710,7 +718,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.requireUnitQuestion',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion',
         scope: 'company',
         defaultValue: true
     },
@@ -725,7 +734,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.unitQuestionMode',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode',
         scope: 'company',
         defaultValue: 'house_or_unit'
     },
@@ -740,7 +750,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.missingCityStatePrompt',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.missingCityStatePrompt',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.missingCityStatePrompt',
         scope: 'company',
         defaultValue: "Got it — what city and state is that in?"
     },
@@ -755,7 +766,8 @@ const RUNTIME_READERS_MAP = {
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.unitTypePrompt',
+        legacyPath: 'company.aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt',
         scope: 'company',
         defaultValue: "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?"
     },
