@@ -4786,8 +4786,10 @@ async function processTurn({
         // were catching booking utterances before booking detection could run.
         //
         // Now booking intent runs FIRST with highest priority!
+        // NOTE: ConsentDetector is defined in THIS FILE (line ~2413), not in engine/booking
         // ═══════════════════════════════════════════════════════════════════════
-        const { DirectBookingIntentDetector, ConsentDetector } = require('./engine/booking');
+        const { DirectBookingIntentDetector } = require('./engine/booking');
+        // ConsentDetector is already available in this scope (defined above at line ~2413)
         
         // AW wiring: Read config for explicit consent requirement
         const bookingRequiresExplicitConsent = awReader 
