@@ -2320,7 +2320,72 @@ class BookingFlowRunner {
     static async handleCollectMode(action, state, flow, userInput, company, startTime) {
         const { step } = action;
         const fieldKey = step.fieldKey || step.id;
-        
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96k: HANDLE SPELLING CONFIRMATION RESPONSE
+        // ═══════════════════════════════════════════════════════════════════════
+        // If we asked for spelling confirmation and this is the response
+        if (state.pendingSpellingConfirm && state.spellingQuestionAsked) {
+            return this.handleSpellingConfirmationResponse(userInput, state, flow, step, startTime);
+        }
+
+        // Handle spelling correction response
+        if (state.spellingCorrectionPending && state.pendingSpellingConfirm) {
+            const correctedName = userInput.trim();
+            const { fieldKey, value: originalValue } = state.pendingSpellingConfirm;
+
+            // Replace the first name in the full name
+            let finalValue = originalValue;
+            if (originalValue.includes(' ')) {
+                // Has last name - replace only first name
+                const nameParts = originalValue.split(/\s+/);
+                nameParts[0] = correctedName;
+                finalValue = nameParts.join(' ');
+            } else {
+                // Only first name
+                finalValue = correctedName;
+            }
+
+            logger.info('[BOOKING FLOW RUNNER] V96k: Spelling correction provided', {
+                originalValue,
+                correctedValue: finalValue,
+                userProvided: correctedName
+            });
+
+            // Clean up spelling state
+            delete state.pendingSpellingConfirm;
+            delete state.spellingQuestionAsked;
+            delete state.spellingCorrectionPending;
+            delete state.tempCollectedName;
+
+            // Store the final value and advance
+            const setResult = safeSetSlot(state, fieldKey, finalValue, {
+                source: 'spelling_corrected',
+                confidence: 0.95
+            });
+
+            if (!setResult.accepted) {
+                logger.warn('[BOOKING FLOW RUNNER] V96k: Failed to store corrected name', {
+                    fieldKey,
+                    finalValue,
+                    reason: setResult.reason
+                });
+                return this.repromptStep(step, state, flow, `invalid_${fieldKey}`);
+            }
+
+            // Mark as confirmed and advance to next step
+            markSlotConfirmed(state, fieldKey);
+
+            const nextAction = this.findNextRequiredStep(flow, state);
+            if (!nextAction) {
+                // All steps complete - build confirmation
+                return this.buildConfirmation(flow, state);
+            }
+
+            // Ask next step
+            return this.askStep(nextAction.step, state, flow);
+        }
+
         // First entry or no input - ask the question
         if (!userInput || userInput.trim() === '') {
             logger.info('[BOOKING FLOW RUNNER] COLLECT MODE - Asking for slot', {
@@ -2862,6 +2927,81 @@ class BookingFlowRunner {
             geoValidated: addressValidation?.success || false
         });
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96k: SPELLING CONFIRMATION FOR COLLECT MODE
+        // ═══════════════════════════════════════════════════════════════════════
+        // When collecting a name in COLLECT mode (not COLLECT_DETAILS), we still
+        // need to check if spelling confirmation is required for common names
+        // like "Mark" vs "Marc". This logic mirrors COLLECT_DETAILS mode.
+        // ═══════════════════════════════════════════════════════════════════════
+        if ((fieldKey === 'name' || step.type === 'name') && valueToStore) {
+            const slotOptions = step.options || {};
+            const confirmSpelling = slotOptions.confirmSpelling !== false; // Default true
+
+            if (confirmSpelling) {
+                const nameToSpell = valueToStore;
+                const firstName = nameToSpell?.split?.(/\s+/)?.[0] || nameToSpell;
+
+                // Check if this first name needs spelling confirmation
+                const nameLower = firstName?.toLowerCase?.() || '';
+                let variants = [];
+                for (const group of SIMILAR_NAME_GROUPS) {
+                    if (group.includes(nameLower)) {
+                        variants = group.filter(v => v !== nameLower);
+                        break;
+                    }
+                }
+
+                if (variants.length > 0 || firstName.length <= 3) {
+                    // Name needs spelling confirmation - ask now before advancing
+                    logger.info('[BOOKING FLOW RUNNER] V96k: Name collected but needs spelling confirmation', {
+                        name: valueToStore,
+                        firstName,
+                        hasVariants: variants.length > 0,
+                        isShort: firstName.length <= 3
+                    });
+
+                    // Store the collected value temporarily
+                    state.tempCollectedName = valueToStore;
+                    state.pendingSpellingConfirm = {
+                        fieldKey,
+                        value: valueToStore,
+                        firstName,
+                        variants
+                    };
+
+                    let spellingPrompt;
+                    if (variants.length > 0) {
+                        // Use configured prompt or build one with variants
+                        const primaryVariant = variants[0];
+                        const currentSpelling = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+                        const altSpelling = primaryVariant.charAt(0).toUpperCase() + primaryVariant.slice(1).toLowerCase();
+
+                        spellingPrompt = slotOptions.spellingVariantPrompt
+                            ? slotOptions.spellingVariantPrompt
+                                .replace('{optionA}', currentSpelling)
+                                .replace('{optionB}', altSpelling)
+                            : `Just to confirm — is that ${currentSpelling} or ${altSpelling}?`;
+                    } else {
+                        // Spell out letter by letter for short names
+                        const spelled = firstName.toUpperCase().split('').join(' - ');
+                        spellingPrompt = `Let me confirm the spelling: ${spelled}. Is that correct?`;
+                    }
+
+                    state.spellingQuestionAsked = true;
+
+                    return {
+                        reply: spellingPrompt,
+                        state,
+                        isComplete: false,
+                        action: 'CONFIRM_SPELLING',
+                        currentStep: step.id,
+                        matchSource: 'BOOKING_FLOW_RUNNER'
+                    };
+                }
+            }
+        }
+
         // ═══════════════════════════════════════════════════════════════════════
         // V92: FULL NAME HANDLING - Wire askFullName, lastNameQuestion, etc.
         // ═══════════════════════════════════════════════════════════════════════
@@ -3853,6 +3993,100 @@ class BookingFlowRunner {
                 userInput: input
             }
         };
+    }
+
+    /**
+     * ========================================================================
+     * V96k: HANDLE SPELLING CONFIRMATION RESPONSE
+     * ========================================================================
+     * Process user response to spelling confirmation question
+     */
+    static async handleSpellingConfirmationResponse(userInput, state, flow, step, startTime) {
+        const pendingSpelling = state.pendingSpellingConfirm;
+        if (!pendingSpelling) {
+            logger.warn('[BOOKING FLOW RUNNER] V96k: No pending spelling confirmation', { userInput });
+            return this.repromptStep(step, state, flow, 'spelling_confirmation_lost');
+        }
+
+        const spellingResponse = userInput.toLowerCase().trim();
+        const { fieldKey, value: originalValue, firstName } = pendingSpelling;
+
+        // Check if they confirmed or provided a correction
+        const isYes = /^(yes|yeah|yep|correct|right|that's right|that is correct|exactly)$/i.test(spellingResponse);
+        const isNo = /^(no|nope|nah|incorrect|wrong)$/i.test(spellingResponse);
+
+        let finalValue = originalValue;
+
+        if (isYes) {
+            // Confirmed original spelling - proceed with collection
+            logger.info('[BOOKING FLOW RUNNER] V96k: Spelling confirmed', {
+                originalValue,
+                confirmed: true
+            });
+        } else if (isNo) {
+            // Denied - ask for correction but keep the pending state
+            state.spellingCorrectionPending = true;
+            return {
+                reply: `What is the correct spelling for the name?`,
+                state,
+                isComplete: false,
+                action: 'COLLECT_SPELLING_CORRECTION',
+                currentStep: step.id,
+                matchSource: 'BOOKING_FLOW_RUNNER'
+            };
+        } else {
+            // User provided a new spelling directly
+            const correctedName = userInput.trim();
+
+            // Replace the first name in the full name
+            if (originalValue.includes(' ')) {
+                // Has last name - replace only first name
+                const nameParts = originalValue.split(/\s+/);
+                nameParts[0] = correctedName;
+                finalValue = nameParts.join(' ');
+            } else {
+                // Only first name
+                finalValue = correctedName;
+            }
+
+            logger.info('[BOOKING FLOW RUNNER] V96k: Spelling corrected', {
+                originalValue,
+                correctedValue: finalValue,
+                userProvided: correctedName
+            });
+        }
+
+        // Clean up spelling state
+        delete state.pendingSpellingConfirm;
+        delete state.spellingQuestionAsked;
+        delete state.tempCollectedName;
+
+        // Store the final value and advance
+        const setResult = safeSetSlot(state, fieldKey, finalValue, {
+            source: 'spelling_confirmed',
+            confidence: 0.95
+        });
+
+        if (!setResult.accepted) {
+            logger.warn('[BOOKING FLOW RUNNER] V96k: Failed to store corrected name', {
+                fieldKey,
+                finalValue,
+                reason: setResult.reason
+            });
+            return this.repromptStep(step, state, flow, `invalid_${fieldKey}`);
+        }
+
+        // Mark as confirmed and advance to next step
+        markSlotConfirmed(state, fieldKey);
+
+        const nextAction = this.findNextRequiredStep(flow, state);
+        if (!nextAction) {
+            // All steps complete - build confirmation
+            return this.buildConfirmation(flow, state);
+        }
+
+        // Ask next step
+        return this.askStep(nextAction.step, state, flow);
     }
 }
 
