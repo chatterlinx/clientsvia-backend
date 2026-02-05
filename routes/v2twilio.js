@@ -3747,6 +3747,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 // ═══════════════════════════════════════════════════════════════════
                 // These fields are saved to Redis and checked at the TOP of the next turn.
                 // If bookingModeLocked === true, BookingFlowRunner runs instead of LLM.
+                // 
+                // V96 FIX: Store BOTH individual fields AND bookingFlowState object.
+                // The individual fields are for backward compatibility.
+                // The bookingFlowState object prevents auto-init from creating defaults.
                 // ═══════════════════════════════════════════════════════════════════
                 ...(engineResult.bookingFlowState ? {
                   bookingModeLocked: engineResult.bookingFlowState.bookingModeLocked,
@@ -3754,7 +3758,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   currentStepId: engineResult.bookingFlowState.currentStepId,
                   currentBookingStep: engineResult.bookingFlowState.currentStepId, // Alias
                   bookingCollected: engineResult.bookingFlowState.bookingCollected || {},
-                  bookingState: engineResult.bookingFlowState.bookingState || 'ACTIVE'
+                  bookingState: engineResult.bookingFlowState.bookingState || 'ACTIVE',
+                  // V96 FIX: Store the full object so next turn's auto-init doesn't override
+                  bookingFlowState: {
+                    bookingModeLocked: engineResult.bookingFlowState.bookingModeLocked,
+                    bookingFlowId: engineResult.bookingFlowState.bookingFlowId,
+                    currentStepId: engineResult.bookingFlowState.currentStepId,
+                    bookingCollected: engineResult.bookingFlowState.bookingCollected || {},
+                    bookingState: engineResult.bookingFlowState.bookingState || 'ACTIVE'
+                  }
                 } : {})
               },
               debug: {
