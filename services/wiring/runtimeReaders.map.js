@@ -1363,6 +1363,54 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // V96j: STRICT CONFIG REGISTRY (Nuke Clean Sweep)
+    // =========================================================================
+    'infra.strictConfigRegistry': {
+        readers: [
+            {
+                file: 'services/wiring/AWConfigReader.js',
+                function: '_handleDeadRead',
+                line: 750,
+                description: 'When true, DEAD_READs emit CONFIG_REGISTRY_VIOLATION events',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.infra.strictConfigRegistry',
+        scope: 'company',
+        defaultValue: false
+    },
+    
+    'infra.strictConfigRegistry.blockDeadReads': {
+        readers: [
+            {
+                file: 'services/wiring/AWConfigReader.js',
+                function: '_handleDeadRead',
+                line: 752,
+                description: 'When true (and strict mode enabled), DEAD_READs return undefined instead of reading',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.infra.strictConfigRegistry.blockDeadReads',
+        scope: 'company',
+        defaultValue: false
+    },
+    
+    'infra.strictConfigRegistry.allowlist': {
+        readers: [
+            {
+                file: 'services/wiring/AWConfigReader.js',
+                function: '_handleDeadRead',
+                line: 753,
+                description: 'Array of AW paths allowed to be read even if not in registry',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.infra.strictConfigRegistry.allowlist',
+        scope: 'company',
+        defaultValue: []
+    },
+
+    // =========================================================================
     // SCENARIOS (from templates)
     // =========================================================================
     'dataConfig.scenarios': {

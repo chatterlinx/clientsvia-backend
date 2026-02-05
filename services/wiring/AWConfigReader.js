@@ -450,7 +450,18 @@ const AW_PATH_MAPPINGS = {
     // ─────────────────────────────────────────────────────────────────────────
     // INFRASTRUCTURE - AW Enforcement (Phase 6h)
     // ─────────────────────────────────────────────────────────────────────────
-    'infra.aw.enforcementMode': 'aiAgentSettings.infra.aw.enforcementMode' // off | warn | throw
+    'infra.aw.enforcementMode': 'aiAgentSettings.infra.aw.enforcementMode', // off | warn | throw
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // V96j: STRICT CONFIG REGISTRY (Nuke Clean Sweep)
+    // ─────────────────────────────────────────────────────────────────────────
+    // When true, any DEAD_READ (runtime reads config path not in registry)
+    // emits CONFIG_REGISTRY_VIOLATION and blocks/logs based on environment.
+    // Enable for Penguin Air only first to catch all legacy readers.
+    // ─────────────────────────────────────────────────────────────────────────
+    'infra.strictConfigRegistry': 'aiAgentSettings.infra.strictConfigRegistry', // boolean
+    'infra.strictConfigRegistry.blockDeadReads': 'aiAgentSettings.infra.strictConfigRegistry.blockDeadReads', // boolean
+    'infra.strictConfigRegistry.allowlist': 'aiAgentSettings.infra.strictConfigRegistry.allowlist' // string[] - paths allowed even if not in registry
 };
 
 // ============================================================================
@@ -618,6 +629,20 @@ class AWConfigReader {
             const isRegistered = isPathRegistered(awPath);
             
             if (!isRegistered) {
+                // V96j: Enhanced DEAD_READ handling with strict mode
+                const deadReadResult = this._handleDeadRead(awPath, this.readerId);
+                
+                if (deadReadResult.blocked) {
+                    // Strict mode is blocking this read
+                    logger.warn('[AW CONFIG READER] 🚫 DEAD_READ BLOCKED', { 
+                        awPath, 
+                        readerId: this.readerId,
+                        reason: deadReadResult.reason 
+                    });
+                    return defaultValue; // Return default instead of reading unregistered path
+                }
+                
+                // Also emit the original AW_VIOLATION for backward compat
                 this._handleViolation(awPath, 'UNREGISTERED_AW_PATH');
                 
                 if (this.enforcementMode === 'throw') {
@@ -730,6 +755,87 @@ class AWConfigReader {
                 // Silent fail - never let tracing kill the call
             }
         }
+    }
+    
+    /**
+     * V96j: Handle DEAD_READ violation (strict config registry)
+     * ═══════════════════════════════════════════════════════════════════════
+     * DEAD_READ = runtime reads a config path that is NOT in the registry.
+     * This is how "ghost/legacy readers" bypass Control Plane.
+     * 
+     * When infra.strictConfigRegistry is enabled:
+     * - Emit CONFIG_REGISTRY_VIOLATION event
+     * - If blockDeadReads is true, return undefined (block the read)
+     * - If in dev/staging, throw error
+     * ═══════════════════════════════════════════════════════════════════════
+     * @private
+     */
+    _handleDeadRead(awPath, readerLocation) {
+        // Check if strict mode is enabled for this company
+        const strictMode = getByPath(this.runtimeConfig, 'aiAgentSettings.infra.strictConfigRegistry');
+        const blockDeadReads = getByPath(this.runtimeConfig, 'aiAgentSettings.infra.strictConfigRegistry.blockDeadReads');
+        const allowlist = getByPath(this.runtimeConfig, 'aiAgentSettings.infra.strictConfigRegistry.allowlist') || [];
+        
+        // Check if this path is explicitly allowlisted
+        if (Array.isArray(allowlist) && allowlist.includes(awPath)) {
+            logger.debug('[AW CONFIG READER] DEAD_READ path is allowlisted', { awPath });
+            return { blocked: false, reason: 'ALLOWLISTED' };
+        }
+        
+        const violation = {
+            type: 'CONFIG_REGISTRY_VIOLATION',
+            ts: new Date().toISOString(),
+            turn: this.turn,
+            data: {
+                kind: 'DEAD_READ',
+                awPath,
+                readerId: this.readerId,
+                readerLocation: readerLocation || 'unknown',
+                strictModeEnabled: !!strictMode,
+                blockDeadReads: !!blockDeadReads,
+                action: strictMode 
+                    ? (blockDeadReads ? 'BLOCKED' : 'LOGGED') 
+                    : 'IGNORED',
+                remediation: 'Add to wiringRegistry.v2.js OR remove legacy reader'
+            }
+        };
+        
+        // Track locally
+        this.violations.push(violation);
+        
+        // Log based on severity
+        if (strictMode) {
+            logger.error('[AW CONFIG READER] 🚨 CONFIG_REGISTRY_VIOLATION (DEAD_READ)', violation.data);
+        } else {
+            logger.warn('[AW CONFIG READER] ⚠️ DEAD_READ detected (strict mode OFF)', violation.data);
+        }
+        
+        // Emit to Black Box (always emit for tracking, even if not blocking)
+        if (BlackBoxLogger?.logEvent && this.callId && this.companyId) {
+            try {
+                BlackBoxLogger.logEvent({
+                    callId: this.callId,
+                    companyId: this.companyId,
+                    type: 'CONFIG_REGISTRY_VIOLATION',
+                    turn: this.turn,
+                    data: violation.data
+                }).catch(() => {}); // Silent fail
+            } catch (err) {
+                // Silent fail - never let tracing kill the call
+            }
+        }
+        
+        // Return blocking decision
+        if (strictMode && blockDeadReads) {
+            return { blocked: true, reason: 'STRICT_MODE_BLOCK' };
+        }
+        
+        // In dev/test with throw enforcement, throw error
+        if (this.enforcementMode === 'throw' && strictMode) {
+            throw new Error(`[CONFIG_REGISTRY_VIOLATION] DEAD_READ: ${awPath}. Add to registry or remove reader.`);
+        }
+        
+        return { blocked: false, reason: strictMode ? 'STRICT_MODE_WARN' : 'NOT_STRICT' };
     }
     
     /**

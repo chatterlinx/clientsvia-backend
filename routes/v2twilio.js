@@ -4797,6 +4797,49 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           promptSource = `scenario:${result.scenarioId || result.debug?.scenarioId || 'matched'}`;
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96j: BOOKING_VOICE_COLLISION DETECTION
+        // ═══════════════════════════════════════════════════════════════════════
+        // When bookingModeLocked=true, ONLY BookingFlowRunner should speak.
+        // If any other speaker generates a response, that's a VOICE COLLISION.
+        // This is the smoking gun for "multiple booking systems alive" bug.
+        // ═══════════════════════════════════════════════════════════════════════
+        const isVoiceCollision = 
+          callState?.bookingModeLocked === true && 
+          responseOwner !== 'BOOKING_FLOW_RUNNER' &&
+          responseOwner !== 'SILENCE_HANDLER' && // Silence handling is OK
+          responseOwner !== 'UNKNOWN'; // Don't flag if we can't determine owner
+        
+        if (isVoiceCollision) {
+          logger.error('[V96j] 🚨 BOOKING_VOICE_COLLISION DETECTED', {
+            callSid,
+            turn: turnCount,
+            bookingModeLocked: true,
+            unexpectedSpeaker: responseOwner,
+            expectedSpeaker: 'BOOKING_FLOW_RUNNER',
+            matchSource: result.matchSource,
+            responsePreview: (result.response || result.text || '').substring(0, 80)
+          });
+          
+          // Emit BOOKING_VOICE_COLLISION event to Black Box
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'BOOKING_VOICE_COLLISION',
+            turn: turnCount,
+            data: {
+              turn: turnCount,
+              bookingModeLocked: true,
+              unexpectedSpeaker: responseOwner,
+              expectedSpeaker: 'BOOKING_FLOW_RUNNER',
+              matchSource: result.matchSource || 'UNKNOWN',
+              debugSource: result.debug?.source || 'UNKNOWN',
+              responsePreview: (result.response || result.text || '').substring(0, 100),
+              remediation: 'Ensure BookingFlowRunner is the ONLY speaker when bookingModeLocked=true. Delete/disable competing responders.'
+            }
+          }).catch(() => {});
+        }
+        
         BlackBoxLogger.logEvent({
           callId: callSid,
           companyId: companyID,

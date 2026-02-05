@@ -1645,6 +1645,36 @@ const wiringRegistryV2 = {
             description: 'Primary database',
             scope: 'system',
             critical: true
+        },
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96j: STRICT CONFIG REGISTRY (Nuke Clean Sweep)
+        // ═══════════════════════════════════════════════════════════════════════
+        {
+            id: 'infra.strictConfigRegistry',
+            label: 'Strict Config Registry',
+            description: 'When enabled, any DEAD_READ (runtime reads config path not in registry) emits CONFIG_REGISTRY_VIOLATION. Enable for specific companies to catch legacy readers.',
+            db: { path: 'aiAgentSettings.infra.strictConfigRegistry' },
+            scope: 'company',
+            critical: false,
+            defaultValue: false
+        },
+        {
+            id: 'infra.strictConfigRegistry.blockDeadReads',
+            label: 'Block Dead Reads',
+            description: 'When strict mode is enabled AND this is true, DEAD_READs return undefined instead of reading the unregistered path.',
+            db: { path: 'aiAgentSettings.infra.strictConfigRegistry.blockDeadReads' },
+            scope: 'company',
+            critical: false,
+            defaultValue: false
+        },
+        {
+            id: 'infra.strictConfigRegistry.allowlist',
+            label: 'Dead Read Allowlist',
+            description: 'Array of AW paths that are allowed to be read even if not in registry (for gradual migration).',
+            db: { path: 'aiAgentSettings.infra.strictConfigRegistry.allowlist' },
+            scope: 'company',
+            critical: false,
+            defaultValue: []
         }
     ],
     
