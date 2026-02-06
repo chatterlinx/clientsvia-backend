@@ -3752,6 +3752,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   sttProcessResult
                 },
                 preExtractedSlots,  // 🎯 Slots from Redis state
+                // V97 FIX: Pass bookingConsentPending from Redis so consent detection works
+                bookingConsentPending: callState.bookingConsentPending === true,
                 includeDebug: false  // No debug for production calls
               }),
               new Promise((_, reject) => 
@@ -3968,6 +3970,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 sessionId: engineResult.sessionId,
                 phase: engineResult.phase,
                 collectedSlots: engineResult.slotsCollected,
+                // ═══════════════════════════════════════════════════════════════════
+                // V97 FIX: SAVE bookingConsentPending TO REDIS
+                // ═══════════════════════════════════════════════════════════════════
+                // BUG: When consent question was asked (Turn 2), the pending flag was
+                // only saved to MongoDB session, not Redis. On Turn 3, Redis had no
+                // record of the pending consent, so "Yes please" wasn't recognized.
+                // FIX: Save consent pending state to Redis.
+                // CLEAR when: consent granted (bookingModeLocked becomes true)
+                // PERSIST when: consent question just asked (signal is true)
+                // ═══════════════════════════════════════════════════════════════════
+                bookingConsentPending: (engineResult.bookingFlowState?.bookingModeLocked === true || engineResult.signals?.bookingModeLocked === true)
+                  ? false  // Consent granted → clear pending
+                  : (engineResult.signals?.bookingConsentPending === true || callState.bookingConsentPending === true),
                 // ═══════════════════════════════════════════════════════════════════
                 // 🔒 BOOKING FLOW STATE (Feb 2026)
                 // ═══════════════════════════════════════════════════════════════════

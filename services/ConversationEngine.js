@@ -3043,7 +3043,11 @@ async function processTurn({
     includeDebug = false,
     debug = false,
     forceNewSession = false,  // For Test Console - always create fresh session
-    preExtractedSlots = {}    // 🎯 FEB 2026: Slots pre-extracted by v2twilio (from Redis state)
+    preExtractedSlots = {},   // 🎯 FEB 2026: Slots pre-extracted by v2twilio (from Redis state)
+    // V97 FIX: Consent pending flag from Redis (not MongoDB session)
+    // BUG: When consent question was asked on Turn 2, the pending flag was only
+    // in MongoDB. Turn 3 loaded from Redis which had no record of the pending consent.
+    bookingConsentPending: paramBookingConsentPending = false
 }) {
     const startTime = Date.now();
         const debugLog = [];
@@ -4857,7 +4861,10 @@ async function processTurn({
         // Early booking intent detection (before meta intents can intercept)
         let earlyBookingIntent = null;
         let earlyConsentCheck = null;
-        let bookingConsentPending = session.booking?.consentPending || false;
+        // V97 FIX: Use BOTH MongoDB session AND Redis parameter for consent pending
+        // BUG: Consent question asked on Turn 2 set MongoDB flag, but Turn 3
+        // loaded state from Redis which didn't have the flag → consent not detected!
+        let bookingConsentPending = session.booking?.consentPending || paramBookingConsentPending || false;
         
         if (!aiResult && userText && userText.length > 3) {
             // 1. Check for DIRECT booking intent (highest priority)
