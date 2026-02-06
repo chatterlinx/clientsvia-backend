@@ -39,14 +39,25 @@ async function main() {
         process.exit(1);
     }
     
-    const mongoUri = process.env.MONGODB_URI;
+    // Support multiple env var names (Render uses different names)
+    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.DATABASE_URL;
+    const envVarUsed = process.env.MONGODB_URI ? 'MONGODB_URI' : 
+                       process.env.MONGO_URI ? 'MONGO_URI' : 
+                       process.env.DATABASE_URL ? 'DATABASE_URL' : null;
+    
     if (!mongoUri) {
-        console.error('ERROR: MONGODB_URI environment variable not set');
+        console.error('ERROR: No MongoDB connection string found');
+        console.error('');
+        console.error('Set one of: MONGODB_URI, MONGO_URI, or DATABASE_URL');
         console.error('');
         console.error('Usage:');
         console.error('  MONGODB_URI="mongodb+srv://..." node scripts/enable-strict-mode.js <companyId> [level]');
+        console.error('');
+        console.error('Or run from Render Shell where env vars are already set.');
         process.exit(1);
     }
+    
+    console.log(`Using env var: ${envVarUsed}`);
     
     console.log('═══════════════════════════════════════════════════════════════════════════════');
     console.log('ENABLE STRICT CONTROL PLANE MODE');

@@ -285,6 +285,39 @@ async function loadAllRoutes() {
 // Load routes asynchronously with timeout protection
 const routesPromise = loadAllRoutes();
 
+// ============================================================================
+// 🛡️ BOOT VERIFICATION: Control Plane Modules (V100)
+// ============================================================================
+// These modules MUST load for strict Control Plane enforcement to work.
+// If they fail silently, strict mode appears enabled but doesn't actually run.
+// ============================================================================
+(function verifyControlPlaneModules() {
+    console.log('[BOOT] Verifying Control Plane modules...');
+    
+    // 1) ControlPlaneEnforcer
+    try {
+        const ControlPlaneEnforcer = require('./services/engine/ControlPlaneEnforcer');
+        const contractVersion = ControlPlaneEnforcer.CONTRACT?.version || 'unknown';
+        const keyCount = ControlPlaneEnforcer.CONTRACT_KEYS?.size || 0;
+        console.log(`[BOOT] ✅ ControlPlaneEnforcer OK | contractVersion=${contractVersion} | keyCount=${keyCount}`);
+    } catch (err) {
+        console.error(`[BOOT] ❌ ControlPlaneEnforcer FAILED TO LOAD: ${err.message}`);
+        console.error('[BOOT] ⚠️ Strict mode will NOT work without this module!');
+    }
+    
+    // 2) FrontDeskRuntime
+    try {
+        const FrontDeskRuntime = require('./services/engine/FrontDeskRuntime');
+        const lanes = FrontDeskRuntime.LANES || {};
+        console.log(`[BOOT] ✅ FrontDeskRuntime OK | lanes=${Object.keys(lanes).join(',')}`);
+    } catch (err) {
+        console.error(`[BOOT] ❌ FrontDeskRuntime FAILED TO LOAD: ${err.message}`);
+        console.error('[BOOT] ⚠️ Strict mode routing will NOT work without this module!');
+    }
+    
+    console.log('[BOOT] Control Plane module verification complete');
+})();
+
 // Initialize Express app
 // --- Boot-time allow-list to prevent env drift ---
 (function assertMongoUriSafe() {

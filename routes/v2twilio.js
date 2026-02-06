@@ -3934,6 +3934,37 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             // This path will be removed in Pass 2 after live call verification.
             // For now, it serves as fallback when strict mode is not enabled.
             // ════════════════════════════════════════════════════════════════════════
+            
+            // V100 SAFETY CHECK: If the company THINKS they're in strict mode but we're here,
+            // something is wrong (module load failure, config drift, etc). Log loudly.
+            const intendedStrict = company?.aiAgentSettings?.frontDesk?.enforcement?.level === 'strict' ||
+                                   company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly === true;
+            if (intendedStrict) {
+              logger.error('[V100] LEGACY_PATH_BLOCKED_VIOLATION: Strict mode intended but legacy path running!', {
+                callSid,
+                companyId: companyID,
+                enforcementLevel: company?.aiAgentSettings?.frontDesk?.enforcement?.level,
+                strictControlPlaneOnly: company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly,
+                reason: 'This should NOT happen - FrontDeskRuntime or ControlPlaneEnforcer may have failed to load'
+              });
+              
+              if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'LEGACY_PATH_BLOCKED_VIOLATION',
+                  turn: turnCount,
+                  data: {
+                    intendedMode: 'strict',
+                    actualPath: 'LEGACY_CONVERSATION_ENGINE',
+                    enforcementLevel: company?.aiAgentSettings?.frontDesk?.enforcement?.level,
+                    violation: 'Strict mode enabled but FrontDeskRuntime did not handle turn',
+                    remediation: 'Check server logs for ControlPlaneEnforcer/FrontDeskRuntime load failures'
+                  }
+                }).catch(() => {});
+              }
+            }
+            
             const ConversationEngine = require('../services/ConversationEngine');
             
             // ════════════════════════════════════════════════════════════════════════
