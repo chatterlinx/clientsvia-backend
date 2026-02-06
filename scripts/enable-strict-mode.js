@@ -76,10 +76,33 @@ async function main() {
         
         const Company = mongoose.model('Company', new mongoose.Schema({}, { strict: false }), 'companies');
         
-        const company = await Company.findById(companyId);
+        // Diagnostic: Show total company count
+        const totalCount = await Company.countDocuments({});
+        console.log(`  (Database has ${totalCount} companies)`);
+        
+        // Try findById first
+        let company = await Company.findById(companyId);
+        
+        // If not found, try alternative lookups
+        if (!company) {
+            console.log('  findById failed, trying findOne with _id...');
+            company = await Company.findOne({ _id: companyId });
+        }
         
         if (!company) {
+            console.log('  Trying findOne with string match...');
+            company = await Company.findOne({ _id: { $eq: companyId } });
+        }
+        
+        if (!company) {
+            // List first few companies to help debug
             console.error(`ERROR: Company not found: ${companyId}`);
+            console.error('');
+            console.error('First 5 companies in database:');
+            const samples = await Company.find({}).limit(5).select('_id companyName name').lean();
+            samples.forEach((c, i) => {
+                console.error(`  ${i + 1}. ${c._id} - ${c.companyName || c.name || '(no name)'}`);
+            });
             process.exit(1);
         }
         
