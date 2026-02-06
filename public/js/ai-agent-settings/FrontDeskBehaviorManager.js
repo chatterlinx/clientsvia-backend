@@ -523,19 +523,30 @@ class FrontDeskBehaviorManager {
                 ],
                 
                 // ════════════════════════════════════════════════════════════════════
-                // 📅 WANTS BOOKING: Caller wants to schedule (5-8 examples)
+                // 📅 WANTS BOOKING: Caller wants to schedule (V107: comprehensive list)
                 // AI should transition to booking: "I can help with that! Let me get..."
                 // ════════════════════════════════════════════════════════════════════
                 wantsBooking: [
-                    "schedule",
-                    "appointment",
-                    "send someone",
-                    "come out",
-                    "fix this",
-                    "repair",
-                    "service call",
-                    "book a time",
-                    "get someone here"
+                    // Direct booking words
+                    "schedule", "book", "appointment", "dispatch",
+                    // Service request phrases
+                    "technician", "service call", "service visit",
+                    // "Send/get someone" variations
+                    "send someone", "send somebody", "get someone", "get somebody",
+                    "send a tech", "get a tech", "need someone", "need somebody",
+                    // V107: "help me out" - EXTREMELY common in real calls
+                    "help me out", "help me out here", "need help", "i need help",
+                    "need somebody to help", "need someone to help",
+                    "i need somebody to help me out", "i need someone to help me out",
+                    // V107: Other common phrases
+                    "can you send someone", "can you send somebody",
+                    "can someone come out", "can a tech come out",
+                    // "Come out" variations  
+                    "come out", "come over", "come by",
+                    // Urgency indicators
+                    "asap", "right away", "as soon as possible", "today", "emergency", "urgent",
+                    // Action requests
+                    "fix it", "repair it", "look at it", "check it out"
                 ]
             },
             
@@ -7264,18 +7275,49 @@ Sean → Shawn, Shaun`;
                     </div>
                 </div>
                 
-                <!-- Wants Booking -->
-                <div style="border: 1px solid #30363d; border-radius: 8px; padding: 16px; background: #0d1117;">
-                    <h4 style="margin: 0 0 8px 0; color: #3fb950;">📅 Booking Intent Detection</h4>
-                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">When caller wants to schedule an appointment</p>
+                <!-- Wants Booking - V107: CRITICAL for booking lane activation -->
+                <div style="border: 2px solid #3fb950; border-radius: 8px; padding: 16px; background: #0d1117;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 style="margin: 0; color: #3fb950;">📅 Booking Intent Detection</h4>
+                        <button onclick="window.frontDeskBehaviorManager.restoreDetectionDefaults('wantsBooking')" 
+                            style="padding: 4px 12px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.75rem;">
+                            ↩ Restore Defaults
+                        </button>
+                    </div>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
+                        <strong>CRITICAL:</strong> These phrases trigger the BOOKING lane. If a caller says any of these, they skip discovery and go straight to booking prompts.
+                    </p>
+                    
+                    <!-- V107: Warning if list is empty -->
+                    ${(dt.wantsBooking || []).length === 0 ? `
+                        <div style="background: #f8514920; border: 1px solid #f85149; border-radius: 6px; padding: 10px; margin-bottom: 12px;">
+                            <strong style="color: #f85149;">⚠️ Warning:</strong> <span style="color: #f85149;">No booking triggers defined. Callers won't be able to trigger booking mode!</span>
+                        </div>
+                    ` : ''}
+                    
                     <div id="fdb-booking-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
                         ${(dt.wantsBooking || []).map((t, i) => this.renderDetectionChip(t, i, 'wantsBooking')).join('')}
                     </div>
-                    <div style="display: flex; gap: 10px;">
+                    <div style="display: flex; gap: 10px; margin-bottom: 16px;">
                         <input type="text" id="fdb-new-wantsBooking" placeholder="e.g., 'schedule a visit'" 
                             style="flex: 1; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                         <button onclick="window.frontDeskBehaviorManager.addDetection('wantsBooking')" 
                             style="padding: 8px 16px; background: #3fb950; color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add</button>
+                    </div>
+                    
+                    <!-- V107: Test Phrase Matcher -->
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px;">
+                        <h5 style="margin: 0 0 8px 0; color: #c9d1d9; font-size: 0.85rem;">🧪 Test Phrase Matcher</h5>
+                        <p style="color: #8b949e; font-size: 0.75rem; margin-bottom: 8px;">
+                            Test if a caller phrase would trigger booking (checks your list + smart patterns)
+                        </p>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="fdb-test-phrase" placeholder="Type a phrase like 'I need somebody to help me out'" 
+                                style="flex: 1; padding: 8px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                            <button onclick="window.frontDeskBehaviorManager.testBookingPhrase()" 
+                                style="padding: 8px 16px; background: #58a6ff; color: white; border: none; border-radius: 6px; cursor: pointer;">Test</button>
+                        </div>
+                        <div id="fdb-test-result" style="margin-top: 10px; display: none;"></div>
                     </div>
                 </div>
             </div>
@@ -7321,6 +7363,119 @@ Sean → Shawn, Shaun`;
             
             const container = document.querySelector('.front-desk-behavior-panel');
             if (container) this.switchTab('detection', container);
+        }
+    }
+    
+    // V107: Restore detection triggers to template defaults
+    restoreDetectionDefaults(type) {
+        const defaults = this.getDefaultConfig().detectionTriggers;
+        if (!defaults || !defaults[type]) {
+            this.showNotification('❌ No defaults available for this category', 'error');
+            return;
+        }
+        
+        if (!confirm(`Restore ${type} triggers to defaults? This will replace your current list with ${defaults[type].length} default phrases.`)) {
+            return;
+        }
+        
+        if (!this.config.detectionTriggers) this.config.detectionTriggers = {};
+        this.config.detectionTriggers[type] = [...defaults[type]]; // Clone array
+        this.isDirty = true;
+        
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('detection', container);
+        
+        this.showNotification(`✅ Restored ${defaults[type].length} default triggers for ${type}`, 'success');
+    }
+    
+    // V107: Test if a phrase would trigger booking
+    testBookingPhrase() {
+        const input = document.getElementById('fdb-test-phrase');
+        const resultDiv = document.getElementById('fdb-test-result');
+        if (!input || !resultDiv) return;
+        
+        const phrase = input.value.trim().toLowerCase();
+        if (!phrase) {
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<span style="color: #8b949e;">Please enter a phrase to test</span>`;
+            return;
+        }
+        
+        // Get current triggers
+        const triggers = this.config.detectionTriggers?.wantsBooking || [];
+        
+        // Normalize input (same as runtime)
+        const normalized = phrase
+            .replace(/\bsomebody\b/g, 'someone')
+            .replace(/\banybody\b/g, 'anyone')
+            .replace(/\bgonna\b/g, 'going to')
+            .replace(/\bwanna\b/g, 'want to')
+            .replace(/\bgotta\b/g, 'got to');
+        
+        // Check configured patterns
+        let matchResult = null;
+        for (const trigger of triggers) {
+            const normalizedTrigger = trigger.toLowerCase()
+                .replace(/\bsomebody\b/g, 'someone')
+                .replace(/\banybody\b/g, 'anyone');
+            if (normalized.includes(normalizedTrigger)) {
+                matchResult = { type: 'configured', matched: trigger };
+                break;
+            }
+        }
+        
+        // Check smart patterns (same as FrontDeskRuntime)
+        if (!matchResult) {
+            const smartPatterns = [
+                { regex: /\b(get|send|dispatch|have)\s+(a\s+)?(someone|somebody|anyone|a\s*tech|technician|guy|person)\s+(out|over|here|there|to)/i, desc: 'send/get someone out' },
+                { regex: /\b(need|want)\s+(a\s+)?(someone|somebody|tech|technician|person)\s+(to\s+)?(come|come\s*out|look|check|fix|help)/i, desc: 'need someone to help/fix' },
+                { regex: /\b(need|want)\s+(someone|somebody|a\s*tech|a\s*person)\s+to\s+help/i, desc: 'need someone to help' },
+                { regex: /\b(help\s+me\s+out|help\s+me\s+here|help\s+me\s+with\s+this)/i, desc: 'help me out' },
+                { regex: /\bcan\s+(you|someone|somebody|a\s*tech)\s+(come|come\s*out|get\s*here|come\s*over|help)/i, desc: 'can you come out' },
+                { regex: /\b(come\s*out|come\s*over|come\s*by)\s+(today|tomorrow|asap|soon|right\s*away|this\s*week)/i, desc: 'come out today' },
+                { regex: /\b(asap|right\s*away|as\s*soon\s*as\s*possible|emergency|urgent)/i, desc: 'urgency words' },
+                { regex: /\b(schedule|book|set\s*up)\s+(a\s+)?(service|appointment|call|visit|time)/i, desc: 'schedule appointment' },
+                { regex: /\bi\s+need\s+help\b/i, desc: 'I need help' },
+                { regex: /\bneed\s+help\s+(with|here|now|today)/i, desc: 'need help with' }
+            ];
+            
+            for (const { regex, desc } of smartPatterns) {
+                if (regex.test(phrase)) {
+                    const match = phrase.match(regex);
+                    matchResult = { type: 'smart', matched: match ? match[0] : desc, pattern: desc };
+                    break;
+                }
+            }
+        }
+        
+        resultDiv.style.display = 'block';
+        if (matchResult) {
+            if (matchResult.type === 'configured') {
+                resultDiv.innerHTML = `
+                    <div style="background: #3fb95020; border: 1px solid #3fb950; border-radius: 6px; padding: 10px;">
+                        <strong style="color: #3fb950;">✅ MATCH</strong>
+                        <span style="color: #c9d1d9;"> - Would trigger BOOKING lane</span>
+                        <br><span style="color: #8b949e; font-size: 0.8rem;">Matched configured trigger: "<strong>${matchResult.matched}</strong>"</span>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = `
+                    <div style="background: #58a6ff20; border: 1px solid #58a6ff; border-radius: 6px; padding: 10px;">
+                        <strong style="color: #58a6ff;">✅ SMART MATCH</strong>
+                        <span style="color: #c9d1d9;"> - Would trigger BOOKING lane</span>
+                        <br><span style="color: #8b949e; font-size: 0.8rem;">Matched smart pattern: ${matchResult.pattern}</span>
+                        <br><span style="color: #8b949e; font-size: 0.8rem;">Detected: "<strong>${matchResult.matched}</strong>"</span>
+                    </div>
+                `;
+            }
+        } else {
+            resultDiv.innerHTML = `
+                <div style="background: #f8514920; border: 1px solid #f85149; border-radius: 6px; padding: 10px;">
+                    <strong style="color: #f85149;">❌ NO MATCH</strong>
+                    <span style="color: #c9d1d9;"> - Would stay in DISCOVERY mode</span>
+                    <br><span style="color: #8b949e; font-size: 0.8rem;">Consider adding this phrase or a keyword from it to your triggers</span>
+                </div>
+            `;
         }
     }
     
