@@ -359,6 +359,53 @@ const DEFAULT_PROMPT_GUARDS = {
 // DEFAULT_PROMPT_PACKS REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT DETECTION TRIGGERS (V106 - Critical for booking intent detection)
+// ═══════════════════════════════════════════════════════════════════════════
+// These phrases trigger booking mode when detected in caller speech.
+// Without these, callers saying "get someone out" stay stuck in DISCOVERY.
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_DETECTION_TRIGGERS = {
+    // Core booking intent phrases - what makes a caller want to BOOK
+    wantsBooking: [
+        // Direct booking words
+        'schedule', 'book', 'appointment', 'dispatch',
+        // Service request phrases
+        'technician', 'service call', 'service visit',
+        // "Send/get someone" variations (normalized: somebody→someone in runtime)
+        'send someone', 'send somebody', 'get someone', 'get somebody',
+        'send a tech', 'get a tech', 'need someone', 'need somebody',
+        // "Come out" variations
+        'come out', 'come over', 'come by',
+        // Urgency indicators (direct booking intent)
+        'asap', 'right away', 'as soon as possible', 'today', 'emergency', 'urgent',
+        // Action requests
+        'fix it', 'repair it', 'look at it', 'check it out'
+    ],
+    // Trust concern detection
+    trustConcern: [
+        'can you do', 'can you handle', 'can you fix', 'are you able',
+        'know what you\'re doing', 'qualified', 'sure you can',
+        'is this going to work', 'you guys any good'
+    ],
+    // Caller feels ignored
+    callerFeelsIgnored: [
+        'you\'re not listening', 'didn\'t listen', 'you didn\'t hear',
+        'you\'re ignoring', 'you don\'t get it', 'that\'s not what I said', 'you missed'
+    ],
+    // Refused to provide info
+    refusedSlot: [
+        'i don\'t want to', 'not going to give', 'don\'t want to share',
+        'not comfortable', 'rather not'
+    ],
+    // Describing a problem (discovery, not booking yet)
+    describingProblem: [
+        'water leak', 'thermostat', 'not cooling', 'not cool',
+        'won\'t turn', 'won\'t start', 'making noise', 'making sound',
+        'smell', 'broken', 'not working', 'problem is', 'issue is'
+    ]
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT DISCOVERY & CONSENT
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_DISCOVERY_CONSENT = {
@@ -465,6 +512,10 @@ function getPresetForTrade(tradeKey = 'universal') {
         // Core booking config
         bookingSlots: tradePreset.bookingSlots || DEFAULT_BOOKING_SLOTS,
         
+        // V106: Detection triggers - CRITICAL for booking intent detection
+        // Without these, callers saying "get someone out" stay stuck in DISCOVERY
+        detectionTriggers: tradePreset.detectionTriggers || DEFAULT_DETECTION_TRIGGERS,
+        
         // Greeting responses
         greetingResponses: tradePreset.greetingResponses || DEFAULT_GREETING_RESPONSES,
         
@@ -527,6 +578,7 @@ function getPresetForTrade(tradeKey = 'universal') {
 module.exports = {
     getPresetForTrade,
     DEFAULT_BOOKING_SLOTS,
+    DEFAULT_DETECTION_TRIGGERS,  // V106: Critical for booking intent detection
     DEFAULT_GREETING_RESPONSES,
     DEFAULT_FALLBACK_RESPONSES,
     DEFAULT_LOOP_PREVENTION,

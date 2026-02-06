@@ -15,6 +15,7 @@
  
 const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
+const { DEFAULT_DETECTION_TRIGGERS } = require('../../config/onboarding/DefaultFrontDeskPreset');
 
 /**
  * Infer a tradeKey for a company using templateReferences (if present).
@@ -67,6 +68,18 @@ async function seedCompanyBaseFields({ companyId, companyDoc }) {
         const inferred = await inferTradeKeyFromTemplateRefs(companyDoc?.aiAgentSettings?.templateReferences || []);
         resolvedTradeKey = inferred || 'universal';
         applied['aiAgentSettings.tradeKey'] = resolvedTradeKey;
+    }
+
+    // V106: Seed detection triggers if missing - CRITICAL for booking intent detection
+    // Without these, callers saying "get someone out" stay stuck in DISCOVERY
+    const hasWantsBooking = Array.isArray(companyDoc?.aiAgentSettings?.frontDeskBehavior?.detectionTriggers?.wantsBooking) &&
+        companyDoc.aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking.length > 0;
+    if (!hasWantsBooking) {
+        applied['aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking'] = DEFAULT_DETECTION_TRIGGERS.wantsBooking;
+        logger.info('[WIRING SEEDER] V106: Seeding wantsBooking detection triggers', {
+            companyId: companyDoc._id.toString(),
+            phraseCount: DEFAULT_DETECTION_TRIGGERS.wantsBooking.length
+        });
     }
 
     const keys = Object.keys(applied);
