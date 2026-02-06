@@ -3864,7 +3864,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 callSid,
                 turnCount,
                 companyId: companyID,
-                session: session || {},
+                callState,  // V101 fix: pass callState instead of undefined 'session'
                 callerPhone: fromNumber
               };
               
