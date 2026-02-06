@@ -74,6 +74,15 @@ try {
     logger.warn('[V2TWILIO] AWConfigReader not available - BookingFlowRunner will use direct config access');
 }
 
+// 🔒 V99: Control Plane Enforcer - Platform Law enforcement
+let ControlPlaneEnforcer;
+try {
+    ControlPlaneEnforcer = require('../services/engine/ControlPlaneEnforcer');
+    logger.info('[V2TWILIO] ✅ Control Plane Enforcer loaded - Platform Law active');
+} catch (e) {
+    logger.warn('[V2TWILIO] ⚠️ Control Plane Enforcer not available', { error: e.message });
+}
+
 // Helper: Get Redis client safely (returns null if unavailable)
 async function getRedis() {
   if (!isRedisConfigured()) return null;
@@ -2943,12 +2952,40 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       callState.effectiveConfigVersion = callState.effectiveConfigVersion || awProofForTurn.effectiveConfigVersion;
       
       // ═══════════════════════════════════════════════════════════════════════════
-      // V98d: CONTROL_PLANE_HEADER - Instant debug visibility
+      // V99: CONTROL_PLANE_HEADER - Platform Law Enforcement
       // ═══════════════════════════════════════════════════════════════════════════
-      // Every turn starts with this header showing control plane load status.
-      // If controlPlaneLoaded=false, don't debug booking - debug config load.
+      // IF IT'S NOT IN FRONT DESK UI, IT DOES NOT EXIST.
+      // Every turn validates config against contract and logs header.
+      // If controlPlaneLoaded=false → fail closed (safe escalation).
       // ═══════════════════════════════════════════════════════════════════════════
       const controlPlaneLoaded = !!(callState.awHash && callState.effectiveConfigVersion);
+      
+      // V99: Initialize decision trace for this turn
+      if (ControlPlaneEnforcer) {
+        ControlPlaneEnforcer.getTrace(callSid, callState.turnCount);
+      }
+      
+      // V99: Build enhanced header with contract validation
+      let controlPlaneHeader;
+      if (ControlPlaneEnforcer && company?.aiAgentSettings) {
+        controlPlaneHeader = ControlPlaneEnforcer.buildControlPlaneHeader(
+          company.aiAgentSettings,
+          callState.awHash,
+          callState.effectiveConfigVersion,
+          callSid
+        );
+      } else {
+        controlPlaneHeader = {
+          companyId: companyID,
+          awHash: callState.awHash || null,
+          effectiveConfigVersion: callState.effectiveConfigVersion || null,
+          controlPlaneLoaded,
+          resolvedFrom: controlPlaneLoaded ? 'controlPlane' : 'FAILED',
+          contractVersion: 'unknown',
+          enforcementMode: 'unknown'
+        };
+      }
+      
       if (BlackBoxLogger) {
         BlackBoxLogger.logEvent({
           callId: callSid,
@@ -2956,18 +2993,46 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           type: 'CONTROL_PLANE_HEADER',
           turn: callState.turnCount,
           data: {
-            companyId: companyID,
-            awHash: callState.awHash || null,
-            effectiveConfigVersion: callState.effectiveConfigVersion || null,
+            ...controlPlaneHeader,
             traceRunId: callState.traceRunId,
-            controlPlaneLoaded,
             bookingModeLocked: !!callState.bookingModeLocked,
             consentPending: !!callState.bookingConsentPending,
             sessionMode: callState.sessionMode || 'DISCOVERY',
-            // V98c: Show where booking patterns will come from
             bookingPatternsSource: controlPlaneLoaded ? 'controlPlane' : 'globalDefaults'
           }
         }).catch(() => {});
+      }
+      
+      // V99: Fail closed if Control Plane not loaded and strict mode enabled
+      const strictMode = company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly;
+      if (!controlPlaneLoaded && strictMode === true) {
+        logger.error('[V2TWILIO] CONTROL_PLANE_LOAD_FAILED - Fail closed', {
+          callId: callSid,
+          companyId: companyID,
+          awHash: callState.awHash,
+          effectiveConfigVersion: callState.effectiveConfigVersion
+        });
+        
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'CONTROL_PLANE_LOAD_FAILED',
+            turn: callState.turnCount,
+            data: { reason: 'strictMode=true, config not loaded' }
+          }).catch(() => {});
+        }
+        
+        // Safe escalation response
+        const failResponse = ControlPlaneEnforcer?.getFailClosedResponse?.('CONTROL_PLANE_LOAD_FAILED');
+        const safeResponse = failResponse?.response || 
+          "I apologize, but I'm having a technical issue. Let me connect you with someone who can help.";
+        
+        // Return safe response instead of continuing
+        const twiml = new twilio.twiml.VoiceResponse();
+        twiml.say({ voice: 'Polly.Joanna' }, safeResponse);
+        twiml.redirect('/twilio/transfer-to-agent');
+        return res.type('text/xml').send(twiml.toString());
       }
       
       const adminSettings = await AdminSettings.findOne({}).lean();
@@ -5907,6 +5972,32 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       hasHangup: twimlString.includes('<Hangup'),
       hasDial: twimlString.includes('<Dial')
     });
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V99: DECISION_TRACE - Emit what config keys were used this turn
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Platform Law: Every turn must prove what config it used
+    // This enables "If it's not on Front Desk UI, it does not exist" enforcement
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (ControlPlaneEnforcer && BlackBoxLogger) {
+      const decisionTrace = ControlPlaneEnforcer.finalizeTrace(callSid, turnCount);
+      if (decisionTrace) {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'DECISION_TRACE',
+          turn: turnCount,
+          data: {
+            keysUsed: decisionTrace.keysUsed,
+            sourcesUsed: decisionTrace.sourcesUsed,
+            decisionReasons: decisionTrace.decisionReasons,
+            modeChanges: decisionTrace.modeChanges,
+            violations: decisionTrace.violations,
+            durationMs: decisionTrace.durationMs
+          }
+        }).catch(() => {});
+      }
+    }
     
     res.type('text/xml');
     res.send(twimlString);
