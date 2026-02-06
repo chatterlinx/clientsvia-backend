@@ -359,6 +359,20 @@ const DEFAULT_PROMPT_GUARDS = {
 // DEFAULT_PROMPT_PACKS REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
 
 // ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT DIRECT INTENT PATTERNS (V107 - Secondary booking triggers)
+// ═══════════════════════════════════════════════════════════════════════════
+// These are ADDITIONAL patterns that bypass consent dialogs.
+// Must resolve from companyConfig, NOT globalDefaults (or it shows 0 items on turn 1).
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_DIRECT_INTENT_PATTERNS = [
+    'schedule', 'book', 'appointment', 'come out',
+    'send someone', 'send somebody', 'get someone out', 'get somebody out',
+    'need a tech', 'need someone out', 'dispatch', 'service call',
+    // V107: "help" phrases - critical for real customer language
+    'help me out', 'need help', 'somebody to help', 'someone to help'
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
 // DEFAULT DETECTION TRIGGERS (V106 - Critical for booking intent detection)
 // ═══════════════════════════════════════════════════════════════════════════
 // These phrases trigger booking mode when detected in caller speech.
@@ -366,6 +380,7 @@ const DEFAULT_PROMPT_GUARDS = {
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_DETECTION_TRIGGERS = {
     // Core booking intent phrases - what makes a caller want to BOOK
+    // V107: Expanded to match how REAL HUMANS actually ask for service
     wantsBooking: [
         // Direct booking words
         'schedule', 'book', 'appointment', 'dispatch',
@@ -374,6 +389,16 @@ const DEFAULT_DETECTION_TRIGGERS = {
         // "Send/get someone" variations (normalized: somebody→someone in runtime)
         'send someone', 'send somebody', 'get someone', 'get somebody',
         'send a tech', 'get a tech', 'need someone', 'need somebody',
+        // V107: "help me out" variations - EXTREMELY common in real calls
+        'help me out', 'help me out here', 'need help', 'i need help',
+        'need somebody to help', 'need someone to help',
+        // V107: Full phrases that real customers say
+        'i need somebody to help me out',
+        'i need someone to help me out',
+        'can you send someone',
+        'can you send somebody',
+        'can someone come out',
+        'can a tech come out',
         // "Come out" variations
         'come out', 'come over', 'come by',
         // Urgency indicators (direct booking intent)
@@ -516,6 +541,10 @@ function getPresetForTrade(tradeKey = 'universal') {
         // Without these, callers saying "get someone out" stay stuck in DISCOVERY
         detectionTriggers: tradePreset.detectionTriggers || DEFAULT_DETECTION_TRIGGERS,
         
+        // V107: Direct intent patterns - MUST resolve from companyConfig (not globalDefaults)
+        // Without these, booking.directIntentPatterns shows [0 items] on turn 1
+        directIntentPatterns: DEFAULT_DIRECT_INTENT_PATTERNS,
+        
         // Greeting responses
         greetingResponses: tradePreset.greetingResponses || DEFAULT_GREETING_RESPONSES,
         
@@ -579,6 +608,7 @@ module.exports = {
     getPresetForTrade,
     DEFAULT_BOOKING_SLOTS,
     DEFAULT_DETECTION_TRIGGERS,  // V106: Critical for booking intent detection
+    DEFAULT_DIRECT_INTENT_PATTERNS,  // V107: Must resolve from companyConfig
     DEFAULT_GREETING_RESPONSES,
     DEFAULT_FALLBACK_RESPONSES,
     DEFAULT_LOOP_PREVENTION,

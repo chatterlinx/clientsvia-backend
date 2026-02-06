@@ -15,7 +15,7 @@
  
 const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
-const { DEFAULT_DETECTION_TRIGGERS } = require('../../config/onboarding/DefaultFrontDeskPreset');
+const { DEFAULT_DETECTION_TRIGGERS, DEFAULT_DIRECT_INTENT_PATTERNS } = require('../../config/onboarding/DefaultFrontDeskPreset');
 
 /**
  * Infer a tradeKey for a company using templateReferences (if present).
@@ -79,6 +79,18 @@ async function seedCompanyBaseFields({ companyId, companyDoc }) {
         logger.info('[WIRING SEEDER] V106: Seeding wantsBooking detection triggers', {
             companyId: companyDoc._id.toString(),
             phraseCount: DEFAULT_DETECTION_TRIGGERS.wantsBooking.length
+        });
+    }
+
+    // V107: Seed directIntentPatterns if missing - fixes inconsistent sourcing (0 items on turn 1)
+    // Must resolve from companyConfig NOT globalDefaults
+    const hasDirectPatterns = Array.isArray(companyDoc?.aiAgentSettings?.booking?.directIntentPatterns) &&
+        companyDoc.aiAgentSettings.booking.directIntentPatterns.length > 0;
+    if (!hasDirectPatterns) {
+        applied['aiAgentSettings.booking.directIntentPatterns'] = DEFAULT_DIRECT_INTENT_PATTERNS;
+        logger.info('[WIRING SEEDER] V107: Seeding directIntentPatterns', {
+            companyId: companyDoc._id.toString(),
+            phraseCount: DEFAULT_DIRECT_INTENT_PATTERNS.length
         });
     }
 

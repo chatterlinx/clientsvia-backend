@@ -197,8 +197,8 @@ const DEFAULT_FRONT_DESK_CONFIG = {
         callerFeelsIgnored: ['you\'re not listening', 'didn\'t listen', 'you didn\'t hear', 'you\'re ignoring', 'you don\'t get it', 'that\'s not what I said', 'you missed'],
         refusedSlot: ['i don\'t want to', 'not going to give', 'don\'t want to share', 'not comfortable', 'rather not'],
         describingProblem: ['water leak', 'thermostat', 'not cooling', 'not cool', 'won\'t turn', 'won\'t start', 'making noise', 'making sound', 'smell', 'broken', 'not working', 'problem is', 'issue is'],
-        // V105: Comprehensive booking intent phrases
-        // These match how real customers ask for service
+        // V107: Comprehensive booking intent phrases
+        // These match how REAL CUSTOMERS actually ask for service
         wantsBooking: [
             // Direct booking words
             'schedule', 'book', 'appointment', 'dispatch',
@@ -207,6 +207,10 @@ const DEFAULT_FRONT_DESK_CONFIG = {
             // "Send/get someone" variations (code also normalizes somebody→someone)
             'send someone', 'send somebody', 'get someone', 'get somebody',
             'send a tech', 'get a tech', 'need someone', 'need somebody',
+            // V107: "help me out" - EXTREMELY common in real calls
+            'help me out', 'help me out here', 'need help', 'i need help',
+            'need somebody to help', 'need someone to help',
+            'i need somebody to help me out', 'i need someone to help me out',
             // "Come out" variations
             'come out', 'come over', 'come by',
             // Urgency indicators

@@ -294,10 +294,26 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     }
     
     // 4. Check for direct booking intent (V102: via cfgGet)
-    // V105: Improved matching with normalization and smart patterns
+    // V107: Improved matching with normalization and smart patterns
+    // NOTE: bookingTriggers is the PRIMARY source (Front Desk UI)
+    // directIntentPatterns is secondary (may be empty for some companies)
     const bookingTriggers = getConfig('frontDesk.detectionTriggers.wantsBooking', []);
     const directIntentPatterns = getConfig('booking.directIntentPatterns', []);
-    const allBookingPatterns = [...new Set([...bookingTriggers, ...directIntentPatterns])];
+    
+    // V107: If both are empty, use hardcoded emergency fallback
+    // This prevents "cold start" where new companies have no patterns at all
+    const FALLBACK_PATTERNS = [
+        'schedule', 'book', 'appointment', 'come out', 'send someone',
+        'get someone', 'need someone', 'help me out', 'technician'
+    ];
+    
+    let allBookingPatterns;
+    if (bookingTriggers.length === 0 && directIntentPatterns.length === 0) {
+        allBookingPatterns = FALLBACK_PATTERNS;
+        logger.warn('[FRONT_DESK_RUNTIME] V107: Using fallback patterns - company has no booking triggers configured');
+    } else {
+        allBookingPatterns = [...new Set([...bookingTriggers, ...directIntentPatterns])];
+    }
     
     // V105: Normalize text to catch variations
     // - "somebody" → "someone"
@@ -326,15 +342,40 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         }
     }
     
-    // V105: Smart pattern matching for common "send/get someone out" variations
-    // These catch phrases like "can you get somebody out there" even if not explicitly configured
+    // V107: Smart pattern matching for common service request variations
+    // These catch phrases even if not explicitly configured in UI
+    // CRITICAL: Must match how REAL HUMANS talk, not formal booking language
     const smartPatterns = [
+        // "get/send someone out" variations
         /\b(get|send|dispatch|have)\s+(a\s+)?(someone|somebody|anyone|a\s*tech|technician|guy|person)\s+(out|over|here|there|to)/i,
-        /\b(need|want)\s+(a\s+)?(someone|somebody|tech|technician|person)\s+(to\s+)?(come|come\s*out|look|check|fix)/i,
-        /\bcan\s+(you|someone|a\s*tech)\s+(come|come\s*out|get\s*here|come\s*over)/i,
+        
+        // "need someone to help/come/fix" - V107: Added "help" which is extremely common
+        /\b(need|want)\s+(a\s+)?(someone|somebody|tech|technician|person)\s+(to\s+)?(come|come\s*out|look|check|fix|help)/i,
+        
+        // "I need someone/somebody to help me out" - V107: NEW pattern for "help me out"
+        /\b(need|want)\s+(someone|somebody|a\s*tech|a\s*person)\s+to\s+help/i,
+        
+        // "help me out" / "help me out here" - V107: Direct "help" request = wants service
+        /\b(help\s+me\s+out|help\s+me\s+here|help\s+me\s+with\s+this)/i,
+        
+        // "can you come out" / "can someone come"
+        /\bcan\s+(you|someone|somebody|a\s*tech)\s+(come|come\s*out|get\s*here|come\s*over|help)/i,
+        
+        // "come out today/asap"
         /\b(come\s*out|come\s*over|come\s*by)\s+(today|tomorrow|asap|soon|right\s*away|this\s*week)/i,
+        
+        // Urgency words alone
         /\b(asap|right\s*away|as\s*soon\s*as\s*possible|emergency|urgent)/i,
-        /\b(schedule|book|set\s*up)\s+(a\s+)?(service|appointment|call|visit|time)/i
+        
+        // "schedule/book an appointment"
+        /\b(schedule|book|set\s*up)\s+(a\s+)?(service|appointment|call|visit|time)/i,
+        
+        // V107: "I need help" / "need help with" - simple help requests
+        /\bi\s+need\s+help\b/i,
+        /\bneed\s+help\s+(with|here|now|today)/i,
+        
+        // V107: "something's wrong" + "need someone" in same utterance
+        /\b(something'?s?\s+wrong|not\s+working|broken|won'?t\s+work).{0,30}(need|send|get)\s+(someone|somebody|help)/i
     ];
     
     for (const regex of smartPatterns) {

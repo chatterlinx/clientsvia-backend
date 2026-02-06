@@ -47,10 +47,13 @@
             "come out", "send someone", "send somebody", "get someone", "get somebody",
             "dispatch", "service call", "need someone", "need somebody",
             "can you come", "can someone come", "can a tech", "asap", "right away",
-            "as soon as possible", "today if possible", "emergency"
+            "as soon as possible", "today if possible", "emergency",
+            "help me out", "help me out here", "need help", "i need help",
+            "need somebody to help", "need someone to help",
+            "i need somebody to help me out", "i need someone to help me out"
           ], 
           "uiSection": "detection",
-          "description": "Phrases that indicate caller wants to book/schedule service"
+          "description": "Phrases that indicate caller wants to book/schedule service (V107: added 'help me out' variants)"
         },
         "booking.directIntentPatterns": { 
           "type": "array", 
@@ -58,10 +61,11 @@
           "default": [
             "schedule", "book", "appointment", "come out",
             "send someone", "send somebody", "get someone out", "get somebody out",
-            "need a tech", "need someone out", "dispatch", "service call"
+            "need a tech", "need someone out", "dispatch", "service call",
+            "help me out", "need help", "somebody to help", "someone to help"
           ], 
           "uiSection": "detection",
-          "description": "Direct booking intent patterns (bypass consent if matched)"
+          "description": "Direct booking intent patterns (bypass consent if matched, V107: added 'help' variants)"
         }
       }
     },
