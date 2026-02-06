@@ -4929,6 +4929,44 @@ async function processTurn({
                             }
                         }).catch(() => {});
                     }
+                    
+                    // ═══════════════════════════════════════════════════════════════════
+                    // V96o FIX: DEFER TO BOOKING RUNNER WHEN CONSENT GRANTED
+                    // ═══════════════════════════════════════════════════════════════════
+                    // BUG: This block was setting bookingModeLocked=true but NOT setting
+                    // aiResult, causing execution to fall through to STATE_MACHINE which
+                    // generated a response while booking was locked → ROUTING_INVARIANT_VIOLATION
+                    //
+                    // FIX: Set aiResult with deferToBookingRunner=true so v2twilio.js
+                    // invokes BookingFlowRunner to generate the first booking prompt.
+                    // ═══════════════════════════════════════════════════════════════════
+                    aiResult = {
+                        reply: null, // BookingFlowRunner will generate the reply
+                        conversationMode: 'BOOKING',
+                        filledSlots: currentSlots,
+                        latencyMs: Date.now() - aiStartTime,
+                        tokensUsed: 0,
+                        fromStateMachine: false,
+                        matchSource: 'BOOKING_CONSENT_GRANTED',
+                        tier: 'tier1',
+                        mode: 'BOOKING',
+                        bookingFlowState: session.bookingFlowState,
+                        signals: {
+                            deferToBookingRunner: true,
+                            bookingModeLocked: true,
+                            consentJustGranted: true
+                        },
+                        debug: {
+                            source: 'V96o_CONSENT_GRANTED_DEFER',
+                            reason: 'User gave consent, deferring to BookingFlowRunner',
+                            consentPhrase: earlyConsentCheck.matchedPhrase
+                        }
+                    };
+                    
+                    log('✅ V96o: CONSENT GRANTED → DEFERRING TO BOOKING RUNNER', {
+                        bookingModeLocked: true,
+                        deferToBookingRunner: true
+                    });
                 }
                 // Case 4a: Direct booking intent detected, but consent required
                 else if (earlyBookingIntent.hasDirectIntent && bookingRequiresExplicitConsent && earlyBookingIntent.confidence < 0.95) {
@@ -5036,7 +5074,45 @@ async function processTurn({
                             }).catch(() => {});
                         }
                         
-                        // Don't set aiResult - let booking flow runner pick up on this turn
+                        // ═══════════════════════════════════════════════════════════════════
+                        // V96o FIX: DEFER TO BOOKING RUNNER FOR DIRECT INTENT
+                        // ═══════════════════════════════════════════════════════════════════
+                        // OLD COMMENT WAS WRONG: "let booking flow runner pick up on this turn"
+                        // The booking gate at v2twilio.js line ~3066 already ran at turn start
+                        // when bookingModeLocked was false, so it won't run again.
+                        // 
+                        // FIX: Set aiResult with deferToBookingRunner=true so v2twilio.js
+                        // explicitly invokes BookingFlowRunner now.
+                        // ═══════════════════════════════════════════════════════════════════
+                        aiResult = {
+                            reply: null,
+                            conversationMode: 'BOOKING',
+                            filledSlots: currentSlots,
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,
+                            fromStateMachine: false,
+                            matchSource: 'BOOKING_DIRECT_INTENT_TRIGGERED',
+                            tier: 'tier1',
+                            mode: 'BOOKING',
+                            bookingFlowState: session.bookingFlowState,
+                            signals: {
+                                deferToBookingRunner: true,
+                                bookingModeLocked: true,
+                                directIntentTriggered: true
+                            },
+                            debug: {
+                                source: 'V96o_DIRECT_INTENT_DEFER',
+                                reason: 'Direct booking intent detected, deferring to BookingFlowRunner',
+                                intentConfidence: earlyBookingIntent.confidence,
+                                intentReason: earlyBookingIntent.reason
+                            }
+                        };
+                        
+                        log('✅ V96o: DIRECT INTENT → DEFERRING TO BOOKING RUNNER', {
+                            bookingModeLocked: true,
+                            deferToBookingRunner: true,
+                            intentConfidence: earlyBookingIntent.confidence
+                        });
                     }
                 }
                 // Case 3 alt: User gives consent but we never asked (spontaneous "yes schedule me")
@@ -5081,6 +5157,37 @@ async function processTurn({
                                 }
                             }).catch(() => {});
                         }
+                        
+                        // ═══════════════════════════════════════════════════════════════════
+                        // V96o FIX: DEFER TO BOOKING RUNNER FOR SPONTANEOUS CONSENT
+                        // ═══════════════════════════════════════════════════════════════════
+                        aiResult = {
+                            reply: null,
+                            conversationMode: 'BOOKING',
+                            filledSlots: currentSlots,
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,
+                            fromStateMachine: false,
+                            matchSource: 'BOOKING_SPONTANEOUS_CONSENT',
+                            tier: 'tier1',
+                            mode: 'BOOKING',
+                            bookingFlowState: session.bookingFlowState,
+                            signals: {
+                                deferToBookingRunner: true,
+                                bookingModeLocked: true,
+                                spontaneousConsent: true
+                            },
+                            debug: {
+                                source: 'V96o_SPONTANEOUS_CONSENT_DEFER',
+                                reason: 'Spontaneous booking consent, deferring to BookingFlowRunner',
+                                consentPhrase: earlyConsentCheck.matchedPhrase
+                            }
+                        };
+                        
+                        log('✅ V96o: SPONTANEOUS CONSENT → DEFERRING TO BOOKING RUNNER', {
+                            bookingModeLocked: true,
+                            deferToBookingRunner: true
+                        });
                     }
                 }
             }
