@@ -409,9 +409,12 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         const signals = engineResult.signals || {};
         
         // If engine detected booking intent or consent
+        // V101 fix: ConversationEngine returns 'reply', not 'response' or 'text'
+        const engineResponse = engineResult.reply || engineResult.response || engineResult.text || '';
+        
         if (signals.deferToBookingRunner || signals.bookingModeLocked) {
             return {
-                response: engineResult.response || engineResult.text,
+                response: engineResponse,
                 signals: {
                     enterBooking: true,
                     enterBookingReason: signals.bookingTriggerReason || 'engine_detected',
@@ -424,7 +427,7 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         // If engine set consent pending (asked booking question)
         if (signals.bookingConsentPending === true) {
             return {
-                response: engineResult.response || engineResult.text,
+                response: engineResponse,
                 signals: {
                     setConsentPending: true
                 },
@@ -433,7 +436,7 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         }
         
         return {
-            response: engineResult.response || engineResult.text,
+            response: engineResponse,
             signals: {},
             matchSource: engineResult.matchSource || 'CONVERSATION_ENGINE',
             metadata: engineResult.metadata
