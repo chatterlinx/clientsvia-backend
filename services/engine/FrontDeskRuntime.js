@@ -394,16 +394,17 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
     
     try {
         // Call ConversationEngine for discovery handling
-        // V101 fix: use callState parameter directly (already passed to function)
-        const engineResult = await ConversationEngine.processTurn(
-            userTurn,
-            callState || {},
-            company,
-            {
-                callSid,
-                bookingConsentPending: callState?.bookingConsentPending
-            }
-        );
+        // V101 fix: ConversationEngine.processTurn expects a SINGLE object, not positional args
+        const engineResult = await ConversationEngine.processTurn({
+            companyId: company?._id?.toString() || context.companyId,
+            channel: 'voice',
+            userText: userTurn,
+            sessionId: callState?.sessionId || null,
+            callerPhone: context.callerPhone || null,
+            callSid,
+            preExtractedSlots: callState?.bookingCollected || {},
+            bookingConsentPending: callState?.bookingConsentPending || false
+        });
         
         // Extract signals from engine result
         const signals = engineResult.signals || {};
