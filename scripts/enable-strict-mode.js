@@ -19,19 +19,14 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-require('dotenv').config();
-
 const mongoose = require('mongoose');
-const logger = require('../lib/logger');
-
-const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
 
 async function main() {
     const companyId = process.argv[2];
     const level = process.argv[3] || 'strict';
     
     if (!companyId) {
-        console.log('Usage: node scripts/enable-strict-mode.js <companyId> [level]');
+        console.log('Usage: MONGODB_URI="mongodb+srv://..." node scripts/enable-strict-mode.js <companyId> [level]');
         console.log('');
         console.log('Levels:');
         console.log('  warn   - Log violations but continue (migration mode)');
@@ -44,15 +39,28 @@ async function main() {
         process.exit(1);
     }
     
+    const mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+        console.error('ERROR: MONGODB_URI environment variable not set');
+        console.error('');
+        console.error('Usage:');
+        console.error('  MONGODB_URI="mongodb+srv://..." node scripts/enable-strict-mode.js <companyId> [level]');
+        process.exit(1);
+    }
+    
     console.log('═══════════════════════════════════════════════════════════════════════════════');
     console.log('ENABLE STRICT CONTROL PLANE MODE');
     console.log('═══════════════════════════════════════════════════════════════════════════════');
     console.log(`Company ID: ${companyId}`);
     console.log(`Level: ${level}`);
+    
+    // Show which database we're connecting to (mask credentials)
+    const maskedUri = mongoUri.replace(/:\/\/[^@]+@/, '://***:***@');
+    console.log(`Database: ${maskedUri}`);
     console.log('');
     
     try {
-        await mongoose.connect(MONGO_URI);
+        await mongoose.connect(mongoUri);
         console.log('✓ Connected to MongoDB');
         
         const Company = mongoose.model('Company', new mongoose.Schema({}, { strict: false }), 'companies');
