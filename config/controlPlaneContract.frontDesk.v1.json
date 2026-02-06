@@ -39,8 +39,30 @@
     "detection": {
       "description": "Intent detection triggers and patterns",
       "keys": {
-        "frontDesk.detectionTriggers.wantsBooking": { "type": "array", "required": false, "default": ["schedule", "book", "appointment"], "uiSection": "detection" },
-        "booking.directIntentPatterns": { "type": "array", "required": false, "default": ["schedule", "book", "appointment", "come out"], "uiSection": "detection" }
+        "frontDesk.detectionTriggers.wantsBooking": { 
+          "type": "array", 
+          "required": false, 
+          "default": [
+            "schedule", "book", "appointment", "technician",
+            "come out", "send someone", "send somebody", "get someone", "get somebody",
+            "dispatch", "service call", "need someone", "need somebody",
+            "can you come", "can someone come", "can a tech", "asap", "right away",
+            "as soon as possible", "today if possible", "emergency"
+          ], 
+          "uiSection": "detection",
+          "description": "Phrases that indicate caller wants to book/schedule service"
+        },
+        "booking.directIntentPatterns": { 
+          "type": "array", 
+          "required": false, 
+          "default": [
+            "schedule", "book", "appointment", "come out",
+            "send someone", "send somebody", "get someone out", "get somebody out",
+            "need a tech", "need someone out", "dispatch", "service call"
+          ], 
+          "uiSection": "detection",
+          "description": "Direct booking intent patterns (bypass consent if matched)"
+        }
       }
     },
     

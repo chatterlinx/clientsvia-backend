@@ -197,7 +197,23 @@ const DEFAULT_FRONT_DESK_CONFIG = {
         callerFeelsIgnored: ['you\'re not listening', 'didn\'t listen', 'you didn\'t hear', 'you\'re ignoring', 'you don\'t get it', 'that\'s not what I said', 'you missed'],
         refusedSlot: ['i don\'t want to', 'not going to give', 'don\'t want to share', 'not comfortable', 'rather not'],
         describingProblem: ['water leak', 'thermostat', 'not cooling', 'not cool', 'won\'t turn', 'won\'t start', 'making noise', 'making sound', 'smell', 'broken', 'not working', 'problem is', 'issue is'],
-        wantsBooking: ['fix', 'repair', 'service', 'appointment', 'schedule', 'technician', 'someone', 'come out', 'send']
+        // V105: Comprehensive booking intent phrases
+        // These match how real customers ask for service
+        wantsBooking: [
+            // Direct booking words
+            'schedule', 'book', 'appointment', 'dispatch',
+            // Service request phrases
+            'technician', 'service call', 'service visit',
+            // "Send/get someone" variations (code also normalizes somebody→someone)
+            'send someone', 'send somebody', 'get someone', 'get somebody',
+            'send a tech', 'get a tech', 'need someone', 'need somebody',
+            // "Come out" variations
+            'come out', 'come over', 'come by',
+            // Urgency indicators
+            'asap', 'right away', 'as soon as possible', 'today', 'emergency', 'urgent',
+            // Action requests
+            'fix it', 'repair it', 'look at it', 'check it out'
+        ]
     },
 
     // ════════════════════════════════════════════════════════════════════════

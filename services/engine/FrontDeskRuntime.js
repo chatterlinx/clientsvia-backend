@@ -294,19 +294,63 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     }
     
     // 4. Check for direct booking intent (V102: via cfgGet)
+    // V105: Improved matching with normalization and smart patterns
     const bookingTriggers = getConfig('frontDesk.detectionTriggers.wantsBooking', []);
     const directIntentPatterns = getConfig('booking.directIntentPatterns', []);
-    const allBookingPatterns = [...bookingTriggers, ...directIntentPatterns];
+    const allBookingPatterns = [...new Set([...bookingTriggers, ...directIntentPatterns])];
     
+    // V105: Normalize text to catch variations
+    // - "somebody" → "someone"
+    // - "anybody" → "anyone"
+    // - "gonna" → "going to"
+    const normalizedInput = userTurnLower
+        .replace(/\bsomebody\b/g, 'someone')
+        .replace(/\banybody\b/g, 'anyone')
+        .replace(/\bgonna\b/g, 'going to')
+        .replace(/\bwanna\b/g, 'want to')
+        .replace(/\bgotta\b/g, 'got to');
+    
+    // Check configured patterns first
     for (const pattern of allBookingPatterns) {
-        if (userTurnLower.includes(pattern.toLowerCase())) {
-            trace.addDecisionReason('LANE_BOOKING', { reason: 'direct_booking_intent', pattern });
+        const normalizedPattern = pattern.toLowerCase()
+            .replace(/\bsomebody\b/g, 'someone')
+            .replace(/\banybody\b/g, 'anyone');
+            
+        if (normalizedInput.includes(normalizedPattern)) {
+            trace.addDecisionReason('LANE_BOOKING', { 
+                reason: 'direct_booking_intent', 
+                pattern,
+                matchedIn: 'configured_patterns'
+            });
+            return LANES.BOOKING;
+        }
+    }
+    
+    // V105: Smart pattern matching for common "send/get someone out" variations
+    // These catch phrases like "can you get somebody out there" even if not explicitly configured
+    const smartPatterns = [
+        /\b(get|send|dispatch|have)\s+(a\s+)?(someone|somebody|anyone|a\s*tech|technician|guy|person)\s+(out|over|here|there|to)/i,
+        /\b(need|want)\s+(a\s+)?(someone|somebody|tech|technician|person)\s+(to\s+)?(come|come\s*out|look|check|fix)/i,
+        /\bcan\s+(you|someone|a\s*tech)\s+(come|come\s*out|get\s*here|come\s*over)/i,
+        /\b(come\s*out|come\s*over|come\s*by)\s+(today|tomorrow|asap|soon|right\s*away|this\s*week)/i,
+        /\b(asap|right\s*away|as\s*soon\s*as\s*possible|emergency|urgent)/i,
+        /\b(schedule|book|set\s*up)\s+(a\s+)?(service|appointment|call|visit|time)/i
+    ];
+    
+    for (const regex of smartPatterns) {
+        if (regex.test(userTurn)) {
+            const match = userTurn.match(regex);
+            trace.addDecisionReason('LANE_BOOKING', { 
+                reason: 'smart_pattern_match', 
+                pattern: regex.source.substring(0, 50),
+                matched: match ? match[0] : 'unknown'
+            });
             return LANES.BOOKING;
         }
     }
     
     // 5. Default to discovery
-    trace.addDecisionReason('LANE_DISCOVERY', { reason: 'default' });
+    trace.addDecisionReason('LANE_DISCOVERY', { reason: 'default', checkedPatterns: allBookingPatterns.length });
     return LANES.DISCOVERY;
 }
 
