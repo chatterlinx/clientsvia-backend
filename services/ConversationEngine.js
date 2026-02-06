@@ -5275,39 +5275,11 @@ async function processTurn({
         }
         
         // REMOVED: Complex consent handling - eliminated competing booking system
+        // Booking is now handled by MINIMAL BOOKING DETECTION at line ~4831
+        // which sets bookingModeLocked=true and defers to BookingFlowRunner
         
-        // ═══════════════════════════════════════════════════════════════════════
-        // V92 ENHANCED: FAILURE DETECTION - Why didn't booking trigger?
-        // ═══════════════════════════════════════════════════════════════════════
-        // If we asked a consent question, user said something affirmative-looking,
-        // but we didn't enter booking - THIS IS A BUG we need to investigate
-        const userTextLowerV92 = (userText || '').toLowerCase().trim();
-        const looksAffirmative = ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'right', 'please', 'go ahead', 'sounds good']
-            .some(word => userTextLowerV92.includes(word));
-        
-        if (askedConsentQuestionFlag && looksAffirmative && !shouldEnterBooking) {
-            log('⚠️ V92: POTENTIAL CONSENT→BOOKING FAILURE', {
-                problem: 'User gave affirmative response after consent question, but booking NOT triggered',
-                userInput: userText,
-                askedConsentQuestion: askedConsentQuestionFlag,
-                shouldEnterBooking: false,
-                // Diagnose the failure reason
-                failureReason: aiResult ? 'aiResult_already_set' 
-                    : session.booking?.consentGiven ? 'already_consented'
-                    : !consentCheck.hasConsent ? 'consent_check_failed'
-                    : 'unknown',
-                consentCheckReason: consentCheck.reason,
-                aiResultSource: aiResult?.debug?.source || null,
-                // Full state for debugging
-                sessionMode: session.mode,
-                conversationMemory: {
-                    askedConsentQuestion: session.conversationMemory?.askedConsentQuestion,
-                    nameAcknowledged: session.conversationMemory?.nameAcknowledged
-                }
-            });
-        }
-        
-        if (shouldEnterBooking) {
+        // Skip legacy booking entry - minimal detection already handled it
+        if (false) { // DISABLED: Legacy shouldEnterBooking path - replaced by minimal detection
             // 🎯 BOOKING MODE TRIGGERED - Either by consent or direct intent
             session.booking.consentGiven = true;
             session.booking.consentPhrase = consentCheck.hasConsent 
@@ -5579,8 +5551,8 @@ async function processTurn({
             mode: session.mode,
             consentGiven: session.booking?.consentGiven,
             consentPhrase: session.booking?.consentPhrase,
-            consentCheck,
-            bookingSnapTriggered: !!aiResult
+            bookingModeLocked: session.bookingModeLocked || false,
+            aiResultSet: !!aiResult
         });
         
         // ═══════════════════════════════════════════════════════════════════════
@@ -6482,7 +6454,8 @@ async function processTurn({
                             }
                         };
                     }
-                } else if (session.lastAgentIntent === 'ASK_SERVICE_CONSENT' && !consentCheck.hasConsent) {
+                // DISABLED: Legacy consent check - booking now handled by minimal detection
+                } else if (session.lastAgentIntent === 'ASK_SERVICE_CONSENT' && false) { // consentCheck removed
                     const clarifyPrompt = resolveServiceFlowPrompt('consentClarify', 'serviceFlow.consentClarify');
                     if (clarifyPrompt) {
                         aiLatencyMs = Date.now() - aiStartTime;
@@ -7512,8 +7485,9 @@ async function processTurn({
             modeTransition: session._previousMode !== session.mode ? `${session._previousMode || 'DISCOVERY'} → ${session.mode}` : 'none',
             
             // Consent Gate (MUST BE EXPLICIT)
-            consentDetected: consentCheck?.hasConsent || false,
-            consentPhrase: consentCheck?.matchedPhrase || null,
+            // consentCheck removed - booking now handled by minimal keyword detection
+            consentDetected: session.booking?.consentGiven || false,
+            consentPhrase: session.booking?.consentPhrase || null,
             consentGiven: session.booking?.consentGiven || false,
             bookingStarted: session.mode === 'BOOKING',
             
