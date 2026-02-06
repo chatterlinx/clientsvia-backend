@@ -63,8 +63,8 @@ const wiringRegistryV1 = {
     // Flow & State
     "DynamicFlowEngine": "services/DynamicFlowEngine.js",
     "FlowEngine": "services/FlowEngine.js",
-    "BookingStateMachine": "services/BookingStateMachine.js",
-    "ConversationStateMachine": "services/ConversationStateMachine.js",
+    // REMOVED: BookingStateMachine - dead code, deleted
+    // REMOVED: ConversationStateMachine - dead code, deleted
     "SessionService": "services/SessionService.js",
     
     // Scenarios & Templates
@@ -225,7 +225,7 @@ const wiringRegistryV1 = {
         "runtimeSlots.slotCount"
         // ☢️ NUKED: bookingContractV2.enabled - Jan 2026
       ],
-      expectedConsumers: ["BookingStateMachine", "ConversationEngine"],
+      expectedConsumers: ["BookingFlowRunner", "ConversationEngine"],
       expectedTraceKeys: [
         "trace.booking.slotRequested",
         "CHECKPOINT 8"
@@ -308,7 +308,7 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.loopPrevention"
       ],
-      expectedConsumers: ["ConversationStateMachine"],
+      expectedConsumers: ["ConversationEngine"],
       runtimeMethod: "detectLoop()",
       expectedTraceKeys: ["trace.loop.detected"],
       requiredFields: []
@@ -855,7 +855,7 @@ const wiringRegistryV1 = {
       expectedDbPaths: [
         "company.aiAgentSettings.frontDeskBehavior.bookingSlots"
       ],
-      expectedConsumers: ["ConversationEngine", "BookingStateMachine"],
+      expectedConsumers: ["ConversationEngine", "BookingFlowRunner"],
       expectedTraceKeys: ["CHECKPOINT 8", "trace.slot.extracted"],
       children: [
         "slot.name",
@@ -1182,7 +1182,7 @@ const wiringRegistryV1 = {
     "FallbackController": "Phantom - actual services are LowConfidenceHandler + Tier3LLMFallback",
     "ModePolicy": "Phantom - logic is inline in ConversationEngine",
     "EscalationPolicy": "Phantom - logic is inline in ConversationEngine",
-    "LoopDetector": "Phantom - actual service is ConversationStateMachine",
+    "LoopDetector": "Phantom - logic is inline in ConversationEngine",
     "FrustrationEngine": "Phantom - logic is inline in ConversationEngine",
     "EmotionClassifier": "Phantom - logic is in HybridReceptionistLLM",
     "ConsentGate": "Phantom - logic is inline in ConversationEngine",

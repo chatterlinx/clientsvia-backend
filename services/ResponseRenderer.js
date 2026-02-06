@@ -9,9 +9,9 @@
  * 100% deterministic (seeded by session ID for consistency).
  * 
  * ARCHITECTURE:
- * - Takes action objects from BookingStateMachine
+ * - Takes action objects from BookingFlowRunner (the ONLY booking system)
  * - Renders human-friendly speech with appropriate acknowledgments
- * - Uses exact questions from UI config
+ * - Uses exact questions from UI config (Booking Prompt tab)
  * - Picks style-appropriate variants based on company settings
  * 
  * BENEFITS:
@@ -62,7 +62,7 @@ class ResponseRenderer {
      * MAIN: Render state machine action to human-friendly response
      * ════════════════════════════════════════════════════════════════════════
      * 
-     * @param {Object} action - Action from BookingStateMachine.getNextAction()
+     * @param {Object} action - Action from BookingFlowRunner
      * @param {Object} extractedThisTurn - Slots extracted this turn (for acknowledgment)
      * @returns {Object} Structured response with: say, action, expecting, trace, etc.
      */

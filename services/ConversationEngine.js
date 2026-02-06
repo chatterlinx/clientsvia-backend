@@ -41,9 +41,9 @@ const SessionService = require('./SessionService');
 const RunningSummaryService = require('./RunningSummaryService');
 const HybridReceptionistLLM = require('./HybridReceptionistLLM');
 const BookingScriptEngine = require('./BookingScriptEngine');
-const BookingStateMachine = require('./BookingStateMachine');
+// REMOVED: BookingStateMachine - dead code, never instantiated
 const ResponseRenderer = require('./ResponseRenderer');
-const ConversationStateMachine = require('./ConversationStateMachine');
+// REMOVED: ConversationStateMachine - dead code, never instantiated  
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
 const DiscoveryExtractor = require('./engine/booking/DiscoveryExtractor');
@@ -4650,15 +4650,26 @@ async function processTurn({
             log('✅ MODE RESTORED: Booking already COMPLETE - will not re-ask slots');
         } else if (session.booking.consentGiven || hasPendingConfirm) {
             session.mode = 'BOOKING';
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V97 FIX: RESTORE bookingModeLocked WHEN RESTORING BOOKING MODE
+            // ═══════════════════════════════════════════════════════════════════════════
+            // BUG: Mode was restored but bookingModeLocked wasn't, causing the guard
+            // at line ~6310 to fail and competing handlers to fire.
+            // FIX: When consent was previously given, always lock booking mode.
+            // ═══════════════════════════════════════════════════════════════════════════
+            session.bookingModeLocked = true;
             if (hasPendingConfirm && !session.booking.consentGiven) {
                 // V37: Force consent if we have pending confirmations (safety net)
                 session.booking.consentGiven = true;
                 log('📋 MODE RESTORED: Pending slot confirmation detected - forcing BOOKING mode', {
                     phonePending: session.booking?.meta?.phone?.pendingConfirm,
-                    addressPending: session.booking?.meta?.address?.pendingConfirm
+                    addressPending: session.booking?.meta?.address?.pendingConfirm,
+                    bookingModeLocked: true  // V97
                 });
             } else {
-                log('📋 MODE RESTORED: Consent was given previously, restoring BOOKING mode');
+                log('📋 MODE RESTORED: Consent was given previously, restoring BOOKING mode', {
+                    bookingModeLocked: true  // V97
+                });
             }
         } else if (!session.mode) {
             session.mode = 'DISCOVERY';
@@ -5834,6 +5845,10 @@ async function processTurn({
             session.booking.consentTurn = (session.metrics?.totalTurns || 0) + 1;
             session.booking.consentTimestamp = new Date();
             session.mode = 'BOOKING';
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V97 FIX: SET bookingModeLocked WHEN ENTERING BOOKING MODE
+            // ═══════════════════════════════════════════════════════════════════════════
+            session.bookingModeLocked = true;
             
             // Store discovery summary before switching to booking
             session.discoverySummary = session.discovery?.issue || 
@@ -6126,8 +6141,22 @@ async function processTurn({
         // booking mode is ONLY allowed if consent was explicitly given
         const canEnterBooking = !killSwitches.bookingRequiresConsent || session.booking?.consentGiven;
         
-        if (aiResult && aiResult.debug?.source === 'BOOKING_SNAP') {
-            log('⚡ BOOKING SNAP: Skipping AI routing - using snap response');
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V97: SKIP MODE ROUTING IF aiResult ALREADY SET WITH DEFER SIGNAL
+        // ═══════════════════════════════════════════════════════════════════════════
+        // If V96o/V96p already set aiResult with deferToBookingRunner=true, skip all
+        // mode-based routing. v2twilio.js will handle calling BookingFlowRunner.
+        // ═══════════════════════════════════════════════════════════════════════════
+        const shouldSkipModeRouting = aiResult && (
+            aiResult.debug?.source === 'BOOKING_SNAP' ||
+            aiResult.signals?.deferToBookingRunner === true
+        );
+        
+        if (shouldSkipModeRouting) {
+            log('⚡ V97: SKIPPING MODE ROUTING - aiResult already set', {
+                source: aiResult.debug?.source,
+                deferToBookingRunner: aiResult.signals?.deferToBookingRunner
+            });
             // aiResult is already set, skip to save/return
         }
         // ═══════════════════════════════════════════════════════════════════════
@@ -6307,9 +6336,13 @@ async function processTurn({
             // 
             // DO NOT generate booking questions here when locked - let BookingFlowRunner own it.
             // ═══════════════════════════════════════════════════════════════════════════
-            if (session.bookingModeLocked === true) {
-                log('⚠️ V96j: BOOKING_MODE block skipped - bookingModeLocked=true, deferring to BookingFlowRunner', {
-                    bookingModeLocked: true,
+            // V97: Check BOTH session.bookingModeLocked AND session.bookingFlowState.bookingModeLocked
+            const isBookingLocked = session.bookingModeLocked === true || 
+                                    session.bookingFlowState?.bookingModeLocked === true;
+            if (isBookingLocked) {
+                log('⚠️ V96j/V97: BOOKING_MODE block skipped - bookingModeLocked=true, deferring to BookingFlowRunner', {
+                    sessionBookingModeLocked: session.bookingModeLocked,
+                    flowStateBookingModeLocked: session.bookingFlowState?.bookingModeLocked,
                     sessionMode: session.mode,
                     reason: 'SINGLE_OWNER_ENFORCEMENT'
                 });
@@ -6758,6 +6791,7 @@ async function processTurn({
                         // Skip remaining booking logic if we produced a response
                         if (aiResult) {
                             session.mode = 'BOOKING';
+                            session.bookingModeLocked = true;  // V97: Ensure lock is set
                             session.markModified('mode');
                             break BOOKING_MODE;
                         }
@@ -11114,6 +11148,7 @@ async function processTurn({
                         if (canAskAddAnother) {
                             // Stay in BOOKING mode until caller confirms no more units
                             session.mode = 'BOOKING';
+                            session.bookingModeLocked = true;  // V97: Ensure lock is set
                             session.unitOfWork.awaitingAddAnother = true;
                             session.markModified('mode');
                             session.markModified('unitOfWork');

@@ -90,12 +90,13 @@ const FILES_TO_SCAN = [
     'services/BookingFlowEngine.js',
     'services/BookingScriptEngine.js',
     'services/ResponseRenderer.js',
-    'services/ConversationStateMachine.js',
+    // REMOVED: ConversationStateMachine.js - deleted
     'services/v2AIAgentRuntime.js',
     'services/elite-frontline/EliteFrontlineIntelV23.js',
     'services/Tier3LLMFallback.js',
     'services/LowConfidenceHandler.js',
-    'services/CheatSheetEngine.js'
+    'services/CheatSheetEngine.js',
+    'services/engine/booking/BookingFlowRunner.js'  // The ONLY booking system
 ];
 
 // ============================================================================
