@@ -19,6 +19,14 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../../utils/logger');
 
+// V103: Import BlackBoxLogger for CONFIG_READ event tracing
+let BlackBoxLogger;
+try {
+    BlackBoxLogger = require('./BlackBoxLogger');
+} catch (err) {
+    logger.warn('[CONTROL_PLANE_ENFORCER] BlackBoxLogger not available - tracing disabled');
+}
+
 // Load the contract at module init
 const CONTRACT_PATH = path.join(__dirname, '../../config/controlPlaneContract.frontDesk.v1.json');
 let CONTRACT = null;
@@ -204,6 +212,31 @@ function cfgGet(effectiveConfig, key, options = {}) {
         hasValue: value !== undefined && value !== null,
         source: 'controlPlane'
     });
+    
+    // V103: Emit CONFIG_READ event to BlackBox for trace visibility
+    // This shows config reads from FrontDeskRuntime in the same format as AWConfigReader
+    if (BlackBoxLogger?.logEvent && callId && callId !== 'unknown') {
+        BlackBoxLogger.logEvent({
+            callId,
+            companyId: effectiveConfig?.companyId || 'unknown',
+            type: 'CONFIG_READ',
+            turn,
+            data: {
+                awPath: key,
+                readerId,
+                resolvedFrom: (value !== undefined && value !== null) ? 'controlPlane' : 'notFound',
+                valuePreview: typeof value === 'string' 
+                    ? value.substring(0, 50) 
+                    : Array.isArray(value) 
+                        ? `[array:${value.length}]`
+                        : typeof value === 'object' && value !== null
+                            ? `{object:${Object.keys(value).length}}`
+                            : String(value),
+                valueType: Array.isArray(value) ? 'array' : typeof value,
+                source: 'ControlPlaneEnforcer.cfgGet'
+            }
+        }).catch(() => {}); // Silent fail - never let tracing kill the call
+    }
     
     return value;
 }

@@ -3800,6 +3800,37 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         const strictControlPlaneMode = runtimeEnforcementLevel === 'strict' || 
           (runtimeStrictOnly === true && runtimeEnforcementLevel !== 'warn');
         
+        // V103: Log strict mode evaluation for debugging
+        const strictModeReason = strictControlPlaneMode 
+          ? (runtimeEnforcementLevel === 'strict' ? 'level=strict' : 'strictOnly=true')
+          : (runtimeEnforcementLevel === 'warn' ? 'level=warn' : 'not_configured');
+        
+        logger.info('[V103] STRICT MODE EVALUATION', {
+          callSid,
+          companyId: companyID,
+          runtimeEnforcementLevel,
+          runtimeStrictOnly,
+          strictControlPlaneMode,
+          reason: strictModeReason
+        });
+        
+        // V103: BlackBox event for strict mode evaluation (shows in trace!)
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'STRICT_MODE_EVALUATION',
+            turn: turnCount,
+            data: {
+              strictMode: strictControlPlaneMode,
+              enforcementLevel: runtimeEnforcementLevel || 'not_set',
+              strictControlPlaneOnly: runtimeStrictOnly || false,
+              reason: strictModeReason,
+              hybridPathPossible: !strictControlPlaneMode
+            }
+          }).catch(() => {});
+        }
+        
         // ═══════════════════════════════════════════════════════════════════════════
         // V96j: BOOKING GATE BYPASS PROTECTION
         // ═══════════════════════════════════════════════════════════════════════════
@@ -4524,14 +4555,25 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
         
         // 📼 BLACK BOX: Log turn completion with booking state
+        // V103: handler now reflects actual path taken (was hardcoded 'ConversationEngine')
         if (BlackBoxLogger) {
+          // Map usedPath to handler name for clarity
+          const handlerFromPath = {
+            'frontDeskRuntime': 'FrontDeskRuntime',
+            'frontDeskRuntime_error_recovery': 'FrontDeskRuntime_ErrorRecovery',
+            'hybrid': 'ConversationEngine',
+            'booking': 'BookingFlowRunner',
+            'vendor': 'VendorScenario',
+            'legacy': 'LegacyPath'
+          };
           BlackBoxLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'TURN_COMPLETE',
             turn: turnCount,
             data: {
-              handler: 'ConversationEngine',
+              handler: handlerFromPath[usedPath] || usedPath || 'Unknown',
+              usedPath,  // V103: Include raw path for debugging
               action: result.action,
               responsePreview: (result.text || result.response || '').substring(0, 100),
               bookingModeLocked: !!result.callState?.bookingModeLocked,

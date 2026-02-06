@@ -184,21 +184,58 @@ function getByPath(obj, path) {
 
 /**
  * Determine where the value was resolved from
+ * V103: Now checks ACTUAL config location, not just value comparison
+ * 
+ * This is critical for "UI is law" discipline - we need to know if the value
+ * came from company config (what they set in UI) vs. falling back to defaults.
+ * 
+ * PRIORITY ORDER:
+ * 1. 'companyConfig' - Value found in aiAgentSettings paths (UI-controlled)
+ * 2. 'templateConfig' - Value found in templateMerged paths (inherited)
+ * 3. 'globalDefaults' - Value is from hardcoded defaults (NOT from company UI)
  */
 function determineSource(awPath, value, runtimeConfig) {
+    // Explicit default marker takes precedence
     if (runtimeConfig?._isDefault) return 'globalDefaults';
     
-    const readerInfo = RUNTIME_READERS_MAP?.[awPath];
-    if (readerInfo?.defaultValue !== undefined) {
-        const defaultVal = readerInfo.defaultValue;
-        const defaultStr = JSON.stringify(defaultVal);
-        const valueStr = JSON.stringify(value);
-        if (defaultStr === valueStr) {
-            return 'globalDefaults';
+    // V103: Check if value actually exists in company's aiAgentSettings
+    // This is the ONLY way to know if the UI was used
+    const pathsToCheck = [
+        awPath,
+        `aiAgentSettings.${awPath}`,
+        `aiAgentSettings.frontDeskBehavior.${awPath}`,
+        // Handle frontDesk.* paths
+        awPath.startsWith('frontDesk.') ? `aiAgentSettings.frontDeskBehavior.${awPath.replace('frontDesk.', '')}` : null,
+        awPath.startsWith('frontDesk.') ? `aiAgentSettings.${awPath}` : null
+    ].filter(Boolean);
+    
+    // Check AW_PATH_MAPPINGS for the canonical mapping
+    const mappedPath = AW_PATH_MAPPINGS[awPath];
+    if (mappedPath) {
+        pathsToCheck.unshift(mappedPath);
+    }
+    
+    // Check if any of these paths exist in runtimeConfig with a non-undefined value
+    for (const path of pathsToCheck) {
+        const foundValue = getByPath(runtimeConfig, path);
+        if (foundValue !== undefined) {
+            // Value was found in company config structure
+            // Check if it's from template merge
+            if (path.includes('templateMerged') || runtimeConfig?.aiAgentSettings?.templateReferences?.length > 0) {
+                // Could be template, but if direct path exists, it's company override
+                const directCheck = getByPath(runtimeConfig, path);
+                if (directCheck !== undefined) {
+                    return 'companyConfig';
+                }
+                return 'templateConfig';
+            }
+            return 'companyConfig';
         }
     }
     
-    return 'companyConfig';
+    // Value was not found in any company config path
+    // This means we're using the hardcoded default
+    return 'globalDefaults';
 }
 
 /**
