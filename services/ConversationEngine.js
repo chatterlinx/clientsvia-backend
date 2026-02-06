@@ -41,9 +41,7 @@ const SessionService = require('./SessionService');
 const RunningSummaryService = require('./RunningSummaryService');
 const HybridReceptionistLLM = require('./HybridReceptionistLLM');
 const BookingScriptEngine = require('./BookingScriptEngine');
-// REMOVED: BookingStateMachine - dead code, never instantiated
 const ResponseRenderer = require('./ResponseRenderer');
-// REMOVED: ConversationStateMachine - dead code, never instantiated  
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
 const DiscoveryExtractor = require('./engine/booking/DiscoveryExtractor');
@@ -4815,12 +4813,8 @@ async function processTurn({
         // 
         // The meta intent patterns (especially REPAIR_CONVERSATION with /i said/)
         // were catching booking utterances before booking detection could run.
-        //
-        // Now booking intent runs FIRST with highest priority!
-        // NOTE: ConsentDetector is defined in THIS FILE (line ~2413), not in engine/booking
+        // Now booking intent runs FIRST with highest priority via MINIMAL BOOKING DETECTION.
         // ═══════════════════════════════════════════════════════════════════════
-        // REMOVED: DirectBookingIntentDetector - eliminated competing booking system
-        // ConsentDetector is already available in this scope (defined above at line ~2413)
         
         // AW wiring: Read config for explicit consent requirement
         const bookingRequiresExplicitConsent = awReader 
@@ -4912,8 +4906,6 @@ async function processTurn({
         const metaIntentCheck = aiResult ? null : (() => {
             const lowerText = (userText || '').toLowerCase().trim();
             if (!lowerText) return null;
-
-            // REMOVED: Booking clarification patterns - eliminated competing booking system
             
             // === REPEAT / DIDN'T HEAR ===
             const repeatPatterns = [
@@ -5022,8 +5014,6 @@ async function processTurn({
                 return { intent: 'REPAIR_CONVERSATION', patterns: 'repair' };
             }
             
-            // REMOVED: Urgency scheduling patterns - eliminated competing booking system
-            
             return null;
         })();
         
@@ -5089,15 +5079,7 @@ async function processTurn({
                                "what specifically can I help you with right now?";
                     break;
                     
-                case 'URGENCY_SCHEDULING':
-                    // REMOVED: Competing booking system eliminated for clean sweep
-                    // Agent now uses minimal keyword detection + defer to BookingFlowRunner
-                    break;
-
-                case 'CLARIFY_BOOKING_SLOT':
-                    // REMOVED: Competing booking system eliminated for clean sweep
-                    // Agent now uses minimal keyword detection + defer to BookingFlowRunner
-                    break;
+                // URGENCY_SCHEDULING and CLARIFY_BOOKING_SLOT removed - booking handled by minimal detection
             }
             
             if (metaReply) {
@@ -5235,14 +5217,8 @@ async function processTurn({
             }
         }
         
-        // REMOVED: Complex booking intent fallback - eliminated competing booking system
-        
         // ═══════════════════════════════════════════════════════════════════════
-        // CONSENT DETECTION - Check if caller explicitly wants to book
-        // ═══════════════════════════════════════════════════════════════════════
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // V92 ENHANCED: PRE-CONSENT CHECK DIAGNOSTICS
+        // V92: PRE-CONSENT CHECK DIAGNOSTICS
         // ═══════════════════════════════════════════════════════════════════════
         // Log the full context BEFORE consent check runs so we can trace failures
         const debugLogging = company.aiAgentSettings?.debugLogging === true;
@@ -5274,278 +5250,8 @@ async function processTurn({
             });
         }
         
-        // REMOVED: Complex consent handling - eliminated competing booking system
-        // Booking is now handled by MINIMAL BOOKING DETECTION at line ~4831
+        // Booking is handled by MINIMAL BOOKING DETECTION at line ~4831
         // which sets bookingModeLocked=true and defers to BookingFlowRunner
-        
-        // Skip legacy booking entry - minimal detection already handled it
-        if (false) { // DISABLED: Legacy shouldEnterBooking path - replaced by minimal detection
-            // 🎯 BOOKING MODE TRIGGERED - Either by consent or direct intent
-            session.booking.consentGiven = true;
-            session.booking.consentPhrase = consentCheck.hasConsent 
-                ? consentCheck.matchedPhrase 
-                : (directBookingIntent?.matchedPattern || 'direct_booking_intent');
-            session.booking.consentReason = consentCheck.hasConsent 
-                ? 'explicit_consent' 
-                : 'direct_booking_intent';
-            session.booking.directBookingConfidence = directBookingIntent?.confidence || null;
-            session.booking.consentTurn = (session.metrics?.totalTurns || 0) + 1;
-            session.booking.consentTimestamp = new Date();
-            session.mode = 'BOOKING';
-            // ═══════════════════════════════════════════════════════════════════════════
-            // V97 FIX: SET bookingModeLocked WHEN ENTERING BOOKING MODE
-            // ═══════════════════════════════════════════════════════════════════════════
-            session.bookingModeLocked = true;
-            
-            // Store discovery summary before switching to booking
-            session.discoverySummary = session.discovery?.issue || 
-                                       session.conversationMemory?.summary || 
-                                       'Caller wants to schedule service';
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // 🔒 BOOKING FLOW LOCK (Feb 2026)
-            // ═══════════════════════════════════════════════════════════════════
-            // This is THE CRITICAL MOMENT where we lock into booking mode.
-            // From this point, all subsequent turns will use the BookingFlowRunner
-            // instead of scenarios + LLM.
-            // ═══════════════════════════════════════════════════════════════════
-            const { BookingFlowResolver } = require('./engine/booking');
-            const bookingFlow = BookingFlowResolver.resolve({
-                companyId,
-                trade: company?.trade || company?.tradeType || null,
-                serviceType: session.discovery?.serviceType || null,
-                company
-            });
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // V95 FIX: Use preExtractedSlots for CORRECT slot values
-            // ═══════════════════════════════════════════════════════════════════
-            // BUG: currentSlots was getting corrupted with "Air Conditioning" 
-            // instead of "Mark" from "my name is Mark and air conditioning issues".
-            // preExtractedSlots comes from v2twilio's SlotExtractor which correctly
-            // extracts names using validation rules.
-            // 
-            // Priority: preExtractedSlots > currentSlots for name/phone slots
-            // ═══════════════════════════════════════════════════════════════════
-            const correctSlots = {
-                ...currentSlots,
-                // Override with preExtractedSlots values (these are validated by SlotExtractor)
-                ...(preExtractedSlots || {})
-            };
-            
-            log('🎯 V95: Merging slots for booking', {
-                currentSlotsName: currentSlots.name,
-                preExtractedName: preExtractedSlots?.name,
-                finalName: correctSlots.name,
-                currentSlotsPhone: currentSlots.phone,
-                preExtractedPhone: preExtractedSlots?.phone,
-                finalPhone: correctSlots.phone
-            });
-            
-            // Set booking lock state - this will be saved to Redis by v2twilio.js
-            session.bookingFlowState = {
-                bookingModeLocked: true,
-                bookingFlowId: bookingFlow.flowId,
-                currentStepId: bookingFlow.steps[0]?.id || 'name',
-                bookingCollected: { ...correctSlots },  // V95: Use correctly extracted slots
-                bookingState: 'ACTIVE'
-            };
-            
-            log('🔒 BOOKING FLOW LOCKED - State machine takes over', {
-                flowId: bookingFlow.flowId,
-                firstStep: bookingFlow.steps[0]?.id,
-                stepCount: bookingFlow.steps.length
-            });
-            
-            log('🎯 BOOKING TRIGGERED - Transitioning to BOOKING mode', {
-                trigger: session.booking.consentReason,
-                matchedPhrase: session.booking.consentPhrase,
-                directIntentConfidence: directBookingIntent?.confidence || null,
-                turn: session.booking.consentTurn,
-                discoverySummary: session.discoverySummary,
-                bookingModeLocked: true,
-                bookingFlowId: bookingFlow.flowId
-            });
-            
-            // ═══════════════════════════════════════════════════════════════════════════
-            // V96 FIX: BookingFlowRunner speaks FIRST when booking triggers
-            // ═══════════════════════════════════════════════════════════════════════════
-            // PROBLEM: BOOKING_SNAP was a "shortcut" that built its own response when
-            // booking intent was detected. This caused:
-            // 1. Questions not coming from Booking Prompt tab
-            // 2. Slot corruption (e.g., "Got it, Air Conditioning" instead of "Mark")
-            // 3. Random question order
-            //
-            // FIX: When bookingModeLocked flips TRUE, BookingFlowRunner must be the
-            // ONLY voice. No BOOKING_SNAP. No hybrid routing. No interceptors.
-            //
-            // This ensures the Booking Prompt tab is used from the FIRST booking turn.
-            // ═══════════════════════════════════════════════════════════════════════════
-            const { BookingFlowRunner } = require('./engine/booking');
-            
-            // Build slots object with metadata for BookingFlowRunner
-            // V95: Use correctSlots which has preExtractedSlots override
-            const slotsForRunner = {};
-            for (const [key, value] of Object.entries(correctSlots)) {
-                if (value) {
-                    slotsForRunner[key] = {
-                        value,
-                        confidence: preExtractedSlots?.[key]?.confidence || 0.9,
-                        source: preExtractedSlots?.[key]?.source || 'discovery'
-                    };
-                }
-            }
-            
-            log('🔒 V96: Calling BookingFlowRunner as FIRST booking response', {
-                flowId: bookingFlow.flowId,
-                slotsCount: Object.keys(slotsForRunner).length,
-                slotsKeys: Object.keys(slotsForRunner),
-                nameValue: slotsForRunner.name?.value
-            });
-            
-            // Build context-aware acknowledgment BEFORE calling runner
-            // This is the discovery acknowledgment that leads into booking
-            const discovery = session.discovery || {};
-            const callerName = correctSlots.name || correctSlots.partialName;
-            let contextAck = '';
-            
-            if (discovery.issue || discovery.techMentioned || discovery.temperature) {
-                const parts = [];
-                
-                if (callerName) {
-                    parts.push(`Got it, ${callerName}`);
-                } else {
-                    parts.push('Got it');
-                }
-                
-                if (discovery.issue && discovery.temperature && discovery.temperature >= 80) {
-                    parts.push(`${discovery.issue} and it's ${discovery.temperature}° in the house`);
-                } else if (discovery.issue) {
-                    parts.push(discovery.issue);
-                }
-                
-                if (discovery.techMentioned && discovery.recentVisit) {
-                    parts.push(`You mentioned ${discovery.techMentioned} was out recently`);
-                } else if (discovery.techMentioned) {
-                    parts.push(`I see ${discovery.techMentioned} was there before`);
-                } else if (discovery.recentVisit) {
-                    parts.push(`I see someone was out recently`);
-                }
-                
-                contextAck = parts.join(' — ') + '. Let me get you taken care of. ';
-            } else {
-                contextAck = "Perfect! Let me get your information. ";
-            }
-            
-            try {
-                // Call BookingFlowRunner directly - this uses Booking Prompt tab
-                const bookingRunnerResult = await BookingFlowRunner.runStep({
-                    flow: bookingFlow,
-                    state: session.bookingFlowState,
-                    userInput: '', // First entry - no user input yet for this step
-                    company,
-                    session,
-                    callSid: session._id?.toString() || companyId,
-                    slots: slotsForRunner,
-                    awReader
-                });
-                
-                aiLatencyMs = Date.now() - aiStartTime;
-                
-                // Update session state from runner result
-                if (bookingRunnerResult.state) {
-                    session.bookingFlowState = {
-                        ...session.bookingFlowState,
-                        ...bookingRunnerResult.state,
-                        bookingModeLocked: true
-                    };
-                }
-                
-                // Build final reply: context acknowledgment + runner's booking question
-                const runnerReply = bookingRunnerResult.reply || '';
-                const finalReply = `${contextAck}${runnerReply}`.trim();
-                
-                log('📋 V96: BookingFlowRunner SUCCESS - First booking response', {
-                    contextAck: contextAck.substring(0, 50),
-                    runnerReply: runnerReply.substring(0, 100),
-                    finalReply: finalReply.substring(0, 150),
-                    currentStepId: session.bookingFlowState?.currentStepId,
-                    bookingCollected: Object.keys(session.bookingFlowState?.bookingCollected || {}),
-                    isComplete: bookingRunnerResult.isComplete,
-                    latencyMs: aiLatencyMs
-                });
-                
-                aiResult = {
-                    reply: finalReply,
-                    conversationMode: 'booking',
-                    intent: 'booking',
-                    nextGoal: `COLLECT_${session.bookingFlowState?.currentStepId?.toUpperCase() || 'SLOT'}`,
-                    filledSlots: correctSlots,
-                    signals: { 
-                        wantsBooking: true,
-                        consentGiven: true,
-                        bookingJustStarted: true,
-                        bookingModeLocked: true
-                    },
-                    latencyMs: aiLatencyMs,
-                    tokensUsed: 0,
-                    fromStateMachine: true,
-                    mode: 'BOOKING',
-                    matchSource: 'BOOKING_FLOW_RUNNER_FIRST',  // V96: New source identifier
-                    tier: 'tier1',
-                    bookingFlowState: session.bookingFlowState,
-                    debug: {
-                        source: 'BOOKING_FLOW_RUNNER_FIRST',
-                        stage: 'booking',
-                        step: session.bookingFlowState?.currentStepId,
-                        runnerAction: bookingRunnerResult.action,
-                        bookingModeLocked: true,
-                        bookingFlowId: bookingFlow.flowId,
-                        v96Fix: 'BookingFlowRunner speaks first, no BOOKING_SNAP'
-                    }
-                };
-                
-            } catch (runnerErr) {
-                // Fallback: If BookingFlowRunner fails, use a safe generic prompt
-                log('⚠️ V96: BookingFlowRunner failed, using safe fallback', {
-                    error: runnerErr.message,
-                    stack: runnerErr.stack?.substring(0, 200)
-                });
-                
-                aiLatencyMs = Date.now() - aiStartTime;
-                
-                // Get first step prompt from booking config as fallback
-                const bookingConfigFallback = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
-                const firstSlot = (bookingConfigFallback.slots || []).find(s => s.required);
-                const fallbackQuestion = firstSlot?.prompt || "What's the best phone number to reach you at?";
-                
-                aiResult = {
-                    reply: `${contextAck}${fallbackQuestion}`,
-                    conversationMode: 'booking',
-                    intent: 'booking',
-                    nextGoal: 'COLLECT_SLOT',
-                    filledSlots: correctSlots,
-                    signals: { 
-                        wantsBooking: true,
-                        consentGiven: true,
-                        bookingJustStarted: true,
-                        bookingModeLocked: true
-                    },
-                    latencyMs: aiLatencyMs,
-                    tokensUsed: 0,
-                    fromStateMachine: true,
-                    mode: 'BOOKING',
-                    matchSource: 'BOOKING_RUNNER_FALLBACK',
-                    tier: 'tier1',
-                    bookingFlowState: session.bookingFlowState,
-                    debug: {
-                        source: 'BOOKING_RUNNER_FALLBACK',
-                        error: runnerErr.message,
-                        bookingModeLocked: true
-                    }
-                };
-            }
-        }
         
         log('CHECKPOINT 9a: Mode state', {
             mode: session.mode,
@@ -6450,28 +6156,6 @@ async function processTurn({
                             mode: 'DISCOVERY',
                             debug: {
                                 source: 'SERVICE_FLOW_POST_TRIAGE',
-                                trade: tradeKey
-                            }
-                        };
-                    }
-                // DISABLED: Legacy consent check - booking now handled by minimal detection
-                } else if (session.lastAgentIntent === 'ASK_SERVICE_CONSENT' && false) { // consentCheck removed
-                    const clarifyPrompt = resolveServiceFlowPrompt('consentClarify', 'serviceFlow.consentClarify');
-                    if (clarifyPrompt) {
-                        aiLatencyMs = Date.now() - aiStartTime;
-                        aiResult = {
-                            reply: clarifyPrompt,
-                            conversationMode: 'discovery',
-                            intent: 'service_consent_clarify',
-                            nextGoal: 'AWAIT_CONSENT',
-                            filledSlots: currentSlots,
-                            signals: { wantsBooking: false },
-                            latencyMs: aiLatencyMs,
-                            tokensUsed: 0,
-                            fromStateMachine: true,
-                            mode: 'DISCOVERY',
-                            debug: {
-                                source: 'SERVICE_FLOW_CONSENT_CLARIFY',
                                 trade: tradeKey
                             }
                         };
@@ -8033,15 +7717,8 @@ async function processTurn({
             // will take over (no scenarios, no LLM, just the checklist).
             // V96i: Now guaranteed to exist for all booking responses.
             // ═══════════════════════════════════════════════════════════════════
-            bookingFlowState: finalBookingFlowState,
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // 🎯 V94: BOOKING INTENT TRACE (for TURN_TRACE diagnostic)
-            // ═══════════════════════════════════════════════════════════════════
-            // Captures early booking intent/consent detection results for tracing
-            // why booking did or didn't trigger on this turn.
-            // ═══════════════════════════════════════════════════════════════════
-            // REMOVED: bookingIntentTrace - eliminated competing booking system
+            bookingFlowState: finalBookingFlowState
+            // Booking is now handled by minimal keyword detection + BookingFlowRunner
         };
 
         // V93: Allow deterministic mid-call rules (and other protocols) to request transfer in a visible way
