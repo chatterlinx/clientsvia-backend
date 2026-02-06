@@ -136,6 +136,11 @@ function cfgGet(effectiveConfig, key, options = {}) {
     const { callId = 'unknown', turn = 0, strict = true, readerId = 'unknown' } = options;
     const trace = getTrace(callId, turn);
     
+    // Determine enforcement level: "strict" = block+fail, "warn" = log only
+    const enforcementLevel = effectiveConfig?.frontDesk?.enforcement?.level || 
+        (effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn');
+    const isStrictMode = enforcementLevel === 'strict';
+    
     // ═══════════════════════════════════════════════════════════════════════════
     // GATE 1: Is this key in the contract?
     // ═══════════════════════════════════════════════════════════════════════════
@@ -144,20 +149,21 @@ function cfgGet(effectiveConfig, key, options = {}) {
             type: 'UNKNOWN_KEY',
             key,
             readerId,
+            enforcementLevel,
             message: `Key "${key}" is not in Control Plane contract - IF IT'S NOT IN UI, IT DOES NOT EXIST`
         };
         
         trace.addViolation('CONTROL_PLANE_VIOLATION', key, violation);
         
+        // Always log the violation
         logger.error('[CONTROL_PLANE_ENFORCER] VIOLATION: Unknown key accessed', violation);
         
-        // Check enforcement mode
-        const strictMode = effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly !== false;
-        
-        if (strictMode) {
+        if (isStrictMode) {
+            // STRICT: Block and throw
             throw new Error(`CONTROL_PLANE_VIOLATION: ${violation.message}`);
         } else {
-            // Log but don't throw - degraded mode
+            // WARN: Log but continue (for migration period)
+            logger.warn('[CONTROL_PLANE_ENFORCER] WARN MODE: Violation logged but not blocked', { key, readerId });
             return undefined;
         }
     }
@@ -316,25 +322,52 @@ function flattenKeys(obj, prefix = '', result = []) {
  * ═══════════════════════════════════════════════════════════════════════════════
  * Build CONTROL_PLANE_HEADER event data
  * ═══════════════════════════════════════════════════════════════════════════════
+ * Must include:
+ * - strictMode: true/false
+ * - contractVersion: "frontDesk.v1"
+ * - validation: { ok, missingRequired[], unknownAccesses[] }
+ * - configSource: "company" | "template" | "defaults"
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 function buildControlPlaneHeader(effectiveConfig, awHash, effectiveConfigVersion, callId) {
     const validation = validateConfig(effectiveConfig, callId);
     
+    // Determine enforcement level (strict vs warn)
+    const enforcementLevel = effectiveConfig?.frontDesk?.enforcement?.level || 
+        (effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn');
+    const strictMode = enforcementLevel === 'strict';
+    
+    // Determine config source
+    let configSource = 'defaults';
+    if (awHash && effectiveConfigVersion) {
+        configSource = 'company'; // Loaded from company-specific wiring
+    } else if (effectiveConfig?.frontDesk) {
+        configSource = 'template'; // Has frontDesk but no awHash
+    }
+    
     return {
+        // Core identifiers
         companyId: effectiveConfig?.companyId || 'unknown',
         awHash: awHash || null,
         effectiveConfigVersion: effectiveConfigVersion || null,
+        
+        // Load status
         controlPlaneLoaded: !!(awHash && effectiveConfigVersion),
-        resolvedFrom: awHash ? 'controlPlane' : 'FAILED',
-        contractVersion: CONTRACT?.version || 'unknown',
+        configSource,
+        
+        // Contract info
+        contractVersion: CONTRACT?.version || 'frontDesk.v1',
+        
+        // Enforcement status - CRITICAL for debugging
+        strictMode,
+        enforcementLevel,
+        
+        // Validation - must show ok/missingRequired/unknownAccesses
         validation: {
-            valid: validation.valid,
-            missingRequiredCount: validation.missingRequired.length,
-            unknownKeysCount: validation.unknownKeys.length
-        },
-        enforcementMode: effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly !== false 
-            ? 'strict' 
-            : 'permissive'
+            ok: validation.valid,
+            missingRequired: validation.missingRequired,
+            unknownAccesses: validation.unknownKeys
+        }
     };
 }
 

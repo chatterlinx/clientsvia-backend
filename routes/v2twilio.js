@@ -3003,9 +3003,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }).catch(() => {});
       }
       
-      // V99: Fail closed if Control Plane not loaded and strict mode enabled
-      const strictMode = company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly;
-      if (!controlPlaneLoaded && strictMode === true) {
+      // V100: Fail closed if Control Plane not loaded and strict mode enabled
+      // Check both enforcement.level and strictControlPlaneOnly for backward compatibility
+      const enforcementLevel = company?.aiAgentSettings?.frontDesk?.enforcement?.level;
+      const strictControlPlaneOnly = company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly;
+      const strictMode = enforcementLevel === 'strict' || (strictControlPlaneOnly === true && enforcementLevel !== 'warn');
+      
+      if (!controlPlaneLoaded && strictMode) {
         logger.error('[V2TWILIO] CONTROL_PLANE_LOAD_FAILED - Fail closed', {
           callId: callSid,
           companyId: companyID,
@@ -3822,15 +3826,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             // FrontDeskRuntime. No legacy paths, no bypass. This is the surgeon-mode
             // nuke that gives you full control without breaking infrastructure.
             // ════════════════════════════════════════════════════════════════════════
-            const strictControlPlaneMode = company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly === true;
+            // V100: Check both enforcement.level and strictControlPlaneOnly
+            const runtimeEnforcementLevel = company?.aiAgentSettings?.frontDesk?.enforcement?.level;
+            const runtimeStrictOnly = company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly;
+            const strictControlPlaneMode = runtimeEnforcementLevel === 'strict' || 
+              (runtimeStrictOnly === true && runtimeEnforcementLevel !== 'warn');
             
             if (strictControlPlaneMode) {
               // Route through FrontDeskRuntime - THE ONLY ORCHESTRATOR
               const FrontDeskRuntime = require('../services/engine/FrontDeskRuntime');
               
-              logger.info('[V99] STRICT CONTROL PLANE MODE - Routing through FrontDeskRuntime', {
+              logger.info('[V100] STRICT CONTROL PLANE MODE - Routing through FrontDeskRuntime', {
                 callSid,
                 turnCount,
+                enforcementLevel: runtimeEnforcementLevel || 'strict',
                 userInput: speechResult?.substring(0, 50)
               });
               

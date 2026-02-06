@@ -645,6 +645,32 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             });
         }
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V100: ENFORCEMENT SETTINGS - Control Plane strict mode toggle
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This is the "kill switch" that enables Platform Law enforcement
+        // - strictControlPlaneOnly: true = FrontDeskRuntime handles all turns
+        // - level: "warn" = log violations, "strict" = block + fail closed
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (updates.enforcement) {
+            if (updates.enforcement.strictControlPlaneOnly !== undefined) {
+                updateObj['aiAgentSettings.frontDesk.enforcement.strictControlPlaneOnly'] = updates.enforcement.strictControlPlaneOnly === true;
+                logger.info('[FRONT DESK BEHAVIOR] V100: Setting strictControlPlaneOnly', {
+                    companyId,
+                    strictControlPlaneOnly: updates.enforcement.strictControlPlaneOnly === true
+                });
+            }
+            if (updates.enforcement.level !== undefined) {
+                const validLevels = ['warn', 'strict'];
+                const level = validLevels.includes(updates.enforcement.level) ? updates.enforcement.level : 'warn';
+                updateObj['aiAgentSettings.frontDesk.enforcement.level'] = level;
+                logger.info('[FRONT DESK BEHAVIOR] V100: Setting enforcement level', {
+                    companyId,
+                    level
+                });
+            }
+        }
+        
         if (updates.forbiddenPhrases) {
             updateObj['aiAgentSettings.frontDeskBehavior.forbiddenPhrases'] = updates.forbiddenPhrases;
         }

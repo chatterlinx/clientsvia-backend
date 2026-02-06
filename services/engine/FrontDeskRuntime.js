@@ -98,8 +98,20 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     // ═══════════════════════════════════════════════════════════════════════════
     // GATE 1: Validate Control Plane is loaded
     // ═══════════════════════════════════════════════════════════════════════════
-    const strictMode = effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true;
+    // Determine enforcement level: "strict" = block+fail, "warn" = log only
+    const enforcementLevel = effectiveConfig?.frontDesk?.enforcement?.level || 
+        (effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn');
+    const strictMode = enforcementLevel === 'strict';
     const validation = validateConfig(effectiveConfig, callSid);
+    
+    // Log enforcement status on every turn for visibility
+    logger.info('[FRONT_DESK_RUNTIME] Enforcement status', {
+        callSid,
+        enforcementLevel,
+        strictMode,
+        validationOk: validation.valid,
+        missingRequiredCount: validation.missingRequired?.length || 0
+    });
     
     if (!validation.valid && strictMode) {
         logger.error('[FRONT_DESK_RUNTIME] FAIL CLOSED - Control Plane validation failed', {
@@ -465,7 +477,25 @@ async function handleEscalateLane(effectiveConfig, callState, userTurn, context,
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 function isStrictModeEnabled(effectiveConfig) {
+    // Check enforcement.level first, then fallback to strictControlPlaneOnly boolean
+    const level = effectiveConfig?.frontDesk?.enforcement?.level;
+    if (level) {
+        return level === 'strict';
+    }
     return effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * getEnforcementLevel() - Get current enforcement level ("warn" or "strict")
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+function getEnforcementLevel(effectiveConfig) {
+    const level = effectiveConfig?.frontDesk?.enforcement?.level;
+    if (level && ['warn', 'strict'].includes(level)) {
+        return level;
+    }
+    return effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn';
 }
 
 /**
@@ -477,5 +507,6 @@ module.exports = {
     handleTurn,
     determineLane,
     isStrictModeEnabled,
+    getEnforcementLevel,
     LANES
 };
