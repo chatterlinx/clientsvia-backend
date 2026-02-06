@@ -2277,8 +2277,12 @@ class BookingFlowRunner {
                 const nameParts = existingValue.trim().split(/\s+/);
                 
                 if (askFullName && askMissingNamePart && nameParts.length < 2) {
-                    // Still need last name
-                    const lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion || "And what's your last name?";
+                    // V99: Use UI-configured last name question
+                    let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
+                    if (!lastNameQuestion) {
+                        logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for lastNameQuestion', { stepId: step.id });
+                        lastNameQuestion = "And your last name?";
+                    }
                     const ack = isYes ? 'Perfect.' : 'Got it.';
                     
                     state.firstNameCollected = nameParts[0];
@@ -2363,7 +2367,12 @@ class BookingFlowRunner {
                 const nameParts = fullCorrectedName.trim().split(/\s+/);
                 
                 if (askFullName && askMissingNamePart && nameParts.length < 2) {
-                    const lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion || "And what's your last name?";
+                    // V99: Use UI-configured last name question
+                    let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
+                    if (!lastNameQuestion) {
+                        logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for lastNameQuestion', { stepId: step.id });
+                        lastNameQuestion = "And your last name?";
+                    }
                     state.firstNameCollected = nameParts[0];
                     state.askedForLastName = true;
                     
@@ -2422,7 +2431,12 @@ class BookingFlowRunner {
             // First entry - ask for last name
             if (!userInput || userInput.trim() === '' || !state.askedForLastName) {
                 const firstName = existingValue?.split?.(/\s+/)?.[0] || existingValue;
-                const lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion || "And what's your last name?";
+                // V99: Use UI-configured last name question
+                let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
+                if (!lastNameQuestion) {
+                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for lastNameQuestion', { stepId: step.id });
+                    lastNameQuestion = "And your last name?";
+                }
                 
                 state.firstNameCollected = firstName;
                 state.askedForLastName = true;
@@ -2498,9 +2512,16 @@ class BookingFlowRunner {
         if (detailReason === 'ADDRESS_INCOMPLETE_NEEDS_CITY_STATE' && (fieldKey === 'address' || step.type === 'address')) {
             // First entry - ask for city/state
             if (!userInput || userInput.trim() === '' || !state.askedForCityState) {
-                const cityStatePrompt = slotOptions.missingCityStatePrompt || 
-                    step.options?.missingCityStatePrompt || 
-                    "Got it — what city and state is that in?";
+                // V99: Use UI-configured prompt ONLY
+                let cityStatePrompt = slotOptions.missingCityStatePrompt || 
+                    step.options?.missingCityStatePrompt ||
+                    slotOptions.cityPrompt;
+                if (!cityStatePrompt) {
+                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for missingCityStatePrompt - using minimal fallback', {
+                        stepId: step.id
+                    });
+                    cityStatePrompt = "What city and state?";
+                }
                 
                 state.streetAddressCollected = existingValue;
                 state.askedForCityState = true;
@@ -2776,6 +2797,110 @@ class BookingFlowRunner {
         let addressValidation = null;
         
         // ═══════════════════════════════════════════════════════════════════════
+        // V99: ADDRESS BREAKDOWN - Step-by-step collection using UI prompts
+        // ═══════════════════════════════════════════════════════════════════════
+        // When breakDownIfUnclear=true, collect address components separately:
+        // street → city → zip → unit (if configured)
+        // ALL prompts come from Booking Prompt tab - NO hardcoded values
+        // ═══════════════════════════════════════════════════════════════════════
+        if ((fieldKey === 'address' || step.type === 'address') && state.addressBreakdown) {
+            const slotOptions = step.options || {};
+            const breakdown = state.addressBreakdown;
+            const phase = breakdown.phase;
+            const userInput = extractResult.value;
+            
+            logger.info('[BOOKING FLOW RUNNER] V99: Processing address breakdown response', {
+                phase,
+                userInput: userInput?.substring(0, 30),
+                collected: breakdown.collected
+            });
+            
+            // Store the current phase value
+            breakdown.collected[phase] = userInput;
+            
+            // Determine next phase based on UI config
+            const requireZip = slotOptions.requireZip === true;
+            const requireUnit = slotOptions.unitNumberMode !== 'never';
+            
+            let nextPhase = null;
+            let nextPrompt = null;
+            let promptSource = null;
+            
+            if (phase === 'street') {
+                nextPhase = 'city';
+                nextPrompt = slotOptions.cityPrompt;
+                promptSource = 'bookingPromptTab:cityPrompt';
+            } else if (phase === 'city') {
+                if (requireZip) {
+                    nextPhase = 'zip';
+                    nextPrompt = slotOptions.zipPrompt;
+                    promptSource = 'bookingPromptTab:zipPrompt';
+                } else if (requireUnit) {
+                    nextPhase = 'unit';
+                    nextPrompt = slotOptions.unitNumberPrompt || slotOptions.unitTypePrompt;
+                    promptSource = 'bookingPromptTab:unitNumberPrompt';
+                } else {
+                    nextPhase = null; // Complete
+                }
+            } else if (phase === 'zip') {
+                if (requireUnit) {
+                    nextPhase = 'unit';
+                    nextPrompt = slotOptions.unitNumberPrompt || slotOptions.unitTypePrompt;
+                    promptSource = 'bookingPromptTab:unitNumberPrompt';
+                } else {
+                    nextPhase = null; // Complete
+                }
+            } else if (phase === 'unit') {
+                nextPhase = null; // Complete
+            }
+            
+            if (nextPhase && nextPrompt) {
+                // Advance to next phase
+                breakdown.phase = nextPhase;
+                
+                logger.info('[BOOKING FLOW RUNNER] V99: Address breakdown - asking next component', {
+                    nextPhase,
+                    nextPrompt: nextPrompt?.substring(0, 50),
+                    promptSource
+                });
+                
+                return {
+                    reply: nextPrompt,
+                    state,
+                    isComplete: false,
+                    action: `ADDRESS_BREAKDOWN_${nextPhase.toUpperCase()}`,
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        addressBreakdownPhase: nextPhase,
+                        promptSource,
+                        collected: breakdown.collected
+                    }
+                };
+            } else {
+                // Address breakdown complete - assemble full address
+                const fullAddress = this.assembleAddressFromBreakdown(breakdown.collected);
+                
+                logger.info('[BOOKING FLOW RUNNER] V99: Address breakdown complete', {
+                    collected: breakdown.collected,
+                    fullAddress
+                });
+                
+                // Clear breakdown state
+                delete state.addressBreakdown;
+                
+                // Store the assembled address and continue with validation
+                extractResult.value = fullAddress;
+                valueToStore = fullAddress;
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
         // V92: GOOGLE GEO VALIDATION FOR ADDRESS
         // ═══════════════════════════════════════════════════════════════════════
         // When collecting address, validate with Google Maps API:
@@ -2821,13 +2946,29 @@ class BookingFlowRunner {
                 let requireZip = slotOptions.requireZip === true; // Default false
                 let requireUnitQuestion = slotOptions.unitNumberMode !== 'never';
                 let unitQuestionMode = slotOptions.unitNumberMode || 'smart';
-                let missingCityStatePrompt = slotOptions.missingCityStatePrompt || 
-                    slotOptions.cityPrompt || 
-                    "Got it — what city and state is that in?";
-                let unitTypePrompt = slotOptions.unitTypePrompt || 
-                    "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?";
-                let unitNumberPrompt = slotOptions.unitNumberPrompt || slotOptions.unitPrompt ||
-                    "Is there an apartment or unit number?";
+                let missingCityStatePrompt = slotOptions.missingCityStatePrompt || slotOptions.cityPrompt;
+                if (!missingCityStatePrompt) {
+                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for missingCityStatePrompt or cityPrompt', {
+                        stepId: step.id,
+                        slotOptionsKeys: Object.keys(slotOptions)
+                    });
+                    missingCityStatePrompt = "What city and state is that in?";
+                }
+                // V99: Use UI-configured unit prompts ONLY
+                let unitTypePrompt = slotOptions.unitTypePrompt;
+                if (!unitTypePrompt) {
+                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for unitTypePrompt', {
+                        stepId: step.id
+                    });
+                    unitTypePrompt = "Is this a house or apartment? If apartment, what's the unit number?";
+                }
+                let unitNumberPrompt = slotOptions.unitNumberPrompt || slotOptions.unitPrompt;
+                if (!unitNumberPrompt) {
+                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for unitNumberPrompt', {
+                        stepId: step.id
+                    });
+                    unitNumberPrompt = "What's the unit number?";
+                }
                 
                 // 2. Fall back to AWConfigReader for any undefined values (legacy global config)
                 if (awReader) {
@@ -2982,10 +3123,9 @@ class BookingFlowRunner {
                         state.addressNeedsUnit = true;
                         state.addressUnitAsked = true;
                         
-                        // Use Google's hint if available, otherwise use policy prompt
-                        const prompt = addressValidation.needsUnit
-                            ? `I found ${valueToStore}. It looks like this might be a ${addressValidation.unitDetection?.buildingLabel || 'building'}. What's the apartment or unit number?`
-                            : unitTypePrompt;
+                        // V99: Use UI-configured unit prompt ONLY
+                        // If Google detected a building, use unitNumberPrompt; otherwise use unitTypePrompt
+                        const prompt = addressValidation.needsUnit ? unitNumberPrompt : unitTypePrompt;
                         
                         logger.info('[BOOKING FLOW RUNNER] V93: Asking unit question per policy', {
                             address: valueToStore,
@@ -3304,7 +3444,12 @@ class BookingFlowRunner {
                         });
                     } else {
                         // Still not enough digits - ask again
-                        const restPrompt = slotOptions.restOfNumberPrompt || "And the rest of the number?";
+                        // V99: Use UI-configured prompt
+                        let restPrompt = slotOptions.restOfNumberPrompt;
+                        if (!restPrompt) {
+                            logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for restOfNumberPrompt', { stepId: step.id });
+                            restPrompt = "And the rest?";
+                        }
                         return {
                             reply: restPrompt,
                             state,
@@ -3330,7 +3475,12 @@ class BookingFlowRunner {
                         state.phoneAreaCode = digits.slice(0, 3);
                         state.collectingRestOfNumber = true;
                         
-                        const restPrompt = slotOptions.restOfNumberPrompt || "Got it. And the rest of the number?";
+                        // V99: Use UI-configured prompt ONLY
+                        let restPrompt = slotOptions.restOfNumberPrompt;
+                        if (!restPrompt) {
+                            logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for restOfNumberPrompt', { stepId: step.id });
+                            restPrompt = "And the rest of the number?";
+                        }
                         
                         logger.info('[BOOKING FLOW RUNNER] V96n: Phone area code collected, asking for rest', {
                             areaCode: state.phoneAreaCode
@@ -3355,9 +3505,14 @@ class BookingFlowRunner {
                         };
                     } else {
                         // Not enough digits for area code - ask again
-                        const areaCodePrompt = slotOptions.areaCodePrompt || "What's the area code?";
+                        // V99: Use UI-configured prompt
+                        let areaCodePrompt = slotOptions.areaCodePrompt;
+                        if (!areaCodePrompt) {
+                            logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for areaCodePrompt', { stepId: step.id });
+                            areaCodePrompt = "What's the area code?";
+                        }
                         return {
-                            reply: `I need a 3-digit area code. ${areaCodePrompt}`,
+                            reply: areaCodePrompt,
                             state,
                             isComplete: false,
                             action: 'COLLECT_PHONE_AREA_CODE',
@@ -3382,8 +3537,12 @@ class BookingFlowRunner {
                     state.phoneAreaCode = digits.slice(0, 3);
                     state.collectingRestOfNumber = true;
                     
-                    const restPrompt = slotOptions.restOfNumberPrompt || 
-                        `I got ${digits.slice(0, 3)} as the area code. What's the rest of the number?`;
+                    // V99: Use UI-configured prompt ONLY
+                    let restPrompt = slotOptions.restOfNumberPrompt;
+                    if (!restPrompt) {
+                        logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for restOfNumberPrompt', { stepId: step.id });
+                        restPrompt = `Got ${digits.slice(0, 3)}. What's the rest of the number?`;
+                    }
                     
                     logger.info('[BOOKING FLOW RUNNER] V96n: Starting phone breakdown (partial number)', {
                         digits,
@@ -3411,8 +3570,14 @@ class BookingFlowRunner {
                     // Need to ask for area code first
                     state.phoneBreakdownInProgress = true;
                     
-                    const areaCodePrompt = slotOptions.areaCodePrompt || 
-                        "I didn't catch the full number. What's the area code?";
+                    let areaCodePrompt = slotOptions.areaCodePrompt;
+                    if (!areaCodePrompt) {
+                        logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for areaCodePrompt', {
+                            stepId: step.id,
+                            slotOptionsKeys: Object.keys(slotOptions)
+                        });
+                        areaCodePrompt = "What's the area code?";
+                    }
                     
                     logger.info('[BOOKING FLOW RUNNER] V96n: Starting phone breakdown (asking area code)', {
                         digits,
@@ -3595,8 +3760,12 @@ class BookingFlowRunner {
                 state.firstNameCollected = firstName;
                 state.askedForLastName = true;
                 
-                // Use configured lastNameQuestion or default
-                const lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion || "And what's your last name?";
+                // V99: Use UI-configured last name question
+                let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
+                if (!lastNameQuestion) {
+                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for lastNameQuestion', { stepId: step.id });
+                    lastNameQuestion = "And your last name?";
+                }
                 const ack = `Got it, ${firstName}.`;
                 
                 logger.info('[BOOKING FLOW RUNNER] V92: Asking for last name', {
@@ -4050,20 +4219,84 @@ class BookingFlowRunner {
      * ========================================================================
      * ASK STEP - Build response to ask for a step
      * ========================================================================
+     * V99: UI-DRIVEN ADDRESS BREAKDOWN
+     * If step.options.breakDownIfUnclear === true for address slots,
+     * start step-by-step collection using UI-configured prompts.
+     * ========================================================================
      */
     static askStep(step, state, flow) {
-        const prompt = step.prompt || `What is your ${step.label || step.id}?`;
+        const slotOptions = step.options || {};
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V99: ADDRESS BREAKDOWN - Use UI prompts for step-by-step collection
+        // When breakDownIfUnclear=true, ask street → city → zip → unit separately
+        // ALL prompts come from Booking Prompt tab - NO hardcoded defaults used
+        // ═══════════════════════════════════════════════════════════════════════
+        if ((step.type === 'address' || step.id === 'address') && slotOptions.breakDownIfUnclear === true) {
+            // Initialize address breakdown state
+            if (!state.addressBreakdown) {
+                state.addressBreakdown = {
+                    phase: 'street',
+                    collected: {}
+                };
+                
+                // Use streetBreakdownPrompt from UI - REQUIRED if breakDownIfUnclear is enabled
+                const streetPrompt = slotOptions.streetBreakdownPrompt || step.prompt;
+                
+                logger.info('[BOOKING FLOW RUNNER] V99: Starting UI-driven address breakdown', {
+                    stepId: step.id,
+                    breakDownIfUnclear: true,
+                    streetPrompt: streetPrompt?.substring(0, 50),
+                    source: slotOptions.streetBreakdownPrompt ? 'bookingPromptTab:streetBreakdownPrompt' : 'bookingPromptTab:question'
+                });
+                
+                // Track ask count
+                state.askCount = state.askCount || {};
+                state.askCount[step.id] = (state.askCount[step.id] || 0) + 1;
+                
+                return {
+                    reply: streetPrompt,
+                    state,
+                    isComplete: false,
+                    action: 'ADDRESS_BREAKDOWN_STREET',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: 0,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        currentStep: step.id,
+                        addressBreakdownPhase: 'street',
+                        promptSource: slotOptions.streetBreakdownPrompt 
+                            ? 'bookingPromptTab:streetBreakdownPrompt' 
+                            : 'bookingPromptTab:question',
+                        promptPath: 'frontDeskBehavior.bookingSlots[address].streetBreakdownPrompt'
+                    }
+                };
+            }
+        }
+        
+        // Standard flow - use the UI-configured prompt
+        const prompt = step.prompt;
+        if (!prompt) {
+            logger.warn('[BOOKING FLOW RUNNER] V99: No prompt configured for step - UI config required', {
+                stepId: step.id,
+                stepType: step.type
+            });
+        }
         
         // Track ask count
         state.askCount = state.askCount || {};
         state.askCount[step.id] = (state.askCount[step.id] || 0) + 1;
         
-        // V96j: Track prompt source for SPEAKER_OWNER trace
+        // V99: Track exact prompt source from UI
         const promptSource = step.promptSource || 
-            (step.prompt ? 'step.prompt:custom' : 'step.prompt:default_fallback');
+            (step.prompt ? 'bookingPromptTab:slot.question' : 'ERROR:no_ui_prompt');
         
         return {
-            reply: prompt,
+            reply: prompt || `What is your ${step.label || step.id}?`,
             state,
             isComplete: false,
             action: 'CONTINUE',
@@ -4077,26 +4310,89 @@ class BookingFlowRunner {
                 flowId: flow.flowId,
                 currentStep: step.id,
                 askCount: state.askCount[step.id],
-                // V96j: Exact prompt source (user directive #5)
+                // V99: Exact prompt source from UI
                 promptSource,
-                promptPath: step.promptPath || `flow.steps[${step.id}].prompt`
+                promptPath: step.promptPath || `frontDeskBehavior.bookingSlots[${step.id}].question`
             }
         };
     }
     
     /**
      * ========================================================================
+     * V99: ASSEMBLE ADDRESS FROM BREAKDOWN
+     * ========================================================================
+     * Combines address components collected via step-by-step breakdown
+     * into a single address string for validation.
+     * ========================================================================
+     */
+    static assembleAddressFromBreakdown(collected) {
+        const parts = [];
+        
+        if (collected.street) {
+            parts.push(collected.street);
+        }
+        
+        if (collected.unit) {
+            // Handle unit - could be "no", "house", "none", etc.
+            const unitLower = (collected.unit || '').toLowerCase().trim();
+            const isNoUnit = ['no', 'none', 'n/a', 'na', 'house', 'single family', 'single-family'].includes(unitLower);
+            if (!isNoUnit && collected.unit.trim()) {
+                // Only add if it's an actual unit number/letter
+                const unitClean = collected.unit.replace(/^(unit|apt|apartment|suite|ste|#)\s*/i, '').trim();
+                if (unitClean && !/^(no|none|house)$/i.test(unitClean)) {
+                    parts.push(`Unit ${unitClean}`);
+                }
+            }
+        }
+        
+        if (collected.city) {
+            parts.push(collected.city);
+        }
+        
+        if (collected.zip) {
+            parts.push(collected.zip);
+        }
+        
+        const assembled = parts.join(', ');
+        
+        logger.info('[BOOKING FLOW RUNNER] V99: Assembled address from breakdown', {
+            collected,
+            assembled
+        });
+        
+        return assembled;
+    }
+    
+    /**
+     * ========================================================================
      * REPROMPT STEP - Ask again with clarification
+     * ========================================================================
+     * V99: Uses UI-configured reprompt, falls back to UI question
      * ========================================================================
      */
     static repromptStep(step, state, flow, reason) {
-        const reprompt = step.reprompt || 
-            `I didn't quite catch that. ${step.prompt || `What is your ${step.label || step.id}?`}`;
+        // V99: Use UI-configured reprompt first, then fall back to UI question
+        // NO hardcoded defaults - if not configured in UI, log warning
+        let reprompt;
+        let promptSource;
         
-        // V96j: Track prompt source for SPEAKER_OWNER trace
-        const promptSource = step.reprompt 
-            ? (step.promptSource || 'step.reprompt:custom')
-            : 'step.reprompt:default_fallback';
+        if (step.reprompt) {
+            reprompt = step.reprompt;
+            promptSource = 'bookingPromptTab:slot.reprompt';
+        } else if (step.prompt) {
+            // Use the UI question with a prefix
+            reprompt = `I didn't quite catch that. ${step.prompt}`;
+            promptSource = 'bookingPromptTab:slot.question:with_prefix';
+        } else {
+            // No UI config - log error
+            logger.error('[BOOKING FLOW RUNNER] V99: No UI prompt configured for reprompt', {
+                stepId: step.id,
+                stepType: step.type,
+                reason
+            });
+            reprompt = `Could you repeat that?`;
+            promptSource = 'ERROR:no_ui_prompt';
+        }
         
         return {
             reply: reprompt,
