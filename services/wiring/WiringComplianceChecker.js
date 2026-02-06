@@ -87,7 +87,7 @@ const HARDCODE_PATTERNS = [
 // These are the runtime files that handle AI responses and should read from config
 const FILES_TO_SCAN = [
     'services/ConversationEngine.js',
-    'services/BookingFlowEngine.js',
+    // 'services/BookingFlowEngine.js', // V97c: NUKED
     'services/BookingScriptEngine.js',
     'services/ResponseRenderer.js',
     // REMOVED: ConversationStateMachine.js - deleted

@@ -26,7 +26,12 @@ const { authenticateJWT, requireRole } = require('../../middleware/auth');
 // Services
 const MissionCacheService = require('../../services/MissionCacheService');
 const FlowEngine = require('../../services/FlowEngine');
-const BookingFlowEngine = require('../../services/BookingFlowEngine');
+// V97c: BookingFlowEngine NUKED - stubs for admin compatibility
+const BookingFlowEngine = {
+    getNextStep: () => ({ field: 'name', prompt: 'Use BookingFlowRunner instead' }),
+    DEFAULT_FLOW_CONFIGS: { BOOKING: { name: 'Booking', description: 'DEPRECATED - Use BookingFlowRunner' } },
+    STEP_TYPES: ['collect', 'confirm', 'complete']
+};
 
 // ============================================================================
 // DEFAULT CONFIGURATION

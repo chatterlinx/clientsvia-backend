@@ -833,13 +833,14 @@ const RUNTIME_READERS_MAP = {
                 checkpoint: 'BOOKING_INTERRUPTION_*',
                 required: false
             },
-            {
-                file: 'utils/resumeBookingProtocol.js',
-                function: 'buildResumeBookingBlock',
-                line: 1,
-                description: 'Builds the resume block using UI-configured templates and collected slots',
-                required: false
-            }
+            // V97c: NUKED - utils/resumeBookingProtocol.js deleted, functionality moved to BookingFlowRunner
+            // {
+            //     file: 'utils/resumeBookingProtocol.js',
+            //     function: 'buildResumeBookingBlock',
+            //     line: 1,
+            //     description: 'Builds the resume block using UI-configured templates and collected slots',
+            //     required: false
+            // }
         ],
         dbPath: 'company.aiAgentSettings.frontDeskBehavior.offRailsRecovery.bridgeBack.resumeBooking',
         scope: 'company',

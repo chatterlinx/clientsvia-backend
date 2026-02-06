@@ -64,8 +64,10 @@ const {
     normalizeUnitValue,
     buildAccessSnapshot
 } = require('../utils/accessFlow');
-const { buildResumeBookingBlock } = require('../utils/resumeBookingProtocol');
-const { detectBookingClarification } = require('../utils/bookingClarification');
+// NUKED V97c: Competing booking logic removed - BookingFlowRunner is single owner
+// Original utils deleted - inline stubs below
+const buildResumeBookingBlock = () => ''; // V97c: Stub - BookingFlowRunner handles this
+const detectBookingClarification = () => false; // V97c: Stub - BookingFlowRunner handles this
 const { detectConfirmationRequest } = require('../utils/confirmationRequest');
 const { findFirstMatchingRule, recordRuleFired } = require('../utils/slotMidCallRules');
 const { classifyServiceUrgency } = require('../utils/serviceUrgency');
