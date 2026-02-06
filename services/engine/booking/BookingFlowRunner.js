@@ -1160,6 +1160,35 @@ class BookingFlowRunner {
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
+        // V98 FIX: FIRST TURN IN BOOKING MODE - Auto-confirm pre-filled slots
+        // ═══════════════════════════════════════════════════════════════════════════
+        // When booking JUST started (user said "book an appointment"), we should NOT
+        // ask "Is that correct?" for pre-filled slots. The user's booking trigger
+        // utterance is NOT a yes/no response to a confirmation question.
+        //
+        // On first turn: auto-confirm all pre-filled slots and ask for FIRST UNFILLED.
+        // This prevents: "book an appointment" → "I didn't catch that, yes or no?"
+        // ═══════════════════════════════════════════════════════════════════════════
+        const isFirstBookingTurn = !state.bookingTurnStarted;
+        if (isFirstBookingTurn) {
+            state.bookingTurnStarted = true;
+            
+            // Auto-confirm all pre-filled slots on first booking turn
+            state.confirmedSlots = state.confirmedSlots || {};
+            for (const step of flow.steps) {
+                const fieldKey = step.fieldKey || step.id;
+                if (state.bookingCollected[fieldKey] && !state.confirmedSlots[fieldKey]) {
+                    state.confirmedSlots[fieldKey] = true;
+                    logger.info('[BOOKING FLOW RUNNER] V98: Auto-confirmed pre-filled slot on first booking turn', {
+                        fieldKey,
+                        value: state.bookingCollected[fieldKey],
+                        reason: 'FIRST_BOOKING_TURN'
+                    });
+                }
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
         // V94: BOOKING_PROMPT_RESOLVED - Prove where booking config came from
         // ═══════════════════════════════════════════════════════════════════════════
         // This event is emitted ONCE when booking mode starts. It proves:
