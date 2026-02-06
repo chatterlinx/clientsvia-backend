@@ -4368,6 +4368,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 }
               }).catch(() => {});
             }
+            } // V100 FIX: Close else (legacy ConversationEngine path)
             
           } catch (hybridError) {
             // ════════════════════════════════════════════════════════════════════════════
@@ -4445,7 +4446,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             };
           }
         }
-        } // END OF ELSE BLOCK (Legacy ConversationEngine path)
         
         // 📼 BLACK BOX: Log which path was used
         if (BlackBoxLogger) {
