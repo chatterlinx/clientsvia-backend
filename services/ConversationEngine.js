@@ -4827,28 +4827,78 @@ async function processTurn({
         // SINGLE SOURCE OF TRUTH: Simple keyword detection + defer to BookingFlowRunner
         // No complex intent detectors, no meta intents, no competing systems.
         // Agent reads ONLY from frontDesk.bookingSlots configuration.
+        //
+        // V98 FIX: Also detect consent when consentPending=true
+        // - Affirmative: yes, yeah, sure, okay, please, go ahead, sounds good
+        // - Urgency: as soon as possible, today, right away, asap, immediately
         // ═══════════════════════════════════════════════════════════════════════
 
         let bookingIntentDetected = false;
         let bookingConsentPending = session.booking?.consentPending || paramBookingConsentPending || false;
+        let consentGivenThisTurn = false;
 
-        if (!aiResult && userText && userText.length > 3 && !session.bookingModeLocked) {
-            // MINIMAL BOOKING DETECTION: Simple keyword matching
-            // No complex confidence scoring, no multiple pattern sources
-            const bookingKeywords = /\b(schedule|book|appointment|service|technician|send someone|get someone|come out|fix|repair|when can you|how soon can you)\b/i;
-            bookingIntentDetected = bookingKeywords.test(userText);
+        if (!aiResult && userText && userText.length > 0 && !session.bookingModeLocked) {
+            const lowerText = (userText || '').toLowerCase().trim();
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // V98 FIX 1: Check if agent offered scheduling and caller responded
+            // ═══════════════════════════════════════════════════════════════════
+            // If consentPending=true (agent asked "would you like to schedule?"),
+            // treat affirmative and urgency phrases as YES → start booking
+            // ═══════════════════════════════════════════════════════════════════
+            if (bookingConsentPending) {
+                // Affirmative responses to booking offer
+                const affirmativePatterns = /^(yes|yeah|yep|yup|sure|okay|ok|please|go ahead|sounds good|that works|let'?s do it|absolutely|definitely|right|correct|uh-?huh|mm-?hm)[\s.,!]*$/i;
+                
+                // Urgency phrases that imply "yes, schedule me"
+                const urgencyPatterns = /\b(as soon as possible|asap|today|right away|right now|immediately|this morning|this afternoon|this evening|earliest|first available|next available|send someone|get someone out|come out)\b/i;
+                
+                const isAffirmative = affirmativePatterns.test(lowerText) || urgencyPatterns.test(lowerText);
+                
+                if (isAffirmative) {
+                    log('📅 V98: CONSENT DETECTED - Affirmative/urgency response to booking offer', {
+                        userText: userText.substring(0, 60),
+                        consentPending: true,
+                        matchType: affirmativePatterns.test(lowerText) ? 'affirmative' : 'urgency'
+                    });
+                    bookingIntentDetected = true;
+                    consentGivenThisTurn = true;
+                }
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // V98 FIX 2: Explicit booking keywords (original detection)
+            // ═══════════════════════════════════════════════════════════════════
+            // These words explicitly request scheduling regardless of consentPending
+            // ═══════════════════════════════════════════════════════════════════
+            if (!bookingIntentDetected && userText.length > 3) {
+                const bookingKeywords = /\b(schedule|book|appointment|technician|send someone|get someone|come out|when can you|how soon can you)\b/i;
+                bookingIntentDetected = bookingKeywords.test(userText);
+                
+                if (bookingIntentDetected) {
+                    log('📅 MINIMAL BOOKING: Keyword match detected', {
+                        userText: userText.substring(0, 60),
+                        matchedKeyword: userText.match(bookingKeywords)?.[0]
+                    });
+                }
+            }
 
+            // ═══════════════════════════════════════════════════════════════════
+            // V98 FIX 3: FORCE BOOKING HANDOFF when intent detected
+            // ═══════════════════════════════════════════════════════════════════
             if (bookingIntentDetected) {
-                log('📅 MINIMAL BOOKING DETECTION: Keyword match, deferring to BookingFlowRunner', {
+                log('🔒 V98: FORCING BOOKING HANDOFF - deferring to BookingFlowRunner', {
                     userText: userText.substring(0, 60),
-                    matchedKeyword: userText.match(/\b(schedule|book|appointment|service|technician|send someone|get someone|come out|fix|repair|when can you|how soon can you)\b/i)?.[0]
+                    consentPending: bookingConsentPending,
+                    consentGivenThisTurn
                 });
 
                 // Set booking state and defer - NO response generation here
                 session.booking = session.booking || {};
                 session.booking.consentGiven = true;
+                session.booking.consentPending = false; // Clear pending flag
                 session.booking.consentTurn = session.metrics?.totalTurns || 0;
-                session.booking.consentReason = 'MINIMAL_KEYWORD_DETECTION';
+                session.booking.consentReason = consentGivenThisTurn ? 'CONSENT_RESPONSE' : 'MINIMAL_KEYWORD_DETECTION';
                 session.booking.consentPhrase = userText;
                 session.bookingModeLocked = true;
                 session.mode = 'BOOKING';
@@ -4877,16 +4927,18 @@ async function processTurn({
                     signals: {
                         deferToBookingRunner: true,
                         bookingModeLocked: true,
-                        minimalDetection: true
+                        minimalDetection: true,
+                        consentGivenThisTurn
                     },
                     debug: {
                         source: 'MINIMAL_BOOKING_DETECTION',
-                        reason: 'Simple keyword detection, deferring to BookingFlowRunner',
-                        userText: userText.substring(0, 100)
+                        reason: consentGivenThisTurn ? 'Consent response to booking offer' : 'Explicit booking keyword',
+                        userText: userText.substring(0, 100),
+                        consentPendingWas: bookingConsentPending
                     }
                 };
 
-                log('✅ MINIMAL BOOKING: Deferring to BookingFlowRunner');
+                log('✅ V98: Booking locked, deferring to BookingFlowRunner');
             }
         }
             
@@ -6748,9 +6800,15 @@ async function processTurn({
                 session.conversationMemory.askedConsentQuestion = true;
                 session.markModified('conversationMemory');
                 
-                log('✅ V92: CONSENT QUESTION INJECTED INTO LLM RESPONSE', {
+                // V98 FIX: Set consentPending so next turn's affirmative = booking
+                session.booking = session.booking || {};
+                session.booking.consentPending = true;
+                session.markModified('booking');
+                
+                log('✅ V92/V98: CONSENT QUESTION INJECTED - consentPending=true', {
                     consentQuestion: consentQuestionLLM,
-                    fullReplyPreview: llmResult.reply.substring(0, 100)
+                    fullReplyPreview: llmResult.reply.substring(0, 100),
+                    consentPendingSet: true
                 });
             } else if (llmAskedSchedulingQuestion && !alreadyAskedConsentLLM) {
                 // LLM organically asked about scheduling
@@ -6758,8 +6816,14 @@ async function processTurn({
                 session.conversationMemory.askedConsentQuestion = true;
                 session.markModified('conversationMemory');
                 
-                log('✅ V92: LLM ORGANICALLY ASKED CONSENT QUESTION', {
-                    replyPreview: (llmResult.reply || '').substring(0, 80)
+                // V98 FIX: Set consentPending so next turn's affirmative = booking
+                session.booking = session.booking || {};
+                session.booking.consentPending = true;
+                session.markModified('booking');
+                
+                log('✅ V92/V98: LLM ORGANICALLY ASKED CONSENT - consentPending=true', {
+                    replyPreview: (llmResult.reply || '').substring(0, 80),
+                    consentPendingSet: true
                 });
             }
             
@@ -6837,7 +6901,9 @@ async function processTurn({
                 signals: { 
                     wantsBooking: false,  // NOT booking until consent
                     consentGiven: false,
-                    discoveryComplete: !!session.discovery?.issue
+                    discoveryComplete: !!session.discovery?.issue,
+                    // V98 FIX: Propagate consentPending to Redis so next turn can detect consent
+                    bookingConsentPending: session.booking?.consentPending === true
                 },
                 latencyMs: aiLatencyMs,
                 tokensUsed: llmResult.tokensUsed || 0,
@@ -7717,7 +7783,14 @@ async function processTurn({
             // will take over (no scenarios, no LLM, just the checklist).
             // V96i: Now guaranteed to exist for all booking responses.
             // ═══════════════════════════════════════════════════════════════════
-            bookingFlowState: finalBookingFlowState
+            bookingFlowState: finalBookingFlowState,
+            // ═══════════════════════════════════════════════════════════════════
+            // V98: SIGNALS - Propagate booking consent state to v2twilio
+            // ═══════════════════════════════════════════════════════════════════
+            // bookingConsentPending tells v2twilio to save this flag to Redis.
+            // On next turn, if caller says "yes" or urgency, booking starts.
+            // ═══════════════════════════════════════════════════════════════════
+            signals: aiResult?.signals || {}
             // Booking is now handled by minimal keyword detection + BookingFlowRunner
         };
 

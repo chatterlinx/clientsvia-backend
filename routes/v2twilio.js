@@ -1222,6 +1222,16 @@ router.post('/voice', async (req, res) => {
     const awProof = computeAwProof(company);
     const traceRunId = `tr-${req.body.CallSid || Date.now()}`;
     
+    // ════════════════════════════════════════════════════════════════════════════
+    // V98 FIX: Persist awHash + traceRunId to session for v2-agent-respond access
+    // ════════════════════════════════════════════════════════════════════════════
+    // Without this, Turn 1 has awHash=null because callState is created fresh.
+    // ════════════════════════════════════════════════════════════════════════════
+    req.session = req.session || {};
+    req.session.awHash = awProof.awHash;
+    req.session.effectiveConfigVersion = awProof.effectiveConfigVersion;
+    req.session.traceRunId = traceRunId;
+    
     if (BlackBoxLogger) {
       try {
         await BlackBoxLogger.initCall({
@@ -2755,7 +2765,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           consecutiveSilences: 0,
           failedAttempts: 0,
           startTime: new Date(),
-          turnCount: 0
+          turnCount: 0,
+          // V98 FIX: Initialize awHash from session (set in /voice route)
+          // This ensures awHash is available from Turn 1, not null
+          awHash: req.session?.awHash || null,
+          effectiveConfigVersion: req.session?.effectiveConfigVersion || null,
+          traceRunId: req.session?.traceRunId || `tr-${callSid || Date.now()}`
         };
       }
     }
