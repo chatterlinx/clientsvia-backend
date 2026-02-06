@@ -3816,11 +3816,114 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             }
             
             // ════════════════════════════════════════════════════════════════════════
-            // 🧠 UNIFIED BRAIN: Call ConversationEngine (same as chat/SMS)
+            // V99: FRONT DESK RUNTIME - THE ONLY ORCHESTRATOR (when strict mode enabled)
             // ════════════════════════════════════════════════════════════════════════
-            // This is THE FIX for "phone and chat behave differently".
-            // ConversationEngine uses: SessionService, HybridReceptionistLLM, same prompts
-            // Phone route only handles: TwiML, TTS, Twilio-specific stuff
+            // PLATFORM LAW: If strictControlPlaneOnly=true, ALL turns go through
+            // FrontDeskRuntime. No legacy paths, no bypass. This is the surgeon-mode
+            // nuke that gives you full control without breaking infrastructure.
+            // ════════════════════════════════════════════════════════════════════════
+            const strictControlPlaneMode = company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly === true;
+            
+            if (strictControlPlaneMode) {
+              // Route through FrontDeskRuntime - THE ONLY ORCHESTRATOR
+              const FrontDeskRuntime = require('../services/engine/FrontDeskRuntime');
+              
+              logger.info('[V99] STRICT CONTROL PLANE MODE - Routing through FrontDeskRuntime', {
+                callSid,
+                turnCount,
+                userInput: speechResult?.substring(0, 50)
+              });
+              
+              if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'FRONT_DESK_RUNTIME_ENTRY',
+                  turn: turnCount,
+                  data: {
+                    strictMode: true,
+                    userInput: speechResult?.substring(0, 100),
+                    bookingModeLocked: !!callState?.bookingModeLocked,
+                    consentPending: !!callState?.bookingConsentPending
+                  }
+                }).catch(() => {});
+              }
+              
+              // Build context for FrontDeskRuntime
+              const runtimeContext = {
+                company,
+                callSid,
+                turnCount,
+                companyId: companyID,
+                session: session || {},
+                callerPhone: fromNumber
+              };
+              
+              // Call FrontDeskRuntime - THE SINGLE ORCHESTRATOR
+              const runtimeResult = await FrontDeskRuntime.handleTurn(
+                company.aiAgentSettings,
+                callState,
+                speechResult,
+                runtimeContext
+              );
+              
+              // Update callState from runtime result
+              if (runtimeResult.state) {
+                Object.assign(callState, runtimeResult.state);
+              }
+              
+              // Handle escalation/transfer
+              if (runtimeResult.signals?.escalate || runtimeResult.action === 'TRANSFER') {
+                result = {
+                  response: runtimeResult.response,
+                  text: runtimeResult.response,
+                  requiresTransfer: true,
+                  conversationMode: 'transfer',
+                  matchSource: runtimeResult.matchSource || 'FRONT_DESK_RUNTIME'
+                };
+              } else {
+                result = {
+                  response: runtimeResult.response,
+                  text: runtimeResult.response,
+                  conversationMode: runtimeResult.lane === 'BOOKING' ? 'booking' : 'discovery',
+                  matchSource: runtimeResult.matchSource || 'FRONT_DESK_RUNTIME',
+                  bookingFlowState: {
+                    bookingModeLocked: callState.bookingModeLocked,
+                    bookingConsentPending: callState.bookingConsentPending
+                  },
+                  signals: runtimeResult.signals
+                };
+              }
+              
+              // Log successful routing
+              if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'FRONT_DESK_RUNTIME_RESULT',
+                  turn: turnCount,
+                  data: {
+                    lane: runtimeResult.lane,
+                    responsePreview: runtimeResult.response?.substring(0, 100),
+                    matchSource: runtimeResult.matchSource,
+                    bookingModeLocked: !!callState.bookingModeLocked,
+                    escalate: !!runtimeResult.signals?.escalate
+                  }
+                }).catch(() => {});
+              }
+              
+              // Skip legacy ConversationEngine path
+              modeOwner = runtimeResult.lane === 'BOOKING' ? 'BOOKING_FLOW_RUNNER' :
+                          runtimeResult.lane === 'ESCALATE' ? 'TRANSFER_HANDLER' :
+                          'FRONT_DESK_RUNTIME';
+              ownerGateApplied = true;
+              
+            } else {
+            // ════════════════════════════════════════════════════════════════════════
+            // LEGACY PATH: ConversationEngine (when strictControlPlaneOnly != true)
+            // ════════════════════════════════════════════════════════════════════════
+            // This path will be removed in Pass 2 after live call verification.
+            // For now, it serves as fallback when strict mode is not enabled.
             // ════════════════════════════════════════════════════════════════════════
             const ConversationEngine = require('../services/ConversationEngine');
             
@@ -4333,6 +4436,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             };
           }
         }
+        } // END OF ELSE BLOCK (Legacy ConversationEngine path)
         
         // 📼 BLACK BOX: Log which path was used
         if (BlackBoxLogger) {
