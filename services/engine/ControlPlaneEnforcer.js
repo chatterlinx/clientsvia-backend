@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const logger = require('../../lib/logger');
+const logger = require('../../utils/logger');
 
 // Load the contract at module init
 const CONTRACT_PATH = path.join(__dirname, '../../config/controlPlaneContract.frontDesk.v1.json');

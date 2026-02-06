@@ -18,7 +18,7 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-const logger = require('../../lib/logger');
+const logger = require('../../utils/logger');
 const { cfgGet, getTrace, validateConfig, getFailClosedResponse, assertModeOwnership } = require('./ControlPlaneEnforcer');
 
 // Lazy load plugins to avoid circular dependencies
