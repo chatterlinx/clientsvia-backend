@@ -5443,116 +5443,70 @@ async function processTurn({
                     break;
                     
                 case 'URGENCY_SCHEDULING':
-                    // V88 P1: ASAP/Urgency scheduling - CHECK REAL CALENDAR IF AVAILABLE!
-                    // If Google Calendar is connected, query for actual availability
-                    // If not connected, use preference capture (no fake "let me check")
-                    
-                    // Check if Google Calendar is connected
-                    const calConfig = company.googleCalendar;
-                    const calendarConnected = calConfig?.enabled && calConfig?.connected && calConfig?.accessToken;
-                    
-                    if (calendarConnected) {
-                        // REAL CALENDAR - Query for actual available slots!
-                        log('📅 URGENCY_SCHEDULING: Google Calendar connected - checking real availability');
-                        try {
-                            const urgencySlots = await GoogleCalendarService.findAvailableSlots(
-                                company._id.toString(),
-                                {
-                                    dayPreference: 'asap',
-                                    timePreference: 'anytime',
-                                    durationMinutes: calConfig.settings?.defaultDurationMinutes || 60,
-                                    maxSlots: 3,
-                                    serviceType: session.discovery?.detectedServiceType || 'service'
-                                }
-                            );
-                            
-                            if (urgencySlots.slots && urgencySlots.slots.length > 0) {
-                                // We have real availability! Offer the slots
-                                const slot1 = urgencySlots.slots[0];
-                                const slot2 = urgencySlots.slots[1];
-                                
-                                // Format time nicely
-                                const formatSlot = (s) => {
-                                    if (!s) return '';
-                                    const d = new Date(s.start);
-                                    const isToday = d.toDateString() === new Date().toDateString();
-                                    const isTomorrow = d.toDateString() === new Date(Date.now() + 86400000).toDateString();
-                                    const day = isToday ? 'today' : isTomorrow ? 'tomorrow' : d.toLocaleDateString('en-US', { weekday: 'long' });
-                                    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                                    return `${day} at ${time}`;
-                                };
-                                
-                                // Store offered slots in session for selection
-                                session.offeredTimeSlots = urgencySlots.slots;
-                                session.markModified('offeredTimeSlots');
-                                
-                                if (slot2) {
-                                    metaReply = `The earliest I have is ${formatSlot(slot1)}, or ${formatSlot(slot2)}. Which works better for you?`;
-                                } else {
-                                    metaReply = `The earliest I have available is ${formatSlot(slot1)}. Does that work for you?`;
-                                }
-                                
-                                log('📅 URGENCY_SCHEDULING: Offering real slots', { 
-                                    slot1: slot1.start, 
-                                    slot2: slot2?.start,
-                                    slotsOffered: urgencySlots.slots.length
-                                });
-                            } else {
-                                // Calendar connected but no slots found (fully booked or error)
-                                metaReply = urgencySlots.error || 
-                                    "I'm checking availability and it looks like we're pretty booked up today. " +
-                                    "Let me get your information and we'll find the earliest time that works.";
-                                currentSlots.time = 'ASAP';
-                                session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
-                            }
-                        } catch (calError) {
-                            log('📅 URGENCY_SCHEDULING: Calendar query failed', { error: calError.message });
-                            // Fall back to preference capture
-                            metaReply = "I understand you need this as soon as possible. " +
-                                       "Let me get your information and we'll confirm the earliest available time.";
-                            currentSlots.time = 'ASAP';
-                            session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
-                        }
-                        break;
-                    }
-                    
-                    // NO CALENDAR - Use preference capture (no fake schedule lookup!)
-                    log('📅 URGENCY_SCHEDULING: No calendar connected - using preference capture');
+                    // V96p FIX: URGENCY_SCHEDULING MUST DEFER TO BOOKINGFLOWRUNNER
+                    // ═══════════════════════════════════════════════════════════════════
+                    // PROBLEM: This meta intent was generating booking responses directly,
+                    // competing with BookingFlowRunner and causing inconsistent behavior.
+                    //
+                    // SOLUTION: Extract time preference but ALWAYS defer to BookingFlowRunner
+                    // for all booking responses and flow control.
+                    // ═══════════════════════════════════════════════════════════════════
+
+                    log('🚨 V96p: URGENCY_SCHEDULING detected - deferring to BookingFlowRunner');
+
+                    // Extract the time preference for BookingFlowRunner to use
                     currentSlots.time = 'ASAP';
                     session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
-                    
-                    // If we're ALREADY in booking mode, check if all required slots are now filled
-                    if (String(session?.mode || '').toUpperCase() === 'BOOKING') {
-                        // V88 FIX: Check if setting time=ASAP completes all required slots
-                        const urgBookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
-                        const urgBookingSlots = urgBookingConfig.slots || [];
-                        const urgNextMissing = urgBookingSlots.find(slot => {
-                            const slotId = slot.slotId || slot.id || slot.type;
-                            const isCollected = currentSlots[slotId] || currentSlots[slot.type];
-                            return slot.required && !isCollected;
-                        });
-                        
-                        if (!urgNextMissing) {
-                            // ALL SLOTS FILLED! Acknowledge ASAP and confirm booking
-                            log('🚀 URGENCY_SCHEDULING: All slots now filled with time=ASAP, confirming booking');
-                            metaReply = "Got it, I'll get you the earliest available appointment. Let me confirm what I have: " +
-                                       `${currentSlots.name || 'your name'}, at ${currentSlots.address || 'your address'}, ` +
-                                       `phone ${currentSlots.phone || 'your number'}. Is all that correct?`;
-                            // Mark we're in confirmation phase
-                            session.booking = session.booking || {};
-                            session.booking.pendingFinalConfirm = true;
-                            session.markModified('booking');
-                        } else {
-                            // More slots needed - let booking flow handle it
-                            metaReply = '';
-                        }
-                        break;
-                    }
 
-                    // Not in booking mode yet - provide intro response
-                    metaReply = "I understand you need this as soon as possible. " +
-                               "I'll note ASAP and we'll get you the earliest available appointment. " +
-                               "Let me get your information to confirm.";
+                    // CRITICAL: Set booking mode and defer - DO NOT generate responses here
+                    session.booking = session.booking || {};
+                    session.booking.consentGiven = true;
+                    session.booking.consentTurn = session.metrics?.totalTurns || 0;
+                    session.booking.consentReason = 'URGENCY_SCHEDULING_DETECTED';
+                    session.booking.consentPhrase = userText;
+                    session.bookingModeLocked = true;
+                    session.mode = 'BOOKING';
+
+                    // Set bookingFlowState for Redis persistence
+                    session.bookingFlowState = {
+                        bookingModeLocked: true,
+                        bookingFlowId: 'urgency_scheduling_trigger',
+                        currentStepId: 'name', // Start with first slot
+                        bookingCollected: { ...currentSlots },
+                        bookingState: 'ACTIVE'
+                    };
+
+                    // Defer to BookingFlowRunner - it will generate the first booking prompt
+                    aiResult = {
+                        reply: null, // BookingFlowRunner will generate the reply
+                        conversationMode: 'BOOKING',
+                        filledSlots: currentSlots,
+                        latencyMs: Date.now() - aiStartTime,
+                        tokensUsed: 0,
+                        fromStateMachine: false,
+                        matchSource: 'URGENCY_SCHEDULING_TRIGGERED',
+                        tier: 'tier1',
+                        mode: 'BOOKING',
+                        bookingFlowState: session.bookingFlowState,
+                        signals: {
+                            deferToBookingRunner: true,
+                            bookingModeLocked: true,
+                            urgencyDetected: true
+                        },
+                        debug: {
+                            source: 'V96p_URGENCY_SCHEDULING_DEFER',
+                            reason: 'ASAP/urgency detected, deferring to BookingFlowRunner',
+                            userText: userText.substring(0, 100)
+                        }
+                    };
+
+                    log('✅ V96p: URGENCY_SCHEDULING → DEFERRING TO BOOKING RUNNER', {
+                        bookingModeLocked: true,
+                        deferToBookingRunner: true,
+                        timeSet: 'ASAP'
+                    });
+
+                    // BREAK - we're done, no metaReply needed
                     break;
 
                 case 'CLARIFY_BOOKING_SLOT': {
