@@ -5236,15 +5236,6 @@ async function processTurn({
         }
         
         // REMOVED: Complex booking intent fallback - eliminated competing booking system
-            
-            if (directBookingIntent?.hasDirectIntent) {
-                log('🎯 DIRECT BOOKING INTENT DETECTED (late check)', {
-                    confidence: directBookingIntent.confidence,
-                    reason: directBookingIntent.reason,
-                    pattern: directBookingIntent.matchedPattern
-                });
-            }
-        }
         
         // ═══════════════════════════════════════════════════════════════════════
         // CONSENT DETECTION - Check if caller explicitly wants to book
@@ -5284,11 +5275,6 @@ async function processTurn({
         }
         
         // REMOVED: Complex consent handling - eliminated competing booking system
-            aiResultSet: !!aiResult,
-            notAlreadyConsented: !session.booking?.consentGiven,
-            consentHasConsent: consentCheck.hasConsent,
-            directIntentMet: directBookingIntent?.hasDirectIntent && directBookingIntent.confidence >= 0.75
-        });
         
         // ═══════════════════════════════════════════════════════════════════════
         // V92 ENHANCED: FAILURE DETECTION - Why didn't booking trigger?
