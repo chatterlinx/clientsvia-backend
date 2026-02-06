@@ -826,6 +826,17 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             });
         }
         
+        // Phase 1: Save scheduling config (request_only mode with UI-controlled time windows)
+        if (updates.scheduling) {
+            // Save entire scheduling object - includes provider, timeWindows, prompts
+            updateObj['aiAgentSettings.frontDeskBehavior.scheduling'] = updates.scheduling;
+            logger.info('[FRONT DESK] Phase 1: Scheduling config saved', {
+                companyId: req.params.companyId,
+                provider: updates.scheduling.provider,
+                windowCount: updates.scheduling.timeWindows?.length || 0
+            });
+        }
+        
         // Save service area responses
         if (updates.serviceAreaResponses) {
             Object.entries(updates.serviceAreaResponses).forEach(([key, value]) => {

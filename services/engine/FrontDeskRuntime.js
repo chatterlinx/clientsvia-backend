@@ -534,6 +534,73 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
         }
         
         // ═══════════════════════════════════════════════════════════════════════
+        // GATE 3.5: Phase 1 - Verify scheduling config if provider=request_only
+        // If time slot exists in bookingSlots, ensure timeWindows are configured
+        // ═══════════════════════════════════════════════════════════════════════
+        const hasTimeSlot = bookingSlots.some(s => 
+            s.id === 'time' || s.fieldKey === 'time' || 
+            s.type === 'time' || s.type === 'dateTime'
+        );
+        
+        if (hasTimeSlot) {
+            let schedulingProvider;
+            let timeWindows;
+            
+            try {
+                schedulingProvider = cfgGet(effectiveConfig, 'frontDesk.scheduling.provider', {
+                    callId: callSid,
+                    turn: callState?.turnCount || 0,
+                    strict: false,
+                    readerId: 'handleBookingLane.scheduling.provider'
+                }) || 'request_only';
+                
+                timeWindows = cfgGet(effectiveConfig, 'frontDesk.scheduling.timeWindows', {
+                    callId: callSid,
+                    turn: callState?.turnCount || 0,
+                    strict: false,
+                    readerId: 'handleBookingLane.scheduling.timeWindows'
+                }) || [];
+            } catch (e) {
+                schedulingProvider = 'request_only';
+                timeWindows = [];
+            }
+            
+            // Phase 1: If provider=request_only and no time windows, warn (strict mode: fail closed)
+            if (schedulingProvider === 'request_only' && 
+                (!Array.isArray(timeWindows) || timeWindows.length === 0)) {
+                
+                logger.warn('[FRONT_DESK_RUNTIME] Phase 1: No time windows configured for request_only mode', {
+                    callSid,
+                    provider: schedulingProvider,
+                    hasTimeSlot: true
+                });
+                
+                if (BlackBoxLogger) {
+                    BlackBoxLogger.logEvent({
+                        callId: callSid,
+                        companyId,
+                        type: 'SCHEDULING_CONFIG_WARNING',
+                        data: {
+                            provider: schedulingProvider,
+                            timeWindowCount: 0,
+                            hasTimeSlot: true,
+                            message: 'Time slot exists but no time windows configured. Time preferences will be stored as-is.'
+                        }
+                    }).catch(() => {});
+                }
+                
+                // Note: We don't fail closed here - we just won't offer specific windows
+                // The booking flow will store the user's preference as-is
+            } else if (timeWindows.length > 0) {
+                logger.info('[FRONT_DESK_RUNTIME] Phase 1: Scheduling config verified', {
+                    callSid,
+                    provider: schedulingProvider,
+                    windowCount: timeWindows.length
+                });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
         // GATE 4: LOCK BOOKING STATE (before any processing)
         // This is critical - if we're in BOOKING lane, we MUST lock
         // ═══════════════════════════════════════════════════════════════════════

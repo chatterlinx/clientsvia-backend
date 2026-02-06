@@ -15,7 +15,7 @@
  
 const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
-const { DEFAULT_DETECTION_TRIGGERS, DEFAULT_DIRECT_INTENT_PATTERNS } = require('../../config/onboarding/DefaultFrontDeskPreset');
+const { DEFAULT_DETECTION_TRIGGERS, DEFAULT_DIRECT_INTENT_PATTERNS, DEFAULT_SCHEDULING, DEFAULT_BUSINESS_HOURS } = require('../../config/onboarding/DefaultFrontDeskPreset');
 
 /**
  * Infer a tradeKey for a company using templateReferences (if present).
@@ -91,6 +91,28 @@ async function seedCompanyBaseFields({ companyId, companyDoc }) {
         logger.info('[WIRING SEEDER] V107: Seeding directIntentPatterns', {
             companyId: companyDoc._id.toString(),
             phraseCount: DEFAULT_DIRECT_INTENT_PATTERNS.length
+        });
+    }
+
+    // Phase 1: Seed scheduling config if missing (request_only mode)
+    // This ensures frontDesk.scheduling.* keys resolve from companyConfig
+    const hasScheduling = companyDoc?.aiAgentSettings?.frontDeskBehavior?.scheduling?.provider;
+    if (!hasScheduling) {
+        applied['aiAgentSettings.frontDeskBehavior.scheduling'] = DEFAULT_SCHEDULING;
+        logger.info('[WIRING SEEDER] Phase 1: Seeding scheduling config (request_only mode)', {
+            companyId: companyDoc._id.toString(),
+            provider: DEFAULT_SCHEDULING.provider,
+            windowCount: DEFAULT_SCHEDULING.timeWindows.length
+        });
+    }
+
+    // Phase 1: Seed business hours if missing
+    // This ensures frontDesk.businessHours resolves from companyConfig
+    const hasBusinessHours = companyDoc?.aiAgentSettings?.frontDeskBehavior?.businessHours;
+    if (!hasBusinessHours) {
+        applied['aiAgentSettings.frontDeskBehavior.businessHours'] = DEFAULT_BUSINESS_HOURS;
+        logger.info('[WIRING SEEDER] Phase 1: Seeding business hours', {
+            companyId: companyDoc._id.toString()
         });
     }
 

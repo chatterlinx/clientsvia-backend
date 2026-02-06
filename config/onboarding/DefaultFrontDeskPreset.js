@@ -260,6 +260,50 @@ const DEFAULT_BOOKING_INTERRUPTION = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT SCHEDULING CONFIG (Phase 1: request_only mode)
+// ═══════════════════════════════════════════════════════════════════════════
+// This controls HOW time windows are offered to callers.
+// Phase 1: request_only = UI-controlled windows, no calendar integration
+// Phase 2: google_calendar = real-time availability from Google
+// Phase 3: servicetitan = book through ServiceTitan API
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_SCHEDULING = {
+    // Provider determines scheduling mode
+    provider: 'request_only',  // Phase 1 default
+    
+    // Time windows to offer callers (used when provider=request_only)
+    timeWindows: [
+        { label: '8-10am', start: '08:00', end: '10:00' },
+        { label: '10am-12pm', start: '10:00', end: '12:00' },
+        { label: '12-2pm', start: '12:00', end: '14:00' },
+        { label: '2-4pm', start: '14:00', end: '16:00' }
+    ],
+    
+    // Prompts for time selection (UI-controlled)
+    morningAfternoonPrompt: 'Do you prefer morning or afternoon?',
+    timeWindowPrompt: 'What time works best for you? We have openings in the {windows}.',
+    
+    // Lead time requirements
+    minLeadTimeHours: 2,  // Don't offer times less than 2 hours from now
+    
+    // Same-day booking
+    allowSameDayBooking: true
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFAULT BUSINESS HOURS
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_BUSINESS_HOURS = {
+    monday: { open: '08:00', close: '17:00', closed: false },
+    tuesday: { open: '08:00', close: '17:00', closed: false },
+    wednesday: { open: '08:00', close: '17:00', closed: false },
+    thursday: { open: '08:00', close: '17:00', closed: false },
+    friday: { open: '08:00', close: '17:00', closed: false },
+    saturday: { open: '09:00', close: '14:00', closed: false },
+    sunday: { open: null, close: null, closed: true }
+};
+
 // DEFAULT ESCALATION CONFIG
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_ESCALATION = {
@@ -560,6 +604,12 @@ function getPresetForTrade(tradeKey = 'universal') {
         // Escalation
         escalation: DEFAULT_ESCALATION,
         
+        // Phase 1: Scheduling (request_only mode with UI-controlled time windows)
+        scheduling: DEFAULT_SCHEDULING,
+        
+        // Business hours
+        businessHours: DEFAULT_BUSINESS_HOURS,
+        
         // Unit of work
         unitOfWork: DEFAULT_UNIT_OF_WORK,
         
@@ -614,6 +664,8 @@ module.exports = {
     DEFAULT_LOOP_PREVENTION,
     DEFAULT_BOOKING_OUTCOME,
     DEFAULT_ESCALATION,
+    DEFAULT_SCHEDULING,
+    DEFAULT_BUSINESS_HOURS,
     DEFAULT_UNIT_OF_WORK,
     DEFAULT_DISCOVERY_CONSENT,
     DEFAULT_NAME_SPELLING_VARIANTS,

@@ -3303,14 +3303,135 @@ class BookingFlowRunner {
         // ═══════════════════════════════════════════════════════════════════════
         // V92: GOOGLE CALENDAR INTEGRATION FOR TIME SLOT
         // ═══════════════════════════════════════════════════════════════════════
-        // When collecting time/dateTime preference, check Google Calendar for
-        // available slots and offer choices. Handles "ASAP", "morning", "tomorrow", etc.
-        // Falls back gracefully if calendar not connected or unavailable.
+        // Phase 1: Check scheduling provider mode FIRST
+        // If provider=request_only, use UI-controlled time windows (no Google Calendar)
         // ═══════════════════════════════════════════════════════════════════════
         if ((fieldKey === 'time' || fieldKey === 'dateTime' || step.type === 'time' || step.type === 'dateTime') && extractResult.value) {
-            const calendarEnabled = company?.integrations?.googleCalendar?.enabled;
-            const calendarConnected = company?.integrations?.googleCalendar?.connected;
             const companyId = company?._id?.toString();
+            
+            // Phase 1: Read scheduling provider via AWConfigReader
+            let schedulingProvider = 'request_only'; // Default
+            let timeWindows = [];
+            
+            if (awReader && typeof awReader.get === 'function') {
+                awReader.setReaderId('BookingFlowRunner.scheduling.provider');
+                schedulingProvider = awReader.get('frontDesk.scheduling.provider', 'request_only');
+                
+                awReader.setReaderId('BookingFlowRunner.scheduling.timeWindows');
+                timeWindows = awReader.get('frontDesk.scheduling.timeWindows', []) || [];
+                
+                logger.info('[BOOKING FLOW RUNNER] Phase 1: Scheduling config read', {
+                    provider: schedulingProvider,
+                    windowCount: timeWindows.length,
+                    source: 'AWConfigReader'
+                });
+            } else {
+                logger.warn('[BOOKING FLOW RUNNER] Phase 1: No AWConfigReader - using default request_only mode');
+            }
+            
+            // Phase 1: If provider=request_only, offer UI-controlled time windows
+            if (schedulingProvider === 'request_only') {
+                const userPreference = extractResult.value; // e.g., "morning", "afternoon", "ASAP"
+                
+                // Check if user is selecting from offered windows
+                if (state.awaitingWindowSelection && timeWindows.length > 0) {
+                    const normalizedInput = userPreference.toLowerCase();
+                    const matchedWindow = timeWindows.find(w => 
+                        normalizedInput.includes(w.label.toLowerCase()) ||
+                        normalizedInput.includes(w.start) ||
+                        normalizedInput.includes(w.end)
+                    );
+                    
+                    if (matchedWindow) {
+                        valueToStore = matchedWindow.label;
+                        state.awaitingWindowSelection = false;
+                        logger.info('[BOOKING FLOW RUNNER] Phase 1: Time window selected', {
+                            selected: matchedWindow.label,
+                            userInput: userPreference
+                        });
+                    }
+                }
+                
+                // If we have time windows and user gave preference, offer specific windows
+                if (timeWindows.length > 0 && !state.awaitingWindowSelection && !valueToStore) {
+                    // Categorize windows
+                    const morningWindows = timeWindows.filter(w => {
+                        const hour = parseInt(w.start.split(':')[0], 10);
+                        return hour < 12;
+                    });
+                    const afternoonWindows = timeWindows.filter(w => {
+                        const hour = parseInt(w.start.split(':')[0], 10);
+                        return hour >= 12;
+                    });
+                    
+                    // Filter based on user preference
+                    let relevantWindows = timeWindows;
+                    if (/morning/i.test(userPreference) && morningWindows.length > 0) {
+                        relevantWindows = morningWindows;
+                    } else if (/afternoon/i.test(userPreference) && afternoonWindows.length > 0) {
+                        relevantWindows = afternoonWindows;
+                    }
+                    
+                    // Build window choices string
+                    const windowLabels = relevantWindows.map(w => w.label);
+                    const choicesFormatted = windowLabels.length === 1
+                        ? windowLabels[0]
+                        : windowLabels.slice(0, -1).join(', ') + ', or ' + windowLabels[windowLabels.length - 1];
+                    
+                    state.awaitingWindowSelection = true;
+                    
+                    logger.info('[BOOKING FLOW RUNNER] Phase 1: Offering UI time windows', {
+                        userPreference,
+                        windowsOffered: windowLabels,
+                        provider: 'request_only'
+                    });
+                    
+                    // Read time window prompt from UI
+                    let timeWindowPrompt = 'Which time window works best for you?';
+                    if (awReader && typeof awReader.get === 'function') {
+                        awReader.setReaderId('BookingFlowRunner.scheduling.timeWindowPrompt');
+                        const uiPrompt = awReader.get('frontDesk.scheduling.timeWindowPrompt', null);
+                        if (uiPrompt) {
+                            timeWindowPrompt = uiPrompt.replace('{windows}', choicesFormatted);
+                        } else {
+                            timeWindowPrompt = `I can offer ${choicesFormatted}. Which works best for you?`;
+                        }
+                    } else {
+                        timeWindowPrompt = `I can offer ${choicesFormatted}. Which works best for you?`;
+                    }
+                    
+                    return {
+                        reply: timeWindowPrompt,
+                        state,
+                        isComplete: false,
+                        action: 'OFFER_TIME_WINDOWS',
+                        currentStep: step.id,
+                        availableWindows: windowLabels,
+                        matchSource: 'BOOKING_FLOW_RUNNER_PHASE1',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            source: 'BOOKING_FLOW_RUNNER',
+                            flowId: flow.flowId,
+                            mode: 'REQUEST_ONLY_WINDOWS',
+                            provider: schedulingProvider,
+                            windowsOffered: windowLabels
+                        }
+                    };
+                } else if (!valueToStore) {
+                    // No time windows configured - store preference as-is
+                    valueToStore = userPreference;
+                    logger.warn('[BOOKING FLOW RUNNER] Phase 1: No time windows configured - storing raw preference', {
+                        provider: schedulingProvider,
+                        preference: userPreference
+                    });
+                }
+            }
+            
+            // Phase 2+: Google Calendar integration (only if provider is not request_only)
+            const calendarEnabled = company?.integrations?.googleCalendar?.enabled && schedulingProvider === 'google_calendar';
+            const calendarConnected = company?.integrations?.googleCalendar?.connected;
             
             if (calendarEnabled && calendarConnected && companyId) {
                 try {

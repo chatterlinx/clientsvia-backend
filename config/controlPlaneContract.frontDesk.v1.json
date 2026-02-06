@@ -71,9 +71,48 @@
     },
     
     "hoursAvailability": {
-      "description": "Business hours and availability",
+      "description": "Business hours, scheduling mode, and time windows",
       "keys": {
-        "frontDesk.businessHours": { "type": "object", "required": false, "uiSection": "hours" }
+        "frontDesk.businessHours": { 
+          "type": "object", 
+          "required": false, 
+          "uiSection": "hours",
+          "description": "Business hours by day of week"
+        },
+        "frontDesk.scheduling.provider": { 
+          "type": "string", 
+          "required": false, 
+          "default": "request_only",
+          "enum": ["request_only", "google_calendar", "servicetitan"],
+          "uiSection": "hours",
+          "description": "Scheduling mode: request_only (Phase 1), google_calendar, or servicetitan"
+        },
+        "frontDesk.scheduling.timeWindows": { 
+          "type": "array", 
+          "required": false, 
+          "default": [
+            {"label": "8-10am", "start": "08:00", "end": "10:00"},
+            {"label": "10am-12pm", "start": "10:00", "end": "12:00"},
+            {"label": "12-2pm", "start": "12:00", "end": "14:00"},
+            {"label": "2-4pm", "start": "14:00", "end": "16:00"}
+          ],
+          "uiSection": "hours",
+          "description": "Time windows to offer callers when provider=request_only"
+        },
+        "frontDesk.scheduling.timeWindowPrompt": { 
+          "type": "string", 
+          "required": false, 
+          "default": "What time works best for you? We have openings in the {windows}.",
+          "uiSection": "hours",
+          "description": "Prompt to ask caller for preferred time window"
+        },
+        "frontDesk.scheduling.morningAfternoonPrompt": { 
+          "type": "string", 
+          "required": false, 
+          "default": "Do you prefer morning or afternoon?",
+          "uiSection": "hours",
+          "description": "Initial prompt to narrow down time preference"
+        }
       }
     },
     

@@ -576,6 +576,24 @@ class FrontDeskBehaviorManager {
             },
             
             // ════════════════════════════════════════════════════════════════════
+            // Phase 1: Scheduling - Request-Only Mode with UI-Controlled Time Windows
+            // ════════════════════════════════════════════════════════════════════
+            scheduling: {
+                // Provider determines scheduling mode
+                provider: 'request_only',  // Phase 1 default
+                // Time windows to offer callers
+                timeWindows: [
+                    { label: '8-10am', start: '08:00', end: '10:00' },
+                    { label: '10am-12pm', start: '10:00', end: '12:00' },
+                    { label: '12-2pm', start: '12:00', end: '14:00' },
+                    { label: '2-4pm', start: '14:00', end: '16:00' }
+                ],
+                // Prompts for time selection
+                morningAfternoonPrompt: 'Do you prefer morning or afternoon?',
+                timeWindowPrompt: 'What time works best for you? We have openings in the {windows}.'
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
             // V22: Discovery & Consent Gate (LLM-led architecture)
             // ════════════════════════════════════════════════════════════════════
             discoveryConsent: {
@@ -1390,9 +1408,21 @@ class FrontDeskBehaviorManager {
             `;
         };
 
+        // Phase 1: Scheduling config
+        const scheduling = this.config.scheduling || {};
+        const provider = scheduling.provider || 'request_only';
+        const timeWindows = Array.isArray(scheduling.timeWindows) ? scheduling.timeWindows : [
+            { label: '8-10am', start: '08:00', end: '10:00' },
+            { label: '10am-12pm', start: '10:00', end: '12:00' },
+            { label: '12-2pm', start: '12:00', end: '14:00' },
+            { label: '2-4pm', start: '14:00', end: '16:00' }
+        ];
+        const morningAfternoonPrompt = scheduling.morningAfternoonPrompt || 'Do you prefer morning or afternoon?';
+        const timeWindowPrompt = scheduling.timeWindowPrompt || 'What time works best for you? We have openings in the {windows}.';
+
         return `
             <div data-section-id="hours-availability" data-field-id="businessHours"
-                 style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px;">
+                 style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
                 <h3 style="margin:0 0 10px 0; color:#58a6ff;">🕒 Business Hours</h3>
                 <p style="color:#8b949e; margin:0 0 18px 0; font-size:0.875rem;">
                     Canonical hours used for after-hours routing (Dynamic Flow trigger <code style="color:#c9d1d9;">after_hours</code>).
@@ -1423,6 +1453,108 @@ class FrontDeskBehaviorManager {
                         Save Hours
                     </button>
                     <span id="bh-status" style="color:#8b949e; font-size:0.875rem;"></span>
+                </div>
+            </div>
+
+            <!-- Phase 1: Scheduling Mode & Time Windows -->
+            <div data-section-id="scheduling" data-field-id="scheduling"
+                 style="background:#161b22; border:2px solid #3fb950; border-radius:8px; padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <h3 style="margin:0; color:#3fb950;">📅 Scheduling Mode (Phase 1)</h3>
+                    <span style="background:#3fb95020; color:#3fb950; padding:4px 10px; border-radius:12px; font-size:0.75rem; font-weight:600;">
+                        REQUEST-ONLY
+                    </span>
+                </div>
+                <p style="color:#8b949e; margin:0 0 18px 0; font-size:0.875rem;">
+                    Controls how time windows are offered to callers. Phase 1 uses <strong>request_only</strong> mode 
+                    (no calendar integration). Runtime reads via <code style="color:#c9d1d9;">cfgGet()</code>.
+                </p>
+
+                <!-- Provider Selector -->
+                <div style="margin-bottom:20px;">
+                    <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:600;">Scheduling Provider</label>
+                    <select id="scheduling-provider" 
+                        style="width:320px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                        <option value="request_only" ${provider === 'request_only' ? 'selected' : ''}>Request Only (Phase 1)</option>
+                        <option value="google_calendar" ${provider === 'google_calendar' ? 'selected' : ''} disabled>Google Calendar (Phase 2 - Coming Soon)</option>
+                        <option value="servicetitan" ${provider === 'servicetitan' ? 'selected' : ''} disabled>ServiceTitan (Phase 3 - Coming Soon)</option>
+                    </select>
+                    <p style="color:#6e7681; font-size:0.75rem; margin:6px 0 0 0;">
+                        Stored at <code>frontDesk.scheduling.provider</code>
+                    </p>
+                </div>
+
+                <!-- Time Windows Editor -->
+                <div style="margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <label style="color:#c9d1d9; font-weight:600;">Time Windows</label>
+                        <button onclick="window.frontDeskBehaviorManager.restoreSchedulingDefaults()" 
+                            style="padding:4px 12px; background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:6px; cursor:pointer; font-size:0.75rem;">
+                            ↩ Restore Defaults
+                        </button>
+                    </div>
+                    <p style="color:#8b949e; font-size:0.8rem; margin-bottom:12px;">
+                        These windows are offered to callers when they request booking. Used when provider = <strong>request_only</strong>.
+                    </p>
+                    
+                    <!-- Warning if empty -->
+                    ${timeWindows.length === 0 ? `
+                        <div style="background:#f8514920; border:1px solid #f85149; border-radius:6px; padding:10px; margin-bottom:12px;">
+                            <strong style="color:#f85149;">⚠️ Warning:</strong> <span style="color:#f85149;">No time windows defined. Callers won't be offered specific times!</span>
+                        </div>
+                    ` : ''}
+
+                    <div id="scheduling-windows-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
+                        ${timeWindows.map((w, i) => `
+                            <div class="time-window-row" style="display:flex; align-items:center; gap:10px; padding:10px; border:1px solid #30363d; border-radius:6px; background:#0d1117;">
+                                <input type="text" id="tw-label-${i}" value="${this.escapeHtml(w.label || '')}" placeholder="Label (e.g., 8-10am)"
+                                    style="width:120px; padding:8px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                                <input type="text" id="tw-start-${i}" value="${this.escapeHtml(w.start || '')}" placeholder="Start (08:00)"
+                                    style="width:100px; padding:8px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                                <span style="color:#8b949e;">to</span>
+                                <input type="text" id="tw-end-${i}" value="${this.escapeHtml(w.end || '')}" placeholder="End (10:00)"
+                                    style="width:100px; padding:8px; background:#161b22; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                                <button onclick="window.frontDeskBehaviorManager.removeTimeWindow(${i})" 
+                                    style="background:none; border:none; color:#f85149; cursor:pointer; font-size:1.2rem; padding:4px 8px;">×</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="window.frontDeskBehaviorManager.addTimeWindow()" 
+                        style="padding:8px 16px; background:#238636; color:white; border:none; border-radius:6px; cursor:pointer;">
+                        + Add Time Window
+                    </button>
+                    <p style="color:#6e7681; font-size:0.75rem; margin:10px 0 0 0;">
+                        Stored at <code>frontDesk.scheduling.timeWindows</code>
+                    </p>
+                </div>
+
+                <!-- Time Selection Prompts -->
+                <div style="margin-bottom:20px;">
+                    <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:600;">Morning/Afternoon Prompt</label>
+                    <input id="scheduling-morning-afternoon-prompt" value="${this.escapeHtml(morningAfternoonPrompt)}" 
+                        placeholder="Do you prefer morning or afternoon?"
+                        style="width:100%; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                    <p style="color:#6e7681; font-size:0.75rem; margin:6px 0 0 0;">
+                        Stored at <code>frontDesk.scheduling.morningAfternoonPrompt</code>
+                    </p>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <label style="display:block; margin-bottom:6px; color:#c9d1d9; font-weight:600;">Time Window Prompt</label>
+                    <input id="scheduling-time-window-prompt" value="${this.escapeHtml(timeWindowPrompt)}" 
+                        placeholder="What time works best for you? We have openings in the {windows}."
+                        style="width:100%; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:6px; color:#c9d1d9;">
+                    <p style="color:#6e7681; font-size:0.75rem; margin:6px 0 0 0;">
+                        Use <code>{windows}</code> placeholder. Stored at <code>frontDesk.scheduling.timeWindowPrompt</code>
+                    </p>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <button onclick="window.frontDeskBehaviorManager.saveSchedulingConfig()" type="button"
+                        style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:600;">
+                        Save Scheduling
+                    </button>
+                    <span id="scheduling-status" style="color:#8b949e; font-size:0.875rem;"></span>
                 </div>
             </div>
         `;
@@ -7480,6 +7612,132 @@ Sean → Shawn, Shaun`;
     }
     
     // ════════════════════════════════════════════════════════════════════
+    // Phase 1: SCHEDULING - Time Windows Management
+    // ════════════════════════════════════════════════════════════════════
+    
+    // Add a new time window
+    addTimeWindow() {
+        if (!this.config.scheduling) this.config.scheduling = {};
+        if (!Array.isArray(this.config.scheduling.timeWindows)) {
+            this.config.scheduling.timeWindows = [];
+        }
+        
+        // Add empty window
+        this.config.scheduling.timeWindows.push({
+            label: '',
+            start: '',
+            end: ''
+        });
+        
+        this.isDirty = true;
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('hours', container);
+    }
+    
+    // Remove a time window
+    removeTimeWindow(index) {
+        if (this.config.scheduling?.timeWindows?.[index] !== undefined) {
+            this.config.scheduling.timeWindows.splice(index, 1);
+            this.isDirty = true;
+            
+            const container = document.querySelector('.front-desk-behavior-panel');
+            if (container) this.switchTab('hours', container);
+        }
+    }
+    
+    // Restore scheduling defaults
+    restoreSchedulingDefaults() {
+        const defaults = this.getDefaultConfig().scheduling || {
+            provider: 'request_only',
+            timeWindows: [
+                { label: '8-10am', start: '08:00', end: '10:00' },
+                { label: '10am-12pm', start: '10:00', end: '12:00' },
+                { label: '12-2pm', start: '12:00', end: '14:00' },
+                { label: '2-4pm', start: '14:00', end: '16:00' }
+            ],
+            morningAfternoonPrompt: 'Do you prefer morning or afternoon?',
+            timeWindowPrompt: 'What time works best for you? We have openings in the {windows}.'
+        };
+        
+        if (!confirm(`Restore scheduling to defaults? This will replace your time windows with ${defaults.timeWindows.length} default windows.`)) {
+            return;
+        }
+        
+        this.config.scheduling = JSON.parse(JSON.stringify(defaults)); // Deep clone
+        this.isDirty = true;
+        
+        const container = document.querySelector('.front-desk-behavior-panel');
+        if (container) this.switchTab('hours', container);
+        
+        this.showNotification(`✅ Restored ${defaults.timeWindows.length} default time windows`, 'success');
+    }
+    
+    // Collect scheduling config from form fields
+    collectSchedulingConfig() {
+        const provider = document.getElementById('scheduling-provider')?.value || 'request_only';
+        const morningAfternoonPrompt = document.getElementById('scheduling-morning-afternoon-prompt')?.value?.trim() || '';
+        const timeWindowPrompt = document.getElementById('scheduling-time-window-prompt')?.value?.trim() || '';
+        
+        // Collect time windows from form
+        const timeWindows = [];
+        let i = 0;
+        while (true) {
+            const labelEl = document.getElementById(`tw-label-${i}`);
+            const startEl = document.getElementById(`tw-start-${i}`);
+            const endEl = document.getElementById(`tw-end-${i}`);
+            
+            if (!labelEl) break;
+            
+            const label = labelEl.value.trim();
+            const start = startEl?.value.trim() || '';
+            const end = endEl?.value.trim() || '';
+            
+            if (label || start || end) {
+                timeWindows.push({ label, start, end });
+            }
+            i++;
+        }
+        
+        return {
+            provider,
+            timeWindows,
+            morningAfternoonPrompt,
+            timeWindowPrompt
+        };
+    }
+    
+    // Save scheduling config
+    async saveSchedulingConfig() {
+        const statusEl = document.getElementById('scheduling-status');
+        
+        try {
+            // Collect from form
+            const schedulingConfig = this.collectSchedulingConfig();
+            
+            // Validate
+            if (schedulingConfig.provider === 'request_only' && schedulingConfig.timeWindows.length === 0) {
+                this.showNotification('⚠️ No time windows defined. Please add at least one window.', 'error');
+                return;
+            }
+            
+            // Update config
+            this.config.scheduling = schedulingConfig;
+            this.isDirty = true;
+            
+            // Save full config
+            await this.save();
+            
+            if (statusEl) statusEl.textContent = '✅ Saved';
+            this.showNotification('✅ Scheduling config saved!', 'success');
+            
+        } catch (error) {
+            console.error('[SCHEDULING] Save error:', error);
+            if (statusEl) statusEl.textContent = '❌ Error';
+            this.showNotification(`❌ Failed to save: ${error.message}`, 'error');
+        }
+    }
+    
+    // ════════════════════════════════════════════════════════════════════
     // TIERED FALLBACK: Honesty-First Recovery Protocol
     // - NEVER pretend to understand when you don't
     // - NEVER say "Got it" if you didn't get it
@@ -9749,6 +10007,15 @@ Sean → Shawn, Shaun`;
                 .map(s => s.trim())
                 .filter(Boolean);
             this.config.confirmationRequests = { enabled, triggers };
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // Phase 1: Scheduling - Request-Only Mode with UI-Controlled Time Windows
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('scheduling-provider')) {
+            const schedulingConfig = this.collectSchedulingConfig();
+            this.config.scheduling = schedulingConfig;
+            console.log('[FRONT DESK BEHAVIOR] 📅 Phase 1 Scheduling saved:', this.config.scheduling);
         }
     }
 
