@@ -4865,15 +4865,29 @@ async function processTurn({
             );
             if (urgencyPhrases.length === 0) urgencyPhrases = defaultUrgencyPhrases;
             
-            // Booking keywords from directIntentPatterns + wantsBooking
-            const directIntentPatterns = awReader.get('booking.directIntentPatterns', []);
+            // V108: Booking keywords from frontDesk.detectionTriggers.* (canonical paths)
+            // Check canonical path first, fall back to legacy only in warn mode
+            const enforcementLevel = awReader.get('frontDesk.enforcement.level', 'warn');
+            const isStrictMode = enforcementLevel === 'strict';
+            
+            let directIntentPatterns = awReader.get('frontDesk.detectionTriggers.directIntentPatterns', []);
+            if (directIntentPatterns.length === 0 && !isStrictMode) {
+                // WARN MODE: Fall back to legacy path
+                directIntentPatterns = awReader.get('booking.directIntentPatterns', []);
+                if (directIntentPatterns.length > 0) {
+                    log('⚠️ V108: Using legacy booking.directIntentPatterns - migrate to frontDesk.detectionTriggers.directIntentPatterns');
+                }
+            }
+            
             bookingKeywords = [...new Set([...directIntentPatterns, ...wantsBooking])];
             if (bookingKeywords.length === 0) bookingKeywords = defaultBookingKeywords;
             
-            log('📋 V98c: Loaded booking detection patterns from Control Plane', {
+            log('📋 V108: Loaded booking detection patterns from Control Plane', {
                 consentPhrasesCount: consentPhrases.length,
                 urgencyPhrasesCount: urgencyPhrases.length,
                 bookingKeywordsCount: bookingKeywords.length,
+                directIntentSource: directIntentPatterns.length > 0 ? 'canonical' : 'empty',
+                isStrictMode,
                 source: 'AWConfigReader'
             });
         } else {

@@ -547,6 +547,24 @@ class FrontDeskBehaviorManager {
                     "asap", "right away", "as soon as possible", "today", "emergency", "urgent",
                     // Action requests
                     "fix it", "repair it", "look at it", "check it out"
+                ],
+                
+                // ════════════════════════════════════════════════════════════════════
+                // ⚡ DIRECT INTENT PATTERNS: Bypass consent gate (V108: canonical location)
+                // These patterns skip "Would you like to book?" and go straight to booking
+                // REPLACES: legacy booking.directIntentPatterns in strict mode
+                // ════════════════════════════════════════════════════════════════════
+                directIntentPatterns: [
+                    // Direct booking commands
+                    "schedule", "book", "appointment", 
+                    // Explicit requests
+                    "come out", "send someone", "send somebody",
+                    "get someone out", "get somebody out",
+                    "need a tech", "need someone out", 
+                    "dispatch", "service call",
+                    // Help requests (clear intent)
+                    "help me out", "need help", 
+                    "somebody to help", "someone to help"
                 ]
             },
             
@@ -7333,7 +7351,8 @@ Sean → Shawn, Shaun`;
         const dt = this.config.detectionTriggers;
         
         // Pre-populate with defaults if arrays are empty (for existing companies)
-        const categories = ['trustConcern', 'callerFeelsIgnored', 'refusedSlot', 'describingProblem', 'wantsBooking'];
+        // V108: Added directIntentPatterns - THE canonical location for bypass-consent patterns
+        const categories = ['trustConcern', 'callerFeelsIgnored', 'refusedSlot', 'describingProblem', 'wantsBooking', 'directIntentPatterns'];
         categories.forEach(key => {
             if (!dt[key] || dt[key].length === 0) {
                 dt[key] = defaults[key] || [];
@@ -7452,6 +7471,38 @@ Sean → Shawn, Shaun`;
                         <div id="fdb-test-result" style="margin-top: 10px; display: none;"></div>
                     </div>
                 </div>
+                
+                <!-- V108: Direct Intent Patterns - BYPASS CONSENT patterns (canonical location) -->
+                <div style="margin-top: 24px; border: 2px solid #a371f7; border-radius: 8px; padding: 16px; background: #0d1117;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <h4 style="margin: 0; color: #a371f7;">⚡ Direct Intent Patterns (Bypass Consent)</h4>
+                        <button onclick="window.frontDeskBehaviorManager.restoreDetectionDefaults('directIntentPatterns')" 
+                            style="padding: 4px 12px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.75rem;">
+                            ↩ Restore Defaults
+                        </button>
+                    </div>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
+                        <strong>CANONICAL LOCATION:</strong> These patterns bypass the consent gate. If caller uses these, AI skips "Would you like to book?" and goes straight to booking.
+                        <br><span style="color: #f0883e; font-size: 0.75rem;">⚠️ In strict mode, this replaces the legacy <code>booking.directIntentPatterns</code> path entirely.</span>
+                    </p>
+                    
+                    <!-- V108: Warning if list is empty -->
+                    ${(dt.directIntentPatterns || []).length === 0 ? \`
+                        <div style="background: #a371f720; border: 1px solid #a371f7; border-radius: 6px; padding: 10px; margin-bottom: 12px;">
+                            <strong style="color: #a371f7;">ℹ️ Note:</strong> <span style="color: #c9d1d9;">No direct intent patterns defined. Callers will always go through consent if <code>bookingRequiresExplicitConsent</code> is enabled.</span>
+                        </div>
+                    \` : ''}
+                    
+                    <div id="fdb-directIntent-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+                        \${(dt.directIntentPatterns || []).map((t, i) => this.renderDetectionChip(t, i, 'directIntentPatterns')).join('')}
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="fdb-new-directIntentPatterns" placeholder="e.g., 'book an appointment'" 
+                            style="flex: 1; padding: 8px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <button onclick="window.frontDeskBehaviorManager.addDetection('directIntentPatterns')" 
+                            style="padding: 8px 16px; background: #a371f7; color: white; border: none; border-radius: 6px; cursor: pointer;">+ Add</button>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -7462,7 +7513,8 @@ Sean → Shawn, Shaun`;
             callerFeelsIgnored: '#f85149',
             refusedSlot: '#8b949e',
             describingProblem: '#58a6ff',
-            wantsBooking: '#3fb950'
+            wantsBooking: '#3fb950',
+            directIntentPatterns: '#a371f7'  // V108: canonical bypass-consent patterns
         };
         return `
             <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: ${colors[type]}20; border: 1px solid ${colors[type]}40; border-radius: 16px; color: ${colors[type]}; font-size: 0.8rem;">

@@ -376,38 +376,57 @@ class DirectBookingIntentDetector {
             }
         }
         
-        // Try AWConfigReader (V96k: This is the primary path now that awReader is passed)
+        // V108: Try AWConfigReader - ALL patterns from frontDesk.detectionTriggers.* (canonical)
         if (patterns.length === 0 && context.awReader && typeof context.awReader.get === 'function') {
             try {
                 const wantsBooking = context.awReader.getArray('frontDesk.detectionTriggers.wantsBooking');
-                const directPatterns = context.awReader.getArray('booking.directIntentPatterns');
+                // V108: Read from CANONICAL path first
+                const directPatternsCanonical = context.awReader.getArray('frontDesk.detectionTriggers.directIntentPatterns');
+                
                 if (wantsBooking?.length > 0) {
                     patterns.push(...wantsBooking);
                     source = 'awReader:wantsBooking';
                 }
-                if (directPatterns?.length > 0) {
-                    patterns.push(...directPatterns);
-                    source = patterns.length > wantsBooking?.length ? 'awReader:directIntentPatterns' : source;
+                
+                // V108: Check enforcement level for strict mode
+                const enforcementLevel = context.awReader.get('frontDesk.enforcement.level', 'warn');
+                const isStrictMode = enforcementLevel === 'strict';
+                
+                if (directPatternsCanonical?.length > 0) {
+                    patterns.push(...directPatternsCanonical);
+                    source = 'awReader:directIntentPatterns:canonical';
+                } else if (!isStrictMode) {
+                    // WARN MODE ONLY: Fall back to legacy path
+                    const directPatternsLegacy = context.awReader.getArray('booking.directIntentPatterns');
+                    if (directPatternsLegacy?.length > 0) {
+                        patterns.push(...directPatternsLegacy);
+                        source = 'awReader:directIntentPatterns:legacy';
+                        logger.warn('[DIRECT BOOKING] V108: Using legacy booking.directIntentPatterns - migrate to frontDesk.detectionTriggers.directIntentPatterns');
+                    }
                 }
-                logger.debug('[DIRECT BOOKING] V96k: Patterns from AWConfigReader', { 
+                
+                logger.debug('[DIRECT BOOKING] V108: Patterns from AWConfigReader', { 
                     wantsBookingCount: wantsBooking?.length || 0, 
-                    directPatternsCount: directPatterns?.length || 0 
+                    directPatternsCount: directPatternsCanonical?.length || 0,
+                    source,
+                    isStrictMode
                 });
             } catch (e) {
                 logger.debug('[DIRECT BOOKING] AWConfigReader patterns not available', { error: e.message });
             }
         }
         
-        // Fallback: Direct company config read (legacy)
+        // V108: Fallback - Direct company config read (uses canonical path)
         if (patterns.length === 0 && context.company) {
             const frontDesk = context.company.aiAgentSettings?.frontDeskBehavior || {};
             const wantsBooking = frontDesk.detectionTriggers?.wantsBooking || [];
-            const directPatterns = frontDesk.bookingFlow?.directIntentPatterns || [];
+            // V108: Canonical path: detectionTriggers.directIntentPatterns
+            const directPatterns = frontDesk.detectionTriggers?.directIntentPatterns || [];
             if (wantsBooking?.length > 0) patterns.push(...wantsBooking);
             if (directPatterns?.length > 0) patterns.push(...directPatterns);
             if (patterns.length > 0) {
-                source = 'company_fallback';
-                logger.debug('[DIRECT BOOKING] V96k: Patterns from company fallback', { 
+                source = 'company_fallback:canonical';
+                logger.debug('[DIRECT BOOKING] V108: Patterns from company fallback', { 
                     wantsBookingCount: wantsBooking?.length || 0, 
                     directPatternsCount: directPatterns?.length || 0 
                 });

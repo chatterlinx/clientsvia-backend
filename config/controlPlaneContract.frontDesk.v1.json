@@ -37,7 +37,7 @@
     },
     
     "detection": {
-      "description": "Intent detection triggers and patterns",
+      "description": "Intent detection triggers and patterns - ALL MUST BE UNDER frontDesk.detectionTriggers.*",
       "keys": {
         "frontDesk.detectionTriggers.wantsBooking": { 
           "type": "array", 
@@ -55,7 +55,7 @@
           "uiSection": "detection",
           "description": "Phrases that indicate caller wants to book/schedule service (V107: added 'help me out' variants)"
         },
-        "booking.directIntentPatterns": { 
+        "frontDesk.detectionTriggers.directIntentPatterns": { 
           "type": "array", 
           "required": false, 
           "default": [
@@ -65,7 +65,16 @@
             "help me out", "need help", "somebody to help", "someone to help"
           ], 
           "uiSection": "detection",
-          "description": "Direct booking intent patterns (bypass consent if matched, V107: added 'help' variants)"
+          "description": "Direct booking intent patterns (bypass consent if matched) - CANONICAL LOCATION"
+        },
+        "booking.directIntentPatterns": { 
+          "type": "array", 
+          "required": false, 
+          "legacy": true,
+          "migratedTo": "frontDesk.detectionTriggers.directIntentPatterns",
+          "default": [],
+          "uiSection": "detection",
+          "description": "LEGACY - DO NOT USE IN STRICT MODE. Replaced by frontDesk.detectionTriggers.directIntentPatterns"
         }
       }
     },

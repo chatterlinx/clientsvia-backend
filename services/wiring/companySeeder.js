@@ -82,15 +82,16 @@ async function seedCompanyBaseFields({ companyId, companyDoc }) {
         });
     }
 
-    // V107: Seed directIntentPatterns if missing - fixes inconsistent sourcing (0 items on turn 1)
-    // Must resolve from companyConfig NOT globalDefaults
-    const hasDirectPatterns = Array.isArray(companyDoc?.aiAgentSettings?.booking?.directIntentPatterns) &&
-        companyDoc.aiAgentSettings.booking.directIntentPatterns.length > 0;
-    if (!hasDirectPatterns) {
-        applied['aiAgentSettings.booking.directIntentPatterns'] = DEFAULT_DIRECT_INTENT_PATTERNS;
-        logger.info('[WIRING SEEDER] V107: Seeding directIntentPatterns', {
+    // V108: Seed directIntentPatterns to CANONICAL path (frontDesk.detectionTriggers.*)
+    // Legacy path (booking.directIntentPatterns) is no longer seeded in strict mode
+    const hasDirectPatternsCanonical = Array.isArray(companyDoc?.aiAgentSettings?.frontDeskBehavior?.detectionTriggers?.directIntentPatterns) &&
+        companyDoc.aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns.length > 0;
+    if (!hasDirectPatternsCanonical) {
+        applied['aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns'] = DEFAULT_DIRECT_INTENT_PATTERNS;
+        logger.info('[WIRING SEEDER] V108: Seeding directIntentPatterns to canonical path', {
             companyId: companyDoc._id.toString(),
-            phraseCount: DEFAULT_DIRECT_INTENT_PATTERNS.length
+            phraseCount: DEFAULT_DIRECT_INTENT_PATTERNS.length,
+            path: 'frontDeskBehavior.detectionTriggers.directIntentPatterns'
         });
     }
 

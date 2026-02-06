@@ -48,6 +48,86 @@ try {
 } catch (err) {
     logger.error('[CONTROL_PLANE_ENFORCER] CRITICAL: Failed to load contract', { error: err.message });
     // Create empty contract - will fail closed on all reads
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AW PATH → DB PATH TRANSLATION
+// ═══════════════════════════════════════════════════════════════════════════════
+// AW paths use 'frontDesk.*' convention, but DB stores at 'frontDeskBehavior.*'
+// This map ensures cfgGet reads from the correct location in effectiveConfig
+// (which is company.aiAgentSettings passed from v2twilio.js)
+// ═══════════════════════════════════════════════════════════════════════════════
+const AW_TO_DB_PATH_MAP = {
+    // Core booking
+    'frontDesk.bookingEnabled': 'frontDeskBehavior.bookingEnabled',
+    'frontDesk.bookingSlots': 'frontDeskBehavior.bookingSlots',
+    'frontDesk.bookingOutcome': 'frontDeskBehavior.bookingOutcome',
+    'frontDesk.bookingBehavior': 'frontDeskBehavior.bookingBehavior',
+    'frontDesk.bookingBehavior.errorMessage': 'frontDeskBehavior.bookingBehavior.errorMessage',
+    'frontDesk.bookingBehavior.notConfiguredMessage': 'frontDeskBehavior.bookingBehavior.notConfiguredMessage',
+    
+    // Escalation
+    'frontDesk.escalation': 'frontDeskBehavior.escalation',
+    'frontDesk.escalation.triggerPhrases': 'frontDeskBehavior.escalation.triggerPhrases',
+    'frontDesk.escalation.transferMessage': 'frontDeskBehavior.escalation.transferMessage',
+    
+    // Discovery consent
+    'frontDesk.discoveryConsent': 'frontDeskBehavior.discoveryConsent',
+    'frontDesk.discoveryConsent.consentPhrases': 'frontDeskBehavior.discoveryConsent.consentPhrases',
+    'frontDesk.discoveryConsent.bookingIntentPhrases': 'frontDeskBehavior.discoveryConsent.bookingIntentPhrases',
+    
+    // Detection triggers - CRITICAL for booking intent
+    'frontDesk.detectionTriggers': 'frontDeskBehavior.detectionTriggers',
+    'frontDesk.detectionTriggers.wantsBooking': 'frontDeskBehavior.detectionTriggers.wantsBooking',
+    'frontDesk.detectionTriggers.directIntentPatterns': 'frontDeskBehavior.detectionTriggers.directIntentPatterns',
+    'frontDesk.detectionTriggers.trustConcern': 'frontDeskBehavior.detectionTriggers.trustConcern',
+    'frontDesk.detectionTriggers.callerFeelsIgnored': 'frontDeskBehavior.detectionTriggers.callerFeelsIgnored',
+    
+    // Scheduling (Phase 1)
+    'frontDesk.scheduling': 'frontDeskBehavior.scheduling',
+    'frontDesk.scheduling.provider': 'frontDeskBehavior.scheduling.provider',
+    'frontDesk.scheduling.timeWindows': 'frontDeskBehavior.scheduling.timeWindows',
+    'frontDesk.scheduling.morningAfternoonPrompt': 'frontDeskBehavior.scheduling.morningAfternoonPrompt',
+    'frontDesk.scheduling.timeWindowPrompt': 'frontDeskBehavior.scheduling.timeWindowPrompt',
+    
+    // Business hours
+    'frontDesk.businessHours': 'businessHours',  // Note: stored at top level, not under frontDeskBehavior
+    
+    // Personality
+    'frontDesk.personality': 'frontDeskBehavior.personality',
+    'frontDesk.aiName': 'aiName',  // Note: stored at top level
+    
+    // Fallbacks
+    'frontDesk.fallbackResponses': 'frontDeskBehavior.fallbackResponses'
+};
+
+/**
+ * Translate AW path to DB path for effectiveConfig lookup
+ * @param {string} awPath - AW convention path (e.g., 'frontDesk.bookingSlots')
+ * @returns {string} DB path for getNestedValue (e.g., 'frontDeskBehavior.bookingSlots')
+ */
+function translateAwPathToDbPath(awPath) {
+    // Check exact match first
+    if (AW_TO_DB_PATH_MAP[awPath]) {
+        return AW_TO_DB_PATH_MAP[awPath];
+    }
+    
+    // Check if this is a child of a mapped path
+    // e.g., 'frontDesk.bookingSlots.0.question' → 'frontDeskBehavior.bookingSlots.0.question'
+    for (const [awPrefix, dbPrefix] of Object.entries(AW_TO_DB_PATH_MAP)) {
+        if (awPath.startsWith(awPrefix + '.')) {
+            const suffix = awPath.slice(awPrefix.length);
+            return dbPrefix + suffix;
+        }
+    }
+    
+    // Generic fallback: frontDesk.X → frontDeskBehavior.X
+    if (awPath.startsWith('frontDesk.')) {
+        return 'frontDeskBehavior.' + awPath.slice('frontDesk.'.length);
+    }
+    
+    // No translation needed (e.g., 'booking.directIntentPatterns' legacy paths)
+    return awPath;
     CONTRACT = { rules: { unknownKeyBehavior: 'CONTROL_PLANE_VIOLATION' } };
     CONTRACT_KEYS = new Set();
 }
@@ -178,10 +258,12 @@ function cfgGet(effectiveConfig, key, options = {}) {
     
     // ═══════════════════════════════════════════════════════════════════════════
     // GATE 2: Read the value from effectiveConfig
+    // CRITICAL FIX: Translate AW path to DB path (frontDesk.* → frontDeskBehavior.*)
     // ═══════════════════════════════════════════════════════════════════════════
-    const value = getNestedValue(effectiveConfig, key);
+    const dbPath = translateAwPathToDbPath(key);
+    const value = getNestedValue(effectiveConfig, dbPath);
     
-    // Record the read
+    // Record the read with both paths for tracing
     trace.addKeyRead(key, 'controlPlane', value);
     
     // ═══════════════════════════════════════════════════════════════════════════
