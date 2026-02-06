@@ -784,59 +784,173 @@ function cleanName(name) {
 }
 
 /**
- * V92: Check if a name needs spelling confirmation
- * Names that sound similar (Mark/Marc, John/Jon, etc.) should be spelled out
- * to avoid booking under wrong name.
+ * ============================================================================
+ * V96n: NAME SPELLING CHECK - Now reads from company config
+ * ============================================================================
+ * 
+ * Previously hardcoded with 28 name groups. Now reads from:
+ * - company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.variantGroups
+ * - company.aiAgentSettings.frontDeskBehavior.nameSpellingVariants.precomputedVariantMap
+ * 
+ * Config options:
+ * - enabled: Master toggle (OFF by default)
+ * - source: 'curated_list' | 'auto_scan'
+ * - mode: '1_char_only' | 'any_variant'
+ * - variantGroups: Map of { "Mark": ["Marc"], ... }
+ * - precomputedVariantMap: O(1) lookup map for runtime
+ * 
+ * Returns: { needsCheck: boolean, variants: string[] }
+ * ============================================================================
  */
-const SIMILAR_NAME_GROUPS = [
-    ['mark', 'marc', 'marcus'],
-    ['john', 'jon', 'jonathan', 'jonathon'],
-    ['steven', 'stephen', 'steve'],
-    ['michael', 'micheal', 'mike'],
-    ['brian', 'bryan', 'bryon'],
-    ['eric', 'erik', 'erick'],
-    ['jason', 'jayson'],
-    ['jeffrey', 'geoffrey', 'geoff', 'jeff'],
-    ['kris', 'chris', 'kristopher', 'christopher'],
-    ['shawn', 'sean', 'shaun'],
-    ['alan', 'allan', 'allen'],
-    ['anne', 'ann', 'anna'],
-    ['cathy', 'kathy', 'catherine', 'katherine'],
-    ['sara', 'sarah'],
-    ['lindsey', 'lindsay'],
-    ['tracy', 'tracey'],
-    ['brittany', 'britney', 'brittney'],
-    ['ashley', 'ashlee', 'ashleigh'],
-    ['megan', 'meghan', 'meagan'],
-    ['rachel', 'rachael'],
-    ['nicole', 'nichole'],
-    ['teresa', 'theresa'],
-    ['carl', 'karl'],
-    ['gary', 'garry'],
-    ['jerry', 'gerry'],
-    ['phil', 'phillip', 'philip'],
-    ['tony', 'toni', 'anthony']
-];
 
-function needsSpellingCheck(name) {
-    if (!name) return false;
+// Fallback for when no config is available (legacy behavior)
+const FALLBACK_VARIANT_GROUPS = {
+    'mark': ['marc'],
+    'marc': ['mark'],
+    'john': ['jon'],
+    'jon': ['john'],
+    'brian': ['bryan'],
+    'bryan': ['brian'],
+    'eric': ['erik'],
+    'erik': ['eric'],
+    'sara': ['sarah'],
+    'sarah': ['sara'],
+    'steven': ['stephen'],
+    'stephen': ['steven'],
+    'sean': ['shawn', 'shaun'],
+    'shawn': ['sean', 'shaun'],
+    'shaun': ['sean', 'shawn'],
+    'cathy': ['kathy'],
+    'kathy': ['cathy']
+};
+
+/**
+ * Check if a name needs spelling confirmation based on company config
+ * 
+ * @param {string} name - The name to check
+ * @param {Object} company - Company document with aiAgentSettings
+ * @returns {{ needsCheck: boolean, variants: string[], mode: string }}
+ */
+function checkNameSpellingVariants(name, company) {
+    if (!name) return { needsCheck: false, variants: [], mode: null };
     
     const nameLower = name.toLowerCase().trim();
-    const firstName = nameLower.split(/\s+/)[0]; // Check first name only
+    const firstName = nameLower.split(/\s+/)[0];
     
-    // Check if first name is in any similar-sounding group
-    for (const group of SIMILAR_NAME_GROUPS) {
-        if (group.includes(firstName)) {
-            return true;
+    // Get config from company
+    const spellingConfig = company?.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants;
+    
+    // Check if feature is enabled (OFF by default)
+    if (!spellingConfig?.enabled) {
+        // Feature disabled - use legacy fallback for basic check only
+        const fallbackVariants = FALLBACK_VARIANT_GROUPS[firstName];
+        if (fallbackVariants) {
+            return { 
+                needsCheck: true, 
+                variants: fallbackVariants,
+                mode: 'fallback_1_char_only',
+                primaryName: firstName
+            };
+        }
+        return { needsCheck: false, variants: [], mode: 'disabled' };
+    }
+    
+    // Feature enabled - read from config
+    const mode = spellingConfig.mode || '1_char_only';
+    
+    // Prefer precomputed map for O(1) lookup, fall back to variantGroups
+    let variantMap = null;
+    
+    if (spellingConfig.precomputedVariantMap instanceof Map) {
+        variantMap = spellingConfig.precomputedVariantMap;
+    } else if (spellingConfig.precomputedVariantMap && typeof spellingConfig.precomputedVariantMap === 'object') {
+        // Handle case where Map was serialized to object
+        variantMap = new Map(Object.entries(spellingConfig.precomputedVariantMap));
+    }
+    
+    // If no precomputed map, build lookup from variantGroups
+    if (!variantMap || variantMap.size === 0) {
+        if (spellingConfig.variantGroups instanceof Map) {
+            variantMap = new Map();
+            for (const [primary, variants] of spellingConfig.variantGroups) {
+                const primaryLower = primary.toLowerCase();
+                variantMap.set(primaryLower, variants.map(v => v.toLowerCase()));
+                // Also add reverse lookups
+                for (const variant of variants) {
+                    const variantLower = variant.toLowerCase();
+                    if (!variantMap.has(variantLower)) {
+                        variantMap.set(variantLower, [primaryLower]);
+                    } else {
+                        const existing = variantMap.get(variantLower);
+                        if (!existing.includes(primaryLower)) {
+                            existing.push(primaryLower);
+                        }
+                    }
+                }
+            }
+        } else if (spellingConfig.variantGroups && typeof spellingConfig.variantGroups === 'object') {
+            // Handle case where Map was serialized to object
+            variantMap = new Map();
+            for (const [primary, variants] of Object.entries(spellingConfig.variantGroups)) {
+                const primaryLower = primary.toLowerCase();
+                const variantsList = Array.isArray(variants) ? variants : [variants];
+                variantMap.set(primaryLower, variantsList.map(v => v.toLowerCase()));
+                // Also add reverse lookups
+                for (const variant of variantsList) {
+                    const variantLower = variant.toLowerCase();
+                    if (!variantMap.has(variantLower)) {
+                        variantMap.set(variantLower, [primaryLower]);
+                    }
+                }
+            }
         }
     }
     
-    // Also check for very short names (3 letters or less) - easy to mishear
-    if (firstName.length <= 3) {
-        return true;
+    // Check if firstName is in variant map
+    if (variantMap && variantMap.has(firstName)) {
+        const variants = variantMap.get(firstName);
+        
+        // If mode is '1_char_only', verify at least one variant differs by only 1 char
+        if (mode === '1_char_only') {
+            const oneCharVariants = variants.filter(v => {
+                if (v.length !== firstName.length) return Math.abs(v.length - firstName.length) === 1;
+                let diff = 0;
+                for (let i = 0; i < firstName.length; i++) {
+                    if (firstName[i] !== v[i]) diff++;
+                }
+                return diff === 1;
+            });
+            
+            if (oneCharVariants.length > 0) {
+                return { 
+                    needsCheck: true, 
+                    variants: oneCharVariants,
+                    mode,
+                    primaryName: firstName
+                };
+            }
+            return { needsCheck: false, variants: [], mode };
+        }
+        
+        // Mode is 'any_variant' - return all variants
+        return { 
+            needsCheck: true, 
+            variants,
+            mode,
+            primaryName: firstName
+        };
     }
     
-    return false;
+    return { needsCheck: false, variants: [], mode };
+}
+
+/**
+ * Legacy wrapper for backward compatibility
+ * Use checkNameSpellingVariants() for full config support
+ */
+function needsSpellingCheck(name, company = null) {
+    const result = checkNameSpellingVariants(name, company);
+    return result.needsCheck;
 }
 
 /**
@@ -845,6 +959,99 @@ function needsSpellingCheck(name) {
  * ============================================================================
  */
 class BookingFlowRunner {
+    
+    /**
+     * ========================================================================
+     * V96n: STATIC NAME SPELLING CHECK
+     * ========================================================================
+     * Wrapper for checkNameSpellingVariants that reads from company config.
+     * 
+     * @param {string} name - The name to check
+     * @param {Object} company - Company document (optional, uses fallback if not provided)
+     * @returns {boolean} Whether the name needs spelling confirmation
+     */
+    static needsSpellingCheck(name, company = null) {
+        return needsSpellingCheck(name, company);
+    }
+    
+    /**
+     * ========================================================================
+     * V96n: GET SPELLING VARIANTS
+     * ========================================================================
+     * Get full variant info including the variant names and configured script.
+     * 
+     * @param {string} name - The name to check
+     * @param {Object} company - Company document
+     * @returns {{ needsCheck: boolean, variants: string[], mode: string, primaryName: string }}
+     */
+    static getSpellingVariants(name, company) {
+        return checkNameSpellingVariants(name, company);
+    }
+    
+    /**
+     * ========================================================================
+     * V96n: BUILD SPELLING QUESTION
+     * ========================================================================
+     * Build the spelling confirmation question using the configured script template.
+     * 
+     * Template placeholders:
+     * - {optionA}, {optionB}: The two name variants
+     * - {letterA}, {letterB}: The differing letters
+     * 
+     * Example: "Just to confirm — Mark with a K or Marc with a C?"
+     * 
+     * @param {string} name - The caller's name
+     * @param {Object} company - Company document
+     * @returns {{ question: string, optionA: string, optionB: string } | null}
+     */
+    static buildSpellingQuestion(name, company) {
+        const variantInfo = checkNameSpellingVariants(name, company);
+        
+        if (!variantInfo.needsCheck || variantInfo.variants.length === 0) {
+            return null;
+        }
+        
+        const firstName = variantInfo.primaryName || name.toLowerCase().split(/\s+/)[0];
+        const firstNameCapitalized = firstName.charAt(0).toUpperCase() + firstName.slice(1);
+        const variant = variantInfo.variants[0];
+        const variantCapitalized = variant.charAt(0).toUpperCase() + variant.slice(1);
+        
+        // Find differing letters
+        let letterA = '', letterB = '';
+        if (firstName.length === variant.length) {
+            for (let i = 0; i < firstName.length; i++) {
+                if (firstName[i] !== variant[i]) {
+                    letterA = firstName[i].toUpperCase();
+                    letterB = variant[i].toUpperCase();
+                    break;
+                }
+            }
+        } else {
+            // Different lengths - use last char or highlight the difference
+            letterA = firstName.charAt(firstName.length - 1).toUpperCase();
+            letterB = variant.charAt(variant.length - 1).toUpperCase();
+        }
+        
+        // Get configured script template
+        const spellingConfig = company?.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants;
+        const scriptTemplate = spellingConfig?.script || 
+            'Just to confirm — {optionA} with a {letterA} or {optionB} with a {letterB}?';
+        
+        // Replace placeholders
+        const question = scriptTemplate
+            .replace('{optionA}', firstNameCapitalized)
+            .replace('{optionB}', variantCapitalized)
+            .replace('{letterA}', letterA)
+            .replace('{letterB}', letterB);
+        
+        return {
+            question,
+            optionA: firstNameCapitalized,
+            optionB: variantCapitalized,
+            letterA,
+            letterB
+        };
+    }
     
     /**
      * ========================================================================
@@ -1221,20 +1428,85 @@ class BookingFlowRunner {
         // When user gives a value (e.g., "12155 Metro Parkway"), don't immediately
         // ask "Is that correct?" - accept it and move on. Only ask for confirmation
         // if value came from a PREVIOUS turn or from caller ID.
+        //
+        // V96n FIX: BUT don't auto-confirm if slot needs detailed prompts!
+        // - Address: must check for city/state completeness first
+        // - Name: must check for spelling confirmation or last name requirement
         // ═══════════════════════════════════════════════════════════════════
         if (slotsCollectedThisTurn.size > 0) {
             state.confirmedSlots = state.confirmedSlots || {};
             for (const key of slotsCollectedThisTurn) {
                 // Only auto-confirm if it's the current step we were asking about
                 if (key === state.currentStepId) {
-                    state.confirmedSlots[key] = true;
-                    if (state.slotMetadata?.[key]) {
-                        state.slotMetadata[key].confirmed = true;
+                    // V96n: Check if this slot needs detailed prompts BEFORE auto-confirming
+                    let needsDetailedPrompts = false;
+                    const slotValue = state.bookingCollected[key];
+                    const currentStepObj = flow.steps.find(s => (s.fieldKey || s.id) === key);
+                    const slotOptions = currentStepObj?.options || {};
+                    
+                    // V96n: ADDRESS - Don't auto-confirm if missing city/state
+                    if (key === 'address' && slotValue) {
+                        const requireCity = slotOptions.requireCity !== false; // Default true
+                        const requireState = slotOptions.requireState !== false;
+                        
+                        if (requireCity || requireState) {
+                            const hasComma = slotValue.includes(',');
+                            const statePattern = /\b[A-Z]{2}\b|\b(alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new\s+hampshire|new\s+jersey|new\s+mexico|new\s+york|north\s+carolina|north\s+dakota|ohio|oklahoma|oregon|pennsylvania|rhode\s+island|south\s+carolina|south\s+dakota|tennessee|texas|utah|vermont|virginia|washington|west\s+virginia|wisconsin|wyoming)\b/i;
+                            const hasState = statePattern.test(slotValue);
+                            
+                            if (!hasComma && !hasState) {
+                                needsDetailedPrompts = true;
+                                logger.info('[BOOKING FLOW] V96n: NOT auto-confirming address - needs city/state', {
+                                    address: slotValue?.substring?.(0, 30),
+                                    hasComma,
+                                    hasState
+                                });
+                            }
+                        }
                     }
-                    logger.info('[BOOKING FLOW RUNNER] Auto-confirmed slot collected this turn', {
-                        key,
-                        reason: 'USER_JUST_PROVIDED_VALUE'
-                    });
+                    
+                    // V96n: NAME - Don't auto-confirm if needs spelling check or last name
+                    if (key === 'name' && slotValue) {
+                        const confirmSpelling = slotOptions.confirmSpelling || currentStepObj?.confirmSpelling;
+                        const askFullName = slotOptions.askFullName || currentStepObj?.askFullName;
+                        const askMissingNamePart = slotOptions.askMissingNamePart || currentStepObj?.askMissingNamePart;
+                        
+                        // Check if needs last name
+                        if (askFullName && askMissingNamePart) {
+                            const nameParts = slotValue.trim().split(/\s+/);
+                            if (nameParts.length < 2) {
+                                needsDetailedPrompts = true;
+                                logger.info('[BOOKING FLOW] V96n: NOT auto-confirming name - needs last name', {
+                                    name: slotValue,
+                                    nameParts: nameParts.length
+                                });
+                            }
+                        }
+                        
+                        // Check if needs spelling confirmation (V96n: now reads from company config)
+                        if (confirmSpelling && !state.spellingConfirmed) {
+                            const needsSpelling = BookingFlowRunner.needsSpellingCheck(slotValue, company);
+                            if (needsSpelling) {
+                                needsDetailedPrompts = true;
+                                logger.info('[BOOKING FLOW] V96n: NOT auto-confirming name - needs spelling check', {
+                                    name: slotValue,
+                                    usingCompanyConfig: !!company?.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants?.enabled
+                                });
+                            }
+                        }
+                    }
+                    
+                    // Only auto-confirm if NO detailed prompts needed
+                    if (!needsDetailedPrompts) {
+                        state.confirmedSlots[key] = true;
+                        if (state.slotMetadata?.[key]) {
+                            state.slotMetadata[key].confirmed = true;
+                        }
+                        logger.info('[BOOKING FLOW RUNNER] Auto-confirmed slot collected this turn', {
+                            key,
+                            reason: 'USER_JUST_PROVIDED_VALUE'
+                        });
+                    }
                 }
             }
         }
@@ -1242,7 +1514,7 @@ class BookingFlowRunner {
         // ═══════════════════════════════════════════════════════════════════
         // FIND NEXT STEP NEEDING ACTION (CONFIRM OR COLLECT)
         // ═══════════════════════════════════════════════════════════════════
-        const nextAction = this.determineNextAction(flow, state, slots);
+        const nextAction = this.determineNextAction(flow, state, slots, company);
         
         if (!nextAction) {
             // All required steps confirmed - go to final confirmation
@@ -1326,7 +1598,7 @@ class BookingFlowRunner {
      * 
      * @returns {Object|null} { step, mode: 'CONFIRM'|'COLLECT', existingValue }
      */
-    static determineNextAction(flow, state, slots = {}) {
+    static determineNextAction(flow, state, slots = {}, company = null) {
         const collected = state.bookingCollected || {};
         const slotMetadata = state.slotMetadata || {};
         const confirmedSlots = state.confirmedSlots || new Set();
@@ -1497,9 +1769,9 @@ class BookingFlowRunner {
             let detailedPromptReason = null;
             
             if (fieldKey === 'name' || step.type === 'name') {
-                // Check spelling confirmation requirement
+                // Check spelling confirmation requirement (V96n: now reads from company config)
                 const confirmSpelling = slotOptions.confirmSpelling || step.confirmSpelling;
-                if (confirmSpelling && existingValue && needsSpellingCheck(existingValue)) {
+                if (confirmSpelling && existingValue && BookingFlowRunner.needsSpellingCheck(existingValue, company)) {
                     needsDetailedPrompts = true;
                     detailedPromptReason = 'SPELLING_CHECK_REQUIRED';
                 }
@@ -1569,9 +1841,26 @@ class BookingFlowRunner {
             }
             
             // Value exists but low confidence or caller_id - need to CONFIRM
+            // V96n: But respect offerCallerId option for phone slots
             if (metadata?.needsConfirmation || 
                 (metadata?.confidence && metadata.confidence < AUTO_CONFIRM_THRESHOLD) ||
                 metadata?.source === 'caller_id') {
+                
+                // V96n: If phone from caller_id and offerCallerId is explicitly false, auto-confirm
+                if (fieldKey === 'phone' && metadata?.source === 'caller_id') {
+                    const offerCallerId = slotOptions.offerCallerId;
+                    if (offerCallerId === false) {
+                        // Don't offer caller ID - auto-confirm it
+                        logger.debug('[BOOKING FLOW] V96n: Auto-confirming phone from caller ID (offerCallerId=false)', {
+                            phone: existingValue,
+                            source: metadata?.source
+                        });
+                        state.confirmedSlots = state.confirmedSlots || {};
+                        state.confirmedSlots[fieldKey] = true;
+                        continue;
+                    }
+                }
+                
                 return {
                     step,
                     mode: 'CONFIRM',
@@ -1581,7 +1870,15 @@ class BookingFlowRunner {
             }
             
             // Value exists without metadata - treat as needing confirmation if it's phone from caller ID
+            // V96n: Respect offerCallerId option
             if (fieldKey === 'phone' && !metadata) {
+                const offerCallerId = slotOptions.offerCallerId;
+                if (offerCallerId === false) {
+                    // Auto-confirm without asking
+                    state.confirmedSlots = state.confirmedSlots || {};
+                    state.confirmedSlots[fieldKey] = true;
+                    continue;
+                }
                 return {
                     step,
                     mode: 'CONFIRM',
@@ -1605,22 +1902,45 @@ class BookingFlowRunner {
     static handleConfirmMode(action, state, flow, userInput, startTime) {
         const { step, existingValue, metadata } = action;
         const fieldKey = step.fieldKey || step.id;
+        const slotOptions = step.options || {};
         
         // First entry or no input - ask confirmation question
         if (!userInput || userInput.trim() === '') {
-            const confirmPrompt = this.buildConfirmPrompt(step, existingValue);
+            let confirmPrompt;
+            
+            // ═══════════════════════════════════════════════════════════════
+            // V96n: Use callerIdPrompt for phone from caller ID
+            // ═══════════════════════════════════════════════════════════════
+            if (fieldKey === 'phone' && metadata?.source === 'caller_id' && slotOptions.offerCallerId !== false) {
+                // Use configured callerIdPrompt if available
+                const callerIdPrompt = slotOptions.callerIdPrompt;
+                if (callerIdPrompt) {
+                    confirmPrompt = callerIdPrompt.replace(/\{callerId\}/gi, existingValue || '');
+                    logger.info('[BOOKING FLOW RUNNER] V96n: Using configured callerIdPrompt', {
+                        template: callerIdPrompt,
+                        phone: existingValue
+                    });
+                } else {
+                    // Default caller ID prompt
+                    confirmPrompt = `Is ${existingValue} a good number to reach you?`;
+                }
+            } else {
+                confirmPrompt = this.buildConfirmPrompt(step, existingValue);
+            }
             
             state.pendingConfirmation = {
                 fieldKey,
                 value: existingValue,
-                step: step.id
+                step: step.id,
+                source: metadata?.source // V96n: Track source for later handling
             };
             
             logger.info('[BOOKING FLOW RUNNER] CONFIRM MODE - Asking to confirm', {
                 stepId: step.id,
                 fieldKey,
                 value: existingValue,
-                source: metadata?.source
+                source: metadata?.source,
+                usedCallerIdPrompt: fieldKey === 'phone' && metadata?.source === 'caller_id'
             });
             
             return {
@@ -1641,7 +1961,8 @@ class BookingFlowRunner {
                     mode: 'CONFIRM',
                     fieldKey,
                     existingValue,
-                    confidence: metadata?.confidence
+                    confidence: metadata?.confidence,
+                    slotSource: metadata?.source
                 }
             };
         }
@@ -2457,23 +2778,61 @@ class BookingFlowRunner {
                 );
                 
                 // ═══════════════════════════════════════════════════════════════
-                // V93: ADDRESS COMPLETENESS POLICY (always read, even if geo skipped)
+                // V96n FIX: ADDRESS COMPLETENESS POLICY
+                // PRIORITY: Booking Prompt slot options > AWConfigReader > hardcoded defaults
                 // ═══════════════════════════════════════════════════════════════
-                let requireCity = true, requireState = true, requireZip = false;
-                let requireUnitQuestion = true, unitQuestionMode = 'house_or_unit';
-                let missingCityStatePrompt = "Got it — what city and state is that in?";
-                let unitTypePrompt = "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?";
+                // The Booking Prompt tab saves to step.options (via extractSlotOptions)
+                // AWConfigReader is only used as fallback for legacy global config
+                // ═══════════════════════════════════════════════════════════════
+                const slotOptions = step.options || {};
                 
+                // 1. Read from slot options (Booking Prompt tab) first
+                let requireCity = slotOptions.requireCity !== false; // Default true
+                let requireState = slotOptions.requireState !== false;
+                let requireZip = slotOptions.requireZip === true; // Default false
+                let requireUnitQuestion = slotOptions.unitNumberMode !== 'never';
+                let unitQuestionMode = slotOptions.unitNumberMode || 'smart';
+                let missingCityStatePrompt = slotOptions.missingCityStatePrompt || 
+                    slotOptions.cityPrompt || 
+                    "Got it — what city and state is that in?";
+                let unitTypePrompt = slotOptions.unitTypePrompt || 
+                    "Is this a house, or an apartment, suite, or unit? If it's a unit, what's the number?";
+                let unitNumberPrompt = slotOptions.unitNumberPrompt || slotOptions.unitPrompt ||
+                    "Is there an apartment or unit number?";
+                
+                // 2. Fall back to AWConfigReader for any undefined values (legacy global config)
                 if (awReader) {
                     awReader.setReaderId('BookingFlowRunner.addressCompleteness');
-                    requireCity = awReader.get('booking.addressVerification.requireCity', true) !== false;
-                    requireState = awReader.get('booking.addressVerification.requireState', true) !== false;
-                    requireZip = awReader.get('booking.addressVerification.requireZip', false) === true;
-                    requireUnitQuestion = awReader.get('booking.addressVerification.requireUnitQuestion', true) !== false;
-                    unitQuestionMode = awReader.get('booking.addressVerification.unitQuestionMode', 'house_or_unit');
-                    missingCityStatePrompt = awReader.get('booking.addressVerification.missingCityStatePrompt', missingCityStatePrompt);
-                    unitTypePrompt = awReader.get('booking.addressVerification.unitTypePrompt', unitTypePrompt);
+                    // Only use AWConfigReader if slot options didn't have a value
+                    if (slotOptions.requireCity === undefined) {
+                        requireCity = awReader.get('booking.addressVerification.requireCity', true) !== false;
+                    }
+                    if (slotOptions.requireState === undefined) {
+                        requireState = awReader.get('booking.addressVerification.requireState', true) !== false;
+                    }
+                    if (slotOptions.requireZip === undefined) {
+                        requireZip = awReader.get('booking.addressVerification.requireZip', false) === true;
+                    }
+                    if (slotOptions.unitNumberMode === undefined) {
+                        requireUnitQuestion = awReader.get('booking.addressVerification.requireUnitQuestion', true) !== false;
+                        unitQuestionMode = awReader.get('booking.addressVerification.unitQuestionMode', 'house_or_unit');
+                    }
+                    if (!slotOptions.missingCityStatePrompt && !slotOptions.cityPrompt) {
+                        missingCityStatePrompt = awReader.get('booking.addressVerification.missingCityStatePrompt', missingCityStatePrompt);
+                    }
+                    if (!slotOptions.unitTypePrompt) {
+                        unitTypePrompt = awReader.get('booking.addressVerification.unitTypePrompt', unitTypePrompt);
+                    }
                 }
+                
+                logger.debug('[BOOKING FLOW] V96n: Address completeness policy loaded', {
+                    source: slotOptions.requireCity !== undefined ? 'bookingPromptTab' : 'awReader',
+                    requireCity,
+                    requireState,
+                    requireZip,
+                    unitQuestionMode,
+                    hasSlotOptions: Object.keys(slotOptions).length > 0
+                });
                 
                 // Use the formatted address when available, otherwise raw
                 valueToStore = addressValidation.formattedAddress || addressValidation.normalized || extractResult.value;
@@ -2876,6 +3235,190 @@ class BookingFlowRunner {
             }
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V96n: PHONE BREAKDOWN - Ask for parts if number is incomplete
+        // ═══════════════════════════════════════════════════════════════════════
+        // If breakDownIfUnclear is enabled and phone has < 10 digits,
+        // ask for area code then rest of number using configured prompts.
+        // ═══════════════════════════════════════════════════════════════════════
+        if ((fieldKey === 'phone' || step.type === 'phone') && extractResult.value) {
+            const phoneValue = extractResult.value;
+            const digits = phoneValue.replace(/\D/g, '');
+            const slotOptions = step.options || {};
+            const breakDownIfUnclear = slotOptions.breakDownIfUnclear === true;
+            
+            // Check if we're in the middle of phone breakdown collection
+            if (state.phoneBreakdownInProgress) {
+                if (state.collectingRestOfNumber) {
+                    // Got the rest of the number - combine with area code
+                    const areaCode = state.phoneAreaCode || '';
+                    const restDigits = digits;
+                    const fullPhone = areaCode + restDigits;
+                    
+                    if (fullPhone.length >= 10) {
+                        // Format phone number
+                        const formatted = fullPhone.length === 10 
+                            ? `(${fullPhone.slice(0,3)}) ${fullPhone.slice(3,6)}-${fullPhone.slice(6)}`
+                            : fullPhone;
+                        
+                        // Clear breakdown state
+                        delete state.phoneBreakdownInProgress;
+                        delete state.phoneAreaCode;
+                        delete state.collectingRestOfNumber;
+                        
+                        valueToStore = formatted;
+                        
+                        logger.info('[BOOKING FLOW RUNNER] V96n: Phone breakdown complete', {
+                            areaCode,
+                            rest: restDigits,
+                            fullPhone: formatted
+                        });
+                    } else {
+                        // Still not enough digits - ask again
+                        const restPrompt = slotOptions.restOfNumberPrompt || "And the rest of the number?";
+                        return {
+                            reply: restPrompt,
+                            state,
+                            isComplete: false,
+                            action: 'COLLECT_PHONE_REST',
+                            currentStep: step.id,
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                source: 'BOOKING_FLOW_RUNNER',
+                                flowId: flow.flowId,
+                                mode: 'PHONE_BREAKDOWN_REST_RETRY',
+                                areaCode,
+                                digitsCollected: restDigits.length
+                            }
+                        };
+                    }
+                } else {
+                    // Got area code - now ask for rest
+                    if (digits.length >= 3) {
+                        state.phoneAreaCode = digits.slice(0, 3);
+                        state.collectingRestOfNumber = true;
+                        
+                        const restPrompt = slotOptions.restOfNumberPrompt || "Got it. And the rest of the number?";
+                        
+                        logger.info('[BOOKING FLOW RUNNER] V96n: Phone area code collected, asking for rest', {
+                            areaCode: state.phoneAreaCode
+                        });
+                        
+                        return {
+                            reply: restPrompt,
+                            state,
+                            isComplete: false,
+                            action: 'COLLECT_PHONE_REST',
+                            currentStep: step.id,
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                source: 'BOOKING_FLOW_RUNNER',
+                                flowId: flow.flowId,
+                                mode: 'PHONE_BREAKDOWN_REST',
+                                areaCode: state.phoneAreaCode
+                            }
+                        };
+                    } else {
+                        // Not enough digits for area code - ask again
+                        const areaCodePrompt = slotOptions.areaCodePrompt || "What's the area code?";
+                        return {
+                            reply: `I need a 3-digit area code. ${areaCodePrompt}`,
+                            state,
+                            isComplete: false,
+                            action: 'COLLECT_PHONE_AREA_CODE',
+                            currentStep: step.id,
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                source: 'BOOKING_FLOW_RUNNER',
+                                flowId: flow.flowId,
+                                mode: 'PHONE_BREAKDOWN_AREA_RETRY'
+                            }
+                        };
+                    }
+                }
+            } else if (breakDownIfUnclear && digits.length < 10 && digits.length > 0) {
+                // Phone is incomplete and breakdown is enabled - start breakdown flow
+                if (digits.length >= 3 && digits.length < 7) {
+                    // Might be area code already - ask for rest
+                    state.phoneBreakdownInProgress = true;
+                    state.phoneAreaCode = digits.slice(0, 3);
+                    state.collectingRestOfNumber = true;
+                    
+                    const restPrompt = slotOptions.restOfNumberPrompt || 
+                        `I got ${digits.slice(0, 3)} as the area code. What's the rest of the number?`;
+                    
+                    logger.info('[BOOKING FLOW RUNNER] V96n: Starting phone breakdown (partial number)', {
+                        digits,
+                        assumedAreaCode: state.phoneAreaCode
+                    });
+                    
+                    return {
+                        reply: restPrompt,
+                        state,
+                        isComplete: false,
+                        action: 'COLLECT_PHONE_REST',
+                        currentStep: step.id,
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            source: 'BOOKING_FLOW_RUNNER',
+                            flowId: flow.flowId,
+                            mode: 'PHONE_BREAKDOWN_START',
+                            partialDigits: digits
+                        }
+                    };
+                } else {
+                    // Need to ask for area code first
+                    state.phoneBreakdownInProgress = true;
+                    
+                    const areaCodePrompt = slotOptions.areaCodePrompt || 
+                        "I didn't catch the full number. What's the area code?";
+                    
+                    logger.info('[BOOKING FLOW RUNNER] V96n: Starting phone breakdown (asking area code)', {
+                        digits,
+                        reason: 'incomplete_phone'
+                    });
+                    
+                    return {
+                        reply: areaCodePrompt,
+                        state,
+                        isComplete: false,
+                        action: 'COLLECT_PHONE_AREA_CODE',
+                        currentStep: step.id,
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            source: 'BOOKING_FLOW_RUNNER',
+                            flowId: flow.flowId,
+                            mode: 'PHONE_BREAKDOWN_AREA',
+                            partialDigits: digits
+                        }
+                    };
+                }
+            } else if (digits.length >= 10) {
+                // Full phone number - format it
+                const formatted = digits.length === 10 
+                    ? `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6,10)}`
+                    : digits.length === 11 && digits[0] === '1'
+                        ? `(${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7,11)}`
+                        : phoneValue;
+                valueToStore = formatted;
+            }
+        }
+        
         // 🚫 Address plausibility guard: reject junk when not validated
         if ((fieldKey === 'address' || step.type === 'address') && extractResult.value) {
             const validated = addressValidation?.validated === true || state.addressValidation?.validated === true;
@@ -3087,55 +3630,74 @@ class BookingFlowRunner {
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V92: CONFIRM SPELLING FOR NAME - Wire confirmSpelling from booking prompts
+        // V96n: CONFIRM SPELLING FOR NAME - Now uses company config
         // ═══════════════════════════════════════════════════════════════════════
-        // If name slot has confirmSpelling: true, spell back the name letter-by-letter
-        // for similar-sounding names (Mark/Marc, John/Jon, etc.) before proceeding.
-        // This addresses the "Biggest current bug" from wiring analysis.
+        // Uses nameSpellingVariants.variantGroups for spelling pairs (Mark/Marc)
+        // Uses nameSpellingVariants.script for the question template
+        // Example: "Just to confirm — Mark with a K or Marc with a C?"
         // ═══════════════════════════════════════════════════════════════════════
         const confirmSpelling = slotOptions.confirmSpelling || step.confirmSpelling;
         
         if ((fieldKey === 'name' || step.type === 'name') && confirmSpelling && !state.spellingConfirmed) {
             const nameToSpell = valueToStore || state.bookingCollected[fieldKey];
             
-            if (nameToSpell && this.needsSpellingCheck(nameToSpell)) {
-                // Spell out the name letter by letter
-                const spelled = nameToSpell.toUpperCase().split('').join(' - ');
-                const spellingPrompt = slotOptions.spellingConfirmPrompt || step.spellingConfirmPrompt || 
-                    `Let me confirm the spelling: ${spelled}. Is that correct?`;
+            // V96n: Use buildSpellingQuestion which reads from company config
+            const spellingQuestion = nameToSpell ? this.buildSpellingQuestion(nameToSpell, company) : null;
+            
+            if (spellingQuestion) {
+                // Check maxAsksPerCall limit
+                const spellingConfig = company?.aiAgentSettings?.frontDeskBehavior?.nameSpellingVariants;
+                const maxAsks = spellingConfig?.maxAsksPerCall ?? 1;
+                const askedCount = state.spellingAsksThisCall || 0;
                 
-                state.pendingSpellingConfirm = {
-                    fieldKey,
-                    value: nameToSpell,
-                    step: step.id
-                };
-                
-                logger.info('[BOOKING FLOW RUNNER] V92: Asking spelling confirmation', {
-                    name: nameToSpell,
-                    spelled,
-                    confirmSpelling: true
-                });
-                
-                return {
-                    reply: spellingPrompt,
-                    state,
-                    isComplete: false,
-                    action: 'CONFIRM_SPELLING',
-                    currentStep: step.id,
-                    matchSource: 'BOOKING_FLOW_RUNNER',
-                    tier: 'tier1',
-                    tokensUsed: 0,
-                    latencyMs: Date.now() - startTime,
-                    debug: {
-                        source: 'BOOKING_FLOW_RUNNER',
-                        flowId: flow.flowId,
-                        mode: 'CONFIRM_SPELLING',
-                        nameToSpell,
-                        spelled
-                    }
-                };
+                if (askedCount >= maxAsks) {
+                    // Already asked max spelling questions - skip this one
+                    logger.info('[BOOKING FLOW RUNNER] V96n: Skipping spelling check - maxAsksPerCall reached', {
+                        name: nameToSpell,
+                        askedCount,
+                        maxAsks
+                    });
+                    state.spellingConfirmed = true;
+                } else {
+                    // Ask spelling confirmation using configured template
+                    state.pendingSpellingConfirm = {
+                        fieldKey,
+                        value: nameToSpell,
+                        step: step.id,
+                        optionA: spellingQuestion.optionA,
+                        optionB: spellingQuestion.optionB
+                    };
+                    state.spellingAsksThisCall = askedCount + 1;
+                    
+                    logger.info('[BOOKING FLOW RUNNER] V96n: Asking spelling confirmation', {
+                        name: nameToSpell,
+                        optionA: spellingQuestion.optionA,
+                        optionB: spellingQuestion.optionB,
+                        usingConfigScript: !!spellingConfig?.script
+                    });
+                    
+                    return {
+                        reply: spellingQuestion.question,
+                        state,
+                        isComplete: false,
+                        action: 'CONFIRM_SPELLING',
+                        currentStep: step.id,
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            source: 'BOOKING_FLOW_RUNNER',
+                            flowId: flow.flowId,
+                            mode: 'CONFIRM_SPELLING',
+                            nameToSpell,
+                            optionA: spellingQuestion.optionA,
+                            optionB: spellingQuestion.optionB
+                        }
+                    };
+                }
             } else {
-                // Name doesn't need spelling check (common/unique enough)
+                // Name doesn't need spelling check (not in variant groups)
                 state.spellingConfirmed = true;
             }
         }

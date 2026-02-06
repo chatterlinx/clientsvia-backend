@@ -503,6 +503,12 @@ class BookingFlowResolver {
         if (slot.type === 'phone') {
             options.offerCallerId = slot.offerCallerId;
             options.callerIdPrompt = slot.callerIdPrompt;
+            
+            // V96n FIX: Extract ALL phone options from Control Plane
+            options.acceptTextMe = slot.acceptTextMe;
+            options.breakDownIfUnclear = slot.breakDownIfUnclear;
+            options.areaCodePrompt = slot.areaCodePrompt;
+            options.restOfNumberPrompt = slot.restOfNumberPrompt;
         }
         
         // Address options
@@ -510,6 +516,31 @@ class BookingFlowResolver {
             options.addressConfirmLevel = slot.addressConfirmLevel;
             options.useGoogleMapsValidation = slot.useGoogleMapsValidation;
             options.unitNumberMode = slot.unitNumberMode;
+            
+            // V96n FIX: Extract ALL address options from Control Plane
+            // These were configured but never passed to BookingFlowRunner!
+            options.breakDownIfUnclear = slot.breakDownIfUnclear;
+            options.acceptPartialAddress = slot.acceptPartialAddress;
+            options.partialAddressPrompt = slot.partialAddressPrompt;
+            options.streetBreakdownPrompt = slot.streetBreakdownPrompt;
+            options.cityPrompt = slot.cityPrompt;
+            options.missingCityStatePrompt = slot.missingCityStatePrompt;
+            options.zipPrompt = slot.zipPrompt;
+            
+            // City/State requirements
+            options.requireCity = slot.requireCity !== false; // Default true if not explicitly false
+            options.requireState = slot.requireState !== false;
+            options.requireZip = slot.requireZip === true; // Default false
+            
+            // Unit prompts
+            options.unitPrompt = slot.unitPrompt;
+            options.unitPromptVariants = slot.unitPromptVariants;
+            options.unitTypePrompt = slot.unitTypePrompt;
+            options.unitNumberPrompt = slot.unitNumberPrompt;
+            
+            // Always/Never ask unit for specific zips
+            options.unitAlwaysAskZips = slot.unitAlwaysAskZips;
+            options.unitNeverAskZips = slot.unitNeverAskZips;
         }
         
         // Time options
