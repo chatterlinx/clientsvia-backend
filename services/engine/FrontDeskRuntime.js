@@ -379,7 +379,7 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context, trace) {
-    const { company, callSid, session } = context;
+    const { company, callSid } = context;
     
     trace.addDecisionReason('DISCOVERY_LANE_HANDLER', { handler: 'ConversationEngine' });
     
@@ -394,9 +394,10 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
     
     try {
         // Call ConversationEngine for discovery handling
+        // V101 fix: use callState parameter directly (already passed to function)
         const engineResult = await ConversationEngine.processTurn(
             userTurn,
-            session || {},
+            callState || {},
             company,
             {
                 callSid,
