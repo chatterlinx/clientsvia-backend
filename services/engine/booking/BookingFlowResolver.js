@@ -417,6 +417,12 @@ class BookingFlowResolver {
     
     /**
      * Get the reprompt (clarification) for a slot
+     * 
+     * V97e FIX: DO NOT use confirmPrompt as reprompt fallback!
+     * - reprompt: "I didn't catch that. What is your address?" (asking again)
+     * - confirmPrompt: "Just to confirm, that's {value}, correct?" (confirming)
+     * These serve different purposes. confirmPrompt has {value} placeholder
+     * that won't be replaced in reprompt context → garbled output.
      */
     static getSlotReprompt(slot, slotId, slotType, bookingPromptsMap, company) {
         // 1. Direct slot reprompt
@@ -424,18 +430,19 @@ class BookingFlowResolver {
             return slot.reprompt;
         }
         
-        // 2. Confirm prompt can be used as reprompt
-        if (slot.confirmPrompt) {
-            return slot.confirmPrompt;
-        }
-        
-        // 3. Booking prompts map
+        // 2. Booking prompts map
         if (bookingPromptsMap instanceof Map) {
             const mapReprompt = bookingPromptsMap.get(`booking:${slotId}:reprompt`);
             if (mapReprompt) return mapReprompt;
         } else if (typeof bookingPromptsMap === 'object') {
             const mapReprompt = bookingPromptsMap[`booking:${slotId}:reprompt`];
             if (mapReprompt) return mapReprompt;
+        }
+        
+        // 3. Use slot's question/prompt if available (better than generic)
+        // V97e: This is safer than confirmPrompt because questions don't have {value}
+        if (slot.question) {
+            return `I didn't quite catch that. ${slot.question}`;
         }
         
         // 4. Default fallback

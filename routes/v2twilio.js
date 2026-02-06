@@ -3941,6 +3941,101 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               }
             }
             
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V97e FIX: SAFETY NET - Booking locked but deferToBookingRunner NOT signaled
+            // ═══════════════════════════════════════════════════════════════════════════
+            // BUG: When LLM offers to schedule (not deterministic path), and user says
+            // "yes", consent is detected LATE in ConversationEngine. bookingModeLocked
+            // becomes true, but deferToBookingRunner wasn't set. LLM generates "I'm sorry,
+            // could you repeat that?" while booking is locked → ROUTING_INVARIANT_VIOLATION.
+            //
+            // FIX: If booking got locked during this turn but we haven't run BookingFlowRunner
+            // yet, discard the LLM response and run BookingFlowRunner now.
+            // ═══════════════════════════════════════════════════════════════════════════
+            const bookingGotLockedThisTurn = (
+              engineResult.bookingFlowState?.bookingModeLocked === true ||
+              engineResult.signals?.bookingModeLocked === true
+            );
+            const notYetDeferred = !result; // result is still null = haven't run BookingFlowRunner
+            
+            if (bookingGotLockedThisTurn && notYetDeferred && engineResult.matchSource !== 'BOOKING_FLOW_RUNNER') {
+              logger.info('[V97e] SAFETY NET: Booking locked during turn but defer not signaled - running BookingFlowRunner', {
+                callSid,
+                turnCount: callState.turnCount,
+                matchSource: engineResult.matchSource,
+                bookingModeLocked: true
+              });
+              
+              try {
+                const { BookingFlowRunner, BookingFlowResolver } = require('../services/engine/booking');
+                
+                // Resolve the booking flow from company config
+                const safetyNetFlow = BookingFlowResolver.resolve({
+                  companyId: companyID,
+                  trade: callState.trade || null,
+                  serviceType: callState.serviceType || null,
+                  company
+                });
+                
+                // Build state from engineResult.bookingFlowState or defaults
+                const safetyNetState = {
+                  bookingModeLocked: true,
+                  bookingFlowId: engineResult.bookingFlowState?.bookingFlowId || safetyNetFlow.flowId,
+                  currentStepId: engineResult.bookingFlowState?.currentStepId || safetyNetFlow.steps[0]?.id,
+                  bookingCollected: engineResult.bookingFlowState?.bookingCollected || callState.bookingCollected || {},
+                  slotMetadata: callState.slotMetadata || {},
+                  confirmedSlots: callState.confirmedSlots || {},
+                  askCount: callState.bookingAskCount || {},
+                  pendingConfirmation: callState.pendingConfirmation || null
+                };
+                
+                // Run booking flow
+                const safetyNetResult = await BookingFlowRunner.runStep({
+                  flow: safetyNetFlow,
+                  state: safetyNetState,
+                  userInput: speechResult,
+                  callSid,
+                  company,
+                  session: { _id: callSid, mode: 'BOOKING', collectedSlots: callState.slots || {} }
+                });
+                
+                // Map to result format
+                result = {
+                  text: safetyNetResult.reply,
+                  response: safetyNetResult.reply,
+                  action: safetyNetResult.action || 'BOOKING',
+                  matchSource: 'BOOKING_FLOW_RUNNER',
+                  tier: 'tier0',
+                  bookingFlowState: safetyNetResult.state,
+                  callState: {
+                    ...callState,
+                    ...(safetyNetResult.state || {}),
+                    bookingModeLocked: true
+                  },
+                  debug: {
+                    source: 'BOOKING_FLOW_RUNNER',
+                    reason: 'V97e_SAFETY_NET_LATE_LOCK',
+                    flowId: safetyNetFlow.flowId,
+                    currentStep: safetyNetResult.state?.currentStepId,
+                    originalMatchSource: engineResult.matchSource
+                  }
+                };
+                
+                logger.info('[V97e] Safety net BookingFlowRunner executed successfully', {
+                  callSid,
+                  flowId: safetyNetFlow.flowId,
+                  currentStep: safetyNetResult.state?.currentStepId,
+                  responsePreview: (safetyNetResult.reply || '').substring(0, 50)
+                });
+              } catch (safetyNetError) {
+                logger.error('[V97e] Safety net BookingFlowRunner failed', {
+                  callSid,
+                  error: safetyNetError.message
+                });
+                // Fall through to use ConversationEngine result as fallback
+              }
+            }
+            
             // Only map ConversationEngine result if result wasn't set by deferred booking runner
             if (!result) {
               // Map ConversationEngine result to expected format
