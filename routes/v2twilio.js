@@ -2942,6 +2942,34 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       callState.awHash = callState.awHash || awProofForTurn.awHash;
       callState.effectiveConfigVersion = callState.effectiveConfigVersion || awProofForTurn.effectiveConfigVersion;
       
+      // ═══════════════════════════════════════════════════════════════════════════
+      // V98d: CONTROL_PLANE_HEADER - Instant debug visibility
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Every turn starts with this header showing control plane load status.
+      // If controlPlaneLoaded=false, don't debug booking - debug config load.
+      // ═══════════════════════════════════════════════════════════════════════════
+      const controlPlaneLoaded = !!(callState.awHash && callState.effectiveConfigVersion);
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'CONTROL_PLANE_HEADER',
+          turn: callState.turnCount,
+          data: {
+            companyId: companyID,
+            awHash: callState.awHash || null,
+            effectiveConfigVersion: callState.effectiveConfigVersion || null,
+            traceRunId: callState.traceRunId,
+            controlPlaneLoaded,
+            bookingModeLocked: !!callState.bookingModeLocked,
+            consentPending: !!callState.bookingConsentPending,
+            sessionMode: callState.sessionMode || 'DISCOVERY',
+            // V98c: Show where booking patterns will come from
+            bookingPatternsSource: controlPlaneLoaded ? 'controlPlane' : 'globalDefaults'
+          }
+        }).catch(() => {});
+      }
+      
       const adminSettings = await AdminSettings.findOne({}).lean();
       
       // 🧠 LOAD LLM-0 CONTROLS (Dec 2025) - Configurable brain behavior
