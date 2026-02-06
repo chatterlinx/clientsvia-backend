@@ -314,14 +314,41 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
  * ═══════════════════════════════════════════════════════════════════════════════
  * handleBookingLane() - Process booking mode turns
  * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * V104 REWRITE: Now follows "UI is law" discipline:
+ * 1. cfgGet('frontDesk.bookingEnabled') FIRST - if false, escalate
+ * 2. cfgGet('frontDesk.bookingSlots') - if empty, escalate with UI message
+ * 3. Lock booking state BEFORE processing
+ * 4. Use correct method names (resolve, runStep)
+ * 5. Emit BOOKING_FLOW_ERROR with real stack on failure
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 async function handleBookingLane(effectiveConfig, callState, userTurn, context, trace) {
     const { company, callSid } = context;
+    const companyId = company?._id?.toString() || context.companyId;
     
     trace.addDecisionReason('BOOKING_LANE_HANDLER', { handler: 'BookingFlowRunner' });
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GATE 1: Is booking module available?
+    // ═══════════════════════════════════════════════════════════════════════════
     if (!BookingFlowRunner || !BookingFlowResolver) {
         logger.error('[FRONT_DESK_RUNTIME] BookingFlowRunner not available - fail closed');
+        
+        // Emit error event for tracing
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'BOOKING_FLOW_ERROR',
+                data: {
+                    error: 'BookingFlowRunner module not loaded',
+                    gate: 'MODULE_AVAILABILITY',
+                    recovery: 'ESCALATE'
+                }
+            }).catch(() => {});
+        }
+        
         return {
             response: "I apologize, I'm having trouble with the booking system. Let me connect you with someone who can help.",
             signals: { escalate: true, failClosed: true },
@@ -330,39 +357,228 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
     }
     
     try {
-        // Resolve booking flow from UI config
-        const resolution = await BookingFlowResolver.resolveFlow(company);
+        // ═══════════════════════════════════════════════════════════════════════
+        // GATE 2: Is booking enabled? (cfgGet - traced read)
+        // ═══════════════════════════════════════════════════════════════════════
+        let bookingEnabled;
+        try {
+            bookingEnabled = cfgGet(effectiveConfig, 'frontDesk.bookingEnabled', {
+                callId: callSid,
+                turn: callState?.turnCount || 0,
+                strict: false,
+                readerId: 'handleBookingLane.bookingEnabled'
+            });
+        } catch (e) {
+            // Key might not be in contract - treat as disabled
+            bookingEnabled = false;
+        }
         
-        if (!resolution.flow) {
-            logger.error('[FRONT_DESK_RUNTIME] No booking flow resolved', { callSid });
+        if (bookingEnabled === false) {
+            logger.warn('[FRONT_DESK_RUNTIME] Booking is disabled via UI', { callSid });
+            
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'BOOKING_FLOW_ERROR',
+                    data: {
+                        error: 'frontDesk.bookingEnabled is false',
+                        gate: 'BOOKING_DISABLED',
+                        recovery: 'ESCALATE'
+                    }
+                }).catch(() => {});
+            }
+            
+            // Use UI-controlled escalation message
+            let transferMsg;
+            try {
+                transferMsg = cfgGet(effectiveConfig, 'frontDesk.escalation.transferMessage', {
+                    callId: callSid,
+                    turn: callState?.turnCount || 0,
+                    strict: false,
+                    readerId: 'handleBookingLane.transferMessage'
+                });
+            } catch (e) {
+                transferMsg = null;
+            }
+            
             return {
-                response: "I apologize, the booking system isn't configured. Let me get you some help.",
+                response: transferMsg || "I'd be happy to help you with booking. Let me connect you with someone who can assist.",
+                signals: { escalate: true },
+                matchSource: 'FRONT_DESK_RUNTIME_BOOKING_DISABLED'
+            };
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // GATE 3: Are booking slots configured? (cfgGet - traced read)
+        // ═══════════════════════════════════════════════════════════════════════
+        let bookingSlots;
+        try {
+            bookingSlots = cfgGet(effectiveConfig, 'frontDesk.bookingSlots', {
+                callId: callSid,
+                turn: callState?.turnCount || 0,
+                strict: false,
+                readerId: 'handleBookingLane.bookingSlots'
+            });
+        } catch (e) {
+            bookingSlots = null;
+        }
+        
+        if (!bookingSlots || !Array.isArray(bookingSlots) || bookingSlots.length === 0) {
+            logger.error('[FRONT_DESK_RUNTIME] No bookingSlots configured - fail closed', { callSid });
+            
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'BOOKING_FLOW_ERROR',
+                    data: {
+                        error: 'frontDesk.bookingSlots is empty or not configured',
+                        gate: 'BOOKING_SLOTS_MISSING',
+                        recovery: 'ESCALATE',
+                        slotCount: Array.isArray(bookingSlots) ? bookingSlots.length : 0
+                    }
+                }).catch(() => {});
+            }
+            
+            return {
+                response: "I apologize, the booking system isn't fully configured yet. Let me connect you with someone who can help schedule your appointment.",
+                signals: { escalate: true },
+                matchSource: 'FRONT_DESK_RUNTIME_NO_SLOTS'
+            };
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // GATE 4: LOCK BOOKING STATE (before any processing)
+        // This is critical - if we're in BOOKING lane, we MUST lock
+        // ═══════════════════════════════════════════════════════════════════════
+        if (!callState.bookingModeLocked) {
+            assertModeOwnership('handleBookingLane', 'SET', 'bookingModeLocked');
+            callState.bookingModeLocked = true;
+            callState.bookingConsentPending = false;  // Consent was given to enter booking
+            
+            logger.info('[FRONT_DESK_RUNTIME] BOOKING STATE LOCKED', {
+                callSid,
+                slotCount: bookingSlots.length,
+                slots: bookingSlots.map(s => s.id || s.fieldKey).join(',')
+            });
+            
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'BOOKING_MODE_LOCKED',
+                    data: {
+                        slotCount: bookingSlots.length,
+                        slotIds: bookingSlots.map(s => s.id || s.fieldKey),
+                        source: 'handleBookingLane'
+                    }
+                }).catch(() => {});
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // RESOLVE: Get booking flow from UI config
+        // V104 FIX: Use correct method name and parameters
+        // ═══════════════════════════════════════════════════════════════════════
+        const resolution = BookingFlowResolver.resolve({
+            companyId,
+            company,
+            // Note: awReader not passed here - BookingFlowResolver creates its own if needed
+        });
+        
+        if (!resolution || !resolution.steps || resolution.steps.length === 0) {
+            logger.error('[FRONT_DESK_RUNTIME] BookingFlowResolver returned no flow', { callSid });
+            
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'BOOKING_FLOW_ERROR',
+                    data: {
+                        error: 'BookingFlowResolver.resolve returned empty flow',
+                        gate: 'FLOW_RESOLUTION',
+                        recovery: 'ESCALATE',
+                        resolutionSource: resolution?.source
+                    }
+                }).catch(() => {});
+            }
+            
+            return {
+                response: "I apologize, there was an issue loading the booking configuration. Let me get you some help.",
                 signals: { escalate: true },
                 matchSource: 'FRONT_DESK_RUNTIME_NO_FLOW'
             };
         }
         
-        // Build state for BookingFlowRunner
+        // Log successful flow resolution
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'BOOKING_FLOW_RESOLVED',
+                data: {
+                    flowId: resolution.flowId,
+                    stepCount: resolution.steps.length,
+                    stepIds: resolution.steps.map(s => s.id),
+                    source: resolution.source
+                }
+            }).catch(() => {});
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // BUILD: Prepare state for BookingFlowRunner
+        // ═══════════════════════════════════════════════════════════════════════
         const bookingState = {
-            bookingCollected: callState.slots || {},
+            bookingCollected: callState.bookingCollected || callState.slots || {},
             confirmedSlots: callState.confirmedSlots || {},
+            slotMetadata: callState.slotMetadata || {},
             currentStepId: callState.currentBookingStep,
             turn: callState.turnCount || 0,
-            _traceContext: { callSid, companyId: company?._id?.toString() }
+            _traceContext: { callSid, companyId }
         };
         
-        // Run BookingFlowRunner
-        const bookingResult = await BookingFlowRunner.processBookingTurn(
-            resolution.flow,
-            bookingState,
-            userTurn,
-            { company, callSid, session: callState }
-        );
+        // Initialize state if this is first entry
+        BookingFlowRunner.initializeState(bookingState, resolution, callState.slots || {});
         
-        // Update call state with booking results
+        // ═══════════════════════════════════════════════════════════════════════
+        // RUN: Execute booking step
+        // V104 FIX: Use correct method name (runStep, not processBookingTurn)
+        // ═══════════════════════════════════════════════════════════════════════
+        const bookingResult = await BookingFlowRunner.runStep({
+            flow: resolution,
+            state: bookingState,
+            userInput: userTurn,
+            company,
+            session: callState,
+            callSid,
+            slots: callState.slots || {}
+        });
+        
+        // Log step result
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'BOOKING_STEP_COMPLETE',
+                data: {
+                    currentStepId: bookingResult.state?.currentStepId,
+                    isComplete: bookingResult.isComplete,
+                    mode: bookingResult.mode,
+                    promptSource: bookingResult.promptSource,
+                    slotsCollected: Object.keys(bookingResult.state?.bookingCollected || {})
+                }
+            }).catch(() => {});
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // UPDATE: Sync state back to callState
+        // ═══════════════════════════════════════════════════════════════════════
         if (bookingResult.state) {
+            callState.bookingCollected = bookingResult.state.bookingCollected || callState.bookingCollected;
             callState.slots = bookingResult.state.bookingCollected || callState.slots;
             callState.confirmedSlots = bookingResult.state.confirmedSlots || callState.confirmedSlots;
+            callState.slotMetadata = bookingResult.state.slotMetadata || callState.slotMetadata;
             callState.currentBookingStep = bookingResult.state.currentStepId;
         }
         
@@ -375,17 +591,49 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
             },
             action: bookingResult.action,
             matchSource: 'BOOKING_FLOW_RUNNER',
+            promptSource: bookingResult.promptSource,
             metadata: bookingResult.debug
         };
         
     } catch (error) {
+        // ═══════════════════════════════════════════════════════════════════════
+        // ERROR: Log with FULL STACK for debugging
+        // ═══════════════════════════════════════════════════════════════════════
         logger.error('[FRONT_DESK_RUNTIME] BookingFlowRunner error', {
             callSid,
-            error: error.message
+            error: error.message,
+            stack: error.stack?.substring(0, 1000)
         });
         
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'BOOKING_FLOW_ERROR',
+                data: {
+                    error: error.message,
+                    stack: error.stack?.substring(0, 500),
+                    gate: 'EXECUTION_ERROR',
+                    recovery: 'ESCALATE'
+                }
+            }).catch(() => {});
+        }
+        
+        // Use UI-controlled error message if available
+        let errorMsg;
+        try {
+            errorMsg = cfgGet(effectiveConfig, 'frontDesk.bookingBehavior.errorMessage', {
+                callId: callSid,
+                turn: callState?.turnCount || 0,
+                strict: false,
+                readerId: 'handleBookingLane.errorMessage'
+            });
+        } catch (e) {
+            errorMsg = null;
+        }
+        
         return {
-            response: "I apologize, I encountered an issue with booking. Let me get you some help.",
+            response: errorMsg || "I apologize, I encountered an issue with booking. Let me connect you with someone who can help.",
             signals: { escalate: true },
             matchSource: 'FRONT_DESK_RUNTIME_ERROR'
         };

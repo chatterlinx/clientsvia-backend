@@ -87,7 +87,13 @@
         "booking.addressVerification.unitQuestionMode": { "type": "string", "required": false, "uiSection": "booking-prompts" },
         "booking.addressVerification.missingCityStatePrompt": { "type": "string", "required": false, "uiSection": "booking-prompts" },
         "booking.addressVerification.unitTypePrompt": { "type": "string", "required": false, "uiSection": "booking-prompts" },
-        "frontDesk.confirmationRequests": { "type": "array", "required": false, "uiSection": "booking-prompts" }
+        "frontDesk.confirmationRequests": { "type": "array", "required": false, "uiSection": "booking-prompts" },
+        "frontDesk.bookingBehavior": { "type": "object", "required": false, "uiSection": "booking-prompts", "description": "Parent key for booking behavior settings" },
+        "frontDesk.bookingBehavior.errorMessage": { "type": "string", "required": false, "uiSection": "booking-prompts", "default": "I apologize, I encountered an issue with booking. Let me connect you with someone who can help." },
+        "frontDesk.bookingBehavior.notConfiguredMessage": { "type": "string", "required": false, "uiSection": "booking-prompts", "default": "I apologize, the booking system isn't fully configured yet. Let me connect you with someone who can help." },
+        "frontDesk.bookingTemplates": { "type": "object", "required": false, "uiSection": "booking-prompts", "description": "Booking message templates" },
+        "frontDesk.bookingPrompts": { "type": "object", "required": false, "uiSection": "booking-prompts", "description": "Booking prompts configuration" },
+        "frontDesk.bookingOutcome": { "type": "object", "required": false, "uiSection": "booking-prompts", "description": "Booking outcome configuration" }
       }
     },
     
