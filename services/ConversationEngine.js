@@ -4819,7 +4819,7 @@ async function processTurn({
         // Now booking intent runs FIRST with highest priority!
         // NOTE: ConsentDetector is defined in THIS FILE (line ~2413), not in engine/booking
         // ═══════════════════════════════════════════════════════════════════════
-        const { DirectBookingIntentDetector } = require('./engine/booking');
+        // REMOVED: DirectBookingIntentDetector - eliminated competing booking system
         // ConsentDetector is already available in this scope (defined above at line ~2413)
         
         // AW wiring: Read config for explicit consent requirement
@@ -4827,369 +4827,75 @@ async function processTurn({
             ? awReader.get('frontDesk.discoveryConsent.bookingRequiresExplicitConsent')
             : (company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.bookingRequiresExplicitConsent ?? false);
         
-        // Early booking intent detection (before meta intents can intercept)
-        let earlyBookingIntent = null;
-        let earlyConsentCheck = null;
-        // V97 FIX: Use BOTH MongoDB session AND Redis parameter for consent pending
-        // BUG: Consent question asked on Turn 2 set MongoDB flag, but Turn 3
-        // loaded state from Redis which didn't have the flag → consent not detected!
+        // ═══════════════════════════════════════════════════════════════════════
+        // 🎯 MINIMAL BOOKING DETECTION (Clean Sweep - Feb 2026)
+        // ═══════════════════════════════════════════════════════════════════════
+        // SINGLE SOURCE OF TRUTH: Simple keyword detection + defer to BookingFlowRunner
+        // No complex intent detectors, no meta intents, no competing systems.
+        // Agent reads ONLY from frontDesk.bookingSlots configuration.
+        // ═══════════════════════════════════════════════════════════════════════
+
+        let bookingIntentDetected = false;
         let bookingConsentPending = session.booking?.consentPending || paramBookingConsentPending || false;
-        
-        if (!aiResult && userText && userText.length > 3) {
-            // 1. Check for DIRECT booking intent (highest priority)
-            // V96k FIX: Pass awReader so patterns are read from company config with tracing
-            earlyBookingIntent = DirectBookingIntentDetector.detect(userText, {
-                trade: company?.trade || company?.tradeType,
-                company,
-                awReader
-            });
-            
-            // 2. Check for consent (yes/yeah/sure to a consent question)
-            earlyConsentCheck = ConsentDetector.checkForConsent(userText, company, session, awReader);
-            
-            const alreadyConsented = session.booking?.consentGiven === true;
-            const inBookingMode = String(session?.mode || '').toUpperCase() === 'BOOKING' || session.bookingModeLocked;
-            
-            // Log early booking intent check for trace
-            log('🎯 V94: EARLY BOOKING INTENT CHECK (before meta)', {
-                hasDirectIntent: earlyBookingIntent?.hasDirectIntent,
-                directConfidence: earlyBookingIntent?.confidence,
-                directReason: earlyBookingIntent?.reason,
-                directPattern: earlyBookingIntent?.matchedPattern?.substring(0, 50),
-                hasConsent: earlyConsentCheck?.hasConsent,
-                consentReason: earlyConsentCheck?.reason,
-                bookingRequiresExplicitConsent,
-                alreadyConsented,
-                inBookingMode,
-                bookingConsentPending,
-                userTextPreview: userText.substring(0, 60)
-            });
-            
-            // ═══════════════════════════════════════════════════════════════════
-            // DECISION TREE:
-            // 1. If already in booking mode → skip (let booking runner handle)
-            // 2. If already consented → skip (let booking runner handle)
-            // 3. If consent given now (responded YES to consent question) → enter booking
-            // 4. If direct booking intent detected:
-            //    a. If explicit consent required AND confidence < 0.9 → ask consent question
-            //    b. Otherwise → enter booking directly
-            // ═══════════════════════════════════════════════════════════════════
-            
-            if (!inBookingMode && !alreadyConsented) {
-                // Case 3: User responded YES to a consent question we asked
-                if (bookingConsentPending && earlyConsentCheck.hasConsent) {
-                    log('✅ V94: CONSENT GIVEN (after pending question) → ENTER BOOKING', {
-                        consentPhrase: earlyConsentCheck.matchedPhrase
-                    });
-                    
-                    session.booking = session.booking || {};
-                    session.booking.consentGiven = true;
-                    session.booking.consentTurn = session.metrics?.totalTurns || 0;
-                    session.booking.consentReason = 'YES_AFTER_CONSENT_QUESTION';
-                    session.booking.consentPhrase = earlyConsentCheck.matchedPhrase || userText;
-                    session.booking.consentPending = false;
-                    session.bookingModeLocked = true;
-                    session.mode = 'BOOKING';
-                    
-                    // 🔒 CRITICAL: Set bookingFlowState for Redis persistence!
-                    // Without this, v2twilio.js won't save bookingModeLocked and next turn won't trigger booking
-                    session.bookingFlowState = {
+
+        if (!aiResult && userText && userText.length > 3 && !session.bookingModeLocked) {
+            // MINIMAL BOOKING DETECTION: Simple keyword matching
+            // No complex confidence scoring, no multiple pattern sources
+            const bookingKeywords = /\b(schedule|book|appointment|service|technician|send someone|get someone|come out|fix|repair|when can you|how soon can you)\b/i;
+            bookingIntentDetected = bookingKeywords.test(userText);
+
+            if (bookingIntentDetected) {
+                log('📅 MINIMAL BOOKING DETECTION: Keyword match, deferring to BookingFlowRunner', {
+                    userText: userText.substring(0, 60),
+                    matchedKeyword: userText.match(/\b(schedule|book|appointment|service|technician|send someone|get someone|come out|fix|repair|when can you|how soon can you)\b/i)?.[0]
+                });
+
+                // Set booking state and defer - NO response generation here
+                session.booking = session.booking || {};
+                session.booking.consentGiven = true;
+                session.booking.consentTurn = session.metrics?.totalTurns || 0;
+                session.booking.consentReason = 'MINIMAL_KEYWORD_DETECTION';
+                session.booking.consentPhrase = userText;
+                session.bookingModeLocked = true;
+                session.mode = 'BOOKING';
+
+                // Set bookingFlowState for Redis persistence
+                session.bookingFlowState = {
+                    bookingModeLocked: true,
+                    bookingFlowId: 'minimal_booking_detection',
+                    currentStepId: 'name', // Start with first slot
+                    bookingCollected: { ...currentSlots },
+                    bookingState: 'ACTIVE'
+                };
+
+                // Defer to BookingFlowRunner - it will generate the first booking prompt
+                aiResult = {
+                    reply: null, // BookingFlowRunner will generate the reply
+                    conversationMode: 'BOOKING',
+                    filledSlots: currentSlots,
+                    latencyMs: Date.now() - aiStartTime,
+                    tokensUsed: 0,
+                    fromStateMachine: false,
+                    matchSource: 'MINIMAL_BOOKING_DETECTION',
+                    tier: 'tier1',
+                    mode: 'BOOKING',
+                    bookingFlowState: session.bookingFlowState,
+                    signals: {
+                        deferToBookingRunner: true,
                         bookingModeLocked: true,
-                        bookingFlowId: 'early_consent_trigger',
-                        currentStepId: 'name', // Start with first slot
-                        bookingCollected: { ...currentSlots },
-                        bookingState: 'ACTIVE'
-                    };
-                    
-                    // BlackBox trace
-                    if (BlackBoxLogger) {
-                        BlackBoxLogger.logEvent({
-                            callId: session._id?.toString(),
-                            companyId,
-                            type: 'BOOKING_CONSENT_GRANTED',
-                            turn: session.metrics?.totalTurns || 0,
-                            data: {
-                                trigger: 'YES_AFTER_CONSENT_QUESTION',
-                                consentPhrase: earlyConsentCheck.matchedPhrase,
-                                bookingRequiresExplicitConsent,
-                                userText: userText.substring(0, 100)
-                            }
-                        }).catch(() => {});
+                        minimalDetection: true
+                    },
+                    debug: {
+                        source: 'MINIMAL_BOOKING_DETECTION',
+                        reason: 'Simple keyword detection, deferring to BookingFlowRunner',
+                        userText: userText.substring(0, 100)
                     }
-                    
-                    // ═══════════════════════════════════════════════════════════════════
-                    // V96o FIX: DEFER TO BOOKING RUNNER WHEN CONSENT GRANTED
-                    // ═══════════════════════════════════════════════════════════════════
-                    // BUG: This block was setting bookingModeLocked=true but NOT setting
-                    // aiResult, causing execution to fall through to STATE_MACHINE which
-                    // generated a response while booking was locked → ROUTING_INVARIANT_VIOLATION
-                    //
-                    // FIX: Set aiResult with deferToBookingRunner=true so v2twilio.js
-                    // invokes BookingFlowRunner to generate the first booking prompt.
-                    // ═══════════════════════════════════════════════════════════════════
-                    aiResult = {
-                        reply: null, // BookingFlowRunner will generate the reply
-                        conversationMode: 'BOOKING',
-                        filledSlots: currentSlots,
-                        latencyMs: Date.now() - aiStartTime,
-                        tokensUsed: 0,
-                        fromStateMachine: false,
-                        matchSource: 'BOOKING_CONSENT_GRANTED',
-                        tier: 'tier1',
-                        mode: 'BOOKING',
-                        bookingFlowState: session.bookingFlowState,
-                        signals: {
-                            deferToBookingRunner: true,
-                            bookingModeLocked: true,
-                            consentJustGranted: true
-                        },
-                        debug: {
-                            source: 'V96o_CONSENT_GRANTED_DEFER',
-                            reason: 'User gave consent, deferring to BookingFlowRunner',
-                            consentPhrase: earlyConsentCheck.matchedPhrase
-                        }
-                    };
-                    
-                    log('✅ V96o: CONSENT GRANTED → DEFERRING TO BOOKING RUNNER', {
-                        bookingModeLocked: true,
-                        deferToBookingRunner: true
-                    });
-                }
-                // Case 4a: Direct booking intent detected, but consent required
-                else if (earlyBookingIntent.hasDirectIntent && bookingRequiresExplicitConsent && earlyBookingIntent.confidence < 0.95) {
-                    log('⏸️ V94: BOOKING INTENT DETECTED but explicit consent required → ASK CONSENT', {
-                        confidence: earlyBookingIntent.confidence,
-                        reason: earlyBookingIntent.reason
-                    });
-                    
-                    session.booking = session.booking || {};
-                    session.booking.consentPending = true;
-                    session.booking.intentDetectedTurn = session.metrics?.totalTurns || 0;
-                    session.booking.intentReason = earlyBookingIntent.reason;
-                    bookingConsentPending = true;
-                    
-                    // Get consent question from config or use default
-                    // V96n FIX: Default must apply AFTER awReader.get() returns, not as alt branch
-                    // BUG: When awReader returned undefined, default wasn't used → "I'm sorry, could you repeat"
-                    const consentQuestion = (awReader 
-                        ? awReader.get('frontDesk.discoveryConsent.consentQuestion')
-                        : company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.consentQuestion)
-                        || "Would you like me to schedule a technician to come out?";
-                    
-                    aiResult = {
-                        reply: consentQuestion,
-                        conversationMode: session.mode || 'DISCOVERY',
-                        filledSlots: currentSlots,
-                        signals: { bookingConsentPending: true },
-                        latencyMs: Date.now() - aiStartTime,
-                        tokensUsed: 0,
-                        fromStateMachine: true,
-                        matchSource: 'BOOKING_CONSENT_QUESTION',
-                        tier: 'tier1',
-                        mode: session.mode || 'DISCOVERY',
-                        debug: {
-                            source: 'BOOKING_CONSENT_QUESTION',
-                            intentConfidence: earlyBookingIntent.confidence,
-                            intentReason: earlyBookingIntent.reason,
-                            bookingRequiresExplicitConsent
-                        }
-                    };
-                    
-                    session.conversationMemory = session.conversationMemory || {};
-                    session.conversationMemory.askedConsentQuestion = true;
-                    
-                    // BlackBox trace
-                    if (BlackBoxLogger) {
-                        BlackBoxLogger.logEvent({
-                            callId: session._id?.toString(),
-                            companyId,
-                            type: 'BOOKING_CONSENT_QUESTION_ASKED',
-                            turn: session.metrics?.totalTurns || 0,
-                            data: {
-                                intentConfidence: earlyBookingIntent.confidence,
-                                intentReason: earlyBookingIntent.reason,
-                                consentQuestion,
-                                bookingRequiresExplicitConsent
-                            }
-                        }).catch(() => {});
-                    }
-                    
-                    log('⏸️ V94: CONSENT QUESTION SENT (instant Tier-1)', { reply: consentQuestion });
-                }
-                // Case 4b: Direct booking intent with high confidence OR consent not required → ENTER BOOKING
-                else if (earlyBookingIntent.hasDirectIntent && earlyBookingIntent.confidence >= 0.75) {
-                    const skipConsent = !bookingRequiresExplicitConsent || earlyBookingIntent.confidence >= 0.95;
-                    
-                    if (skipConsent) {
-                        log('✅ V94: DIRECT BOOKING INTENT (high confidence) → ENTER BOOKING', {
-                            confidence: earlyBookingIntent.confidence,
-                            reason: earlyBookingIntent.reason,
-                            skipConsentBecause: !bookingRequiresExplicitConsent ? 'consentNotRequired' : 'highConfidence'
-                        });
-                        
-                        session.booking = session.booking || {};
-                        session.booking.consentGiven = true;
-                        session.booking.consentTurn = session.metrics?.totalTurns || 0;
-                        session.booking.consentReason = 'DIRECT_BOOKING_INTENT';
-                        session.booking.consentPhrase = earlyBookingIntent.matchedPattern || userText;
-                        session.bookingModeLocked = true;
-                        session.mode = 'BOOKING';
-                        
-                        // 🔒 CRITICAL: Set bookingFlowState for Redis persistence!
-                        session.bookingFlowState = {
-                            bookingModeLocked: true,
-                            bookingFlowId: 'direct_intent_trigger',
-                            currentStepId: 'name',
-                            bookingCollected: { ...currentSlots },
-                            bookingState: 'ACTIVE'
-                        };
-                        
-                        // BlackBox trace
-                        if (BlackBoxLogger) {
-                            BlackBoxLogger.logEvent({
-                                callId: session._id?.toString(),
-                                companyId,
-                                type: 'BOOKING_DIRECT_INTENT_TRIGGERED',
-                                turn: session.metrics?.totalTurns || 0,
-                                data: {
-                                    trigger: 'DIRECT_BOOKING_INTENT',
-                                    confidence: earlyBookingIntent.confidence,
-                                    reason: earlyBookingIntent.reason,
-                                    pattern: earlyBookingIntent.matchedPattern,
-                                    userText: userText.substring(0, 100)
-                                }
-                            }).catch(() => {});
-                        }
-                        
-                        // ═══════════════════════════════════════════════════════════════════
-                        // V96o FIX: DEFER TO BOOKING RUNNER FOR DIRECT INTENT
-                        // ═══════════════════════════════════════════════════════════════════
-                        // OLD COMMENT WAS WRONG: "let booking flow runner pick up on this turn"
-                        // The booking gate at v2twilio.js line ~3066 already ran at turn start
-                        // when bookingModeLocked was false, so it won't run again.
-                        // 
-                        // FIX: Set aiResult with deferToBookingRunner=true so v2twilio.js
-                        // explicitly invokes BookingFlowRunner now.
-                        // ═══════════════════════════════════════════════════════════════════
-                        aiResult = {
-                            reply: null,
-                            conversationMode: 'BOOKING',
-                            filledSlots: currentSlots,
-                            latencyMs: Date.now() - aiStartTime,
-                            tokensUsed: 0,
-                            fromStateMachine: false,
-                            matchSource: 'BOOKING_DIRECT_INTENT_TRIGGERED',
-                            tier: 'tier1',
-                            mode: 'BOOKING',
-                            bookingFlowState: session.bookingFlowState,
-                            signals: {
-                                deferToBookingRunner: true,
-                                bookingModeLocked: true,
-                                directIntentTriggered: true
-                            },
-                            debug: {
-                                source: 'V96o_DIRECT_INTENT_DEFER',
-                                reason: 'Direct booking intent detected, deferring to BookingFlowRunner',
-                                intentConfidence: earlyBookingIntent.confidence,
-                                intentReason: earlyBookingIntent.reason
-                            }
-                        };
-                        
-                        log('✅ V96o: DIRECT INTENT → DEFERRING TO BOOKING RUNNER', {
-                            bookingModeLocked: true,
-                            deferToBookingRunner: true,
-                            intentConfidence: earlyBookingIntent.confidence
-                        });
-                    }
-                }
-                // Case 3 alt: User gives consent but we never asked (spontaneous "yes schedule me")
-                else if (earlyConsentCheck.hasConsent && !bookingConsentPending) {
-                    // Check if this looks like spontaneous booking consent
-                    const looksLikeSpontaneousBookingRequest = /\b(yes|yeah|sure|ok|okay).*(schedule|book|appointment|come\s+out|send)/i.test(userText);
-                    
-                    if (looksLikeSpontaneousBookingRequest) {
-                        log('✅ V94: SPONTANEOUS BOOKING CONSENT → ENTER BOOKING', {
-                            consentPhrase: earlyConsentCheck.matchedPhrase,
-                            userText: userText.substring(0, 60)
-                        });
-                        
-                        session.booking = session.booking || {};
-                        session.booking.consentGiven = true;
-                        session.booking.consentTurn = session.metrics?.totalTurns || 0;
-                        session.booking.consentReason = 'SPONTANEOUS_CONSENT';
-                        session.booking.consentPhrase = earlyConsentCheck.matchedPhrase || userText;
-                        session.bookingModeLocked = true;
-                        session.mode = 'BOOKING';
-                        
-                        // 🔒 CRITICAL: Set bookingFlowState for Redis persistence!
-                        session.bookingFlowState = {
-                            bookingModeLocked: true,
-                            bookingFlowId: 'spontaneous_consent_trigger',
-                            currentStepId: 'name',
-                            bookingCollected: { ...currentSlots },
-                            bookingState: 'ACTIVE'
-                        };
-                        
-                        // BlackBox trace
-                        if (BlackBoxLogger) {
-                            BlackBoxLogger.logEvent({
-                                callId: session._id?.toString(),
-                                companyId,
-                                type: 'BOOKING_SPONTANEOUS_CONSENT',
-                                turn: session.metrics?.totalTurns || 0,
-                                data: {
-                                    trigger: 'SPONTANEOUS_CONSENT',
-                                    consentPhrase: earlyConsentCheck.matchedPhrase,
-                                    userText: userText.substring(0, 100)
-                                }
-                            }).catch(() => {});
-                        }
-                        
-                        // ═══════════════════════════════════════════════════════════════════
-                        // V96o FIX: DEFER TO BOOKING RUNNER FOR SPONTANEOUS CONSENT
-                        // ═══════════════════════════════════════════════════════════════════
-                        aiResult = {
-                            reply: null,
-                            conversationMode: 'BOOKING',
-                            filledSlots: currentSlots,
-                            latencyMs: Date.now() - aiStartTime,
-                            tokensUsed: 0,
-                            fromStateMachine: false,
-                            matchSource: 'BOOKING_SPONTANEOUS_CONSENT',
-                            tier: 'tier1',
-                            mode: 'BOOKING',
-                            bookingFlowState: session.bookingFlowState,
-                            signals: {
-                                deferToBookingRunner: true,
-                                bookingModeLocked: true,
-                                spontaneousConsent: true
-                            },
-                            debug: {
-                                source: 'V96o_SPONTANEOUS_CONSENT_DEFER',
-                                reason: 'Spontaneous booking consent, deferring to BookingFlowRunner',
-                                consentPhrase: earlyConsentCheck.matchedPhrase
-                            }
-                        };
-                        
-                        log('✅ V96o: SPONTANEOUS CONSENT → DEFERRING TO BOOKING RUNNER', {
-                            bookingModeLocked: true,
-                            deferToBookingRunner: true
-                        });
-                    }
-                }
+                };
+
+                log('✅ MINIMAL BOOKING: Deferring to BookingFlowRunner');
             }
         }
-        
-        // Store early booking intent check results for trace output
-        const earlyBookingIntentTrace = {
-            requiresExplicitConsent: bookingRequiresExplicitConsent,
-            intentMatched: earlyBookingIntent?.hasDirectIntent || false,
-            intentConfidence: earlyBookingIntent?.confidence || 0,
-            intentPattern: earlyBookingIntent?.matchedPattern?.substring(0, 50) || null,
-            consentPending: bookingConsentPending,
-            consentMatched: earlyConsentCheck?.hasConsent || false,
-            branchTaken: aiResult?.debug?.source || (session.bookingModeLocked ? 'BOOKING_TRIGGERED' : 'CONTINUE_TO_META_INTENT')
-        };
+        }
             
         // ═══════════════════════════════════════════════════════════════════════
         // V86 P0: UNIVERSAL META INTENT INTERCEPTOR
@@ -5208,22 +4914,7 @@ async function processTurn({
             const lowerText = (userText || '').toLowerCase().trim();
             if (!lowerText) return null;
 
-            // === BOOKING CLARIFICATION (Tier-1) ===
-            // If caller says "what information?" while we're collecting booking slots,
-            // do NOT repeat the last response (which may be an acknowledgment) — instead
-            // repeat the CURRENT slot question from UI config.
-            const bookingClarifyPatterns = [
-                /\bwhat\s+information\b/i,
-                /\bwhat\s+info\b/i,
-                /\bwhat\s+do\s+you\s+need\b/i,
-                /\bwhat\s+are\s+you\s+asking\b/i,
-                /\basking\s+for\s+what\b/i,
-                /\binfo(rmation)?\s+about\s+what\b/i
-            ];
-            const isBookingMode = String(session?.mode || '').toUpperCase() === 'BOOKING';
-            if (isBookingMode && bookingClarifyPatterns.some(p => p.test(lowerText))) {
-                return { intent: 'CLARIFY_BOOKING_SLOT', patterns: 'booking_clarify' };
-            }
+            // REMOVED: Booking clarification patterns - eliminated competing booking system
             
             // === REPEAT / DIDN'T HEAR ===
             const repeatPatterns = [
@@ -5332,37 +5023,7 @@ async function processTurn({
                 return { intent: 'REPAIR_CONVERSATION', patterns: 'repair' };
             }
             
-            // V88 P0: ASAP/URGENCY SCHEDULING - PREFERENCE CAPTURE (no fake schedule lookup!)
-            // Intercept "as soon as possible" / "urgent" / "need someone today" BEFORE LLM
-            // LLM tends to say "let me check our schedule" which is deceptive if no calendar
-            const urgencyPatterns = [
-                /\bas\s+soon\s+as\s+possible\b/i,
-                /\basap\b/i,
-                /\bi\s+(want|need|like)\s+(somebody|someone|a\s+tech)/i,
-                /\bsend\s+(somebody|someone|a\s+tech)/i,
-                /\bget\s+(somebody|someone|a\s+tech)\s+(here|out)/i,
-                /\bsomebody\s+here\b/i,
-                /\bsomeone\s+here\b/i,
-                /\bright\s+(away|now)\b/i,
-                /\bimmediately\b/i,
-                /\btoday\s+if\s+possible\b/i,
-                /\bearliest\s+(available|time|slot)\b/i,
-                /\bearliest\s+you\s+can\b/i,
-                /\bsoonest\s+you\s+can\b/i,
-                /\bhow\s+soon\s+can\s+you\b/i,
-                /\bhow\s+fast\s+can\s+you\b/i,
-                /\bhow\s+quickly\s+can\s+you\b/i,
-                /\bwhat(?:'s|\s+is)\s+the\s+(earliest|soonest)\b/i,
-                /\bwhen(?:'s|\s+is)\s+the\s+(earliest|soonest)\b/i,
-                /\b(earliest|soonest)\s+you\s+have\b/i,
-                /\bfirst\s+available\b/i,
-                /\bnext\s+available\b/i,
-                /\bsoonest\b/i
-            ];
-            
-            if (urgencyPatterns.some(p => p.test(lowerText))) {
-                return { intent: 'URGENCY_SCHEDULING', patterns: 'asap' };
-            }
+            // REMOVED: Urgency scheduling patterns - eliminated competing booking system
             
             return null;
         })();
@@ -5430,118 +5091,14 @@ async function processTurn({
                     break;
                     
                 case 'URGENCY_SCHEDULING':
-                    // V96p FIX: URGENCY_SCHEDULING MUST DEFER TO BOOKINGFLOWRUNNER
-                    // ═══════════════════════════════════════════════════════════════════
-                    // PROBLEM: This meta intent was generating booking responses directly,
-                    // competing with BookingFlowRunner and causing inconsistent behavior.
-                    //
-                    // SOLUTION: Extract time preference but ALWAYS defer to BookingFlowRunner
-                    // for all booking responses and flow control.
-                    // ═══════════════════════════════════════════════════════════════════
-
-                    log('🚨 V96p: URGENCY_SCHEDULING detected - deferring to BookingFlowRunner');
-
-                    // Extract the time preference for BookingFlowRunner to use
-                    currentSlots.time = 'ASAP';
-                    session.collectedSlots = { ...(session.collectedSlots || {}), time: 'ASAP' };
-
-                    // CRITICAL: Set booking mode and defer - DO NOT generate responses here
-                    session.booking = session.booking || {};
-                    session.booking.consentGiven = true;
-                    session.booking.consentTurn = session.metrics?.totalTurns || 0;
-                    session.booking.consentReason = 'URGENCY_SCHEDULING_DETECTED';
-                    session.booking.consentPhrase = userText;
-                    session.bookingModeLocked = true;
-                    session.mode = 'BOOKING';
-
-                    // Set bookingFlowState for Redis persistence
-                    session.bookingFlowState = {
-                        bookingModeLocked: true,
-                        bookingFlowId: 'urgency_scheduling_trigger',
-                        currentStepId: 'name', // Start with first slot
-                        bookingCollected: { ...currentSlots },
-                        bookingState: 'ACTIVE'
-                    };
-
-                    // Defer to BookingFlowRunner - it will generate the first booking prompt
-                    aiResult = {
-                        reply: null, // BookingFlowRunner will generate the reply
-                        conversationMode: 'BOOKING',
-                        filledSlots: currentSlots,
-                        latencyMs: Date.now() - aiStartTime,
-                        tokensUsed: 0,
-                        fromStateMachine: false,
-                        matchSource: 'URGENCY_SCHEDULING_TRIGGERED',
-                        tier: 'tier1',
-                        mode: 'BOOKING',
-                        bookingFlowState: session.bookingFlowState,
-                        signals: {
-                            deferToBookingRunner: true,
-                            bookingModeLocked: true,
-                            urgencyDetected: true
-                        },
-                        debug: {
-                            source: 'V96p_URGENCY_SCHEDULING_DEFER',
-                            reason: 'ASAP/urgency detected, deferring to BookingFlowRunner',
-                            userText: userText.substring(0, 100)
-                        }
-                    };
-
-                    log('✅ V96p: URGENCY_SCHEDULING → DEFERRING TO BOOKING RUNNER', {
-                        bookingModeLocked: true,
-                        deferToBookingRunner: true,
-                        timeSet: 'ASAP'
-                    });
-
-                    // BREAK - we're done, no metaReply needed
+                    // REMOVED: Competing booking system eliminated for clean sweep
+                    // Agent now uses minimal keyword detection + defer to BookingFlowRunner
                     break;
 
-                case 'CLARIFY_BOOKING_SLOT': {
-                    // V97q FIX: CLARIFY_BOOKING_SLOT MUST DEFER TO BOOKINGFLOWRUNNER
-                    // ═══════════════════════════════════════════════════════════════════
-                    // PROBLEM: This meta intent was generating booking slot questions directly,
-                    // competing with BookingFlowRunner and bypassing its state management.
-                    //
-                    // SOLUTION: If we're in booking mode, defer clarification to BookingFlowRunner.
-                    // If not in booking mode, this shouldn't happen anyway.
-                    // ═══════════════════════════════════════════════════════════════════
-
-                    log('🚨 V97q: CLARIFY_BOOKING_SLOT detected - deferring to BookingFlowRunner');
-
-                    // If we're already in booking mode, this is a clarification request
-                    // BookingFlowRunner should handle repeating the current question
-                    if (session.bookingModeLocked || session.mode === 'BOOKING') {
-                        // Set deferToBookingRunner signal to let BookingFlowRunner handle clarification
-                        aiResult = {
-                            reply: null, // BookingFlowRunner will generate the clarification response
-                            conversationMode: 'BOOKING',
-                            filledSlots: currentSlots,
-                            latencyMs: Date.now() - aiStartTime,
-                            tokensUsed: 0,
-                            fromStateMachine: false,
-                            matchSource: 'CLARIFY_BOOKING_SLOT_DEFERRED',
-                            tier: 'tier1',
-                            mode: 'BOOKING',
-                            signals: {
-                                deferToBookingRunner: true,
-                                clarificationRequested: true
-                            },
-                            debug: {
-                                source: 'V97q_CLARIFY_BOOKING_SLOT_DEFER',
-                                reason: 'User asked for booking slot clarification, deferring to BookingFlowRunner',
-                                userText: userText.substring(0, 100)
-                            }
-                        };
-
-                        log('✅ V97q: CLARIFY_BOOKING_SLOT → DEFERRING TO BOOKING RUNNER');
-                        // BREAK - we're done, no metaReply needed
-                        break;
-                    } else {
-                        // Not in booking mode - this shouldn't happen, but handle gracefully
-                        metaReply = "I'm not sure which information you're referring to. Could you clarify what you'd like me to help with?";
-                        break;
-                    }
-                }
+                case 'CLARIFY_BOOKING_SLOT':
+                    // REMOVED: Competing booking system eliminated for clean sweep
+                    // Agent now uses minimal keyword detection + defer to BookingFlowRunner
+                    break;
             }
             
             if (metaReply) {
@@ -5679,24 +5236,7 @@ async function processTurn({
             }
         }
         
-        // ═══════════════════════════════════════════════════════════════════════
-        // 🎯 DIRECT BOOKING INTENT DETECTION (Feb 2026)
-        // ═══════════════════════════════════════════════════════════════════════
-        // V94 NOTE: Early booking intent detection now runs BEFORE meta intents!
-        // This section uses the early detection results (earlyBookingIntent)
-        // and only re-runs if early detection didn't happen.
-        // ═══════════════════════════════════════════════════════════════════════
-        
-        // Use early detection results if available (V94 - runs before meta intent)
-        let directBookingIntent = earlyBookingIntent;
-        if (!directBookingIntent && !aiResult && !session.booking?.consentGiven) {
-            // Fallback: run detection if early check didn't run (shouldn't normally happen)
-            // V96k FIX: Pass awReader so patterns are read from company config with tracing
-            directBookingIntent = DirectBookingIntentDetector.detect(userText, {
-                trade: company?.trade || company?.tradeType,
-                company,
-                awReader
-            });
+        // REMOVED: Complex booking intent fallback - eliminated competing booking system
             
             if (directBookingIntent?.hasDirectIntent) {
                 log('🎯 DIRECT BOOKING INTENT DETECTED (late check)', {
@@ -5744,56 +5284,7 @@ async function processTurn({
             });
         }
         
-        // V94: Use early consent check results if available (runs before meta intent)
-        // Only re-run if early check didn't run (shouldn't normally happen)
-        const consentCheck = earlyConsentCheck || (!aiResult ? ConsentDetector.checkForConsent(userText, company, session, awReader) : { hasConsent: false });
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // V92 ENHANCED: POST-CONSENT CHECK DIAGNOSTICS
-        // ═══════════════════════════════════════════════════════════════════════
-        if (consentCheck.hasConsent) {
-            log('✅ V92: CONSENT DETECTED!', {
-                matchedPhrase: consentCheck.matchedPhrase,
-                reason: consentCheck.reason,
-                userInput: (userText || '').substring(0, 80),
-                askedConsentQuestion: askedConsentQuestionFlag,
-                // This is the "yes after scheduling offer" path
-                isYesAfterOffer: consentCheck.reason === 'yes_after_scheduling_offer'
-            });
-        } else if (!aiResult) {
-            // Only log "no consent" if we actually ran the check
-            log('❌ V92: NO CONSENT DETECTED', {
-                reason: consentCheck.reason || 'unknown',
-                userInputPreview: (userText || '').substring(0, 50),
-                askedConsentQuestion: askedConsentQuestionFlag,
-                // Help debug why "yes" might not have matched
-                userInputLower: (userText || '').toLowerCase().trim(),
-                containsYes: (userText || '').toLowerCase().includes('yes'),
-                containsRight: (userText || '').toLowerCase().includes('right'),
-                containsSure: (userText || '').toLowerCase().includes('sure')
-            });
-        }
-        
-        log('🔍 V92: CONSENT/BOOKING DECISION POINT', {
-            aiResultSet: !!aiResult,
-            consentCheckResult: consentCheck,
-            alreadyConsented: !!session.booking?.consentGiven,
-            directBookingIntent: directBookingIntent,
-            turnsInSession: session.turns?.length || 0,
-            sessionMode: session.mode,
-            bookingModeLocked: session.bookingFlowState?.bookingModeLocked || session.bookingModeLocked
-        });
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // TRIGGER BOOKING: Either explicit consent OR direct booking intent
-        // ═══════════════════════════════════════════════════════════════════════
-        const shouldEnterBooking = !aiResult && !session.booking?.consentGiven && (
-            consentCheck.hasConsent || 
-            (directBookingIntent?.hasDirectIntent && directBookingIntent.confidence >= 0.75)
-        );
-        
-        log('🔍 V92: SHOULD ENTER BOOKING?', {
-            shouldEnterBooking,
+        // REMOVED: Complex consent handling - eliminated competing booking system
             aiResultSet: !!aiResult,
             notAlreadyConsented: !session.booking?.consentGiven,
             consentHasConsent: consentCheck.hasConsent,
@@ -8591,7 +8082,7 @@ async function processTurn({
             // Captures early booking intent/consent detection results for tracing
             // why booking did or didn't trigger on this turn.
             // ═══════════════════════════════════════════════════════════════════
-            bookingIntentTrace: earlyBookingIntentTrace || null
+            // REMOVED: bookingIntentTrace - eliminated competing booking system
         };
 
         // V93: Allow deterministic mid-call rules (and other protocols) to request transfer in a visible way
