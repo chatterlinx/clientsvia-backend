@@ -100,19 +100,39 @@ async function getRedis() {
 // Without this, AW and RE cannot be correlated (ghost mode).
 // ============================================================================
 function computeAwProof(company) {
+    let awHash = null;
+    let effectiveConfigVersion = null;
+    
     try {
+        // Compute awHash first (independent of effectiveConfigVersion)
         const aiAgentSettings = company?.aiAgentSettings || {};
         const configStr = JSON.stringify(aiAgentSettings);
-        const awHash = 'sha256:' + crypto.createHash('sha256').update(configStr).digest('hex').substring(0, 16);
-        const effectiveConfigVersion = company?.effectiveConfigVersion || 
-                                       company?.aiAgentSettings?.effectiveConfigVersion || 
-                                       company?.updatedAt?.toISOString() || 
-                                       null;
-        return { awHash, effectiveConfigVersion };
+        awHash = 'sha256:' + crypto.createHash('sha256').update(configStr).digest('hex').substring(0, 16);
     } catch (e) {
-        logger.warn('[AW PROOF] Failed to compute', { error: e.message });
-        return { awHash: null, effectiveConfigVersion: null };
+        logger.warn('[AW PROOF] Failed to compute awHash', { error: e.message });
     }
+    
+    try {
+        // Compute effectiveConfigVersion (separate try-catch for robustness)
+        // V102: Handle both Date objects (from DB) and strings (from Redis cache)
+        effectiveConfigVersion = company?.effectiveConfigVersion || 
+                                 company?.aiAgentSettings?.effectiveConfigVersion ||
+                                 null;
+        
+        if (!effectiveConfigVersion && company?.updatedAt) {
+            // Handle Date object or ISO string
+            if (company.updatedAt instanceof Date) {
+                effectiveConfigVersion = company.updatedAt.toISOString();
+            } else if (typeof company.updatedAt === 'string') {
+                // Already a string (from Redis cache)
+                effectiveConfigVersion = company.updatedAt;
+            }
+        }
+    } catch (e) {
+        logger.warn('[AW PROOF] Failed to compute effectiveConfigVersion', { error: e.message });
+    }
+    
+    return { awHash, effectiveConfigVersion };
 }
 
 // ============================================================================
@@ -2972,7 +2992,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           company.aiAgentSettings,
           callState.awHash,
           callState.effectiveConfigVersion,
-          callSid
+          callSid,
+          companyID  // V102: Pass companyId explicitly
         );
       } else {
         controlPlaneHeader = {
@@ -3760,26 +3781,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         }
 
         // ════════════════════════════════════════════════════════════════════════════════════
-        // 🚀 UNIFIED AI PATH (Dec 2025)
+        // 🚀 UNIFIED AI PATH (Feb 2026 - STRICT MODE REFACTOR)
         // ════════════════════════════════════════════════════════════════════════════════════
-        // ConversationEngine → HybridReceptionistLLM → OpenAI (lean ~400 token prompt)
-        // Handles: intent detection, slot extraction, empathy - all in <1.5s
+        // V102: CHECK STRICT MODE FIRST - if strict, hybrid path is IMPOSSIBLE
+        // This ensures FrontDeskRuntime is the ONLY orchestrator when strict=true
         // ════════════════════════════════════════════════════════════════════════════════════
         
-        const useHybridPath = company?.aiAgentSettings?.callFlowEngine?.enabled !== false; // Default ON
         const hybridStartTime = Date.now();
-        // V96j: Removed BOOKING_SNAP reference (deprecated legacy ghost)
         let usedPath = result
           ? ((bookingInProgress || result?.matchSource === 'BOOKING_FLOW_RUNNER')
               ? 'booking'
               : 'vendor')
           : 'legacy';
         
+        // V102: Determine strict mode FIRST (before any path decisions)
+        const runtimeEnforcementLevel = company?.aiAgentSettings?.frontDesk?.enforcement?.level;
+        const runtimeStrictOnly = company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly;
+        const strictControlPlaneMode = runtimeEnforcementLevel === 'strict' || 
+          (runtimeStrictOnly === true && runtimeEnforcementLevel !== 'warn');
+        
         // ═══════════════════════════════════════════════════════════════════════════
         // V96j: BOOKING GATE BYPASS PROTECTION
-        // ═══════════════════════════════════════════════════════════════════════════
-        // If booking gate already handled this turn, DO NOT run ConversationEngine.
-        // This is defense-in-depth on top of the !result check.
         // ═══════════════════════════════════════════════════════════════════════════
         if (callState?._bookingGateHandled && result) {
           logger.info('[V96j] Skipping ConversationEngine - booking gate already handled', {
@@ -3787,56 +3809,32 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             matchSource: result?.matchSource,
             debugSource: result?.debug?.source
           });
-        } else if (useHybridPath && !result) {
+        } else if (strictControlPlaneMode && !result) {
+          // ════════════════════════════════════════════════════════════════════════
+          // V102: STRICT MODE = FRONT DESK RUNTIME ONLY (hybrid path is BLOCKED)
+          // ════════════════════════════════════════════════════════════════════════
+          // PLATFORM LAW: When enforcement.level === 'strict', FrontDeskRuntime is
+          // the ONLY orchestrator. Hybrid/ConversationEngine paths are IMPOSSIBLE.
+          // ════════════════════════════════════════════════════════════════════════
           try {
-            usedPath = 'hybrid';
-            tracer.step('HYBRID_PATH_START', '🚀 Fast hybrid path - bypassing slow decideNextStep');
+            usedPath = 'frontDeskRuntime';  // V102: NOT 'hybrid'
             
-            // 📼 BLACK BOX: Log hybrid path start
             if (BlackBoxLogger) {
-              BlackBoxLogger.logEvent({
-                callId: callSid,
-                companyId: companyID,
-                type: 'HYBRID_PATH_START',
-                turn: turnCount,
-                data: {
-                  reason: 'useHybridPath enabled (default ON)',
-                  bookingModeLocked: !!callState?.bookingModeLocked,
-                  userInput: speechResult?.substring(0, 100)
-                }
-              }).catch(() => {});
-              
-              // 📼 BLACK BOX V2: Log scenario match attempt (BEFORE processing)
-              // This helps debug what the system is trying to match
-              // Note: speechResult is already cleaned at this point (STT preprocessing happened above)
+              // Log scenario match attempt (BEFORE processing)
               BlackBoxLogger.QuickLog.scenarioMatchAttempt(
                 callSid,
                 companyID,
                 turnCount,
-                rawSpeechResult || speechResult || '[empty]',  // Original from Twilio
-                speechResult || '[empty]',  // Cleaned (after STT preprocessing)
-                'checking...'  // Scenarios count will be in matched/no-match event
+                rawSpeechResult || speechResult || '[empty]',
+                speechResult || '[empty]',
+                'checking...'
               ).catch(() => {});
             }
             
-            // ════════════════════════════════════════════════════════════════════════
-            // V99: FRONT DESK RUNTIME - THE ONLY ORCHESTRATOR (when strict mode enabled)
-            // ════════════════════════════════════════════════════════════════════════
-            // PLATFORM LAW: If strictControlPlaneOnly=true, ALL turns go through
-            // FrontDeskRuntime. No legacy paths, no bypass. This is the surgeon-mode
-            // nuke that gives you full control without breaking infrastructure.
-            // ════════════════════════════════════════════════════════════════════════
-            // V100: Check both enforcement.level and strictControlPlaneOnly
-            const runtimeEnforcementLevel = company?.aiAgentSettings?.frontDesk?.enforcement?.level;
-            const runtimeStrictOnly = company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly;
-            const strictControlPlaneMode = runtimeEnforcementLevel === 'strict' || 
-              (runtimeStrictOnly === true && runtimeEnforcementLevel !== 'warn');
+            // Route through FrontDeskRuntime - THE ONLY ORCHESTRATOR
+            const FrontDeskRuntime = require('../services/engine/FrontDeskRuntime');
             
-            if (strictControlPlaneMode) {
-              // Route through FrontDeskRuntime - THE ONLY ORCHESTRATOR
-              const FrontDeskRuntime = require('../services/engine/FrontDeskRuntime');
-              
-              logger.info('[V100] STRICT CONTROL PLANE MODE - Routing through FrontDeskRuntime', {
+            logger.info('[V102] STRICT CONTROL PLANE MODE - Routing through FrontDeskRuntime', {
                 callSid,
                 turnCount,
                 enforcementLevel: runtimeEnforcementLevel || 'strict',
@@ -3921,48 +3919,81 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 }).catch(() => {});
               }
               
-              // Skip legacy ConversationEngine path
-              modeOwner = runtimeResult.lane === 'BOOKING' ? 'BOOKING_FLOW_RUNNER' :
-                          runtimeResult.lane === 'ESCALATE' ? 'TRANSFER_HANDLER' :
-                          'FRONT_DESK_RUNTIME';
-              ownerGateApplied = true;
-              
-            } else {
-            // ════════════════════════════════════════════════════════════════════════
-            // LEGACY PATH: ConversationEngine (when strictControlPlaneOnly != true)
-            // ════════════════════════════════════════════════════════════════════════
-            // This path will be removed in Pass 2 after live call verification.
-            // For now, it serves as fallback when strict mode is not enabled.
-            // ════════════════════════════════════════════════════════════════════════
+            // Skip legacy ConversationEngine path
+            modeOwner = runtimeResult.lane === 'BOOKING' ? 'BOOKING_FLOW_RUNNER' :
+                        runtimeResult.lane === 'ESCALATE' ? 'TRANSFER_HANDLER' :
+                        'FRONT_DESK_RUNTIME';
+            ownerGateApplied = true;
             
-            // V100 SAFETY CHECK: If the company THINKS they're in strict mode but we're here,
-            // something is wrong (module load failure, config drift, etc). Log loudly.
-            const intendedStrict = company?.aiAgentSettings?.frontDesk?.enforcement?.level === 'strict' ||
-                                   company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly === true;
-            if (intendedStrict) {
-              logger.error('[V100] LEGACY_PATH_BLOCKED_VIOLATION: Strict mode intended but legacy path running!', {
-                callSid,
+          } catch (strictModeError) {
+            // ════════════════════════════════════════════════════════════════════════
+            // V102: STRICT MODE FAILED - Return helpful response (NO LEGACY FALLBACK)
+            // ════════════════════════════════════════════════════════════════════════
+            usedPath = 'frontDeskRuntime_error_recovery';
+            const strictLatencyMs = Date.now() - hybridStartTime;
+            
+            logger.error('[V102] Strict mode FrontDeskRuntime failed - using simple recovery', {
+              error: strictModeError.message,
+              stack: strictModeError.stack?.substring(0, 500),
+              latencyMs: strictLatencyMs,
+              callSid
+            });
+            
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
                 companyId: companyID,
-                enforcementLevel: company?.aiAgentSettings?.frontDesk?.enforcement?.level,
-                strictControlPlaneOnly: company?.aiAgentSettings?.frontDesk?.enforcement?.strictControlPlaneOnly,
-                reason: 'This should NOT happen - FrontDeskRuntime or ControlPlaneEnforcer may have failed to load'
-              });
+                type: 'FRONT_DESK_RUNTIME_FAILED',
+                turn: turnCount,
+                data: {
+                  error: strictModeError.message?.substring(0, 200),
+                  stack: strictModeError.stack?.substring(0, 500),
+                  latencyMs: strictLatencyMs,
+                  recovery: 'simple_response'
+                }
+              }).catch(() => {});
+            }
+            
+            // Simple recovery - use UI-controlled message
+            const recoveryMsgs = company.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+            result = {
+              text: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
+              response: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
+              conversationMode: 'discovery',
+              matchSource: 'FRONT_DESK_RUNTIME_ERROR_RECOVERY'
+            };
+          }
+        } else if (!strictControlPlaneMode && !result) {
+          // ════════════════════════════════════════════════════════════════════════
+          // V102: LEGACY PATH - ConversationEngine (ONLY when strict mode is OFF)
+          // ════════════════════════════════════════════════════════════════════════
+          // This path runs ONLY when enforcement.level !== 'strict'
+          // When strict mode is ON, this path is IMPOSSIBLE to reach.
+          // ════════════════════════════════════════════════════════════════════════
+          try {
+            usedPath = 'hybrid';
+            
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'HYBRID_PATH_START',
+                turn: turnCount,
+                data: {
+                  reason: 'Legacy path (strict mode OFF)',
+                  bookingModeLocked: !!callState?.bookingModeLocked,
+                  userInput: speechResult?.substring(0, 100)
+                }
+              }).catch(() => {});
               
-              if (BlackBoxLogger) {
-                BlackBoxLogger.logEvent({
-                  callId: callSid,
-                  companyId: companyID,
-                  type: 'LEGACY_PATH_BLOCKED_VIOLATION',
-                  turn: turnCount,
-                  data: {
-                    intendedMode: 'strict',
-                    actualPath: 'LEGACY_CONVERSATION_ENGINE',
-                    enforcementLevel: company?.aiAgentSettings?.frontDesk?.enforcement?.level,
-                    violation: 'Strict mode enabled but FrontDeskRuntime did not handle turn',
-                    remediation: 'Check server logs for ControlPlaneEnforcer/FrontDeskRuntime load failures'
-                  }
-                }).catch(() => {});
-              }
+              BlackBoxLogger.QuickLog.scenarioMatchAttempt(
+                callSid,
+                companyID,
+                turnCount,
+                rawSpeechResult || speechResult || '[empty]',
+                speechResult || '[empty]',
+                'checking...'
+              ).catch(() => {});
             }
             
             const ConversationEngine = require('../services/ConversationEngine');
@@ -4399,7 +4430,6 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 }
               }).catch(() => {});
             }
-            } // V100 FIX: Close else (legacy ConversationEngine path)
             
           } catch (hybridError) {
             // ════════════════════════════════════════════════════════════════════════════

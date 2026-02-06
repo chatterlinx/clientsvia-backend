@@ -241,14 +241,31 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 function determineLane(effectiveConfig, callState, userTurn, trace, context) {
+    const { callSid, turnCount = 0 } = context;
+    
+    // V102: Helper to read config via cfgGet (traces reads in DecisionTrace)
+    const getConfig = (key, defaultValue) => {
+        try {
+            return cfgGet(effectiveConfig, key, {
+                callId: callSid,
+                turn: turnCount,
+                strict: false, // Don't throw in determineLane - use defaults
+                readerId: 'FrontDeskRuntime.determineLane'
+            });
+        } catch (e) {
+            logger.debug('[FRONT_DESK_RUNTIME] Config read fallback', { key, error: e.message });
+            return defaultValue;
+        }
+    };
+    
     // 1. If already in booking mode, stay there
     if (callState?.bookingModeLocked === true) {
         trace.addDecisionReason('LANE_BOOKING', { reason: 'bookingModeLocked=true' });
         return LANES.BOOKING;
     }
     
-    // 2. Check for escalation triggers
-    const escalationTriggers = effectiveConfig?.frontDesk?.escalation?.triggerPhrases || [];
+    // 2. Check for escalation triggers (V102: via cfgGet)
+    const escalationTriggers = getConfig('frontDesk.escalation.triggerPhrases', []);
     const userTurnLower = (userTurn || '').toLowerCase();
     
     for (const trigger of escalationTriggers) {
@@ -260,8 +277,8 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     
     // 3. Check for booking consent (yes-equivalent after consent question)
     if (callState?.bookingConsentPending === true) {
-        const consentPhrases = effectiveConfig?.frontDesk?.discoveryConsent?.consentPhrases || 
-            ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please'];
+        const consentPhrases = getConfig('frontDesk.discoveryConsent.consentPhrases',
+            ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please']);
         
         const isConsent = consentPhrases.some(phrase => {
             const regex = new RegExp(`^${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s.,!]*$`, 'i');
@@ -274,9 +291,9 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         }
     }
     
-    // 4. Check for direct booking intent
-    const bookingTriggers = effectiveConfig?.frontDesk?.detectionTriggers?.wantsBooking || [];
-    const directIntentPatterns = effectiveConfig?.booking?.directIntentPatterns || [];
+    // 4. Check for direct booking intent (V102: via cfgGet)
+    const bookingTriggers = getConfig('frontDesk.detectionTriggers.wantsBooking', []);
+    const directIntentPatterns = getConfig('booking.directIntentPatterns', []);
     const allBookingPatterns = [...bookingTriggers, ...directIntentPatterns];
     
     for (const pattern of allBookingPatterns) {
@@ -463,10 +480,21 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 async function handleEscalateLane(effectiveConfig, callState, userTurn, context, trace) {
+    const { callSid, turnCount = 0 } = context;
     trace.addDecisionReason('ESCALATE_LANE_HANDLER', { reason: 'escalation_triggered' });
     
-    const transferMessage = effectiveConfig?.frontDesk?.escalation?.transferMessage ||
-        "Of course, let me connect you with someone who can help.";
+    // V102: Read via cfgGet for tracing
+    let transferMessage;
+    try {
+        transferMessage = cfgGet(effectiveConfig, 'frontDesk.escalation.transferMessage', {
+            callId: callSid,
+            turn: turnCount,
+            strict: false,
+            readerId: 'FrontDeskRuntime.handleEscalateLane'
+        }) || "Of course, let me connect you with someone who can help.";
+    } catch (e) {
+        transferMessage = "Of course, let me connect you with someone who can help.";
+    }
     
     return {
         response: transferMessage,

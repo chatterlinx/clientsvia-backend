@@ -329,7 +329,7 @@ function flattenKeys(obj, prefix = '', result = []) {
  * - configSource: "company" | "template" | "defaults"
  * ═══════════════════════════════════════════════════════════════════════════════
  */
-function buildControlPlaneHeader(effectiveConfig, awHash, effectiveConfigVersion, callId) {
+function buildControlPlaneHeader(effectiveConfig, awHash, effectiveConfigVersion, callId, companyId = null) {
     const validation = validateConfig(effectiveConfig, callId);
     
     // Determine enforcement level (strict vs warn)
@@ -346,8 +346,8 @@ function buildControlPlaneHeader(effectiveConfig, awHash, effectiveConfigVersion
     }
     
     return {
-        // Core identifiers
-        companyId: effectiveConfig?.companyId || 'unknown',
+        // Core identifiers - V102: Accept companyId as parameter
+        companyId: companyId || effectiveConfig?.companyId || 'unknown',
         awHash: awHash || null,
         effectiveConfigVersion: effectiveConfigVersion || null,
         

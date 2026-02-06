@@ -175,6 +175,7 @@
     "enforcement": {
       "description": "Control Plane enforcement settings - PLATFORM LAW",
       "keys": {
+        "frontDesk.enforcement": { "type": "object", "required": false, "uiSection": "enforcement", "description": "Parent key for enforcement settings" },
         "frontDesk.enforcement.strictControlPlaneOnly": { "type": "boolean", "required": false, "uiSection": "enforcement", "default": false },
         "frontDesk.enforcement.level": { "type": "string", "required": false, "uiSection": "enforcement", "default": "warn", "enum": ["warn", "strict"], "description": "warn=log violations, strict=block+fail closed" },
         "infra.strictConfigRegistry": { "type": "object", "required": false, "uiSection": "enforcement" },
