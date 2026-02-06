@@ -4895,7 +4895,6 @@ async function processTurn({
                 log('✅ MINIMAL BOOKING: Deferring to BookingFlowRunner');
             }
         }
-        }
             
         // ═══════════════════════════════════════════════════════════════════════
         // V86 P0: UNIVERSAL META INTENT INTERCEPTOR
