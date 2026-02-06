@@ -6331,70 +6331,58 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         else if (session.mode === 'BOOKING' && canEnterBooking) BOOKING_MODE: {
             // ═══════════════════════════════════════════════════════════════════════════
-            // V96j: BOOKING MODE OWNERSHIP GUARD - CRITICAL FIX
+            // V97d: ALWAYS DEFER TO BOOKING FLOW RUNNER
             // ═══════════════════════════════════════════════════════════════════════════
-            // If bookingModeLocked is ALREADY TRUE, BookingFlowRunner should have handled
-            // this turn. ConversationEngine must NOT compete by generating booking responses.
+            // SIMPLIFICATION: When mode is BOOKING, BookingFlowRunner is the ONLY owner.
+            // ConversationEngine does NOT generate booking questions - period.
             // 
-            // This is the "two engines steering the car" fix. When bookingModeLocked=true,
-            // the ONLY speaker should be BookingFlowRunner (via v2twilio.js top-level gate).
+            // This eliminates thousands of lines of competing booking logic that was
+            // causing agent confusion and inconsistent responses.
             // 
-            // If we got here with bookingModeLocked=true, it means:
-            // - Either the top-level gate failed (error case)
-            // - Or this is the turn where consent was JUST given (set bookingFlowState and return)
-            // 
-            // DO NOT generate booking questions here when locked - let BookingFlowRunner own it.
+            // BookingFlowRunner reads prompts from UI config → single source of truth.
             // ═══════════════════════════════════════════════════════════════════════════
-            // V97: Check BOTH session.bookingModeLocked AND session.bookingFlowState.bookingModeLocked
-            const isBookingLocked = session.bookingModeLocked === true || 
-                                    session.bookingFlowState?.bookingModeLocked === true;
-            if (isBookingLocked) {
-                log('⚠️ V96j/V97: BOOKING_MODE block skipped - bookingModeLocked=true, deferring to BookingFlowRunner', {
-                    sessionBookingModeLocked: session.bookingModeLocked,
-                    flowStateBookingModeLocked: session.bookingFlowState?.bookingModeLocked,
-                    sessionMode: session.mode,
-                    reason: 'SINGLE_OWNER_ENFORCEMENT'
-                });
-                
-                // Return a signal that booking is locked - caller should run BookingFlowRunner
-                // We don't generate text here - the top-level gate will handle it
-                aiResult = {
-                    text: null,  // No response from ConversationEngine when locked
-                    reply: null,
-                    mode: 'BOOKING',
-                    action: 'defer_to_booking_runner',
-                    bookingFlowState: session.bookingFlowState || {
-                        bookingModeLocked: true,
-                        bookingFlowId: session.bookingFlowId || 'deferred',
-                        currentStepId: session.currentBookingStep || 'name',
-                        bookingCollected: currentSlots,
-                        bookingState: 'ACTIVE'
-                    },
-                    fromStateMachine: false,
-                    signals: {
-                        deferToBookingRunner: true,
-                        bookingModeLocked: true
-                    },
-                    debug: {
-                        source: 'BOOKING_MODE_DEFERRED_V96j',
-                        reason: 'bookingModeLocked=true, ConversationEngine yielding to BookingFlowRunner'
-                    }
-                };
-                break BOOKING_MODE;
-            }
+            
+            // Ensure booking is locked so BookingFlowRunner takes over
+            session.bookingModeLocked = true;
+            session.bookingFlowState = session.bookingFlowState || {
+                bookingModeLocked: true,
+                bookingFlowId: 'conversation_engine_deferred',
+                currentStepId: session.currentBookingStep || 'name',
+                bookingCollected: currentSlots,
+                bookingState: 'ACTIVE'
+            };
+            session.bookingFlowState.bookingModeLocked = true;
+            
+            log('🔒 V97d: BOOKING MODE → ALWAYS DEFER to BookingFlowRunner', {
+                sessionMode: session.mode,
+                currentSlots: Object.keys(currentSlots).filter(k => currentSlots[k]),
+                reason: 'SINGLE_OWNER_SIMPLIFICATION'
+            });
+            
+            aiResult = {
+                text: null,
+                reply: null,
+                mode: 'BOOKING',
+                action: 'defer_to_booking_runner',
+                bookingFlowState: session.bookingFlowState,
+                fromStateMachine: false,
+                signals: {
+                    deferToBookingRunner: true,
+                    bookingModeLocked: true
+                },
+                debug: {
+                    source: 'V97d_ALWAYS_DEFER',
+                    reason: 'ConversationEngine simplified - BookingFlowRunner is single owner'
+                }
+            };
+            break BOOKING_MODE;
             
             // ═══════════════════════════════════════════════════════════════════
-            // BOOKING MODE - Deterministic clipboard (consent already given)
+            // V97d: ALL CODE BELOW IS NOW DEAD - Left for reference/rollback
             // ═══════════════════════════════════════════════════════════════════
-            // In V22, we DO NOT use the state machine for booking responses.
-            // The state machine was generating bad responses like "I'm sorry to hear that"
-            // which is discovery language, not booking language.
-            // 
-            // Instead, we use the BOOKING SAFETY NET directly which:
-            // 1. Reads the booking slot config from UI
-            // 2. Uses the exact questions and confirmBack templates
-            // 3. Handles name slot with askFullName logic
-            // 4. Never re-asks the same slot
+            // The code below this point was the old booking logic that competed
+            // with BookingFlowRunner. It's been disabled by the break above.
+            // TODO: Remove in next cleanup pass after verifying V97d works.
             // ═══════════════════════════════════════════════════════════════════
             log('CHECKPOINT 9b: 📋 BOOKING MODE (deterministic - no state machine)');
 
