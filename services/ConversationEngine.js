@@ -4934,19 +4934,57 @@ async function processTurn({
             // V98 FIX 3: FORCE BOOKING HANDOFF when intent detected
             // ═══════════════════════════════════════════════════════════════════
             if (bookingIntentDetected) {
+                // V98e: Compute diagnostic reason codes for full visibility
+                const bookingTriggerReason = consentGivenThisTurn 
+                    ? (consentRegex.test(lowerText) ? 'consent_pending_affirmative' : 'consent_pending_urgency')
+                    : 'explicit_booking_keyword';
+                const yesEquivalentMatched = consentGivenThisTurn 
+                    ? (userText.match(consentRegex)?.[0] || userText.match(urgencyRegex)?.[0] || userText)
+                    : null;
+                const explicitKeywordMatched = !consentGivenThisTurn 
+                    ? userText.match(bookingRegex)?.[0] 
+                    : null;
+                const bookingOfferOpenTurn = session.booking?.consentPendingTurn || null;
+                const bookingTriggerTurn = session.metrics?.totalTurns || 0;
+                
                 log('🔒 V98: FORCING BOOKING HANDOFF - deferring to BookingFlowRunner', {
                     userText: userText.substring(0, 60),
-                    consentPending: bookingConsentPending,
-                    consentGivenThisTurn
+                    bookingTriggerReason,
+                    yesEquivalentMatched,
+                    explicitKeywordMatched,
+                    bookingOfferOpenTurn,
+                    bookingTriggerTurn,
+                    consentPendingWas: bookingConsentPending
                 });
+                
+                // V98e: Emit BOOKING_TRIGGER event with full diagnostic details
+                if (BlackBoxLogger && sessionId && companyId) {
+                    BlackBoxLogger.logEvent({
+                        callId: sessionId,
+                        companyId,
+                        type: 'BOOKING_TRIGGER',
+                        turn: bookingTriggerTurn,
+                        data: {
+                            bookingTriggerReason,
+                            yesEquivalentMatched,
+                            explicitKeywordMatched,
+                            bookingOfferOpenTurn,
+                            bookingTriggerTurn,
+                            consentPendingWas: bookingConsentPending,
+                            userTextPreview: userText.substring(0, 60),
+                            patternsSource: awReader ? 'controlPlane' : 'globalDefaults'
+                        }
+                    }).catch(() => {});
+                }
 
                 // Set booking state and defer - NO response generation here
                 session.booking = session.booking || {};
                 session.booking.consentGiven = true;
                 session.booking.consentPending = false; // Clear pending flag
-                session.booking.consentTurn = session.metrics?.totalTurns || 0;
-                session.booking.consentReason = consentGivenThisTurn ? 'CONSENT_RESPONSE' : 'MINIMAL_KEYWORD_DETECTION';
+                session.booking.consentTurn = bookingTriggerTurn;
+                session.booking.consentReason = bookingTriggerReason;
                 session.booking.consentPhrase = userText;
+                session.booking.yesEquivalentMatched = yesEquivalentMatched;
                 session.bookingModeLocked = true;
                 session.mode = 'BOOKING';
 
@@ -4975,7 +5013,8 @@ async function processTurn({
                         deferToBookingRunner: true,
                         bookingModeLocked: true,
                         minimalDetection: true,
-                        consentGivenThisTurn
+                        consentGivenThisTurn,
+                        bookingTriggerReason
                     },
                     debug: {
                         source: 'MINIMAL_BOOKING_DETECTION',
@@ -6848,14 +6887,17 @@ async function processTurn({
                 session.markModified('conversationMemory');
                 
                 // V98 FIX: Set consentPending so next turn's affirmative = booking
+                // V98e: Also track which turn the offer was made
                 session.booking = session.booking || {};
                 session.booking.consentPending = true;
+                session.booking.consentPendingTurn = session.metrics?.totalTurns || 0;
                 session.markModified('booking');
                 
                 log('✅ V92/V98: CONSENT QUESTION INJECTED - consentPending=true', {
                     consentQuestion: consentQuestionLLM,
                     fullReplyPreview: llmResult.reply.substring(0, 100),
-                    consentPendingSet: true
+                    consentPendingSet: true,
+                    consentPendingTurn: session.booking.consentPendingTurn
                 });
             } else if (llmAskedSchedulingQuestion && !alreadyAskedConsentLLM) {
                 // LLM organically asked about scheduling
@@ -6864,13 +6906,16 @@ async function processTurn({
                 session.markModified('conversationMemory');
                 
                 // V98 FIX: Set consentPending so next turn's affirmative = booking
+                // V98e: Also track which turn the offer was made
                 session.booking = session.booking || {};
                 session.booking.consentPending = true;
+                session.booking.consentPendingTurn = session.metrics?.totalTurns || 0;
                 session.markModified('booking');
                 
                 log('✅ V92/V98: LLM ORGANICALLY ASKED CONSENT - consentPending=true', {
                     replyPreview: (llmResult.reply || '').substring(0, 80),
-                    consentPendingSet: true
+                    consentPendingSet: true,
+                    consentPendingTurn: session.booking.consentPendingTurn
                 });
             }
             
