@@ -246,12 +246,14 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     // V102: Helper to read config via cfgGet (traces reads in DecisionTrace)
     const getConfig = (key, defaultValue) => {
         try {
-            return cfgGet(effectiveConfig, key, {
+            const value = cfgGet(effectiveConfig, key, {
                 callId: callSid,
                 turn: turnCount,
                 strict: false, // Don't throw in determineLane - use defaults
                 readerId: 'FrontDeskRuntime.determineLane'
             });
+            // V102 FIX: cfgGet returns undefined for missing keys - use default
+            return (value !== undefined && value !== null) ? value : defaultValue;
         } catch (e) {
             logger.debug('[FRONT_DESK_RUNTIME] Config read fallback', { key, error: e.message });
             return defaultValue;
@@ -484,16 +486,19 @@ async function handleEscalateLane(effectiveConfig, callState, userTurn, context,
     trace.addDecisionReason('ESCALATE_LANE_HANDLER', { reason: 'escalation_triggered' });
     
     // V102: Read via cfgGet for tracing
+    const defaultTransferMsg = "Of course, let me connect you with someone who can help.";
     let transferMessage;
     try {
-        transferMessage = cfgGet(effectiveConfig, 'frontDesk.escalation.transferMessage', {
+        const value = cfgGet(effectiveConfig, 'frontDesk.escalation.transferMessage', {
             callId: callSid,
             turn: turnCount,
             strict: false,
             readerId: 'FrontDeskRuntime.handleEscalateLane'
-        }) || "Of course, let me connect you with someone who can help.";
+        });
+        // V102 FIX: Use default if cfgGet returns undefined/null
+        transferMessage = (value !== undefined && value !== null && value !== '') ? value : defaultTransferMsg;
     } catch (e) {
-        transferMessage = "Of course, let me connect you with someone who can help.";
+        transferMessage = defaultTransferMsg;
     }
     
     return {
