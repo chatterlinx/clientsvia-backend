@@ -4829,13 +4829,65 @@ async function processTurn({
         // Agent reads ONLY from frontDesk.bookingSlots configuration.
         //
         // V98 FIX: Also detect consent when consentPending=true
-        // - Affirmative: yes, yeah, sure, okay, please, go ahead, sounds good
-        // - Urgency: as soon as possible, today, right away, asap, immediately
+        // V98c: Read patterns from Control Plane Wiring (not hardcoded)
         // ═══════════════════════════════════════════════════════════════════════
 
         let bookingIntentDetected = false;
         let bookingConsentPending = session.booking?.consentPending || paramBookingConsentPending || false;
         let consentGivenThisTurn = false;
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V98c: READ PATTERNS FROM CONTROL PLANE (UI-configurable)
+        // ═══════════════════════════════════════════════════════════════════════
+        // These patterns are now configurable via Control Plane Wiring tab.
+        // If not configured, fall back to safe defaults.
+        // Paths: frontDesk.discoveryConsent.consentPhrases, 
+        //        frontDesk.detectionTriggers.wantsBooking,
+        //        booking.directIntentPatterns
+        // ═══════════════════════════════════════════════════════════════════════
+        const defaultConsentPhrases = ['yes', 'yeah', 'yep', 'yup', 'sure', 'okay', 'ok', 'please', 
+            'go ahead', 'sounds good', 'that works', "let's do it", 'absolutely', 'definitely'];
+        const defaultUrgencyPhrases = ['as soon as possible', 'asap', 'today', 'right away', 'right now',
+            'immediately', 'this morning', 'this afternoon', 'this evening', 'earliest', 
+            'first available', 'next available', 'send someone', 'get someone out', 'come out'];
+        const defaultBookingKeywords = ['schedule', 'book', 'appointment', 'technician', 
+            'send someone', 'get someone', 'come out', 'when can you', 'how soon can you'];
+        
+        // Read from Control Plane via AWConfigReader
+        let consentPhrases, urgencyPhrases, bookingKeywords;
+        if (awReader) {
+            awReader.setReaderId('ConversationEngine.minimalBookingDetection');
+            consentPhrases = awReader.get('frontDesk.discoveryConsent.consentPhrases', defaultConsentPhrases);
+            // Urgency is part of wantsBooking triggers
+            const wantsBooking = awReader.get('frontDesk.detectionTriggers.wantsBooking', []);
+            urgencyPhrases = wantsBooking.filter(p => 
+                /asap|soon|today|immediate|earliest|first available|right away/i.test(p)
+            );
+            if (urgencyPhrases.length === 0) urgencyPhrases = defaultUrgencyPhrases;
+            
+            // Booking keywords from directIntentPatterns + wantsBooking
+            const directIntentPatterns = awReader.get('booking.directIntentPatterns', []);
+            bookingKeywords = [...new Set([...directIntentPatterns, ...wantsBooking])];
+            if (bookingKeywords.length === 0) bookingKeywords = defaultBookingKeywords;
+            
+            log('📋 V98c: Loaded booking detection patterns from Control Plane', {
+                consentPhrasesCount: consentPhrases.length,
+                urgencyPhrasesCount: urgencyPhrases.length,
+                bookingKeywordsCount: bookingKeywords.length,
+                source: 'AWConfigReader'
+            });
+        } else {
+            // Fallback to defaults (no AWConfigReader available)
+            consentPhrases = defaultConsentPhrases;
+            urgencyPhrases = defaultUrgencyPhrases;
+            bookingKeywords = defaultBookingKeywords;
+        }
+        
+        // Build regex patterns from arrays
+        const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const consentRegex = new RegExp(`^(${consentPhrases.map(escapeRegex).join('|')})[\\s.,!]*$`, 'i');
+        const urgencyRegex = new RegExp(`\\b(${urgencyPhrases.map(escapeRegex).join('|')})\\b`, 'i');
+        const bookingRegex = new RegExp(`\\b(${bookingKeywords.map(escapeRegex).join('|')})\\b`, 'i');
 
         if (!aiResult && userText && userText.length > 0 && !session.bookingModeLocked) {
             const lowerText = (userText || '').toLowerCase().trim();
@@ -4847,19 +4899,14 @@ async function processTurn({
             // treat affirmative and urgency phrases as YES → start booking
             // ═══════════════════════════════════════════════════════════════════
             if (bookingConsentPending) {
-                // Affirmative responses to booking offer
-                const affirmativePatterns = /^(yes|yeah|yep|yup|sure|okay|ok|please|go ahead|sounds good|that works|let'?s do it|absolutely|definitely|right|correct|uh-?huh|mm-?hm)[\s.,!]*$/i;
-                
-                // Urgency phrases that imply "yes, schedule me"
-                const urgencyPatterns = /\b(as soon as possible|asap|today|right away|right now|immediately|this morning|this afternoon|this evening|earliest|first available|next available|send someone|get someone out|come out)\b/i;
-                
-                const isAffirmative = affirmativePatterns.test(lowerText) || urgencyPatterns.test(lowerText);
+                const isAffirmative = consentRegex.test(lowerText) || urgencyRegex.test(lowerText);
                 
                 if (isAffirmative) {
                     log('📅 V98: CONSENT DETECTED - Affirmative/urgency response to booking offer', {
                         userText: userText.substring(0, 60),
                         consentPending: true,
-                        matchType: affirmativePatterns.test(lowerText) ? 'affirmative' : 'urgency'
+                        matchType: consentRegex.test(lowerText) ? 'affirmative' : 'urgency',
+                        source: awReader ? 'control_plane' : 'defaults'
                     });
                     bookingIntentDetected = true;
                     consentGivenThisTurn = true;
@@ -4867,18 +4914,18 @@ async function processTurn({
             }
             
             // ═══════════════════════════════════════════════════════════════════
-            // V98 FIX 2: Explicit booking keywords (original detection)
+            // V98 FIX 2: Explicit booking keywords (UI-configurable)
             // ═══════════════════════════════════════════════════════════════════
             // These words explicitly request scheduling regardless of consentPending
             // ═══════════════════════════════════════════════════════════════════
             if (!bookingIntentDetected && userText.length > 3) {
-                const bookingKeywords = /\b(schedule|book|appointment|technician|send someone|get someone|come out|when can you|how soon can you)\b/i;
-                bookingIntentDetected = bookingKeywords.test(userText);
+                bookingIntentDetected = bookingRegex.test(userText);
                 
                 if (bookingIntentDetected) {
                     log('📅 MINIMAL BOOKING: Keyword match detected', {
                         userText: userText.substring(0, 60),
-                        matchedKeyword: userText.match(bookingKeywords)?.[0]
+                        matchedKeyword: userText.match(bookingRegex)?.[0],
+                        source: awReader ? 'control_plane' : 'defaults'
                     });
                 }
             }
