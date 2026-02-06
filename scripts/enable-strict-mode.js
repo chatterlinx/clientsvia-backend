@@ -74,7 +74,7 @@ async function main() {
         await mongoose.connect(mongoUri);
         console.log('✓ Connected to MongoDB');
         
-        const Company = mongoose.model('Company', new mongoose.Schema({}, { strict: false }), 'companies');
+        const Company = mongoose.model('Company', new mongoose.Schema({}, { strict: false }), 'companiesCollection');
         
         // Diagnostic: Show total company count
         const totalCount = await Company.countDocuments({});
