@@ -5497,27 +5497,50 @@ async function processTurn({
                     break;
 
                 case 'CLARIFY_BOOKING_SLOT': {
-                    // Repeat the CURRENT slot question (UI-configured) based on active slot.
-                    // This prevents confusing loops like: "What is your information?"
-                    const bookingConfigSnap = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
-                    const bookingSlotsSnap = bookingConfigSnap.slots || [];
+                    // V97q FIX: CLARIFY_BOOKING_SLOT MUST DEFER TO BOOKINGFLOWRUNNER
+                    // ═══════════════════════════════════════════════════════════════════
+                    // PROBLEM: This meta intent was generating booking slot questions directly,
+                    // competing with BookingFlowRunner and bypassing its state management.
+                    //
+                    // SOLUTION: If we're in booking mode, defer clarification to BookingFlowRunner.
+                    // If not in booking mode, this shouldn't happen anyway.
+                    // ═══════════════════════════════════════════════════════════════════
 
-                    const activeSlotId = session?.booking?.activeSlot || session?.booking?.currentSlotId || null;
-                    const activeSlotConfig = activeSlotId
-                        ? bookingSlotsSnap.find(s => (s.slotId || s.id || s.type) === activeSlotId || s.type === activeSlotId)
-                        : null;
+                    log('🚨 V97q: CLARIFY_BOOKING_SLOT detected - deferring to BookingFlowRunner');
 
-                    const askedCount = activeSlotId
-                        ? (session?.booking?.meta?.[activeSlotId]?.askedCount || 0)
-                        : 0;
+                    // If we're already in booking mode, this is a clarification request
+                    // BookingFlowRunner should handle repeating the current question
+                    if (session.bookingModeLocked || session.mode === 'BOOKING') {
+                        // Set deferToBookingRunner signal to let BookingFlowRunner handle clarification
+                        aiResult = {
+                            reply: null, // BookingFlowRunner will generate the clarification response
+                            conversationMode: 'BOOKING',
+                            filledSlots: currentSlots,
+                            latencyMs: Date.now() - aiStartTime,
+                            tokensUsed: 0,
+                            fromStateMachine: false,
+                            matchSource: 'CLARIFY_BOOKING_SLOT_DEFERRED',
+                            tier: 'tier1',
+                            mode: 'BOOKING',
+                            signals: {
+                                deferToBookingRunner: true,
+                                clarificationRequested: true
+                            },
+                            debug: {
+                                source: 'V97q_CLARIFY_BOOKING_SLOT_DEFER',
+                                reason: 'User asked for booking slot clarification, deferring to BookingFlowRunner',
+                                userText: userText.substring(0, 100)
+                            }
+                        };
 
-                    const question = (activeSlotConfig && activeSlotId)
-                        ? getSlotPromptVariant(activeSlotConfig, activeSlotId, askedCount)
-                        : null;
-
-                    // Repeat only the question (no new hardcoded wrapper text)
-                    metaReply = question || '';
-                    break;
+                        log('✅ V97q: CLARIFY_BOOKING_SLOT → DEFERRING TO BOOKING RUNNER');
+                        // BREAK - we're done, no metaReply needed
+                        break;
+                    } else {
+                        // Not in booking mode - this shouldn't happen, but handle gracefully
+                        metaReply = "I'm not sure which information you're referring to. Could you clarify what you'd like me to help with?";
+                        break;
+                    }
                 }
             }
             
