@@ -16,8 +16,8 @@
     "personality": {
       "description": "AI personality and conversation style",
       "keys": {
-        "frontDesk.aiName": { "type": "string", "required": true, "uiSection": "personality" },
-        "frontDesk.conversationStyle": { "type": "string", "required": true, "uiSection": "personality" },
+        "frontDesk.aiName": { "type": "string", "required": false, "default": "AI Assistant", "uiSection": "personality" },
+        "frontDesk.conversationStyle": { "type": "string", "required": false, "default": "professional", "uiSection": "personality" },
         "frontDesk.styleAcknowledgments": { "type": "array", "required": false, "uiSection": "personality" },
         "frontDesk.personality.warmth": { "type": "number", "required": false, "uiSection": "personality", "min": 0, "max": 10 },
         "frontDesk.personality.speakingPace": { "type": "string", "required": false, "uiSection": "personality" },
@@ -30,8 +30,8 @@
       "keys": {
         "frontDesk.discoveryConsent.forceLLMDiscovery": { "type": "boolean", "required": false, "uiSection": "discovery" },
         "frontDesk.discoveryConsent.disableScenarioAutoResponses": { "type": "boolean", "required": false, "uiSection": "discovery" },
-        "frontDesk.discoveryConsent.bookingRequiresExplicitConsent": { "type": "boolean", "required": true, "uiSection": "discovery" },
-        "frontDesk.discoveryConsent.consentPhrases": { "type": "array", "required": true, "uiSection": "discovery" },
+        "frontDesk.discoveryConsent.bookingRequiresExplicitConsent": { "type": "boolean", "required": false, "default": false, "uiSection": "discovery" },
+        "frontDesk.discoveryConsent.consentPhrases": { "type": "array", "required": false, "default": ["yes", "sure", "okay", "go ahead"], "uiSection": "discovery" },
         "frontDesk.discoveryConsent.autoReplyAllowedScenarioTypes": { "type": "array", "required": false, "uiSection": "discovery" }
       }
     },
@@ -39,8 +39,8 @@
     "detection": {
       "description": "Intent detection triggers and patterns",
       "keys": {
-        "frontDesk.detectionTriggers.wantsBooking": { "type": "array", "required": true, "uiSection": "detection" },
-        "booking.directIntentPatterns": { "type": "array", "required": true, "uiSection": "detection" }
+        "frontDesk.detectionTriggers.wantsBooking": { "type": "array", "required": false, "default": ["schedule", "book", "appointment"], "uiSection": "detection" },
+        "booking.directIntentPatterns": { "type": "array", "required": false, "default": ["schedule", "book", "appointment", "come out"], "uiSection": "detection" }
       }
     },
     
@@ -65,8 +65,8 @@
     "bookingPrompts": {
       "description": "Booking slot configuration and prompts - THE SINGLE SOURCE OF TRUTH",
       "keys": {
-        "frontDesk.bookingEnabled": { "type": "boolean", "required": true, "uiSection": "booking-prompts" },
-        "frontDesk.bookingSlots": { "type": "array", "required": true, "uiSection": "booking-prompts" },
+        "frontDesk.bookingEnabled": { "type": "boolean", "required": false, "default": true, "uiSection": "booking-prompts" },
+        "frontDesk.bookingSlots": { "type": "array", "required": false, "default": [], "uiSection": "booking-prompts" },
         "frontDesk.bookingSlots.name.confirmSpelling": { "type": "boolean", "required": false, "uiSection": "booking-prompts" },
         "booking.nameParsing": { "type": "object", "required": false, "uiSection": "booking-prompts" },
         "booking.nameParsing.acceptLastNameOnly": { "type": "boolean", "required": false, "uiSection": "booking-prompts" },
@@ -103,7 +103,7 @@
     "escalation": {
       "description": "Human transfer and escalation settings",
       "keys": {
-        "frontDesk.escalation.enabled": { "type": "boolean", "required": true, "uiSection": "escalation" },
+        "frontDesk.escalation.enabled": { "type": "boolean", "required": false, "default": true, "uiSection": "escalation" },
         "frontDesk.escalation.triggerPhrases": { "type": "array", "required": false, "uiSection": "escalation" },
         "frontDesk.escalation.transferMessage": { "type": "string", "required": false, "uiSection": "escalation" },
         "transfers.transferTargets": { "type": "array", "required": false, "uiSection": "escalation" }
