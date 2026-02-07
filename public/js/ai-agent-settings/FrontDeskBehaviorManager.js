@@ -1944,7 +1944,7 @@ class FrontDeskBehaviorManager {
                     this.config.slotRegistry = { version: 'v1', slots: [] };
                 }
                 this.config.slotRegistry.slots.push(newSlot);
-                this.switchTab(container, 'discovery-flow');
+                this.switchTab('discovery-flow', container);
             });
         }
 
@@ -1966,7 +1966,7 @@ class FrontDeskBehaviorManager {
                     this.config.discoveryFlow = { version: 'v1', enabled: true, steps: [] };
                 }
                 this.config.discoveryFlow.steps.push(newStep);
-                this.switchTab(container, 'discovery-flow');
+                this.switchTab('discovery-flow', container);
             });
         }
 
@@ -1988,7 +1988,7 @@ class FrontDeskBehaviorManager {
                     this.config.bookingFlow = { version: 'v1', enabled: true, confirmCapturedFirst: true, steps: [] };
                 }
                 this.config.bookingFlow.steps.push(newStep);
-                this.switchTab(container, 'discovery-flow');
+                this.switchTab('discovery-flow', container);
             });
         }
 
@@ -1998,7 +1998,7 @@ class FrontDeskBehaviorManager {
                 const idx = parseInt(e.target.dataset.idx, 10);
                 if (this.config.slotRegistry?.slots) {
                     this.config.slotRegistry.slots.splice(idx, 1);
-                    this.switchTab(container, 'discovery-flow');
+                    this.switchTab('discovery-flow', container);
                 }
             });
         });
@@ -2009,7 +2009,7 @@ class FrontDeskBehaviorManager {
                 const idx = parseInt(e.target.dataset.idx, 10);
                 if (this.config.discoveryFlow?.steps) {
                     this.config.discoveryFlow.steps.splice(idx, 1);
-                    this.switchTab(container, 'discovery-flow');
+                    this.switchTab('discovery-flow', container);
                 }
             });
         });
@@ -2020,7 +2020,7 @@ class FrontDeskBehaviorManager {
                 const idx = parseInt(e.target.dataset.idx, 10);
                 if (this.config.bookingFlow?.steps) {
                     this.config.bookingFlow.steps.splice(idx, 1);
-                    this.switchTab(container, 'discovery-flow');
+                    this.switchTab('discovery-flow', container);
                 }
             });
         });
@@ -2133,7 +2133,7 @@ class FrontDeskBehaviorManager {
                         if (data.discoveryFlow) this.config.discoveryFlow = data.discoveryFlow;
                         if (data.bookingFlow) this.config.bookingFlow = data.bookingFlow;
                         if (data.policies) this.config.policies = data.policies;
-                        this.switchTab(container, 'discovery-flow');
+                        this.switchTab('discovery-flow', container);
                         this.showNotification('✅ Imported successfully', 'success');
                     } catch (err) {
                         this.showNotification('❌ Import failed: ' + err.message, 'error');
