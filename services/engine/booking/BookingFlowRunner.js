@@ -1160,6 +1160,57 @@ class BookingFlowRunner {
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
+        // V110++ CRITICAL FIX: MERGE INCOMING SLOTS BEFORE PRECONFIRM
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Previously, checkPreconfirmQueue() ran before slots were merged into
+        // bookingCollected, so it couldn't see discovery values (name, phone).
+        // Result: preconfirm was skipped, jumped straight to address.
+        //
+        // This block MUST run before checkPreconfirmQueue() so preconfirm can see
+        // the discovery slots and prompt "Ok — I assume Mark is your first name..."
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (slots && typeof slots === 'object' && Object.keys(slots).length > 0) {
+            state.slots = state.slots || {};
+            state.bookingCollected = state.bookingCollected || {};
+            state.slotMetadata = state.slotMetadata || {};
+            
+            for (const [slotId, slotObj] of Object.entries(slots)) {
+                if (!slotObj) continue;
+                
+                // Normalize: allow {value, source...} OR raw string
+                const value = typeof slotObj === 'object' ? slotObj.value : slotObj;
+                if (value == null || value === '') continue;
+                
+                // Skip if already in bookingCollected (don't overwrite booking-provided values)
+                if (state.bookingCollected[slotId]) continue;
+                
+                // Build merged slot object
+                const merged = typeof slotObj === 'object'
+                    ? { ...slotObj, value }
+                    : { value, source: 'discovery', confidence: 0.7 };
+                
+                // Persist to canonical slot store
+                state.slots[slotId] = { ...(state.slots[slotId] || {}), ...merged };
+                
+                // Maintain value-only view for compatibility
+                state.bookingCollected[slotId] = value;
+                
+                // Maintain metadata (source) for preconfirm check
+                state.slotMetadata[slotId] = {
+                    ...(state.slotMetadata[slotId] || {}),
+                    source: merged.source || state.slotMetadata[slotId]?.source || 'unknown',
+                    confidence: merged.confidence || state.slotMetadata[slotId]?.confidence || 0.7
+                };
+                
+                logger.info('[BOOKING FLOW RUNNER] V110++: Early-merged slot for preconfirm', {
+                    slotId,
+                    value: slotId === 'phone' ? '***MASKED***' : value,
+                    source: merged.source
+                });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
         // V110+: PRECONFIRM DISCOVERY SLOTS BEFORE PROCEEDING
         // ═══════════════════════════════════════════════════════════════════════════
         // When booking JUST started (user said "book an appointment"), if we have
@@ -4465,10 +4516,13 @@ class BookingFlowRunner {
                 continue;
             }
             
-            // Get value and metadata
-            const value = collected[slotId];
-            const metadata = slotMetadata[slotId] || slots[slotId] || {};
-            const source = metadata.source || 'unknown';
+            // V110++: Get value from bookingCollected OR slots (fallback)
+            // This ensures preconfirm works even if early merge somehow missed
+            const slotObj = slots[slotId];
+            const value = collected[slotId] ?? slotObj?.value;
+            
+            // V110++: Get source from slotMetadata OR slots (fallback)
+            const source = slotMetadata[slotId]?.source ?? slotObj?.source ?? 'unknown';
             
             // Skip if no value
             if (!value) {
@@ -4597,9 +4651,10 @@ class BookingFlowRunner {
         const { slotId, value, source } = state.pendingPreconfirm;
         const normalizedInput = (userInput || '').toLowerCase().trim();
         
-        // Check for yes/no response
-        const yesPatterns = /^(yes|yeah|yep|correct|that's right|right|uh-huh|affirmative|sure|ok|okay|yup|mhm)$/i;
-        const noPatterns = /^(no|nope|wrong|incorrect|that's wrong|not right|negative|nah)$/i;
+        // Check for yes/no response (V110++: use contains patterns, not exact match)
+        // People say "yes absolutely", "yeah that's right", "correct sir" - must handle these
+        const yesPatterns = /\b(yes|yeah|yep|correct|right|that's right|sure|ok|okay|affirmative|mhm|uh.?huh|yup)\b/i;
+        const noPatterns = /\b(no|nope|wrong|incorrect|not right|nah|negative)\b/i;
         
         // Special case: "no that's my last name" for name slot
         const thatsMyLastName = /no[,.]?\s*(that'?s?\s*(my\s+)?last\s+name|my\s+last\s+name)/i;
