@@ -2757,13 +2757,56 @@ class BookingFlowRunner {
             return this.askStep(nextAction.step, state, flow);
         }
 
-        // First entry or no input - ask the question
+        // ═══════════════════════════════════════════════════════════════════════
+        // V109e: EMPTY INPUT HANDLING - Critical fix for address breakdown bug
+        // ═══════════════════════════════════════════════════════════════════════
+        // When userInput is empty (GATHER_TIMEOUT / silence):
+        // - If this is TRUE first entry (askCount=0) → ask the question
+        // - If we've ALREADY ASKED (askCount>0) → REPROMPT same step
+        // 
+        // This prevents the bug where silence incorrectly triggers address
+        // breakdown mode ("Let's go step by step - what's the street address?")
+        // instead of reprompting the configured question.
+        // ═══════════════════════════════════════════════════════════════════════
         if (!userInput || userInput.trim() === '') {
-            logger.info('[BOOKING FLOW RUNNER] COLLECT MODE - Asking for slot', {
-                stepId: step.id,
-                prompt: step.prompt?.substring(0, 50)
-            });
-            return this.askStep(step, state, flow);
+            const currentAskCount = state.askCount?.[step.id] || 0;
+            
+            if (currentAskCount === 0) {
+                // TRUE first entry - ask the question normally
+                logger.info('[BOOKING FLOW RUNNER] COLLECT MODE - First ask for slot', {
+                    stepId: step.id,
+                    askCount: 0,
+                    prompt: step.prompt?.substring(0, 50)
+                });
+                return this.askStep(step, state, flow);
+            } else {
+                // V109e: Already asked but got empty input → REPROMPT same step
+                // Do NOT call askStep() - that would reinitialize address breakdown
+                logger.info('[BOOKING FLOW RUNNER] V109e: Empty input after asking - REPROMPT same step', {
+                    stepId: step.id,
+                    askCount: currentAskCount,
+                    reason: 'empty_input_not_first_ask',
+                    willReprompt: true
+                });
+                
+                // Increment ask count
+                state.askCount = state.askCount || {};
+                state.askCount[step.id] = currentAskCount + 1;
+                
+                // Check max attempts
+                const maxAttempts = step.maxAttempts || step.options?.maxAttempts || 3;
+                if (state.askCount[step.id] >= maxAttempts) {
+                    logger.warn('[BOOKING FLOW RUNNER] V109e: Max attempts reached on empty input - escalating', {
+                        stepId: step.id,
+                        askCount: state.askCount[step.id],
+                        maxAttempts
+                    });
+                    return this.buildEscalation(step, state, flow, 
+                        `Unable to collect ${step.label || step.id} - no response after ${maxAttempts} attempts`);
+                }
+                
+                return this.repromptStep(step, state, flow, 'empty_input');
+            }
         }
         
         // User responded - extract value
