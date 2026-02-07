@@ -4859,6 +4859,15 @@ async function processTurn({
         // This code should NOT detect booking intent or set bookingModeLocked.
         // We skip the entire detection block and let FrontDeskRuntime handle it.
         // ═══════════════════════════════════════════════════════════════════════
+        
+        // V109: Log explicitly when MINIMAL_BOOKING_DETECTION is DISABLED in strict mode
+        if (strictModeEnabled) {
+            log('🚫 V109: MINIMAL_BOOKING_DETECTION DISABLED (strictMode=ON, FrontDeskRuntime is sole orchestrator)', {
+                strictModeEnabled: true,
+                reason: 'Strict mode active - FrontDeskRuntime handles all booking intent detection'
+            });
+        }
+        
         if (!strictModeEnabled && !aiResult && userText && userText.length > 0 && !session.bookingModeLocked) {
             log('📋 V109: MINIMAL_BOOKING_DETECTION running (strictMode=OFF)', {
                 strictModeEnabled: false,

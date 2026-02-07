@@ -1383,7 +1383,8 @@ class FrontDeskBehaviorManager {
     // - AfterHoursEvaluator (single source of truth)
     // - DynamicFlowEngine trigger: after_hours
     //
-    // Stored at: aiAgentSettings.businessHours
+    // V109: Stored at CANONICAL location: aiAgentSettings.frontDeskBehavior.businessHours
+    // (Legacy location aiAgentSettings.businessHours is auto-migrated on save)
     // ============================================================================
     renderHoursTab() {
         const bh = (this.config.businessHours && typeof this.config.businessHours === 'object')
@@ -1444,7 +1445,7 @@ class FrontDeskBehaviorManager {
                 <h3 style="margin:0 0 10px 0; color:#58a6ff;">🕒 Business Hours</h3>
                 <p style="color:#8b949e; margin:0 0 18px 0; font-size:0.875rem;">
                     Canonical hours used for after-hours routing (Dynamic Flow trigger <code style="color:#c9d1d9;">after_hours</code>).
-                    Stored at <code style="color:#c9d1d9;">aiAgentSettings.businessHours</code>.
+                    <br><span style="color:#3fb950;">✅ V109: Stored at <code style="color:#c9d1d9;">frontDeskBehavior.businessHours</code> (canonical Control Plane path)</span>
                 </p>
 
                 <div style="margin-bottom:16px;">
@@ -7487,14 +7488,10 @@ Sean → Shawn, Shaun`;
                     </p>
                     
                     <!-- V108: Warning if list is empty -->
-                    ${(dt.directIntentPatterns || []).length === 0 ? \`
-                        <div style="background: #a371f720; border: 1px solid #a371f7; border-radius: 6px; padding: 10px; margin-bottom: 12px;">
-                            <strong style="color: #a371f7;">ℹ️ Note:</strong> <span style="color: #c9d1d9;">No direct intent patterns defined. Callers will always go through consent if <code>bookingRequiresExplicitConsent</code> is enabled.</span>
-                        </div>
-                    \` : ''}
+                    ${(dt.directIntentPatterns || []).length === 0 ? '<div style="background: #a371f720; border: 1px solid #a371f7; border-radius: 6px; padding: 10px; margin-bottom: 12px;"><strong style="color: #a371f7;">ℹ️ Note:</strong> <span style="color: #c9d1d9;">No direct intent patterns defined. Callers will always go through consent if <code>bookingRequiresExplicitConsent</code> is enabled.</span></div>' : ''}
                     
                     <div id="fdb-directIntent-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
-                        \${(dt.directIntentPatterns || []).map((t, i) => this.renderDetectionChip(t, i, 'directIntentPatterns')).join('')}
+                        ${(dt.directIntentPatterns || []).map((t, i) => this.renderDetectionChip(t, i, 'directIntentPatterns')).join('')}
                     </div>
                     <div style="display: flex; gap: 10px;">
                         <input type="text" id="fdb-new-directIntentPatterns" placeholder="e.g., 'book an appointment'" 
