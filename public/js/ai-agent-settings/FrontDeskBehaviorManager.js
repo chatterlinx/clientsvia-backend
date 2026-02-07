@@ -1674,13 +1674,23 @@ class FrontDeskBehaviorManager {
             `;
         }).join('');
 
+        // V110++: Core booking slots that cannot be deleted (IDs match SlotExtractor)
+        const CORE_SLOT_IDS = ['name', 'lastName', 'phone', 'address', 'time'];
+        
         // Render slot registry rows
-        const slotRegistryRows = (slotRegistry.slots || []).map((slot, idx) => `
+        const slotRegistryRows = (slotRegistry.slots || []).map((slot, idx) => {
+            const isCore = CORE_SLOT_IDS.includes(slot.id);
+            const idFieldStyle = isCore 
+                ? 'width:100%; background:#21262d; color:#8b949e; border:1px solid #30363d; padding:6px; border-radius:4px; cursor:not-allowed;'
+                : 'width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;';
+            
+            return `
             <tr data-slot-idx="${idx}" style="border-bottom:1px solid #30363d;">
                 <td style="padding:10px;">
                     <input type="text" class="fdb-slot-id" data-idx="${idx}" value="${this.escapeHtml(slot.id)}" 
-                           style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;"
-                           placeholder="e.g., name.first">
+                           style="${idFieldStyle}"
+                           ${isCore ? 'readonly title="Core booking slot - ID cannot be changed"' : 'placeholder="auto-generated"'}>
+                    ${isCore ? '<span style="font-size:0.65rem; color:#3fb950; display:block; margin-top:2px;">🔒 Core</span>' : ''}
                 </td>
                 <td style="padding:10px;">
                     <input type="text" class="fdb-slot-label" data-idx="${idx}" value="${this.escapeHtml(slot.label || '')}" 
@@ -1707,12 +1717,13 @@ class FrontDeskBehaviorManager {
                     <input type="checkbox" class="fdb-slot-book-confirm" data-idx="${idx}" ${slot.bookingConfirmRequired !== false ? 'checked' : ''}>
                 </td>
                 <td style="padding:10px; text-align:center;">
-                    <button class="fdb-slot-delete" data-idx="${idx}" style="background:#f8514940; color:#f85149; border:1px solid #f85149; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Delete slot">
-                        🗑️
-                    </button>
+                    ${isCore 
+                        ? '<span style="color:#8b949e; font-size:0.75rem;" title="Core slots cannot be deleted">—</span>'
+                        : `<button class="fdb-slot-delete" data-idx="${idx}" style="background:#f8514940; color:#f85149; border:1px solid #f85149; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Delete slot">🗑️</button>`
+                    }
                 </td>
             </tr>
-        `).join('');
+        `}).join('');
 
         // Policies display
         const nameParsing = policies.nameParsing || {};
@@ -1934,23 +1945,30 @@ class FrontDeskBehaviorManager {
         const discoveryFlow = this.config.discoveryFlow || { version: 'v1', enabled: true, steps: [] };
         const bookingFlow = this.config.bookingFlow || { version: 'v1', enabled: true, steps: [] };
         
-        // Add Slot button
+        // Add Slot button - generates unique discovery.XXX IDs that never repeat
         const addSlotBtn = contentElement.querySelector('#fdb-add-slot');
         if (addSlotBtn) {
             addSlotBtn.addEventListener('click', () => {
-                const slots = this.config.slotRegistry?.slots || [];
+                if (!this.config.slotRegistry) {
+                    this.config.slotRegistry = { version: 'v1', slots: [], nextCustomId: 1 };
+                }
+                
+                // Get next ID counter (never reused, even after deletion)
+                const nextId = this.config.slotRegistry.nextCustomId || 1;
+                const paddedId = String(nextId).padStart(3, '0');
+                
                 const newSlot = {
-                    id: `custom.slot${slots.length + 1}`,
+                    id: `discovery.${paddedId}`,
                     type: 'text',
-                    label: 'New Slot',
+                    label: 'New Discovery Slot',
                     required: false,
                     discoveryFillAllowed: true,
                     bookingConfirmRequired: false,
                     extraction: { source: ['utterance'] }
                 };
-                if (!this.config.slotRegistry) {
-                    this.config.slotRegistry = { version: 'v1', slots: [] };
-                }
+                
+                // Increment counter (persisted so IDs are never reused)
+                this.config.slotRegistry.nextCustomId = nextId + 1;
                 this.config.slotRegistry.slots.push(newSlot);
                 this.switchTab('discovery-flow', getParentContainer());
             });
