@@ -28,6 +28,13 @@ const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVe
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 // V93: BlackBoxLogger for CONFIG_WRITE events (AW ⇄ RE marriage)
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
+// V110++: Import canonical slot/flow defaults
+const { 
+    DEFAULT_SLOT_REGISTRY, 
+    DEFAULT_DISCOVERY_FLOW, 
+    DEFAULT_BOOKING_FLOW, 
+    DEFAULT_FLOW_POLICIES 
+} = require('../../config/onboarding/DefaultFrontDeskPreset');
 
 // ============================================================================
 // DEFAULT VALUES (Shown in UI, can be customized per company)
@@ -1323,20 +1330,29 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
 // ============================================================================
 // POST - Reset to defaults
 // ============================================================================
+// V110++: Now includes canonical slot registry, discovery flow, booking flow
 router.post('/:companyId/reset', authenticateJWT, async (req, res) => {
     try {
         const { companyId } = req.params;
+        
+        // V110++: Merge UI_DEFAULTS with V110 canonical slot/flow configs
+        const fullDefaults = {
+            enabled: true,
+            ...UI_DEFAULTS,
+            // V110 Canonical Configs - IDs match SlotExtractor output
+            slotRegistry: DEFAULT_SLOT_REGISTRY,
+            discoveryFlow: DEFAULT_DISCOVERY_FLOW,
+            bookingFlow: DEFAULT_BOOKING_FLOW,
+            policies: DEFAULT_FLOW_POLICIES,
+            lastUpdated: new Date(),
+            updatedBy: req.user?.email || 'admin'
+        };
         
         const result = await v2Company.findByIdAndUpdate(
             companyId,
             { 
                 $set: { 
-                    'aiAgentSettings.frontDeskBehavior': {
-                        enabled: true,
-                        ...UI_DEFAULTS,
-                        lastUpdated: new Date(),
-                        updatedBy: req.user?.email || 'admin'
-                    }
+                    'aiAgentSettings.frontDeskBehavior': fullDefaults
                 }
             },
             { new: true }
@@ -1346,9 +1362,16 @@ router.post('/:companyId/reset', authenticateJWT, async (req, res) => {
             return res.status(404).json({ success: false, message: 'Company not found' });
         }
         
+        logger.info('[FRONT DESK BEHAVIOR] V110++ Reset to defaults with canonical slots', {
+            companyId,
+            slotCount: DEFAULT_SLOT_REGISTRY?.slots?.length || 0,
+            discoveryStepCount: DEFAULT_DISCOVERY_FLOW?.steps?.length || 0,
+            bookingStepCount: DEFAULT_BOOKING_FLOW?.steps?.length || 0
+        });
+        
         res.json({
             success: true,
-            message: 'Reset to defaults',
+            message: 'Reset to defaults (V110++ with canonical slots)',
             data: result.aiAgentSettings?.frontDeskBehavior
         });
         
