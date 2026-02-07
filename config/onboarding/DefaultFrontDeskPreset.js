@@ -26,8 +26,12 @@ const logger = require('../../utils/logger');
 const DEFAULT_SLOT_REGISTRY = {
     version: 'v1',
     slots: [
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CORE BOOKING SLOTS - IDs MUST match what SlotExtractor produces
+        // These are auto-populated for all companies. Admins customize labels/prompts.
+        // ═══════════════════════════════════════════════════════════════════════════
         {
-            id: 'name.first',
+            id: 'name',  // CANONICAL: matches SlotExtractor output
             type: 'name_first',
             label: 'First Name',
             required: true,
@@ -40,19 +44,19 @@ const DEFAULT_SLOT_REGISTRY = {
             }
         },
         {
-            id: 'name.last',
+            id: 'lastName',  // CANONICAL: matches SlotExtractor output
             type: 'name_last',
             label: 'Last Name',
             required: false,
             discoveryFillAllowed: true,
-            bookingConfirmRequired: false,
+            bookingConfirmRequired: true,
             extraction: { 
                 source: ['utterance'],
                 confidenceMin: 0.72
             }
         },
         {
-            id: 'phone',
+            id: 'phone',  // CANONICAL: matches SlotExtractor output
             type: 'phone',
             label: 'Best Callback Cell',
             required: true,
@@ -64,7 +68,7 @@ const DEFAULT_SLOT_REGISTRY = {
             }
         },
         {
-            id: 'address.full',
+            id: 'address',  // CANONICAL: matches SlotExtractor output
             type: 'address',
             label: 'Service Address',
             required: true,
@@ -83,11 +87,11 @@ const DEFAULT_SLOT_REGISTRY = {
             }
         },
         {
-            id: 'time.preference',
+            id: 'time',  // CANONICAL: matches SlotExtractor output
             type: 'time',
             label: 'Preferred Time',
             required: true,
-            discoveryFillAllowed: true,
+            discoveryFillAllowed: false,  // Usually only asked during booking
             bookingConfirmRequired: true,
             extraction: { 
                 source: ['utterance'],
@@ -110,7 +114,7 @@ const DEFAULT_DISCOVERY_FLOW = {
     steps: [
         { 
             stepId: 'd1', 
-            slotId: 'name.first', 
+            slotId: 'name',  // CANONICAL: matches SlotExtractor
             order: 1,
             // V110: Confirm prompt uses {value} placeholder for captured value
             ask: "Got it — I have your first name as {value}. Is that right?", 
@@ -124,7 +128,7 @@ const DEFAULT_DISCOVERY_FLOW = {
         },
         { 
             stepId: 'd2', 
-            slotId: 'phone', 
+            slotId: 'phone',  // CANONICAL: matches SlotExtractor
             order: 2,
             ask: "Is {value} the best number for text updates?", 
             reprompt: "What's a good number for updates?",
@@ -137,7 +141,7 @@ const DEFAULT_DISCOVERY_FLOW = {
         },
         { 
             stepId: 'd3', 
-            slotId: 'address.full', 
+            slotId: 'address',  // CANONICAL: matches SlotExtractor
             order: 3,
             ask: "I have your address as {value}. Is that the service location?", 
             reprompt: "What's the service address?",
@@ -164,10 +168,10 @@ const DEFAULT_BOOKING_FLOW = {
     steps: [
         { 
             stepId: 'b1', 
-            slotId: 'name.first', 
+            slotId: 'name',  // CANONICAL: matches SlotExtractor
             order: 1,
             ask: "What's your first name?", 
-            confirmPrompt: "I've got your first name as {value}. Is that right?",
+            confirmPrompt: "Ok — I assume {value} is your first name, is that correct?",
             reprompt: "What's your first name?",
             repromptVariants: [
                 "What's your first name?",
@@ -178,9 +182,23 @@ const DEFAULT_BOOKING_FLOW = {
             correctionPrompt: "No problem — what is your first name?"
         },
         { 
-            stepId: 'b2', 
-            slotId: 'phone', 
+            stepId: 'b1b', 
+            slotId: 'lastName',  // CANONICAL: matches SlotExtractor
             order: 2,
+            ask: "And what's your last name?", 
+            confirmPrompt: "I've got {value} as your last name. Is that right?",
+            reprompt: "What's your last name?",
+            repromptVariants: [
+                "What's your last name?",
+                "And your last name?",
+                "Your last name?"
+            ],
+            confirmRetryPrompt: "Is {value} your last name?"
+        },
+        { 
+            stepId: 'b2', 
+            slotId: 'phone',  // CANONICAL: matches SlotExtractor
+            order: 3,
             ask: "What's the best cell number to reach you for confirmations and technician updates?", 
             confirmPrompt: "I've got {value}. Is that the best number?",
             reprompt: "What's a good callback number?",
@@ -193,8 +211,8 @@ const DEFAULT_BOOKING_FLOW = {
         },
         { 
             stepId: 'b3', 
-            slotId: 'address.full', 
-            order: 3,
+            slotId: 'address',  // CANONICAL: matches SlotExtractor
+            order: 4,
             ask: "What's the full service address, including unit or suite if there is one?", 
             confirmPrompt: "I've got {value}. Is that the correct service address?",
             reprompt: "What's the service address?",
@@ -208,18 +226,18 @@ const DEFAULT_BOOKING_FLOW = {
             structuredSubflow: {
                 enabled: false,  // Disabled by default - enable when needed
                 trigger: 'parse_incomplete_or_geo_ambiguous',
-                sequence: ['address.street', 'address.city', 'address.unit'],
+                sequence: ['street', 'city', 'unit'],
                 prompts: {
-                    'address.street': "What's the street address?",
-                    'address.city': "And what city is that in?",
-                    'address.unit': "If this is an apartment or unit, what's the number? Otherwise just say house."
+                    'street': "What's the street address?",
+                    'city': "And what city is that in?",
+                    'unit': "If this is an apartment or unit, what's the number? Otherwise just say house."
                 }
             }
         },
         { 
             stepId: 'b4', 
-            slotId: 'time.preference', 
-            order: 4,
+            slotId: 'time',  // CANONICAL: matches SlotExtractor
+            order: 5,
             ask: "Do you prefer morning or afternoon? I can offer 8-10, 10-12, 12-2, or 2-4.", 
             confirmPrompt: "Perfect, {value} works. Is that right?",
             reprompt: "Morning or afternoon?",
@@ -233,7 +251,7 @@ const DEFAULT_BOOKING_FLOW = {
     ],
     completion: {
         reviewAndConfirm: true,
-        confirmScript: "Perfect. I have {name.first}, {phone}, {address.full}, and {time.preference}. Is that all correct?",
+        confirmScript: "Perfect. I have {name} {lastName}, phone {phone}, address {address}, for {time}. Is that all correct?",
         confirmRetryPrompt: "Is all that information correct?",
         correctionPrompt: "What would you like to change?",
         onConfirm: 'finalize_booking_request'
