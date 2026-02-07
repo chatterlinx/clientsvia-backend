@@ -4830,80 +4830,90 @@ async function processTurn({
         //
         // V98 FIX: Also detect consent when consentPending=true
         // V98c: Read patterns from Control Plane Wiring (not hardcoded)
+        // 
         // ═══════════════════════════════════════════════════════════════════════
-
+        // V109: STRICT MODE DISABLES MINIMAL_BOOKING_DETECTION ENTIRELY
+        // ═══════════════════════════════════════════════════════════════════════
+        // When enforcement.level === 'strict', FrontDeskRuntime is the ONLY
+        // orchestrator. This detection code should NOT run, should NOT set
+        // bookingModeLocked, and should NOT compete with FrontDeskRuntime.
+        //
+        // If we're here in strict mode, it means FrontDeskRuntime called us for
+        // DISCOVERY lane handling only. We must NOT do booking intent detection.
+        // ═══════════════════════════════════════════════════════════════════════
+        const strictModeEnabled = awReader 
+            ? awReader.get('frontDesk.enforcement.level', 'warn') === 'strict'
+            : (company?.aiAgentSettings?.frontDesk?.enforcement?.level === 'strict' ||
+               company?.aiAgentSettings?.frontDeskBehavior?.enforcement?.level === 'strict');
+        
         let bookingIntentDetected = false;
         let bookingConsentPending = session.booking?.consentPending || paramBookingConsentPending || false;
         let consentGivenThisTurn = false;
         
+        // V109: Skip ALL booking detection in strict mode
+        // FrontDeskRuntime is the ONLY orchestrator - this code should NOT compete
         // ═══════════════════════════════════════════════════════════════════════
-        // V98c: READ PATTERNS FROM CONTROL PLANE (UI-configurable)
+        // V109: STRICT MODE CHECK - Disable MINIMAL_BOOKING_DETECTION entirely
         // ═══════════════════════════════════════════════════════════════════════
-        // These patterns are now configurable via Control Plane Wiring tab.
-        // If not configured, fall back to safe defaults.
-        // Paths: frontDesk.discoveryConsent.consentPhrases, 
-        //        frontDesk.detectionTriggers.wantsBooking,
-        //        booking.directIntentPatterns
+        // In strict mode, FrontDeskRuntime is the ONLY orchestrator.
+        // This code should NOT detect booking intent or set bookingModeLocked.
+        // We skip the entire detection block and let FrontDeskRuntime handle it.
         // ═══════════════════════════════════════════════════════════════════════
-        const defaultConsentPhrases = ['yes', 'yeah', 'yep', 'yup', 'sure', 'okay', 'ok', 'please', 
-            'go ahead', 'sounds good', 'that works', "let's do it", 'absolutely', 'definitely'];
-        const defaultUrgencyPhrases = ['as soon as possible', 'asap', 'today', 'right away', 'right now',
-            'immediately', 'this morning', 'this afternoon', 'this evening', 'earliest', 
-            'first available', 'next available', 'send someone', 'get someone out', 'come out'];
-        const defaultBookingKeywords = ['schedule', 'book', 'appointment', 'technician', 
-            'send someone', 'get someone', 'come out', 'when can you', 'how soon can you'];
-        
-        // Read from Control Plane via AWConfigReader
-        let consentPhrases, urgencyPhrases, bookingKeywords;
-        if (awReader) {
-            awReader.setReaderId('ConversationEngine.minimalBookingDetection');
-            consentPhrases = awReader.get('frontDesk.discoveryConsent.consentPhrases', defaultConsentPhrases);
-            // Urgency is part of wantsBooking triggers
-            const wantsBooking = awReader.get('frontDesk.detectionTriggers.wantsBooking', []);
-            urgencyPhrases = wantsBooking.filter(p => 
-                /asap|soon|today|immediate|earliest|first available|right away/i.test(p)
-            );
-            if (urgencyPhrases.length === 0) urgencyPhrases = defaultUrgencyPhrases;
+        if (!strictModeEnabled && !aiResult && userText && userText.length > 0 && !session.bookingModeLocked) {
+            log('📋 V109: MINIMAL_BOOKING_DETECTION running (strictMode=OFF)', {
+                strictModeEnabled: false,
+                userTextPreview: userText.substring(0, 50)
+            });
             
-            // V108: Booking keywords from frontDesk.detectionTriggers.* (canonical paths)
-            // Check canonical path first, fall back to legacy only in warn mode
-            const enforcementLevel = awReader.get('frontDesk.enforcement.level', 'warn');
-            const isStrictMode = enforcementLevel === 'strict';
+            // ═══════════════════════════════════════════════════════════════════
+            // V98c: READ PATTERNS FROM CONTROL PLANE (UI-configurable)
+            // ═══════════════════════════════════════════════════════════════════
+            const defaultConsentPhrases = ['yes', 'yeah', 'yep', 'yup', 'sure', 'okay', 'ok', 'please', 
+                'go ahead', 'sounds good', 'that works', "let's do it", 'absolutely', 'definitely'];
+            const defaultUrgencyPhrases = ['as soon as possible', 'asap', 'today', 'right away', 'right now',
+                'immediately', 'this morning', 'this afternoon', 'this evening', 'earliest', 
+                'first available', 'next available', 'send someone', 'get someone out', 'come out'];
+            const defaultBookingKeywords = ['schedule', 'book', 'appointment', 'technician', 
+                'send someone', 'get someone', 'come out', 'when can you', 'how soon can you'];
             
-            let directIntentPatterns = awReader.get('frontDesk.detectionTriggers.directIntentPatterns', []);
-            if (directIntentPatterns.length === 0 && !isStrictMode) {
-                // WARN MODE: Fall back to legacy path
-                directIntentPatterns = awReader.get('booking.directIntentPatterns', []);
-                if (directIntentPatterns.length > 0) {
-                    log('⚠️ V108: Using legacy booking.directIntentPatterns - migrate to frontDesk.detectionTriggers.directIntentPatterns');
+            // Read from Control Plane via AWConfigReader
+            let consentPhrases, urgencyPhrases, bookingKeywords;
+            if (awReader) {
+                awReader.setReaderId('ConversationEngine.minimalBookingDetection');
+                consentPhrases = awReader.get('frontDesk.discoveryConsent.consentPhrases', defaultConsentPhrases);
+                // Urgency is part of wantsBooking triggers
+                const wantsBooking = awReader.get('frontDesk.detectionTriggers.wantsBooking', []);
+                urgencyPhrases = wantsBooking.filter(p => 
+                    /asap|soon|today|immediate|earliest|first available|right away/i.test(p)
+                );
+                if (urgencyPhrases.length === 0) urgencyPhrases = defaultUrgencyPhrases;
+                
+                // V108: Booking keywords from frontDesk.detectionTriggers.* (canonical paths)
+                let directIntentPatterns = awReader.get('frontDesk.detectionTriggers.directIntentPatterns', []);
+                if (directIntentPatterns.length === 0) {
+                    // WARN MODE ONLY: Fall back to legacy path
+                    directIntentPatterns = awReader.get('booking.directIntentPatterns', []);
+                    if (directIntentPatterns.length > 0) {
+                        log('⚠️ V108: Using legacy booking.directIntentPatterns - migrate to frontDesk.detectionTriggers.directIntentPatterns');
+                    }
                 }
+                
+                bookingKeywords = [...new Set([...directIntentPatterns, ...wantsBooking])];
+                if (bookingKeywords.length === 0) bookingKeywords = defaultBookingKeywords;
+            } else {
+                // Fallback to defaults (no AWConfigReader available)
+                consentPhrases = defaultConsentPhrases;
+                urgencyPhrases = defaultUrgencyPhrases;
+                bookingKeywords = defaultBookingKeywords;
             }
             
-            bookingKeywords = [...new Set([...directIntentPatterns, ...wantsBooking])];
-            if (bookingKeywords.length === 0) bookingKeywords = defaultBookingKeywords;
-            
-            log('📋 V108: Loaded booking detection patterns from Control Plane', {
-                consentPhrasesCount: consentPhrases.length,
-                urgencyPhrasesCount: urgencyPhrases.length,
-                bookingKeywordsCount: bookingKeywords.length,
-                directIntentSource: directIntentPatterns.length > 0 ? 'canonical' : 'empty',
-                isStrictMode,
-                source: 'AWConfigReader'
-            });
-        } else {
-            // Fallback to defaults (no AWConfigReader available)
-            consentPhrases = defaultConsentPhrases;
-            urgencyPhrases = defaultUrgencyPhrases;
-            bookingKeywords = defaultBookingKeywords;
-        }
+            // Build regex patterns from arrays
+            const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const consentRegex = new RegExp(`^(${consentPhrases.map(escapeRegex).join('|')})[\\s.,!]*$`, 'i');
+            const urgencyRegex = new RegExp(`\\b(${urgencyPhrases.map(escapeRegex).join('|')})\\b`, 'i');
+            const bookingRegex = new RegExp(`\\b(${bookingKeywords.map(escapeRegex).join('|')})\\b`, 'i');
         
-        // Build regex patterns from arrays
-        const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const consentRegex = new RegExp(`^(${consentPhrases.map(escapeRegex).join('|')})[\\s.,!]*$`, 'i');
-        const urgencyRegex = new RegExp(`\\b(${urgencyPhrases.map(escapeRegex).join('|')})\\b`, 'i');
-        const bookingRegex = new RegExp(`\\b(${bookingKeywords.map(escapeRegex).join('|')})\\b`, 'i');
-
-        if (!aiResult && userText && userText.length > 0 && !session.bookingModeLocked) {
+            // Now check for booking intent (same level - inside the strictMode check)
             const lowerText = (userText || '').toLowerCase().trim();
             
             // ═══════════════════════════════════════════════════════════════════

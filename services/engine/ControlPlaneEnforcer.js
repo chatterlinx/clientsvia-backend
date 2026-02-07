@@ -90,8 +90,8 @@ const AW_TO_DB_PATH_MAP = {
     'frontDesk.scheduling.morningAfternoonPrompt': 'frontDeskBehavior.scheduling.morningAfternoonPrompt',
     'frontDesk.scheduling.timeWindowPrompt': 'frontDeskBehavior.scheduling.timeWindowPrompt',
     
-    // Business hours
-    'frontDesk.businessHours': 'businessHours',  // Note: stored at top level, not under frontDeskBehavior
+    // Business hours - V109: Migrated to CANONICAL location under frontDeskBehavior
+    'frontDesk.businessHours': 'frontDeskBehavior.businessHours',  // CANONICAL location (V109)
     
     // Personality
     'frontDesk.personality': 'frontDeskBehavior.personality',

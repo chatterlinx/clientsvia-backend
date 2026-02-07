@@ -400,7 +400,11 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         
         // Merge saved config with defaults
         const saved = company.aiAgentSettings?.frontDeskBehavior || {};
-        const businessHours = company.aiAgentSettings?.businessHours || null;
+        
+        // V109: Read businessHours from CANONICAL location first, fall back to legacy
+        // CANONICAL: aiAgentSettings.frontDeskBehavior.businessHours
+        // LEGACY: aiAgentSettings.businessHours (will be migrated on next save)
+        const businessHours = saved.businessHours || company.aiAgentSettings?.businessHours || null;
         
         // 👤 DEBUG: Log RAW saved data before merge
         logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: RAW SAVED commonFirstNames:', {
@@ -769,14 +773,25 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             updateObj['aiAgentSettings.frontDeskBehavior.afterHoursMessageContract'] = updates.afterHoursMessageContract;
         }
 
-        // 🕒 Canonical business hours (company-scoped, trade-agnostic)
-        // Stored at: aiAgentSettings.businessHours
-        // Shape validated in AfterHoursEvaluator; here we only enforce basic object-ness to prevent null/strings.
+        // ═══════════════════════════════════════════════════════════════════════
+        // 🕒 V109: Canonical business hours migration
+        // ═══════════════════════════════════════════════════════════════════════
+        // OLD LOCATION: aiAgentSettings.businessHours (LEGACY - DO NOT USE)
+        // NEW LOCATION: aiAgentSettings.frontDeskBehavior.businessHours (CANONICAL)
+        // 
+        // This ensures Hours tab writes to the SAME namespace as all other 
+        // Front Desk settings, so Control Plane can govern it properly.
+        // ═══════════════════════════════════════════════════════════════════════
         if (updates.businessHours !== undefined) {
             if (updates.businessHours === null) {
-                updateObj['aiAgentSettings.businessHours'] = null;
+                // Clear both locations for clean migration
+                updateObj['aiAgentSettings.frontDeskBehavior.businessHours'] = null;
+                updateObj['aiAgentSettings.businessHours'] = null; // Clear legacy
             } else if (updates.businessHours && typeof updates.businessHours === 'object') {
-                updateObj['aiAgentSettings.businessHours'] = updates.businessHours;
+                // Write to CANONICAL location only
+                updateObj['aiAgentSettings.frontDeskBehavior.businessHours'] = updates.businessHours;
+                // Also clear legacy location if it exists (migration)
+                updateObj['aiAgentSettings.businessHours'] = null;
             } else {
                 return res.status(400).json({
                     success: false,
