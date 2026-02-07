@@ -136,11 +136,180 @@
       }
     },
     
+    "slotRegistry": {
+      "description": "V110: Slot Registry - SINGLE SOURCE OF TRUTH for all slots used in Discovery and Booking flows",
+      "keys": {
+        "frontDesk.slotRegistry": { 
+          "type": "object", 
+          "required": false, 
+          "uiSection": "slot-registry",
+          "description": "Slot registry containing all slot definitions"
+        },
+        "frontDesk.slotRegistry.version": { 
+          "type": "string", 
+          "required": false, 
+          "default": "v1",
+          "uiSection": "slot-registry"
+        },
+        "frontDesk.slotRegistry.slots": { 
+          "type": "array", 
+          "required": false, 
+          "uiSection": "slot-registry",
+          "description": "Array of slot definitions with id, type, required, extraction, etc."
+        }
+      }
+    },
+    
+    "discoveryFlow": {
+      "description": "V110: Discovery Flow - Steps for extracting/confirming slots BEFORE booking consent",
+      "keys": {
+        "frontDesk.discoveryFlow": { 
+          "type": "object", 
+          "required": false, 
+          "uiSection": "discovery-flow",
+          "description": "Discovery flow configuration"
+        },
+        "frontDesk.discoveryFlow.version": { 
+          "type": "string", 
+          "required": false, 
+          "default": "v1",
+          "uiSection": "discovery-flow"
+        },
+        "frontDesk.discoveryFlow.enabled": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "discovery-flow"
+        },
+        "frontDesk.discoveryFlow.steps": { 
+          "type": "array", 
+          "required": false, 
+          "uiSection": "discovery-flow",
+          "description": "Array of discovery steps with stepId, slotId, ask, reprompt"
+        }
+      }
+    },
+    
+    "bookingFlow": {
+      "description": "V110: Booking Flow - Steps for collecting/confirming all required slots for booking",
+      "keys": {
+        "frontDesk.bookingFlow": { 
+          "type": "object", 
+          "required": false, 
+          "uiSection": "booking-flow",
+          "description": "Booking flow configuration"
+        },
+        "frontDesk.bookingFlow.version": { 
+          "type": "string", 
+          "required": false, 
+          "default": "v1",
+          "uiSection": "booking-flow"
+        },
+        "frontDesk.bookingFlow.enabled": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "booking-flow"
+        },
+        "frontDesk.bookingFlow.steps": { 
+          "type": "array", 
+          "required": false, 
+          "uiSection": "booking-flow",
+          "description": "Array of booking steps with stepId, slotId, ask, reprompt, confirmPrompt"
+        }
+      }
+    },
+    
+    "flowPolicies": {
+      "description": "V110: Policies for name parsing, address handling, and discovery→booking handoff",
+      "keys": {
+        "frontDesk.policies": { 
+          "type": "object", 
+          "required": false, 
+          "uiSection": "policies",
+          "description": "Flow policies configuration"
+        },
+        "frontDesk.policies.nameParsing": { 
+          "type": "object", 
+          "required": false, 
+          "uiSection": "policies",
+          "description": "Name parsing policy using commonFirstNames list"
+        },
+        "frontDesk.policies.nameParsing.useFirstNameList": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "policies"
+        },
+        "frontDesk.policies.nameParsing.confirmIfFirstNameDetected": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "policies"
+        },
+        "frontDesk.policies.nameParsing.acceptLastNameOnly": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "policies"
+        },
+        "frontDesk.policies.booking": { 
+          "type": "object", 
+          "required": false, 
+          "uiSection": "policies",
+          "description": "Booking behavior policy"
+        },
+        "frontDesk.policies.booking.whenBookingStarts": { 
+          "type": "string", 
+          "required": false, 
+          "default": "confirm_discovery_values_then_ask_missing",
+          "enum": ["confirm_discovery_values_then_ask_missing", "ask_all_from_scratch"],
+          "uiSection": "policies"
+        },
+        "frontDesk.policies.booking.neverRestartIfAlreadyCaptured": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "policies"
+        },
+        "frontDesk.policies.address": { 
+          "type": "object", 
+          "required": false, 
+          "uiSection": "policies",
+          "description": "Address handling policy"
+        },
+        "frontDesk.policies.address.defaultState": { 
+          "type": "string", 
+          "required": false, 
+          "default": "FL",
+          "uiSection": "policies"
+        },
+        "frontDesk.policies.address.requireCityIfMissing": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "policies"
+        },
+        "frontDesk.policies.address.requireUnitIfMultiUnit": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "policies"
+        },
+        "frontDesk.policies.address.geoVerifyEnabled": { 
+          "type": "boolean", 
+          "required": false, 
+          "default": true,
+          "uiSection": "policies"
+        }
+      }
+    },
+    
     "bookingPrompts": {
-      "description": "Booking slot configuration and prompts - THE SINGLE SOURCE OF TRUTH",
+      "description": "Booking slot configuration and prompts - LEGACY (use bookingFlow.steps instead)",
       "keys": {
         "frontDesk.bookingEnabled": { "type": "boolean", "required": false, "default": true, "uiSection": "booking-prompts" },
-        "frontDesk.bookingSlots": { "type": "array", "required": false, "default": [], "uiSection": "booking-prompts" },
+        "frontDesk.bookingSlots": { "type": "array", "required": false, "default": [], "uiSection": "booking-prompts", "description": "LEGACY - use frontDesk.slotRegistry.slots instead" },
         "frontDesk.bookingSlots.name.confirmSpelling": { "type": "boolean", "required": false, "uiSection": "booking-prompts" },
         "booking.nameParsing": { "type": "object", "required": false, "uiSection": "booking-prompts" },
         "booking.nameParsing.acceptLastNameOnly": { "type": "boolean", "required": false, "uiSection": "booking-prompts" },

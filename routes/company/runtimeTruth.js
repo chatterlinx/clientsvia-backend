@@ -535,9 +535,163 @@ router.get('/', async (req, res) => {
                     : []
             },
 
-            // Tab: Booking
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V110: ENTERPRISE SLOT/FLOW ARCHITECTURE
+            // ═══════════════════════════════════════════════════════════════════════════
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V110: SLOT REGISTRY - Single Source of Truth for all slots
+            // ═══════════════════════════════════════════════════════════════════════════
+            slotRegistry: {
+                configured: !!frontDeskBehavior.slotRegistry?.version,
+                version: frontDeskBehavior.slotRegistry?.version || null,
+                slotCount: Array.isArray(frontDeskBehavior.slotRegistry?.slots) 
+                    ? frontDeskBehavior.slotRegistry.slots.length 
+                    : 0,
+                slotIds: Array.isArray(frontDeskBehavior.slotRegistry?.slots)
+                    ? frontDeskBehavior.slotRegistry.slots.map(s => s.id)
+                    : [],
+                requiredSlots: Array.isArray(frontDeskBehavior.slotRegistry?.slots)
+                    ? frontDeskBehavior.slotRegistry.slots.filter(s => s.required).map(s => s.id)
+                    : [],
+                slotsSummary: Array.isArray(frontDeskBehavior.slotRegistry?.slots)
+                    ? frontDeskBehavior.slotRegistry.slots.map(s => ({
+                        id: s.id,
+                        label: s.label,
+                        type: s.type,
+                        required: s.required === true,
+                        discoveryFillAllowed: s.discoveryFillAllowed !== false,
+                        bookingConfirmRequired: s.bookingConfirmRequired !== false,
+                        // V110: Extraction config
+                        extractionSources: s.extraction?.source || ['utterance'],
+                        // V110: Address-specific policy
+                        hasAddressPolicy: s.type === 'address' && !!s.addressPolicy
+                    }))
+                    : [],
+                // V110: Slot lifecycle states
+                slotStates: ['EMPTY', 'CAPTURED', 'CONFIRMED', 'LOCKED', 'REJECTED'],
+                source: 'aiAgentSettings.frontDeskBehavior.slotRegistry'
+            },
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V110: DISCOVERY FLOW - Passive capture + Smart confirmation
+            // ═══════════════════════════════════════════════════════════════════════════
+            discoveryFlow: {
+                configured: !!frontDeskBehavior.discoveryFlow?.version,
+                version: frontDeskBehavior.discoveryFlow?.version || null,
+                enabled: frontDeskBehavior.discoveryFlow?.enabled !== false,
+                stepsCount: Array.isArray(frontDeskBehavior.discoveryFlow?.steps) 
+                    ? frontDeskBehavior.discoveryFlow.steps.length 
+                    : 0,
+                // V110: Step order for reference
+                stepOrder: Array.isArray(frontDeskBehavior.discoveryFlow?.steps)
+                    ? frontDeskBehavior.discoveryFlow.steps
+                        .sort((a, b) => (a.order || 0) - (b.order || 0))
+                        .map(s => s.slotId)
+                    : [],
+                stepsSummary: Array.isArray(frontDeskBehavior.discoveryFlow?.steps)
+                    ? frontDeskBehavior.discoveryFlow.steps.map(s => ({
+                        stepId: s.stepId,
+                        slotId: s.slotId,
+                        order: s.order,
+                        confirmMode: s.confirmMode || 'smart_if_captured',
+                        hasAskPrompt: !!s.ask,
+                        hasReprompt: !!s.reprompt,
+                        hasRepromptVariants: Array.isArray(s.repromptVariants) && s.repromptVariants.length > 0,
+                        repromptVariantsCount: s.repromptVariants?.length || 0
+                    }))
+                    : [],
+                // V110: Confirm modes available
+                confirmModes: ['smart_if_captured', 'always', 'never', 'confirm_if_from_caller_id'],
+                source: 'aiAgentSettings.frontDeskBehavior.discoveryFlow'
+            },
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V110: BOOKING FLOW - Confirm captured → Ask missing → Finalize
+            // ═══════════════════════════════════════════════════════════════════════════
+            bookingFlow: {
+                configured: !!frontDeskBehavior.bookingFlow?.version,
+                version: frontDeskBehavior.bookingFlow?.version || null,
+                enabled: frontDeskBehavior.bookingFlow?.enabled !== false,
+                confirmCapturedFirst: frontDeskBehavior.bookingFlow?.confirmCapturedFirst !== false,
+                stepsCount: Array.isArray(frontDeskBehavior.bookingFlow?.steps) 
+                    ? frontDeskBehavior.bookingFlow.steps.length 
+                    : 0,
+                // V110: Step order for reference
+                stepOrder: Array.isArray(frontDeskBehavior.bookingFlow?.steps)
+                    ? frontDeskBehavior.bookingFlow.steps
+                        .sort((a, b) => (a.order || 0) - (b.order || 0))
+                        .map(s => s.slotId)
+                    : [],
+                stepsSummary: Array.isArray(frontDeskBehavior.bookingFlow?.steps)
+                    ? frontDeskBehavior.bookingFlow.steps.map(s => ({
+                        stepId: s.stepId,
+                        slotId: s.slotId,
+                        order: s.order,
+                        hasAskPrompt: !!s.ask,
+                        hasConfirmPrompt: !!s.confirmPrompt,
+                        hasReprompt: !!s.reprompt,
+                        hasRepromptVariants: Array.isArray(s.repromptVariants) && s.repromptVariants.length > 0,
+                        repromptVariantsCount: s.repromptVariants?.length || 0,
+                        // V110: Address sub-step config
+                        hasStructuredSubflow: s.structuredSubflow?.enabled === true,
+                        structuredSubflowSequence: s.structuredSubflow?.enabled 
+                            ? (s.structuredSubflow.sequence || []).join(' → ')
+                            : null
+                    }))
+                    : [],
+                // V110: Completion config
+                completion: {
+                    reviewAndConfirm: frontDeskBehavior.bookingFlow?.completion?.reviewAndConfirm !== false,
+                    hasConfirmScript: !!frontDeskBehavior.bookingFlow?.completion?.confirmScript,
+                    hasConfirmRetryPrompt: !!frontDeskBehavior.bookingFlow?.completion?.confirmRetryPrompt,
+                    hasCorrectionPrompt: !!frontDeskBehavior.bookingFlow?.completion?.correctionPrompt
+                },
+                // V110: Reprompt budget (enterprise)
+                maxAttemptsPerSlot: frontDeskBehavior.bookingFlow?.maxAttemptsPerSlot || 3,
+                source: 'aiAgentSettings.frontDeskBehavior.bookingFlow'
+            },
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V110: FLOW POLICIES - Enterprise behavior configuration
+            // ═══════════════════════════════════════════════════════════════════════════
+            flowPolicies: {
+                configured: !!frontDeskBehavior.policies,
+                nameParsing: {
+                    useFirstNameList: frontDeskBehavior.policies?.nameParsing?.useFirstNameList !== false,
+                    confirmIfFirstNameDetected: frontDeskBehavior.policies?.nameParsing?.confirmIfFirstNameDetected !== false,
+                    acceptLastNameOnly: frontDeskBehavior.policies?.nameParsing?.acceptLastNameOnly !== false,
+                    // V110: "That's my last name" handling
+                    ifCallerSaysNoThatsMyLastName: frontDeskBehavior.policies?.nameParsing?.ifCallerSaysNoThatsMyLastName || {
+                        moveValueTo: 'name.last',
+                        thenAsk: 'name.first'
+                    }
+                },
+                booking: {
+                    whenBookingStarts: frontDeskBehavior.policies?.booking?.whenBookingStarts || 'confirm_discovery_values_then_ask_missing',
+                    neverRestartIfAlreadyCaptured: frontDeskBehavior.policies?.booking?.neverRestartIfAlreadyCaptured !== false,
+                    // V110: Confirm modes per slot
+                    defaultConfirmMode: frontDeskBehavior.policies?.booking?.defaultConfirmMode || 'smart_if_captured'
+                },
+                address: {
+                    defaultState: frontDeskBehavior.policies?.address?.defaultState || 'FL',
+                    requireCityIfMissing: frontDeskBehavior.policies?.address?.requireCityIfMissing !== false,
+                    requireUnitIfMultiUnit: frontDeskBehavior.policies?.address?.requireUnitIfMultiUnit !== false,
+                    geoVerifyEnabled: frontDeskBehavior.policies?.address?.geoVerifyEnabled !== false,
+                    // V110: Geo verify timing
+                    geoVerifyWhen: frontDeskBehavior.policies?.address?.geoVerifyWhen || 'on_full_address'
+                },
+                // V110: Reprompt budget
+                repromptBudget: {
+                    maxRepromptsPerSlot: frontDeskBehavior.policies?.repromptBudget?.maxRepromptsPerSlot || 3,
+                    maxTotalReprompts: frontDeskBehavior.policies?.repromptBudget?.maxTotalReprompts || 10,
+                    onExceed: frontDeskBehavior.policies?.repromptBudget?.onExceed || 'transfer'
+                },
+                source: 'aiAgentSettings.frontDeskBehavior.policies'
+            },
+
+            // Tab: Booking (LEGACY - use slotRegistry + bookingFlow instead)
             booking: {
-                // Single runtime entry point for slots
+                // Single runtime entry point for slots (LEGACY)
                 runtimeSlots: {
                     source: bookingRuntime.source,
                     isConfigured: bookingRuntime.isConfigured === true,

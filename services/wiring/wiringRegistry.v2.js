@@ -500,11 +500,231 @@ const wiringRegistryV2 = {
                     ]
                 },
 
-                // NAME PARSING (Last-name-first support)
+                // ═══════════════════════════════════════════════════════════════════════════
+                // V110: SLOT REGISTRY - SINGLE SOURCE OF TRUTH FOR ALL SLOTS
+                // ═══════════════════════════════════════════════════════════════════════════
+                {
+                    id: 'frontDesk.slotRegistry',
+                    label: 'Slot Registry',
+                    description: 'V110: Single source of truth for all slots used by Discovery and Booking flows',
+                    critical: true,
+                    tier: 'MVA',
+                    ui: {
+                        sectionId: 'discovery-flow',
+                        path: 'Front Desk → Discovery Flow → Slot Registry'
+                    },
+                    fields: [
+                        {
+                            id: 'frontDesk.slotRegistry',
+                            label: 'Slot Registry',
+                            ui: { inputId: 'slotRegistry', path: 'Front Desk → Discovery Flow → Slot Registry' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.slotRegistry' },
+                            runtime: { readers: ['StepEngine', 'DiscoveryFlowRunner', 'BookingFlowRunner'] },
+                            scope: 'company',
+                            required: true,
+                            critical: true,
+                            tier: 'MVA',
+                            validators: [VALIDATORS.isNonEmptyObject],
+                            defaultValue: { version: 'v1', slots: [] },
+                            notes: 'All slots used by discovery/booking must be registered here. If not in registry, slot does not exist at runtime.'
+                        },
+                        {
+                            id: 'frontDesk.slotRegistry.slots',
+                            label: 'Registered Slots',
+                            ui: { inputId: 'slotRegistrySlots', path: 'Front Desk → Discovery Flow → Slot Registry → Slots' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.slotRegistry.slots' },
+                            runtime: { readers: ['StepEngine', 'DiscoveryFlowRunner', 'BookingFlowRunner'] },
+                            scope: 'company',
+                            required: true,
+                            validators: [VALIDATORS.isNonEmptyArray],
+                            defaultValue: [],
+                            notes: 'Array of slot definitions with id, type, required, discoveryFillAllowed, bookingConfirmRequired, extraction policy'
+                        }
+                    ]
+                },
+
+                // ═══════════════════════════════════════════════════════════════════════════
+                // V110: DISCOVERY FLOW - Steps for extracting/confirming slots BEFORE booking
+                // ═══════════════════════════════════════════════════════════════════════════
+                {
+                    id: 'frontDesk.discoveryFlow',
+                    label: 'Discovery Flow',
+                    description: 'V110: Steps for capturing slots passively before booking consent',
+                    critical: true,
+                    tier: 'MVA',
+                    ui: {
+                        sectionId: 'discovery-flow',
+                        path: 'Front Desk → Discovery Flow'
+                    },
+                    fields: [
+                        {
+                            id: 'frontDesk.discoveryFlow',
+                            label: 'Discovery Flow Config',
+                            ui: { inputId: 'discoveryFlow', path: 'Front Desk → Discovery Flow' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.discoveryFlow' },
+                            runtime: { readers: ['StepEngine', 'DiscoveryFlowRunner'] },
+                            scope: 'company',
+                            required: true,
+                            critical: true,
+                            tier: 'MVA',
+                            validators: [VALIDATORS.isNonEmptyObject],
+                            defaultValue: { version: 'v1', enabled: true, steps: [] },
+                            notes: 'Discovery captures slots passively. When booking starts, captured values are promoted and confirmed (not re-asked).'
+                        },
+                        {
+                            id: 'frontDesk.discoveryFlow.steps',
+                            label: 'Discovery Steps',
+                            ui: { inputId: 'discoveryFlowSteps', path: 'Front Desk → Discovery Flow → Steps' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.discoveryFlow.steps' },
+                            runtime: { readers: ['StepEngine', 'DiscoveryFlowRunner'] },
+                            scope: 'company',
+                            required: true,
+                            validators: [VALIDATORS.isNonEmptyArray],
+                            defaultValue: [],
+                            notes: 'Array of steps with stepId, slotId, ask, reprompt, confirmMode'
+                        },
+                        {
+                            id: 'frontDesk.discoveryFlow.enabled',
+                            label: 'Discovery Flow Enabled',
+                            ui: { inputId: 'discoveryFlowEnabled', path: 'Front Desk → Discovery Flow → Enabled' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.discoveryFlow.enabled' },
+                            runtime: { readers: ['StepEngine', 'DiscoveryFlowRunner'] },
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'Master toggle for discovery flow'
+                        }
+                    ]
+                },
+
+                // ═══════════════════════════════════════════════════════════════════════════
+                // V110: BOOKING FLOW (NEW) - Steps for collecting/confirming all required slots
+                // ═══════════════════════════════════════════════════════════════════════════
+                {
+                    id: 'frontDesk.bookingFlow',
+                    label: 'Booking Flow',
+                    description: 'V110: Steps for collecting/confirming all required slots for booking',
+                    critical: true,
+                    tier: 'MVA',
+                    ui: {
+                        sectionId: 'discovery-flow',
+                        path: 'Front Desk → Discovery Flow → Booking Flow'
+                    },
+                    fields: [
+                        {
+                            id: 'frontDesk.bookingFlow',
+                            label: 'Booking Flow Config',
+                            ui: { inputId: 'bookingFlow', path: 'Front Desk → Discovery Flow → Booking Flow' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.bookingFlow' },
+                            runtime: { readers: ['StepEngine', 'BookingFlowRunner'] },
+                            scope: 'company',
+                            required: true,
+                            critical: true,
+                            tier: 'MVA',
+                            validators: [VALIDATORS.isNonEmptyObject],
+                            defaultValue: { version: 'v1', enabled: true, confirmCapturedFirst: true, steps: [] },
+                            notes: 'Booking flow confirms captured values first, then asks for missing slots.'
+                        },
+                        {
+                            id: 'frontDesk.bookingFlow.steps',
+                            label: 'Booking Steps',
+                            ui: { inputId: 'bookingFlowSteps', path: 'Front Desk → Discovery Flow → Booking Flow → Steps' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.bookingFlow.steps' },
+                            runtime: { readers: ['StepEngine', 'BookingFlowRunner'] },
+                            scope: 'company',
+                            required: true,
+                            validators: [VALIDATORS.isNonEmptyArray],
+                            defaultValue: [],
+                            notes: 'Array of steps with stepId, slotId, ask, confirmPrompt, reprompt'
+                        },
+                        {
+                            id: 'frontDesk.bookingFlow.confirmCapturedFirst',
+                            label: 'Confirm Captured First',
+                            ui: { inputId: 'bookingFlowConfirmFirst', path: 'Front Desk → Discovery Flow → Booking Flow → Confirm First' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.bookingFlow.confirmCapturedFirst' },
+                            runtime: { readers: ['StepEngine', 'BookingFlowRunner'] },
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: true,
+                            notes: 'If true, booking confirms discovery values before asking for new slots'
+                        }
+                    ]
+                },
+
+                // ═══════════════════════════════════════════════════════════════════════════
+                // V110: FLOW POLICIES - Name parsing, address handling, discovery→booking handoff
+                // ═══════════════════════════════════════════════════════════════════════════
+                {
+                    id: 'frontDesk.policies',
+                    label: 'Flow Policies',
+                    description: 'V110: Policies for name parsing, address handling, and booking behavior',
+                    critical: true,
+                    tier: 'MVA',
+                    ui: {
+                        sectionId: 'discovery-flow',
+                        path: 'Front Desk → Discovery Flow → Policies'
+                    },
+                    fields: [
+                        {
+                            id: 'frontDesk.policies',
+                            label: 'Flow Policies',
+                            ui: { inputId: 'policies', path: 'Front Desk → Discovery Flow → Policies' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.policies' },
+                            runtime: { readers: ['StepEngine', 'DiscoveryFlowRunner', 'BookingFlowRunner'] },
+                            scope: 'company',
+                            required: true,
+                            critical: true,
+                            tier: 'MVA',
+                            validators: [VALIDATORS.isNonEmptyObject],
+                            defaultValue: {},
+                            notes: 'Contains nameParsing, booking, and address policies'
+                        },
+                        {
+                            id: 'frontDesk.policies.nameParsing',
+                            label: 'Name Parsing Policy',
+                            ui: { inputId: 'policiesNameParsing', path: 'Front Desk → Discovery Flow → Policies → Name Parsing' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.policies.nameParsing' },
+                            runtime: { readers: ['StepEngine', 'NameHandler'] },
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: { useFirstNameList: true, confirmIfFirstNameDetected: true, acceptLastNameOnly: true },
+                            notes: 'Name parsing rules using commonFirstNames list'
+                        },
+                        {
+                            id: 'frontDesk.policies.booking',
+                            label: 'Booking Policy',
+                            ui: { inputId: 'policiesBooking', path: 'Front Desk → Discovery Flow → Policies → Booking' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.policies.booking' },
+                            runtime: { readers: ['StepEngine', 'BookingFlowRunner'] },
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: { whenBookingStarts: 'confirm_discovery_values_then_ask_missing', neverRestartIfAlreadyCaptured: true },
+                            notes: 'Controls discovery→booking handoff behavior'
+                        },
+                        {
+                            id: 'frontDesk.policies.address',
+                            label: 'Address Policy',
+                            ui: { inputId: 'policiesAddress', path: 'Front Desk → Discovery Flow → Policies → Address' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.policies.address' },
+                            runtime: { readers: ['StepEngine', 'AddressHandler'] },
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: { defaultState: 'FL', requireCityIfMissing: true, requireUnitIfMultiUnit: true, geoVerifyEnabled: true },
+                            notes: 'Address handling and geo verification rules'
+                        }
+                    ]
+                },
+
+                // NAME PARSING (Last-name-first support) - LEGACY (use frontDesk.policies.nameParsing instead)
                 {
                     id: 'frontDesk.nameParsing',
-                    label: 'Name Parsing',
-                    description: 'How names are parsed (supports last-name-first callers like "My name is Smith")',
+                    label: 'Name Parsing (Legacy)',
+                    description: 'How names are parsed (supports last-name-first callers like "My name is Smith") - LEGACY: Use frontDesk.policies.nameParsing',
                     critical: true,
                     ui: {
                         sectionId: 'nameParsing',

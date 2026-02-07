@@ -15,7 +15,17 @@
  
 const Company = require('../../models/v2Company');
 const logger = require('../../utils/logger');
-const { DEFAULT_DETECTION_TRIGGERS, DEFAULT_DIRECT_INTENT_PATTERNS, DEFAULT_SCHEDULING, DEFAULT_BUSINESS_HOURS } = require('../../config/onboarding/DefaultFrontDeskPreset');
+const { 
+    DEFAULT_DETECTION_TRIGGERS, 
+    DEFAULT_DIRECT_INTENT_PATTERNS, 
+    DEFAULT_SCHEDULING, 
+    DEFAULT_BUSINESS_HOURS,
+    // V110: New canonical structures
+    DEFAULT_SLOT_REGISTRY,
+    DEFAULT_DISCOVERY_FLOW,
+    DEFAULT_BOOKING_FLOW,
+    DEFAULT_FLOW_POLICIES
+} = require('../../config/onboarding/DefaultFrontDeskPreset');
 
 /**
  * Infer a tradeKey for a company using templateReferences (if present).
@@ -113,6 +123,45 @@ async function seedCompanyBaseFields({ companyId, companyDoc }) {
     if (!hasBusinessHours) {
         applied['aiAgentSettings.frontDeskBehavior.businessHours'] = DEFAULT_BUSINESS_HOURS;
         logger.info('[WIRING SEEDER] Phase 1: Seeding business hours', {
+            companyId: companyDoc._id.toString()
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V110: Seed NEW CANONICAL STRUCTURES (slotRegistry, discoveryFlow, bookingFlow, policies)
+    // These are the enterprise-grade slot/flow architecture
+    // ═══════════════════════════════════════════════════════════════════════════
+    const hasSlotRegistry = companyDoc?.aiAgentSettings?.frontDeskBehavior?.slotRegistry?.version;
+    if (!hasSlotRegistry) {
+        applied['aiAgentSettings.frontDeskBehavior.slotRegistry'] = DEFAULT_SLOT_REGISTRY;
+        logger.info('[WIRING SEEDER] V110: Seeding slotRegistry', {
+            companyId: companyDoc._id.toString(),
+            slotCount: DEFAULT_SLOT_REGISTRY.slots?.length || 0
+        });
+    }
+
+    const hasDiscoveryFlow = companyDoc?.aiAgentSettings?.frontDeskBehavior?.discoveryFlow?.version;
+    if (!hasDiscoveryFlow) {
+        applied['aiAgentSettings.frontDeskBehavior.discoveryFlow'] = DEFAULT_DISCOVERY_FLOW;
+        logger.info('[WIRING SEEDER] V110: Seeding discoveryFlow', {
+            companyId: companyDoc._id.toString(),
+            stepCount: DEFAULT_DISCOVERY_FLOW.steps?.length || 0
+        });
+    }
+
+    const hasBookingFlow = companyDoc?.aiAgentSettings?.frontDeskBehavior?.bookingFlow?.version;
+    if (!hasBookingFlow) {
+        applied['aiAgentSettings.frontDeskBehavior.bookingFlow'] = DEFAULT_BOOKING_FLOW;
+        logger.info('[WIRING SEEDER] V110: Seeding bookingFlow', {
+            companyId: companyDoc._id.toString(),
+            stepCount: DEFAULT_BOOKING_FLOW.steps?.length || 0
+        });
+    }
+
+    const hasPolicies = companyDoc?.aiAgentSettings?.frontDeskBehavior?.policies?.booking;
+    if (!hasPolicies) {
+        applied['aiAgentSettings.frontDeskBehavior.policies'] = DEFAULT_FLOW_POLICIES;
+        logger.info('[WIRING SEEDER] V110: Seeding policies', {
             companyId: companyDoc._id.toString()
         });
     }

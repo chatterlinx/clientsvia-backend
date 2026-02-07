@@ -2145,12 +2145,25 @@ class BookingFlowRunner {
             };
         }
         
-        // Unclear response - re-ask confirmation
+        // V110: Unclear response - use UI-configured confirmRetryPrompt, NO hardcoded text
+        const confirmRetryPrompt = step.confirmRetryPrompt || step.options?.confirmRetryPrompt || step.reprompt;
+        const promptSource = confirmRetryPrompt 
+            ? `bookingFlow.steps[${step.id}].confirmRetryPrompt`
+            : 'ERROR:NO_CONFIRM_RETRY_CONFIGURED';
+        
+        if (!confirmRetryPrompt) {
+            logger.warn('[BOOKING FLOW RUNNER] V110: No confirmRetryPrompt configured for step', {
+                stepId: step.id,
+                fieldKey,
+                recommendation: 'Add confirmRetryPrompt in Front Desk → Discovery Flow → Booking Flow'
+            });
+        }
+        
         return {
-            reply: "I'm sorry, I didn't catch that. Is that information correct? Please say yes or no.",
+            reply: confirmRetryPrompt || step.confirmPrompt || step.prompt || `Is ${step.label || fieldKey} correct?`,
             state,
             isComplete: false,
-            action: 'CONFIRM_RETRY',
+            action: 'CONTINUE',  // V110: Changed from 'CONFIRM_RETRY' - standardized action
             matchSource: 'BOOKING_FLOW_RUNNER',
             tier: 'tier1',
             tokensUsed: 0,
@@ -2160,7 +2173,8 @@ class BookingFlowRunner {
                 flowId: flow.flowId,
                 mode: 'CONFIRM_RETRY',
                 fieldKey,
-                userInput
+                userInput,
+                promptSource
             }
         };
     }
@@ -2843,25 +2857,127 @@ class BookingFlowRunner {
         // V99: ADDRESS BREAKDOWN - Step-by-step collection using UI prompts
         // ═══════════════════════════════════════════════════════════════════════
         // When breakDownIfUnclear=true, collect address components separately:
-        // street → city → zip → unit (if configured)
-        // ALL prompts come from Booking Prompt tab - NO hardcoded values
         // ═══════════════════════════════════════════════════════════════════════
+        // V110: ADDRESS SUB-STEP CONTINUATION - Enterprise sub-step state handling
+        // ═══════════════════════════════════════════════════════════════════════
+        // Uses state.slotSubStep and state.addressCollected to track progress
+        // ALL prompts come from bookingFlow.steps[].structuredSubflow.prompts
+        // Action is ALWAYS 'CONTINUE' - NO ADDRESS_BREAKDOWN_* actions allowed
+        // ═══════════════════════════════════════════════════════════════════════
+        const structuredSubflow = step.options?.structuredSubflow || step.structuredSubflow;
+        if ((fieldKey === 'address' || step.type === 'address' || step.slotId === 'address.full') && 
+            state.slotSubStep && structuredSubflow?.enabled === true) {
+            
+            const currentSubStep = state.slotSubStep;
+            const userInput = extractResult.value;
+            state.addressCollected = state.addressCollected || {};
+            
+            logger.info('[BOOKING FLOW RUNNER] V110: Processing address sub-step response', {
+                subStep: currentSubStep,
+                userInput: userInput?.substring(0, 30),
+                addressCollected: state.addressCollected
+            });
+            
+            // Store the current sub-step value
+            state.addressCollected[currentSubStep] = userInput;
+            
+            // Get sequence and prompts from V110 config
+            const sequence = structuredSubflow.sequence || ['address.street', 'address.city', 'address.unit'];
+            const prompts = structuredSubflow.prompts || {};
+            
+            // Find current position in sequence and get next
+            const currentKey = `address.${currentSubStep}`;
+            const currentIdx = sequence.indexOf(currentKey);
+            const nextIdx = currentIdx + 1;
+            
+            if (nextIdx < sequence.length) {
+                // Advance to next sub-step
+                const nextKey = sequence[nextIdx];
+                const nextSubStep = nextKey.replace('address.', '');
+                state.slotSubStep = nextSubStep;
+                
+                // Get prompt from V110 config - REQUIRED
+                const nextPrompt = prompts[nextKey] || prompts[nextSubStep];
+                const promptSource = nextPrompt 
+                    ? `bookingFlow.steps[${step.id}].structuredSubflow.prompts.${nextKey}`
+                    : 'ERROR:NO_SUBFLOW_PROMPT_CONFIGURED';
+                
+                if (!nextPrompt) {
+                    logger.error('[BOOKING FLOW RUNNER] V110: FATAL - No prompt for address sub-step', {
+                        stepId: step.id,
+                        nextSubStep,
+                        availablePrompts: Object.keys(prompts),
+                        fix: 'Configure in Front Desk → Discovery Flow → Booking Flow → structuredSubflow.prompts'
+                    });
+                }
+                
+                logger.info('[BOOKING FLOW RUNNER] V110: Address sub-step - advancing', {
+                    nextSubStep,
+                    promptSource
+                });
+                
+                // V110: Update state with current tracking
+                state.currentStepId = step.id;
+                state.currentSlotId = step.slotId || 'address.full';
+                
+                return {
+                    reply: nextPrompt || step.ask || step.prompt,
+                    state,
+                    isComplete: false,
+                    action: 'CONTINUE',  // V110: NEVER use ADDRESS_BREAKDOWN_* actions
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        // V110: Full prompt tracing - REQUIRED fields
+                        step: step.id,
+                        stepId: step.id,
+                        slotId: step.slotId || 'address.full',
+                        slotSubStep: nextSubStep,
+                        repromptCount: 0,
+                        promptSource,
+                        addressCollected: state.addressCollected
+                    }
+                };
+            } else {
+                // Address sub-steps complete - assemble full address
+                const fullAddress = this.assembleAddressFromBreakdown(state.addressCollected);
+                
+                logger.info('[BOOKING FLOW RUNNER] V110: Address sub-steps complete', {
+                    addressCollected: state.addressCollected,
+                    fullAddress
+                });
+                
+                // Clear sub-step state
+                delete state.slotSubStep;
+                delete state.addressCollected;
+                
+                // Store the assembled address and continue with validation
+                extractResult.value = fullAddress;
+                valueToStore = fullAddress;
+            }
+        }
+        
+        // V110 BACKWARD COMPAT: Support legacy addressBreakdown state
         if ((fieldKey === 'address' || step.type === 'address') && state.addressBreakdown) {
             const slotOptions = step.options || {};
             const breakdown = state.addressBreakdown;
             const phase = breakdown.phase;
             const userInput = extractResult.value;
             
-            logger.info('[BOOKING FLOW RUNNER] V99: Processing address breakdown response', {
+            logger.warn('[BOOKING FLOW RUNNER] V110: Using LEGACY addressBreakdown - migrate to structuredSubflow', {
                 phase,
-                userInput: userInput?.substring(0, 30),
-                collected: breakdown.collected
+                stepId: step.id
             });
             
             // Store the current phase value
             breakdown.collected[phase] = userInput;
             
-            // Determine next phase based on UI config
+            // Determine next phase
             const requireZip = slotOptions.requireZip === true;
             const requireUnit = slotOptions.unitNumberMode !== 'never';
             
@@ -2872,16 +2988,16 @@ class BookingFlowRunner {
             if (phase === 'street') {
                 nextPhase = 'city';
                 nextPrompt = slotOptions.cityPrompt;
-                promptSource = 'bookingPromptTab:cityPrompt';
+                promptSource = `bookingFlow.steps[${step.id}].options.cityPrompt`;
             } else if (phase === 'city') {
                 if (requireZip) {
                     nextPhase = 'zip';
                     nextPrompt = slotOptions.zipPrompt;
-                    promptSource = 'bookingPromptTab:zipPrompt';
+                    promptSource = `bookingFlow.steps[${step.id}].options.zipPrompt`;
                 } else if (requireUnit) {
                     nextPhase = 'unit';
                     nextPrompt = slotOptions.unitNumberPrompt || slotOptions.unitTypePrompt;
-                    promptSource = 'bookingPromptTab:unitNumberPrompt';
+                    promptSource = `bookingFlow.steps[${step.id}].options.unitNumberPrompt`;
                 } else {
                     nextPhase = null; // Complete
                 }
@@ -2889,29 +3005,27 @@ class BookingFlowRunner {
                 if (requireUnit) {
                     nextPhase = 'unit';
                     nextPrompt = slotOptions.unitNumberPrompt || slotOptions.unitTypePrompt;
-                    promptSource = 'bookingPromptTab:unitNumberPrompt';
+                    promptSource = `bookingFlow.steps[${step.id}].options.unitNumberPrompt`;
                 } else {
-                    nextPhase = null; // Complete
+                    nextPhase = null;
                 }
             } else if (phase === 'unit') {
-                nextPhase = null; // Complete
+                nextPhase = null;
             }
             
             if (nextPhase && nextPrompt) {
-                // Advance to next phase
                 breakdown.phase = nextPhase;
                 
-                logger.info('[BOOKING FLOW RUNNER] V99: Address breakdown - asking next component', {
-                    nextPhase,
-                    nextPrompt: nextPrompt?.substring(0, 50),
-                    promptSource
-                });
+                // V110: Update state with current tracking (legacy compat)
+                state.currentStepId = step.id;
+                state.currentSlotId = step.slotId || 'address';
+                state.slotSubStep = nextPhase;  // V110: Mirror to slotSubStep
                 
                 return {
                     reply: nextPrompt,
                     state,
                     isComplete: false,
-                    action: `ADDRESS_BREAKDOWN_${nextPhase.toUpperCase()}`,
+                    action: 'CONTINUE',  // V110: Changed from ADDRESS_BREAKDOWN_*
                     currentStep: step.id,
                     matchSource: 'BOOKING_FLOW_RUNNER',
                     tier: 'tier1',
@@ -2920,24 +3034,21 @@ class BookingFlowRunner {
                     debug: {
                         source: 'BOOKING_FLOW_RUNNER',
                         flowId: flow.flowId,
-                        addressBreakdownPhase: nextPhase,
+                        // V110: Full prompt tracing - REQUIRED fields
+                        step: step.id,
+                        stepId: step.id,
+                        slotId: step.slotId || 'address',
+                        slotSubStep: nextPhase,
+                        repromptCount: 0,
                         promptSource,
-                        collected: breakdown.collected
+                        addressCollected: breakdown.collected,
+                        legacy: true
                     }
                 };
             } else {
-                // Address breakdown complete - assemble full address
+                // Address complete - assemble
                 const fullAddress = this.assembleAddressFromBreakdown(breakdown.collected);
-                
-                logger.info('[BOOKING FLOW RUNNER] V99: Address breakdown complete', {
-                    collected: breakdown.collected,
-                    fullAddress
-                });
-                
-                // Clear breakdown state
                 delete state.addressBreakdown;
-                
-                // Store the assembled address and continue with validation
                 extractResult.value = fullAddress;
                 valueToStore = fullAddress;
             }
@@ -4392,37 +4503,61 @@ class BookingFlowRunner {
         const slotOptions = step.options || {};
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V99: ADDRESS BREAKDOWN - Use UI prompts for step-by-step collection
-        // When breakDownIfUnclear=true, ask street → city → zip → unit separately
-        // ALL prompts come from Booking Prompt tab - NO hardcoded defaults used
+        // V110: ADDRESS SUB-STEPS - Enterprise sub-step state (NOT separate actions)
         // ═══════════════════════════════════════════════════════════════════════
-        if ((step.type === 'address' || step.id === 'address') && slotOptions.breakDownIfUnclear === true) {
-            // Initialize address breakdown state
-            if (!state.addressBreakdown) {
-                state.addressBreakdown = {
-                    phase: 'street',
-                    collected: {}
-                };
+        // When structuredSubflow is enabled, use sub-step state to track progress.
+        // Sub-step state: state.slotSubStep = 'street' | 'city' | 'unit' | 'confirm'
+        // 
+        // ALL prompts come from bookingFlow.steps[].structuredSubflow.prompts
+        // NO hardcoded defaults. If prompts not configured, use step.ask only.
+        // ═══════════════════════════════════════════════════════════════════════
+        const structuredSubflow = slotOptions.structuredSubflow || step.structuredSubflow;
+        if ((step.type === 'address' || step.id === 'address' || step.slotId === 'address.full') && 
+            structuredSubflow?.enabled === true) {
+            
+            // V110: Initialize sub-step state (NOT addressBreakdown action)
+            if (!state.slotSubStep) {
+                const sequence = structuredSubflow.sequence || ['address.street', 'address.city', 'address.unit'];
+                state.slotSubStep = sequence[0]?.replace('address.', '') || 'street';
+                state.addressCollected = state.addressCollected || {};
                 
-                // Use streetBreakdownPrompt from UI - REQUIRED if breakDownIfUnclear is enabled
-                const streetPrompt = slotOptions.streetBreakdownPrompt || step.prompt;
+                // Get prompt from UI config - REQUIRED
+                const prompts = structuredSubflow.prompts || {};
+                const subStepPrompt = prompts[`address.${state.slotSubStep}`] || prompts[state.slotSubStep];
                 
-                logger.info('[BOOKING FLOW RUNNER] V99: Starting UI-driven address breakdown', {
+                if (!subStepPrompt) {
+                    logger.error('[BOOKING FLOW RUNNER] V110: FATAL - No subflow prompt configured', {
+                        stepId: step.id,
+                        subStep: state.slotSubStep,
+                        availablePrompts: Object.keys(prompts),
+                        fix: 'Configure prompts in Front Desk → Discovery Flow → Booking Flow → structuredSubflow.prompts'
+                    });
+                }
+                
+                const promptToUse = subStepPrompt || step.ask || step.prompt;
+                const promptSource = subStepPrompt 
+                    ? `bookingFlow.steps[${step.id}].structuredSubflow.prompts.address.${state.slotSubStep}`
+                    : `bookingFlow.steps[${step.id}].ask`;
+                
+                logger.info('[BOOKING FLOW RUNNER] V110: Starting address sub-step flow', {
                     stepId: step.id,
-                    breakDownIfUnclear: true,
-                    streetPrompt: streetPrompt?.substring(0, 50),
-                    source: slotOptions.streetBreakdownPrompt ? 'bookingPromptTab:streetBreakdownPrompt' : 'bookingPromptTab:question'
+                    subStep: state.slotSubStep,
+                    promptSource
                 });
                 
                 // Track ask count
                 state.askCount = state.askCount || {};
                 state.askCount[step.id] = (state.askCount[step.id] || 0) + 1;
                 
+                // V110: Update state with current slot tracking
+                state.currentStepId = step.id;
+                state.currentSlotId = step.slotId || 'address.full';
+                
                 return {
-                    reply: streetPrompt,
+                    reply: promptToUse,
                     state,
                     isComplete: false,
-                    action: 'ADDRESS_BREAKDOWN_STREET',
+                    action: 'CONTINUE',  // V110: NO ADDRESS_BREAKDOWN_* actions - just CONTINUE
                     currentStep: step.id,
                     matchSource: 'BOOKING_FLOW_RUNNER',
                     tier: 'tier1',
@@ -4431,12 +4566,14 @@ class BookingFlowRunner {
                     debug: {
                         source: 'BOOKING_FLOW_RUNNER',
                         flowId: flow.flowId,
-                        currentStep: step.id,
-                        addressBreakdownPhase: 'street',
-                        promptSource: slotOptions.streetBreakdownPrompt 
-                            ? 'bookingPromptTab:streetBreakdownPrompt' 
-                            : 'bookingPromptTab:question',
-                        promptPath: 'frontDeskBehavior.bookingSlots[address].streetBreakdownPrompt'
+                        // V110: Full prompt tracing - REQUIRED fields
+                        step: step.id,
+                        stepId: step.id,
+                        slotId: step.slotId || 'address.full',
+                        slotSubStep: state.slotSubStep,
+                        repromptCount: (state.askCount?.[step.id] || 1) - 1,
+                        promptSource,
+                        promptPath: `frontDeskBehavior.bookingFlow.steps[${step.id}].structuredSubflow.prompts`
                     }
                 };
             }
@@ -4459,6 +4596,10 @@ class BookingFlowRunner {
         const promptSource = step.promptSource || 
             (step.prompt ? 'bookingPromptTab:slot.question' : 'ERROR:no_ui_prompt');
         
+        // V110: Update state with current slot tracking
+        state.currentStepId = step.id;
+        state.currentSlotId = step.slotId || step.fieldKey || step.id;
+        
         return {
             reply: prompt || `What is your ${step.label || step.id}?`,
             state,
@@ -4472,11 +4613,15 @@ class BookingFlowRunner {
             debug: {
                 source: 'BOOKING_FLOW_RUNNER',
                 flowId: flow.flowId,
-                currentStep: step.id,
+                // V110: Full prompt tracing - REQUIRED fields
+                step: step.id,
+                stepId: step.id,
+                slotId: step.slotId || step.fieldKey || step.id,
+                slotSubStep: state.slotSubStep || null,
                 askCount: state.askCount[step.id],
-                // V99: Exact prompt source from UI
+                repromptCount: state.askCount[step.id] - 1,
                 promptSource,
-                promptPath: step.promptPath || `frontDeskBehavior.bookingSlots[${step.id}].question`
+                promptPath: step.promptPath || `frontDeskBehavior.bookingFlow.steps[${step.id}].ask`
             }
         };
     }
@@ -4531,38 +4676,57 @@ class BookingFlowRunner {
      * ========================================================================
      * REPROMPT STEP - Ask again with clarification
      * ========================================================================
-     * V99: Uses UI-configured reprompt, falls back to UI question
+     * V110: ALL PROMPTS MUST COME FROM UI CONFIG - NO HARDCODED DEFAULTS
+     * If not configured, LOG ERROR and use the step.prompt only (no prefix)
      * ========================================================================
      */
     static repromptStep(step, state, flow, reason) {
-        // V99: Use UI-configured reprompt first, then fall back to UI question
-        // NO hardcoded defaults - if not configured in UI, log warning
+        // V110: STRICT - Use ONLY UI-configured prompts
+        // NO hardcoded prefixes like "I didn't quite catch that"
         let reprompt;
         let promptSource;
         
-        if (step.reprompt) {
+        // Check for repromptVariants array (UI configurable)
+        const repromptVariants = step.repromptVariants || step.options?.repromptVariants;
+        if (Array.isArray(repromptVariants) && repromptVariants.length > 0) {
+            const idx = Math.floor(Math.random() * repromptVariants.length);
+            reprompt = repromptVariants[idx];
+            promptSource = `bookingFlow.steps[${step.id}].repromptVariants[${idx}]`;
+        } else if (step.reprompt) {
             reprompt = step.reprompt;
-            promptSource = 'bookingPromptTab:slot.reprompt';
+            promptSource = `bookingFlow.steps[${step.id}].reprompt`;
         } else if (step.prompt) {
-            // Use the UI question with a prefix
-            reprompt = `I didn't quite catch that. ${step.prompt}`;
-            promptSource = 'bookingPromptTab:slot.question:with_prefix';
-        } else {
-            // No UI config - log error
-            logger.error('[BOOKING FLOW RUNNER] V99: No UI prompt configured for reprompt', {
+            // V110: Use the UI question ONLY - NO prefix added
+            reprompt = step.prompt;
+            promptSource = `bookingFlow.steps[${step.id}].prompt:NO_REPROMPT_CONFIGURED`;
+            logger.warn('[BOOKING FLOW RUNNER] V110: No reprompt configured - using step.prompt without prefix', {
                 stepId: step.id,
                 stepType: step.type,
-                reason
+                reason,
+                recommendation: 'Configure reprompt in Front Desk → Discovery Flow → Booking Flow'
             });
-            reprompt = `Could you repeat that?`;
-            promptSource = 'ERROR:no_ui_prompt';
+        } else {
+            // V110: CRITICAL - No UI config at all. This is a config error.
+            logger.error('[BOOKING FLOW RUNNER] V110: FATAL - No prompt configured for step. Config required in UI.', {
+                stepId: step.id,
+                stepType: step.type,
+                reason,
+                fix: 'Add prompts in Front Desk → Discovery Flow tab'
+            });
+            // Fail gracefully but track as config error
+            reprompt = step.label || step.id;
+            promptSource = 'ERROR:NO_UI_CONFIG';
         }
+        
+        // V110: Update state with current slot tracking
+        state.currentStepId = step.id;
+        state.currentSlotId = step.slotId || step.fieldKey || step.id;
         
         return {
             reply: reprompt,
             state,
             isComplete: false,
-            action: 'REPROMPT',
+            action: 'CONTINUE',  // V110: Changed from 'REPROMPT' - all booking actions are CONTINUE
             currentStep: step.id,
             repromptReason: reason,
             matchSource: 'BOOKING_FLOW_RUNNER',
@@ -4572,12 +4736,15 @@ class BookingFlowRunner {
             debug: {
                 source: 'BOOKING_FLOW_RUNNER',
                 flowId: flow.flowId,
-                currentStep: step.id,
+                // V110: Full prompt tracing - REQUIRED fields
+                step: step.id,
+                stepId: step.id,
+                slotId: step.slotId || step.fieldKey || step.id,
+                slotSubStep: state.slotSubStep || null,
                 repromptReason: reason,
-                // V96j: Exact prompt source (user directive #5)
+                repromptCount: state.askCount?.[step.id] || 0,
                 promptSource,
-                promptPath: step.promptPath || `flow.steps[${step.id}].reprompt`,
-                askCount: state.askCount?.[step.id] || 0
+                promptPath: `frontDeskBehavior.bookingFlow.steps[${step.id}].reprompt`
             }
         };
     }
@@ -5012,28 +5179,54 @@ class BookingFlowRunner {
             // Future: Parse which field they want to change
             state.awaitingConfirmation = false;
             
+            // V110: Get correction prompt from flow config
+            const correctionPrompt = flow.completion?.correctionPrompt || flow.completion?.changePrompt;
+            const promptSource = correctionPrompt 
+                ? 'bookingFlow.completion.correctionPrompt'
+                : 'ERROR:NO_CORRECTION_PROMPT_CONFIGURED';
+            
+            if (!correctionPrompt) {
+                logger.warn('[BOOKING FLOW RUNNER] V110: No correctionPrompt configured in bookingFlow.completion', {
+                    flowId: flow.flowId,
+                    recommendation: 'Add correctionPrompt in Front Desk → Discovery Flow → Booking Flow'
+                });
+            }
+            
             return {
-                reply: "What would you like to change?",
+                reply: correctionPrompt || "What would you like to change?",
                 state,
                 isComplete: false,
-                action: 'CHANGE_REQUESTED',
+                action: 'CONTINUE',  // V110: Standardized action
                 matchSource: 'BOOKING_FLOW_RUNNER',
                 tier: 'tier1',
                 tokensUsed: 0,
                 debug: {
                     source: 'BOOKING_FLOW_RUNNER',
                     flowId: flow.flowId,
-                    stage: 'CHANGE_REQUESTED'
+                    stage: 'CHANGE_REQUESTED',
+                    promptSource
                 }
             };
         }
         
-        // Unclear response - ask again
+        // V110: Unclear response - use UI-configured retry prompt
+        const retryPrompt = flow.completion?.confirmRetryPrompt;
+        const promptSource = retryPrompt 
+            ? 'bookingFlow.completion.confirmRetryPrompt'
+            : 'ERROR:NO_CONFIRM_RETRY_PROMPT_CONFIGURED';
+        
+        if (!retryPrompt) {
+            logger.warn('[BOOKING FLOW RUNNER] V110: No confirmRetryPrompt configured in bookingFlow.completion', {
+                flowId: flow.flowId,
+                recommendation: 'Add confirmRetryPrompt in Front Desk → Discovery Flow → Booking Flow'
+            });
+        }
+        
         return {
-            reply: "I'm sorry, I didn't catch that. Is the information I read back correct? Please say yes or no.",
+            reply: retryPrompt || flow.completion?.confirmScript || "Is that correct?",
             state,
             isComplete: false,
-            action: 'CONFIRM_RETRY',
+            action: 'CONTINUE',  // V110: Standardized action
             matchSource: 'BOOKING_FLOW_RUNNER',
             tier: 'tier1',
             tokensUsed: 0,
@@ -5041,7 +5234,8 @@ class BookingFlowRunner {
                 source: 'BOOKING_FLOW_RUNNER',
                 flowId: flow.flowId,
                 stage: 'CONFIRM_RETRY',
-                userInput: input
+                userInput: input,
+                promptSource
             }
         };
     }

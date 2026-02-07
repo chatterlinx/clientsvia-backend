@@ -3293,6 +3293,104 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             awReader
           });
           
+          // ═══════════════════════════════════════════════════════════════════════════
+          // V110: GATE NEVER SPEAKS INVARIANT
+          // ═══════════════════════════════════════════════════════════════════════════
+          // CRITICAL: The gate must ONLY route to runner. It cannot generate text.
+          // The reply must come from BookingFlowRunner with valid promptSource.
+          // If bookingResult.debug.promptSource is missing, it's a violation.
+          // ═══════════════════════════════════════════════════════════════════════════
+          const runnerDebug = bookingResult.debug || {};
+          const promptSource = runnerDebug.promptSource || runnerDebug.source;
+          
+          // ═══════════════════════════════════════════════════════════════════════════
+          // V110: FAIL-CLOSED INVARIANT - Gate must never speak
+          // ═══════════════════════════════════════════════════════════════════════════
+          let gateViolationDetected = false;
+          let originalReply = bookingResult.reply;
+          
+          // V110: Detect GATE_SPOKE_VIOLATION - prompt without proper source
+          if (bookingResult.reply && !promptSource) {
+            gateViolationDetected = true;
+            logger.error('[BOOKING GATE] ❌ GATE_SPOKE_VIOLATION: Prompt returned without promptSource! CLEARING REPLY.', {
+              callSid,
+              turnCount: callState.turnCount,
+              action: bookingResult.action,
+              replyPreview: (bookingResult.reply || '').substring(0, 50),
+              debug: runnerDebug,
+              resolution: 'FAIL_CLOSED_CLEAR_REPLY'
+            });
+            
+            // 📼 BLACK BOX: Log gate spoke violation
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'GATE_SPOKE_VIOLATION',
+                turn: callState.turnCount,
+                data: {
+                  violation: 'PROMPT_WITHOUT_SOURCE',
+                  action: bookingResult.action,
+                  replyLength: (bookingResult.reply || '').length,
+                  debugKeys: Object.keys(runnerDebug),
+                  resolution: 'FAIL_CLOSED'
+                }
+              }).catch(() => {});
+            }
+          }
+          
+          // V110: Detect ADDRESS_BREAKDOWN actions - these are banned
+          if (bookingResult.action && bookingResult.action.includes('ADDRESS_BREAKDOWN')) {
+            gateViolationDetected = true;
+            logger.error('[BOOKING GATE] ❌ GATE_SPOKE_VIOLATION: ADDRESS_BREAKDOWN action detected! FORCING CONTINUE.', {
+              callSid,
+              turnCount: callState.turnCount,
+              action: bookingResult.action,
+              resolution: 'FAIL_CLOSED_FORCE_CONTINUE'
+            });
+            
+            if (BlackBoxLogger) {
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'GATE_SPOKE_VIOLATION',
+                turn: callState.turnCount,
+                data: {
+                  violation: 'ADDRESS_BREAKDOWN_ACTION',
+                  action: bookingResult.action,
+                  expected: 'CONTINUE',
+                  resolution: 'FAIL_CLOSED'
+                }
+              }).catch(() => {});
+            }
+            
+            // Force action to CONTINUE
+            bookingResult.action = 'CONTINUE';
+          }
+          
+          // V110: FAIL-CLOSED ENFORCEMENT
+          // If violation detected, clear the reply and force transfer/escalation
+          if (gateViolationDetected) {
+            logger.warn('[BOOKING GATE] ⚠️ FAIL-CLOSED: Forcing transfer due to gate violation', {
+              callSid,
+              originalReply: (originalReply || '').substring(0, 50)
+            });
+            
+            // Clear the tainted reply - gate violations must not produce user-facing text
+            bookingResult.reply = null;
+            bookingResult.action = 'ESCALATE';
+            bookingResult.transferReason = 'GATE_SPOKE_VIOLATION_FAIL_CLOSED';
+            bookingResult.requiresTransfer = true;
+            
+            // Add fail-closed marker to debug
+            bookingResult.debug = {
+              ...bookingResult.debug,
+              gateViolation: true,
+              failClosed: true,
+              originalReply: (originalReply || '').substring(0, 100)
+            };
+          }
+          
           // Map result to expected format
           result = {
             text: bookingResult.reply,
@@ -3310,14 +3408,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               bookingFlowId: bookingResult.state?.bookingFlowId || flow.flowId,
               currentStepId: bookingResult.state?.currentStepId,
               currentBookingStep: bookingResult.state?.currentStepId,
+              currentSlotId: bookingResult.state?.currentSlotId,  // V110: Add slotId
+              slotSubStep: bookingResult.state?.slotSubStep,      // V110: Add sub-step
               bookingCollected: bookingResult.state?.bookingCollected || {},
               slotMetadata: bookingResult.state?.slotMetadata || callState.slotMetadata || {},
               confirmedSlots: bookingResult.state?.confirmedSlots || callState.confirmedSlots || {},
+              lockedSlots: bookingResult.state?.lockedSlots || callState.lockedSlots || {},  // V110
+              repromptCount: bookingResult.state?.repromptCount || {},  // V110
               bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE',
               bookingFlowState: {
                 bookingModeLocked: bookingResult.state?.bookingModeLocked !== false,
                 bookingFlowId: bookingResult.state?.bookingFlowId || flow.flowId,
                 currentStepId: bookingResult.state?.currentStepId,
+                currentSlotId: bookingResult.state?.currentSlotId,
+                slotSubStep: bookingResult.state?.slotSubStep,
                 bookingCollected: bookingResult.state?.bookingCollected || {},
                 bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE'
               },
@@ -3325,43 +3429,68 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             },
             debug: {
               mode: 'booking',
-              // V96j FIX: Must be 'BOOKING_FLOW_RUNNER' for branchTaken check to work
+              // V110: Full prompt tracing
               source: 'BOOKING_FLOW_RUNNER',
+              promptSource: promptSource,
+              stepId: runnerDebug.step || bookingResult.state?.currentStepId,
+              slotId: runnerDebug.slotId || bookingResult.state?.currentSlotId,
+              slotSubStep: runnerDebug.slotSubStep || bookingResult.state?.slotSubStep,
               flowId: flow.flowId,
               currentStep: bookingResult.state?.currentStepId,
               isComplete: bookingResult.isComplete,
-              gateType: 'ABSOLUTE_TOP_LEVEL'
+              gateType: 'ABSOLUTE_TOP_LEVEL',
+              repromptCount: runnerDebug.repromptCount
             }
           };
           
           const bookingLatencyMs = Date.now() - (callState._gateStartTime || Date.now());
           
-          // 📼 BLACK BOX: Log booking gate success
+          // 📼 BLACK BOX: Log BOOKING_RUNNER_PROMPT - the runner spoke, not the gate
+          // V110: GATE_SUCCESS no longer includes responsePreview (gate doesn't speak)
           if (BlackBoxLogger) {
+            // Event 1: Gate routed successfully (no text)
             BlackBoxLogger.logEvent({
               callId: callSid,
               companyId: companyID,
-              type: 'BOOKING_GATE_SUCCESS',
+              type: 'BOOKING_GATE_ROUTED',  // V110: Renamed from BOOKING_GATE_SUCCESS
               turn: callState.turnCount,
               data: {
                 latencyMs: bookingLatencyMs,
-                action: bookingResult.action,
-                currentStep: bookingResult.state?.currentStepId,
+                routedTo: 'BOOKING_FLOW_RUNNER',
                 isComplete: bookingResult.isComplete,
-                bookingModeLocked: result.callState.bookingModeLocked,
-                responsePreview: (bookingResult.reply || '').substring(0, 100)
+                bookingModeLocked: result.callState.bookingModeLocked
+                // V110: NO responsePreview - gate doesn't speak
+              }
+            }).catch(() => {});
+            
+            // Event 2: Runner produced the prompt (with full tracing)
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'BOOKING_RUNNER_PROMPT',  // V110: New event - runner speaks
+              turn: callState.turnCount,
+              data: {
+                action: bookingResult.action,
+                stepId: runnerDebug.step || bookingResult.state?.currentStepId,
+                slotId: runnerDebug.slotId || bookingResult.state?.currentSlotId,
+                slotSubStep: runnerDebug.slotSubStep || null,
+                promptSource: promptSource,
+                repromptCount: runnerDebug.repromptCount || 0,
+                responsePreview: (bookingResult.reply || '').substring(0, 100)  // Preview is on RUNNER event
               }
             }).catch(() => {});
           }
           
-          logger.info('[BOOKING GATE] ✅ BookingFlowRunner executed via ABSOLUTE GATE', {
+          logger.info('[BOOKING GATE] ✅ Gate routed to BookingFlowRunner', {
             callSid,
             turnCount: callState.turnCount,
             action: bookingResult.action,
-            currentStep: bookingResult.state?.currentStepId,
+            stepId: runnerDebug.step || bookingResult.state?.currentStepId,
+            slotId: runnerDebug.slotId,
+            slotSubStep: runnerDebug.slotSubStep,
+            promptSource: promptSource,
             isComplete: bookingResult.isComplete,
-            latencyMs: bookingLatencyMs,
-            responsePreview: (bookingResult.reply || '').substring(0, 80)
+            latencyMs: bookingLatencyMs
           });
           
           // ═══════════════════════════════════════════════════════════════════
@@ -3680,6 +3809,87 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               });
             }
             
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V110: FAIL-CLOSED INVARIANT (secondary gate) - Gate must never speak
+            // ═══════════════════════════════════════════════════════════════════════════
+            const runnerDebug2 = bookingResult.debug || {};
+            const promptSource2 = runnerDebug2.promptSource || runnerDebug2.source;
+            let gateViolation2 = false;
+            let originalReply2 = bookingResult.reply;
+            
+            // V110: Detect GATE_SPOKE_VIOLATION - prompt without proper source
+            if (bookingResult.reply && !promptSource2) {
+              gateViolation2 = true;
+              logger.error('[BOOKING FLOW] ❌ GATE_SPOKE_VIOLATION: Prompt without promptSource! CLEARING REPLY.', {
+                callSid,
+                action: bookingResult.action,
+                replyPreview: (bookingResult.reply || '').substring(0, 50),
+                resolution: 'FAIL_CLOSED_CLEAR_REPLY'
+              });
+              
+              if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'GATE_SPOKE_VIOLATION',
+                  turn: turnCount,
+                  data: { 
+                    violation: 'PROMPT_WITHOUT_SOURCE', 
+                    action: bookingResult.action,
+                    resolution: 'FAIL_CLOSED'
+                  }
+                }).catch(() => {});
+              }
+            }
+            
+            // V110: Detect ADDRESS_BREAKDOWN actions - banned
+            if (bookingResult.action && bookingResult.action.includes('ADDRESS_BREAKDOWN')) {
+              gateViolation2 = true;
+              logger.error('[BOOKING FLOW] ❌ GATE_SPOKE_VIOLATION: ADDRESS_BREAKDOWN detected! FORCING CONTINUE.', {
+                callSid,
+                action: bookingResult.action,
+                resolution: 'FAIL_CLOSED_FORCE_CONTINUE'
+              });
+              
+              if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'GATE_SPOKE_VIOLATION',
+                  turn: turnCount,
+                  data: { 
+                    violation: 'ADDRESS_BREAKDOWN_ACTION', 
+                    action: bookingResult.action,
+                    resolution: 'FAIL_CLOSED'
+                  }
+                }).catch(() => {});
+              }
+              
+              // Force action to CONTINUE
+              bookingResult.action = 'CONTINUE';
+            }
+            
+            // V110: FAIL-CLOSED ENFORCEMENT
+            if (gateViolation2) {
+              logger.warn('[BOOKING FLOW] ⚠️ FAIL-CLOSED: Forcing transfer due to gate violation', {
+                callSid,
+                originalReply: (originalReply2 || '').substring(0, 50)
+              });
+              
+              // Clear the tainted reply
+              bookingResult.reply = null;
+              bookingResult.action = 'ESCALATE';
+              bookingResult.transferReason = 'GATE_SPOKE_VIOLATION_FAIL_CLOSED';
+              bookingResult.requiresTransfer = true;
+              
+              bookingResult.debug = {
+                ...bookingResult.debug,
+                gateViolation: true,
+                failClosed: true,
+                originalReply: (originalReply2 || '').substring(0, 100)
+              };
+            }
+            
             // Map BookingFlowRunner result to expected format
             result = {
               text: bookingResult.reply,
@@ -3697,57 +3907,80 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 bookingFlowId: bookingResult.state?.bookingFlowId || flow.flowId,
                 currentStepId: bookingResult.state?.currentStepId,
                 currentBookingStep: bookingResult.state?.currentStepId,
+                currentSlotId: bookingResult.state?.currentSlotId,  // V110
+                slotSubStep: bookingResult.state?.slotSubStep,      // V110
                 bookingCollected: bookingResult.state?.bookingCollected || {},
                 slotMetadata: bookingResult.state?.slotMetadata || callState.slotMetadata || {},
                 confirmedSlots: bookingResult.state?.confirmedSlots || {},
+                lockedSlots: bookingResult.state?.lockedSlots || {},  // V110
                 pendingConfirmation: bookingResult.state?.pendingConfirmation || null,
                 bookingAskCount: bookingResult.state?.askCount || {},
+                repromptCount: bookingResult.state?.repromptCount || {},  // V110
                 awaitingConfirmation: bookingResult.state?.awaitingConfirmation || false,
                 bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE',
                 bookingComplete: bookingResult.isComplete || false,
-                // 🎯 Preserve slots across turns
                 slots: callState.slots || {}
               },
               debug: {
                 mode: 'booking',
                 source: 'BOOKING_FLOW_RUNNER',
+                // V110: Full prompt tracing
+                promptSource: promptSource2,
+                stepId: runnerDebug2.step || bookingResult.state?.currentStepId,
+                slotId: runnerDebug2.slotId || bookingResult.state?.currentSlotId,
+                slotSubStep: runnerDebug2.slotSubStep || bookingResult.state?.slotSubStep,
                 flowId: flow.flowId,
                 currentStep: bookingResult.state?.currentStepId,
                 isComplete: bookingResult.isComplete,
                 bookingCollected: bookingResult.state?.bookingCollected,
-                ...bookingResult.debug
+                repromptCount: runnerDebug2.repromptCount
               }
             };
             
             const bookingLatencyMs = Date.now() - aiProcessStart;
             
-            tracer.step('BOOKING_FLOW_SUCCESS', `📋 Booking flow completed in ${bookingLatencyMs}ms (0 tokens)`);
+            tracer.step('BOOKING_FLOW_ROUTED', `📋 Booking flow routed in ${bookingLatencyMs}ms (0 tokens)`);
             
-            // 📼 BLACK BOX: Log booking flow success
+            // 📼 BLACK BOX: V110 - Gate routed, runner spoke
             if (BlackBoxLogger) {
+              // Event 1: Gate routed (no text)
               BlackBoxLogger.logEvent({
                 callId: callSid,
                 companyId: companyID,
-                type: 'BOOKING_FLOW_SUCCESS',
+                type: 'BOOKING_GATE_ROUTED',  // V110: Renamed
                 turn: turnCount,
                 data: {
                   latencyMs: bookingLatencyMs,
+                  routedTo: 'BOOKING_FLOW_RUNNER',
                   flowId: flow.flowId,
-                  currentStep: bookingResult.state?.currentStepId,
+                  isComplete: bookingResult.isComplete
+                }
+              }).catch(() => {});
+              
+              // Event 2: Runner prompt (with full tracing)
+              BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'BOOKING_RUNNER_PROMPT',  // V110: Runner spoke
+                turn: turnCount,
+                data: {
                   action: bookingResult.action,
-                  isComplete: bookingResult.isComplete,
-                  bookingCollected: bookingResult.state?.bookingCollected,
-                  tokensUsed: 0,
-                  responsePreview: (result?.text || '').substring(0, 100)
+                  stepId: runnerDebug2.step || bookingResult.state?.currentStepId,
+                  slotId: runnerDebug2.slotId || bookingResult.state?.currentSlotId,
+                  slotSubStep: runnerDebug2.slotSubStep,
+                  promptSource: promptSource2,
+                  repromptCount: runnerDebug2.repromptCount || 0,
+                  responsePreview: (bookingResult.reply || '').substring(0, 100)
                 }
               }).catch(() => {});
             }
             
-            logger.info('[BOOKING FLOW] ✅ Deterministic booking step completed', {
+            logger.info('[BOOKING FLOW] ✅ Gate routed to runner', {
               callSid,
               flowId: flow.flowId,
-              step: bookingResult.state?.currentStepId,
-              action: bookingResult.action,
+              stepId: runnerDebug2.step || bookingResult.state?.currentStepId,
+              slotId: runnerDebug2.slotId,
+              promptSource: promptSource2,
               latencyMs: bookingLatencyMs
             });
             

@@ -1055,6 +1055,7 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
                     ${this.renderTab('hours', '🕒 Hours & Availability')}
                     ${this.renderTab('vocabulary', '📝 Vocabulary')}
+                    ${this.renderTab('discovery-flow', '🔄 Discovery Flow')}
                     ${this.renderTab('booking', '📅 Booking Prompts')}
                     ${this.renderTab('flows', '🧠 Dynamic Flows')}
                     ${this.renderTab('emotions', '💭 Emotions')}
@@ -1577,6 +1578,672 @@ class FrontDeskBehaviorManager {
                 </div>
             </div>
         `;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V110: DISCOVERY FLOW TAB - Enterprise slot/step architecture
+    // ═══════════════════════════════════════════════════════════════════════════
+    renderDiscoveryFlowTab() {
+        const slotRegistry = this.config.slotRegistry || { version: 'v1', slots: [] };
+        const discoveryFlow = this.config.discoveryFlow || { version: 'v1', enabled: true, steps: [] };
+        const bookingFlow = this.config.bookingFlow || { version: 'v1', enabled: true, steps: [] };
+        const policies = this.config.policies || {};
+        
+        // Build slot options dropdown HTML
+        const slotOptions = (slotRegistry.slots || []).map(s => 
+            `<option value="${this.escapeHtml(s.id)}">${this.escapeHtml(s.label || s.id)} (${s.id})</option>`
+        ).join('');
+        
+        // Render discovery steps table rows
+        const discoveryStepsRows = (discoveryFlow.steps || []).map((step, idx) => {
+            const slot = (slotRegistry.slots || []).find(s => s.id === step.slotId) || {};
+            return `
+                <tr data-step-idx="${idx}" draggable="true" style="border-bottom:1px solid #30363d;">
+                    <td style="padding:10px; text-align:center; cursor:grab;">
+                        <span style="color:#6e7681;">☰</span>
+                    </td>
+                    <td style="padding:10px;">
+                        <select class="fdb-disc-slot-select" data-idx="${idx}" style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;">
+                            ${slotOptions.replace(`value="${this.escapeHtml(step.slotId)}"`, `value="${this.escapeHtml(step.slotId)}" selected`)}
+                        </select>
+                    </td>
+                    <td style="padding:10px;">
+                        <input type="text" class="fdb-disc-ask" data-idx="${idx}" value="${this.escapeHtml(step.ask || '')}" 
+                               style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;"
+                               placeholder="Confirmation prompt...">
+                    </td>
+                    <td style="padding:10px;">
+                        <input type="text" class="fdb-disc-reprompt" data-idx="${idx}" value="${this.escapeHtml(step.reprompt || '')}" 
+                               style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;"
+                               placeholder="Reprompt if unclear...">
+                    </td>
+                    <td style="padding:10px;">
+                        <select class="fdb-disc-confirm-mode" data-idx="${idx}" style="background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;">
+                            <option value="smart_if_captured" ${step.confirmMode === 'smart_if_captured' ? 'selected' : ''}>Smart (if captured)</option>
+                            <option value="always" ${step.confirmMode === 'always' ? 'selected' : ''}>Always</option>
+                            <option value="never" ${step.confirmMode === 'never' ? 'selected' : ''}>Never</option>
+                            <option value="confirm_if_from_caller_id" ${step.confirmMode === 'confirm_if_from_caller_id' ? 'selected' : ''}>If from Caller ID</option>
+                        </select>
+                    </td>
+                    <td style="padding:10px; text-align:center;">
+                        <button class="fdb-disc-delete-step" data-idx="${idx}" style="background:#f8514940; color:#f85149; border:1px solid #f85149; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Delete step">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Render booking steps table rows
+        const bookingStepsRows = (bookingFlow.steps || []).map((step, idx) => {
+            const slot = (slotRegistry.slots || []).find(s => s.id === step.slotId) || {};
+            return `
+                <tr data-step-idx="${idx}" draggable="true" style="border-bottom:1px solid #30363d;">
+                    <td style="padding:10px; text-align:center; cursor:grab;">
+                        <span style="color:#6e7681;">☰</span>
+                    </td>
+                    <td style="padding:10px;">
+                        <select class="fdb-book-slot-select" data-idx="${idx}" style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;">
+                            ${slotOptions.replace(`value="${this.escapeHtml(step.slotId)}"`, `value="${this.escapeHtml(step.slotId)}" selected`)}
+                        </select>
+                    </td>
+                    <td style="padding:10px;">
+                        <input type="text" class="fdb-book-ask" data-idx="${idx}" value="${this.escapeHtml(step.ask || '')}" 
+                               style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;"
+                               placeholder="Ask prompt...">
+                    </td>
+                    <td style="padding:10px;">
+                        <input type="text" class="fdb-book-confirm" data-idx="${idx}" value="${this.escapeHtml(step.confirmPrompt || '')}" 
+                               style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;"
+                               placeholder="Confirm prompt (use {value})...">
+                    </td>
+                    <td style="padding:10px;">
+                        <input type="text" class="fdb-book-reprompt" data-idx="${idx}" value="${this.escapeHtml(step.reprompt || '')}" 
+                               style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;"
+                               placeholder="Reprompt...">
+                    </td>
+                    <td style="padding:10px;">
+                        <span style="color:${slot.required ? '#3fb950' : '#8b949e'};">${slot.required ? '✓' : '○'}</span>
+                    </td>
+                    <td style="padding:10px; text-align:center;">
+                        <button class="fdb-book-delete-step" data-idx="${idx}" style="background:#f8514940; color:#f85149; border:1px solid #f85149; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Delete step">
+                            🗑️
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // Render slot registry rows
+        const slotRegistryRows = (slotRegistry.slots || []).map((slot, idx) => `
+            <tr data-slot-idx="${idx}" style="border-bottom:1px solid #30363d;">
+                <td style="padding:10px;">
+                    <input type="text" class="fdb-slot-id" data-idx="${idx}" value="${this.escapeHtml(slot.id)}" 
+                           style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;"
+                           placeholder="e.g., name.first">
+                </td>
+                <td style="padding:10px;">
+                    <input type="text" class="fdb-slot-label" data-idx="${idx}" value="${this.escapeHtml(slot.label || '')}" 
+                           style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;"
+                           placeholder="Display label">
+                </td>
+                <td style="padding:10px;">
+                    <select class="fdb-slot-type" data-idx="${idx}" style="background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;">
+                        <option value="name_first" ${slot.type === 'name_first' ? 'selected' : ''}>First Name</option>
+                        <option value="name_last" ${slot.type === 'name_last' ? 'selected' : ''}>Last Name</option>
+                        <option value="phone" ${slot.type === 'phone' ? 'selected' : ''}>Phone</option>
+                        <option value="address" ${slot.type === 'address' ? 'selected' : ''}>Address</option>
+                        <option value="time" ${slot.type === 'time' ? 'selected' : ''}>Time Preference</option>
+                        <option value="text" ${slot.type === 'text' ? 'selected' : ''}>Free Text</option>
+                    </select>
+                </td>
+                <td style="padding:10px; text-align:center;">
+                    <input type="checkbox" class="fdb-slot-required" data-idx="${idx}" ${slot.required ? 'checked' : ''}>
+                </td>
+                <td style="padding:10px; text-align:center;">
+                    <input type="checkbox" class="fdb-slot-disc-fill" data-idx="${idx}" ${slot.discoveryFillAllowed !== false ? 'checked' : ''}>
+                </td>
+                <td style="padding:10px; text-align:center;">
+                    <input type="checkbox" class="fdb-slot-book-confirm" data-idx="${idx}" ${slot.bookingConfirmRequired !== false ? 'checked' : ''}>
+                </td>
+                <td style="padding:10px; text-align:center;">
+                    <button class="fdb-slot-delete" data-idx="${idx}" style="background:#f8514940; color:#f85149; border:1px solid #f85149; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Delete slot">
+                        🗑️
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+
+        // Policies display
+        const nameParsing = policies.nameParsing || {};
+        const bookingPolicy = policies.booking || {};
+        const addressPolicy = policies.address || {};
+
+        return `
+            <div data-section-id="discovery-flow" style="color:#c9d1d9;">
+                <!-- Header with V110 badge -->
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div>
+                        <h2 style="margin:0; color:#58a6ff;">🔄 Discovery Flow + Booking Flow</h2>
+                        <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.875rem;">
+                            V110 Enterprise Architecture: Slots → Discovery → Booking with smart confirmation
+                        </p>
+                    </div>
+                    <span style="background:#3fb95020; color:#3fb950; padding:6px 12px; border-radius:16px; font-size:0.75rem; font-weight:600;">
+                        V110 CANONICAL
+                    </span>
+                </div>
+
+                <!-- Slot Registry Section -->
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <h3 style="margin:0; color:#58a6ff;">📋 Slot Registry</h3>
+                        <span style="color:#8b949e; font-size:0.8rem;">${(slotRegistry.slots || []).length} slots defined</span>
+                    </div>
+                    <p style="color:#8b949e; margin:0 0 16px 0; font-size:0.875rem;">
+                        All slots used by Discovery and Booking flows must be registered here. If a slot isn't in this registry, it doesn't exist at runtime.
+                    </p>
+                    
+                    <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+                        <thead>
+                            <tr style="background:#21262d; border-bottom:1px solid #30363d;">
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Slot ID</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Label</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Type</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Required</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Discovery Fill</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Booking Confirm</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="fdb-slot-registry-body">
+                            ${slotRegistryRows || '<tr><td colspan="7" style="padding:20px; text-align:center; color:#8b949e;">No slots defined. Add slots below.</td></tr>'}
+                        </tbody>
+                    </table>
+                    <button id="fdb-add-slot" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
+                        + Add Slot
+                    </button>
+                </div>
+
+                <!-- Discovery Flow Section -->
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <h3 style="margin:0; color:#58a6ff;">🔄 Discovery Flow Steps</h3>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <label style="display:flex; align-items:center; gap:6px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-disc-enabled" ${discoveryFlow.enabled !== false ? 'checked' : ''}>
+                                Enabled
+                            </label>
+                            <span style="color:#8b949e; font-size:0.8rem;">${(discoveryFlow.steps || []).length} steps</span>
+                        </div>
+                    </div>
+                    <p style="color:#8b949e; margin:0 0 16px 0; font-size:0.875rem;">
+                        Discovery captures slot values passively from conversation. When booking starts, captured values are promoted and confirmed (not re-asked from scratch).
+                    </p>
+                    
+                    <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+                        <thead>
+                            <tr style="background:#21262d; border-bottom:1px solid #30363d;">
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500; width:40px;">Order</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Slot</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Confirm Prompt</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Reprompt</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Confirm Mode</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="fdb-disc-steps-body">
+                            ${discoveryStepsRows || '<tr><td colspan="6" style="padding:20px; text-align:center; color:#8b949e;">No discovery steps. Add steps below.</td></tr>'}
+                        </tbody>
+                    </table>
+                    <button id="fdb-add-disc-step" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
+                        + Add Discovery Step
+                    </button>
+                </div>
+
+                <!-- Booking Flow Section -->
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <h3 style="margin:0; color:#58a6ff;">📅 Booking Flow Steps</h3>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <label style="display:flex; align-items:center; gap:6px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-book-enabled" ${bookingFlow.enabled !== false ? 'checked' : ''}>
+                                Enabled
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-book-confirm-first" ${bookingFlow.confirmCapturedFirst !== false ? 'checked' : ''}>
+                                Confirm captured first
+                            </label>
+                            <span style="color:#8b949e; font-size:0.8rem;">${(bookingFlow.steps || []).length} steps</span>
+                        </div>
+                    </div>
+                    <p style="color:#8b949e; margin:0 0 16px 0; font-size:0.875rem;">
+                        Booking flow confirms captured values first, then asks for missing slots. Never restarts from scratch if values were already captured in discovery.
+                    </p>
+                    
+                    <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+                        <thead>
+                            <tr style="background:#21262d; border-bottom:1px solid #30363d;">
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500; width:40px;">Order</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Slot</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Ask Prompt</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Confirm Prompt</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Reprompt</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Req</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="fdb-book-steps-body">
+                            ${bookingStepsRows || '<tr><td colspan="7" style="padding:20px; text-align:center; color:#8b949e;">No booking steps. Add steps below.</td></tr>'}
+                        </tbody>
+                    </table>
+                    <button id="fdb-add-book-step" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
+                        + Add Booking Step
+                    </button>
+                </div>
+
+                <!-- Policies Section -->
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
+                    <h3 style="margin:0 0 16px 0; color:#58a6ff;">⚙️ Flow Policies</h3>
+                    
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <!-- Name Parsing Policy -->
+                        <div style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:16px;">
+                            <h4 style="margin:0 0 12px 0; color:#c9d1d9; font-size:0.9rem;">🏷️ Name Parsing</h4>
+                            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-policy-use-firstname-list" ${nameParsing.useFirstNameList !== false ? 'checked' : ''}>
+                                Use first-name list for smart detection
+                            </label>
+                            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-policy-confirm-firstname" ${nameParsing.confirmIfFirstNameDetected !== false ? 'checked' : ''}>
+                                Confirm if first name detected
+                            </label>
+                            <label style="display:flex; align-items:center; gap:8px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-policy-accept-lastname-only" ${nameParsing.acceptLastNameOnly !== false ? 'checked' : ''}>
+                                Accept last name only (e.g., "Mr. Smith")
+                            </label>
+                        </div>
+                        
+                        <!-- Booking Policy -->
+                        <div style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:16px;">
+                            <h4 style="margin:0 0 12px 0; color:#c9d1d9; font-size:0.9rem;">📅 Booking Behavior</h4>
+                            <label style="display:block; margin-bottom:8px; color:#8b949e; font-size:0.875rem;">
+                                When booking starts:
+                                <select id="fdb-policy-when-booking-starts" style="display:block; margin-top:4px; width:100%; background:#161b22; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;">
+                                    <option value="confirm_discovery_values_then_ask_missing" ${bookingPolicy.whenBookingStarts === 'confirm_discovery_values_then_ask_missing' || !bookingPolicy.whenBookingStarts ? 'selected' : ''}>Confirm discovery values, then ask missing</option>
+                                    <option value="ask_all_from_scratch" ${bookingPolicy.whenBookingStarts === 'ask_all_from_scratch' ? 'selected' : ''}>Ask all from scratch (not recommended)</option>
+                                </select>
+                            </label>
+                            <label style="display:flex; align-items:center; gap:8px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-policy-never-restart" ${bookingPolicy.neverRestartIfAlreadyCaptured !== false ? 'checked' : ''}>
+                                Never restart if already captured
+                            </label>
+                        </div>
+                        
+                        <!-- Address Policy -->
+                        <div style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:16px;">
+                            <h4 style="margin:0 0 12px 0; color:#c9d1d9; font-size:0.9rem;">📍 Address Handling</h4>
+                            <div style="margin-bottom:8px;">
+                                <label style="display:block; color:#8b949e; font-size:0.875rem; margin-bottom:4px;">Default State:</label>
+                                <input type="text" id="fdb-policy-default-state" value="${this.escapeHtml(addressPolicy.defaultState || 'FL')}" 
+                                       style="width:80px; background:#161b22; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px;">
+                            </div>
+                            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-policy-require-city" ${addressPolicy.requireCityIfMissing !== false ? 'checked' : ''}>
+                                Require city if missing
+                            </label>
+                            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-policy-require-unit" ${addressPolicy.requireUnitIfMultiUnit !== false ? 'checked' : ''}>
+                                Require unit if multi-unit detected
+                            </label>
+                            <label style="display:flex; align-items:center; gap:8px; color:#8b949e; font-size:0.875rem;">
+                                <input type="checkbox" id="fdb-policy-geo-verify" ${addressPolicy.geoVerifyEnabled !== false ? 'checked' : ''}>
+                                Geo-verify addresses (Google)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save / Export Actions -->
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <button id="fdb-save-flows" style="background:#238636; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500;">
+                        💾 Save All Changes
+                    </button>
+                    <button id="fdb-export-flows" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:10px 20px; border-radius:6px; cursor:pointer;">
+                        📤 Export JSON
+                    </button>
+                    <button id="fdb-import-flows" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:10px 20px; border-radius:6px; cursor:pointer;">
+                        📥 Import JSON
+                    </button>
+                    <span id="fdb-flows-status" style="color:#8b949e; font-size:0.875rem;"></span>
+                </div>
+            </div>
+        `;
+    }
+
+    initDiscoveryFlowTab(container) {
+        const slotRegistry = this.config.slotRegistry || { version: 'v1', slots: [] };
+        const discoveryFlow = this.config.discoveryFlow || { version: 'v1', enabled: true, steps: [] };
+        const bookingFlow = this.config.bookingFlow || { version: 'v1', enabled: true, steps: [] };
+        
+        // Add Slot button
+        const addSlotBtn = container.querySelector('#fdb-add-slot');
+        if (addSlotBtn) {
+            addSlotBtn.addEventListener('click', () => {
+                const slots = this.config.slotRegistry?.slots || [];
+                const newSlot = {
+                    id: `custom.slot${slots.length + 1}`,
+                    type: 'text',
+                    label: 'New Slot',
+                    required: false,
+                    discoveryFillAllowed: true,
+                    bookingConfirmRequired: false,
+                    extraction: { source: ['utterance'] }
+                };
+                if (!this.config.slotRegistry) {
+                    this.config.slotRegistry = { version: 'v1', slots: [] };
+                }
+                this.config.slotRegistry.slots.push(newSlot);
+                this.switchTab(container, 'discovery-flow');
+            });
+        }
+
+        // Add Discovery Step button
+        const addDiscStepBtn = container.querySelector('#fdb-add-disc-step');
+        if (addDiscStepBtn) {
+            addDiscStepBtn.addEventListener('click', () => {
+                const steps = this.config.discoveryFlow?.steps || [];
+                const firstSlot = this.config.slotRegistry?.slots?.[0]?.id || 'name.first';
+                const newStep = {
+                    stepId: `d${steps.length + 1}`,
+                    slotId: firstSlot,
+                    order: steps.length + 1,
+                    ask: 'Is that correct?',
+                    reprompt: 'Could you confirm?',
+                    confirmMode: 'smart_if_captured'
+                };
+                if (!this.config.discoveryFlow) {
+                    this.config.discoveryFlow = { version: 'v1', enabled: true, steps: [] };
+                }
+                this.config.discoveryFlow.steps.push(newStep);
+                this.switchTab(container, 'discovery-flow');
+            });
+        }
+
+        // Add Booking Step button
+        const addBookStepBtn = container.querySelector('#fdb-add-book-step');
+        if (addBookStepBtn) {
+            addBookStepBtn.addEventListener('click', () => {
+                const steps = this.config.bookingFlow?.steps || [];
+                const firstSlot = this.config.slotRegistry?.slots?.[0]?.id || 'name.first';
+                const newStep = {
+                    stepId: `b${steps.length + 1}`,
+                    slotId: firstSlot,
+                    order: steps.length + 1,
+                    ask: 'What is your value?',
+                    confirmPrompt: 'I have {value}. Is that correct?',
+                    reprompt: 'Could you repeat that?'
+                };
+                if (!this.config.bookingFlow) {
+                    this.config.bookingFlow = { version: 'v1', enabled: true, confirmCapturedFirst: true, steps: [] };
+                }
+                this.config.bookingFlow.steps.push(newStep);
+                this.switchTab(container, 'discovery-flow');
+            });
+        }
+
+        // Delete slot handlers
+        container.querySelectorAll('.fdb-slot-delete').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.idx, 10);
+                if (this.config.slotRegistry?.slots) {
+                    this.config.slotRegistry.slots.splice(idx, 1);
+                    this.switchTab(container, 'discovery-flow');
+                }
+            });
+        });
+
+        // Delete discovery step handlers
+        container.querySelectorAll('.fdb-disc-delete-step').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.idx, 10);
+                if (this.config.discoveryFlow?.steps) {
+                    this.config.discoveryFlow.steps.splice(idx, 1);
+                    this.switchTab(container, 'discovery-flow');
+                }
+            });
+        });
+
+        // Delete booking step handlers
+        container.querySelectorAll('.fdb-book-delete-step').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.idx, 10);
+                if (this.config.bookingFlow?.steps) {
+                    this.config.bookingFlow.steps.splice(idx, 1);
+                    this.switchTab(container, 'discovery-flow');
+                }
+            });
+        });
+
+        // Collect changes on input (slot registry)
+        container.querySelectorAll('.fdb-slot-id, .fdb-slot-label, .fdb-slot-type, .fdb-slot-required, .fdb-slot-disc-fill, .fdb-slot-book-confirm').forEach(input => {
+            input.addEventListener('change', (e) => this._collectSlotRegistryChanges(container));
+        });
+
+        // Collect changes on input (discovery steps)
+        container.querySelectorAll('.fdb-disc-slot-select, .fdb-disc-ask, .fdb-disc-reprompt, .fdb-disc-confirm-mode').forEach(input => {
+            input.addEventListener('change', (e) => this._collectDiscoveryFlowChanges(container));
+        });
+
+        // Collect changes on input (booking steps)
+        container.querySelectorAll('.fdb-book-slot-select, .fdb-book-ask, .fdb-book-confirm, .fdb-book-reprompt').forEach(input => {
+            input.addEventListener('change', (e) => this._collectBookingFlowChanges(container));
+        });
+
+        // Collect policy changes
+        container.querySelectorAll('#fdb-policy-use-firstname-list, #fdb-policy-confirm-firstname, #fdb-policy-accept-lastname-only, #fdb-policy-when-booking-starts, #fdb-policy-never-restart, #fdb-policy-default-state, #fdb-policy-require-city, #fdb-policy-require-unit, #fdb-policy-geo-verify').forEach(input => {
+            input.addEventListener('change', (e) => this._collectPolicyChanges(container));
+        });
+
+        // Flow enable toggles
+        const discEnabledCheckbox = container.querySelector('#fdb-disc-enabled');
+        if (discEnabledCheckbox) {
+            discEnabledCheckbox.addEventListener('change', (e) => {
+                if (!this.config.discoveryFlow) this.config.discoveryFlow = { version: 'v1', enabled: true, steps: [] };
+                this.config.discoveryFlow.enabled = e.target.checked;
+            });
+        }
+
+        const bookEnabledCheckbox = container.querySelector('#fdb-book-enabled');
+        if (bookEnabledCheckbox) {
+            bookEnabledCheckbox.addEventListener('change', (e) => {
+                if (!this.config.bookingFlow) this.config.bookingFlow = { version: 'v1', enabled: true, steps: [] };
+                this.config.bookingFlow.enabled = e.target.checked;
+            });
+        }
+
+        const bookConfirmFirstCheckbox = container.querySelector('#fdb-book-confirm-first');
+        if (bookConfirmFirstCheckbox) {
+            bookConfirmFirstCheckbox.addEventListener('change', (e) => {
+                if (!this.config.bookingFlow) this.config.bookingFlow = { version: 'v1', enabled: true, steps: [] };
+                this.config.bookingFlow.confirmCapturedFirst = e.target.checked;
+            });
+        }
+
+        // Save button
+        const saveBtn = container.querySelector('#fdb-save-flows');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async () => {
+                const statusEl = container.querySelector('#fdb-flows-status');
+                try {
+                    statusEl.textContent = 'Saving...';
+                    statusEl.style.color = '#8b949e';
+                    
+                    // Collect all current values
+                    this._collectSlotRegistryChanges(container);
+                    this._collectDiscoveryFlowChanges(container);
+                    this._collectBookingFlowChanges(container);
+                    this._collectPolicyChanges(container);
+                    
+                    await this.save();
+                    statusEl.textContent = '✅ Saved successfully';
+                    statusEl.style.color = '#3fb950';
+                    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+                } catch (err) {
+                    statusEl.textContent = '❌ Save failed: ' + err.message;
+                    statusEl.style.color = '#f85149';
+                }
+            });
+        }
+
+        // Export button
+        const exportBtn = container.querySelector('#fdb-export-flows');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const exportData = {
+                    slotRegistry: this.config.slotRegistry,
+                    discoveryFlow: this.config.discoveryFlow,
+                    bookingFlow: this.config.bookingFlow,
+                    policies: this.config.policies
+                };
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `frontdesk-flows-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        // Import button
+        const importBtn = container.querySelector('#fdb-import-flows');
+        if (importBtn) {
+            importBtn.addEventListener('click', () => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'application/json';
+                input.addEventListener('change', async (e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    try {
+                        const text = await file.text();
+                        const data = JSON.parse(text);
+                        if (data.slotRegistry) this.config.slotRegistry = data.slotRegistry;
+                        if (data.discoveryFlow) this.config.discoveryFlow = data.discoveryFlow;
+                        if (data.bookingFlow) this.config.bookingFlow = data.bookingFlow;
+                        if (data.policies) this.config.policies = data.policies;
+                        this.switchTab(container, 'discovery-flow');
+                        this.showNotification('✅ Imported successfully', 'success');
+                    } catch (err) {
+                        this.showNotification('❌ Import failed: ' + err.message, 'error');
+                    }
+                });
+                input.click();
+            });
+        }
+    }
+
+    _collectSlotRegistryChanges(container) {
+        if (!this.config.slotRegistry) {
+            this.config.slotRegistry = { version: 'v1', slots: [] };
+        }
+        const rows = container.querySelectorAll('#fdb-slot-registry-body tr[data-slot-idx]');
+        rows.forEach(row => {
+            const idx = parseInt(row.dataset.slotIdx, 10);
+            if (!this.config.slotRegistry.slots[idx]) return;
+            
+            const idInput = row.querySelector('.fdb-slot-id');
+            const labelInput = row.querySelector('.fdb-slot-label');
+            const typeSelect = row.querySelector('.fdb-slot-type');
+            const requiredCheck = row.querySelector('.fdb-slot-required');
+            const discFillCheck = row.querySelector('.fdb-slot-disc-fill');
+            const bookConfirmCheck = row.querySelector('.fdb-slot-book-confirm');
+            
+            if (idInput) this.config.slotRegistry.slots[idx].id = idInput.value.trim();
+            if (labelInput) this.config.slotRegistry.slots[idx].label = labelInput.value.trim();
+            if (typeSelect) this.config.slotRegistry.slots[idx].type = typeSelect.value;
+            if (requiredCheck) this.config.slotRegistry.slots[idx].required = requiredCheck.checked;
+            if (discFillCheck) this.config.slotRegistry.slots[idx].discoveryFillAllowed = discFillCheck.checked;
+            if (bookConfirmCheck) this.config.slotRegistry.slots[idx].bookingConfirmRequired = bookConfirmCheck.checked;
+        });
+    }
+
+    _collectDiscoveryFlowChanges(container) {
+        if (!this.config.discoveryFlow) {
+            this.config.discoveryFlow = { version: 'v1', enabled: true, steps: [] };
+        }
+        const rows = container.querySelectorAll('#fdb-disc-steps-body tr[data-step-idx]');
+        rows.forEach(row => {
+            const idx = parseInt(row.dataset.stepIdx, 10);
+            if (!this.config.discoveryFlow.steps[idx]) return;
+            
+            const slotSelect = row.querySelector('.fdb-disc-slot-select');
+            const askInput = row.querySelector('.fdb-disc-ask');
+            const repromptInput = row.querySelector('.fdb-disc-reprompt');
+            const confirmModeSelect = row.querySelector('.fdb-disc-confirm-mode');
+            
+            if (slotSelect) this.config.discoveryFlow.steps[idx].slotId = slotSelect.value;
+            if (askInput) this.config.discoveryFlow.steps[idx].ask = askInput.value.trim();
+            if (repromptInput) this.config.discoveryFlow.steps[idx].reprompt = repromptInput.value.trim();
+            if (confirmModeSelect) this.config.discoveryFlow.steps[idx].confirmMode = confirmModeSelect.value;
+            this.config.discoveryFlow.steps[idx].order = idx + 1;
+        });
+    }
+
+    _collectBookingFlowChanges(container) {
+        if (!this.config.bookingFlow) {
+            this.config.bookingFlow = { version: 'v1', enabled: true, confirmCapturedFirst: true, steps: [] };
+        }
+        const rows = container.querySelectorAll('#fdb-book-steps-body tr[data-step-idx]');
+        rows.forEach(row => {
+            const idx = parseInt(row.dataset.stepIdx, 10);
+            if (!this.config.bookingFlow.steps[idx]) return;
+            
+            const slotSelect = row.querySelector('.fdb-book-slot-select');
+            const askInput = row.querySelector('.fdb-book-ask');
+            const confirmInput = row.querySelector('.fdb-book-confirm');
+            const repromptInput = row.querySelector('.fdb-book-reprompt');
+            
+            if (slotSelect) this.config.bookingFlow.steps[idx].slotId = slotSelect.value;
+            if (askInput) this.config.bookingFlow.steps[idx].ask = askInput.value.trim();
+            if (confirmInput) this.config.bookingFlow.steps[idx].confirmPrompt = confirmInput.value.trim();
+            if (repromptInput) this.config.bookingFlow.steps[idx].reprompt = repromptInput.value.trim();
+            this.config.bookingFlow.steps[idx].order = idx + 1;
+        });
+    }
+
+    _collectPolicyChanges(container) {
+        if (!this.config.policies) {
+            this.config.policies = {};
+        }
+        
+        // Name parsing
+        if (!this.config.policies.nameParsing) this.config.policies.nameParsing = {};
+        const useFirstNameList = container.querySelector('#fdb-policy-use-firstname-list');
+        const confirmFirstName = container.querySelector('#fdb-policy-confirm-firstname');
+        const acceptLastNameOnly = container.querySelector('#fdb-policy-accept-lastname-only');
+        if (useFirstNameList) this.config.policies.nameParsing.useFirstNameList = useFirstNameList.checked;
+        if (confirmFirstName) this.config.policies.nameParsing.confirmIfFirstNameDetected = confirmFirstName.checked;
+        if (acceptLastNameOnly) this.config.policies.nameParsing.acceptLastNameOnly = acceptLastNameOnly.checked;
+        
+        // Booking
+        if (!this.config.policies.booking) this.config.policies.booking = {};
+        const whenBookingStarts = container.querySelector('#fdb-policy-when-booking-starts');
+        const neverRestart = container.querySelector('#fdb-policy-never-restart');
+        if (whenBookingStarts) this.config.policies.booking.whenBookingStarts = whenBookingStarts.value;
+        if (neverRestart) this.config.policies.booking.neverRestartIfAlreadyCaptured = neverRestart.checked;
+        
+        // Address
+        if (!this.config.policies.address) this.config.policies.address = {};
+        const defaultState = container.querySelector('#fdb-policy-default-state');
+        const requireCity = container.querySelector('#fdb-policy-require-city');
+        const requireUnit = container.querySelector('#fdb-policy-require-unit');
+        const geoVerify = container.querySelector('#fdb-policy-geo-verify');
+        if (defaultState) this.config.policies.address.defaultState = defaultState.value.trim();
+        if (requireCity) this.config.policies.address.requireCityIfMissing = requireCity.checked;
+        if (requireUnit) this.config.policies.address.requireUnitIfMultiUnit = requireUnit.checked;
+        if (geoVerify) this.config.policies.address.geoVerifyEnabled = geoVerify.checked;
     }
 
     renderBookingPromptsTab() {
@@ -9256,6 +9923,7 @@ Sean → Shawn, Shaun`;
             'discovery': 'discovery-consent',
             'hours': 'hours-availability',
             'vocabulary': 'vocabulary',
+            'discovery-flow': 'discovery-flow',
             'booking': 'booking-prompts',
             'flows': 'dynamic-flows',
             'emotions': 'emotions',
@@ -9276,6 +9944,10 @@ Sean → Shawn, Shaun`;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
             case 'hours': content.innerHTML = this.renderHoursTab(); break;
             case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
+            case 'discovery-flow': 
+                content.innerHTML = this.renderDiscoveryFlowTab(); 
+                this.initDiscoveryFlowTab(content);
+                break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
             case 'flows': 
                 content.innerHTML = this.renderDynamicFlowsTab(); 

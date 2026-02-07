@@ -18,8 +18,260 @@ const logger = require('../../utils/logger');
 // promptPacks REMOVED Jan 2026 - nuked
 
 // ═══════════════════════════════════════════════════════════════════════════
-// UNIVERSAL BOOKING SLOTS PRESET
-// Every new company gets these - customize after onboarding
+// V110: SLOT REGISTRY - SINGLE SOURCE OF TRUTH FOR ALL SLOTS
+// ═══════════════════════════════════════════════════════════════════════════
+// Both Discovery and Booking flows reference slots by ID from this registry.
+// If a slot isn't here, it doesn't exist at runtime.
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_SLOT_REGISTRY = {
+    version: 'v1',
+    slots: [
+        {
+            id: 'name.first',
+            type: 'name_first',
+            label: 'First Name',
+            required: true,
+            discoveryFillAllowed: true,
+            bookingConfirmRequired: true,
+            extraction: { 
+                source: ['utterance'], 
+                useFirstNameList: true,
+                confidenceMin: 0.72
+            }
+        },
+        {
+            id: 'name.last',
+            type: 'name_last',
+            label: 'Last Name',
+            required: false,
+            discoveryFillAllowed: true,
+            bookingConfirmRequired: false,
+            extraction: { 
+                source: ['utterance'],
+                confidenceMin: 0.72
+            }
+        },
+        {
+            id: 'phone',
+            type: 'phone',
+            label: 'Best Callback Cell',
+            required: true,
+            discoveryFillAllowed: true,
+            bookingConfirmRequired: true,
+            extraction: { 
+                source: ['caller_id', 'utterance'],
+                confidenceMin: 0.65
+            }
+        },
+        {
+            id: 'address.full',
+            type: 'address',
+            label: 'Service Address',
+            required: true,
+            discoveryFillAllowed: true,
+            bookingConfirmRequired: true,
+            extraction: { 
+                source: ['utterance'],
+                confidenceMin: 0.70
+            },
+            addressPolicy: {
+                defaultState: 'FL',
+                requireCityIfMissing: true,
+                requireUnitIfMultiUnit: true,
+                geoVerifyEnabled: true,
+                unitDetectionKeywords: ['apt', 'apartment', 'unit', 'suite', '#', 'condo', 'bldg']
+            }
+        },
+        {
+            id: 'time.preference',
+            type: 'time',
+            label: 'Preferred Time',
+            required: true,
+            discoveryFillAllowed: true,
+            bookingConfirmRequired: true,
+            extraction: { 
+                source: ['utterance'],
+                confidenceMin: 0.70
+            },
+            options: ['morning', 'afternoon']
+        }
+    ]
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V110: DISCOVERY FLOW - Steps for extracting/confirming slots BEFORE booking
+// ═══════════════════════════════════════════════════════════════════════════
+// Discovery captures slots passively from conversation. When booking starts,
+// captured values are promoted and confirmed (not re-asked).
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_DISCOVERY_FLOW = {
+    version: 'v1',
+    enabled: true,
+    steps: [
+        { 
+            stepId: 'd1', 
+            slotId: 'name.first', 
+            order: 1,
+            // V110: Confirm prompt uses {value} placeholder for captured value
+            ask: "Got it — I have your first name as {value}. Is that right?", 
+            reprompt: "Did I get your first name right?",
+            repromptVariants: [
+                "Did I get your first name right?",
+                "Was that your first name?",
+                "Is that correct?"
+            ],
+            confirmMode: 'smart_if_captured'
+        },
+        { 
+            stepId: 'd2', 
+            slotId: 'phone', 
+            order: 2,
+            ask: "Is {value} the best number for text updates?", 
+            reprompt: "What's a good number for updates?",
+            repromptVariants: [
+                "What's a good number for updates?",
+                "Best number to text you?",
+                "What number should we use?"
+            ],
+            confirmMode: 'confirm_if_from_caller_id'
+        },
+        { 
+            stepId: 'd3', 
+            slotId: 'address.full', 
+            order: 3,
+            ask: "I have your address as {value}. Is that the service location?", 
+            reprompt: "What's the service address?",
+            repromptVariants: [
+                "What's the service address?",
+                "Where will we be going?",
+                "What address?"
+            ],
+            confirmMode: 'smart_if_captured'
+        }
+    ]
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V110: BOOKING FLOW - Steps for collecting/confirming all required slots
+// ═══════════════════════════════════════════════════════════════════════════
+// Booking flow confirms captured values first, then asks for missing slots.
+// Never restarts if values were already captured in discovery.
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_BOOKING_FLOW = {
+    version: 'v1',
+    enabled: true,
+    confirmCapturedFirst: true,  // Confirm discovery values before asking new
+    steps: [
+        { 
+            stepId: 'b1', 
+            slotId: 'name.first', 
+            order: 1,
+            ask: "What's your first name?", 
+            confirmPrompt: "I've got your first name as {value}. Is that right?",
+            reprompt: "What's your first name?",
+            repromptVariants: [
+                "What's your first name?",
+                "And your first name?",
+                "Can I get your first name?"
+            ],
+            confirmRetryPrompt: "Is {value} your first name?",
+            correctionPrompt: "No problem — what is your first name?"
+        },
+        { 
+            stepId: 'b2', 
+            slotId: 'phone', 
+            order: 2,
+            ask: "What's the best cell number to reach you for confirmations and technician updates?", 
+            confirmPrompt: "I've got {value}. Is that the best number?",
+            reprompt: "What's a good callback number?",
+            repromptVariants: [
+                "What's a good callback number?",
+                "What number should we use?",
+                "Best number to reach you?"
+            ],
+            confirmRetryPrompt: "Is {value} the best number?"
+        },
+        { 
+            stepId: 'b3', 
+            slotId: 'address.full', 
+            order: 3,
+            ask: "What's the full service address, including unit or suite if there is one?", 
+            confirmPrompt: "I've got {value}. Is that the correct service address?",
+            reprompt: "What's the service address?",
+            repromptVariants: [
+                "What's the service address?",
+                "Where will the technician be going?",
+                "What address should we come to?"
+            ],
+            confirmRetryPrompt: "Is {value} correct?",
+            // V110: structuredSubflow for address breakdown - ALL prompts UI-configured
+            structuredSubflow: {
+                enabled: false,  // Disabled by default - enable when needed
+                trigger: 'parse_incomplete_or_geo_ambiguous',
+                sequence: ['address.street', 'address.city', 'address.unit'],
+                prompts: {
+                    'address.street': "What's the street address?",
+                    'address.city': "And what city is that in?",
+                    'address.unit': "If this is an apartment or unit, what's the number? Otherwise just say house."
+                }
+            }
+        },
+        { 
+            stepId: 'b4', 
+            slotId: 'time.preference', 
+            order: 4,
+            ask: "Do you prefer morning or afternoon? I can offer 8-10, 10-12, 12-2, or 2-4.", 
+            confirmPrompt: "Perfect, {value} works. Is that right?",
+            reprompt: "Morning or afternoon?",
+            repromptVariants: [
+                "Morning or afternoon?",
+                "What time works best?",
+                "When would be a good time?"
+            ],
+            confirmRetryPrompt: "Is {value} a good time?"
+        }
+    ],
+    completion: {
+        reviewAndConfirm: true,
+        confirmScript: "Perfect. I have {name.first}, {phone}, {address.full}, and {time.preference}. Is that all correct?",
+        confirmRetryPrompt: "Is all that information correct?",
+        correctionPrompt: "What would you like to change?",
+        onConfirm: 'finalize_booking_request'
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V110: POLICIES - Name parsing, address handling, discovery→booking handoff
+// ═══════════════════════════════════════════════════════════════════════════
+const DEFAULT_FLOW_POLICIES = {
+    nameParsing: {
+        useFirstNameList: true,
+        confirmIfFirstNameDetected: true,
+        // If caller says "no that's my last name" - move value and ask for first
+        ifCallerSaysNoThatsMyLastName: { 
+            moveValueTo: 'name.last', 
+            thenAsk: 'name.first' 
+        },
+        acceptLastNameOnly: true
+    },
+    booking: {
+        // When booking starts: confirm what we have, then ask what's missing
+        whenBookingStarts: 'confirm_discovery_values_then_ask_missing',
+        // CRITICAL: Never restart from scratch if we already have values
+        neverRestartIfAlreadyCaptured: true
+    },
+    address: {
+        defaultState: 'FL',
+        requireCityIfMissing: true,
+        requireUnitIfMultiUnit: true,
+        geoVerifyEnabled: true,
+        unitDetectionKeywords: ['apt', 'apartment', 'unit', 'suite', '#', 'condo', 'bldg', 'lot']
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UNIVERSAL BOOKING SLOTS PRESET (LEGACY - kept for backward compatibility)
+// Use slotRegistry + bookingFlow instead
 // ═══════════════════════════════════════════════════════════════════════════
 const DEFAULT_BOOKING_SLOTS = [
     {
@@ -578,7 +830,13 @@ function getPresetForTrade(tradeKey = 'universal') {
     });
     
     return {
-        // Core booking config
+        // V110: NEW CANONICAL STRUCTURES - Enterprise slot/flow architecture
+        slotRegistry: DEFAULT_SLOT_REGISTRY,
+        discoveryFlow: DEFAULT_DISCOVERY_FLOW,
+        bookingFlow: DEFAULT_BOOKING_FLOW,
+        policies: DEFAULT_FLOW_POLICIES,
+        
+        // Core booking config (LEGACY - kept for backward compatibility)
         bookingSlots: tradePreset.bookingSlots || DEFAULT_BOOKING_SLOTS,
         
         // V106: Detection triggers - CRITICAL for booking intent detection
@@ -656,6 +914,12 @@ function getPresetForTrade(tradeKey = 'universal') {
 // ═══════════════════════════════════════════════════════════════════════════
 module.exports = {
     getPresetForTrade,
+    // V110: NEW CANONICAL STRUCTURES
+    DEFAULT_SLOT_REGISTRY,
+    DEFAULT_DISCOVERY_FLOW,
+    DEFAULT_BOOKING_FLOW,
+    DEFAULT_FLOW_POLICIES,
+    // Legacy (kept for backward compatibility)
     DEFAULT_BOOKING_SLOTS,
     DEFAULT_DETECTION_TRIGGERS,  // V106: Critical for booking intent detection
     DEFAULT_DIRECT_INTENT_PATTERNS,  // V107: Must resolve from companyConfig
