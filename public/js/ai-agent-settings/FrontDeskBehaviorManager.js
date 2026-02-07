@@ -1921,13 +1921,21 @@ class FrontDeskBehaviorManager {
         `;
     }
 
-    initDiscoveryFlowTab(container) {
+    initDiscoveryFlowTab(contentElement) {
+        // V110++: contentElement is #fdb-tab-content, but switchTab needs its parent container
+        // Find the parent container that contains .front-desk-behavior-panel
+        const getParentContainer = () => {
+            return contentElement.closest('.front-desk-behavior-panel')?.parentElement 
+                || document.querySelector('.front-desk-behavior-panel')?.parentElement
+                || contentElement;
+        };
+        
         const slotRegistry = this.config.slotRegistry || { version: 'v1', slots: [] };
         const discoveryFlow = this.config.discoveryFlow || { version: 'v1', enabled: true, steps: [] };
         const bookingFlow = this.config.bookingFlow || { version: 'v1', enabled: true, steps: [] };
         
         // Add Slot button
-        const addSlotBtn = container.querySelector('#fdb-add-slot');
+        const addSlotBtn = contentElement.querySelector('#fdb-add-slot');
         if (addSlotBtn) {
             addSlotBtn.addEventListener('click', () => {
                 const slots = this.config.slotRegistry?.slots || [];
@@ -1944,12 +1952,12 @@ class FrontDeskBehaviorManager {
                     this.config.slotRegistry = { version: 'v1', slots: [] };
                 }
                 this.config.slotRegistry.slots.push(newSlot);
-                this.switchTab('discovery-flow', container);
+                this.switchTab('discovery-flow', getParentContainer());
             });
         }
 
         // Add Discovery Step button
-        const addDiscStepBtn = container.querySelector('#fdb-add-disc-step');
+        const addDiscStepBtn = contentElement.querySelector('#fdb-add-disc-step');
         if (addDiscStepBtn) {
             addDiscStepBtn.addEventListener('click', () => {
                 const steps = this.config.discoveryFlow?.steps || [];
@@ -1966,12 +1974,12 @@ class FrontDeskBehaviorManager {
                     this.config.discoveryFlow = { version: 'v1', enabled: true, steps: [] };
                 }
                 this.config.discoveryFlow.steps.push(newStep);
-                this.switchTab('discovery-flow', container);
+                this.switchTab('discovery-flow', getParentContainer());
             });
         }
 
         // Add Booking Step button
-        const addBookStepBtn = container.querySelector('#fdb-add-book-step');
+        const addBookStepBtn = contentElement.querySelector('#fdb-add-book-step');
         if (addBookStepBtn) {
             addBookStepBtn.addEventListener('click', () => {
                 const steps = this.config.bookingFlow?.steps || [];
@@ -1988,65 +1996,65 @@ class FrontDeskBehaviorManager {
                     this.config.bookingFlow = { version: 'v1', enabled: true, confirmCapturedFirst: true, steps: [] };
                 }
                 this.config.bookingFlow.steps.push(newStep);
-                this.switchTab('discovery-flow', container);
+                this.switchTab('discovery-flow', getParentContainer());
             });
         }
 
         // Delete slot handlers
-        container.querySelectorAll('.fdb-slot-delete').forEach(btn => {
+        contentElement.querySelectorAll('.fdb-slot-delete').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const idx = parseInt(e.target.dataset.idx, 10);
                 if (this.config.slotRegistry?.slots) {
                     this.config.slotRegistry.slots.splice(idx, 1);
-                    this.switchTab('discovery-flow', container);
+                    this.switchTab('discovery-flow', getParentContainer());
                 }
             });
         });
 
         // Delete discovery step handlers
-        container.querySelectorAll('.fdb-disc-delete-step').forEach(btn => {
+        contentElement.querySelectorAll('.fdb-disc-delete-step').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const idx = parseInt(e.target.dataset.idx, 10);
                 if (this.config.discoveryFlow?.steps) {
                     this.config.discoveryFlow.steps.splice(idx, 1);
-                    this.switchTab('discovery-flow', container);
+                    this.switchTab('discovery-flow', getParentContainer());
                 }
             });
         });
 
         // Delete booking step handlers
-        container.querySelectorAll('.fdb-book-delete-step').forEach(btn => {
+        contentElement.querySelectorAll('.fdb-book-delete-step').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const idx = parseInt(e.target.dataset.idx, 10);
                 if (this.config.bookingFlow?.steps) {
                     this.config.bookingFlow.steps.splice(idx, 1);
-                    this.switchTab('discovery-flow', container);
+                    this.switchTab('discovery-flow', getParentContainer());
                 }
             });
         });
 
         // Collect changes on input (slot registry)
-        container.querySelectorAll('.fdb-slot-id, .fdb-slot-label, .fdb-slot-type, .fdb-slot-required, .fdb-slot-disc-fill, .fdb-slot-book-confirm').forEach(input => {
-            input.addEventListener('change', (e) => this._collectSlotRegistryChanges(container));
+        contentElement.querySelectorAll('.fdb-slot-id, .fdb-slot-label, .fdb-slot-type, .fdb-slot-required, .fdb-slot-disc-fill, .fdb-slot-book-confirm').forEach(input => {
+            input.addEventListener('change', (e) => this._collectSlotRegistryChanges(contentElement));
         });
 
         // Collect changes on input (discovery steps)
-        container.querySelectorAll('.fdb-disc-slot-select, .fdb-disc-ask, .fdb-disc-reprompt, .fdb-disc-confirm-mode').forEach(input => {
-            input.addEventListener('change', (e) => this._collectDiscoveryFlowChanges(container));
+        contentElement.querySelectorAll('.fdb-disc-slot-select, .fdb-disc-ask, .fdb-disc-reprompt, .fdb-disc-confirm-mode').forEach(input => {
+            input.addEventListener('change', (e) => this._collectDiscoveryFlowChanges(contentElement));
         });
 
         // Collect changes on input (booking steps)
-        container.querySelectorAll('.fdb-book-slot-select, .fdb-book-ask, .fdb-book-confirm, .fdb-book-reprompt').forEach(input => {
-            input.addEventListener('change', (e) => this._collectBookingFlowChanges(container));
+        contentElement.querySelectorAll('.fdb-book-slot-select, .fdb-book-ask, .fdb-book-confirm, .fdb-book-reprompt').forEach(input => {
+            input.addEventListener('change', (e) => this._collectBookingFlowChanges(contentElement));
         });
 
         // Collect policy changes
-        container.querySelectorAll('#fdb-policy-use-firstname-list, #fdb-policy-confirm-firstname, #fdb-policy-accept-lastname-only, #fdb-policy-when-booking-starts, #fdb-policy-never-restart, #fdb-policy-default-state, #fdb-policy-require-city, #fdb-policy-require-unit, #fdb-policy-geo-verify').forEach(input => {
-            input.addEventListener('change', (e) => this._collectPolicyChanges(container));
+        contentElement.querySelectorAll('#fdb-policy-use-firstname-list, #fdb-policy-confirm-firstname, #fdb-policy-accept-lastname-only, #fdb-policy-when-booking-starts, #fdb-policy-never-restart, #fdb-policy-default-state, #fdb-policy-require-city, #fdb-policy-require-unit, #fdb-policy-geo-verify').forEach(input => {
+            input.addEventListener('change', (e) => this._collectPolicyChanges(contentElement));
         });
 
         // Flow enable toggles
-        const discEnabledCheckbox = container.querySelector('#fdb-disc-enabled');
+        const discEnabledCheckbox = contentElement.querySelector('#fdb-disc-enabled');
         if (discEnabledCheckbox) {
             discEnabledCheckbox.addEventListener('change', (e) => {
                 if (!this.config.discoveryFlow) this.config.discoveryFlow = { version: 'v1', enabled: true, steps: [] };
@@ -2054,7 +2062,7 @@ class FrontDeskBehaviorManager {
             });
         }
 
-        const bookEnabledCheckbox = container.querySelector('#fdb-book-enabled');
+        const bookEnabledCheckbox = contentElement.querySelector('#fdb-book-enabled');
         if (bookEnabledCheckbox) {
             bookEnabledCheckbox.addEventListener('change', (e) => {
                 if (!this.config.bookingFlow) this.config.bookingFlow = { version: 'v1', enabled: true, steps: [] };
@@ -2062,7 +2070,7 @@ class FrontDeskBehaviorManager {
             });
         }
 
-        const bookConfirmFirstCheckbox = container.querySelector('#fdb-book-confirm-first');
+        const bookConfirmFirstCheckbox = contentElement.querySelector('#fdb-book-confirm-first');
         if (bookConfirmFirstCheckbox) {
             bookConfirmFirstCheckbox.addEventListener('change', (e) => {
                 if (!this.config.bookingFlow) this.config.bookingFlow = { version: 'v1', enabled: true, steps: [] };
@@ -2071,19 +2079,19 @@ class FrontDeskBehaviorManager {
         }
 
         // Save button
-        const saveBtn = container.querySelector('#fdb-save-flows');
+        const saveBtn = contentElement.querySelector('#fdb-save-flows');
         if (saveBtn) {
             saveBtn.addEventListener('click', async () => {
-                const statusEl = container.querySelector('#fdb-flows-status');
+                const statusEl = contentElement.querySelector('#fdb-flows-status');
                 try {
                     statusEl.textContent = 'Saving...';
                     statusEl.style.color = '#8b949e';
                     
                     // Collect all current values
-                    this._collectSlotRegistryChanges(container);
-                    this._collectDiscoveryFlowChanges(container);
-                    this._collectBookingFlowChanges(container);
-                    this._collectPolicyChanges(container);
+                    this._collectSlotRegistryChanges(contentElement);
+                    this._collectDiscoveryFlowChanges(contentElement);
+                    this._collectBookingFlowChanges(contentElement);
+                    this._collectPolicyChanges(contentElement);
                     
                     await this.save();
                     statusEl.textContent = '✅ Saved successfully';
@@ -2097,7 +2105,7 @@ class FrontDeskBehaviorManager {
         }
 
         // Export button
-        const exportBtn = container.querySelector('#fdb-export-flows');
+        const exportBtn = contentElement.querySelector('#fdb-export-flows');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => {
                 const exportData = {
@@ -2117,7 +2125,7 @@ class FrontDeskBehaviorManager {
         }
 
         // Import button
-        const importBtn = container.querySelector('#fdb-import-flows');
+        const importBtn = contentElement.querySelector('#fdb-import-flows');
         if (importBtn) {
             importBtn.addEventListener('click', () => {
                 const input = document.createElement('input');
@@ -2133,7 +2141,7 @@ class FrontDeskBehaviorManager {
                         if (data.discoveryFlow) this.config.discoveryFlow = data.discoveryFlow;
                         if (data.bookingFlow) this.config.bookingFlow = data.bookingFlow;
                         if (data.policies) this.config.policies = data.policies;
-                        this.switchTab('discovery-flow', container);
+                        this.switchTab('discovery-flow', getParentContainer());
                         this.showNotification('✅ Imported successfully', 'success');
                     } catch (err) {
                         this.showNotification('❌ Import failed: ' + err.message, 'error');
