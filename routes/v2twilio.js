@@ -3994,6 +3994,53 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               matchSource: 'FRONT_DESK_RUNTIME_ERROR_RECOVERY'
             };
           }
+        } else if (strictControlPlaneMode && !result) {
+          // ════════════════════════════════════════════════════════════════════════
+          // V109: LEGACY_PATH_BLOCKED_VIOLATION - This should NEVER happen
+          // ════════════════════════════════════════════════════════════════════════
+          // If we're here with strictControlPlaneMode=true and no result yet,
+          // that means FrontDeskRuntime failed to produce a result. This is a
+          // critical violation that must be logged and handled.
+          // ════════════════════════════════════════════════════════════════════════
+          logger.error('[V109] LEGACY_PATH_BLOCKED_VIOLATION: Strict mode is ON but no result from FrontDeskRuntime!', {
+            callSid,
+            companyId: companyID,
+            turnCount,
+            strictMode: true,
+            resultIsNull: !result,
+            violation: 'STRICT_MODE_NO_RESULT'
+          });
+          
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'LEGACY_PATH_BLOCKED_VIOLATION',
+              turn: turnCount,
+              data: {
+                violation: 'STRICT_MODE_NO_RESULT',
+                strictMode: true,
+                resultIsNull: true,
+                remediation: 'Using fail-closed escalation response',
+                message: 'FrontDeskRuntime should have produced a result in strict mode. Legacy path is BLOCKED.'
+              }
+            }).catch(() => {});
+          }
+          
+          // Fail closed with FrontDesk-controlled message
+          const failClosedMsg = company?.aiAgentSettings?.frontDeskBehavior?.errorMessages?.systemError ||
+            "I apologize, but I'm having a technical issue. Let me connect you with someone who can help.";
+          
+          result = {
+            text: failClosedMsg,
+            response: failClosedMsg,
+            conversationMode: 'transfer',
+            requiresTransfer: true,
+            matchSource: 'LEGACY_PATH_BLOCKED_VIOLATION'
+          };
+          usedPath = 'frontDeskRuntime_strict_fallback';
+          modeOwner = 'FRONT_DESK_RUNTIME';
+          ownerGateApplied = true;
         } else if (!strictControlPlaneMode && !result) {
           // ════════════════════════════════════════════════════════════════════════
           // V102: LEGACY PATH - ConversationEngine (ONLY when strict mode is OFF)

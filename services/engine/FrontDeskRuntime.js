@@ -150,7 +150,79 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // GATE 2: Determine current lane
+    // ABSOLUTE BOOKING GATE (V109) - PLATFORM LAW
+    // ═══════════════════════════════════════════════════════════════════════════
+    // If bookingModeLocked === true, ONLY BookingFlowRunner can respond.
+    // This gate CANNOT be bypassed. No ConversationEngine. No LLM. No exceptions.
+    // If BookingFlowRunner fails → fail-closed with FrontDesk escalation message.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (callState?.bookingModeLocked === true) {
+        logger.info('[FRONT_DESK_RUNTIME] ABSOLUTE BOOKING GATE - bookingModeLocked=true → ONLY BookingFlowRunner can respond', {
+            callSid,
+            companyId,
+            turnCount,
+            userTurnPreview: userTurn?.substring(0, 50)
+        });
+        
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'ABSOLUTE_BOOKING_GATE_ENFORCED',
+                turn: turnCount,
+                data: {
+                    bookingModeLocked: true,
+                    forcedLane: 'BOOKING',
+                    message: 'Lane determination SKIPPED - booking lock forces BOOKING lane. Only BookingFlowRunner can respond.'
+                }
+            }).catch(() => {});
+        }
+        
+        trace.addDecisionReason('ABSOLUTE_BOOKING_GATE', { 
+            reason: 'bookingModeLocked=true',
+            forcedLane: 'BOOKING',
+            normalLaneDeterminationSkipped: true
+        });
+        
+        // ONLY run BookingFlowRunner - NO OTHER PATH
+        const absoluteGateResult = await handleBookingLane(effectiveConfig, callState, userTurn, context, trace);
+        
+        // Ensure matchSource reflects the gate enforcement
+        absoluteGateResult.matchSource = absoluteGateResult.matchSource || 'BOOKING_FLOW_RUNNER';
+        absoluteGateResult.gateEnforced = 'ABSOLUTE_BOOKING_GATE';
+        
+        // Return immediately - no further processing
+        const absoluteGateLatency = Date.now() - startTime;
+        
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'ABSOLUTE_BOOKING_GATE_RESULT',
+                turn: turnCount,
+                data: {
+                    lane: 'BOOKING',
+                    matchSource: absoluteGateResult.matchSource,
+                    responsePreview: absoluteGateResult.response?.substring(0, 100),
+                    escalate: !!absoluteGateResult.signals?.escalate,
+                    latencyMs: absoluteGateLatency
+                }
+            }).catch(() => {});
+        }
+        
+        return {
+            response: absoluteGateResult.response,
+            state: callState,
+            lane: LANES.BOOKING,
+            action: absoluteGateResult.action,
+            signals: absoluteGateResult.signals || {},
+            matchSource: absoluteGateResult.matchSource,
+            gateEnforced: 'ABSOLUTE_BOOKING_GATE'
+        };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GATE 2: Determine current lane (ONLY if booking is NOT locked)
     // ═══════════════════════════════════════════════════════════════════════════
     const currentLane = determineLane(effectiveConfig, callState, userTurn, trace, context);
     
@@ -868,6 +940,61 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
  */
 async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context, trace) {
     const { company, callSid } = context;
+    const companyId = company?._id?.toString() || context.companyId || 'unknown';
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V109: BOOKING GATE INVARIANT CHECK - Defense in depth
+    // ═══════════════════════════════════════════════════════════════════════════
+    // If we somehow reached handleDiscoveryLane with bookingModeLocked=true, that's
+    // an INVARIANT VIOLATION. The Absolute Booking Gate should have caught this.
+    // DO NOT call ConversationEngine - return FrontDesk-controlled message instead.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (callState?.bookingModeLocked === true) {
+        logger.error('[FRONT_DESK_RUNTIME] BOOKING_GATE_INVARIANT_VIOLATION: handleDiscoveryLane called with bookingModeLocked=true!', {
+            callSid,
+            companyId,
+            bookingModeLocked: true,
+            violation: 'DISCOVERY_LANE_WHILE_BOOKING_LOCKED'
+        });
+        
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'BOOKING_GATE_INVARIANT_VIOLATION',
+                data: {
+                    violation: 'DISCOVERY_LANE_WHILE_BOOKING_LOCKED',
+                    bookingModeLocked: true,
+                    expectedBehavior: 'Absolute Booking Gate should have prevented this',
+                    remediation: 'Returning escalation message instead of calling ConversationEngine'
+                }
+            }).catch(() => {});
+        }
+        
+        trace.addDecisionReason('BOOKING_GATE_INVARIANT_VIOLATION', {
+            violation: 'DISCOVERY_LANE_WHILE_BOOKING_LOCKED',
+            action: 'ESCALATE_INSTEAD_OF_CONVERSATION_ENGINE'
+        });
+        
+        // DO NOT call ConversationEngine - use FrontDesk escalation
+        let escalationMsg;
+        try {
+            escalationMsg = cfgGet(effectiveConfig, 'frontDesk.escalation.transferMessage', {
+                callId: callSid,
+                turn: callState?.turnCount || 0,
+                strict: false,
+                readerId: 'handleDiscoveryLane.bookingGateViolation'
+            });
+        } catch (e) {
+            escalationMsg = null;
+        }
+        
+        return {
+            response: escalationMsg || "I apologize for the confusion. Let me connect you with someone who can help with your booking.",
+            signals: { escalate: true, bookingGateViolation: true },
+            matchSource: 'BOOKING_GATE_INVARIANT_VIOLATION'
+        };
+    }
     
     trace.addDecisionReason('DISCOVERY_LANE_HANDLER', { handler: 'ConversationEngine' });
     
@@ -901,15 +1028,117 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         // V101 fix: ConversationEngine returns 'reply', not 'response' or 'text'
         const engineResponse = engineResult.reply || engineResult.response || engineResult.text || '';
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V109: If deferToBookingRunner=true, we MUST run BookingFlowRunner NOW
+        // ═══════════════════════════════════════════════════════════════════════
+        // BUG FIX: Previously, when ConversationEngine signaled deferToBookingRunner
+        // with reply=null, we'd return an empty response that became "I'm sorry, 
+        // could you repeat that?" - THIS IS THE ROOT CAUSE OF SPLIT-BRAIN.
+        //
+        // FIX: Actually run BookingFlowRunner here to generate the booking prompt.
+        // ═══════════════════════════════════════════════════════════════════════
         if (signals.deferToBookingRunner || signals.bookingModeLocked) {
+            logger.info('[FRONT_DESK_RUNTIME] V109: deferToBookingRunner detected - running BookingFlowRunner NOW', {
+                callSid: context.callSid,
+                deferToBookingRunner: !!signals.deferToBookingRunner,
+                bookingModeLocked: !!signals.bookingModeLocked,
+                hasEngineResponse: !!engineResponse,
+                triggerReason: signals.bookingTriggerReason
+            });
+            
+            // Lock booking mode immediately (Absolute Booking Gate from now on)
+            callState.bookingModeLocked = true;
+            callState.sessionMode = 'BOOKING';
+            
+            // Copy any collected slots from engine result
+            if (engineResult.bookingFlowState?.bookingCollected) {
+                callState.bookingCollected = { 
+                    ...callState.bookingCollected,
+                    ...engineResult.bookingFlowState.bookingCollected 
+                };
+            }
+            
+            // Actually run BookingFlowRunner to get the booking prompt
+            try {
+                if (!BookingFlowRunner || !BookingFlowResolver) {
+                    loadPlugins();
+                }
+                
+                if (BookingFlowRunner && BookingFlowResolver) {
+                    // Resolve the booking flow
+                    const deferredFlow = BookingFlowResolver.resolve({
+                        companyId: context.companyId,
+                        trade: callState.trade || null,
+                        serviceType: callState.serviceType || null,
+                        company: context.company
+                    });
+                    
+                    // Build initial state
+                    const deferredState = {
+                        bookingModeLocked: true,
+                        bookingFlowId: deferredFlow.flowId,
+                        currentStepId: deferredFlow.steps[0]?.id || 'name',
+                        bookingCollected: callState.bookingCollected || {},
+                        slotMetadata: {},
+                        confirmedSlots: {},
+                        askCount: {},
+                        pendingConfirmation: null
+                    };
+                    
+                    // Run booking flow
+                    const bookingResult = await BookingFlowRunner.runStep({
+                        flow: deferredFlow,
+                        state: deferredState,
+                        userInput: userTurn,
+                        callSid: context.callSid,
+                        company: context.company,
+                        session: { mode: 'BOOKING', collectedSlots: callState.bookingCollected || {} }
+                    });
+                    
+                    // Update callState with booking state
+                    Object.assign(callState, bookingResult.state || {});
+                    
+                    if (BlackBoxLogger) {
+                        BlackBoxLogger.logEvent({
+                            callId: context.callSid,
+                            companyId: context.companyId,
+                            type: 'DEFERRED_BOOKING_EXECUTED',
+                            data: {
+                                reason: signals.bookingTriggerReason || 'deferToBookingRunner',
+                                flowId: deferredFlow.flowId,
+                                currentStep: bookingResult.state?.currentStepId,
+                                responsePreview: bookingResult.reply?.substring(0, 100)
+                            }
+                        }).catch(() => {});
+                    }
+                    
+                    return {
+                        response: bookingResult.reply || "Great! What's a good phone number to reach you?",
+                        signals: {
+                            enterBooking: true,
+                            enterBookingReason: signals.bookingTriggerReason || 'deferred_from_engine'
+                        },
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        bookingState: bookingResult.state
+                    };
+                }
+            } catch (bookingErr) {
+                logger.error('[FRONT_DESK_RUNTIME] V109: BookingFlowRunner deferred execution failed', {
+                    callSid: context.callSid,
+                    error: bookingErr.message
+                });
+                // Fall through to return enterBooking signal with whatever response we have
+            }
+            
+            // Fallback if BookingFlowRunner couldn't run
             return {
-                response: engineResponse,
+                response: engineResponse || "Great! Let me help you schedule. What's a good phone number to reach you?",
                 signals: {
                     enterBooking: true,
                     enterBookingReason: signals.bookingTriggerReason || 'engine_detected',
                     setConsentPending: signals.bookingConsentPending
                 },
-                matchSource: engineResult.matchSource || 'CONVERSATION_ENGINE'
+                matchSource: engineResult.matchSource || 'CONVERSATION_ENGINE_DEFERRED'
             };
         }
         
