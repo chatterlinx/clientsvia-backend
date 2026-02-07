@@ -731,6 +731,53 @@ router.get('/', async (req, res) => {
                     : null,
                 autoRescueOnFrustration: frontDeskBehavior.modeSwitching?.autoRescueOnFrustration !== false,
                 autoTriageOnProblem: frontDeskBehavior.modeSwitching?.autoTriageOnProblem !== false
+            },
+            
+            // Tab: Hours & Availability (V109: Canonical location is frontDeskBehavior.businessHours)
+            businessHours: (() => {
+                // V109: Check CANONICAL location first (frontDeskBehavior.businessHours)
+                // Fall back to LEGACY location (aiAgentSettings.businessHours) for migration period
+                const canonicalHours = frontDeskBehavior.businessHours;
+                const legacyHours = company.aiAgentSettings?.businessHours;
+                const hours = canonicalHours || legacyHours;
+                const sourceLocation = canonicalHours 
+                    ? 'aiAgentSettings.frontDeskBehavior.businessHours (CANONICAL)' 
+                    : (legacyHours 
+                        ? 'aiAgentSettings.businessHours (LEGACY - should migrate)' 
+                        : 'NOT_CONFIGURED');
+                
+                return {
+                    source: sourceLocation,
+                    configured: !!(hours && (hours.timezone || hours.weekly)),
+                    usesLegacyLocation: !canonicalHours && !!legacyHours,
+                    timezone: hours?.timezone || null,
+                    weeklyConfigured: !!(hours?.weekly && Object.keys(hours.weekly).length > 0),
+                    weeklyDaysSet: hours?.weekly ? Object.keys(hours.weekly).filter(k => hours.weekly[k] !== null).length : 0,
+                    holidaysCount: Array.isArray(hours?.holidays) ? hours.holidays.length : 0,
+                    // Sample for validation
+                    sample: hours?.weekly ? Object.entries(hours.weekly).slice(0, 3).map(([day, val]) => ({
+                        day,
+                        isOpen: val !== null,
+                        hours: val ? `${val.open || '?'}-${val.close || '?'}` : 'CLOSED'
+                    })) : []
+                };
+            })(),
+            
+            // Tab: Scheduling (Phase 1 - Request Only)
+            scheduling: {
+                source: 'aiAgentSettings.frontDeskBehavior.scheduling',
+                provider: frontDeskBehavior.scheduling?.provider || 'request_only',
+                timeWindowsCount: Array.isArray(frontDeskBehavior.scheduling?.timeWindows) 
+                    ? frontDeskBehavior.scheduling.timeWindows.length 
+                    : 0,
+                timeWindowsSample: Array.isArray(frontDeskBehavior.scheduling?.timeWindows)
+                    ? frontDeskBehavior.scheduling.timeWindows.slice(0, 5).map(w => ({
+                        id: w.id,
+                        label: w.label,
+                        time: w.time || `${w.startTime || '?'}-${w.endTime || '?'}`
+                    }))
+                    : [],
+                promptConfigured: !!frontDeskBehavior.scheduling?.morningAfternoonPrompt || !!frontDeskBehavior.scheduling?.timeWindowPrompt
             }
         };
 
@@ -943,6 +990,18 @@ router.get('/', async (req, res) => {
                 area: 'consent', 
                 message: 'disableScenarioAutoResponses=true - scenarios will not reply until consent given',
                 fix: 'Either set discoveryConsent.disableScenarioAutoResponses=false, or configure discoveryConsent.autoReplyAllowedScenarioTypes to allow safe scenario types before consent.'
+            });
+        }
+        
+        // V109: Check for legacy businessHours location
+        const canonicalBusinessHours = frontDeskBehavior.businessHours;
+        const legacyBusinessHours = company.aiAgentSettings?.businessHours;
+        if (!canonicalBusinessHours && legacyBusinessHours) {
+            issues.push({
+                severity: 'WARNING',
+                area: 'businessHours',
+                message: 'businessHours is at LEGACY location (aiAgentSettings.businessHours) - should be in frontDeskBehavior',
+                fix: 'Run migration script: node scripts/migrate-business-hours-to-canonical.js --execute'
             });
         }
         
