@@ -1160,32 +1160,41 @@ class BookingFlowRunner {
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // V98 FIX: FIRST TURN IN BOOKING MODE - Auto-confirm pre-filled slots
+        // V110+: PRECONFIRM DISCOVERY SLOTS BEFORE PROCEEDING
         // ═══════════════════════════════════════════════════════════════════════════
-        // When booking JUST started (user said "book an appointment"), we should NOT
-        // ask "Is that correct?" for pre-filled slots. The user's booking trigger
-        // utterance is NOT a yes/no response to a confirmation question.
+        // When booking JUST started (user said "book an appointment"), if we have
+        // slots captured from DISCOVERY, we must CONFIRM them first before moving on.
         //
-        // On first turn: auto-confirm all pre-filled slots and ask for FIRST UNFILLED.
-        // This prevents: "book an appointment" → "I didn't catch that, yes or no?"
+        // Example: Discovery captured firstName="Mark"
+        // First booking prompt: "Ok — I assume Mark is your first name, is that correct?"
+        // NOT: "What's your address?" (skipping confirmation)
+        //
+        // This is the enterprise "confirm-captured-first" pattern.
         // ═══════════════════════════════════════════════════════════════════════════
         const isFirstBookingTurn = !state.bookingTurnStarted;
         if (isFirstBookingTurn) {
             state.bookingTurnStarted = true;
-            
-            // Auto-confirm all pre-filled slots on first booking turn
             state.confirmedSlots = state.confirmedSlots || {};
-            for (const step of flow.steps) {
-                const fieldKey = step.fieldKey || step.id;
-                if (state.bookingCollected[fieldKey] && !state.confirmedSlots[fieldKey]) {
-                    state.confirmedSlots[fieldKey] = true;
-                    logger.info('[BOOKING FLOW RUNNER] V98: Auto-confirmed pre-filled slot on first booking turn', {
-                        fieldKey,
-                        value: state.bookingCollected[fieldKey],
-                        reason: 'FIRST_BOOKING_TURN'
-                    });
-                }
-            }
+            
+            // V110+: DO NOT auto-confirm discovery slots - they need user confirmation!
+            // Only mark the turn as started so we track state properly
+            logger.info('[BOOKING FLOW RUNNER] V110+: First booking turn - discovery slots will be confirmed', {
+                discoverySlots: Object.keys(state.bookingCollected || {}),
+                reason: 'PRECONFIRM_REQUIRED'
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V110+: PRECONFIRM QUEUE - Check for discovery slots needing confirmation
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Before normal step selection, check if any discovery-sourced slot needs
+        // user confirmation. This runs BEFORE determineNextAction().
+        //
+        // Priority order: firstName → lastName → phone → others
+        // ═══════════════════════════════════════════════════════════════════════════
+        const preconfirmResult = this.checkPreconfirmQueue(flow, state, userInput, company, callSid, startTime);
+        if (preconfirmResult) {
+            return preconfirmResult;
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
@@ -4406,6 +4415,419 @@ class BookingFlowRunner {
         });
         
         return initialized;
+    }
+    
+    /**
+     * ========================================================================
+     * V110+: CHECK PRECONFIRM QUEUE
+     * ========================================================================
+     * Before normal step selection, check if any discovery-sourced slot needs
+     * user confirmation. This implements the "confirm-captured-first" pattern.
+     * 
+     * Priority order: name (firstName) → phone → others
+     * 
+     * RULES:
+     * - Only consider slots with source === 'discovery' or 'utterance' or 'caller_id'
+     * - Only consider slots with value != null
+     * - Only consider slots with confirmed !== true
+     * - Priority: name first, then phone
+     * 
+     * When preconfirm is needed:
+     * - Set state.pendingPreconfirm = { slotId, value, source }
+     * - Return a confirmation prompt
+     * - User's next response will be handled by handlePreconfirmResponse()
+     * 
+     * @returns {Object|null} Preconfirm prompt result, or null to proceed normally
+     * ========================================================================
+     */
+    static checkPreconfirmQueue(flow, state, userInput, company, callSid, startTime) {
+        const collected = state.bookingCollected || {};
+        const confirmedSlots = state.confirmedSlots || {};
+        const slotMetadata = state.slotMetadata || {};
+        const slots = state.slots || {};
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // HANDLE PENDING PRECONFIRM RESPONSE
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (state.pendingPreconfirm && userInput && userInput.trim()) {
+            return this.handlePreconfirmResponse(state, userInput, flow, company, callSid, startTime);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FIND NEXT SLOT NEEDING PRECONFIRM
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Priority order matches booking flow order, but name always first
+        const preconfirmPriority = ['name', 'phone', 'address', 'time'];
+        
+        for (const slotId of preconfirmPriority) {
+            // Skip if already confirmed
+            if (confirmedSlots[slotId]) {
+                continue;
+            }
+            
+            // Get value and metadata
+            const value = collected[slotId];
+            const metadata = slotMetadata[slotId] || slots[slotId] || {};
+            const source = metadata.source || 'unknown';
+            
+            // Skip if no value
+            if (!value) {
+                continue;
+            }
+            
+            // Only preconfirm if source is discovery/utterance/caller_id (not booking)
+            const needsPreconfirm = ['discovery', 'utterance', 'caller_id', 'pre_extracted'].includes(source);
+            if (!needsPreconfirm) {
+                continue;
+            }
+            
+            // V110+: Found a slot that needs preconfirmation!
+            logger.info('[BOOKING FLOW RUNNER] V110+: Preconfirm needed for discovery slot', {
+                slotId,
+                value: slotId === 'phone' ? '***MASKED***' : value,
+                source,
+                reason: 'DISCOVERY_SLOT_UNCONFIRMED'
+            });
+            
+            // Emit BOOKING_PRECONFIRM_SELECTED event
+            if (BlackBoxLogger && callSid) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId: company?._id?.toString(),
+                    type: 'BOOKING_PRECONFIRM_SELECTED',
+                    turn: state._traceContext?.turn || 0,
+                    data: {
+                        slotId,
+                        fromSource: source,
+                        valuePreview: slotId === 'phone' ? '***' : (value || '').substring(0, 20)
+                    }
+                }).catch(() => {});
+            }
+            
+            // Set pending preconfirm state
+            state.pendingPreconfirm = {
+                slotId,
+                value,
+                source,
+                askedAt: new Date().toISOString()
+            };
+            
+            // Build preconfirm prompt
+            const prompt = this.buildPreconfirmPrompt(slotId, value, flow, company);
+            
+            return {
+                reply: prompt,
+                state,
+                isComplete: false,
+                action: 'CONTINUE',
+                currentStep: `preconfirm_${slotId}`,
+                matchSource: 'BOOKING_FLOW_RUNNER',
+                tier: 'tier1',
+                tokensUsed: 0,
+                latencyMs: Date.now() - startTime,
+                debug: {
+                    promptSource: `bookingFlow.preconfirm.${slotId}`,
+                    stepId: `preconfirm_${slotId}`,
+                    slotId,
+                    slotSubStep: null,
+                    repromptCount: 0,
+                    source: 'BOOKING_FLOW_RUNNER',
+                    flowId: flow?.flowId,
+                    mode: 'PRECONFIRM_DISCOVERY_SLOT'
+                }
+            };
+        }
+        
+        // No preconfirm needed - proceed with normal step selection
+        return null;
+    }
+    
+    /**
+     * ========================================================================
+     * V110+: BUILD PRECONFIRM PROMPT
+     * ========================================================================
+     * Generates the confirmation prompt for a discovery-captured slot.
+     * 
+     * Examples:
+     * - name: "Ok — I assume Mark is your first name, is that correct?"
+     * - phone: "I have your number as (239) 555-1234. Is that the best number?"
+     * ========================================================================
+     */
+    static buildPreconfirmPrompt(slotId, value, flow, company) {
+        // Check for custom preconfirm prompts in flow config
+        const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
+        const preconfirmPrompts = frontDesk?.bookingPrompts?.preconfirm || {};
+        
+        // Find the step for this slot to get any custom confirm prompt
+        const step = flow?.steps?.find(s => (s.fieldKey || s.id) === slotId);
+        const customConfirmPrompt = step?.confirmPrompt || preconfirmPrompts[slotId];
+        
+        if (customConfirmPrompt) {
+            // Replace {value} placeholder
+            return customConfirmPrompt.replace(/\{value\}/gi, value);
+        }
+        
+        // Default preconfirm prompts
+        switch (slotId) {
+            case 'name':
+                return `Ok — I assume ${value} is your first name, is that correct?`;
+            case 'phone':
+                return `I have your number as ${value}. Is that the best number to reach you?`;
+            case 'address':
+                return `I have your address as ${value}. Is that correct?`;
+            case 'time':
+                return `I have your preferred time as ${value}. Is that right?`;
+            default:
+                return `I have ${value} for ${slotId}. Is that correct?`;
+        }
+    }
+    
+    /**
+     * ========================================================================
+     * V110+: HANDLE PRECONFIRM RESPONSE
+     * ========================================================================
+     * Process user's response to a preconfirm question.
+     * 
+     * - If "yes": Mark slot as confirmed, proceed to next slot
+     * - If "no": Clear the value, ask for correct value
+     * - If "no that's my last name": Move value to lastName, ask for firstName
+     * ========================================================================
+     */
+    static handlePreconfirmResponse(state, userInput, flow, company, callSid, startTime) {
+        const { slotId, value, source } = state.pendingPreconfirm;
+        const normalizedInput = (userInput || '').toLowerCase().trim();
+        
+        // Check for yes/no response
+        const yesPatterns = /^(yes|yeah|yep|correct|that's right|right|uh-huh|affirmative|sure|ok|okay|yup|mhm)$/i;
+        const noPatterns = /^(no|nope|wrong|incorrect|that's wrong|not right|negative|nah)$/i;
+        
+        // Special case: "no that's my last name" for name slot
+        const thatsMyLastName = /no[,.]?\s*(that'?s?\s*(my\s+)?last\s+name|my\s+last\s+name)/i;
+        
+        if (yesPatterns.test(normalizedInput)) {
+            // User confirmed - mark slot as confirmed
+            state.confirmedSlots = state.confirmedSlots || {};
+            state.confirmedSlots[slotId] = true;
+            
+            if (state.slotMetadata?.[slotId]) {
+                state.slotMetadata[slotId].confirmed = true;
+                state.slotMetadata[slotId].confirmedAt = new Date().toISOString();
+            }
+            
+            delete state.pendingPreconfirm;
+            
+            logger.info('[BOOKING FLOW RUNNER] V110+: Preconfirm YES - slot confirmed', {
+                slotId,
+                value: slotId === 'phone' ? '***MASKED***' : value
+            });
+            
+            // Determine next step
+            if (slotId === 'name') {
+                // After confirming first name, ask for last name
+                const hasLastName = state.bookingCollected?.lastName;
+                if (!hasLastName) {
+                    return {
+                        reply: `Perfect. And what's your last name?`,
+                        state,
+                        isComplete: false,
+                        action: 'CONTINUE',
+                        currentStep: 'lastName_collect',
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            promptSource: 'bookingFlow.preconfirm.name.followup.lastName',
+                            stepId: 'lastName_collect',
+                            slotId: 'lastName',
+                            slotSubStep: null,
+                            repromptCount: 0,
+                            source: 'BOOKING_FLOW_RUNNER',
+                            mode: 'COLLECT_LAST_NAME_AFTER_PRECONFIRM'
+                        }
+                    };
+                }
+            }
+            
+            // Return null to let normal flow continue
+            return null;
+            
+        } else if (slotId === 'name' && thatsMyLastName.test(normalizedInput)) {
+            // Special case: User said "no that's my last name"
+            // Move the value to lastName, clear firstName, ask for firstName
+            
+            // Move value to lastName
+            state.bookingCollected = state.bookingCollected || {};
+            state.bookingCollected.lastName = value;
+            delete state.bookingCollected.name;
+            
+            // Update slots
+            if (state.slots) {
+                state.slots.lastName = {
+                    value,
+                    source: 'preconfirm_correction',
+                    confidence: 0.95,
+                    movedFrom: 'name'
+                };
+                delete state.slots.name;
+            }
+            
+            // Mark lastName as confirmed
+            state.confirmedSlots = state.confirmedSlots || {};
+            state.confirmedSlots.lastName = true;
+            
+            delete state.pendingPreconfirm;
+            
+            logger.info('[BOOKING FLOW RUNNER] V110+: Preconfirm "thats my last name" - moved to lastName', {
+                value,
+                movedTo: 'lastName'
+            });
+            
+            return {
+                reply: `Got it, ${value} is your last name. What's your first name?`,
+                state,
+                isComplete: false,
+                action: 'CONTINUE',
+                currentStep: 'name_collect',
+                matchSource: 'BOOKING_FLOW_RUNNER',
+                tier: 'tier1',
+                tokensUsed: 0,
+                latencyMs: Date.now() - startTime,
+                debug: {
+                    promptSource: 'bookingFlow.preconfirm.name.correction.lastNameSwap',
+                    stepId: 'name_collect',
+                    slotId: 'name',
+                    slotSubStep: null,
+                    repromptCount: 0,
+                    source: 'BOOKING_FLOW_RUNNER',
+                    mode: 'COLLECT_FIRST_NAME_AFTER_LASTNAME_SWAP'
+                }
+            };
+            
+        } else if (noPatterns.test(normalizedInput)) {
+            // User denied - clear the value and ask again
+            delete state.bookingCollected?.[slotId];
+            if (state.slots) {
+                delete state.slots[slotId];
+            }
+            delete state.confirmedSlots?.[slotId];
+            delete state.pendingPreconfirm;
+            
+            logger.info('[BOOKING FLOW RUNNER] V110+: Preconfirm NO - clearing slot and re-asking', {
+                slotId,
+                previousValue: slotId === 'phone' ? '***MASKED***' : value
+            });
+            
+            // Find the step to get the collect prompt
+            const step = flow?.steps?.find(s => (s.fieldKey || s.id) === slotId);
+            const collectPrompt = step?.prompt || step?.question || `What is your ${slotId}?`;
+            
+            return {
+                reply: `No problem. ${collectPrompt}`,
+                state,
+                isComplete: false,
+                action: 'CONTINUE',
+                currentStep: `${slotId}_collect`,
+                matchSource: 'BOOKING_FLOW_RUNNER',
+                tier: 'tier1',
+                tokensUsed: 0,
+                latencyMs: Date.now() - startTime,
+                debug: {
+                    promptSource: `bookingFlow.steps[${slotId}].prompt`,
+                    stepId: `${slotId}_collect`,
+                    slotId,
+                    slotSubStep: null,
+                    repromptCount: 0,
+                    source: 'BOOKING_FLOW_RUNNER',
+                    mode: 'COLLECT_AFTER_PRECONFIRM_DENIED'
+                }
+            };
+            
+        } else {
+            // Unclear response - treat as providing a new value
+            // This handles cases like user saying "Actually it's Michael not Mark"
+            
+            // Try to extract a name from the input
+            const possibleNewValue = userInput.trim();
+            
+            if (possibleNewValue && possibleNewValue.length > 1) {
+                // User provided a new value
+                state.bookingCollected = state.bookingCollected || {};
+                state.bookingCollected[slotId] = possibleNewValue;
+                
+                if (state.slots) {
+                    state.slots[slotId] = {
+                        value: possibleNewValue,
+                        source: 'preconfirm_correction',
+                        confidence: 0.9
+                    };
+                }
+                
+                // Mark as confirmed since user explicitly provided it
+                state.confirmedSlots = state.confirmedSlots || {};
+                state.confirmedSlots[slotId] = true;
+                
+                delete state.pendingPreconfirm;
+                
+                logger.info('[BOOKING FLOW RUNNER] V110+: Preconfirm - new value provided', {
+                    slotId,
+                    oldValue: slotId === 'phone' ? '***MASKED***' : value,
+                    newValue: slotId === 'phone' ? '***MASKED***' : possibleNewValue
+                });
+                
+                // Acknowledge and continue
+                if (slotId === 'name') {
+                    const hasLastName = state.bookingCollected?.lastName;
+                    if (!hasLastName) {
+                        return {
+                            reply: `Got it, ${possibleNewValue}. And what's your last name?`,
+                            state,
+                            isComplete: false,
+                            action: 'CONTINUE',
+                            currentStep: 'lastName_collect',
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                promptSource: 'bookingFlow.preconfirm.name.correction.followup.lastName',
+                                stepId: 'lastName_collect',
+                                slotId: 'lastName',
+                                slotSubStep: null,
+                                repromptCount: 0,
+                                source: 'BOOKING_FLOW_RUNNER',
+                                mode: 'COLLECT_LAST_NAME_AFTER_NAME_CORRECTION'
+                            }
+                        };
+                    }
+                }
+                
+                // Return null to continue normal flow
+                return null;
+            }
+            
+            // Couldn't parse - ask for clarification
+            return {
+                reply: `I'm sorry, I didn't catch that. Is ${value} correct? Please say yes or no.`,
+                state,
+                isComplete: false,
+                action: 'CONTINUE',
+                currentStep: `preconfirm_${slotId}_retry`,
+                matchSource: 'BOOKING_FLOW_RUNNER',
+                tier: 'tier1',
+                tokensUsed: 0,
+                latencyMs: Date.now() - startTime,
+                debug: {
+                    promptSource: `bookingFlow.preconfirm.${slotId}.retry`,
+                    stepId: `preconfirm_${slotId}`,
+                    slotId,
+                    slotSubStep: null,
+                    repromptCount: 1,
+                    source: 'BOOKING_FLOW_RUNNER',
+                    mode: 'PRECONFIRM_RETRY_UNCLEAR_RESPONSE'
+                }
+            };
+        }
     }
     
     /**
