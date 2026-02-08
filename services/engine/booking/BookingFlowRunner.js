@@ -1642,7 +1642,7 @@ class BookingFlowRunner {
         // ═══════════════════════════════════════════════════════════════════
         // HANDLE COLLECT MODE (slot missing, need to ask)
         // ═══════════════════════════════════════════════════════════════════
-        return await this.handleCollectMode(nextAction, state, flow, userInput, company, startTime);
+        return await this.handleCollectMode(nextAction, state, flow, userInput, company, startTime, awReader);
     }
     
     /**
@@ -2762,7 +2762,7 @@ class BookingFlowRunner {
      * HANDLE COLLECT MODE - Ask user to provide missing value
      * ========================================================================
      */
-    static async handleCollectMode(action, state, flow, userInput, company, startTime) {
+    static async handleCollectMode(action, state, flow, userInput, company, startTime, awReader = null) {
         const { step } = action;
         const fieldKey = step.fieldKey || step.id;
 
