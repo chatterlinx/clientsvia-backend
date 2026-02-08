@@ -548,6 +548,9 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 nameStopWordsEnabled: config.nameStopWordsEnabled !== false, // Default to true
                 // 🕒 Canonical business hours (used by after_hours trigger + AfterHours handler)
                 businessHours,
+                // 📋 Architecture Notes - System documentation (editable in V110 tab)
+                architectureNotes: config.architectureNotes || null,
+                architectureNotesUpdated: config.architectureNotesUpdated || null,
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -876,6 +879,16 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         if (updates.policies && typeof updates.policies === 'object') {
             updateObj['aiAgentSettings.frontDeskBehavior.policies'] = updates.policies;
             logger.info('[FRONT DESK BEHAVIOR] V110: Saving policies', { companyId });
+        }
+        
+        // Architecture Notes - System documentation (editable from V110 Discovery tab)
+        if (updates.architectureNotes !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.architectureNotes'] = updates.architectureNotes;
+            updateObj['aiAgentSettings.frontDeskBehavior.architectureNotesUpdated'] = new Date();
+            logger.info('[FRONT DESK BEHAVIOR] Saving architectureNotes', { 
+                companyId,
+                noteLength: (updates.architectureNotes || '').length
+            });
         }
         
         // Save booking templates

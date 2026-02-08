@@ -1741,12 +1741,63 @@ class FrontDeskBehaviorManager {
                         </p>
                     </div>
                     <div style="display:flex; align-items:center; gap:12px;">
+                        <button id="fdb-wiring-modal-btn" style="background:#1f6feb; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem; display:flex; align-items:center; gap:6px;">
+                            📋 Architecture Notes
+                        </button>
                         <button id="fdb-stt-modal-btn" style="background:#6e40c9; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem; display:flex; align-items:center; gap:6px;">
                             🔇 STT Intelligence
                         </button>
                         <span style="background:#3fb95020; color:#3fb950; padding:6px 12px; border-radius:16px; font-size:0.75rem; font-weight:600;">
                             V110 CANONICAL
                         </span>
+                    </div>
+                </div>
+                
+                <!-- Architecture Notes Modal (Hidden by default) -->
+                <div id="fdb-wiring-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center;">
+                    <div style="background:#0d1117; border:1px solid #30363d; border-radius:12px; width:95%; max-width:1100px; max-height:90vh; overflow:hidden; display:flex; flex-direction:column;">
+                        <!-- Modal Header -->
+                        <div style="padding:20px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; align-items:center; background:#161b22;">
+                            <div>
+                                <h3 style="margin:0; color:#58a6ff; font-size:1.25rem;">📋 System Architecture Notes</h3>
+                                <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.8rem;">
+                                    Reference documentation for call flow wiring • Last updated: <span id="fdb-wiring-last-updated">Never</span>
+                                </p>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <button id="fdb-wiring-edit-toggle" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                                    ✏️ Edit
+                                </button>
+                                <button id="fdb-wiring-modal-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:8px;">&times;</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Body -->
+                        <div id="fdb-wiring-modal-body" style="padding:24px; overflow-y:auto; flex:1; background:#0d1117;">
+                            <!-- View Mode (default) -->
+                            <div id="fdb-wiring-view" style="color:#c9d1d9; line-height:1.7;">
+                                <div style="text-align:center; padding:40px; color:#8b949e;">Loading...</div>
+                            </div>
+                            <!-- Edit Mode (hidden) -->
+                            <div id="fdb-wiring-edit" style="display:none;">
+                                <textarea id="fdb-wiring-textarea" style="width:100%; height:calc(70vh - 100px); background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; padding:16px; font-family:monospace; font-size:0.9rem; resize:none; line-height:1.6;" placeholder="Write your architecture notes here using Markdown..."></textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Footer -->
+                        <div style="padding:16px 20px; border-top:1px solid #30363d; display:flex; justify-content:space-between; align-items:center; background:#161b22;">
+                            <div style="color:#8b949e; font-size:0.8rem;">
+                                💡 Tip: Document the call flow, slot wiring, and any gotchas for future reference
+                            </div>
+                            <div style="display:flex; gap:12px;">
+                                <button id="fdb-wiring-save" style="display:none; background:#238636; color:#fff; border:none; padding:8px 20px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
+                                    💾 Save Notes
+                                </button>
+                                <button id="fdb-wiring-modal-done" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:8px 20px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -2433,6 +2484,267 @@ class FrontDeskBehaviorManager {
             sttModal.addEventListener('click', (e) => {
                 if (e.target === sttModal) {
                     sttModal.style.display = 'none';
+                }
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // ARCHITECTURE NOTES MODAL - Documentation for system wiring
+        // ═══════════════════════════════════════════════════════════════════════════
+        const wiringModalBtn = contentElement.querySelector('#fdb-wiring-modal-btn');
+        const wiringModal = contentElement.querySelector('#fdb-wiring-modal');
+        const wiringModalClose = contentElement.querySelector('#fdb-wiring-modal-close');
+        const wiringModalDone = contentElement.querySelector('#fdb-wiring-modal-done');
+        const wiringEditToggle = contentElement.querySelector('#fdb-wiring-edit-toggle');
+        const wiringView = contentElement.querySelector('#fdb-wiring-view');
+        const wiringEdit = contentElement.querySelector('#fdb-wiring-edit');
+        const wiringTextarea = contentElement.querySelector('#fdb-wiring-textarea');
+        const wiringSave = contentElement.querySelector('#fdb-wiring-save');
+        const wiringLastUpdated = contentElement.querySelector('#fdb-wiring-last-updated');
+        
+        let isEditMode = false;
+        
+        // Default architecture notes - this is the initial documentation
+        const DEFAULT_ARCHITECTURE_NOTES = `# 📞 Call Flow Architecture (V110)
+
+## Overview
+When a caller dials in, the call flows through these stages:
+
+\`\`\`
+Twilio → /v2-agent-respond → STT Preprocessing → FrontDeskRuntime → Response
+\`\`\`
+
+---
+
+## 🔄 STEP 1: Twilio Receives Call
+- Caller dials company number
+- Twilio sends webhook to \`/api/twilio/voice/:companyID\`
+- Greeting plays, then \`<Gather>\` starts listening
+
+## 🎤 STEP 2: Caller Speaks
+- Twilio captures speech (SpeechResult)
+- POSTs to \`/api/twilio/v2-agent-respond/:companyID\`
+- Includes: SpeechResult, Confidence, CallSid
+
+## 🔇 STEP 3: STT Preprocessing
+**Location:** Template's STT Profile (Global AI Brain)
+- Removes filler words ("um", "uh", "like")
+- Applies corrections ("thermal stat" → "thermostat")
+- Applies synonyms for matching
+
+## 📦 STEP 4: Call State (Redis)
+Key: \`callState:{CallSid}\`
+- turnCount: which turn we're on
+- bookingModeLocked: are we in booking mode?
+- slots: captured data (name, phone, address)
+- bookingConsentPending: did we offer booking?
+
+## 🚦 STEP 5: Lane Selection (FrontDeskRuntime)
+**File:** \`services/engine/FrontDeskRuntime.js\`
+
+Decision order:
+1. If \`bookingModeLocked === true\` → **BOOKING lane**
+2. If escalation trigger ("manager", "supervisor") → **ESCALATE lane**
+3. If \`bookingConsentPending\` + caller says "yes" → **BOOKING lane**
+4. If direct booking intent detected → **BOOKING lane**
+5. Default → **DISCOVERY lane**
+
+---
+
+## 🎯 V110 SLOTS & FLOWS
+
+### Slot Registry
+Defines WHAT slots exist (the schema):
+- \`name.first\`, \`name.last\`, \`phone\`, \`address\`
+- Each slot has: type, label, required, discoveryFillAllowed
+
+### Discovery Flow (Phase 1)
+Runs BEFORE booking consent:
+- Passively captures slots from caller speech
+- "Hi, this is Mark" → name.first = Mark
+- Values held until booking starts
+
+### Booking Flow (Phase 2)
+Runs AFTER booking consent:
+- Confirms captured slots first (if enabled)
+- Asks for missing required slots
+- Follows the order defined in bookingFlow.steps
+
+---
+
+## ⚠️ GOTCHAS & NOTES
+
+### Booking Mode Lock
+- Once \`bookingModeLocked = true\`, ONLY BookingFlowRunner responds
+- No LLM, no scenarios, no bypasses
+- This is by design (deterministic booking)
+
+### Config Priority
+- V110 slotRegistry/flows are CANONICAL
+- Legacy bookingSlots only used as fallback
+- Check BlackBox logs for \`configSource: V110_SLOT_REGISTRY\`
+
+### Common Issues
+1. **Slots not persisting?** Check v2Company schema has the fields
+2. **GET not returning data?** Check routes/admin/frontDeskBehavior.js response object
+3. **STT not cleaning?** Check template is assigned to company
+
+---
+
+## 📝 CUSTOM NOTES
+
+*Add your company-specific notes here...*
+
+`;
+        
+        // Simple markdown-to-HTML converter
+        const renderMarkdown = (md) => {
+            return md
+                // Code blocks
+                .replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre style="background:#161b22; padding:12px; border-radius:6px; overflow-x:auto; border:1px solid #30363d; margin:12px 0;"><code style="color:#79c0ff;">$1</code></pre>')
+                // Inline code
+                .replace(/\`([^\`]+)\`/g, '<code style="background:#30363d; padding:2px 6px; border-radius:4px; color:#79c0ff;">$1</code>')
+                // Headers
+                .replace(/^### (.+)$/gm, '<h4 style="color:#8b949e; margin:20px 0 8px 0; font-size:0.95rem;">$1</h4>')
+                .replace(/^## (.+)$/gm, '<h3 style="color:#58a6ff; margin:24px 0 12px 0; font-size:1.1rem; border-bottom:1px solid #21262d; padding-bottom:8px;">$1</h3>')
+                .replace(/^# (.+)$/gm, '<h2 style="color:#c9d1d9; margin:0 0 16px 0; font-size:1.3rem;">$1</h2>')
+                // Horizontal rules
+                .replace(/^---$/gm, '<hr style="border:none; border-top:1px solid #30363d; margin:24px 0;">')
+                // Bold
+                .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:#f0883e;">$1</strong>')
+                // Italic
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                // Lists
+                .replace(/^- (.+)$/gm, '<li style="margin:4px 0; margin-left:20px;">$1</li>')
+                .replace(/^(\d+)\. (.+)$/gm, '<li style="margin:4px 0; margin-left:20px;">$2</li>')
+                // Paragraphs (double newline)
+                .replace(/\\n\\n/g, '</p><p style="margin:12px 0;">')
+                // Single newlines in content
+                .replace(/\\n/g, '<br>');
+        };
+        
+        // Load notes from company config or localStorage
+        const loadWiringNotes = () => {
+            // Try to load from company's frontDeskBehavior.architectureNotes
+            const savedNotes = this.config.architectureNotes;
+            const lastUpdated = this.config.architectureNotesUpdated;
+            
+            const notes = savedNotes || DEFAULT_ARCHITECTURE_NOTES;
+            
+            if (lastUpdated) {
+                wiringLastUpdated.textContent = new Date(lastUpdated).toLocaleDateString() + ' ' + new Date(lastUpdated).toLocaleTimeString();
+            } else {
+                wiringLastUpdated.textContent = savedNotes ? 'Unknown' : 'Default template';
+            }
+            
+            wiringTextarea.value = notes;
+            wiringView.innerHTML = '<div style="max-width:100%;">' + renderMarkdown(notes) + '</div>';
+        };
+        
+        // Save notes
+        const saveWiringNotes = async () => {
+            const notes = wiringTextarea.value;
+            this.config.architectureNotes = notes;
+            this.config.architectureNotesUpdated = new Date().toISOString();
+            
+            try {
+                wiringSave.textContent = 'Saving...';
+                wiringSave.disabled = true;
+                
+                await this.save();
+                
+                wiringLastUpdated.textContent = new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString();
+                wiringView.innerHTML = '<div style="max-width:100%;">' + renderMarkdown(notes) + '</div>';
+                
+                // Switch back to view mode
+                isEditMode = false;
+                wiringView.style.display = 'block';
+                wiringEdit.style.display = 'none';
+                wiringSave.style.display = 'none';
+                wiringEditToggle.textContent = '✏️ Edit';
+                wiringEditToggle.style.background = '#21262d';
+                
+                wiringSave.textContent = '💾 Save Notes';
+                wiringSave.disabled = false;
+                
+                this.showNotification('✅ Architecture notes saved', 'success');
+            } catch (err) {
+                wiringSave.textContent = '💾 Save Notes';
+                wiringSave.disabled = false;
+                this.showNotification('❌ Failed to save: ' + err.message, 'error');
+            }
+        };
+        
+        // Toggle edit mode
+        const toggleEditMode = () => {
+            isEditMode = !isEditMode;
+            if (isEditMode) {
+                wiringView.style.display = 'none';
+                wiringEdit.style.display = 'block';
+                wiringSave.style.display = 'block';
+                wiringEditToggle.textContent = '👁️ Preview';
+                wiringEditToggle.style.background = '#1f6feb';
+            } else {
+                wiringView.innerHTML = '<div style="max-width:100%;">' + renderMarkdown(wiringTextarea.value) + '</div>';
+                wiringView.style.display = 'block';
+                wiringEdit.style.display = 'none';
+                wiringSave.style.display = 'none';
+                wiringEditToggle.textContent = '✏️ Edit';
+                wiringEditToggle.style.background = '#21262d';
+            }
+        };
+        
+        // Event handlers
+        if (wiringModalBtn && wiringModal) {
+            wiringModalBtn.addEventListener('click', () => {
+                wiringModal.style.display = 'flex';
+                loadWiringNotes();
+            });
+        }
+        
+        if (wiringModalClose) {
+            wiringModalClose.addEventListener('click', () => {
+                wiringModal.style.display = 'none';
+                isEditMode = false;
+                wiringView.style.display = 'block';
+                wiringEdit.style.display = 'none';
+                wiringSave.style.display = 'none';
+                wiringEditToggle.textContent = '✏️ Edit';
+                wiringEditToggle.style.background = '#21262d';
+            });
+        }
+        
+        if (wiringModalDone) {
+            wiringModalDone.addEventListener('click', () => {
+                wiringModal.style.display = 'none';
+                isEditMode = false;
+                wiringView.style.display = 'block';
+                wiringEdit.style.display = 'none';
+                wiringSave.style.display = 'none';
+                wiringEditToggle.textContent = '✏️ Edit';
+                wiringEditToggle.style.background = '#21262d';
+            });
+        }
+        
+        if (wiringEditToggle) {
+            wiringEditToggle.addEventListener('click', toggleEditMode);
+        }
+        
+        if (wiringSave) {
+            wiringSave.addEventListener('click', saveWiringNotes);
+        }
+        
+        // Close on backdrop click
+        if (wiringModal) {
+            wiringModal.addEventListener('click', (e) => {
+                if (e.target === wiringModal) {
+                    wiringModal.style.display = 'none';
+                    isEditMode = false;
+                    wiringView.style.display = 'block';
+                    wiringEdit.style.display = 'none';
+                    wiringSave.style.display = 'none';
+                    wiringEditToggle.textContent = '✏️ Edit';
+                    wiringEditToggle.style.background = '#21262d';
                 }
             });
         }

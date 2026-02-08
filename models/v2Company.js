@@ -2614,6 +2614,15 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // ARCHITECTURE NOTES - System documentation (editable in UI)
+            // ═══════════════════════════════════════════════════════════════
+            // Markdown-formatted notes explaining how the call flow is wired.
+            // Editable from V110 Discovery tab → "📋 Architecture Notes" button.
+            // Per-company documentation for troubleshooting and onboarding.
+            architectureNotes: { type: String, default: null },
+            architectureNotesUpdated: { type: Date, default: null },
+            
+            // ═══════════════════════════════════════════════════════════════
             // 🆕 COMMON FIRST NAMES - UI-Configurable Name Recognition
             // ═══════════════════════════════════════════════════════════════
             // Used to detect if a single name token is a first name or last name
