@@ -3027,6 +3027,13 @@ async function processTurn({
         const confirmBackTrace = [];
         let confirmBackTraceContext = null;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RETURN LANE: Function-level variables (must be accessible throughout)
+    // ═══════════════════════════════════════════════════════════════════════════
+    let triageCardMatch = null;
+    let matchedTriageCard = null;
+    let companyReturnLaneEnabled = false;
+
     // Backward-compatible alias: many callers pass debug:true.
     // Treat either flag as “include debug payload in response”.
     includeDebug = Boolean(includeDebug || debug);
@@ -5869,11 +5876,8 @@ async function processTurn({
             // IMPORTANT: This only MATCHES cards. The actual Return Lane policy
             // is applied AFTER the 3-tier response is generated (see RETURN_LANE_POLICY below).
             // ═══════════════════════════════════════════════════════════════════
-            let triageCardMatch = null;
-            let matchedTriageCard = null;
-            
-            // Only attempt if company has Return Lane enabled
-            const companyReturnLaneEnabled = company?.aiAgentSettings?.returnLane?.enabled === true;
+            // Variables declared at function level for proper scoping
+            companyReturnLaneEnabled = company?.aiAgentSettings?.returnLane?.enabled === true;
             
             if (companyReturnLaneEnabled) {
                 try {
