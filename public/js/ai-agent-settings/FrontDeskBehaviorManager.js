@@ -1801,28 +1801,40 @@ class FrontDeskBehaviorManager {
                     </div>
                 </div>
                 
-                <!-- STT Intelligence Modal (Hidden by default) -->
-                <div id="fdb-stt-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
-                    <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; width:90%; max-width:900px; max-height:85vh; overflow:hidden; display:flex; flex-direction:column;">
+                <!-- STT Intelligence Modal (Hidden by default) - EDITABLE VERSION -->
+                <div id="fdb-stt-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center;">
+                    <div style="background:#0d1117; border:1px solid #30363d; border-radius:12px; width:95%; max-width:1000px; max-height:90vh; overflow:hidden; display:flex; flex-direction:column;">
                         <!-- Modal Header -->
-                        <div style="padding:20px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="padding:20px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; align-items:center; background:#161b22;">
                             <div>
-                                <h3 style="margin:0; color:#c9d1d9;">🔇 STT Intelligence - Filler Words & Corrections</h3>
+                                <h3 style="margin:0; color:#c9d1d9; display:flex; align-items:center; gap:8px;">
+                                    🔇 STT Intelligence Editor
+                                    <span style="background:#f0883e30; color:#f0883e; padding:4px 8px; border-radius:4px; font-size:0.7rem; font-weight:normal;">GLOBAL</span>
+                                </h3>
                                 <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.8rem;">
-                                    Words removed from caller speech before processing • From template: <span id="fdb-stt-template-name" style="color:#58a6ff;">Loading...</span>
+                                    Template: <span id="fdb-stt-template-name" style="color:#58a6ff; font-weight:600;">Loading...</span>
+                                    <span id="fdb-stt-template-id" style="display:none;"></span>
                                 </p>
                             </div>
                             <button id="fdb-stt-modal-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:8px;">&times;</button>
                         </div>
                         
+                        <!-- Warning Banner -->
+                        <div style="padding:12px 20px; background:#f0883e20; border-bottom:1px solid #f0883e40;">
+                            <p style="margin:0; color:#f0883e; font-size:0.85rem; display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:1.1rem;">⚠️</span>
+                                <strong>Global Edit:</strong> Changes affect ALL companies using this template
+                            </p>
+                        </div>
+                        
                         <!-- Search Bar -->
-                        <div style="padding:16px 20px; border-bottom:1px solid #30363d;">
+                        <div style="padding:16px 20px; border-bottom:1px solid #30363d; background:#161b22;">
                             <input type="text" id="fdb-stt-search" placeholder="🔍 Search filler words, corrections, or synonyms..." 
                                    style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:12px 16px; border-radius:8px; font-size:1rem;">
                         </div>
                         
                         <!-- Modal Body (Scrollable) -->
-                        <div id="fdb-stt-modal-body" style="padding:20px; overflow-y:auto; flex:1;">
+                        <div id="fdb-stt-modal-body" style="padding:20px; overflow-y:auto; flex:1; background:#0d1117;">
                             <div style="text-align:center; padding:40px; color:#8b949e;">
                                 <span style="font-size:2rem;">⏳</span>
                                 <p>Loading STT profile...</p>
@@ -1830,16 +1842,12 @@ class FrontDeskBehaviorManager {
                         </div>
                         
                         <!-- Modal Footer -->
-                        <div style="padding:16px 20px; border-top:1px solid #30363d; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="padding:16px 20px; border-top:1px solid #30363d; display:flex; justify-content:space-between; align-items:center; background:#161b22;">
                             <div style="color:#8b949e; font-size:0.875rem;">
                                 <span id="fdb-stt-stats">— fillers | — corrections | — synonyms</span>
                             </div>
                             <div style="display:flex; gap:12px;">
-                                <a id="fdb-stt-edit-link" href="/admin-global-instant-responses.html" target="_blank" 
-                                   style="background:#21262d; color:#58a6ff; border:1px solid #30363d; padding:8px 16px; border-radius:6px; text-decoration:none; font-size:0.875rem;">
-                                    ✏️ Edit in Global AI Brain
-                                </a>
-                                <button id="fdb-stt-modal-done" style="background:#238636; color:#fff; border:none; padding:8px 24px; border-radius:6px; cursor:pointer;">
+                                <button id="fdb-stt-modal-done" style="background:#238636; color:#fff; border:none; padding:8px 24px; border-radius:6px; cursor:pointer; font-weight:500;">
                                     Done
                                 </button>
                             </div>
@@ -2286,16 +2294,81 @@ class FrontDeskBehaviorManager {
         const sttTemplateName = contentElement.querySelector('#fdb-stt-template-name');
         
         // Store the loaded STT data for filtering
-        let sttData = { fillers: [], corrections: [], synonyms: [] };
+        let sttData = { fillers: [], corrections: [], synonyms: [], rawFillers: [], rawCorrections: [] };
+        let sttTemplateId = null;
         
-        // Render STT data with optional filter
+        // API helper for STT operations
+        const sttApi = {
+            token: () => localStorage.getItem('adminToken') || localStorage.getItem('token'),
+            
+            async addFiller(phrase) {
+                const res = await fetch(`/api/admin/stt-profile/${sttTemplateId}/fillers`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phrase })
+                });
+                return res.json();
+            },
+            
+            async deleteFiller(phrase) {
+                const res = await fetch(`/api/admin/stt-profile/${sttTemplateId}/fillers/${encodeURIComponent(phrase)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${this.token()}` }
+                });
+                return res.json();
+            },
+            
+            async toggleFiller(phrase) {
+                const res = await fetch(`/api/admin/stt-profile/${sttTemplateId}/fillers/${encodeURIComponent(phrase)}/toggle`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${this.token()}` }
+                });
+                return res.json();
+            },
+            
+            async addCorrection(heard, normalized) {
+                const res = await fetch(`/api/admin/stt-profile/${sttTemplateId}/corrections`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ heard, normalized })
+                });
+                return res.json();
+            },
+            
+            async deleteCorrection(heard) {
+                const res = await fetch(`/api/admin/stt-profile/${sttTemplateId}/corrections/${encodeURIComponent(heard)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${this.token()}` }
+                });
+                return res.json();
+            },
+            
+            async addSynonym(technicalTerm, colloquialTerms) {
+                const res = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ technicalTerm, colloquialTerms })
+                });
+                return res.json();
+            },
+            
+            async deleteSynonym(term) {
+                const res = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms/${encodeURIComponent(term)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${this.token()}` }
+                });
+                return res.json();
+            }
+        };
+        
+        // Render STT data with optional filter - EDITABLE VERSION
         const renderSttData = (filter = '') => {
             const lowerFilter = filter.toLowerCase().trim();
             
             // Filter data
             const filteredFillers = lowerFilter 
-                ? sttData.fillers.filter(f => f.toLowerCase().includes(lowerFilter))
-                : sttData.fillers;
+                ? sttData.rawFillers.filter(f => (f.phrase || f).toLowerCase().includes(lowerFilter))
+                : sttData.rawFillers;
             const filteredCorrections = lowerFilter
                 ? sttData.corrections.filter(c => c.from.toLowerCase().includes(lowerFilter) || c.to.toLowerCase().includes(lowerFilter))
                 : sttData.corrections;
@@ -2307,50 +2380,109 @@ class FrontDeskBehaviorManager {
             if (lowerFilter) {
                 sttStats.textContent = `Showing: ${filteredFillers.length} fillers | ${filteredCorrections.length} corrections | ${filteredSynonyms.length} synonyms`;
             } else {
-                sttStats.textContent = `${sttData.fillers.length} fillers | ${sttData.corrections.length} corrections | ${sttData.synonyms.length} synonyms`;
+                sttStats.textContent = `${sttData.rawFillers.length} fillers | ${sttData.corrections.length} corrections | ${sttData.synonyms.length} synonyms`;
             }
             
             sttModalBody.innerHTML = `
                 <!-- Filler Words Section -->
-                <div style="margin-bottom:24px;">
-                    <h4 style="color:#f0883e; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
-                        🔇 Filler Words <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredFillers.length})</span>
-                    </h4>
+                <div style="margin-bottom:24px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="color:#f0883e; margin:0; display:flex; align-items:center; gap:8px;">
+                            🔇 Filler Words <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredFillers.length})</span>
+                        </h4>
+                        <button id="stt-add-filler-btn" style="background:#238636; color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                            + Add Filler
+                        </button>
+                    </div>
                     <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
-                        These words are removed from caller speech before processing (e.g., "um I need help" → "I need help")
+                        These words are removed from caller speech before processing
                     </p>
-                    <div style="display:flex; flex-wrap:wrap; gap:6px; max-height:200px; overflow-y:auto; padding:12px; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
+                    
+                    <!-- Add Filler Form (hidden by default) -->
+                    <div id="stt-add-filler-form" style="display:none; margin-bottom:12px; padding:12px; background:#21262d; border-radius:6px;">
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="text" id="stt-new-filler" placeholder="e.g., umm, uhh, like" 
+                                   style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px 12px; border-radius:6px;">
+                            <button id="stt-save-filler" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">Save</button>
+                            <button id="stt-cancel-filler" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:8px 16px; border-radius:6px; cursor:pointer;">Cancel</button>
+                        </div>
+                    </div>
+                    
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; max-height:200px; overflow-y:auto; padding:12px; background:#0d1117; border-radius:8px; border:1px solid #21262d;">
                         ${filteredFillers.length > 0 
-                            ? filteredFillers.map(f => `<span style="background:#30363d; color:#c9d1d9; padding:4px 10px; border-radius:16px; font-size:0.8rem;">${this.escapeHtml(f)}</span>`).join('')
-                            : '<span style="color:#8b949e; font-style:italic;">No filler words found</span>'
+                            ? filteredFillers.map(f => {
+                                const phrase = f.phrase || f;
+                                const enabled = f.enabled !== false;
+                                return `<span class="stt-filler-tag" data-phrase="${this.escapeHtml(phrase)}" style="
+                                    background:${enabled ? '#30363d' : '#21262d'}; 
+                                    color:${enabled ? '#c9d1d9' : '#6e7681'}; 
+                                    padding:4px 8px 4px 10px; 
+                                    border-radius:16px; 
+                                    font-size:0.8rem; 
+                                    display:inline-flex; 
+                                    align-items:center; 
+                                    gap:6px;
+                                    ${enabled ? '' : 'text-decoration:line-through;'}
+                                ">
+                                    ${this.escapeHtml(phrase)}
+                                    <button class="stt-toggle-filler" data-phrase="${this.escapeHtml(phrase)}" style="background:none; border:none; color:${enabled ? '#3fb950' : '#6e7681'}; cursor:pointer; padding:0; font-size:0.9rem;" title="${enabled ? 'Disable' : 'Enable'}">${enabled ? '✓' : '○'}</button>
+                                    <button class="stt-delete-filler" data-phrase="${this.escapeHtml(phrase)}" style="background:none; border:none; color:#f85149; cursor:pointer; padding:0; font-size:0.9rem;" title="Delete">×</button>
+                                </span>`;
+                            }).join('')
+                            : '<span style="color:#8b949e; font-style:italic;">No filler words configured</span>'
                         }
                     </div>
                 </div>
                 
                 <!-- Corrections Section -->
-                <div style="margin-bottom:24px;">
-                    <h4 style="color:#a371f7; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
-                        ✏️ Corrections <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredCorrections.length})</span>
-                    </h4>
+                <div style="margin-bottom:24px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="color:#a371f7; margin:0; display:flex; align-items:center; gap:8px;">
+                            ✏️ Corrections <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredCorrections.length})</span>
+                        </h4>
+                        <button id="stt-add-correction-btn" style="background:#238636; color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                            + Add Correction
+                        </button>
+                    </div>
                     <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
                         Mishear fixes applied to STT output (e.g., "thermal stat" → "thermostat")
                     </p>
-                    <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
+                    
+                    <!-- Add Correction Form (hidden by default) -->
+                    <div id="stt-add-correction-form" style="display:none; margin-bottom:12px; padding:12px; background:#21262d; border-radius:6px;">
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                            <input type="text" id="stt-new-correction-heard" placeholder="Heard as (e.g., thermal stat)" 
+                                   style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px 12px; border-radius:6px;">
+                            <span style="color:#8b949e;">→</span>
+                            <input type="text" id="stt-new-correction-normalized" placeholder="Correct to (e.g., thermostat)" 
+                                   style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px 12px; border-radius:6px;">
+                        </div>
+                        <div style="display:flex; gap:8px; justify-content:flex-end;">
+                            <button id="stt-save-correction" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">Save</button>
+                            <button id="stt-cancel-correction" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:8px 16px; border-radius:6px; cursor:pointer;">Cancel</button>
+                        </div>
+                    </div>
+                    
+                    <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #21262d;">
                         ${filteredCorrections.length > 0 
                             ? `<table style="width:100%; border-collapse:collapse;">
                                 <thead>
                                     <tr style="background:#21262d;">
-                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">From (mishear)</th>
-                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">→</th>
-                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">To (correct)</th>
+                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Heard As</th>
+                                        <th style="padding:8px 12px; text-align:center; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d; width:40px;"></th>
+                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Correct To</th>
+                                        <th style="padding:8px 12px; text-align:center; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d; width:50px;"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${filteredCorrections.map(c => `
                                         <tr style="border-bottom:1px solid #21262d;">
-                                            <td style="padding:8px 12px; color:#f85149;">${this.escapeHtml(c.from)}</td>
-                                            <td style="padding:8px 12px; color:#8b949e;">→</td>
-                                            <td style="padding:8px 12px; color:#3fb950;">${this.escapeHtml(c.to)}</td>
+                                            <td style="padding:8px 12px; color:#f85149; font-family:monospace;">${this.escapeHtml(c.from)}</td>
+                                            <td style="padding:8px 12px; color:#8b949e; text-align:center;">→</td>
+                                            <td style="padding:8px 12px; color:#3fb950; font-family:monospace;">${this.escapeHtml(c.to)}</td>
+                                            <td style="padding:8px 12px; text-align:center;">
+                                                <button class="stt-delete-correction" data-heard="${this.escapeHtml(c.from)}" style="background:none; border:none; color:#f85149; cursor:pointer; padding:4px;" title="Delete">🗑️</button>
+                                            </td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -2361,20 +2493,43 @@ class FrontDeskBehaviorManager {
                 </div>
                 
                 <!-- Synonyms Section -->
-                <div>
-                    <h4 style="color:#58a6ff; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
-                        🔄 Synonyms <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredSynonyms.length})</span>
-                    </h4>
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <h4 style="color:#58a6ff; margin:0; display:flex; align-items:center; gap:8px;">
+                            🔄 Synonyms <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredSynonyms.length})</span>
+                        </h4>
+                        <button id="stt-add-synonym-btn" style="background:#238636; color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                            + Add Synonym
+                        </button>
+                    </div>
                     <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
-                        Word mappings for scenario matching (e.g., "AC" matches "air conditioner", "hvac")
+                        Word mappings for scenario matching (stored in template)
                     </p>
-                    <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
+                    
+                    <!-- Add Synonym Form (hidden by default) -->
+                    <div id="stt-add-synonym-form" style="display:none; margin-bottom:12px; padding:12px; background:#21262d; border-radius:6px;">
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                            <input type="text" id="stt-new-synonym-term" placeholder="Technical term (e.g., thermostat)" 
+                                   style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px 12px; border-radius:6px;">
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                            <input type="text" id="stt-new-synonym-aliases" placeholder="Synonyms, comma separated (e.g., thingy, box on wall)" 
+                                   style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px 12px; border-radius:6px;">
+                        </div>
+                        <div style="display:flex; gap:8px; justify-content:flex-end;">
+                            <button id="stt-save-synonym" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">Save</button>
+                            <button id="stt-cancel-synonym" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:8px 16px; border-radius:6px; cursor:pointer;">Cancel</button>
+                        </div>
+                    </div>
+                    
+                    <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #21262d;">
                         ${filteredSynonyms.length > 0 
                             ? `<table style="width:100%; border-collapse:collapse;">
                                 <thead>
                                     <tr style="background:#21262d;">
-                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Word</th>
+                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Term</th>
                                         <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Synonyms</th>
+                                        <th style="padding:8px 12px; text-align:center; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d; width:50px;"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2382,6 +2537,9 @@ class FrontDeskBehaviorManager {
                                         <tr style="border-bottom:1px solid #21262d;">
                                             <td style="padding:8px 12px; color:#58a6ff; font-weight:500;">${this.escapeHtml(s.word)}</td>
                                             <td style="padding:8px 12px; color:#c9d1d9;">${s.synonyms.map(syn => this.escapeHtml(syn)).join(', ')}</td>
+                                            <td style="padding:8px 12px; text-align:center;">
+                                                <button class="stt-delete-synonym" data-term="${this.escapeHtml(s.word)}" style="background:none; border:none; color:#f85149; cursor:pointer; padding:4px;" title="Delete">🗑️</button>
+                                            </td>
                                         </tr>
                                     `).join('')}
                                 </tbody>
@@ -2391,6 +2549,240 @@ class FrontDeskBehaviorManager {
                     </div>
                 </div>
             `;
+            
+            // Wire up event handlers after rendering
+            wireUpSttEventHandlers();
+        };
+        
+        // Wire up all event handlers for the STT modal
+        const wireUpSttEventHandlers = () => {
+            // ----- FILLER HANDLERS -----
+            const addFillerBtn = sttModalBody.querySelector('#stt-add-filler-btn');
+            const addFillerForm = sttModalBody.querySelector('#stt-add-filler-form');
+            const newFillerInput = sttModalBody.querySelector('#stt-new-filler');
+            const saveFillerBtn = sttModalBody.querySelector('#stt-save-filler');
+            const cancelFillerBtn = sttModalBody.querySelector('#stt-cancel-filler');
+            
+            if (addFillerBtn && addFillerForm) {
+                addFillerBtn.addEventListener('click', () => {
+                    addFillerForm.style.display = 'block';
+                    newFillerInput?.focus();
+                });
+            }
+            
+            if (cancelFillerBtn && addFillerForm) {
+                cancelFillerBtn.addEventListener('click', () => {
+                    addFillerForm.style.display = 'none';
+                    if (newFillerInput) newFillerInput.value = '';
+                });
+            }
+            
+            if (saveFillerBtn && newFillerInput) {
+                saveFillerBtn.addEventListener('click', async () => {
+                    const phrase = newFillerInput.value.trim();
+                    if (!phrase) return;
+                    
+                    saveFillerBtn.disabled = true;
+                    saveFillerBtn.textContent = 'Saving...';
+                    
+                    try {
+                        const result = await sttApi.addFiller(phrase);
+                        if (result.success) {
+                            await loadSttProfile(); // Reload data
+                        } else {
+                            alert('Failed to add filler: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (err) {
+                        alert('Error: ' + err.message);
+                    }
+                });
+            }
+            
+            // Toggle filler buttons
+            sttModalBody.querySelectorAll('.stt-toggle-filler').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const phrase = e.target.dataset.phrase;
+                    try {
+                        const result = await sttApi.toggleFiller(phrase);
+                        if (result.success) {
+                            await loadSttProfile();
+                        }
+                    } catch (err) {
+                        console.error('Toggle filler error:', err);
+                    }
+                });
+            });
+            
+            // Delete filler buttons
+            sttModalBody.querySelectorAll('.stt-delete-filler').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const phrase = e.target.dataset.phrase;
+                    if (!confirm(`Delete filler "${phrase}"?`)) return;
+                    
+                    try {
+                        const result = await sttApi.deleteFiller(phrase);
+                        if (result.success) {
+                            await loadSttProfile();
+                        }
+                    } catch (err) {
+                        alert('Error: ' + err.message);
+                    }
+                });
+            });
+            
+            // ----- CORRECTION HANDLERS -----
+            const addCorrectionBtn = sttModalBody.querySelector('#stt-add-correction-btn');
+            const addCorrectionForm = sttModalBody.querySelector('#stt-add-correction-form');
+            const newCorrectionHeard = sttModalBody.querySelector('#stt-new-correction-heard');
+            const newCorrectionNormalized = sttModalBody.querySelector('#stt-new-correction-normalized');
+            const saveCorrectionBtn = sttModalBody.querySelector('#stt-save-correction');
+            const cancelCorrectionBtn = sttModalBody.querySelector('#stt-cancel-correction');
+            
+            if (addCorrectionBtn && addCorrectionForm) {
+                addCorrectionBtn.addEventListener('click', () => {
+                    addCorrectionForm.style.display = 'block';
+                    newCorrectionHeard?.focus();
+                });
+            }
+            
+            if (cancelCorrectionBtn && addCorrectionForm) {
+                cancelCorrectionBtn.addEventListener('click', () => {
+                    addCorrectionForm.style.display = 'none';
+                    if (newCorrectionHeard) newCorrectionHeard.value = '';
+                    if (newCorrectionNormalized) newCorrectionNormalized.value = '';
+                });
+            }
+            
+            if (saveCorrectionBtn && newCorrectionHeard && newCorrectionNormalized) {
+                saveCorrectionBtn.addEventListener('click', async () => {
+                    const heard = newCorrectionHeard.value.trim();
+                    const normalized = newCorrectionNormalized.value.trim();
+                    if (!heard || !normalized) {
+                        alert('Both fields are required');
+                        return;
+                    }
+                    
+                    saveCorrectionBtn.disabled = true;
+                    saveCorrectionBtn.textContent = 'Saving...';
+                    
+                    try {
+                        const result = await sttApi.addCorrection(heard, normalized);
+                        if (result.success) {
+                            await loadSttProfile();
+                        } else {
+                            alert('Failed to add correction: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (err) {
+                        alert('Error: ' + err.message);
+                    }
+                });
+            }
+            
+            // Delete correction buttons
+            sttModalBody.querySelectorAll('.stt-delete-correction').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const heard = e.target.dataset.heard;
+                    if (!confirm(`Delete correction for "${heard}"?`)) return;
+                    
+                    try {
+                        const result = await sttApi.deleteCorrection(heard);
+                        if (result.success) {
+                            await loadSttProfile();
+                        }
+                    } catch (err) {
+                        alert('Error: ' + err.message);
+                    }
+                });
+            });
+            
+            // ----- SYNONYM HANDLERS -----
+            const addSynonymBtn = sttModalBody.querySelector('#stt-add-synonym-btn');
+            const addSynonymForm = sttModalBody.querySelector('#stt-add-synonym-form');
+            const newSynonymTerm = sttModalBody.querySelector('#stt-new-synonym-term');
+            const newSynonymAliases = sttModalBody.querySelector('#stt-new-synonym-aliases');
+            const saveSynonymBtn = sttModalBody.querySelector('#stt-save-synonym');
+            const cancelSynonymBtn = sttModalBody.querySelector('#stt-cancel-synonym');
+            
+            if (addSynonymBtn && addSynonymForm) {
+                addSynonymBtn.addEventListener('click', () => {
+                    addSynonymForm.style.display = 'block';
+                    newSynonymTerm?.focus();
+                });
+            }
+            
+            if (cancelSynonymBtn && addSynonymForm) {
+                cancelSynonymBtn.addEventListener('click', () => {
+                    addSynonymForm.style.display = 'none';
+                    if (newSynonymTerm) newSynonymTerm.value = '';
+                    if (newSynonymAliases) newSynonymAliases.value = '';
+                });
+            }
+            
+            if (saveSynonymBtn && newSynonymTerm && newSynonymAliases) {
+                saveSynonymBtn.addEventListener('click', async () => {
+                    const term = newSynonymTerm.value.trim();
+                    const aliasesRaw = newSynonymAliases.value.trim();
+                    if (!term || !aliasesRaw) {
+                        alert('Both fields are required');
+                        return;
+                    }
+                    
+                    const aliases = aliasesRaw.split(',').map(a => a.trim()).filter(a => a);
+                    if (aliases.length === 0) {
+                        alert('Enter at least one synonym');
+                        return;
+                    }
+                    
+                    saveSynonymBtn.disabled = true;
+                    saveSynonymBtn.textContent = 'Saving...';
+                    
+                    try {
+                        const result = await sttApi.addSynonym(term, aliases);
+                        if (result.success) {
+                            // Also refresh inheritedSynonymsRaw
+                            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                            const synRes = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (synRes.ok) {
+                                const synData = await synRes.json();
+                                this.config.inheritedSynonymsRaw = synData.synonyms || {};
+                            }
+                            await loadSttProfile();
+                        } else {
+                            alert('Failed to add synonym: ' + (result.error || 'Unknown error'));
+                        }
+                    } catch (err) {
+                        alert('Error: ' + err.message);
+                    }
+                });
+            }
+            
+            // Delete synonym buttons
+            sttModalBody.querySelectorAll('.stt-delete-synonym').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const term = e.target.dataset.term;
+                    if (!confirm(`Delete all synonyms for "${term}"?`)) return;
+                    
+                    try {
+                        const result = await sttApi.deleteSynonym(term);
+                        if (result.success) {
+                            // Also refresh inheritedSynonymsRaw
+                            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                            const synRes = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (synRes.ok) {
+                                const synData = await synRes.json();
+                                this.config.inheritedSynonymsRaw = synData.synonyms || {};
+                            }
+                            await loadSttProfile();
+                        }
+                    } catch (err) {
+                        alert('Error: ' + err.message);
+                    }
+                });
+            });
         };
         
         // Load STT profile when modal opens
@@ -2417,6 +2809,11 @@ class FrontDeskBehaviorManager {
                 const templateName = templates[0].name || templates[0].templateName || 'Unknown';
                 sttTemplateName.textContent = templateName;
                 
+                // Store templateId for API calls
+                sttTemplateId = templateId;
+                const templateIdSpan = contentElement.querySelector('#fdb-stt-template-id');
+                if (templateIdSpan) templateIdSpan.textContent = templateId;
+                
                 // Load STT profile for this template
                 const sttResponse = await fetch(`/api/admin/stt-profile/${templateId}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -2430,10 +2827,19 @@ class FrontDeskBehaviorManager {
                 // STT Profile schema: fillers is array of {phrase, enabled, scope...}
                 let rawFillers = profile.fillers || [];
                 if (!Array.isArray(rawFillers)) rawFillers = [];
-                sttData.fillers = rawFillers
+                
+                // Store raw fillers with enabled status for editable display
+                sttData.rawFillers = rawFillers.map(f => {
+                    if (typeof f === 'string') {
+                        return { phrase: f, enabled: true };
+                    }
+                    return { phrase: f.phrase || f.word || '', enabled: f.enabled !== false };
+                }).filter(f => f.phrase);
+                
+                // Also keep the simple list for backwards compatibility
+                sttData.fillers = sttData.rawFillers
                     .filter(f => f.enabled !== false)
-                    .map(f => f.phrase || f.word || f)
-                    .filter(f => typeof f === 'string' && f.length > 0);
+                    .map(f => f.phrase);
                 
                 // Corrections schema: {heard, normalized, enabled, context...}
                 let rawCorrections = profile.corrections || [];
@@ -2444,6 +2850,9 @@ class FrontDeskBehaviorManager {
                         rawCorrections = [];
                     }
                 }
+                
+                // Store raw corrections
+                sttData.rawCorrections = rawCorrections;
                 sttData.corrections = rawCorrections
                     .filter(c => c.enabled !== false)
                     .map(c => ({
@@ -2460,11 +2869,11 @@ class FrontDeskBehaviorManager {
                 }));
                 
                 console.log('[STT MODAL] Loaded data:', {
-                    fillers: sttData.fillers.length,
+                    fillers: sttData.rawFillers.length,
                     corrections: sttData.corrections.length,
                     synonyms: sttData.synonyms.length,
-                    synonymSource: this.config.inheritedSynonymsRaw ? 'inheritedSynonymsRaw' : 'profile',
-                    rawProfile: profile
+                    templateId: sttTemplateId,
+                    synonymSource: this.config.inheritedSynonymsRaw ? 'inheritedSynonymsRaw' : 'profile'
                 });
                 
                 renderSttData();
