@@ -137,48 +137,85 @@ class BookingFlowResolver {
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V96j: Use AWConfigReader for ALL config reads (single-gate compliance)
+        // V110: READ FROM SLOT REGISTRY + BOOKING FLOW (CANONICAL SOURCE OF TRUTH)
         // ═══════════════════════════════════════════════════════════════════════
-        // If awReader is provided, use it for traced reads.
-        // Fall back to direct access only if not provided (legacy callers).
+        // Priority:
+        // 1. V110: frontDesk.slotRegistry.slots + frontDesk.bookingFlow.steps
+        // 2. Legacy fallback: frontDesk.bookingSlots (deprecated)
         // ═══════════════════════════════════════════════════════════════════════
         
-        let bookingSlots, bookingTemplates, bookingBehavior, bookingOutcome, bookingPrompts;
-        let aiSettings, frontDeskBehavior; // Hoisted for use in logging later
+        let slotRegistry, bookingFlow, bookingSlots, bookingTemplates, bookingBehavior, bookingOutcome, bookingPrompts;
+        let aiSettings, frontDeskBehavior;
+        let configSource = 'unknown';
 
         // Initialize defaults to prevent undefined reference errors
         aiSettings = company.aiAgentSettings || {};
         frontDeskBehavior = aiSettings.frontDeskBehavior || {};
         
         if (awReader && typeof awReader.get === 'function') {
-            // V96j: Traced reads through AWConfigReader
-            awReader.setReaderId('BookingFlowResolver.resolve');
+            // V110: Traced reads through AWConfigReader
+            awReader.setReaderId('BookingFlowResolver.resolve.v110');
             
-            bookingSlots = awReader.getArray('frontDesk.bookingSlots');
+            // V110 CANONICAL: Read slot registry and booking flow
+            slotRegistry = awReader.getObject('frontDesk.slotRegistry') || {};
+            bookingFlow = awReader.getObject('frontDesk.bookingFlow') || {};
+            
+            const v110Slots = slotRegistry.slots || [];
+            const v110Steps = bookingFlow.steps || [];
+            
+            // Check if V110 is configured
+            if (v110Slots.length > 0 && v110Steps.length > 0) {
+                // V110 is active - use it
+                configSource = 'V110_SLOT_REGISTRY';
+                bookingSlots = this._mergeV110SlotsWithSteps(v110Slots, v110Steps);
+                
+                logger.info('[BOOKING FLOW RESOLVER] ✅ V110: Using slotRegistry + bookingFlow', {
+                    companyId: company._id?.toString(),
+                    slotCount: v110Slots.length,
+                    stepCount: v110Steps.length,
+                    mergedSlotIds: bookingSlots.map(s => s.id || s.slotId)
+                });
+            } else {
+                // V110 not configured - fall back to legacy
+                awReader.setReaderId('BookingFlowResolver.resolve.legacy');
+                bookingSlots = awReader.getArray('frontDesk.bookingSlots');
+                configSource = bookingSlots.length > 0 ? 'LEGACY_BOOKING_SLOTS' : 'NONE';
+                
+                if (bookingSlots.length > 0) {
+                    logger.warn('[BOOKING FLOW RESOLVER] ⚠️ LEGACY: Using deprecated bookingSlots (migrate to V110 slotRegistry)', {
+                        companyId: company._id?.toString(),
+                        slotCount: bookingSlots.length,
+                        v110Status: { hasSlots: v110Slots.length > 0, hasSteps: v110Steps.length > 0 }
+                    });
+                }
+            }
+            
             bookingTemplates = awReader.getObject('frontDesk.bookingTemplates') || {};
             bookingBehavior = awReader.getObject('frontDesk.bookingBehavior') || {};
             bookingOutcome = awReader.getObject('frontDesk.bookingOutcome') || {};
             bookingPrompts = awReader.getObject('frontDesk.bookingPrompts') || {};
             
-            // For logging references below
-            aiSettings = company.aiAgentSettings || {};
-            frontDeskBehavior = aiSettings.frontDeskBehavior || {};
-            
-            logger.debug('[BOOKING FLOW RESOLVER] V96j: Using AWConfigReader for traced reads', {
-                companyId: company._id?.toString(),
-                slotCount: bookingSlots?.length || 0,
-                hasTemplates: Object.keys(bookingTemplates).length > 0
-            });
         } else {
-            // Fallback: Direct access (legacy - no tracing)
+            // Fallback: Direct access (no AWConfigReader)
             logger.warn('[BOOKING FLOW RESOLVER] ⚠️ No AWConfigReader - using direct access (untraced)', {
                 companyId: company._id?.toString()
             });
             
-            aiSettings = company.aiAgentSettings || {};
-            frontDeskBehavior = aiSettings.frontDeskBehavior || {};
+            // Try V110 first via direct access
+            slotRegistry = frontDeskBehavior.slotRegistry || {};
+            bookingFlow = frontDeskBehavior.bookingFlow || {};
             
-            bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
+            const v110Slots = slotRegistry.slots || [];
+            const v110Steps = bookingFlow.steps || [];
+            
+            if (v110Slots.length > 0 && v110Steps.length > 0) {
+                configSource = 'V110_SLOT_REGISTRY_DIRECT';
+                bookingSlots = this._mergeV110SlotsWithSteps(v110Slots, v110Steps);
+            } else {
+                configSource = 'LEGACY_BOOKING_SLOTS_DIRECT';
+                bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
+            }
+            
             bookingTemplates = frontDeskBehavior.bookingTemplates || aiSettings.bookingTemplates || {};
             bookingBehavior = frontDeskBehavior.bookingBehavior || {};
             bookingOutcome = frontDeskBehavior.bookingOutcome || {};
@@ -187,32 +224,37 @@ class BookingFlowResolver {
         
         const bookingPromptsMap = company.aiAgentSettings?.bookingPromptsMap || new Map();
         const checkedPaths = [
-            'frontDesk.bookingSlots (via AWConfigReader)',
-            'aiAgentSettings.frontDeskBehavior.bookingSlots'
+            'frontDesk.slotRegistry.slots (V110 CANONICAL)',
+            'frontDesk.bookingFlow.steps (V110 CANONICAL)',
+            'frontDesk.bookingSlots (LEGACY FALLBACK)'
         ];
         
         logger.debug('[BOOKING FLOW RESOLVER] Resolving flow', {
             companyId: company._id?.toString(),
+            configSource,
             slotCount: bookingSlots?.length || 0,
             slotIds: (bookingSlots || []).map(s => s.id || s.slotId).slice(0, 10),
             usedAwReader: !!(awReader && typeof awReader.get === 'function')
         });
         
         // If no booking slots configured, use defaults
-        if (bookingSlots.length === 0) {
+        if (!bookingSlots || bookingSlots.length === 0) {
             logger.warn('[BOOKING FLOW RESOLVER] No booking slots configured, using defaults', { 
                 companyId: company._id,
                 companyName: company.name,
+                configSource,
                 checkedPaths
             });
             const defaultFlow = this.buildDefaultFlow(companyId, bookingTemplates);
             defaultFlow.resolution = {
                 source: 'default',
                 status: 'DEFAULT_FALLBACK',
+                configSource,
                 checkedPaths,
                 slotCount: 0,
                 hasFrontDeskSlots: false,
-                hasLegacySlots: false
+                hasLegacySlots: false,
+                hasV110Slots: false
             };
             return defaultFlow;
         }
@@ -580,6 +622,88 @@ class BookingFlowResolver {
         const serviceSlug = serviceType ? `_${serviceType.toLowerCase().replace(/[^a-z0-9]/g, '_')}` : '';
         
         return `${companySlug}${tradeSlug}${serviceSlug}_booking_v1`;
+    }
+    
+    /**
+     * ========================================================================
+     * V110: MERGE SLOT REGISTRY WITH BOOKING FLOW STEPS
+     * ========================================================================
+     * Combines V110 slot definitions with booking flow step prompts to create
+     * a unified slot array compatible with the existing flow processing.
+     * 
+     * SlotRegistry provides: id, type, label, required, extraction rules
+     * BookingFlow provides: ask, confirmPrompt, reprompt, correctionPrompt
+     * 
+     * Result: Array of slots with all properties merged
+     * ========================================================================
+     */
+    static _mergeV110SlotsWithSteps(slots, steps) {
+        if (!slots || !steps) return [];
+        
+        // Create a map of steps by slotId for O(1) lookup
+        const stepsBySlotId = new Map();
+        for (const step of steps) {
+            if (step.slotId) {
+                stepsBySlotId.set(step.slotId, step);
+            }
+        }
+        
+        // Merge slot definitions with step prompts
+        const mergedSlots = [];
+        
+        for (const slot of slots) {
+            const slotId = slot.id || slot.slotId;
+            const step = stepsBySlotId.get(slotId);
+            
+            // Build merged slot object
+            const mergedSlot = {
+                // From SlotRegistry
+                id: slotId,
+                slotId: slotId, // Alias for compatibility
+                type: slot.type || 'text',
+                label: slot.label || slotId,
+                required: slot.required !== false,
+                discoveryFillAllowed: slot.discoveryFillAllowed !== false,
+                bookingConfirmRequired: slot.bookingConfirmRequired !== false,
+                extraction: slot.extraction || {},
+                
+                // From BookingFlow step (if exists)
+                question: step?.ask || DEFAULT_STEP_PROMPTS[slotId]?.prompt || `What is your ${slotId}?`,
+                prompt: step?.ask || DEFAULT_STEP_PROMPTS[slotId]?.prompt || `What is your ${slotId}?`,
+                confirmPrompt: step?.confirmPrompt || null,
+                reprompt: step?.reprompt || DEFAULT_STEP_PROMPTS[slotId]?.reprompt || `Could you repeat your ${slotId}?`,
+                repromptVariants: step?.repromptVariants || [],
+                confirmRetryPrompt: step?.confirmRetryPrompt || null,
+                correctionPrompt: step?.correctionPrompt || null,
+                
+                // Additional step metadata
+                stepId: step?.stepId || `step_${slotId}`,
+                order: step?.order || slot.order || 999,
+                
+                // V110 flag for tracing
+                _v110Source: true
+            };
+            
+            // Handle name-specific fields
+            if (slotId === 'name' || slot.type === 'name_first') {
+                mergedSlot.firstNameQuestion = step?.ask || mergedSlot.question;
+                mergedSlot.lastNameQuestion = step?.lastNameQuestion || "And what's your last name?";
+            }
+            
+            mergedSlots.push(mergedSlot);
+        }
+        
+        // Sort by order
+        mergedSlots.sort((a, b) => (a.order || 999) - (b.order || 999));
+        
+        logger.debug('[BOOKING FLOW RESOLVER] V110: Merged slots with steps', {
+            inputSlots: slots.length,
+            inputSteps: steps.length,
+            outputSlots: mergedSlots.length,
+            slotIds: mergedSlots.map(s => s.id)
+        });
+        
+        return mergedSlots;
     }
     
     /**

@@ -4228,17 +4228,33 @@ async function processTurn({
         const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
         
         // 🔍 DIAGNOSTIC: Log booking config to debug NOT_CONFIGURED issue
-        const rawBookingSlots = company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots || [];
-        log('📋 BOOKING CONFIG DIAGNOSTIC', {
+        // V110: Check both V110 and legacy sources for diagnostic clarity
+        const frontDeskBehavior = company?.aiAgentSettings?.frontDeskBehavior || {};
+        const v110SlotRegistry = frontDeskBehavior.slotRegistry || {};
+        const v110BookingFlow = frontDeskBehavior.bookingFlow || {};
+        const legacyBookingSlots = frontDeskBehavior.bookingSlots || [];
+        
+        log('📋 BOOKING CONFIG DIAGNOSTIC (V110 AWARE)', {
             source: bookingConfig.source,
             isConfigured: bookingConfig.isConfigured,
             slotCount: bookingConfig.slots?.length || 0,
             slotIds: bookingConfig.slots?.map(s => s.slotId) || [],
+            // V110 status
+            v110: {
+                hasSlotRegistry: !!v110SlotRegistry.slots?.length,
+                slotRegistryCount: v110SlotRegistry.slots?.length || 0,
+                hasBookingFlow: !!v110BookingFlow.steps?.length,
+                bookingFlowStepCount: v110BookingFlow.steps?.length || 0,
+                isV110Active: bookingConfig.source === 'V110_SLOT_REGISTRY'
+            },
+            // Legacy status
+            legacy: {
+                hasBookingSlots: legacyBookingSlots.length > 0,
+                legacySlotCount: legacyBookingSlots.length
+            },
             companyHasFrontDesk: !!company?.aiAgentSettings?.frontDeskBehavior,
-            companyHasBookingSlots: !!company?.aiAgentSettings?.frontDeskBehavior?.bookingSlots,
-            rawBookingSlotsLength: rawBookingSlots.length,
             // 🔍 V42: Show what fields each raw slot has to debug normalization rejection
-            rawSlotSample: rawBookingSlots.slice(0, 3).map(s => ({
+            rawSlotSample: bookingConfig.slots?.slice(0, 3).map(s => ({
                 hasId: !!s?.id,
                 idValue: s?.id,
                 hasSlotId: !!s?.slotId,
@@ -4247,6 +4263,7 @@ async function processTurn({
                 keyValue: s?.key,
                 hasQuestion: !!s?.question,
                 questionPreview: s?.question?.substring?.(0, 30),
+                _v110: s?._v110 || false,
                 allKeys: s ? Object.keys(s) : []
             }))
         });

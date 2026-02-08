@@ -312,10 +312,23 @@ const AW_PATH_MAPPINGS = {
     'frontDesk.businessHours': 'aiAgentSettings.frontDeskBehavior.businessHours',
     
     // ─────────────────────────────────────────────────────────────────────────
-    // FRONT DESK - Booking
+    // V110: SLOT REGISTRY + DISCOVERY/BOOKING FLOWS (CANONICAL SOURCE OF TRUTH)
+    // ─────────────────────────────────────────────────────────────────────────
+    'frontDesk.slotRegistry': 'aiAgentSettings.frontDeskBehavior.slotRegistry',
+    'frontDesk.slotRegistry.slots': 'aiAgentSettings.frontDeskBehavior.slotRegistry.slots',
+    'frontDesk.discoveryFlow': 'aiAgentSettings.frontDeskBehavior.discoveryFlow',
+    'frontDesk.discoveryFlow.enabled': 'aiAgentSettings.frontDeskBehavior.discoveryFlow.enabled',
+    'frontDesk.discoveryFlow.steps': 'aiAgentSettings.frontDeskBehavior.discoveryFlow.steps',
+    'frontDesk.bookingFlow': 'aiAgentSettings.frontDeskBehavior.bookingFlow',
+    'frontDesk.bookingFlow.enabled': 'aiAgentSettings.frontDeskBehavior.bookingFlow.enabled',
+    'frontDesk.bookingFlow.steps': 'aiAgentSettings.frontDeskBehavior.bookingFlow.steps',
+    'frontDesk.bookingFlow.confirmCapturedFirst': 'aiAgentSettings.frontDeskBehavior.bookingFlow.confirmCapturedFirst',
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // FRONT DESK - Booking (LEGACY - to be deprecated in favor of V110)
     // ─────────────────────────────────────────────────────────────────────────
     'frontDesk.bookingEnabled': 'aiAgentSettings.frontDeskBehavior.bookingEnabled',
-    'frontDesk.bookingSlots': 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+    'frontDesk.bookingSlots': 'aiAgentSettings.frontDeskBehavior.bookingSlots', // LEGACY: Use frontDesk.slotRegistry + frontDesk.bookingFlow instead
     'frontDesk.bookingOutcome': 'aiAgentSettings.frontDeskBehavior.bookingOutcome',
     'frontDesk.bookingAbortPhrases': 'aiAgentSettings.frontDeskBehavior.bookingAbortPhrases',
     'frontDesk.commonFirstNames': 'aiAgentSettings.frontDeskBehavior.commonFirstNames',

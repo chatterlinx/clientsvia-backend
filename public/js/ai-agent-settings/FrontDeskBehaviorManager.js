@@ -1735,9 +1735,9 @@ class FrontDeskBehaviorManager {
                 <!-- Header with V110 badge -->
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <div>
-                        <h2 style="margin:0; color:#58a6ff;">🔄 Discovery Flow + Booking Flow</h2>
+                        <h2 style="margin:0; color:#58a6ff;">🔄 Call Flow: Discovery → Booking</h2>
                         <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.875rem;">
-                            V110 Enterprise Architecture: Slots → Discovery → Booking with smart confirmation
+                            V110: Phase 1 captures passively, Phase 2 confirms after booking consent
                         </p>
                     </div>
                     <span style="background:#3fb95020; color:#3fb950; padding:6px 12px; border-radius:16px; font-size:0.75rem; font-weight:600;">
@@ -1745,41 +1745,10 @@ class FrontDeskBehaviorManager {
                     </span>
                 </div>
 
-                <!-- Slot Registry Section -->
-                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
+                <!-- PHASE 1: Discovery Flow Section (happens FIRST during call) -->
+                <div style="background:#161b22; border:1px solid #21262d; border-left:3px solid #238636; border-radius:8px; padding:20px; margin-bottom:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                        <h3 style="margin:0; color:#58a6ff;">📋 Slot Registry</h3>
-                        <span style="color:#8b949e; font-size:0.8rem;">${(slotRegistry.slots || []).length} slots defined</span>
-                    </div>
-                    <p style="color:#8b949e; margin:0 0 16px 0; font-size:0.875rem;">
-                        All slots used by Discovery and Booking flows must be registered here. If a slot isn't in this registry, it doesn't exist at runtime.
-                    </p>
-                    
-                    <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
-                        <thead>
-                            <tr style="background:#21262d; border-bottom:1px solid #30363d;">
-                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Slot ID</th>
-                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Label</th>
-                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Type</th>
-                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Required</th>
-                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Discovery Fill</th>
-                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Booking Confirm</th>
-                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;"></th>
-                            </tr>
-                        </thead>
-                        <tbody id="fdb-slot-registry-body">
-                            ${slotRegistryRows || '<tr><td colspan="7" style="padding:20px; text-align:center; color:#8b949e;">No slots defined. Add slots below.</td></tr>'}
-                        </tbody>
-                    </table>
-                    <button id="fdb-add-slot" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
-                        + Add Slot
-                    </button>
-                </div>
-
-                <!-- Discovery Flow Section -->
-                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                        <h3 style="margin:0; color:#58a6ff;">🔄 Discovery Flow Steps</h3>
+                        <h3 style="margin:0; color:#3fb950;">📞 PHASE 1: Discovery (Passive Capture)</h3>
                         <div style="display:flex; align-items:center; gap:12px;">
                             <label style="display:flex; align-items:center; gap:6px; color:#8b949e; font-size:0.875rem;">
                                 <input type="checkbox" id="fdb-disc-enabled" ${discoveryFlow.enabled !== false ? 'checked' : ''}>
@@ -1789,7 +1758,8 @@ class FrontDeskBehaviorManager {
                         </div>
                     </div>
                     <p style="color:#8b949e; margin:0 0 16px 0; font-size:0.875rem;">
-                        Discovery captures slot values passively from conversation. When booking starts, captured values are promoted and confirmed (not re-asked from scratch).
+                        <strong>Happens first:</strong> As caller speaks, slots are captured passively ("Hi, this is Mark..." → name=Mark). 
+                        Agent can reference these during conversation. Values are held until booking consent.
                     </p>
                     
                     <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
@@ -1812,10 +1782,10 @@ class FrontDeskBehaviorManager {
                     </button>
                 </div>
 
-                <!-- Booking Flow Section -->
-                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
+                <!-- PHASE 2: Booking Flow Section (after consent) -->
+                <div style="background:#161b22; border:1px solid #21262d; border-left:3px solid #58a6ff; border-radius:8px; padding:20px; margin-bottom:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                        <h3 style="margin:0; color:#58a6ff;">📅 Booking Flow Steps</h3>
+                        <h3 style="margin:0; color:#58a6ff;">📅 PHASE 2: Booking (After Consent)</h3>
                         <div style="display:flex; align-items:center; gap:12px;">
                             <label style="display:flex; align-items:center; gap:6px; color:#8b949e; font-size:0.875rem;">
                                 <input type="checkbox" id="fdb-book-enabled" ${bookingFlow.enabled !== false ? 'checked' : ''}>
@@ -1829,7 +1799,8 @@ class FrontDeskBehaviorManager {
                         </div>
                     </div>
                     <p style="color:#8b949e; margin:0 0 16px 0; font-size:0.875rem;">
-                        Booking flow confirms captured values first, then asks for missing slots. Never restarts from scratch if values were already captured in discovery.
+                        <strong>After consent:</strong> "Is your first name Mark?" → "Mark with a K or C?" → "And your last name?" 
+                        Confirms captured values, checks spelling variants, then collects missing required slots.
                     </p>
                     
                     <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
@@ -1913,6 +1884,37 @@ class FrontDeskBehaviorManager {
                             </label>
                         </div>
                     </div>
+                </div>
+
+                <!-- Slot Registry Section (Configuration - defines what slots exist) -->
+                <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <h3 style="margin:0; color:#58a6ff;">📋 Slot Registry (Configuration)</h3>
+                        <span style="color:#8b949e; font-size:0.8rem;">${(slotRegistry.slots || []).length} slots defined</span>
+                    </div>
+                    <p style="color:#8b949e; margin:0 0 16px 0; font-size:0.875rem;">
+                        Defines what slots exist. Discovery and Booking flows reference these by ID. If a slot isn't here, it doesn't exist at runtime.
+                    </p>
+                    
+                    <table style="width:100%; border-collapse:collapse; margin-bottom:12px;">
+                        <thead>
+                            <tr style="background:#21262d; border-bottom:1px solid #30363d;">
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Slot ID</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Label</th>
+                                <th style="padding:10px; text-align:left; color:#8b949e; font-weight:500;">Type</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Required</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Discovery Fill</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;">Booking Confirm</th>
+                                <th style="padding:10px; text-align:center; color:#8b949e; font-weight:500;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="fdb-slot-registry-body">
+                            ${slotRegistryRows || '<tr><td colspan="7" style="padding:20px; text-align:center; color:#8b949e;">No slots defined. Add slots below.</td></tr>'}
+                        </tbody>
+                    </table>
+                    <button id="fdb-add-slot" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
+                        + Add Slot
+                    </button>
                 </div>
 
                 <!-- Save / Export Actions -->

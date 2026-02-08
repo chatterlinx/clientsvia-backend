@@ -809,6 +809,49 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
 
         // ☢️ NUKED: bookingContractV2Enabled, slotLibrary, slotGroups save logic - Jan 2026
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V110: SLOT REGISTRY + BOOKING FLOW + DISCOVERY FLOW (CANONICAL)
+        // ═══════════════════════════════════════════════════════════════════════
+        // These are the NEW canonical structures that replace legacy bookingSlots.
+        // Runtime reads from these first, falls back to bookingSlots only if empty.
+        // ═══════════════════════════════════════════════════════════════════════
+        if (updates.slotRegistry && typeof updates.slotRegistry === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.slotRegistry'] = updates.slotRegistry;
+            logger.info('[FRONT DESK BEHAVIOR] V110: Saving slotRegistry', {
+                companyId,
+                version: updates.slotRegistry.version,
+                slotCount: updates.slotRegistry.slots?.length || 0,
+                slotIds: (updates.slotRegistry.slots || []).map(s => s.id)
+            });
+        }
+        
+        if (updates.discoveryFlow && typeof updates.discoveryFlow === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.discoveryFlow'] = updates.discoveryFlow;
+            logger.info('[FRONT DESK BEHAVIOR] V110: Saving discoveryFlow', {
+                companyId,
+                version: updates.discoveryFlow.version,
+                enabled: updates.discoveryFlow.enabled,
+                stepCount: updates.discoveryFlow.steps?.length || 0
+            });
+        }
+        
+        if (updates.bookingFlow && typeof updates.bookingFlow === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.bookingFlow'] = updates.bookingFlow;
+            logger.info('[FRONT DESK BEHAVIOR] V110: Saving bookingFlow', {
+                companyId,
+                version: updates.bookingFlow.version,
+                enabled: updates.bookingFlow.enabled,
+                confirmCapturedFirst: updates.bookingFlow.confirmCapturedFirst,
+                stepCount: updates.bookingFlow.steps?.length || 0,
+                stepSlotIds: (updates.bookingFlow.steps || []).map(s => s.slotId)
+            });
+        }
+        
+        if (updates.policies && typeof updates.policies === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.policies'] = updates.policies;
+            logger.info('[FRONT DESK BEHAVIOR] V110: Saving policies', { companyId });
+        }
+        
         // Save booking templates
         if (updates.bookingTemplates) {
             Object.entries(updates.bookingTemplates).forEach(([key, value]) => {

@@ -962,6 +962,54 @@ class BookingFlowRunner {
     
     /**
      * ========================================================================
+     * V110: GET PROMPT FROM CONFIG
+     * ========================================================================
+     * Retrieves a prompt from V110 config with fallback chain.
+     * 
+     * Priority:
+     * 1. V110 bookingFlow.steps[slotId].[promptType]
+     * 2. V110 slotRegistry.slots[slotId].[promptType]
+     * 3. Legacy flow.steps[slotId].[promptType]
+     * 4. Provided fallback
+     * 
+     * @param {Object} company - Company document
+     * @param {Object} flow - The resolved booking flow
+     * @param {string} slotId - The slot ID (name, phone, address, etc.)
+     * @param {string} promptType - The prompt type (ask, confirmPrompt, reprompt, lastNameQuestion, etc.)
+     * @param {string} fallback - Fallback prompt if not found
+     * @returns {string} The prompt text
+     */
+    static getV110Prompt(company, flow, slotId, promptType, fallback = '') {
+        const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
+        
+        // V110 Priority 1: bookingFlow.steps
+        const bookingFlow = frontDesk.bookingFlow || {};
+        const bookingFlowSteps = bookingFlow.steps || [];
+        const v110Step = bookingFlowSteps.find(s => s.slotId === slotId);
+        if (v110Step?.[promptType]) {
+            return v110Step[promptType];
+        }
+        
+        // V110 Priority 2: slotRegistry.slots
+        const slotRegistry = frontDesk.slotRegistry || {};
+        const v110Slots = slotRegistry.slots || [];
+        const v110Slot = v110Slots.find(s => (s.id || s.slotId) === slotId);
+        if (v110Slot?.[promptType]) {
+            return v110Slot[promptType];
+        }
+        
+        // Legacy: flow.steps
+        const legacyStep = flow?.steps?.find(s => (s.fieldKey || s.id) === slotId);
+        if (legacyStep?.[promptType]) {
+            return legacyStep[promptType];
+        }
+        
+        // Use fallback
+        return fallback;
+    }
+    
+    /**
+     * ========================================================================
      * V96n: STATIC NAME SPELLING CHECK
      * ========================================================================
      * Wrapper for checkNameSpellingVariants that reads from company config.
@@ -4602,26 +4650,86 @@ class BookingFlowRunner {
      * ========================================================================
      * Generates the confirmation prompt for a discovery-captured slot.
      * 
-     * Examples:
-     * - name: "Ok — I assume Mark is your first name, is that correct?"
-     * - phone: "I have your number as (239) 555-1234. Is that the best number?"
+     * V110 PRIORITY:
+     * 1. V110 bookingFlow.steps[slotId].confirmPrompt (CANONICAL)
+     * 2. V110 slotRegistry.slots[slotId].confirmPrompt
+     * 3. Legacy bookingPrompts.preconfirm[slotId]
+     * 4. Flow step confirmPrompt (legacy)
+     * 5. HARDCODED FALLBACK (should never be reached if V110 configured)
+     * 
+     * Examples (V110 configured):
+     * - name: "Ok — I assume {value} is your first name, is that correct?" (from config)
+     * - phone: "I have your number as {value}. Is that the best number?" (from config)
      * ========================================================================
      */
     static buildPreconfirmPrompt(slotId, value, flow, company) {
-        // Check for custom preconfirm prompts in flow config
         const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
-        const preconfirmPrompts = frontDesk?.bookingPrompts?.preconfirm || {};
         
-        // Find the step for this slot to get any custom confirm prompt
-        const step = flow?.steps?.find(s => (s.fieldKey || s.id) === slotId);
-        const customConfirmPrompt = step?.confirmPrompt || preconfirmPrompts[slotId];
+        // ═══════════════════════════════════════════════════════════════════════
+        // V110 PRIORITY 1: bookingFlow.steps[slotId].confirmPrompt
+        // ═══════════════════════════════════════════════════════════════════════
+        const bookingFlow = frontDesk.bookingFlow || {};
+        const bookingFlowSteps = bookingFlow.steps || [];
+        const v110Step = bookingFlowSteps.find(s => s.slotId === slotId);
         
-        if (customConfirmPrompt) {
-            // Replace {value} placeholder
-            return customConfirmPrompt.replace(/\{value\}/gi, value);
+        if (v110Step?.confirmPrompt) {
+            logger.debug('[BOOKING FLOW RUNNER] V110: Using confirmPrompt from bookingFlow.steps', {
+                slotId,
+                source: 'V110_BOOKING_FLOW'
+            });
+            return v110Step.confirmPrompt.replace(/\{value\}/gi, value);
         }
         
-        // Default preconfirm prompts
+        // ═══════════════════════════════════════════════════════════════════════
+        // V110 PRIORITY 2: slotRegistry.slots[slotId].confirmPrompt
+        // ═══════════════════════════════════════════════════════════════════════
+        const slotRegistry = frontDesk.slotRegistry || {};
+        const v110Slots = slotRegistry.slots || [];
+        const v110Slot = v110Slots.find(s => (s.id || s.slotId) === slotId);
+        
+        if (v110Slot?.confirmPrompt) {
+            logger.debug('[BOOKING FLOW RUNNER] V110: Using confirmPrompt from slotRegistry.slots', {
+                slotId,
+                source: 'V110_SLOT_REGISTRY'
+            });
+            return v110Slot.confirmPrompt.replace(/\{value\}/gi, value);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // LEGACY FALLBACK 3: bookingPrompts.preconfirm[slotId]
+        // ═══════════════════════════════════════════════════════════════════════
+        const preconfirmPrompts = frontDesk?.bookingPrompts?.preconfirm || {};
+        if (preconfirmPrompts[slotId]) {
+            logger.debug('[BOOKING FLOW RUNNER] LEGACY: Using confirmPrompt from bookingPrompts.preconfirm', {
+                slotId,
+                source: 'LEGACY_BOOKING_PROMPTS'
+            });
+            return preconfirmPrompts[slotId].replace(/\{value\}/gi, value);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // LEGACY FALLBACK 4: flow.steps[slotId].confirmPrompt
+        // ═══════════════════════════════════════════════════════════════════════
+        const step = flow?.steps?.find(s => (s.fieldKey || s.id) === slotId);
+        if (step?.confirmPrompt) {
+            logger.debug('[BOOKING FLOW RUNNER] LEGACY: Using confirmPrompt from flow.steps', {
+                slotId,
+                source: 'LEGACY_FLOW_STEPS'
+            });
+            return step.confirmPrompt.replace(/\{value\}/gi, value);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // HARDCODED FALLBACK (DEPRECATED - log warning)
+        // This should NEVER be reached if V110 is properly configured
+        // ═══════════════════════════════════════════════════════════════════════
+        logger.warn('[BOOKING FLOW RUNNER] ⚠️ HARDCODED FALLBACK: No V110 confirmPrompt configured', {
+            slotId,
+            companyId: company?._id?.toString(),
+            hasSlotRegistry: v110Slots.length > 0,
+            hasBookingFlow: bookingFlowSteps.length > 0
+        });
+        
         switch (slotId) {
             case 'name':
                 return `Ok — I assume ${value} is your first name, is that correct?`;
@@ -4681,8 +4789,13 @@ class BookingFlowRunner {
                 // After confirming first name, ask for last name
                 const hasLastName = state.bookingCollected?.lastName;
                 if (!hasLastName) {
+                    // V110: Get lastNameQuestion from config, fallback to hardcoded
+                    const lastNamePrompt = BookingFlowRunner.getV110Prompt(
+                        company, flow, 'name', 'lastNameQuestion',
+                        "And what's your last name?"
+                    );
                     return {
-                        reply: `Perfect. And what's your last name?`,
+                        reply: `Perfect. ${lastNamePrompt}`,
                         state,
                         isComplete: false,
                         action: 'CONTINUE',
@@ -4738,8 +4851,14 @@ class BookingFlowRunner {
                 movedTo: 'lastName'
             });
             
+            // V110: Get firstNameQuestion from config, fallback to hardcoded
+            const firstNamePrompt = BookingFlowRunner.getV110Prompt(
+                company, flow, 'name', 'firstNameQuestion',
+                "What's your first name?"
+            );
+            
             return {
-                reply: `Got it, ${value} is your last name. What's your first name?`,
+                reply: `Got it, ${value} is your last name. ${firstNamePrompt}`,
                 state,
                 isComplete: false,
                 action: 'CONTINUE',
@@ -4834,8 +4953,13 @@ class BookingFlowRunner {
                 if (slotId === 'name') {
                     const hasLastName = state.bookingCollected?.lastName;
                     if (!hasLastName) {
+                        // V110: Get lastNameQuestion from config, fallback to hardcoded
+                        const lastNamePrompt = BookingFlowRunner.getV110Prompt(
+                            company, flow, 'name', 'lastNameQuestion',
+                            "And what's your last name?"
+                        );
                         return {
-                            reply: `Got it, ${possibleNewValue}. And what's your last name?`,
+                            reply: `Got it, ${possibleNewValue}. ${lastNamePrompt}`,
                             state,
                             isComplete: false,
                             action: 'CONTINUE',

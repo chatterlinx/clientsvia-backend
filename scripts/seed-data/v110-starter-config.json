@@ -1,0 +1,101 @@
+{
+  "slotRegistry": {
+    "version": "v1",
+    "slots": [
+      {
+        "id": "name",
+        "type": "name_first",
+        "label": "First Name",
+        "required": true,
+        "discoveryFillAllowed": true,
+        "bookingConfirmRequired": true
+      },
+      {
+        "id": "lastName",
+        "type": "name_last",
+        "label": "Last Name",
+        "required": false,
+        "discoveryFillAllowed": true,
+        "bookingConfirmRequired": true
+      },
+      {
+        "id": "phone",
+        "type": "phone",
+        "label": "Best Callback Cell",
+        "required": true,
+        "discoveryFillAllowed": true,
+        "bookingConfirmRequired": true
+      },
+      {
+        "id": "address",
+        "type": "address",
+        "label": "Service Address",
+        "required": true,
+        "discoveryFillAllowed": true,
+        "bookingConfirmRequired": true
+      },
+      {
+        "id": "time",
+        "type": "time",
+        "label": "Preferred Time",
+        "required": true,
+        "discoveryFillAllowed": false,
+        "bookingConfirmRequired": true
+      }
+    ]
+  },
+  "bookingFlow": {
+    "version": "v1",
+    "enabled": true,
+    "confirmCapturedFirst": true,
+    "steps": [
+      {
+        "stepId": "b1",
+        "slotId": "name",
+        "order": 1,
+        "ask": "What's your first name?",
+        "confirmPrompt": "Ok — I assume {value} is your first name, is that correct?",
+        "reprompt": "What's your first name?",
+        "lastNameQuestion": "And what's your last name?"
+      },
+      {
+        "stepId": "b2",
+        "slotId": "lastName",
+        "order": 2,
+        "ask": "And what's your last name?",
+        "confirmPrompt": "I've got {value} as your last name. Is that right?",
+        "reprompt": "What's your last name?"
+      },
+      {
+        "stepId": "b3",
+        "slotId": "phone",
+        "order": 3,
+        "ask": "What's the best cell number to reach you for confirmations and technician updates?",
+        "confirmPrompt": "I've got {value}. Is that the best number?",
+        "reprompt": "What's a good callback number?"
+      },
+      {
+        "stepId": "b4",
+        "slotId": "address",
+        "order": 4,
+        "ask": "What's the full service address, including unit or suite if there is one?",
+        "confirmPrompt": "I've got {value}. Is that the correct service address?",
+        "reprompt": "What's the service address?"
+      },
+      {
+        "stepId": "b5",
+        "slotId": "time",
+        "order": 5,
+        "ask": "Do you prefer morning or afternoon? I can offer 8-10, 10-12, 12-2, or 2-4.",
+        "confirmPrompt": "Perfect, {value} works. Is that right?",
+        "reprompt": "Morning or afternoon?"
+      }
+    ]
+  },
+  "discoveryFlow": {
+    "version": "v1",
+    "enabled": true,
+    "steps": []
+  },
+  "policies": {}
+}

@@ -66,6 +66,40 @@ const LANES = {
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════
+ * V110: MERGE SLOT REGISTRY WITH BOOKING FLOW STEPS
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * Helper to combine V110 slot definitions with booking flow step prompts
+ */
+function _mergeV110SlotsWithSteps(slots, steps) {
+    if (!slots || !steps) return [];
+    
+    const stepMap = new Map();
+    for (const step of steps) {
+        if (step.slotId) stepMap.set(step.slotId, step);
+    }
+    
+    return slots.map((slot, index) => {
+        const slotId = slot.id || slot.slotId;
+        const step = stepMap.get(slotId);
+        
+        return {
+            id: slotId,
+            slotId: slotId,
+            type: slot.type || 'text',
+            label: slot.label || slotId,
+            required: slot.required !== false,
+            order: step?.order || slot.order || index,
+            question: step?.ask || `What is your ${slotId}?`,
+            prompt: step?.ask || `What is your ${slotId}?`,
+            confirmPrompt: step?.confirmPrompt || null,
+            reprompt: step?.reprompt || `Could you repeat your ${slotId}?`,
+            _v110: true
+        };
+    }).sort((a, b) => (a.order || 999) - (b.order || 999));
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
  * handleTurn() - THE ONLY ENTRY POINT FOR TURN HANDLING
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
@@ -591,18 +625,64 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // GATE 3: Are booking slots configured? (cfgGet - traced read)
+        // GATE 3: V110 SLOT REGISTRY CHECK (CANONICAL) → LEGACY FALLBACK
+        // ═══════════════════════════════════════════════════════════════════════
+        // Priority 1: V110 slotRegistry.slots + bookingFlow.steps
+        // Priority 2: Legacy bookingSlots (deprecated)
         // ═══════════════════════════════════════════════════════════════════════
         let bookingSlots;
+        let configSource = 'UNKNOWN';
+        
         try {
-            bookingSlots = cfgGet(effectiveConfig, 'frontDesk.bookingSlots', {
+            // V110: Check slotRegistry + bookingFlow first
+            const slotRegistry = cfgGet(effectiveConfig, 'frontDesk.slotRegistry', {
                 callId: callSid,
                 turn: callState?.turnCount || 0,
                 strict: false,
-                readerId: 'handleBookingLane.bookingSlots'
-            });
+                readerId: 'handleBookingLane.v110.slotRegistry'
+            }) || {};
+            
+            const bookingFlow = cfgGet(effectiveConfig, 'frontDesk.bookingFlow', {
+                callId: callSid,
+                turn: callState?.turnCount || 0,
+                strict: false,
+                readerId: 'handleBookingLane.v110.bookingFlow'
+            }) || {};
+            
+            const v110Slots = slotRegistry.slots || [];
+            const v110Steps = bookingFlow.steps || [];
+            
+            if (v110Slots.length > 0 && v110Steps.length > 0) {
+                // V110 is configured - merge slots with steps
+                bookingSlots = _mergeV110SlotsWithSteps(v110Slots, v110Steps);
+                configSource = 'V110_SLOT_REGISTRY';
+                
+                logger.info('[FRONT_DESK_RUNTIME] ✅ V110: Using slotRegistry + bookingFlow', {
+                    callSid,
+                    slotCount: v110Slots.length,
+                    stepCount: v110Steps.length
+                });
+            } else {
+                // V110 not configured - fall back to legacy
+                bookingSlots = cfgGet(effectiveConfig, 'frontDesk.bookingSlots', {
+                    callId: callSid,
+                    turn: callState?.turnCount || 0,
+                    strict: false,
+                    readerId: 'handleBookingLane.legacy.bookingSlots'
+                });
+                
+                if (bookingSlots && bookingSlots.length > 0) {
+                    configSource = 'LEGACY_BOOKING_SLOTS';
+                    logger.warn('[FRONT_DESK_RUNTIME] ⚠️ LEGACY: Using deprecated bookingSlots - migrate to V110', {
+                        callSid,
+                        slotCount: bookingSlots.length
+                    });
+                }
+            }
         } catch (e) {
             bookingSlots = null;
+            configSource = 'ERROR';
+            logger.error('[FRONT_DESK_RUNTIME] Error loading booking slots', { callSid, error: e.message });
         }
         
         // ═══════════════════════════════════════════════════════════════════════
@@ -623,27 +703,34 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
                 data: {
                     slotCount,
                     slotIds: slotSummary,
-                    awPath: 'frontDesk.bookingSlots',
-                    resolvedDbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
-                    resolvedFrom: slotCount > 0 ? 'companyConfig' : 'NOT_FOUND',
+                    configSource,
+                    awPath: configSource === 'V110_SLOT_REGISTRY' 
+                        ? 'frontDesk.slotRegistry + frontDesk.bookingFlow' 
+                        : 'frontDesk.bookingSlots',
+                    resolvedFrom: slotCount > 0 ? configSource : 'NOT_FOUND',
                     lookupDetails: {
-                        expectedKey: 'frontDesk.bookingSlots',
-                        translatedTo: 'frontDeskBehavior.bookingSlots',
+                        v110Checked: true,
+                        legacyChecked: configSource !== 'V110_SLOT_REGISTRY',
                         effectiveConfigKeys: Object.keys(effectiveConfig || {}).slice(0, 10),
                         hasFrontDeskBehavior: !!effectiveConfig?.frontDeskBehavior,
-                        frontDeskBehaviorKeys: Object.keys(effectiveConfig?.frontDeskBehavior || {}).slice(0, 10)
+                        hasSlotRegistry: !!effectiveConfig?.frontDeskBehavior?.slotRegistry,
+                        hasBookingFlow: !!effectiveConfig?.frontDeskBehavior?.bookingFlow,
+                        hasLegacyBookingSlots: !!effectiveConfig?.frontDeskBehavior?.bookingSlots
                     }
                 }
             }).catch(() => {});
         }
         
         if (!bookingSlots || !Array.isArray(bookingSlots) || bookingSlots.length === 0) {
-            logger.error('[FRONT_DESK_RUNTIME] No bookingSlots configured - fail closed', { 
+            logger.error('[FRONT_DESK_RUNTIME] No booking slots configured (V110 or legacy) - fail closed', { 
                 callSid,
-                awPath: 'frontDesk.bookingSlots',
-                translatedPath: 'frontDeskBehavior.bookingSlots',
+                configSource,
+                v110Path: 'frontDesk.slotRegistry + frontDesk.bookingFlow',
+                legacyPath: 'frontDesk.bookingSlots',
                 effectiveConfigHasFrontDeskBehavior: !!effectiveConfig?.frontDeskBehavior,
-                frontDeskBehaviorHasBookingSlots: !!effectiveConfig?.frontDeskBehavior?.bookingSlots
+                hasSlotRegistry: !!effectiveConfig?.frontDeskBehavior?.slotRegistry,
+                hasBookingFlow: !!effectiveConfig?.frontDeskBehavior?.bookingFlow,
+                hasLegacyBookingSlots: !!effectiveConfig?.frontDeskBehavior?.bookingSlots
             });
             
             if (BlackBoxLogger) {

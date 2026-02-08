@@ -253,29 +253,78 @@ function getBookingSlotsFromCompany(company, options = {}) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // PATH PRIORITY - Check multiple locations for backward compatibility
+    // V110: SLOT REGISTRY + BOOKING FLOW = CANONICAL SOURCE OF TRUTH
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Priority:
+    // 1. V110: slotRegistry.slots + bookingFlow.steps (CANONICAL)
+    // 2. Legacy: bookingSlots (DEPRECATED - migration fallback only)
+    // 3. Legacy: callFlowEngine.bookingFields (DEPRECATED)
+    // 4. Legacy: bookingPrompts converted (DEPRECATED)
     // ═══════════════════════════════════════════════════════════════════════════
     
     const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
+    let rawSlots = null;
+    let source = 'NOT_CONFIGURED';
 
-    // ☢️ NUKED: Booking Contract V2 path removed Jan 2026 - was never wired to production
-
-    // Priority 1: New standard path (UI saves here)
-    let rawSlots = frontDesk.bookingSlots;
-    let source = 'frontDeskBehavior.bookingSlots';
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PRIORITY 1: V110 Slot Registry + Booking Flow (CANONICAL)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const slotRegistry = frontDesk.slotRegistry || {};
+    const bookingFlow = frontDesk.bookingFlow || {};
+    const v110Slots = slotRegistry.slots || [];
+    const v110Steps = bookingFlow.steps || [];
     
-    // Priority 2: Legacy callFlowEngine path
-    if (!rawSlots || rawSlots.length === 0) {
-        rawSlots = company?.aiAgentSettings?.callFlowEngine?.bookingFields;
-        source = 'callFlowEngine.bookingFields';
+    if (v110Slots.length > 0 && v110Steps.length > 0) {
+        // V110 is configured - merge slots with step prompts
+        rawSlots = mergeV110SlotsWithSteps(v110Slots, v110Steps);
+        source = 'V110_SLOT_REGISTRY';
+        
+        logger.info('[BOOKING ENGINE] ✅ V110: Using slotRegistry + bookingFlow', {
+            companyId: company._id,
+            slotCount: v110Slots.length,
+            stepCount: v110Steps.length,
+            slotIds: rawSlots.map(s => s.slotId || s.id)
+        });
     }
     
-    // Priority 3: Legacy bookingPrompts (convert to slots format)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PRIORITY 2: Legacy bookingSlots (DEPRECATED - fallback only)
+    // ═══════════════════════════════════════════════════════════════════════════
     if (!rawSlots || rawSlots.length === 0) {
-        const bp = company?.aiAgentSettings?.frontDeskBehavior?.bookingPrompts;
+        rawSlots = frontDesk.bookingSlots;
+        if (rawSlots && rawSlots.length > 0) {
+            source = 'LEGACY_bookingSlots';
+            logger.warn('[BOOKING ENGINE] ⚠️ LEGACY: Using deprecated bookingSlots - migrate to V110 slotRegistry', {
+                companyId: company._id,
+                slotCount: rawSlots.length
+            });
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PRIORITY 3: Legacy callFlowEngine.bookingFields (DEPRECATED)
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (!rawSlots || rawSlots.length === 0) {
+        rawSlots = company?.aiAgentSettings?.callFlowEngine?.bookingFields;
+        if (rawSlots && rawSlots.length > 0) {
+            source = 'LEGACY_callFlowEngine.bookingFields';
+            logger.warn('[BOOKING ENGINE] ⚠️ LEGACY: Using deprecated callFlowEngine.bookingFields', {
+                companyId: company._id
+            });
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // PRIORITY 4: Legacy bookingPrompts converted (DEPRECATED)
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (!rawSlots || rawSlots.length === 0) {
+        const bp = frontDesk.bookingPrompts;
         if (bp && (bp.askName || bp.askPhone || bp.askAddress || bp.askTime)) {
             rawSlots = convertLegacyBookingPrompts(bp);
-            source = 'bookingPrompts (converted)';
+            source = 'LEGACY_bookingPrompts_converted';
+            logger.warn('[BOOKING ENGINE] ⚠️ LEGACY: Using deprecated bookingPrompts (converted)', {
+                companyId: company._id
+            });
         }
     }
     
@@ -295,6 +344,64 @@ function getBookingSlotsFromCompany(company, options = {}) {
         isConfigured,
         source: isConfigured ? source : 'NOT_CONFIGURED'
     };
+}
+
+/**
+ * V110: Merge slot registry definitions with booking flow step prompts
+ * @param {Array} slots - Slot definitions from slotRegistry.slots
+ * @param {Array} steps - Step prompts from bookingFlow.steps
+ * @returns {Array} - Merged slots with prompts attached
+ */
+function mergeV110SlotsWithSteps(slots, steps) {
+    if (!slots || !steps) return [];
+    
+    // Create map of steps by slotId
+    const stepMap = new Map();
+    for (const step of steps) {
+        if (step.slotId) {
+            stepMap.set(step.slotId, step);
+        }
+    }
+    
+    // Merge each slot with its corresponding step
+    return slots.map((slot, index) => {
+        const slotId = slot.id || slot.slotId;
+        const step = stepMap.get(slotId);
+        
+        return {
+            // Core slot identity
+            slotId: slotId,
+            id: slotId,
+            
+            // From SlotRegistry
+            type: slot.type || 'text',
+            label: slot.label || slotId,
+            required: slot.required !== false,
+            order: step?.order || slot.order || index,
+            discoveryFillAllowed: slot.discoveryFillAllowed !== false,
+            bookingConfirmRequired: slot.bookingConfirmRequired !== false,
+            extraction: slot.extraction || {},
+            
+            // From BookingFlow step
+            question: step?.ask || `What is your ${slotId}?`,
+            prompt: step?.ask || `What is your ${slotId}?`,
+            confirmPrompt: step?.confirmPrompt || null,
+            reprompt: step?.reprompt || `Could you repeat your ${slotId}?`,
+            repromptVariants: step?.repromptVariants || [],
+            confirmRetryPrompt: step?.confirmRetryPrompt || null,
+            correctionPrompt: step?.correctionPrompt || null,
+            
+            // Name-specific (if applicable)
+            ...(slotId === 'name' || slot.type === 'name_first' ? {
+                firstNameQuestion: step?.ask,
+                lastNameQuestion: step?.lastNameQuestion || "And what's your last name?"
+            } : {}),
+            
+            // V110 metadata
+            _v110: true,
+            _stepId: step?.stepId
+        };
+    }).sort((a, b) => (a.order || 999) - (b.order || 999));
 }
 
 /**
