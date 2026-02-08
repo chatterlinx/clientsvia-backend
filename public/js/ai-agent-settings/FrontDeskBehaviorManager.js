@@ -1765,6 +1765,9 @@ class FrontDeskBehaviorManager {
                                 </p>
                             </div>
                             <div style="display:flex; align-items:center; gap:12px;">
+                                <button id="fdb-wiring-copy-all" style="background:#1f6feb; color:#fff; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                                    📋 Copy All
+                                </button>
                                 <button id="fdb-wiring-edit-toggle" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
                                     ✏️ Edit
                                 </button>
@@ -3349,6 +3352,40 @@ class FrontDeskBehaviorManager {
         
         if (wiringEditToggle) {
             wiringEditToggle.addEventListener('click', toggleEditMode);
+        }
+        
+        // Copy All button - copies raw markdown to clipboard
+        const wiringCopyAll = contentElement.querySelector('#fdb-wiring-copy-all');
+        if (wiringCopyAll) {
+            wiringCopyAll.addEventListener('click', async () => {
+                const textToCopy = wiringTextarea.value || DEFAULT_ARCHITECTURE_NOTES;
+                try {
+                    await navigator.clipboard.writeText(textToCopy);
+                    // Visual feedback
+                    const originalText = wiringCopyAll.textContent;
+                    wiringCopyAll.textContent = '✅ Copied!';
+                    wiringCopyAll.style.background = '#238636';
+                    setTimeout(() => {
+                        wiringCopyAll.textContent = originalText;
+                        wiringCopyAll.style.background = '#1f6feb';
+                    }, 2000);
+                } catch (err) {
+                    // Fallback for older browsers
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    
+                    wiringCopyAll.textContent = '✅ Copied!';
+                    wiringCopyAll.style.background = '#238636';
+                    setTimeout(() => {
+                        wiringCopyAll.textContent = '📋 Copy All';
+                        wiringCopyAll.style.background = '#1f6feb';
+                    }, 2000);
+                }
+            });
         }
         
         if (wiringSave) {
