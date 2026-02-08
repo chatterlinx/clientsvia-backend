@@ -2451,8 +2451,9 @@ class FrontDeskBehaviorManager {
                         to: c.normalized || c.to || c.correct || c.output || ''
                     })).filter(c => c.from && c.to);
                 
-                // Vocabulary/synonyms: check vocabulary.boostedKeywords or synonymMap
-                const synonymMap = profile.vocabulary?.synonymMap || profile.synonymMap || {};
+                // Synonyms come from template (inheritedSynonymsRaw), not STT profile
+                // Format: { "air conditioner": ["ac", "a/c", "cooling"], ... }
+                const synonymMap = this.config.inheritedSynonymsRaw || profile.vocabulary?.synonymMap || profile.synonymMap || {};
                 sttData.synonyms = Object.entries(synonymMap || {}).map(([word, syns]) => ({
                     word,
                     synonyms: Array.isArray(syns) ? syns : (syns ? [syns] : [])
@@ -2462,6 +2463,7 @@ class FrontDeskBehaviorManager {
                     fillers: sttData.fillers.length,
                     corrections: sttData.corrections.length,
                     synonyms: sttData.synonyms.length,
+                    synonymSource: this.config.inheritedSynonymsRaw ? 'inheritedSynonymsRaw' : 'profile',
                     rawProfile: profile
                 });
                 
