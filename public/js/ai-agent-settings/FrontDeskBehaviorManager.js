@@ -2426,18 +2426,30 @@ class FrontDeskBehaviorManager {
                 const sttResult = await sttResponse.json();
                 const profile = sttResult.data || sttResult;
                 
-                // Extract data
+                // Extract data with safe array handling
                 sttData.fillers = profile.fillers?.words || profile.fillerWords || [];
-                sttData.corrections = (profile.corrections?.entries || profile.corrections || []).map(c => ({
-                    from: c.from || c.mishear || c.input,
-                    to: c.to || c.correct || c.output
+                if (!Array.isArray(sttData.fillers)) sttData.fillers = [];
+                
+                // Corrections can be in various formats - normalize to array
+                let rawCorrections = profile.corrections?.entries || profile.corrections || [];
+                if (!Array.isArray(rawCorrections)) {
+                    // If it's an object/map, convert to array
+                    if (typeof rawCorrections === 'object' && rawCorrections !== null) {
+                        rawCorrections = Object.entries(rawCorrections).map(([from, to]) => ({ from, to }));
+                    } else {
+                        rawCorrections = [];
+                    }
+                }
+                sttData.corrections = rawCorrections.map(c => ({
+                    from: c.from || c.mishear || c.input || '',
+                    to: c.to || c.correct || c.output || ''
                 })).filter(c => c.from && c.to);
                 
                 // Extract synonyms from synonym map
                 const synonymMap = profile.vocabulary?.synonymMap || profile.synonymMap || {};
-                sttData.synonyms = Object.entries(synonymMap).map(([word, syns]) => ({
+                sttData.synonyms = Object.entries(synonymMap || {}).map(([word, syns]) => ({
                     word,
-                    synonyms: Array.isArray(syns) ? syns : [syns]
+                    synonyms: Array.isArray(syns) ? syns : (syns ? [syns] : [])
                 }));
                 
                 renderSttData();
