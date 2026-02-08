@@ -72,10 +72,16 @@ const BlackBoxLogger = require('./BlackBoxLogger');
 const AWConfigReader = require('./wiring/AWConfigReader');
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V1 RETURN LANE - Post-Response Behavior System (2026-02)
+// ═══════════════════════════════════════════════════════════════════════════
+const TriageService = require('./TriageService');
+const ReturnLaneService = require('./ReturnLaneService');
+
+// ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V93-AW-CONFIG-READER';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V94-RETURN-LANE-V1';  // <-- CHANGE THIS EACH DEPLOY
 
 // ═══════════════════════════════════════════════════════════════════════════
 // V92: NAME STOP WORDS - Words that are NEVER valid names (for acknowledgment check)
@@ -5854,6 +5860,49 @@ async function processTurn({
             }
             
             // ═══════════════════════════════════════════════════════════════════
+            // 🆕 RETURN LANE: TRIAGE CARD MATCHING (V1 - 2026-02)
+            // ═══════════════════════════════════════════════════════════════════
+            // Match user input against triage cards for Return Lane context.
+            // This determines which "lane" the conversation is in and what
+            // post-response behavior should be applied.
+            //
+            // IMPORTANT: This only MATCHES cards. The actual Return Lane policy
+            // is applied AFTER the 3-tier response is generated (see RETURN_LANE_POLICY below).
+            // ═══════════════════════════════════════════════════════════════════
+            let triageCardMatch = null;
+            let matchedTriageCard = null;
+            
+            // Only attempt if company has Return Lane enabled
+            const companyReturnLaneEnabled = company?.aiAgentSettings?.returnLane?.enabled === true;
+            
+            if (companyReturnLaneEnabled) {
+                try {
+                    triageCardMatch = await TriageService.applyQuickTriageRules(
+                        userText,
+                        companyId,
+                        company?.defaultTrade || null
+                    );
+                    
+                    if (triageCardMatch?.matched) {
+                        // Load full card for returnConfig
+                        matchedTriageCard = await TriageService.getTriageCardById(triageCardMatch.triageCardId);
+                        
+                        log('🎯 RETURN_LANE: Triage card matched', {
+                            cardId: triageCardMatch.triageCardId,
+                            triageLabel: triageCardMatch.triageLabel,
+                            action: triageCardMatch.action,
+                            hasReturnConfig: !!matchedTriageCard?.returnConfig,
+                            returnConfigEnabled: matchedTriageCard?.returnConfig?.enabled === true
+                        });
+                    } else {
+                        log('📋 RETURN_LANE: No triage card matched');
+                    }
+                } catch (triageErr) {
+                    log('⚠️ RETURN_LANE: Triage matching failed (non-fatal)', { error: triageErr.message });
+                }
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════
             // 🎯 V2: TIER-1 SCENARIO SHORT-CIRCUIT (ZERO TOKENS!)
             // ═══════════════════════════════════════════════════════════════════
             // If HybridScenarioSelector found a HIGH-CONFIDENCE match, use it 
@@ -7515,6 +7564,93 @@ async function processTurn({
                     tokenKey: pricingPolicyResult.tokenKey || null,
                     mode: pricingPolicyResult.policyMode || null
                 };
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // 🆕 RETURN LANE: APPLY POST-RESPONSE POLICY (V1 - 2026-02)
+        // ═══════════════════════════════════════════════════════════════════
+        // After 3-tier response is generated, apply Return Lane policy to:
+        // 1. Track lane context (turns in lane, pushes made)
+        // 2. Optionally append a "push to booking" prompt
+        // 3. Log trace events for debugging
+        //
+        // KILL SWITCHES (all must be true for policy to apply):
+        // - company.aiAgentSettings.returnLane.enabled === true
+        // - matchedTriageCard.returnConfig.enabled === true
+        // - Session not already in BOOKING mode (unless guardrail disabled)
+        // ═══════════════════════════════════════════════════════════════════
+        let returnLaneResult = null;
+        
+        if (companyReturnLaneEnabled && triageCardMatch?.matched && matchedTriageCard) {
+            try {
+                const responseTier = aiResult?.tier || 'tier3';
+                const isAlreadyBooking = session.mode === 'BOOKING' || 
+                                         session.phase === 'booking' ||
+                                         session.booking?.consentGiven === true;
+                
+                returnLaneResult = ReturnLaneService.applyPolicy({
+                    company,
+                    cardMatch: triageCardMatch,
+                    card: matchedTriageCard,
+                    session,
+                    responseTier,
+                    isAlreadyBooking
+                });
+                
+                // If policy returned a push prompt, append it to the response
+                if (returnLaneResult?.applied && returnLaneResult?.pushPrompt && aiResult?.reply) {
+                    const originalReply = aiResult.reply;
+                    
+                    // Don't append if response already ends with a question about scheduling
+                    const alreadyAsksScheduling = /schedul|appointment|technician|come out/i.test(
+                        originalReply.slice(-100)
+                    );
+                    
+                    if (!alreadyAsksScheduling) {
+                        // Append push prompt with proper spacing
+                        aiResult.reply = originalReply.trim() + ' ' + returnLaneResult.pushPrompt;
+                        
+                        log('🚀 RETURN_LANE: Push prompt appended', {
+                            action: returnLaneResult.action,
+                            reason: returnLaneResult.reason,
+                            pushPromptPreview: returnLaneResult.pushPrompt.substring(0, 50),
+                            originalReplyPreview: originalReply.substring(0, 50)
+                        });
+                    } else {
+                        log('📋 RETURN_LANE: Skipped push - response already asks about scheduling');
+                    }
+                }
+                
+                // Update lane context in session
+                if (returnLaneResult?.laneContext) {
+                    session.laneContext = returnLaneResult.laneContext;
+                    session.markModified('laneContext');
+                }
+                
+                // Log trace event to Black Box
+                if (returnLaneResult?.applied) {
+                    await BlackBoxLogger.logEvent({
+                        callId: session._id?.toString(),
+                        companyId,
+                        type: 'LANE_DECISION_SUMMARY',
+                        turn: session.metrics?.totalTurns || 0,
+                        data: {
+                            action: returnLaneResult.action,
+                            reason: returnLaneResult.reason,
+                            lane: returnLaneResult.laneContext?.currentLane,
+                            turnsInLane: returnLaneResult.laneContext?.turnsInLane,
+                            pushCount: returnLaneResult.laneContext?.pushCount,
+                            cardId: matchedTriageCard?._id?.toString(),
+                            cardLabel: triageCardMatch?.triageLabel
+                        }
+                    }).catch(err => {
+                        log('⚠️ RETURN_LANE: Failed to log trace event (non-fatal)', { error: err.message });
+                    });
+                }
+                
+            } catch (returnLaneErr) {
+                log('⚠️ RETURN_LANE: Policy application failed (non-fatal)', { error: returnLaneErr.message });
             }
         }
         

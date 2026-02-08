@@ -175,6 +175,45 @@ const conversationSessionSchema = new Schema({
     },
     
     // ════════════════════════════════════════════════════════════════════════════
+    // 🆕 RETURN LANE CONTEXT - Post-Response Behavior Tracking (V1 - 2026-02)
+    // ════════════════════════════════════════════════════════════════════════════
+    // Tracks the current "lane" and turn counts for Return Lane policy decisions.
+    // ONLY populated when company.aiAgentSettings.returnLane.enabled === true
+    // and a matching triage card has returnConfig.enabled === true.
+    // ════════════════════════════════════════════════════════════════════════════
+    laneContext: {
+        // Current lane classification (from matched card's returnConfig.lane)
+        currentLane: {
+            type: String,
+            enum: ['SYMPTOM', 'INQUIRY', 'BOOKING', 'EMERGENCY', 'OUT_OF_SCOPE', 'CALLBACK', 'BILLING', 'UNKNOWN'],
+            default: null
+        },
+        
+        // When did we enter this lane?
+        enteredAt: { type: Date, default: null },
+        
+        // How many turns have we been in this lane?
+        turnsInLane: { type: Number, default: 0 },
+        
+        // How many times have we pushed booking in this lane?
+        pushCount: { type: Number, default: 0 },
+        
+        // When was the last push?
+        lastPushAt: { type: Date, default: null },
+        
+        // Which card put us in this lane?
+        matchedCardId: { type: String, default: null },
+        matchedCardLabel: { type: String, default: null },
+        
+        // Cached policy from the card (for quick reference)
+        postResponseAction: { type: String, default: null },
+        pushPromptKey: { type: String, default: null },
+        maxTurnsBeforePush: { type: Number, default: null },
+        forceActionAfterTurns: { type: Number, default: null },
+        forceActionType: { type: String, default: null }
+    },
+    
+    // ════════════════════════════════════════════════════════════════════════════
     // 🆕 CONVERSATION MEMORY - Full context for LLM fallback (Enterprise Flow)
     // ════════════════════════════════════════════════════════════════════════════
     // This is what the LLM sees when handling off-rails situations

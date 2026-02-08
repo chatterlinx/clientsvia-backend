@@ -204,6 +204,7 @@ async function loadAllRoutes() {
         routes.triageBuilderRoutes = await loadRouteWithTimeout('./routes/admin/triageBuilder', 'triageBuilderRoutes'); // 🤖 LLM Triage Builder (admin content generator)
         routes.triageEvaluatorRoutes = await loadRouteWithTimeout('./routes/admin/triageEvaluator', 'triageEvaluatorRoutes'); // 🎯 Triage Command Center (A+ Evaluation)
         routes.triagePresetsRoutes = await loadRouteWithTimeout('./routes/admin/triagePresets', 'triagePresetsRoutes'); // 🎯 Dynamic Triage Presets per Trade
+        routes.returnLaneRoutes = await loadRouteWithTimeout('./routes/admin/returnLane', 'returnLaneRoutes'); // 🚀 Return Lane Admin (V1 - Post-Response Behavior)
         routes.scenarioDiagnosticsRoutes = await loadRouteWithTimeout('./routes/admin/scenarioDiagnostics', 'scenarioDiagnosticsRoutes'); // 🔍 Scenario Diagnostics (Link check + selection trace)
         // callFlowRoutes REMOVED Dec 2025 - replaced by Mission Control (callFlowEngine)
         // V1 LLM Console removed - 2025-11-08
@@ -646,6 +647,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/triage-builder', routes.triageBuilderRoutes); // 🤖 LLM Triage Builder (admin content generator)
     app.use('/api/admin/triage-evaluator', routes.triageEvaluatorRoutes); // 🎯 Triage Command Center (A+ Evaluation)
     app.use('/api/admin/triage-presets', routes.triagePresetsRoutes); // 🎯 Dynamic Triage Presets per Trade
+    app.use('/api/admin/return-lane', routes.returnLaneRoutes); // 🚀 Return Lane Admin (V1 - Post-Response Behavior)
     app.use('/api/admin/scenario-diagnostics', routes.scenarioDiagnosticsRoutes); // 🔍 Scenario Diagnostics (proof layer)
     app.use('/api/admin/scenario-migrations', require('./routes/admin/scenarioMigrations')); // 🔧 Scenario Migrations (fix matching issues)
     app.use('/api/admin/scenario-gaps', require('./routes/admin/scenarioGaps')); // 🎯 Scenario Gaps Detection & Auto-Create (V88)
