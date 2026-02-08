@@ -158,6 +158,114 @@ const LinkedScenarioSchema = new Schema(
   { _id: false }
 );
 
+// ═══════════════════════════════════════════════════════════════════════════
+// RETURN LANE CONFIG SUB-SCHEMAS (V1 - 2026-02)
+// ═══════════════════════════════════════════════════════════════════════════
+// PURPOSE: Deterministic post-response behavior per triage card
+// DOCS: See returnLane in v2Company.aiAgentSettings for company defaults
+
+const RoutingTargetSchema = new Schema(
+  {
+    type: { 
+      type: String, 
+      enum: ['service', 'scenario', 'none'], 
+      default: 'none' 
+    },
+    serviceKey: { type: String, trim: true, default: null },   // e.g., 'hvac_ac_repair'
+    scenarioKey: { type: String, trim: true, default: null }   // e.g., 'pricing_inquiry'
+  },
+  { _id: false }
+);
+
+const TierPolicySchema = new Schema(
+  {
+    applyToTiers: {
+      type: [String],
+      enum: ['tier1', 'tier2', 'tier3'],
+      default: ['tier1', 'tier2', 'tier3']  // Govern all tiers by default
+    },
+    // Actions blocked on Tier 3 (LLM fallback) unless explicitly allowed
+    tier3RestrictedActions: {
+      type: [String],
+      default: ['ESCALATE', 'END_CALL', 'TAKE_MESSAGE']
+    },
+    // Override to allow hard actions on Tier 3 (use with caution)
+    allowTier3HardActions: { type: Boolean, default: false }
+  },
+  { _id: false }
+);
+
+const GuardrailsSchema = new Schema(
+  {
+    suppressIfAlreadyBooking: { type: Boolean, default: true },
+    resetCounterOnLaneChange: { type: Boolean, default: true },
+    skipLegacyConsentWhenApplied: { type: Boolean, default: true }
+  },
+  { _id: false }
+);
+
+const ReturnConfigSchema = new Schema(
+  {
+    // ─────────────────────────────────────────────────────────────
+    // CORE CLASSIFICATION
+    // ─────────────────────────────────────────────────────────────
+    enabled: { type: Boolean, default: false },  // V1: default FALSE for migration safety
+    
+    lane: {
+      type: String,
+      enum: ['SYMPTOM', 'INQUIRY', 'BOOKING', 'EMERGENCY', 'OUT_OF_SCOPE', 'CALLBACK', 'BILLING', 'UNKNOWN'],
+      default: 'UNKNOWN'
+    },
+
+    // ─────────────────────────────────────────────────────────────
+    // POST-RESPONSE BEHAVIOR
+    // ─────────────────────────────────────────────────────────────
+    postResponseAction: {
+      type: String,
+      enum: ['NONE', 'PUSH_BOOKING', 'START_BOOKING', 'ESCALATE', 'TAKE_MESSAGE', 'END_CALL', 'CONTINUE_DISCOVERY'],
+      default: 'NONE'
+    },
+
+    // Push prompt selection (references company.aiAgentSettings.returnLane.pushPromptTemplates)
+    pushPromptKey: {
+      type: String,
+      enum: ['default', 'soft', 'strong', 'emergency', 'custom'],
+      default: 'default'
+    },
+    
+    // Only used if pushPromptKey='custom'
+    pushPromptCustom: { type: String, trim: true, default: '' },
+
+    // ─────────────────────────────────────────────────────────────
+    // TURN-BASED THRESHOLDS
+    // ─────────────────────────────────────────────────────────────
+    maxTurnsBeforePush: { type: Number, default: 2, min: 0, max: 10 },
+    forceActionAfterTurns: { type: Number, default: 4, min: 1, max: 10 },
+    
+    forceActionType: {
+      type: String,
+      enum: ['PUSH_BOOKING', 'START_BOOKING', 'ESCALATE', 'TAKE_MESSAGE', 'END_CALL'],
+      default: 'PUSH_BOOKING'
+    },
+
+    // ─────────────────────────────────────────────────────────────
+    // ROUTING BRIDGE (optional link to service/scenario)
+    // ─────────────────────────────────────────────────────────────
+    routingTarget: { type: RoutingTargetSchema, default: () => ({}) },
+
+    // ─────────────────────────────────────────────────────────────
+    // TIER GOVERNANCE
+    // ─────────────────────────────────────────────────────────────
+    tierPolicy: { type: TierPolicySchema, default: () => ({}) },
+
+    // ─────────────────────────────────────────────────────────────
+    // ADVANCED GUARDRAILS (hidden by default in UI)
+    // ─────────────────────────────────────────────────────────────
+    guardrails: { type: GuardrailsSchema, default: () => ({}) }
+  },
+  { _id: false }
+);
+
 const MatchHistorySampleSchema = new Schema(
   {
     text: { type: String, trim: true }, // normalized user input
@@ -274,6 +382,17 @@ const TriageCardSchema = new Schema(
     matchHistory: {
       type: MatchHistorySchema,
       default: () => ({})
+    },
+
+    // ═══════════════════════════════════════════════════════════════
+    // RETURN LANE CONFIG (V1 - 2026-02)
+    // ═══════════════════════════════════════════════════════════════
+    // Post-response behavior: what to do after 3-tier responds
+    // Prevents agent from getting "stuck" answering questions without driving to booking
+    // UI: Collapsible "Post-Response Behavior" section in Triage Card editor
+    returnConfig: {
+      type: ReturnConfigSchema,
+      default: () => ({ enabled: false })  // V1: disabled by default for safe migration
     },
 
     // V23 AUTO-SCAN: Additional fields for auto-generated cards

@@ -3929,6 +3929,96 @@ const companySchema = new mongoose.Schema({
             type: Date, 
             default: Date.now
             // Last time any aiAgentSettings field was modified
+        },
+        
+        // -------------------------------------------------------------------
+        // RETURN LANE SYSTEM - V1 Post-Response Behavior (2026-02)
+        // -------------------------------------------------------------------
+        // PURPOSE: Deterministic flow control after 3-tier responses
+        // Ensures agent doesn't get "stuck" answering questions without driving to booking
+        // KILL SWITCH: enabled=false disables entire system (graceful fallback)
+        // TRACE EVENTS: LANE_DECISION_SUMMARY, LANE_CONTEXT_RESET, LEGACY_CONSENT_SKIPPED
+        returnLane: {
+            // ─────────────────────────────────────────────────────────────
+            // FEATURE FLAG (kill switch)
+            // ─────────────────────────────────────────────────────────────
+            enabled: { 
+                type: Boolean, 
+                default: false  // V1: OFF by default for safe rollout
+            },
+            
+            // ─────────────────────────────────────────────────────────────
+            // COMPANY DEFAULTS (when no card matches or card has no config)
+            // ─────────────────────────────────────────────────────────────
+            defaults: {
+                lane: {
+                    type: String,
+                    enum: ['SYMPTOM', 'INQUIRY', 'BOOKING', 'EMERGENCY', 'OUT_OF_SCOPE', 'CALLBACK', 'BILLING', 'UNKNOWN'],
+                    default: 'UNKNOWN'
+                },
+                postResponseAction: {
+                    type: String,
+                    enum: ['NONE', 'PUSH_BOOKING', 'START_BOOKING', 'ESCALATE', 'TAKE_MESSAGE', 'END_CALL', 'CONTINUE_DISCOVERY'],
+                    default: 'CONTINUE_DISCOVERY'
+                },
+                pushPromptKey: { 
+                    type: String, 
+                    enum: ['default', 'soft', 'strong', 'emergency', 'custom'],
+                    default: 'default' 
+                }
+            },
+            
+            // ─────────────────────────────────────────────────────────────
+            // PUSH PROMPT TEMPLATES (reusable across all triage cards)
+            // ─────────────────────────────────────────────────────────────
+            // Admins configure once, cards reference by key
+            // Prevents inconsistent copy across cards
+            pushPromptTemplates: {
+                default: { 
+                    type: String, 
+                    default: 'Would you like me to schedule a technician to take a look?',
+                    trim: true
+                },
+                soft: { 
+                    type: String, 
+                    default: 'I can help schedule that if you\'d like.',
+                    trim: true
+                },
+                strong: { 
+                    type: String, 
+                    default: 'Let me get a technician scheduled for you.',
+                    trim: true
+                },
+                emergency: { 
+                    type: String, 
+                    default: 'This sounds urgent. Let me get someone out to you right away.',
+                    trim: true
+                }
+            },
+            
+            // ─────────────────────────────────────────────────────────────
+            // TIER 3 GOVERNANCE DEFAULTS
+            // ─────────────────────────────────────────────────────────────
+            tier3Governance: {
+                // Which actions are blocked on Tier 3 responses (LLM fallback)
+                // Rationale: LLM responses can be unpredictable; don't allow hard exits
+                restrictedActions: {
+                    type: [String],
+                    default: ['ESCALATE', 'END_CALL', 'TAKE_MESSAGE']
+                    // Only PUSH_BOOKING and CONTINUE_DISCOVERY allowed by default
+                },
+                // Override to allow hard actions on Tier 3 (use with caution)
+                allowHardActions: { 
+                    type: Boolean, 
+                    default: false 
+                }
+            },
+            
+            // ─────────────────────────────────────────────────────────────
+            // METADATA
+            // ─────────────────────────────────────────────────────────────
+            configuredAt: { type: Date, default: null },
+            configuredBy: { type: String, default: null, trim: true }
         }
     },
     
