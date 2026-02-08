@@ -2352,6 +2352,16 @@ class FrontDeskBehaviorManager {
                 return res.json();
             },
             
+            async updateSynonym(technicalTerm, colloquialTerms) {
+                // Uses replace: true to overwrite existing synonyms
+                const res = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${this.token()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ technicalTerm, colloquialTerms, replace: true })
+                });
+                return res.json();
+            },
+            
             async deleteSynonym(term) {
                 const res = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms/${encodeURIComponent(term)}`, {
                     method: 'DELETE',
@@ -2522,6 +2532,25 @@ class FrontDeskBehaviorManager {
                         </div>
                     </div>
                     
+                    <!-- Edit Synonym Form (hidden by default) -->
+                    <div id="stt-edit-synonym-form" style="display:none; margin-bottom:12px; padding:12px; background:#1f6feb20; border:1px solid #1f6feb; border-radius:6px;">
+                        <div style="margin-bottom:8px;">
+                            <label style="color:#58a6ff; font-size:0.8rem; font-weight:500;">Editing term: <span id="stt-edit-synonym-term-display" style="color:#c9d1d9;"></span></label>
+                            <input type="hidden" id="stt-edit-synonym-term">
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+                            <input type="text" id="stt-edit-synonym-aliases" placeholder="Synonyms, comma separated" 
+                                   style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px 12px; border-radius:6px;">
+                        </div>
+                        <p style="color:#8b949e; font-size:0.75rem; margin:0 0 8px 0;">
+                            ⚠️ This will REPLACE all existing synonyms for this term
+                        </p>
+                        <div style="display:flex; gap:8px; justify-content:flex-end;">
+                            <button id="stt-update-synonym" style="background:#1f6feb; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">Update</button>
+                            <button id="stt-cancel-edit-synonym" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:8px 16px; border-radius:6px; cursor:pointer;">Cancel</button>
+                        </div>
+                    </div>
+                    
                     <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #21262d;">
                         ${filteredSynonyms.length > 0 
                             ? `<table style="width:100%; border-collapse:collapse;">
@@ -2529,7 +2558,7 @@ class FrontDeskBehaviorManager {
                                     <tr style="background:#21262d;">
                                         <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Term</th>
                                         <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Synonyms</th>
-                                        <th style="padding:8px 12px; text-align:center; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d; width:50px;"></th>
+                                        <th style="padding:8px 12px; text-align:center; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d; width:80px;"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2537,7 +2566,8 @@ class FrontDeskBehaviorManager {
                                         <tr style="border-bottom:1px solid #21262d;">
                                             <td style="padding:8px 12px; color:#58a6ff; font-weight:500;">${this.escapeHtml(s.word)}</td>
                                             <td style="padding:8px 12px; color:#c9d1d9;">${s.synonyms.map(syn => this.escapeHtml(syn)).join(', ')}</td>
-                                            <td style="padding:8px 12px; text-align:center;">
+                                            <td style="padding:8px 12px; text-align:center; white-space:nowrap;">
+                                                <button class="stt-edit-synonym" data-term="${this.escapeHtml(s.word)}" data-aliases="${this.escapeHtml(s.synonyms.join(', '))}" style="background:none; border:none; color:#58a6ff; cursor:pointer; padding:4px;" title="Edit">✏️</button>
                                                 <button class="stt-delete-synonym" data-term="${this.escapeHtml(s.word)}" style="background:none; border:none; color:#f85149; cursor:pointer; padding:4px;" title="Delete">🗑️</button>
                                             </td>
                                         </tr>
@@ -2835,7 +2865,7 @@ class FrontDeskBehaviorManager {
                                 });
                                 if (synRes.ok) {
                                     const synData = await synRes.json();
-                                    this.config.inheritedSynonymsRaw = synData.synonyms || {};
+                                    manager.config.inheritedSynonymsRaw = synData.synonyms || {};
                                 }
                                 await loadSttProfile();
                             } else {
@@ -2849,6 +2879,95 @@ class FrontDeskBehaviorManager {
                     }, 0);
                 });
             });
+            
+            // ----- EDIT SYNONYM HANDLERS -----
+            const editSynonymForm = sttModalBody.querySelector('#stt-edit-synonym-form');
+            const editSynonymTermDisplay = sttModalBody.querySelector('#stt-edit-synonym-term-display');
+            const editSynonymTermInput = sttModalBody.querySelector('#stt-edit-synonym-term');
+            const editSynonymAliases = sttModalBody.querySelector('#stt-edit-synonym-aliases');
+            const updateSynonymBtn = sttModalBody.querySelector('#stt-update-synonym');
+            const cancelEditSynonymBtn = sttModalBody.querySelector('#stt-cancel-edit-synonym');
+            
+            // Edit synonym buttons - open edit form
+            sttModalBody.querySelectorAll('.stt-edit-synonym').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const term = e.target.dataset.term;
+                    const aliases = e.target.dataset.aliases;
+                    
+                    // Hide add form if open
+                    const addForm = sttModalBody.querySelector('#stt-add-synonym-form');
+                    if (addForm) addForm.style.display = 'none';
+                    
+                    // Populate and show edit form
+                    if (editSynonymForm && editSynonymTermDisplay && editSynonymTermInput && editSynonymAliases) {
+                        editSynonymTermDisplay.textContent = term;
+                        editSynonymTermInput.value = term;
+                        editSynonymAliases.value = aliases;
+                        editSynonymForm.style.display = 'block';
+                        editSynonymAliases.focus();
+                        editSynonymAliases.select();
+                    }
+                });
+            });
+            
+            // Cancel edit
+            if (cancelEditSynonymBtn && editSynonymForm) {
+                cancelEditSynonymBtn.addEventListener('click', () => {
+                    editSynonymForm.style.display = 'none';
+                });
+            }
+            
+            // Update synonym
+            if (updateSynonymBtn && editSynonymTermInput && editSynonymAliases) {
+                updateSynonymBtn.addEventListener('click', async () => {
+                    const term = editSynonymTermInput.value.trim();
+                    const aliasesRaw = editSynonymAliases.value.trim();
+                    
+                    console.log('[STT MODAL] Update synonym clicked:', { term, aliasesRaw });
+                    
+                    if (!term || !aliasesRaw) {
+                        alert('Synonyms are required');
+                        return;
+                    }
+                    
+                    const aliases = aliasesRaw.split(',').map(a => a.trim()).filter(a => a);
+                    if (aliases.length === 0) {
+                        alert('Enter at least one synonym');
+                        return;
+                    }
+                    
+                    updateSynonymBtn.disabled = true;
+                    updateSynonymBtn.textContent = 'Updating...';
+                    
+                    try {
+                        console.log('[STT MODAL] Calling updateSynonym API:', { term, aliases });
+                        const result = await sttApi.updateSynonym(term, aliases);
+                        console.log('[STT MODAL] updateSynonym result:', result);
+                        
+                        if (result.success) {
+                            // Refresh inheritedSynonymsRaw
+                            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                            const synRes = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            if (synRes.ok) {
+                                const synData = await synRes.json();
+                                manager.config.inheritedSynonymsRaw = synData.synonyms || {};
+                            }
+                            await loadSttProfile();
+                        } else {
+                            alert('Failed to update synonym: ' + (result.error || 'Unknown error'));
+                            updateSynonymBtn.disabled = false;
+                            updateSynonymBtn.textContent = 'Update';
+                        }
+                    } catch (err) {
+                        console.error('[STT MODAL] Update synonym error:', err);
+                        alert('Error: ' + err.message);
+                        updateSynonymBtn.disabled = false;
+                        updateSynonymBtn.textContent = 'Update';
+                    }
+                });
+            }
         };
         
         // Load STT profile when modal opens
