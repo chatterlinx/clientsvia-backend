@@ -2427,30 +2427,43 @@ class FrontDeskBehaviorManager {
                 const profile = sttResult.data || sttResult;
                 
                 // Extract data with safe array handling
-                sttData.fillers = profile.fillers?.words || profile.fillerWords || [];
-                if (!Array.isArray(sttData.fillers)) sttData.fillers = [];
+                // STT Profile schema: fillers is array of {phrase, enabled, scope...}
+                let rawFillers = profile.fillers || [];
+                if (!Array.isArray(rawFillers)) rawFillers = [];
+                sttData.fillers = rawFillers
+                    .filter(f => f.enabled !== false)
+                    .map(f => f.phrase || f.word || f)
+                    .filter(f => typeof f === 'string' && f.length > 0);
                 
-                // Corrections can be in various formats - normalize to array
-                let rawCorrections = profile.corrections?.entries || profile.corrections || [];
+                // Corrections schema: {heard, normalized, enabled, context...}
+                let rawCorrections = profile.corrections || [];
                 if (!Array.isArray(rawCorrections)) {
-                    // If it's an object/map, convert to array
                     if (typeof rawCorrections === 'object' && rawCorrections !== null) {
-                        rawCorrections = Object.entries(rawCorrections).map(([from, to]) => ({ from, to }));
+                        rawCorrections = Object.entries(rawCorrections).map(([from, to]) => ({ heard: from, normalized: to }));
                     } else {
                         rawCorrections = [];
                     }
                 }
-                sttData.corrections = rawCorrections.map(c => ({
-                    from: c.from || c.mishear || c.input || '',
-                    to: c.to || c.correct || c.output || ''
-                })).filter(c => c.from && c.to);
+                sttData.corrections = rawCorrections
+                    .filter(c => c.enabled !== false)
+                    .map(c => ({
+                        from: c.heard || c.from || c.mishear || c.input || '',
+                        to: c.normalized || c.to || c.correct || c.output || ''
+                    })).filter(c => c.from && c.to);
                 
-                // Extract synonyms from synonym map
+                // Vocabulary/synonyms: check vocabulary.boostedKeywords or synonymMap
                 const synonymMap = profile.vocabulary?.synonymMap || profile.synonymMap || {};
                 sttData.synonyms = Object.entries(synonymMap || {}).map(([word, syns]) => ({
                     word,
                     synonyms: Array.isArray(syns) ? syns : (syns ? [syns] : [])
                 }));
+                
+                console.log('[STT MODAL] Loaded data:', {
+                    fillers: sttData.fillers.length,
+                    corrections: sttData.corrections.length,
+                    synonyms: sttData.synonyms.length,
+                    rawProfile: profile
+                });
                 
                 renderSttData();
                 
