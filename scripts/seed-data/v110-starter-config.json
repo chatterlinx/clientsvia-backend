@@ -14,7 +14,7 @@
         "id": "lastName",
         "type": "name_last",
         "label": "Last Name",
-        "required": false,
+        "required": true,
         "discoveryFillAllowed": true,
         "bookingConfirmRequired": true
       },
@@ -44,6 +44,36 @@
       }
     ]
   },
+  "discoveryFlow": {
+    "version": "v1",
+    "enabled": true,
+    "steps": [
+      {
+        "stepId": "d1",
+        "slotId": "name",
+        "order": 1,
+        "ask": "I have your first name as {value}. Is that right?",
+        "reprompt": "Did I get your first name right?",
+        "confirmMode": "smart_if_captured"
+      },
+      {
+        "stepId": "d2",
+        "slotId": "phone",
+        "order": 2,
+        "ask": "Is {value} the best number for text updates?",
+        "reprompt": "What's a good number for updates?",
+        "confirmMode": "confirm_if_from_caller_id"
+      },
+      {
+        "stepId": "d3",
+        "slotId": "address",
+        "order": 3,
+        "ask": "I have your address as {value}. Is that the service location?",
+        "reprompt": "What's the service address?",
+        "confirmMode": "smart_if_captured"
+      }
+    ]
+  },
   "bookingFlow": {
     "version": "v1",
     "enabled": true,
@@ -56,7 +86,8 @@
         "ask": "What's your first name?",
         "confirmPrompt": "Ok — I assume {value} is your first name, is that correct?",
         "reprompt": "What's your first name?",
-        "lastNameQuestion": "And what's your last name?"
+        "lastNameQuestion": "And what's your last name?",
+        "firstNameQuestion": "What's your first name?"
       },
       {
         "stepId": "b2",
@@ -92,10 +123,21 @@
       }
     ]
   },
-  "discoveryFlow": {
-    "version": "v1",
-    "enabled": true,
-    "steps": []
-  },
-  "policies": {}
+  "policies": {
+    "nameParsing": {
+      "useFirstNameList": true,
+      "confirmIfFirstNameDetected": true,
+      "acceptLastNameOnly": true
+    },
+    "booking": {
+      "whenBookingStarts": "confirm_discovery_values_then_ask_missing",
+      "neverRestartIfAlreadyCaptured": true
+    },
+    "address": {
+      "defaultState": "FL",
+      "requireCityIfMissing": true,
+      "requireUnitIfMultiUnit": true,
+      "geoVerifyEnabled": true
+    }
+  }
 }

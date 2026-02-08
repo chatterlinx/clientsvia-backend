@@ -2583,6 +2583,37 @@ const companySchema = new mongoose.Schema({
             slotGroups: { type: [mongoose.Schema.Types.Mixed], default: [] },
             
             // ═══════════════════════════════════════════════════════════════
+            // V110: SLOT REGISTRY + DISCOVERY FLOW + BOOKING FLOW (CANONICAL)
+            // ═══════════════════════════════════════════════════════════════
+            // These are the NEW canonical structures that replace legacy bookingSlots.
+            // Runtime reads from these first, falls back to bookingSlots only if empty.
+            // ═══════════════════════════════════════════════════════════════
+            
+            // Slot Registry: Defines what slots exist (schema/contract)
+            slotRegistry: {
+                type: mongoose.Schema.Types.Mixed,
+                default: { version: 'v1', slots: [] }
+            },
+            
+            // Discovery Flow: Phase 1 - passive capture during conversation
+            discoveryFlow: {
+                type: mongoose.Schema.Types.Mixed,
+                default: { version: 'v1', enabled: true, steps: [] }
+            },
+            
+            // Booking Flow: Phase 2 - confirmation after consent
+            bookingFlow: {
+                type: mongoose.Schema.Types.Mixed,
+                default: { version: 'v1', enabled: true, confirmCapturedFirst: true, steps: [] }
+            },
+            
+            // Flow Policies: Name parsing, booking behavior, address handling
+            policies: {
+                type: mongoose.Schema.Types.Mixed,
+                default: {}
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // 🆕 COMMON FIRST NAMES - UI-Configurable Name Recognition
             // ═══════════════════════════════════════════════════════════════
             // Used to detect if a single name token is a first name or last name
