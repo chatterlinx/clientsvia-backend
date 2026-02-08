@@ -1740,9 +1740,60 @@ class FrontDeskBehaviorManager {
                             V110: Phase 1 captures passively, Phase 2 confirms after booking consent
                         </p>
                     </div>
-                    <span style="background:#3fb95020; color:#3fb950; padding:6px 12px; border-radius:16px; font-size:0.75rem; font-weight:600;">
-                        V110 CANONICAL
-                    </span>
+                    <div style="display:flex; align-items:center; gap:12px;">
+                        <button id="fdb-stt-modal-btn" style="background:#6e40c9; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem; display:flex; align-items:center; gap:6px;">
+                            🔇 STT Intelligence
+                        </button>
+                        <span style="background:#3fb95020; color:#3fb950; padding:6px 12px; border-radius:16px; font-size:0.75rem; font-weight:600;">
+                            V110 CANONICAL
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- STT Intelligence Modal (Hidden by default) -->
+                <div id="fdb-stt-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+                    <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; width:90%; max-width:900px; max-height:85vh; overflow:hidden; display:flex; flex-direction:column;">
+                        <!-- Modal Header -->
+                        <div style="padding:20px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <h3 style="margin:0; color:#c9d1d9;">🔇 STT Intelligence - Filler Words & Corrections</h3>
+                                <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.8rem;">
+                                    Words removed from caller speech before processing • From template: <span id="fdb-stt-template-name" style="color:#58a6ff;">Loading...</span>
+                                </p>
+                            </div>
+                            <button id="fdb-stt-modal-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:8px;">&times;</button>
+                        </div>
+                        
+                        <!-- Search Bar -->
+                        <div style="padding:16px 20px; border-bottom:1px solid #30363d;">
+                            <input type="text" id="fdb-stt-search" placeholder="🔍 Search filler words, corrections, or synonyms..." 
+                                   style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:12px 16px; border-radius:8px; font-size:1rem;">
+                        </div>
+                        
+                        <!-- Modal Body (Scrollable) -->
+                        <div id="fdb-stt-modal-body" style="padding:20px; overflow-y:auto; flex:1;">
+                            <div style="text-align:center; padding:40px; color:#8b949e;">
+                                <span style="font-size:2rem;">⏳</span>
+                                <p>Loading STT profile...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Footer -->
+                        <div style="padding:16px 20px; border-top:1px solid #30363d; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="color:#8b949e; font-size:0.875rem;">
+                                <span id="fdb-stt-stats">— fillers | — corrections | — synonyms</span>
+                            </div>
+                            <div style="display:flex; gap:12px;">
+                                <a id="fdb-stt-edit-link" href="/admin-global-instant-responses.html" target="_blank" 
+                                   style="background:#21262d; color:#58a6ff; border:1px solid #30363d; padding:8px 16px; border-radius:6px; text-decoration:none; font-size:0.875rem;">
+                                    ✏️ Edit in Global AI Brain
+                                </a>
+                                <button id="fdb-stt-modal-done" style="background:#238636; color:#fff; border:none; padding:8px 24px; border-radius:6px; cursor:pointer;">
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- PHASE 1: Discovery Flow Section (happens FIRST during call) -->
@@ -2168,6 +2219,221 @@ class FrontDeskBehaviorManager {
                     }
                 });
                 input.click();
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // STT INTELLIGENCE MODAL - View filler words, corrections, synonyms inline
+        // ═══════════════════════════════════════════════════════════════════════════
+        const sttModalBtn = contentElement.querySelector('#fdb-stt-modal-btn');
+        const sttModal = contentElement.querySelector('#fdb-stt-modal');
+        const sttModalClose = contentElement.querySelector('#fdb-stt-modal-close');
+        const sttModalDone = contentElement.querySelector('#fdb-stt-modal-done');
+        const sttSearch = contentElement.querySelector('#fdb-stt-search');
+        const sttModalBody = contentElement.querySelector('#fdb-stt-modal-body');
+        const sttStats = contentElement.querySelector('#fdb-stt-stats');
+        const sttTemplateName = contentElement.querySelector('#fdb-stt-template-name');
+        
+        // Store the loaded STT data for filtering
+        let sttData = { fillers: [], corrections: [], synonyms: [] };
+        
+        // Render STT data with optional filter
+        const renderSttData = (filter = '') => {
+            const lowerFilter = filter.toLowerCase().trim();
+            
+            // Filter data
+            const filteredFillers = lowerFilter 
+                ? sttData.fillers.filter(f => f.toLowerCase().includes(lowerFilter))
+                : sttData.fillers;
+            const filteredCorrections = lowerFilter
+                ? sttData.corrections.filter(c => c.from.toLowerCase().includes(lowerFilter) || c.to.toLowerCase().includes(lowerFilter))
+                : sttData.corrections;
+            const filteredSynonyms = lowerFilter
+                ? sttData.synonyms.filter(s => s.word.toLowerCase().includes(lowerFilter) || s.synonyms.some(syn => syn.toLowerCase().includes(lowerFilter)))
+                : sttData.synonyms;
+            
+            // Update stats
+            if (lowerFilter) {
+                sttStats.textContent = \`Showing: \${filteredFillers.length} fillers | \${filteredCorrections.length} corrections | \${filteredSynonyms.length} synonyms\`;
+            } else {
+                sttStats.textContent = \`\${sttData.fillers.length} fillers | \${sttData.corrections.length} corrections | \${sttData.synonyms.length} synonyms\`;
+            }
+            
+            sttModalBody.innerHTML = \`
+                <!-- Filler Words Section -->
+                <div style="margin-bottom:24px;">
+                    <h4 style="color:#f0883e; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
+                        🔇 Filler Words <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(\${filteredFillers.length})</span>
+                    </h4>
+                    <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
+                        These words are removed from caller speech before processing (e.g., "um I need help" → "I need help")
+                    </p>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; max-height:200px; overflow-y:auto; padding:12px; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
+                        \${filteredFillers.length > 0 
+                            ? filteredFillers.map(f => \`<span style="background:#30363d; color:#c9d1d9; padding:4px 10px; border-radius:16px; font-size:0.8rem;">\${this.escapeHtml(f)}</span>\`).join('')
+                            : '<span style="color:#8b949e; font-style:italic;">No filler words found</span>'
+                        }
+                    </div>
+                </div>
+                
+                <!-- Corrections Section -->
+                <div style="margin-bottom:24px;">
+                    <h4 style="color:#a371f7; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
+                        ✏️ Corrections <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(\${filteredCorrections.length})</span>
+                    </h4>
+                    <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
+                        Mishear fixes applied to STT output (e.g., "thermal stat" → "thermostat")
+                    </p>
+                    <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
+                        \${filteredCorrections.length > 0 
+                            ? \`<table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#21262d;">
+                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">From (mishear)</th>
+                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">→</th>
+                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">To (correct)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    \${filteredCorrections.map(c => \`
+                                        <tr style="border-bottom:1px solid #21262d;">
+                                            <td style="padding:8px 12px; color:#f85149;">\${this.escapeHtml(c.from)}</td>
+                                            <td style="padding:8px 12px; color:#8b949e;">→</td>
+                                            <td style="padding:8px 12px; color:#3fb950;">\${this.escapeHtml(c.to)}</td>
+                                        </tr>
+                                    \`).join('')}
+                                </tbody>
+                            </table>\`
+                            : '<div style="padding:20px; text-align:center; color:#8b949e; font-style:italic;">No corrections configured</div>'
+                        }
+                    </div>
+                </div>
+                
+                <!-- Synonyms Section -->
+                <div>
+                    <h4 style="color:#58a6ff; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
+                        🔄 Synonyms <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(\${filteredSynonyms.length})</span>
+                    </h4>
+                    <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
+                        Word mappings for scenario matching (e.g., "AC" matches "air conditioner", "hvac")
+                    </p>
+                    <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
+                        \${filteredSynonyms.length > 0 
+                            ? \`<table style="width:100%; border-collapse:collapse;">
+                                <thead>
+                                    <tr style="background:#21262d;">
+                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Word</th>
+                                        <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Synonyms</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    \${filteredSynonyms.map(s => \`
+                                        <tr style="border-bottom:1px solid #21262d;">
+                                            <td style="padding:8px 12px; color:#58a6ff; font-weight:500;">\${this.escapeHtml(s.word)}</td>
+                                            <td style="padding:8px 12px; color:#c9d1d9;">\${s.synonyms.map(syn => this.escapeHtml(syn)).join(', ')}</td>
+                                        </tr>
+                                    \`).join('')}
+                                </tbody>
+                            </table>\`
+                            : '<div style="padding:20px; text-align:center; color:#8b949e; font-style:italic;">No synonyms configured</div>'
+                        }
+                    </div>
+                </div>
+            \`;
+        };
+        
+        // Load STT profile when modal opens
+        const loadSttProfile = async () => {
+            sttModalBody.innerHTML = '<div style="text-align:center; padding:40px; color:#8b949e;"><span style="font-size:2rem;">⏳</span><p>Loading STT profile...</p></div>';
+            
+            try {
+                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                
+                // First get the company's template
+                const configResponse = await fetch(\`/api/company/\${this.companyId}/configuration/templates\`, {
+                    headers: { 'Authorization': \`Bearer \${token}\` }
+                });
+                
+                if (!configResponse.ok) throw new Error('Failed to load templates');
+                const templates = await configResponse.json();
+                
+                if (!templates || templates.length === 0) {
+                    sttModalBody.innerHTML = '<div style="text-align:center; padding:40px; color:#f85149;"><span style="font-size:2rem;">⚠️</span><p>No template assigned to this company</p></div>';
+                    return;
+                }
+                
+                const templateId = templates[0].templateId || templates[0]._id;
+                const templateName = templates[0].name || templates[0].templateName || 'Unknown';
+                sttTemplateName.textContent = templateName;
+                
+                // Load STT profile for this template
+                const sttResponse = await fetch(\`/api/admin/stt-profile/\${templateId}\`, {
+                    headers: { 'Authorization': \`Bearer \${token}\` }
+                });
+                
+                if (!sttResponse.ok) throw new Error('Failed to load STT profile');
+                const sttResult = await sttResponse.json();
+                const profile = sttResult.data || sttResult;
+                
+                // Extract data
+                sttData.fillers = profile.fillers?.words || profile.fillerWords || [];
+                sttData.corrections = (profile.corrections?.entries || profile.corrections || []).map(c => ({
+                    from: c.from || c.mishear || c.input,
+                    to: c.to || c.correct || c.output
+                })).filter(c => c.from && c.to);
+                
+                // Extract synonyms from synonym map
+                const synonymMap = profile.vocabulary?.synonymMap || profile.synonymMap || {};
+                sttData.synonyms = Object.entries(synonymMap).map(([word, syns]) => ({
+                    word,
+                    synonyms: Array.isArray(syns) ? syns : [syns]
+                }));
+                
+                renderSttData();
+                
+            } catch (err) {
+                console.error('[STT MODAL] Load failed:', err);
+                sttModalBody.innerHTML = \`<div style="text-align:center; padding:40px; color:#f85149;"><span style="font-size:2rem;">❌</span><p>Failed to load: \${err.message}</p></div>\`;
+            }
+        };
+        
+        // Event handlers
+        if (sttModalBtn && sttModal) {
+            sttModalBtn.addEventListener('click', () => {
+                sttModal.style.display = 'flex';
+                loadSttProfile();
+            });
+        }
+        
+        if (sttModalClose) {
+            sttModalClose.addEventListener('click', () => {
+                sttModal.style.display = 'none';
+            });
+        }
+        
+        if (sttModalDone) {
+            sttModalDone.addEventListener('click', () => {
+                sttModal.style.display = 'none';
+            });
+        }
+        
+        // Search functionality
+        if (sttSearch) {
+            let searchTimeout;
+            sttSearch.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    renderSttData(e.target.value);
+                }, 200);
+            });
+        }
+        
+        // Close on backdrop click
+        if (sttModal) {
+            sttModal.addEventListener('click', (e) => {
+                if (e.target === sttModal) {
+                    sttModal.style.display = 'none';
+                }
             });
         }
     }
