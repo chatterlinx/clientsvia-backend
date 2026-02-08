@@ -2582,18 +2582,27 @@ class FrontDeskBehaviorManager {
                     const phrase = newFillerInput.value.trim();
                     if (!phrase) return;
                     
+                    console.log('[STT MODAL] Save filler clicked:', { phrase });
+                    
                     saveFillerBtn.disabled = true;
                     saveFillerBtn.textContent = 'Saving...';
                     
                     try {
                         const result = await sttApi.addFiller(phrase);
+                        console.log('[STT MODAL] addFiller result:', result);
+                        
                         if (result.success) {
                             await loadSttProfile(); // Reload data
                         } else {
                             alert('Failed to add filler: ' + (result.error || 'Unknown error'));
+                            saveFillerBtn.disabled = false;
+                            saveFillerBtn.textContent = 'Save';
                         }
                     } catch (err) {
+                        console.error('[STT MODAL] Save filler error:', err);
                         alert('Error: ' + err.message);
+                        saveFillerBtn.disabled = false;
+                        saveFillerBtn.textContent = 'Save';
                     }
                 });
             }
@@ -2675,6 +2684,9 @@ class FrontDeskBehaviorManager {
                 saveCorrectionBtn.addEventListener('click', async () => {
                     const heard = newCorrectionHeard.value.trim();
                     const normalized = newCorrectionNormalized.value.trim();
+                    
+                    console.log('[STT MODAL] Save correction clicked:', { heard, normalized });
+                    
                     if (!heard || !normalized) {
                         alert('Both fields are required');
                         return;
@@ -2685,13 +2697,20 @@ class FrontDeskBehaviorManager {
                     
                     try {
                         const result = await sttApi.addCorrection(heard, normalized);
+                        console.log('[STT MODAL] addCorrection result:', result);
+                        
                         if (result.success) {
                             await loadSttProfile();
                         } else {
                             alert('Failed to add correction: ' + (result.error || 'Unknown error'));
+                            saveCorrectionBtn.disabled = false;
+                            saveCorrectionBtn.textContent = 'Save';
                         }
                     } catch (err) {
+                        console.error('[STT MODAL] Save correction error:', err);
                         alert('Error: ' + err.message);
+                        saveCorrectionBtn.disabled = false;
+                        saveCorrectionBtn.textContent = 'Save';
                     }
                 });
             }
@@ -2744,9 +2763,15 @@ class FrontDeskBehaviorManager {
             }
             
             if (saveSynonymBtn && newSynonymTerm && newSynonymAliases) {
+                // Store reference to manager for config access
+                const manager = this;
+                
                 saveSynonymBtn.addEventListener('click', async () => {
                     const term = newSynonymTerm.value.trim();
                     const aliasesRaw = newSynonymAliases.value.trim();
+                    
+                    console.log('[STT MODAL] Save synonym clicked:', { term, aliasesRaw });
+                    
                     if (!term || !aliasesRaw) {
                         alert('Both fields are required');
                         return;
@@ -2762,7 +2787,10 @@ class FrontDeskBehaviorManager {
                     saveSynonymBtn.textContent = 'Saving...';
                     
                     try {
+                        console.log('[STT MODAL] Calling addSynonym API:', { term, aliases, templateId: sttTemplateId });
                         const result = await sttApi.addSynonym(term, aliases);
+                        console.log('[STT MODAL] addSynonym result:', result);
+                        
                         if (result.success) {
                             // Also refresh inheritedSynonymsRaw
                             const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
@@ -2771,14 +2799,20 @@ class FrontDeskBehaviorManager {
                             });
                             if (synRes.ok) {
                                 const synData = await synRes.json();
-                                this.config.inheritedSynonymsRaw = synData.synonyms || {};
+                                manager.config.inheritedSynonymsRaw = synData.synonyms || {};
+                                console.log('[STT MODAL] Refreshed synonyms:', synData);
                             }
                             await loadSttProfile();
                         } else {
                             alert('Failed to add synonym: ' + (result.error || 'Unknown error'));
+                            saveSynonymBtn.disabled = false;
+                            saveSynonymBtn.textContent = 'Save';
                         }
                     } catch (err) {
+                        console.error('[STT MODAL] Save synonym error:', err);
                         alert('Error: ' + err.message);
+                        saveSynonymBtn.disabled = false;
+                        saveSynonymBtn.textContent = 'Save';
                     }
                 });
             }
