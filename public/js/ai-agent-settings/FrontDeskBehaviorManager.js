@@ -2305,23 +2305,23 @@ class FrontDeskBehaviorManager {
             
             // Update stats
             if (lowerFilter) {
-                sttStats.textContent = \`Showing: \${filteredFillers.length} fillers | \${filteredCorrections.length} corrections | \${filteredSynonyms.length} synonyms\`;
+                sttStats.textContent = `Showing: ${filteredFillers.length} fillers | ${filteredCorrections.length} corrections | ${filteredSynonyms.length} synonyms`;
             } else {
-                sttStats.textContent = \`\${sttData.fillers.length} fillers | \${sttData.corrections.length} corrections | \${sttData.synonyms.length} synonyms\`;
+                sttStats.textContent = `${sttData.fillers.length} fillers | ${sttData.corrections.length} corrections | ${sttData.synonyms.length} synonyms`;
             }
             
-            sttModalBody.innerHTML = \`
+            sttModalBody.innerHTML = `
                 <!-- Filler Words Section -->
                 <div style="margin-bottom:24px;">
                     <h4 style="color:#f0883e; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
-                        🔇 Filler Words <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(\${filteredFillers.length})</span>
+                        🔇 Filler Words <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredFillers.length})</span>
                     </h4>
                     <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
                         These words are removed from caller speech before processing (e.g., "um I need help" → "I need help")
                     </p>
                     <div style="display:flex; flex-wrap:wrap; gap:6px; max-height:200px; overflow-y:auto; padding:12px; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
-                        \${filteredFillers.length > 0 
-                            ? filteredFillers.map(f => \`<span style="background:#30363d; color:#c9d1d9; padding:4px 10px; border-radius:16px; font-size:0.8rem;">\${this.escapeHtml(f)}</span>\`).join('')
+                        ${filteredFillers.length > 0 
+                            ? filteredFillers.map(f => `<span style="background:#30363d; color:#c9d1d9; padding:4px 10px; border-radius:16px; font-size:0.8rem;">${this.escapeHtml(f)}</span>`).join('')
                             : '<span style="color:#8b949e; font-style:italic;">No filler words found</span>'
                         }
                     </div>
@@ -2330,14 +2330,14 @@ class FrontDeskBehaviorManager {
                 <!-- Corrections Section -->
                 <div style="margin-bottom:24px;">
                     <h4 style="color:#a371f7; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
-                        ✏️ Corrections <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(\${filteredCorrections.length})</span>
+                        ✏️ Corrections <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredCorrections.length})</span>
                     </h4>
                     <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
                         Mishear fixes applied to STT output (e.g., "thermal stat" → "thermostat")
                     </p>
                     <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
-                        \${filteredCorrections.length > 0 
-                            ? \`<table style="width:100%; border-collapse:collapse;">
+                        ${filteredCorrections.length > 0 
+                            ? `<table style="width:100%; border-collapse:collapse;">
                                 <thead>
                                     <tr style="background:#21262d;">
                                         <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">From (mishear)</th>
@@ -2346,15 +2346,15 @@ class FrontDeskBehaviorManager {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    \${filteredCorrections.map(c => \`
+                                    ${filteredCorrections.map(c => `
                                         <tr style="border-bottom:1px solid #21262d;">
-                                            <td style="padding:8px 12px; color:#f85149;">\${this.escapeHtml(c.from)}</td>
+                                            <td style="padding:8px 12px; color:#f85149;">${this.escapeHtml(c.from)}</td>
                                             <td style="padding:8px 12px; color:#8b949e;">→</td>
-                                            <td style="padding:8px 12px; color:#3fb950;">\${this.escapeHtml(c.to)}</td>
+                                            <td style="padding:8px 12px; color:#3fb950;">${this.escapeHtml(c.to)}</td>
                                         </tr>
-                                    \`).join('')}
+                                    `).join('')}
                                 </tbody>
-                            </table>\`
+                            </table>`
                             : '<div style="padding:20px; text-align:center; color:#8b949e; font-style:italic;">No corrections configured</div>'
                         }
                     </div>
@@ -2363,14 +2363,14 @@ class FrontDeskBehaviorManager {
                 <!-- Synonyms Section -->
                 <div>
                     <h4 style="color:#58a6ff; margin:0 0 12px 0; display:flex; align-items:center; gap:8px;">
-                        🔄 Synonyms <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(\${filteredSynonyms.length})</span>
+                        🔄 Synonyms <span style="color:#8b949e; font-size:0.8rem; font-weight:normal;">(${filteredSynonyms.length})</span>
                     </h4>
                     <p style="color:#8b949e; font-size:0.8rem; margin:0 0 12px 0;">
                         Word mappings for scenario matching (e.g., "AC" matches "air conditioner", "hvac")
                     </p>
                     <div style="max-height:200px; overflow-y:auto; background:#0d1117; border-radius:8px; border:1px solid #30363d;">
-                        \${filteredSynonyms.length > 0 
-                            ? \`<table style="width:100%; border-collapse:collapse;">
+                        ${filteredSynonyms.length > 0 
+                            ? `<table style="width:100%; border-collapse:collapse;">
                                 <thead>
                                     <tr style="background:#21262d;">
                                         <th style="padding:8px 12px; text-align:left; color:#8b949e; font-weight:500; border-bottom:1px solid #30363d;">Word</th>
@@ -2378,19 +2378,19 @@ class FrontDeskBehaviorManager {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    \${filteredSynonyms.map(s => \`
+                                    ${filteredSynonyms.map(s => `
                                         <tr style="border-bottom:1px solid #21262d;">
-                                            <td style="padding:8px 12px; color:#58a6ff; font-weight:500;">\${this.escapeHtml(s.word)}</td>
-                                            <td style="padding:8px 12px; color:#c9d1d9;">\${s.synonyms.map(syn => this.escapeHtml(syn)).join(', ')}</td>
+                                            <td style="padding:8px 12px; color:#58a6ff; font-weight:500;">${this.escapeHtml(s.word)}</td>
+                                            <td style="padding:8px 12px; color:#c9d1d9;">${s.synonyms.map(syn => this.escapeHtml(syn)).join(', ')}</td>
                                         </tr>
-                                    \`).join('')}
+                                    `).join('')}
                                 </tbody>
-                            </table>\`
+                            </table>`
                             : '<div style="padding:20px; text-align:center; color:#8b949e; font-style:italic;">No synonyms configured</div>'
                         }
                     </div>
                 </div>
-            \`;
+            `;
         };
         
         // Load STT profile when modal opens
@@ -2401,8 +2401,8 @@ class FrontDeskBehaviorManager {
                 const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
                 
                 // First get the company's template
-                const configResponse = await fetch(\`/api/company/\${this.companyId}/configuration/templates\`, {
-                    headers: { 'Authorization': \`Bearer \${token}\` }
+                const configResponse = await fetch(`/api/company/${this.companyId}/configuration/templates`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
                 if (!configResponse.ok) throw new Error('Failed to load templates');
@@ -2418,8 +2418,8 @@ class FrontDeskBehaviorManager {
                 sttTemplateName.textContent = templateName;
                 
                 // Load STT profile for this template
-                const sttResponse = await fetch(\`/api/admin/stt-profile/\${templateId}\`, {
-                    headers: { 'Authorization': \`Bearer \${token}\` }
+                const sttResponse = await fetch(`/api/admin/stt-profile/${templateId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
                 if (!sttResponse.ok) throw new Error('Failed to load STT profile');
@@ -2444,7 +2444,7 @@ class FrontDeskBehaviorManager {
                 
             } catch (err) {
                 console.error('[STT MODAL] Load failed:', err);
-                sttModalBody.innerHTML = \`<div style="text-align:center; padding:40px; color:#f85149;"><span style="font-size:2rem;">❌</span><p>Failed to load: \${err.message}</p></div>\`;
+                sttModalBody.innerHTML = `<div style="text-align:center; padding:40px; color:#f85149;"><span style="font-size:2rem;">❌</span><p>Failed to load: ${err.message}</p></div>`;
             }
         };
         
@@ -2510,20 +2510,20 @@ class FrontDeskBehaviorManager {
 ## Overview
 When a caller dials in, the call flows through these stages:
 
-\`\`\`
+```
 Twilio → /v2-agent-respond → STT Preprocessing → FrontDeskRuntime → Response
-\`\`\`
+```
 
 ---
 
 ## 🔄 STEP 1: Twilio Receives Call
 - Caller dials company number
-- Twilio sends webhook to \`/api/twilio/voice/:companyID\`
-- Greeting plays, then \`<Gather>\` starts listening
+- Twilio sends webhook to `/api/twilio/voice/:companyID`
+- Greeting plays, then `<Gather>` starts listening
 
 ## 🎤 STEP 2: Caller Speaks
 - Twilio captures speech (SpeechResult)
-- POSTs to \`/api/twilio/v2-agent-respond/:companyID\`
+- POSTs to `/api/twilio/v2-agent-respond/:companyID`
 - Includes: SpeechResult, Confidence, CallSid
 
 ## 🔇 STEP 3: STT Preprocessing
@@ -2533,19 +2533,19 @@ Twilio → /v2-agent-respond → STT Preprocessing → FrontDeskRuntime → Resp
 - Applies synonyms for matching
 
 ## 📦 STEP 4: Call State (Redis)
-Key: \`callState:{CallSid}\`
+Key: `callState:{CallSid}`
 - turnCount: which turn we're on
 - bookingModeLocked: are we in booking mode?
 - slots: captured data (name, phone, address)
 - bookingConsentPending: did we offer booking?
 
 ## 🚦 STEP 5: Lane Selection (FrontDeskRuntime)
-**File:** \`services/engine/FrontDeskRuntime.js\`
+**File:** `services/engine/FrontDeskRuntime.js`
 
 Decision order:
-1. If \`bookingModeLocked === true\` → **BOOKING lane**
+1. If `bookingModeLocked === true` → **BOOKING lane**
 2. If escalation trigger ("manager", "supervisor") → **ESCALATE lane**
-3. If \`bookingConsentPending\` + caller says "yes" → **BOOKING lane**
+3. If `bookingConsentPending` + caller says "yes" → **BOOKING lane**
 4. If direct booking intent detected → **BOOKING lane**
 5. Default → **DISCOVERY lane**
 
@@ -2555,7 +2555,7 @@ Decision order:
 
 ### Slot Registry
 Defines WHAT slots exist (the schema):
-- \`name.first\`, \`name.last\`, \`phone\`, \`address\`
+- `name.first`, `name.last`, `phone`, `address`
 - Each slot has: type, label, required, discoveryFillAllowed
 
 ### Discovery Flow (Phase 1)
@@ -2575,14 +2575,14 @@ Runs AFTER booking consent:
 ## ⚠️ GOTCHAS & NOTES
 
 ### Booking Mode Lock
-- Once \`bookingModeLocked = true\`, ONLY BookingFlowRunner responds
+- Once `bookingModeLocked = true`, ONLY BookingFlowRunner responds
 - No LLM, no scenarios, no bypasses
 - This is by design (deterministic booking)
 
 ### Config Priority
 - V110 slotRegistry/flows are CANONICAL
 - Legacy bookingSlots only used as fallback
-- Check BlackBox logs for \`configSource: V110_SLOT_REGISTRY\`
+- Check BlackBox logs for `configSource: V110_SLOT_REGISTRY`
 
 ### Common Issues
 1. **Slots not persisting?** Check v2Company schema has the fields
@@ -2601,9 +2601,9 @@ Runs AFTER booking consent:
         const renderMarkdown = (md) => {
             return md
                 // Code blocks
-                .replace(/\`\`\`([\\s\\S]*?)\`\`\`/g, '<pre style="background:#161b22; padding:12px; border-radius:6px; overflow-x:auto; border:1px solid #30363d; margin:12px 0;"><code style="color:#79c0ff;">$1</code></pre>')
+                .replace(/```([\s\S]*?)```/g, '<pre style="background:#161b22; padding:12px; border-radius:6px; overflow-x:auto; border:1px solid #30363d; margin:12px 0;"><code style="color:#79c0ff;">$1</code></pre>')
                 // Inline code
-                .replace(/\`([^\`]+)\`/g, '<code style="background:#30363d; padding:2px 6px; border-radius:4px; color:#79c0ff;">$1</code>')
+                .replace(/`([^`]+)`/g, '<code style="background:#30363d; padding:2px 6px; border-radius:4px; color:#79c0ff;">$1</code>')
                 // Headers
                 .replace(/^### (.+)$/gm, '<h4 style="color:#8b949e; margin:20px 0 8px 0; font-size:0.95rem;">$1</h4>')
                 .replace(/^## (.+)$/gm, '<h3 style="color:#58a6ff; margin:24px 0 12px 0; font-size:1.1rem; border-bottom:1px solid #21262d; padding-bottom:8px;">$1</h3>')
@@ -2618,9 +2618,9 @@ Runs AFTER booking consent:
                 .replace(/^- (.+)$/gm, '<li style="margin:4px 0; margin-left:20px;">$1</li>')
                 .replace(/^(\d+)\. (.+)$/gm, '<li style="margin:4px 0; margin-left:20px;">$2</li>')
                 // Paragraphs (double newline)
-                .replace(/\\n\\n/g, '</p><p style="margin:12px 0;">')
+                .replace(/\n\n/g, '</p><p style="margin:12px 0;">')
                 // Single newlines in content
-                .replace(/\\n/g, '<br>');
+                .replace(/\n/g, '<br>');
         };
         
         // Load notes from company config or localStorage
