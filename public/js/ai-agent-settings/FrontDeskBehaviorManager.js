@@ -2598,35 +2598,53 @@ class FrontDeskBehaviorManager {
                 });
             }
             
+            // Helper to show loading state
+            const showSttLoading = () => {
+                sttModalBody.innerHTML = '<div style="text-align:center; padding:40px; color:#8b949e;"><span style="font-size:2rem;">⏳</span><p>Updating...</p></div>';
+            };
+            
             // Toggle filler buttons
             sttModalBody.querySelectorAll('.stt-toggle-filler').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
+                btn.addEventListener('click', (e) => {
                     const phrase = e.target.dataset.phrase;
-                    try {
-                        const result = await sttApi.toggleFiller(phrase);
-                        if (result.success) {
-                            await loadSttProfile();
+                    e.target.textContent = '⏳';
+                    // Defer async work to avoid blocking click handler
+                    setTimeout(async () => {
+                        try {
+                            const result = await sttApi.toggleFiller(phrase);
+                            if (result.success) {
+                                await loadSttProfile();
+                            }
+                        } catch (err) {
+                            console.error('Toggle filler error:', err);
+                            await loadSttProfile(); // Reload to reset state
                         }
-                    } catch (err) {
-                        console.error('Toggle filler error:', err);
-                    }
+                    }, 0);
                 });
             });
             
             // Delete filler buttons
             sttModalBody.querySelectorAll('.stt-delete-filler').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
+                btn.addEventListener('click', (e) => {
                     const phrase = e.target.dataset.phrase;
                     if (!confirm(`Delete filler "${phrase}"?`)) return;
                     
-                    try {
-                        const result = await sttApi.deleteFiller(phrase);
-                        if (result.success) {
+                    showSttLoading();
+                    // Defer async work
+                    setTimeout(async () => {
+                        try {
+                            const result = await sttApi.deleteFiller(phrase);
+                            if (result.success) {
+                                await loadSttProfile();
+                            } else {
+                                alert('Failed to delete: ' + (result.error || 'Unknown error'));
+                                await loadSttProfile();
+                            }
+                        } catch (err) {
+                            alert('Error: ' + err.message);
                             await loadSttProfile();
                         }
-                    } catch (err) {
-                        alert('Error: ' + err.message);
-                    }
+                    }, 0);
                 });
             });
             
@@ -2680,18 +2698,25 @@ class FrontDeskBehaviorManager {
             
             // Delete correction buttons
             sttModalBody.querySelectorAll('.stt-delete-correction').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
+                btn.addEventListener('click', (e) => {
                     const heard = e.target.dataset.heard;
                     if (!confirm(`Delete correction for "${heard}"?`)) return;
                     
-                    try {
-                        const result = await sttApi.deleteCorrection(heard);
-                        if (result.success) {
+                    showSttLoading();
+                    setTimeout(async () => {
+                        try {
+                            const result = await sttApi.deleteCorrection(heard);
+                            if (result.success) {
+                                await loadSttProfile();
+                            } else {
+                                alert('Failed to delete: ' + (result.error || 'Unknown error'));
+                                await loadSttProfile();
+                            }
+                        } catch (err) {
+                            alert('Error: ' + err.message);
                             await loadSttProfile();
                         }
-                    } catch (err) {
-                        alert('Error: ' + err.message);
-                    }
+                    }, 0);
                 });
             });
             
@@ -2760,27 +2785,34 @@ class FrontDeskBehaviorManager {
             
             // Delete synonym buttons
             sttModalBody.querySelectorAll('.stt-delete-synonym').forEach(btn => {
-                btn.addEventListener('click', async (e) => {
+                btn.addEventListener('click', (e) => {
                     const term = e.target.dataset.term;
                     if (!confirm(`Delete all synonyms for "${term}"?`)) return;
                     
-                    try {
-                        const result = await sttApi.deleteSynonym(term);
-                        if (result.success) {
-                            // Also refresh inheritedSynonymsRaw
-                            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-                            const synRes = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms`, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            if (synRes.ok) {
-                                const synData = await synRes.json();
-                                this.config.inheritedSynonymsRaw = synData.synonyms || {};
+                    showSttLoading();
+                    setTimeout(async () => {
+                        try {
+                            const result = await sttApi.deleteSynonym(term);
+                            if (result.success) {
+                                // Also refresh inheritedSynonymsRaw
+                                const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                                const synRes = await fetch(`/api/admin/global-instant-responses/${sttTemplateId}/synonyms`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                if (synRes.ok) {
+                                    const synData = await synRes.json();
+                                    this.config.inheritedSynonymsRaw = synData.synonyms || {};
+                                }
+                                await loadSttProfile();
+                            } else {
+                                alert('Failed to delete: ' + (result.error || 'Unknown error'));
+                                await loadSttProfile();
                             }
+                        } catch (err) {
+                            alert('Error: ' + err.message);
                             await loadSttProfile();
                         }
-                    } catch (err) {
-                        alert('Error: ' + err.message);
-                    }
+                    }, 0);
                 });
             });
         };
