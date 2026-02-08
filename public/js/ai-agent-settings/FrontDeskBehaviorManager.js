@@ -2505,97 +2505,97 @@ class FrontDeskBehaviorManager {
         let isEditMode = false;
         
         // Default architecture notes - this is the initial documentation
-        const DEFAULT_ARCHITECTURE_NOTES = `# 📞 Call Flow Architecture (V110)
-
-## Overview
-When a caller dials in, the call flows through these stages:
-
-```
-Twilio → /v2-agent-respond → STT Preprocessing → FrontDeskRuntime → Response
-```
-
----
-
-## 🔄 STEP 1: Twilio Receives Call
-- Caller dials company number
-- Twilio sends webhook to `/api/twilio/voice/:companyID`
-- Greeting plays, then `<Gather>` starts listening
-
-## 🎤 STEP 2: Caller Speaks
-- Twilio captures speech (SpeechResult)
-- POSTs to `/api/twilio/v2-agent-respond/:companyID`
-- Includes: SpeechResult, Confidence, CallSid
-
-## 🔇 STEP 3: STT Preprocessing
-**Location:** Template's STT Profile (Global AI Brain)
-- Removes filler words ("um", "uh", "like")
-- Applies corrections ("thermal stat" → "thermostat")
-- Applies synonyms for matching
-
-## 📦 STEP 4: Call State (Redis)
-Key: `callState:{CallSid}`
-- turnCount: which turn we're on
-- bookingModeLocked: are we in booking mode?
-- slots: captured data (name, phone, address)
-- bookingConsentPending: did we offer booking?
-
-## 🚦 STEP 5: Lane Selection (FrontDeskRuntime)
-**File:** `services/engine/FrontDeskRuntime.js`
-
-Decision order:
-1. If `bookingModeLocked === true` → **BOOKING lane**
-2. If escalation trigger ("manager", "supervisor") → **ESCALATE lane**
-3. If `bookingConsentPending` + caller says "yes" → **BOOKING lane**
-4. If direct booking intent detected → **BOOKING lane**
-5. Default → **DISCOVERY lane**
-
----
-
-## 🎯 V110 SLOTS & FLOWS
-
-### Slot Registry
-Defines WHAT slots exist (the schema):
-- `name.first`, `name.last`, `phone`, `address`
-- Each slot has: type, label, required, discoveryFillAllowed
-
-### Discovery Flow (Phase 1)
-Runs BEFORE booking consent:
-- Passively captures slots from caller speech
-- "Hi, this is Mark" → name.first = Mark
-- Values held until booking starts
-
-### Booking Flow (Phase 2)
-Runs AFTER booking consent:
-- Confirms captured slots first (if enabled)
-- Asks for missing required slots
-- Follows the order defined in bookingFlow.steps
-
----
-
-## ⚠️ GOTCHAS & NOTES
-
-### Booking Mode Lock
-- Once `bookingModeLocked = true`, ONLY BookingFlowRunner responds
-- No LLM, no scenarios, no bypasses
-- This is by design (deterministic booking)
-
-### Config Priority
-- V110 slotRegistry/flows are CANONICAL
-- Legacy bookingSlots only used as fallback
-- Check BlackBox logs for `configSource: V110_SLOT_REGISTRY`
-
-### Common Issues
-1. **Slots not persisting?** Check v2Company schema has the fields
-2. **GET not returning data?** Check routes/admin/frontDeskBehavior.js response object
-3. **STT not cleaning?** Check template is assigned to company
-
----
-
-## 📝 CUSTOM NOTES
-
-*Add your company-specific notes here...*
-
-`;
+        // NOTE: Using array.join for cleaner multiline string without template literal backtick issues
+        const DEFAULT_ARCHITECTURE_NOTES = [
+            '# 📞 Call Flow Architecture (V110)',
+            '',
+            '## Overview',
+            'When a caller dials in, the call flows through these stages:',
+            '',
+            'Twilio → /v2-agent-respond → STT Preprocessing → FrontDeskRuntime → Response',
+            '',
+            '---',
+            '',
+            '## 🔄 STEP 1: Twilio Receives Call',
+            '- Caller dials company number',
+            '- Twilio sends webhook to /api/twilio/voice/:companyID',
+            '- Greeting plays, then Gather starts listening',
+            '',
+            '## 🎤 STEP 2: Caller Speaks',
+            '- Twilio captures speech (SpeechResult)',
+            '- POSTs to /api/twilio/v2-agent-respond/:companyID',
+            '- Includes: SpeechResult, Confidence, CallSid',
+            '',
+            '## 🔇 STEP 3: STT Preprocessing',
+            '**Location:** Template STT Profile (Global AI Brain)',
+            '- Removes filler words ("um", "uh", "like")',
+            '- Applies corrections ("thermal stat" → "thermostat")',
+            '- Applies synonyms for matching',
+            '',
+            '## 📦 STEP 4: Call State (Redis)',
+            'Key: callState:{CallSid}',
+            '- turnCount: which turn we are on',
+            '- bookingModeLocked: are we in booking mode?',
+            '- slots: captured data (name, phone, address)',
+            '- bookingConsentPending: did we offer booking?',
+            '',
+            '## 🚦 STEP 5: Lane Selection (FrontDeskRuntime)',
+            '**File:** services/engine/FrontDeskRuntime.js',
+            '',
+            'Decision order:',
+            '1. If bookingModeLocked === true → **BOOKING lane**',
+            '2. If escalation trigger ("manager", "supervisor") → **ESCALATE lane**',
+            '3. If bookingConsentPending + caller says "yes" → **BOOKING lane**',
+            '4. If direct booking intent detected → **BOOKING lane**',
+            '5. Default → **DISCOVERY lane**',
+            '',
+            '---',
+            '',
+            '## 🎯 V110 SLOTS & FLOWS',
+            '',
+            '### Slot Registry',
+            'Defines WHAT slots exist (the schema):',
+            '- name.first, name.last, phone, address',
+            '- Each slot has: type, label, required, discoveryFillAllowed',
+            '',
+            '### Discovery Flow (Phase 1)',
+            'Runs BEFORE booking consent:',
+            '- Passively captures slots from caller speech',
+            '- "Hi, this is Mark" → name.first = Mark',
+            '- Values held until booking starts',
+            '',
+            '### Booking Flow (Phase 2)',
+            'Runs AFTER booking consent:',
+            '- Confirms captured slots first (if enabled)',
+            '- Asks for missing required slots',
+            '- Follows the order defined in bookingFlow.steps',
+            '',
+            '---',
+            '',
+            '## ⚠️ GOTCHAS & NOTES',
+            '',
+            '### Booking Mode Lock',
+            '- Once bookingModeLocked = true, ONLY BookingFlowRunner responds',
+            '- No LLM, no scenarios, no bypasses',
+            '- This is by design (deterministic booking)',
+            '',
+            '### Config Priority',
+            '- V110 slotRegistry/flows are CANONICAL',
+            '- Legacy bookingSlots only used as fallback',
+            '- Check BlackBox logs for configSource: V110_SLOT_REGISTRY',
+            '',
+            '### Common Issues',
+            '1. **Slots not persisting?** Check v2Company schema has the fields',
+            '2. **GET not returning data?** Check routes/admin/frontDeskBehavior.js response object',
+            '3. **STT not cleaning?** Check template is assigned to company',
+            '',
+            '---',
+            '',
+            '## 📝 CUSTOM NOTES',
+            '',
+            '*Add your company-specific notes here...*',
+            ''
+        ].join('\n');
         
         // Simple markdown-to-HTML converter
         const renderMarkdown = (md) => {
