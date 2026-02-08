@@ -432,8 +432,23 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
             hasCommonFirstNames: !!config.commonFirstNames
         });
         
+        // V110: Log slot registry and flows
+        logger.info('[FRONT DESK BEHAVIOR] GET - V110 Status:', {
+            companyId,
+            hasSlotRegistry: !!config.slotRegistry,
+            slotRegistryVersion: config.slotRegistry?.version || null,
+            slotCount: config.slotRegistry?.slots?.length || 0,
+            hasDiscoveryFlow: !!config.discoveryFlow,
+            discoveryEnabled: config.discoveryFlow?.enabled,
+            discoverySteps: config.discoveryFlow?.steps?.length || 0,
+            hasBookingFlow: !!config.bookingFlow,
+            bookingEnabled: config.bookingFlow?.enabled,
+            bookingSteps: config.bookingFlow?.steps?.length || 0,
+            hasPolicies: !!config.policies
+        });
+        
         if (config.bookingSlots) {
-            logger.info('[FRONT DESK BEHAVIOR] GET - Returning bookingSlots:', {
+            logger.info('[FRONT DESK BEHAVIOR] GET - Returning bookingSlots (LEGACY):', {
                 companyId,
                 slotCount: config.bookingSlots.length,
                 slots: config.bookingSlots.map(s => ({
@@ -465,7 +480,18 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // 💬 Style Acknowledgments - custom phrases per style
                 styleAcknowledgments: config.styleAcknowledgments || null,
                 personality: config.personality,
-                // 🚨 Dynamic booking slots (new system)
+                
+                // ═══════════════════════════════════════════════════════════════
+                // V110: SLOT REGISTRY + DISCOVERY/BOOKING FLOWS (CANONICAL)
+                // ═══════════════════════════════════════════════════════════════
+                // These are the NEW canonical structures - UI reads/writes these.
+                // Runtime reads from these first, falls back to bookingSlots only if empty.
+                slotRegistry: config.slotRegistry || null,
+                discoveryFlow: config.discoveryFlow || null,
+                bookingFlow: config.bookingFlow || null,
+                policies: config.policies || null,
+                
+                // 🚨 Dynamic booking slots (LEGACY - kept for fallback only)
                 bookingSlots: config.bookingSlots || null,
                 // ☢️ NUKED: bookingContractV2Enabled, slotLibrary, slotGroups - Jan 2026
                 // 🏷️ Vendor / Supplier Handling (Call Center directory)
