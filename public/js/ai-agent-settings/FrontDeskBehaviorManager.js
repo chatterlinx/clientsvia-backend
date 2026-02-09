@@ -1732,6 +1732,31 @@ class FrontDeskBehaviorManager {
 
         return `
             <div data-section-id="discovery-flow" style="color:#c9d1d9;">
+                <!-- V111 HEALTH CHECK PANEL -->
+                <div id="v111-health-panel" style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #30363d; border-radius:12px; padding:16px 20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:1.25rem;">🩺</span>
+                            <h3 style="margin:0; color:#58a6ff; font-size:1rem;">V111 System Health</h3>
+                        </div>
+                        <button id="v111-refresh-health" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; gap:6px;">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                    <div id="v111-health-status" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px;">
+                        <div style="text-align:center; padding:12px; color:#8b949e;">
+                            <span style="font-size:1.5rem;">⏳</span>
+                            <p style="margin:8px 0 0 0; font-size:0.8rem;">Loading health status...</p>
+                        </div>
+                    </div>
+                    <div id="v111-health-summary" style="margin-top:12px; padding-top:12px; border-top:1px solid #30363d; display:none;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span id="v111-health-result" style="font-size:0.85rem; font-weight:600;"></span>
+                            <span id="v111-health-time" style="font-size:0.7rem; color:#6e7681;"></span>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Header with V110 badge -->
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <div>
@@ -2357,6 +2382,117 @@ class FrontDeskBehaviorManager {
                 || document.querySelector('.front-desk-behavior-panel')?.parentElement
                 || contentElement;
         };
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V111 HEALTH CHECK - Load and display system health status
+        // ═══════════════════════════════════════════════════════════════════════════
+        const loadV111Health = async () => {
+            const statusContainer = contentElement.querySelector('#v111-health-status');
+            const summaryContainer = contentElement.querySelector('#v111-health-summary');
+            const resultEl = contentElement.querySelector('#v111-health-result');
+            const timeEl = contentElement.querySelector('#v111-health-time');
+            
+            if (!statusContainer) return;
+            
+            statusContainer.innerHTML = `
+                <div style="text-align:center; padding:12px; color:#8b949e; grid-column: 1 / -1;">
+                    <span style="font-size:1.5rem;">⏳</span>
+                    <p style="margin:8px 0 0 0; font-size:0.8rem;">Checking V111 health...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch('/api/v111-health');
+                const data = await response.json();
+                
+                // Build health cards
+                const cards = [];
+                
+                // Module checks
+                for (const [name, info] of Object.entries(data.modules || {})) {
+                    const isOk = info.status === 'ok';
+                    cards.push({
+                        name: name.replace('ConversationMemory', 'Memory').replace('TurnRecordBuilder', 'TurnBuilder').replace('TranscriptGenerator', 'Transcripts'),
+                        status: isOk ? 'ok' : 'error',
+                        icon: isOk ? '✅' : '❌',
+                        detail: info.version || (isOk ? 'Ready' : info.error?.substring(0, 20) || 'Error')
+                    });
+                }
+                
+                // Redis
+                const redisOk = data.redis?.status === 'ok';
+                const redisWarn = data.redis?.status === 'not_configured';
+                cards.push({
+                    name: 'Redis',
+                    status: redisOk ? 'ok' : (redisWarn ? 'warn' : 'error'),
+                    icon: redisOk ? '✅' : (redisWarn ? '⚠️' : '❌'),
+                    detail: redisOk ? 'Connected' : (redisWarn ? 'Not configured' : 'Error')
+                });
+                
+                // MongoDB
+                const mongoOk = data.mongodb?.status === 'ok';
+                cards.push({
+                    name: 'MongoDB',
+                    status: mongoOk ? 'ok' : 'error',
+                    icon: mongoOk ? '✅' : '❌',
+                    detail: mongoOk ? 'Connected' : 'Disconnected'
+                });
+                
+                // Integration
+                const intOk = data.integration?.status === 'ok';
+                cards.push({
+                    name: 'Integration',
+                    status: intOk ? 'ok' : 'error',
+                    icon: intOk ? '✅' : '❌',
+                    detail: intOk ? 'Passing' : 'Failed'
+                });
+                
+                // Render cards
+                statusContainer.innerHTML = cards.map(c => `
+                    <div style="background:${c.status === 'ok' ? '#0d1117' : (c.status === 'warn' ? '#3d2d00' : '#2d0d0d')}; 
+                                border:1px solid ${c.status === 'ok' ? '#238636' : (c.status === 'warn' ? '#9e6a03' : '#f85149')}; 
+                                border-radius:8px; padding:10px; text-align:center;">
+                        <div style="font-size:1.25rem; margin-bottom:4px;">${c.icon}</div>
+                        <div style="font-size:0.75rem; font-weight:600; color:${c.status === 'ok' ? '#3fb950' : (c.status === 'warn' ? '#d29922' : '#f85149')};">${c.name}</div>
+                        <div style="font-size:0.65rem; color:#8b949e; margin-top:2px;">${c.detail}</div>
+                    </div>
+                `).join('');
+                
+                // Show summary
+                if (summaryContainer && resultEl && timeEl) {
+                    summaryContainer.style.display = 'block';
+                    const passed = data.summary?.passed || 0;
+                    const failed = data.summary?.failed || 0;
+                    const warnings = data.summary?.warnings || 0;
+                    
+                    if (failed === 0) {
+                        resultEl.innerHTML = `<span style="color:#3fb950;">✓ All systems healthy</span> <span style="color:#8b949e;">(${passed} passed${warnings > 0 ? ', ' + warnings + ' warnings' : ''})</span>`;
+                    } else {
+                        resultEl.innerHTML = `<span style="color:#f85149;">✗ ${failed} issue(s) detected</span> <span style="color:#8b949e;">(${passed} passed)</span>`;
+                    }
+                    timeEl.textContent = 'Checked ' + new Date().toLocaleTimeString() + ' • ' + (data.durationMs || 0) + 'ms';
+                }
+                
+            } catch (err) {
+                statusContainer.innerHTML = `
+                    <div style="text-align:center; padding:12px; color:#f85149; grid-column: 1 / -1;">
+                        <span style="font-size:1.5rem;">❌</span>
+                        <p style="margin:8px 0 0 0; font-size:0.8rem;">Failed to load health: ${err.message}</p>
+                    </div>
+                `;
+            }
+        };
+        
+        // Load health on tab init
+        loadV111Health();
+        
+        // Refresh button
+        const refreshBtn = contentElement.querySelector('#v111-refresh-health');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                loadV111Health();
+            });
+        }
         
         const slotRegistry = this.config.slotRegistry || { version: 'v1', slots: [] };
         const discoveryFlow = this.config.discoveryFlow || { version: 'v1', enabled: true, steps: [] };
