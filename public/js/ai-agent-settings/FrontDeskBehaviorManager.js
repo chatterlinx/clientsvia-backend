@@ -3023,6 +3023,7 @@ class FrontDeskBehaviorManager {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
             });
+        }
         
         // Render a single turn card
         const renderTurnCard = (turn, idx) => {
