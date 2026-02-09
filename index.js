@@ -253,6 +253,7 @@ async function loadAllRoutes() {
         routes.frontDeskBehaviorRoutes = await loadRouteWithTimeout('./routes/admin/frontDeskBehavior', 'frontDeskBehaviorRoutes'); // 💬 Front Desk Behavior (LLM-0 conversation style)
         routes.conversationMemoryRoutes = await loadRouteWithTimeout('./routes/admin/conversationMemory', 'conversationMemoryRoutes'); // 📊 V111 Conversation Memory Viewer
         routes.transcriptsRoutes = await loadRouteWithTimeout('./routes/admin/transcripts', 'transcriptsRoutes'); // 📝 V111 Call Transcripts
+        routes.v111HealthRoutes = await loadRouteWithTimeout('./routes/admin/v111Health', 'v111HealthRoutes'); // 🩺 V111 Health Check API
         // promptPacksRoutes REMOVED Jan 2026 - nuked (static packs = maintenance overhead, schema defaults preferred)
         routes.dynamicFlowAdminRoutes = await loadRouteWithTimeout('./routes/admin/dynamicFlowAdmin', 'dynamicFlowAdminRoutes'); // 🧠 Dynamic Flow Admin (Seed templates, manage global flows)
         routes.quickAnswersRoutes = await loadRouteWithTimeout('./routes/admin/quickAnswers', 'quickAnswersRoutes'); // ❓ Quick Answers (common questions - NO LEGACY)
@@ -742,6 +743,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/front-desk-behavior', routes.frontDeskBehaviorRoutes); // 💬 Front Desk Behavior (LLM-0 conversation style - ALL UI controlled)
     app.use('/api/admin/conversation-memory', routes.conversationMemoryRoutes); // 📊 V111 Conversation Memory Viewer
     app.use('/api/admin/transcripts', routes.transcriptsRoutes); // 📝 V111 Call Transcripts
+    app.use('/api/admin/v111', routes.v111HealthRoutes); // 🩺 V111 Health Check API
     // /api/admin/prompt-packs REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
     app.use('/api/admin/dynamic-flows', routes.dynamicFlowAdminRoutes); // 🧠 Dynamic Flow Admin (Seed templates, manage global flows)
     app.use('/api/admin/quick-answers', routes.quickAnswersRoutes); // ❓ Quick Answers (common questions - NO LEGACY connection)
