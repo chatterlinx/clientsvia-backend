@@ -2302,6 +2302,28 @@ class FrontDeskBehaviorManager {
                         </div>
                     </div>
                     
+                    <!-- V111 Phase 5: Transcript Viewer -->
+                    <div id="fdb-v111-transcript-section" style="display:none; margin-top:16px;">
+                        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>📝 TRANSCRIPT</span>
+                            <div style="display:flex; gap:8px;">
+                                <select id="fdb-v111-transcript-format" style="background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:4px 8px; border-radius:4px; font-size:0.75rem;">
+                                    <option value="customer">Customer Transcript</option>
+                                    <option value="engineering">Engineering Transcript</option>
+                                </select>
+                                <button id="fdb-v111-transcript-copy" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:4px 12px; border-radius:4px; cursor:pointer; font-size:0.75rem;">
+                                    📋 Copy
+                                </button>
+                                <button id="fdb-v111-transcript-download" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:4px 12px; border-radius:4px; cursor:pointer; font-size:0.75rem;">
+                                    ⬇️ Download
+                                </button>
+                            </div>
+                        </div>
+                        <div id="fdb-v111-transcript-content" style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:16px; max-height:400px; overflow-y:auto;">
+                            <pre style="margin:0; white-space:pre-wrap; font-family:'Fira Code', 'Consolas', monospace; font-size:0.8rem; color:#c9d1d9; line-height:1.5;"></pre>
+                        </div>
+                    </div>
+                    
                     <!-- Empty State -->
                     <div id="fdb-v111-empty" style="text-align:center; padding:40px; color:#8b949e;">
                         <span style="font-size:2rem;">📊</span>
@@ -2909,7 +2931,98 @@ class FrontDeskBehaviorManager {
                     });
                 });
             }
+            
+            // V111 Phase 5: Load and display transcript
+            loadTranscript(data.callId);
         };
+        
+        // V111 Phase 5: Transcript handling
+        let currentTranscripts = { customer: '', engineering: '' };
+        let currentCallIdForTranscript = null;
+        
+        const loadTranscript = async (callId) => {
+            const transcriptSection = contentElement.querySelector('#fdb-v111-transcript-section');
+            const transcriptContent = contentElement.querySelector('#fdb-v111-transcript-content pre');
+            const formatSelect = contentElement.querySelector('#fdb-v111-transcript-format');
+            
+            if (!transcriptSection || !callId) return;
+            
+            currentCallIdForTranscript = callId;
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                transcriptContent.textContent = 'Loading transcript...';
+                transcriptSection.style.display = 'block';
+                
+                const res = await fetch(`/api/admin/conversation-memory/${this.companyId}/${callId}/transcript?format=all`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const json = await res.json();
+                
+                if (json.success) {
+                    currentTranscripts = {
+                        customer: json.data.customerTranscript || '(No customer transcript available)',
+                        engineering: json.data.engineeringTranscript || '(No engineering transcript available)'
+                    };
+                    
+                    // Show the selected format
+                    const format = formatSelect?.value || 'customer';
+                    transcriptContent.textContent = currentTranscripts[format];
+                } else {
+                    transcriptContent.textContent = 'Failed to load transcript: ' + (json.error || 'Unknown error');
+                }
+            } catch (err) {
+                console.error('[V111] Failed to load transcript:', err);
+                transcriptContent.textContent = 'Error loading transcript: ' + err.message;
+            }
+        };
+        
+        // Transcript format selector
+        const transcriptFormatSelect = contentElement.querySelector('#fdb-v111-transcript-format');
+        if (transcriptFormatSelect) {
+            transcriptFormatSelect.addEventListener('change', () => {
+                const transcriptContent = contentElement.querySelector('#fdb-v111-transcript-content pre');
+                if (transcriptContent && currentTranscripts) {
+                    transcriptContent.textContent = currentTranscripts[transcriptFormatSelect.value] || '';
+                }
+            });
+        }
+        
+        // Transcript copy button
+        const transcriptCopyBtn = contentElement.querySelector('#fdb-v111-transcript-copy');
+        if (transcriptCopyBtn) {
+            transcriptCopyBtn.addEventListener('click', async () => {
+                const format = transcriptFormatSelect?.value || 'customer';
+                const text = currentTranscripts[format] || '';
+                
+                try {
+                    await navigator.clipboard.writeText(text);
+                    transcriptCopyBtn.textContent = '✓ Copied!';
+                    setTimeout(() => { transcriptCopyBtn.textContent = '📋 Copy'; }, 2000);
+                } catch (err) {
+                    alert('Failed to copy: ' + err.message);
+                }
+            });
+        }
+        
+        // Transcript download button
+        const transcriptDownloadBtn = contentElement.querySelector('#fdb-v111-transcript-download');
+        if (transcriptDownloadBtn) {
+            transcriptDownloadBtn.addEventListener('click', () => {
+                const format = transcriptFormatSelect?.value || 'customer';
+                const text = currentTranscripts[format] || '';
+                const filename = `transcript_${currentCallIdForTranscript || 'call'}_${format}.txt`;
+                
+                const blob = new Blob([text], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
         
         // Render a single turn card
         const renderTurnCard = (turn, idx) => {

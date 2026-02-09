@@ -8043,6 +8043,64 @@ router.post('/status-callback', async (req, res) => {
         }
       }
       // ────────────────────────────────────────────────────────────────
+      
+      // ────────────────────────────────────────────────────────────────
+      // V111 Phase 5: Generate transcript at call end
+      // ────────────────────────────────────────────────────────────────
+      // Non-blocking: Load ConversationMemory and generate transcripts
+      // ────────────────────────────────────────────────────────────────
+      (async () => {
+        try {
+          const { ConversationMemory } = require('../services/engine/ConversationMemory');
+          const { generateAllTranscripts } = require('../services/TranscriptGenerator');
+          const CallTranscript = require('../models/CallTranscript');
+          const v2Company = require('../models/v2Company');
+          
+          // Try to load ConversationMemory from Redis
+          const memory = await ConversationMemory.load(CallSid);
+          
+          if (!memory) {
+            logger.debug('[V111 TRANSCRIPT] No ConversationMemory found for call (V111 may not be enabled)', {
+              callSid: CallSid
+            });
+            return;
+          }
+          
+          // Set the outcome on the memory
+          memory.setOutcome({
+            endReason: CallStatus === 'completed' ? 'caller_hangup' : CallStatus,
+            duration: parseInt(CallDuration) * 1000 || 0,  // Convert to ms
+            finalPhase: memory.phase?.current || 'DISCOVERY'
+          });
+          
+          // Load company for branding
+          const company = await v2Company.findById(memory.companyId).lean();
+          
+          // Generate all transcripts
+          const transcripts = generateAllTranscripts(memory.toJSON(), company);
+          
+          // Save to MongoDB
+          await CallTranscript.createFromMemory(memory.toJSON(), transcripts, company);
+          
+          logger.info('[V111 TRANSCRIPT] Transcript generated and saved', {
+            callSid: CallSid,
+            companyId: memory.companyId,
+            turnCount: memory.turns?.length || 0,
+            v111Enabled: memory.config?.enabled || false
+          });
+          
+          // Archive memory (delete from Redis after saving transcript)
+          await memory.archive();
+          
+        } catch (transcriptErr) {
+          // Non-blocking: Log but don't fail
+          logger.warn('[V111 TRANSCRIPT] Failed to generate transcript (non-fatal)', {
+            callSid: CallSid,
+            error: transcriptErr.message
+          });
+        }
+      })();
+      // ────────────────────────────────────────────────────────────────
     }
     
     // Always return 200 to Twilio

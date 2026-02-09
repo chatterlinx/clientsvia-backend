@@ -880,6 +880,22 @@ class ConversationMemory {
     }
   }
 
+  /**
+   * Archive memory (delete from Redis after transcript is saved to MongoDB)
+   * Call this after CallTranscript.createFromMemory() has persisted the data
+   * @returns {Promise<boolean>} Success
+   */
+  async archive() {
+    logger.info('[CONVERSATION MEMORY] Archiving call memory', {
+      callId: this.callId,
+      turnCount: this.turns.length,
+      phase: this.phase?.current
+    });
+    
+    // Delete from Redis (data is now in MongoDB via CallTranscript)
+    return this.delete();
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // SERIALIZATION
   // ═══════════════════════════════════════════════════════════════════════════

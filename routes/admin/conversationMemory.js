@@ -326,6 +326,188 @@ router.get('/:companyId/:callId/facts', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// GET /:companyId/:callId/transcript - Get transcripts for a call (V111 Phase 5)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.get('/:companyId/:callId/transcript', async (req, res) => {
+  try {
+    const { companyId, callId } = req.params;
+    const { format = 'all' } = req.query; // 'customer', 'engineering', 'json', 'all'
+    
+    // Try CallTranscript first (V111 Phase 5)
+    let CallTranscript;
+    try {
+      CallTranscript = require('../../models/CallTranscript');
+    } catch (e) {
+      // Model not yet available
+    }
+    
+    if (CallTranscript) {
+      const transcript = await CallTranscript.getByCallId(callId);
+      
+      if (transcript) {
+        const response = {
+          success: true,
+          source: 'CallTranscript',
+          data: {
+            callId: transcript.callId,
+            companyId: transcript.companyId,
+            callStartTime: transcript.callStartTime,
+            durationMs: transcript.durationMs,
+            turnCount: transcript.turnCount,
+            bookingCreated: transcript.bookingCreated,
+            v111Enabled: transcript.v111Enabled
+          }
+        };
+        
+        // Include requested formats
+        if (format === 'customer' || format === 'all') {
+          response.data.customerTranscript = transcript.customerTranscript;
+        }
+        if (format === 'engineering' || format === 'all') {
+          response.data.engineeringTranscript = transcript.engineeringTranscript;
+        }
+        if (format === 'json' || format === 'all') {
+          response.data.memorySnapshot = transcript.memorySnapshot;
+          response.data.facts = transcript.facts;
+          response.data.captureProgress = transcript.captureProgress;
+        }
+        
+        return res.json(response);
+      }
+    }
+    
+    // Fall back to generating from BlackBox recording
+    const recording = await BlackBoxRecording.findOne({ companyId, callId }).lean();
+    
+    if (!recording) {
+      return res.status(404).json({
+        success: false,
+        error: 'Call recording not found'
+      });
+    }
+    
+    // Extract turn records and build a memory-like structure
+    const turnRecords = (recording.events || [])
+      .filter(e => e.type === 'TURN_RECORDED')
+      .sort((a, b) => (a.data?.turn || 0) - (b.data?.turn || 0))
+      .map(e => e.data);
+    
+    if (turnRecords.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'No V111 turn records found for this call'
+      });
+    }
+    
+    // Build memory object from turn records
+    const lastTurn = turnRecords[turnRecords.length - 1];
+    const memory = {
+      callId: recording.callId,
+      companyId: recording.companyId,
+      createdAt: recording.startedAt,
+      outcome: {
+        duration: recording.durationMs,
+        endReason: recording.callOutcome || 'unknown'
+      },
+      facts: lastTurn?.memorySnapshot?.knownFacts || {},
+      turns: turnRecords,
+      captureProgress: lastTurn?.memorySnapshot?.captureProgress || {},
+      booking: {
+        modeLocked: lastTurn?.memorySnapshot?.bookingMode || false
+      }
+    };
+    
+    // Generate transcripts on-the-fly
+    const { generateAllTranscripts } = require('../../services/TranscriptGenerator');
+    const v2Company = require('../../models/v2Company');
+    const company = await v2Company.findById(companyId).lean();
+    
+    const transcripts = generateAllTranscripts(memory, company);
+    
+    const response = {
+      success: true,
+      source: 'BlackBoxRecording',
+      data: {
+        callId: recording.callId,
+        companyId: recording.companyId,
+        callStartTime: recording.startedAt,
+        durationMs: recording.durationMs,
+        turnCount: turnRecords.length
+      }
+    };
+    
+    if (format === 'customer' || format === 'all') {
+      response.data.customerTranscript = transcripts.customer;
+    }
+    if (format === 'engineering' || format === 'all') {
+      response.data.engineeringTranscript = transcripts.engineering;
+    }
+    if (format === 'json' || format === 'all') {
+      response.data.memorySnapshot = memory;
+      response.data.json = transcripts.json;
+    }
+    
+    res.json(response);
+    
+  } catch (error) {
+    logger.error('[CONVERSATION MEMORY API] Failed to get transcript', {
+      error: error.message,
+      companyId: req.params.companyId,
+      callId: req.params.callId
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GET /transcripts/:companyId - List recent transcripts (V111 Phase 5)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.get('/transcripts/:companyId', async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const { limit = 20 } = req.query;
+    
+    let CallTranscript;
+    try {
+      CallTranscript = require('../../models/CallTranscript');
+    } catch (e) {
+      return res.json({
+        success: true,
+        data: { transcripts: [], total: 0 },
+        message: 'CallTranscript model not available'
+      });
+    }
+    
+    const transcripts = await CallTranscript.getRecentForCompany(companyId, parseInt(limit));
+    const total = await CallTranscript.countDocuments({ companyId });
+    
+    res.json({
+      success: true,
+      data: {
+        transcripts,
+        total,
+        limit: parseInt(limit)
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[CONVERSATION MEMORY API] Failed to list transcripts', {
+      error: error.message,
+      companyId: req.params.companyId
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 

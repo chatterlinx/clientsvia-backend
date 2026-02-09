@@ -1,9 +1,9 @@
 # V111: Implementation Roadmap
 
-> **Status:** Phase 0-4 COMPLETE  
+> **Status:** ALL PHASES COMPLETE (0-5)  
 > **Linked Spec:** V111-ConversationMemory-Spec.md  
 > **Date:** 2026-02-08  
-> **Last Updated:** 2026-02-09 - Phase 4 governance enforcement complete
+> **Last Updated:** 2026-02-09 - Phase 5 transcripts complete
 
 ---
 
@@ -692,14 +692,14 @@ renderTranscriptViewer(callId) {
 }
 ```
 
-### Phase 4 Deliverables
-- [ ] TranscriptGenerator service created
-- [ ] Customer transcript format implemented
-- [ ] Engineering transcript format implemented
-- [ ] Call end hooks transcript generation
-- [ ] MongoDB storage for transcripts
-- [ ] Transcript viewer in Discovery tab
-- [ ] Copy/download functionality
+### Phase 4 Deliverables (Transcripts - renamed Phase 5)
+- [x] TranscriptGenerator service created (`services/TranscriptGenerator.js`)
+- [x] Customer transcript format implemented (clean, shareable)
+- [x] Engineering transcript format implemented (full debug details)
+- [x] Call end hooks transcript generation (`/status-callback` in v2twilio.js)
+- [x] MongoDB storage for transcripts (`models/CallTranscript.js`)
+- [x] Transcript viewer in Discovery tab (format selector, copy/download)
+- [x] Copy/download functionality
 
 ---
 

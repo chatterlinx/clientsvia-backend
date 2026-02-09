@@ -252,6 +252,7 @@ async function loadAllRoutes() {
         // serviceTypeClarificationRoutes REMOVED Dec 2025 - redundant with Triage
         routes.frontDeskBehaviorRoutes = await loadRouteWithTimeout('./routes/admin/frontDeskBehavior', 'frontDeskBehaviorRoutes'); // 💬 Front Desk Behavior (LLM-0 conversation style)
         routes.conversationMemoryRoutes = await loadRouteWithTimeout('./routes/admin/conversationMemory', 'conversationMemoryRoutes'); // 📊 V111 Conversation Memory Viewer
+        routes.transcriptsRoutes = await loadRouteWithTimeout('./routes/admin/transcripts', 'transcriptsRoutes'); // 📝 V111 Call Transcripts
         // promptPacksRoutes REMOVED Jan 2026 - nuked (static packs = maintenance overhead, schema defaults preferred)
         routes.dynamicFlowAdminRoutes = await loadRouteWithTimeout('./routes/admin/dynamicFlowAdmin', 'dynamicFlowAdminRoutes'); // 🧠 Dynamic Flow Admin (Seed templates, manage global flows)
         routes.quickAnswersRoutes = await loadRouteWithTimeout('./routes/admin/quickAnswers', 'quickAnswersRoutes'); // ❓ Quick Answers (common questions - NO LEGACY)
@@ -740,6 +741,7 @@ function registerRoutes(routes) {
     // serviceTypeClarificationRoutes REMOVED Dec 2025 - nuked
     app.use('/api/admin/front-desk-behavior', routes.frontDeskBehaviorRoutes); // 💬 Front Desk Behavior (LLM-0 conversation style - ALL UI controlled)
     app.use('/api/admin/conversation-memory', routes.conversationMemoryRoutes); // 📊 V111 Conversation Memory Viewer
+    app.use('/api/admin/transcripts', routes.transcriptsRoutes); // 📝 V111 Call Transcripts
     // /api/admin/prompt-packs REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
     app.use('/api/admin/dynamic-flows', routes.dynamicFlowAdminRoutes); // 🧠 Dynamic Flow Admin (Seed templates, manage global flows)
     app.use('/api/admin/quick-answers', routes.quickAnswersRoutes); // ❓ Quick Answers (common questions - NO LEGACY connection)
