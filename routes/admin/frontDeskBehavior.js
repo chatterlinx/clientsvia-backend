@@ -551,6 +551,8 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // 📋 Architecture Notes - System documentation (editable in V110 tab)
                 architectureNotes: config.architectureNotes || null,
                 architectureNotesUpdated: config.architectureNotesUpdated || null,
+                // 🧠 V111: Conversation Memory Config - Runtime truth configuration
+                conversationMemory: config.conversationMemory || null,
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -888,6 +890,25 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             logger.info('[FRONT DESK BEHAVIOR] Saving architectureNotes', { 
                 companyId,
                 noteLength: (updates.architectureNotes || '').length
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V111: CONVERSATION MEMORY CONFIG - Runtime truth configuration
+        // ═══════════════════════════════════════════════════════════════════════
+        // Configures capture goals, handler governance, and context window policies.
+        // Spec: docs/architecture/V111-ConversationMemory-Spec.md
+        // ═══════════════════════════════════════════════════════════════════════
+        if (updates.conversationMemory && typeof updates.conversationMemory === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.conversationMemory'] = updates.conversationMemory;
+            logger.info('[FRONT DESK BEHAVIOR] V111: Saving conversationMemory config', {
+                companyId,
+                version: updates.conversationMemory.version || 'v111',
+                enabled: updates.conversationMemory.enabled,
+                mustCapture: updates.conversationMemory.captureGoals?.must?.fields || [],
+                shouldCapture: updates.conversationMemory.captureGoals?.should?.fields || [],
+                maxTurns: updates.conversationMemory.contextWindow?.maxTurns,
+                logTurnRecords: updates.conversationMemory.blackbox?.logTurnRecords
             });
         }
         

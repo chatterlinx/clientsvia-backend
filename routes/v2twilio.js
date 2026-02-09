@@ -83,6 +83,23 @@ try {
     logger.warn('[V2TWILIO] ⚠️ Control Plane Enforcer not available', { error: e.message });
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 📊 V111: CONVERSATION MEMORY - Runtime Truth for Call State
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 0: Visibility only - parallel logging without behavior change
+// Captures: STT result, slots extracted, routing decision, response, turn record
+// Spec: docs/architecture/V111-ConversationMemory-Spec.md
+// ═══════════════════════════════════════════════════════════════════════════
+let ConversationMemory;
+try {
+    const memoryModule = require('../services/engine/ConversationMemory');
+    ConversationMemory = memoryModule.ConversationMemory;
+    logger.info('[V2TWILIO] ✅ V111 ConversationMemory loaded - Runtime truth active');
+} catch (e) {
+    logger.warn('[V2TWILIO] ⚠️ V111 ConversationMemory not available', { error: e.message });
+    ConversationMemory = null;
+}
+
 // Helper: Get Redis client safely (returns null if unavailable)
 async function getRedis() {
   if (!isRedisConfigured()) return null;
@@ -2558,6 +2575,33 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   }
   
   // ═══════════════════════════════════════════════════════════════════════════
+  // 📊 V111: CONVERSATION MEMORY - Initialize/Load Runtime Truth
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Phase 0: Visibility only - parallel logging without behavior change
+  // This captures the turn lifecycle for debugging and analysis
+  // ═══════════════════════════════════════════════════════════════════════════
+  let v111Memory = null;
+  let v111TurnNumber = 0;
+  try {
+    if (ConversationMemory && callSid && companyID) {
+      v111Memory = await ConversationMemory.loadOrCreate({
+        callId: callSid,
+        companyId: companyID,
+        callerPhone: fromNumber
+      });
+      v111TurnNumber = v111Memory.turns.length;
+      v111Memory.startTurn(v111TurnNumber);
+      logger.debug('[V111] 📊 ConversationMemory active', { 
+        callSid, 
+        turn: v111TurnNumber,
+        existingTurns: v111Memory.turns.length 
+      });
+    }
+  } catch (v111Err) {
+    logger.debug('[V111] ConversationMemory init failed (non-fatal)', { error: v111Err.message });
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
   // 🎤 STT INTELLIGENCE - Apply preprocessing (fillers, corrections, impossible)
   // ═══════════════════════════════════════════════════════════════════════════
   // This is where the STT Intelligence UI settings actually get applied!
@@ -2631,6 +2675,22 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       callSid,
       error: sttErr.message
     });
+  }
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 📊 V111: Log STT result to ConversationMemory
+  // ═══════════════════════════════════════════════════════════════════════════
+  try {
+    if (v111Memory && v111Memory._currentTurnBuilder) {
+      v111Memory.addSTTResult(rawSpeechResult, speechResult, sttProcessResult);
+      logger.debug('[V111] 📊 STT result captured', { 
+        callSid, 
+        turn: v111TurnNumber,
+        hasSTTOps: !!(sttProcessResult?.transformations)
+      });
+    }
+  } catch (v111Err) {
+    logger.debug('[V111] STT capture failed (non-fatal)', { error: v111Err.message });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -2967,6 +3027,36 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // ═══════════════════════════════════════════════════════════════════════════
       const awProofForTurn = computeAwProof(company);
       const traceRunIdForTurn = callState.traceRunId || `tr-${callSid || Date.now()}`;
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // 📊 V111 Phase 3: Load Config from Company Settings
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Now that company is loaded, we can set the V111 config on ConversationMemory.
+      // This enables config-driven governance (handler rules, capture goals, etc.)
+      // Config comes from: company.aiAgentSettings.frontDeskBehavior.conversationMemory
+      // ═══════════════════════════════════════════════════════════════════════════
+      try {
+        if (v111Memory) {
+          const v111Config = company?.aiAgentSettings?.frontDeskBehavior?.conversationMemory;
+          if (v111Config) {
+            v111Memory.setConfig(v111Config);
+            logger.debug('[V111] 🎛️ Config loaded from company settings', { 
+              callSid,
+              v111Enabled: v111Config.enabled,
+              mustCapture: v111Config.captureGoals?.must?.fields,
+              shouldCapture: v111Config.captureGoals?.should?.fields
+            });
+          } else {
+            logger.debug('[V111] No V111 config in company settings, using defaults', { callSid });
+          }
+        }
+      } catch (v111ConfigErr) {
+        // Config loading errors are non-fatal
+        logger.debug('[V111] Config loading failed (non-fatal)', { 
+          error: v111ConfigErr.message, 
+          callSid 
+        });
+      }
       callState.traceRunId = traceRunIdForTurn;
       callState.awHash = callState.awHash || awProofForTurn.awHash;
       callState.effectiveConfigVersion = callState.effectiveConfigVersion || awProofForTurn.effectiveConfigVersion;
@@ -4127,7 +4217,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 turnCount,
                 companyId: companyID,
                 callState,  // V101 fix: pass callState instead of undefined 'session'
-                callerPhone: fromNumber
+                callerPhone: fromNumber,
+                // V111 Phase 4: Pass ConversationMemory for governance enforcement
+                v111Memory: v111Memory || null,
+                // V111: Pass scenario match for router (if available from earlier in pipeline)
+                scenarioMatch: checkpointE?.scenarioMatch || null,
+                consentSignal: checkpointE?.consentSignal || { detected: false },
+                escalationSignal: checkpointE?.escalationSignal || { explicit: false, frustration: false }
               };
               
               // Call FrontDeskRuntime - THE SINGLE ORCHESTRATOR
@@ -4150,7 +4246,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   text: runtimeResult.response,
                   requiresTransfer: true,
                   conversationMode: 'transfer',
-                  matchSource: runtimeResult.matchSource || 'FRONT_DESK_RUNTIME'
+                  matchSource: runtimeResult.matchSource || 'FRONT_DESK_RUNTIME',
+                  // V111 Phase 4: Include governance decision
+                  v111: runtimeResult.v111 || null
                 };
               } else {
                 result = {
@@ -4162,7 +4260,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                     bookingModeLocked: callState.bookingModeLocked,
                     bookingConsentPending: callState.bookingConsentPending
                   },
-                  signals: runtimeResult.signals
+                  signals: runtimeResult.signals,
+                  // V111 Phase 4: Include governance decision
+                  v111: runtimeResult.v111 || null
                 };
               }
               
@@ -5407,6 +5507,155 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       logger.warn('[TRACE ERROR] TURN_TRACE/TURN_DECISION_TRACE_V1 failed (call continues)', { 
         error: traceBlockErr.message,
         stack: traceBlockErr.stack?.split('\n').slice(0, 3).join(' | ')
+      });
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // 📊 V111 Phase 4: Finalize ConversationMemory TurnRecord
+    // ════════════════════════════════════════════════════════════════════════════
+    // - Captures routing decision and response
+    // - Records V111 governance decisions
+    // - Tracks capture progress (turns without new facts)
+    // - Detects response loops
+    // - Commits turn and saves to Redis & BlackBox
+    // ════════════════════════════════════════════════════════════════════════════
+    try {
+      if (v111Memory && v111Memory._currentTurnBuilder) {
+        // Extract routing info from the turn
+        const matchSource = checkpointE?.matchSource || result?.matchSource || branchTaken || 'UNKNOWN';
+        const routingWhy = [];
+        if (branchReason) routingWhy.push({ rule: branchReason });
+        if (branchTaken) routingWhy.push({ rule: `branch_${branchTaken.toLowerCase()}` });
+        
+        // ─────────────────────────────────────────────────────────────────────────
+        // V111 Phase 4: Record governance decision from FrontDeskRuntime
+        // ─────────────────────────────────────────────────────────────────────────
+        if (result?.v111 && v111Memory._currentTurnBuilder.setV111Decision) {
+          v111Memory._currentTurnBuilder.setV111Decision(result.v111);
+          
+          // Also add governance steps to routing why for unified view
+          if (result.v111.governance?.length > 0) {
+            result.v111.governance.forEach(g => {
+              routingWhy.push({ rule: `v111_${g.step}`, result: g.result });
+            });
+          }
+          
+          if (result.v111.captureInjection?.inject) {
+            routingWhy.push({ 
+              rule: 'v111_capture_applied', 
+              field: result.v111.captureInjection.field 
+            });
+          }
+          
+          if (result.v111.escalation) {
+            routingWhy.push({ 
+              rule: 'v111_escalation', 
+              trigger: result.v111.escalation.trigger 
+            });
+          }
+        }
+        
+        // Add routing decision
+        v111Memory.addRoutingDecision(matchSource, routingWhy, []);
+        
+        // Add response
+        const responseText = result?.text || result?.response || '';
+        const latencyMs = Date.now() - (checkpointA?.timestamp ? new Date(checkpointA.timestamp).getTime() : Date.now());
+        v111Memory.addResponse(matchSource, responseText, latencyMs, result?.action ? [result.action] : []);
+        
+        // ─────────────────────────────────────────────────────────────────────────
+        // V111 Phase 3: Track capture progress
+        // ─────────────────────────────────────────────────────────────────────────
+        // If no facts were added this turn, increment turnsWithoutProgress
+        const factsAddedThisTurn = v111Memory._currentTurnBuilder?.delta?.factsAdded?.length || 0;
+        if (factsAddedThisTurn === 0) {
+          v111Memory.incrementTurnsWithoutProgress();
+        } else {
+          // Reset counter when progress is made
+          v111Memory.captureProgress.turnsWithoutProgress = 0;
+        }
+        
+        // ─────────────────────────────────────────────────────────────────────────
+        // V111 Phase 3: Loop detection
+        // ─────────────────────────────────────────────────────────────────────────
+        // Check if the agent is repeating the same response
+        const loopCheck = v111Memory.checkForResponseLoop(responseText);
+        if (loopCheck.isLoop && v111Memory.isV111Enabled()) {
+          logger.warn('[V111] 🔄 Response loop detected', {
+            callSid,
+            consecutiveRepeats: loopCheck.consecutiveRepeats,
+            action: loopCheck.action,
+            response: responseText?.substring(0, 50)
+          });
+          
+          // Log loop detection to turn record
+          routingWhy.push({ rule: 'loop_detected', repeats: loopCheck.consecutiveRepeats });
+        }
+        
+        // ─────────────────────────────────────────────────────────────────────────
+        // V111 Phase 3: Capture injection check (visibility only)
+        // ─────────────────────────────────────────────────────────────────────────
+        // In Phase 3, we only LOG when capture injection WOULD happen.
+        // Actual injection (modifying responses) comes in Phase 4.
+        if (v111Memory.isV111Enabled()) {
+          const captureCheck = v111Memory.shouldInjectCapturePrompt();
+          if (captureCheck.inject) {
+            logger.info('[V111] 🎯 Capture injection recommended', {
+              callSid,
+              field: captureCheck.field,
+              priority: captureCheck.priority,
+              reason: captureCheck.reason,
+              turnsWithoutProgress: v111Memory.captureProgress.turnsWithoutProgress
+            });
+            
+            // Log to turn record for visibility
+            routingWhy.push({ 
+              rule: 'capture_injection_recommended', 
+              field: captureCheck.field,
+              priority: captureCheck.priority
+            });
+          }
+        }
+        
+        // Commit the turn
+        const turnRecord = v111Memory.commitTurn();
+        
+        // Save ConversationMemory to Redis
+        await v111Memory.save();
+        
+        // Log TurnRecord to BlackBox (one structured event instead of many)
+        if (BlackBoxLogger && turnRecord) {
+          await BlackBoxLogger.logTurnRecord({
+            callId: callSid,
+            companyId: companyID,
+            turnRecord
+          });
+        }
+        
+        // ─────────────────────────────────────────────────────────────────────────
+        // V111 Phase 3: Enhanced debug logging
+        // ─────────────────────────────────────────────────────────────────────────
+        logger.debug('[V111] 📊 Turn completed and saved', {
+          callSid,
+          turn: turnRecord?.turn,
+          handler: turnRecord?.routing?.selectedHandler,
+          latencyMs: turnRecord?.response?.latencyMs,
+          v111Enabled: v111Memory.isV111Enabled(),
+          factsCount: Object.keys(v111Memory.facts || {}).length,
+          factsAddedThisTurn,
+          captureProgress: {
+            missingMust: v111Memory.getMissingMustFields?.() || [],
+            missingShould: v111Memory.getMissingShouldFields?.() || [],
+            turnsWithoutProgress: v111Memory.captureProgress?.turnsWithoutProgress || 0
+          }
+        });
+      }
+    } catch (v111Err) {
+      // V111 errors must NEVER crash the call
+      logger.warn('[V111] Turn finalization failed (non-fatal)', { 
+        error: v111Err.message,
+        stack: v111Err.stack?.split('\n').slice(0, 3).join(' | '),
+        callSid
       });
     }
     

@@ -26,6 +26,7 @@ let BookingFlowRunner = null;
 let BookingFlowResolver = null;
 let ConversationEngine = null;
 let BlackBoxLogger = null;
+let V111Router = null;
 
 function loadPlugins() {
     if (!BookingFlowRunner) {
@@ -49,6 +50,14 @@ function loadPlugins() {
             BlackBoxLogger = require('../BlackBoxLogger');
         } catch (e) {
             logger.debug('[FRONT_DESK_RUNTIME] BlackBoxLogger not available');
+        }
+    }
+    // V111 Phase 4: Load V111Router for governance enforcement
+    if (!V111Router) {
+        try {
+            V111Router = require('./V111Router');
+        } catch (e) {
+            logger.debug('[FRONT_DESK_RUNTIME] V111Router not available (Phase 4 governance disabled)', { error: e.message });
         }
     }
 }
@@ -1085,6 +1094,92 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
     
     trace.addDecisionReason('DISCOVERY_LANE_HANDLER', { handler: 'ConversationEngine' });
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V111 Phase 4: Check V111 Router for governance & capture injection
+    // ═══════════════════════════════════════════════════════════════════════════
+    // If V111 is enabled, the router may override handler selection or
+    // inject a capture prompt for missing fields.
+    // ═══════════════════════════════════════════════════════════════════════════
+    let v111Decision = null;
+    let v111Router = null;
+    
+    if (V111Router && context.v111Memory?.isV111Enabled?.()) {
+        try {
+            v111Router = V111Router.createRouter(context.v111Memory, { callId: callSid });
+            v111Decision = v111Router.route({
+                scenarioMatch: context.scenarioMatch || null,
+                consentSignal: context.consentSignal || null,
+                escalationSignal: context.escalationSignal || null,
+                currentResponse: null  // Will check loop detection later
+            });
+            
+            logger.debug('[FRONT_DESK_RUNTIME] V111 Router decision', {
+                callSid,
+                handler: v111Decision?.handler,
+                reason: v111Decision?.reason,
+                captureField: v111Decision?.captureInjection?.field,
+                escalation: v111Decision?.escalation?.trigger
+            });
+            
+            // Handle escalation trigger from V111
+            if (v111Decision?.handler === 'ESCALATION') {
+                trace.addDecisionReason('V111_ESCALATION', {
+                    reason: v111Decision.reason,
+                    trigger: v111Decision.escalation?.trigger
+                });
+                
+                let escalationMsg;
+                try {
+                    escalationMsg = cfgGet(effectiveConfig, 'frontDesk.escalation.transferMessage', {
+                        callId: callSid,
+                        turn: callState?.turnCount || 0,
+                        strict: false,
+                        readerId: 'handleDiscoveryLane.v111Escalation'
+                    });
+                } catch (e) {
+                    escalationMsg = null;
+                }
+                
+                return {
+                    response: escalationMsg || "Let me connect you with someone who can help.",
+                    signals: { escalate: true, v111Escalation: true },
+                    matchSource: 'V111_ESCALATION',
+                    v111: v111Decision
+                };
+            }
+            
+            // Handle capture injection (V111 wants to prompt for missing field)
+            if (v111Decision?.handler === 'CAPTURE_INJECTION' && v111Decision?.captureInjection?.inject) {
+                trace.addDecisionReason('V111_CAPTURE_INJECTION', {
+                    field: v111Decision.captureInjection.field,
+                    priority: v111Decision.captureInjection.priority,
+                    reason: v111Decision.captureInjection.reason
+                });
+                
+                // Return capture prompt directly (bypass ConversationEngine this turn)
+                logger.info('[FRONT_DESK_RUNTIME] V111 Capture injection active', {
+                    callSid,
+                    field: v111Decision.captureInjection.field,
+                    priority: v111Decision.captureInjection.priority
+                });
+                
+                return {
+                    response: v111Decision.captureInjection.prompt,
+                    signals: { captureInjection: true, captureField: v111Decision.captureInjection.field },
+                    matchSource: 'V111_CAPTURE_INJECTION',
+                    v111: v111Decision
+                };
+            }
+            
+        } catch (v111Err) {
+            // V111 errors must NEVER crash the call - log and continue
+            logger.warn('[FRONT_DESK_RUNTIME] V111 Router error (non-fatal)', {
+                callSid,
+                error: v111Err.message
+            });
+        }
+    }
+    
     if (!ConversationEngine) {
         logger.error('[FRONT_DESK_RUNTIME] ConversationEngine not available - fail closed');
         return {
@@ -1240,11 +1335,54 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
             };
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V111 Phase 4: Apply soft capture injection (append to response)
+        // ═══════════════════════════════════════════════════════════════════════
+        // If V111 router recommended capture injection but handler wasn't switched,
+        // we can still append a capture prompt to the response.
+        // This is "soft" injection - it doesn't interrupt the conversation.
+        // ═══════════════════════════════════════════════════════════════════════
+        let finalResponse = engineResponse;
+        let captureInjectionApplied = false;
+        
+        if (v111Router && v111Decision && context.v111Memory?.isV111Enabled?.()) {
+            // Check if we should apply soft capture injection
+            const softCaptureCheck = context.v111Memory.shouldInjectCapturePrompt();
+            
+            if (softCaptureCheck.inject && engineResponse) {
+                // Only apply soft injection if we have a meaningful response
+                // and turns without progress is at threshold (not above - that's handled earlier)
+                const turnsWithoutProgress = context.v111Memory.captureProgress?.turnsWithoutProgress || 0;
+                const maxTurns = context.v111Memory.config?.routerRules?.captureInjection?.maxTurnsWithoutProgress || 2;
+                
+                // Soft injection at threshold, hard injection above threshold
+                if (turnsWithoutProgress === maxTurns) {
+                    const capturePrompt = context.v111Memory.getNextCaptureField()?.prompt;
+                    if (capturePrompt) {
+                        finalResponse = v111Router.applyCaptureInjection(engineResponse, {
+                            inject: true,
+                            prompt: capturePrompt,
+                            field: softCaptureCheck.field
+                        });
+                        captureInjectionApplied = true;
+                        
+                        logger.info('[FRONT_DESK_RUNTIME] V111 Soft capture injection applied', {
+                            callSid,
+                            field: softCaptureCheck.field,
+                            originalLength: engineResponse.length,
+                            finalLength: finalResponse.length
+                        });
+                    }
+                }
+            }
+        }
+        
         return {
-            response: engineResponse,
-            signals: {},
+            response: finalResponse,
+            signals: captureInjectionApplied ? { softCaptureInjection: true } : {},
             matchSource: engineResult.matchSource || 'CONVERSATION_ENGINE',
-            metadata: engineResult.metadata
+            metadata: engineResult.metadata,
+            v111: v111Decision
         };
         
     } catch (error) {

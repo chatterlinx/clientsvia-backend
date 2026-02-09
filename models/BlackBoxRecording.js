@@ -29,6 +29,7 @@ const Schema = mongoose.Schema;
 // ============================================================================
 const EVENT_TYPES = [
   'CALL_START',
+  'TURN_RECORDED',              // 📊 V111: Full TurnRecord for conversation memory
   'CONFIG_READ',              // 🔌 AW config read (Phase 3 - AW ⇄ RE marriage)
   'CONFIG_WRITE',             // ✏️ AW config write (V93 - Onboarding Cockpit)
   'LEGACY_PATH_USED',         // ⚠️ V93 GhostBuster - legacy path was used instead of AW path

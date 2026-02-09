@@ -2623,6 +2623,109 @@ const companySchema = new mongoose.Schema({
             architectureNotesUpdated: { type: Date, default: null },
             
             // ═══════════════════════════════════════════════════════════════
+            // V111: CONVERSATION MEMORY - Runtime Truth Configuration
+            // ═══════════════════════════════════════════════════════════════
+            // Configures the ConversationMemory system that tracks call state.
+            // Defines capture goals (MUST/SHOULD/NICE), handler governance,
+            // and context window policies.
+            // 
+            // Spec: docs/architecture/V111-ConversationMemory-Spec.md
+            // UI: Discovery tab → Conversation Memory Config section
+            // ═══════════════════════════════════════════════════════════════
+            conversationMemory: {
+                // Version identifier
+                version: { type: String, default: 'v111' },
+                
+                // Master toggle - enables V111 runtime truth
+                enabled: { type: Boolean, default: false },
+                
+                // ─────────────────────────────────────────────────────────────
+                // CAPTURE GOALS - What MUST/SHOULD/NICE be captured
+                // ─────────────────────────────────────────────────────────────
+                captureGoals: {
+                    // Required before booking can proceed
+                    must: {
+                        fields: { type: [String], default: ['name', 'issue'] },
+                        deadline: { type: String, default: 'before_booking_confirmation' },
+                        onMissing: { type: String, default: 'router_prompts' }
+                    },
+                    // Strongly desired but not blocking
+                    should: {
+                        fields: { type: [String], default: ['phone', 'address'] },
+                        deadline: { type: String, default: 'end_of_discovery' },
+                        onMissing: { type: String, default: 'log_warning' }
+                    },
+                    // Optional enrichment
+                    nice: {
+                        fields: { type: [String], default: [] },
+                        deadline: { type: String, default: 'none' },
+                        onMissing: { type: String, default: 'ignore' }
+                    }
+                },
+                
+                // ─────────────────────────────────────────────────────────────
+                // CONTEXT WINDOW - What LLM sees
+                // ─────────────────────────────────────────────────────────────
+                contextWindow: {
+                    maxTurns: { type: Number, default: 6 },
+                    summarizeOlderTurns: { type: Boolean, default: true },
+                    alwaysIncludeFacts: { type: Boolean, default: true },
+                    maxTokenBudget: { type: Number, default: 600 }
+                },
+                
+                // ─────────────────────────────────────────────────────────────
+                // HANDLER GOVERNANCE - Who can respond when
+                // ─────────────────────────────────────────────────────────────
+                handlerGovernance: {
+                    scenarioHandler: {
+                        enabled: { type: Boolean, default: true },
+                        minConfidence: { type: Number, default: 0.75 },
+                        allowInBookingMode: { type: Boolean, default: false }
+                    },
+                    bookingHandler: {
+                        enabled: { type: Boolean, default: true },
+                        requiresConsent: { type: Boolean, default: true },
+                        consentConfidence: { type: Number, default: 0.8 },
+                        lockAfterConsent: { type: Boolean, default: true }
+                    },
+                    llmHandler: {
+                        enabled: { type: Boolean, default: true },
+                        isDefaultFallback: { type: Boolean, default: true },
+                        canWriteFacts: { type: Boolean, default: false }
+                    },
+                    escalationHandler: {
+                        enabled: { type: Boolean, default: true },
+                        triggers: { type: [String], default: ['explicit_request', 'frustration_detected', 'loop_detected'] }
+                    }
+                },
+                
+                // ─────────────────────────────────────────────────────────────
+                // ROUTER RULES - Decision logic
+                // ─────────────────────────────────────────────────────────────
+                routerRules: {
+                    priority: { type: [String], default: ['escalation', 'booking_locked', 'scenario_match', 'llm_default'] },
+                    captureInjection: {
+                        enabled: { type: Boolean, default: true },
+                        maxTurnsWithoutProgress: { type: Number, default: 2 }
+                    },
+                    loopDetection: {
+                        enabled: { type: Boolean, default: true },
+                        maxRepeatedResponses: { type: Number, default: 2 },
+                        onLoop: { type: String, default: 'escalate' }
+                    }
+                },
+                
+                // ─────────────────────────────────────────────────────────────
+                // BLACKBOX CONFIG - What gets logged
+                // ─────────────────────────────────────────────────────────────
+                blackbox: {
+                    logTurnRecords: { type: Boolean, default: true },
+                    logMilestones: { type: Boolean, default: true },
+                    verbosity: { type: String, enum: ['minimal', 'standard', 'debug'], default: 'standard' }
+                }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // 🆕 COMMON FIRST NAMES - UI-Configurable Name Recognition
             // ═══════════════════════════════════════════════════════════════
             // Used to detect if a single name token is a first name or last name

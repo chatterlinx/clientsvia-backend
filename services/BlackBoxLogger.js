@@ -1702,6 +1702,76 @@ const QuickLog = {
 };
 
 // ============================================================================
+// LOG TURN RECORD (V111 - Conversation Memory)
+// ============================================================================
+
+/**
+ * Log a complete TurnRecord for V111 Conversation Memory
+ * This replaces dozens of individual events with one structured record per turn.
+ * 
+ * @param {object} params - Parameters
+ * @param {string} params.callId - Call SID
+ * @param {string} params.companyId - Company ID
+ * @param {object} params.turnRecord - Complete TurnRecord from TurnRecordBuilder
+ * @returns {Promise<boolean>} Success
+ */
+async function logTurnRecord({ callId, companyId, turnRecord }) {
+  const now = new Date();
+  
+  try {
+    // Get startedAt for calculating offset
+    const rec = await BlackBoxRecording.findOne(
+      { callId, companyId },
+      { startedAt: 1 }
+    ).lean();
+    
+    if (!rec) {
+      logger.warn('[BLACK BOX] Cannot log TurnRecord - recording not found', {
+        callId,
+        turn: turnRecord?.turn
+      });
+      return false;
+    }
+    
+    const t = rec.startedAt ? (now.getTime() - new Date(rec.startedAt).getTime()) : 0;
+    
+    // Log as a single event with full TurnRecord as payload
+    await BlackBoxRecording.updateOne(
+      { callId, companyId },
+      {
+        $push: {
+          events: {
+            type: 'TURN_RECORDED',
+            ts: now,
+            t,
+            turn: turnRecord?.turn || 0,
+            data: turnRecord
+          }
+        }
+      }
+    );
+    
+    logger.debug('[BLACK BOX] 📊 TurnRecord logged (V111)', {
+      callId,
+      turn: turnRecord?.turn,
+      handler: turnRecord?.routing?.selectedHandler,
+      factsAdded: turnRecord?.delta?.factsAdded?.length || 0,
+      t: `${(t / 1000).toFixed(1)}s`
+    });
+    
+    return true;
+    
+  } catch (error) {
+    logger.error('[BLACK BOX] Failed to log TurnRecord (non-fatal)', {
+      callId,
+      turn: turnRecord?.turn,
+      error: error.message
+    });
+    return false;
+  }
+}
+
+// ============================================================================
 // UPDATE SESSION SNAPSHOT
 // ============================================================================
 
@@ -1764,6 +1834,9 @@ module.exports = {
   appendError,
   addTranscript,
   finalizeCall,
+  
+  // V111 Conversation Memory
+  logTurnRecord,
   
   // Diagnostics
   logBookingDiagnostic,

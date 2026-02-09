@@ -2030,6 +2030,286 @@ class FrontDeskBehaviorManager {
                     </button>
                 </div>
 
+                <!-- V111: Conversation Memory Config (Phase 2 - Configuration) -->
+                <div style="background:#161b22; border:1px solid #30363d; border-left:3px solid #f0883e; border-radius:8px; padding:20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <div>
+                            <h3 style="margin:0; color:#f0883e; display:flex; align-items:center; gap:8px;">
+                                ⚙️ Conversation Memory Config
+                                <span style="background:#f0883e20; color:#f0883e; padding:4px 8px; border-radius:4px; font-size:0.7rem; font-weight:normal;">V111</span>
+                            </h3>
+                            <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.8rem;">
+                                Define capture goals, handler governance, and context window policies
+                            </p>
+                        </div>
+                        <label style="display:flex; align-items:center; gap:8px; color:#c9d1d9;">
+                            <input type="checkbox" id="fdb-v111-config-enabled" ${this.config.conversationMemory?.enabled ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer;">
+                            <span style="font-size:0.85rem;">Enable V111</span>
+                        </label>
+                    </div>
+                    
+                    <div id="fdb-v111-config-body" style="${this.config.conversationMemory?.enabled ? '' : 'opacity:0.5; pointer-events:none;'}">
+                        <!-- Capture Goals -->
+                        <div style="margin-bottom:20px;">
+                            <h4 style="margin:0 0 12px 0; color:#c9d1d9; font-size:0.9rem; display:flex; align-items:center; gap:8px;">
+                                🎯 Capture Goals
+                                <span style="color:#8b949e; font-size:0.75rem; font-weight:normal;">What facts to capture and when</span>
+                            </h4>
+                            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:16px;">
+                                <!-- MUST -->
+                                <div style="background:#0d1117; border:1px solid #f8514940; border-radius:8px; padding:12px;">
+                                    <div style="color:#f85149; font-size:0.8rem; font-weight:600; margin-bottom:8px;">MUST CAPTURE</div>
+                                    <div style="color:#8b949e; font-size:0.7rem; margin-bottom:8px;">Required before booking</div>
+                                    <textarea id="fdb-v111-must-fields" rows="3" placeholder="name, issue" style="width:100%; background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:8px; font-size:0.8rem; resize:vertical; box-sizing:border-box;">${(this.config.conversationMemory?.captureGoals?.must?.fields || ['name', 'issue']).join(', ')}</textarea>
+                                </div>
+                                <!-- SHOULD -->
+                                <div style="background:#0d1117; border:1px solid #f0883e40; border-radius:8px; padding:12px;">
+                                    <div style="color:#f0883e; font-size:0.8rem; font-weight:600; margin-bottom:8px;">SHOULD CAPTURE</div>
+                                    <div style="color:#8b949e; font-size:0.7rem; margin-bottom:8px;">Desired but not blocking</div>
+                                    <textarea id="fdb-v111-should-fields" rows="3" placeholder="phone, address" style="width:100%; background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:8px; font-size:0.8rem; resize:vertical; box-sizing:border-box;">${(this.config.conversationMemory?.captureGoals?.should?.fields || ['phone', 'address']).join(', ')}</textarea>
+                                </div>
+                                <!-- NICE -->
+                                <div style="background:#0d1117; border:1px solid #3fb95040; border-radius:8px; padding:12px;">
+                                    <div style="color:#3fb950; font-size:0.8rem; font-weight:600; margin-bottom:8px;">NICE TO HAVE</div>
+                                    <div style="color:#8b949e; font-size:0.7rem; margin-bottom:8px;">Optional enrichment</div>
+                                    <textarea id="fdb-v111-nice-fields" rows="3" placeholder="email, notes" style="width:100%; background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:8px; font-size:0.8rem; resize:vertical; box-sizing:border-box;">${(this.config.conversationMemory?.captureGoals?.nice?.fields || []).join(', ')}</textarea>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Handler Governance -->
+                        <div style="margin-bottom:20px;">
+                            <h4 style="margin:0 0 12px 0; color:#c9d1d9; font-size:0.9rem; display:flex; align-items:center; gap:8px;">
+                                🎛️ Handler Governance
+                                <span style="color:#8b949e; font-size:0.75rem; font-weight:normal;">Who can respond when</span>
+                            </h4>
+                            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:16px;">
+                                <!-- Scenario Handler -->
+                                <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:12px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                        <span style="color:#58a6ff; font-size:0.85rem; font-weight:500;">Scenario Handler</span>
+                                        <input type="checkbox" id="fdb-v111-scenario-enabled" ${this.config.conversationMemory?.handlerGovernance?.scenarioHandler?.enabled !== false ? 'checked' : ''} style="width:16px; height:16px;">
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                                        <span style="color:#8b949e; font-size:0.75rem;">Min Confidence:</span>
+                                        <input type="number" id="fdb-v111-scenario-confidence" min="0" max="1" step="0.05" value="${this.config.conversationMemory?.handlerGovernance?.scenarioHandler?.minConfidence || 0.75}" style="width:60px; background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:4px 6px; font-size:0.8rem;">
+                                    </div>
+                                    <label style="display:flex; gap:8px; align-items:center; margin-top:8px; color:#8b949e; font-size:0.75rem;">
+                                        <input type="checkbox" id="fdb-v111-scenario-booking" ${this.config.conversationMemory?.handlerGovernance?.scenarioHandler?.allowInBookingMode ? 'checked' : ''} style="width:14px; height:14px;">
+                                        Allow in booking mode
+                                    </label>
+                                </div>
+                                
+                                <!-- Booking Handler -->
+                                <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:12px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                        <span style="color:#3fb950; font-size:0.85rem; font-weight:500;">Booking Handler</span>
+                                        <input type="checkbox" id="fdb-v111-booking-enabled" ${this.config.conversationMemory?.handlerGovernance?.bookingHandler?.enabled !== false ? 'checked' : ''} style="width:16px; height:16px;">
+                                    </div>
+                                    <label style="display:flex; gap:8px; align-items:center; margin-top:8px; color:#8b949e; font-size:0.75rem;">
+                                        <input type="checkbox" id="fdb-v111-booking-consent" ${this.config.conversationMemory?.handlerGovernance?.bookingHandler?.requiresConsent !== false ? 'checked' : ''} style="width:14px; height:14px;">
+                                        Requires consent
+                                    </label>
+                                    <label style="display:flex; gap:8px; align-items:center; margin-top:8px; color:#8b949e; font-size:0.75rem;">
+                                        <input type="checkbox" id="fdb-v111-booking-lock" ${this.config.conversationMemory?.handlerGovernance?.bookingHandler?.lockAfterConsent !== false ? 'checked' : ''} style="width:14px; height:14px;">
+                                        Lock after consent
+                                    </label>
+                                </div>
+                                
+                                <!-- LLM Handler -->
+                                <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:12px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                        <span style="color:#a371f7; font-size:0.85rem; font-weight:500;">LLM Handler</span>
+                                        <input type="checkbox" id="fdb-v111-llm-enabled" ${this.config.conversationMemory?.handlerGovernance?.llmHandler?.enabled !== false ? 'checked' : ''} style="width:16px; height:16px;">
+                                    </div>
+                                    <label style="display:flex; gap:8px; align-items:center; margin-top:8px; color:#8b949e; font-size:0.75rem;">
+                                        <input type="checkbox" id="fdb-v111-llm-fallback" ${this.config.conversationMemory?.handlerGovernance?.llmHandler?.isDefaultFallback !== false ? 'checked' : ''} style="width:14px; height:14px;">
+                                        Default fallback
+                                    </label>
+                                    <label style="display:flex; gap:8px; align-items:center; margin-top:8px; color:#8b949e; font-size:0.75rem;">
+                                        <input type="checkbox" id="fdb-v111-llm-facts" ${this.config.conversationMemory?.handlerGovernance?.llmHandler?.canWriteFacts ? 'checked' : ''} style="width:14px; height:14px;">
+                                        Can write facts
+                                    </label>
+                                </div>
+                                
+                                <!-- Escalation Handler -->
+                                <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:12px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                                        <span style="color:#f85149; font-size:0.85rem; font-weight:500;">Escalation Handler</span>
+                                        <input type="checkbox" id="fdb-v111-escalation-enabled" ${this.config.conversationMemory?.handlerGovernance?.escalationHandler?.enabled !== false ? 'checked' : ''} style="width:16px; height:16px;">
+                                    </div>
+                                    <div style="color:#8b949e; font-size:0.7rem; margin-top:8px;">Triggers:</div>
+                                    <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
+                                        ${['explicit_request', 'frustration_detected', 'loop_detected'].map(t => {
+                                            const triggers = this.config.conversationMemory?.handlerGovernance?.escalationHandler?.triggers || ['explicit_request', 'frustration_detected', 'loop_detected'];
+                                            return '<label style="display:flex; gap:4px; align-items:center; color:#8b949e; font-size:0.7rem;"><input type="checkbox" class="fdb-v111-escalation-trigger" data-trigger="' + t + '" ' + (triggers.includes(t) ? 'checked' : '') + ' style="width:12px; height:12px;">' + t.replace(/_/g, ' ') + '</label>';
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Context Window & Router -->
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:20px;">
+                            <!-- Context Window -->
+                            <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                                <h4 style="margin:0 0 12px 0; color:#c9d1d9; font-size:0.85rem;">📝 Context Window</h4>
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                                    <div>
+                                        <label style="color:#8b949e; font-size:0.75rem; display:block; margin-bottom:4px;">Max Turns</label>
+                                        <input type="number" id="fdb-v111-max-turns" min="1" max="20" value="${this.config.conversationMemory?.contextWindow?.maxTurns || 6}" style="width:100%; background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:6px; font-size:0.85rem; box-sizing:border-box;">
+                                    </div>
+                                    <div>
+                                        <label style="color:#8b949e; font-size:0.75rem; display:block; margin-bottom:4px;">Token Budget</label>
+                                        <input type="number" id="fdb-v111-token-budget" min="100" max="2000" step="50" value="${this.config.conversationMemory?.contextWindow?.maxTokenBudget || 600}" style="width:100%; background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:6px; font-size:0.85rem; box-sizing:border-box;">
+                                    </div>
+                                </div>
+                                <label style="display:flex; gap:8px; align-items:center; margin-top:12px; color:#8b949e; font-size:0.75rem;">
+                                    <input type="checkbox" id="fdb-v111-summarize-older" ${this.config.conversationMemory?.contextWindow?.summarizeOlderTurns !== false ? 'checked' : ''} style="width:14px; height:14px;">
+                                    Summarize older turns
+                                </label>
+                                <label style="display:flex; gap:8px; align-items:center; margin-top:8px; color:#8b949e; font-size:0.75rem;">
+                                    <input type="checkbox" id="fdb-v111-include-facts" ${this.config.conversationMemory?.contextWindow?.alwaysIncludeFacts !== false ? 'checked' : ''} style="width:14px; height:14px;">
+                                    Always include facts
+                                </label>
+                            </div>
+                            
+                            <!-- Router Rules -->
+                            <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                                <h4 style="margin:0 0 12px 0; color:#c9d1d9; font-size:0.85rem;">🔀 Router Rules</h4>
+                                <label style="display:flex; gap:8px; align-items:center; color:#8b949e; font-size:0.75rem;">
+                                    <input type="checkbox" id="fdb-v111-capture-injection" ${this.config.conversationMemory?.routerRules?.captureInjection?.enabled !== false ? 'checked' : ''} style="width:14px; height:14px;">
+                                    Capture injection enabled
+                                </label>
+                                <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                                    <span style="color:#8b949e; font-size:0.75rem;">Max turns without progress:</span>
+                                    <input type="number" id="fdb-v111-max-no-progress" min="1" max="5" value="${this.config.conversationMemory?.routerRules?.captureInjection?.maxTurnsWithoutProgress || 2}" style="width:50px; background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:4px; font-size:0.8rem;">
+                                </div>
+                                <label style="display:flex; gap:8px; align-items:center; margin-top:12px; color:#8b949e; font-size:0.75rem;">
+                                    <input type="checkbox" id="fdb-v111-loop-detection" ${this.config.conversationMemory?.routerRules?.loopDetection?.enabled !== false ? 'checked' : ''} style="width:14px; height:14px;">
+                                    Loop detection enabled
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- BlackBox Settings -->
+                        <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                            <h4 style="margin:0 0 12px 0; color:#c9d1d9; font-size:0.85rem;">📦 BlackBox Logging</h4>
+                            <div style="display:flex; gap:24px; align-items:center;">
+                                <label style="display:flex; gap:8px; align-items:center; color:#8b949e; font-size:0.8rem;">
+                                    <input type="checkbox" id="fdb-v111-log-turns" ${this.config.conversationMemory?.blackbox?.logTurnRecords !== false ? 'checked' : ''} style="width:16px; height:16px;">
+                                    Log TurnRecords
+                                </label>
+                                <label style="display:flex; gap:8px; align-items:center; color:#8b949e; font-size:0.8rem;">
+                                    <input type="checkbox" id="fdb-v111-log-milestones" ${this.config.conversationMemory?.blackbox?.logMilestones !== false ? 'checked' : ''} style="width:16px; height:16px;">
+                                    Log Milestones
+                                </label>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <span style="color:#8b949e; font-size:0.8rem;">Verbosity:</span>
+                                    <select id="fdb-v111-verbosity" style="background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:4px; padding:4px 8px; font-size:0.8rem;">
+                                        <option value="minimal" ${this.config.conversationMemory?.blackbox?.verbosity === 'minimal' ? 'selected' : ''}>Minimal</option>
+                                        <option value="standard" ${!this.config.conversationMemory?.blackbox?.verbosity || this.config.conversationMemory?.blackbox?.verbosity === 'standard' ? 'selected' : ''}>Standard</option>
+                                        <option value="debug" ${this.config.conversationMemory?.blackbox?.verbosity === 'debug' ? 'selected' : ''}>Debug</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- V111: Conversation Memory Viewer (Phase 1 - Visibility) -->
+                <div style="background:#161b22; border:1px solid #30363d; border-left:3px solid #a371f7; border-radius:8px; padding:20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <div>
+                            <h3 style="margin:0; color:#a371f7; display:flex; align-items:center; gap:8px;">
+                                📊 Conversation Memory Viewer
+                                <span style="background:#a371f720; color:#a371f7; padding:4px 8px; border-radius:4px; font-size:0.7rem; font-weight:normal;">V111 BETA</span>
+                            </h3>
+                            <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.8rem;">
+                                View turn-by-turn data from recent calls • Debug routing decisions • Track fact capture
+                            </p>
+                        </div>
+                        <button id="fdb-v111-refresh" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                    
+                    <!-- Call Selector -->
+                    <div style="margin-bottom:16px; display:flex; gap:12px; align-items:center;">
+                        <select id="fdb-v111-call-select" style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:10px 12px; border-radius:6px; font-size:0.9rem;">
+                            <option value="">-- Select a recent call to analyze --</option>
+                        </select>
+                        <button id="fdb-v111-load" style="background:#238636; color:#fff; border:none; padding:10px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
+                            Load Call
+                        </button>
+                    </div>
+                    
+                    <!-- Call Summary (hidden initially) -->
+                    <div id="fdb-v111-summary" style="display:none; background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px; margin-bottom:16px;">
+                        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:16px; margin-bottom:16px;">
+                            <div style="text-align:center;">
+                                <div style="color:#8b949e; font-size:0.75rem; margin-bottom:4px;">TURNS</div>
+                                <div id="fdb-v111-turn-count" style="color:#58a6ff; font-size:1.5rem; font-weight:600;">-</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="color:#8b949e; font-size:0.75rem; margin-bottom:4px;">DURATION</div>
+                                <div id="fdb-v111-duration" style="color:#3fb950; font-size:1.5rem; font-weight:600;">-</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="color:#8b949e; font-size:0.75rem; margin-bottom:4px;">PRIMARY HANDLER</div>
+                                <div id="fdb-v111-handler" style="color:#f0883e; font-size:1.25rem; font-weight:600;">-</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="color:#8b949e; font-size:0.75rem; margin-bottom:4px;">FACTS CAPTURED</div>
+                                <div id="fdb-v111-facts-count" style="color:#a371f7; font-size:1.5rem; font-weight:600;">-</div>
+                            </div>
+                        </div>
+                        <div id="fdb-v111-final-facts" style="background:#161b22; border-radius:6px; padding:12px;">
+                            <div style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">FINAL FACTS</div>
+                            <div id="fdb-v111-facts-list" style="display:flex; flex-wrap:wrap; gap:8px; color:#c9d1d9; font-size:0.85rem;">
+                                <span style="color:#8b949e;">No facts captured</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Goal Comparison -->
+                        <div id="fdb-v111-goal-comparison" style="background:#161b22; border-radius:6px; padding:12px; margin-top:12px;">
+                            <div style="color:#8b949e; font-size:0.75rem; margin-bottom:8px;">CAPTURE GOALS VS ACTUAL</div>
+                            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;">
+                                <div style="background:#0d1117; border:1px solid #f8514940; border-radius:6px; padding:10px;">
+                                    <div style="color:#f85149; font-size:0.7rem; font-weight:600; margin-bottom:6px;">MUST CAPTURE</div>
+                                    <div id="fdb-v111-must-status" style="font-size:0.8rem;">-</div>
+                                </div>
+                                <div style="background:#0d1117; border:1px solid #f0883e40; border-radius:6px; padding:10px;">
+                                    <div style="color:#f0883e; font-size:0.7rem; font-weight:600; margin-bottom:6px;">SHOULD CAPTURE</div>
+                                    <div id="fdb-v111-should-status" style="font-size:0.8rem;">-</div>
+                                </div>
+                                <div style="background:#0d1117; border:1px solid #3fb95040; border-radius:6px; padding:10px;">
+                                    <div style="color:#3fb950; font-size:0.7rem; font-weight:600; margin-bottom:6px;">NICE TO HAVE</div>
+                                    <div id="fdb-v111-nice-status" style="font-size:0.8rem;">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Turn-by-Turn Timeline -->
+                    <div id="fdb-v111-turns" style="display:none;">
+                        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>TURN-BY-TURN TIMELINE</span>
+                            <button id="fdb-v111-expand-all" style="background:transparent; border:none; color:#58a6ff; cursor:pointer; font-size:0.8rem;">Expand All</button>
+                        </div>
+                        <div id="fdb-v111-turns-container" style="display:flex; flex-direction:column; gap:8px;">
+                            <!-- Turns will be populated here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Empty State -->
+                    <div id="fdb-v111-empty" style="text-align:center; padding:40px; color:#8b949e;">
+                        <span style="font-size:2rem;">📊</span>
+                        <p style="margin:12px 0 0 0;">Select a call above to view conversation memory data</p>
+                        <p style="margin:8px 0 0 0; font-size:0.8rem;">Only calls with V111 TurnRecords will appear</p>
+                    </div>
+                </div>
+
                 <!-- Save / Export Actions -->
                 <div style="display:flex; gap:12px; align-items:center;">
                     <button id="fdb-save-flows" style="background:#238636; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500;">
@@ -2283,6 +2563,498 @@ class FrontDeskBehaviorManager {
                 input.click();
             });
         }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V111: CONVERSATION MEMORY CONFIG - Define capture goals & governance
+        // ═══════════════════════════════════════════════════════════════════════════
+        const v111ConfigEnabled = contentElement.querySelector('#fdb-v111-config-enabled');
+        const v111ConfigBody = contentElement.querySelector('#fdb-v111-config-body');
+        
+        // Enable/disable toggle
+        if (v111ConfigEnabled) {
+            v111ConfigEnabled.addEventListener('change', () => {
+                const enabled = v111ConfigEnabled.checked;
+                if (v111ConfigBody) {
+                    v111ConfigBody.style.opacity = enabled ? '1' : '0.5';
+                    v111ConfigBody.style.pointerEvents = enabled ? 'auto' : 'none';
+                }
+                this.updateV111Config({ enabled });
+            });
+        }
+        
+        // Capture Goals - Must/Should/Nice fields
+        const mustFieldsEl = contentElement.querySelector('#fdb-v111-must-fields');
+        const shouldFieldsEl = contentElement.querySelector('#fdb-v111-should-fields');
+        const niceFieldsEl = contentElement.querySelector('#fdb-v111-nice-fields');
+        
+        const parseFields = (text) => text.split(',').map(f => f.trim()).filter(f => f);
+        
+        if (mustFieldsEl) {
+            mustFieldsEl.addEventListener('change', () => {
+                this.updateV111Config({ captureGoals: { must: { fields: parseFields(mustFieldsEl.value) } } });
+            });
+        }
+        if (shouldFieldsEl) {
+            shouldFieldsEl.addEventListener('change', () => {
+                this.updateV111Config({ captureGoals: { should: { fields: parseFields(shouldFieldsEl.value) } } });
+            });
+        }
+        if (niceFieldsEl) {
+            niceFieldsEl.addEventListener('change', () => {
+                this.updateV111Config({ captureGoals: { nice: { fields: parseFields(niceFieldsEl.value) } } });
+            });
+        }
+        
+        // Handler Governance - Scenario Handler
+        const scenarioEnabled = contentElement.querySelector('#fdb-v111-scenario-enabled');
+        const scenarioConfidence = contentElement.querySelector('#fdb-v111-scenario-confidence');
+        const scenarioBooking = contentElement.querySelector('#fdb-v111-scenario-booking');
+        
+        if (scenarioEnabled) {
+            scenarioEnabled.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { scenarioHandler: { enabled: scenarioEnabled.checked } } });
+            });
+        }
+        if (scenarioConfidence) {
+            scenarioConfidence.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { scenarioHandler: { minConfidence: parseFloat(scenarioConfidence.value) || 0.75 } } });
+            });
+        }
+        if (scenarioBooking) {
+            scenarioBooking.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { scenarioHandler: { allowInBookingMode: scenarioBooking.checked } } });
+            });
+        }
+        
+        // Handler Governance - Booking Handler
+        const bookingEnabled = contentElement.querySelector('#fdb-v111-booking-enabled');
+        const bookingConsent = contentElement.querySelector('#fdb-v111-booking-consent');
+        const bookingLock = contentElement.querySelector('#fdb-v111-booking-lock');
+        
+        if (bookingEnabled) {
+            bookingEnabled.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { bookingHandler: { enabled: bookingEnabled.checked } } });
+            });
+        }
+        if (bookingConsent) {
+            bookingConsent.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { bookingHandler: { requiresConsent: bookingConsent.checked } } });
+            });
+        }
+        if (bookingLock) {
+            bookingLock.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { bookingHandler: { lockAfterConsent: bookingLock.checked } } });
+            });
+        }
+        
+        // Handler Governance - LLM Handler
+        const llmEnabled = contentElement.querySelector('#fdb-v111-llm-enabled');
+        const llmFallback = contentElement.querySelector('#fdb-v111-llm-fallback');
+        const llmFacts = contentElement.querySelector('#fdb-v111-llm-facts');
+        
+        if (llmEnabled) {
+            llmEnabled.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { llmHandler: { enabled: llmEnabled.checked } } });
+            });
+        }
+        if (llmFallback) {
+            llmFallback.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { llmHandler: { isDefaultFallback: llmFallback.checked } } });
+            });
+        }
+        if (llmFacts) {
+            llmFacts.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { llmHandler: { canWriteFacts: llmFacts.checked } } });
+            });
+        }
+        
+        // Handler Governance - Escalation Handler
+        const escalationEnabled = contentElement.querySelector('#fdb-v111-escalation-enabled');
+        const escalationTriggers = contentElement.querySelectorAll('.fdb-v111-escalation-trigger');
+        
+        if (escalationEnabled) {
+            escalationEnabled.addEventListener('change', () => {
+                this.updateV111Config({ handlerGovernance: { escalationHandler: { enabled: escalationEnabled.checked } } });
+            });
+        }
+        if (escalationTriggers.length > 0) {
+            escalationTriggers.forEach(checkbox => {
+                checkbox.addEventListener('change', () => {
+                    const triggers = [];
+                    escalationTriggers.forEach(cb => {
+                        if (cb.checked) triggers.push(cb.dataset.trigger);
+                    });
+                    this.updateV111Config({ handlerGovernance: { escalationHandler: { triggers } } });
+                });
+            });
+        }
+        
+        // Context Window Settings
+        const maxTurns = contentElement.querySelector('#fdb-v111-max-turns');
+        const tokenBudget = contentElement.querySelector('#fdb-v111-token-budget');
+        const summarizeOlder = contentElement.querySelector('#fdb-v111-summarize-older');
+        const includeFacts = contentElement.querySelector('#fdb-v111-include-facts');
+        
+        if (maxTurns) {
+            maxTurns.addEventListener('change', () => {
+                this.updateV111Config({ contextWindow: { maxTurns: parseInt(maxTurns.value) || 6 } });
+            });
+        }
+        if (tokenBudget) {
+            tokenBudget.addEventListener('change', () => {
+                this.updateV111Config({ contextWindow: { maxTokenBudget: parseInt(tokenBudget.value) || 600 } });
+            });
+        }
+        if (summarizeOlder) {
+            summarizeOlder.addEventListener('change', () => {
+                this.updateV111Config({ contextWindow: { summarizeOlderTurns: summarizeOlder.checked } });
+            });
+        }
+        if (includeFacts) {
+            includeFacts.addEventListener('change', () => {
+                this.updateV111Config({ contextWindow: { alwaysIncludeFacts: includeFacts.checked } });
+            });
+        }
+        
+        // Router Rules
+        const captureInjection = contentElement.querySelector('#fdb-v111-capture-injection');
+        const maxNoProgress = contentElement.querySelector('#fdb-v111-max-no-progress');
+        const loopDetection = contentElement.querySelector('#fdb-v111-loop-detection');
+        
+        if (captureInjection) {
+            captureInjection.addEventListener('change', () => {
+                this.updateV111Config({ routerRules: { captureInjection: { enabled: captureInjection.checked } } });
+            });
+        }
+        if (maxNoProgress) {
+            maxNoProgress.addEventListener('change', () => {
+                this.updateV111Config({ routerRules: { captureInjection: { maxTurnsWithoutProgress: parseInt(maxNoProgress.value) || 2 } } });
+            });
+        }
+        if (loopDetection) {
+            loopDetection.addEventListener('change', () => {
+                this.updateV111Config({ routerRules: { loopDetection: { enabled: loopDetection.checked } } });
+            });
+        }
+        
+        // BlackBox Settings
+        const logTurns = contentElement.querySelector('#fdb-v111-log-turns');
+        const logMilestones = contentElement.querySelector('#fdb-v111-log-milestones');
+        const verbosity = contentElement.querySelector('#fdb-v111-verbosity');
+        
+        if (logTurns) {
+            logTurns.addEventListener('change', () => {
+                this.updateV111Config({ blackbox: { logTurnRecords: logTurns.checked } });
+            });
+        }
+        if (logMilestones) {
+            logMilestones.addEventListener('change', () => {
+                this.updateV111Config({ blackbox: { logMilestones: logMilestones.checked } });
+            });
+        }
+        if (verbosity) {
+            verbosity.addEventListener('change', () => {
+                this.updateV111Config({ blackbox: { verbosity: verbosity.value } });
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V111: CONVERSATION MEMORY VIEWER - Turn-by-turn analysis
+        // ═══════════════════════════════════════════════════════════════════════════
+        const v111CallSelect = contentElement.querySelector('#fdb-v111-call-select');
+        const v111LoadBtn = contentElement.querySelector('#fdb-v111-load');
+        const v111RefreshBtn = contentElement.querySelector('#fdb-v111-refresh');
+        const v111Summary = contentElement.querySelector('#fdb-v111-summary');
+        const v111Turns = contentElement.querySelector('#fdb-v111-turns');
+        const v111TurnsContainer = contentElement.querySelector('#fdb-v111-turns-container');
+        const v111Empty = contentElement.querySelector('#fdb-v111-empty');
+        const v111ExpandAll = contentElement.querySelector('#fdb-v111-expand-all');
+        
+        // Load recent calls with V111 data
+        const loadRecentCalls = async () => {
+            if (!v111CallSelect) return;
+            const companyId = this.companyId;
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                v111CallSelect.innerHTML = '<option value="">Loading...</option>';
+                
+                const res = await fetch(`/api/admin/conversation-memory/recent/${companyId}?limit=20`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const json = await res.json();
+                
+                if (json.success && json.data?.calls?.length > 0) {
+                    v111CallSelect.innerHTML = '<option value="">-- Select a recent call to analyze --</option>' +
+                        json.data.calls.map(call => {
+                            const time = new Date(call.startedAt).toLocaleString();
+                            const phone = call.from || 'Unknown';
+                            const turns = call.v111TurnCount || call.totalTurns || 0;
+                            return `<option value="${call.callId}">${time} | ${phone} | ${turns} turns</option>`;
+                        }).join('');
+                } else {
+                    v111CallSelect.innerHTML = '<option value="">No calls with V111 data found</option>';
+                }
+            } catch (err) {
+                console.error('[V111] Failed to load recent calls:', err);
+                v111CallSelect.innerHTML = '<option value="">Error loading calls</option>';
+            }
+        };
+        
+        // Load a specific call's memory
+        const loadCallMemory = async (callId) => {
+            if (!callId) return;
+            const companyId = this.companyId;
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            
+            try {
+                const res = await fetch(`/api/admin/conversation-memory/${companyId}/${callId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const json = await res.json();
+                
+                if (json.success && json.data?.v111) {
+                    displayCallMemory(json.data);
+                } else {
+                    alert('No V111 data found for this call');
+                }
+            } catch (err) {
+                console.error('[V111] Failed to load call memory:', err);
+                alert('Failed to load call memory: ' + err.message);
+            }
+        };
+        
+        // Display call memory data
+        const displayCallMemory = (data) => {
+            const v111 = data.v111;
+            
+            // Show summary, hide empty
+            if (v111Empty) v111Empty.style.display = 'none';
+            if (v111Summary) v111Summary.style.display = 'block';
+            if (v111Turns) v111Turns.style.display = 'block';
+            
+            // Update summary stats
+            const turnCountEl = contentElement.querySelector('#fdb-v111-turn-count');
+            const durationEl = contentElement.querySelector('#fdb-v111-duration');
+            const handlerEl = contentElement.querySelector('#fdb-v111-handler');
+            const factsCountEl = contentElement.querySelector('#fdb-v111-facts-count');
+            const factsListEl = contentElement.querySelector('#fdb-v111-facts-list');
+            
+            if (turnCountEl) turnCountEl.textContent = v111.turnCount || 0;
+            if (durationEl) {
+                const durationSec = Math.round((data.durationMs || 0) / 1000);
+                durationEl.textContent = durationSec > 60 ? `${Math.floor(durationSec/60)}m ${durationSec%60}s` : `${durationSec}s`;
+            }
+            if (handlerEl) handlerEl.textContent = v111.routingSummary?.primaryHandler || '-';
+            
+            // Display final facts
+            const finalFacts = v111.finalState?.facts || {};
+            const factKeys = Object.keys(finalFacts);
+            if (factsCountEl) factsCountEl.textContent = factKeys.length;
+            if (factsListEl) {
+                if (factKeys.length > 0) {
+                    factsListEl.innerHTML = factKeys.map(k => 
+                        `<span style="background:#238636; padding:4px 10px; border-radius:12px; font-size:0.8rem;">${k}: ${finalFacts[k]}</span>`
+                    ).join('');
+                } else {
+                    factsListEl.innerHTML = '<span style="color:#8b949e;">No facts captured</span>';
+                }
+            }
+            
+            // Goal comparison - compare config goals vs actual captured facts
+            const mustStatusEl = contentElement.querySelector('#fdb-v111-must-status');
+            const shouldStatusEl = contentElement.querySelector('#fdb-v111-should-status');
+            const niceStatusEl = contentElement.querySelector('#fdb-v111-nice-status');
+            
+            const capturedLower = factKeys.map(k => k.toLowerCase());
+            const config = this.config.conversationMemory || {};
+            
+            // Helper to render field status
+            const renderFieldStatus = (fields = [], captured) => {
+                if (fields.length === 0) return '<span style="color:#8b949e;">None configured</span>';
+                return fields.map(f => {
+                    const fLower = f.toLowerCase();
+                    // Check if any captured fact contains this field name
+                    const isCaptured = captured.some(c => c.includes(fLower) || fLower.includes(c));
+                    return isCaptured 
+                        ? `<span style="color:#3fb950;">✓ ${f}</span>`
+                        : `<span style="color:#f85149;">✗ ${f}</span>`;
+                }).join('<br>');
+            };
+            
+            if (mustStatusEl) {
+                const mustFields = config.captureGoals?.must?.fields || ['name', 'issue'];
+                mustStatusEl.innerHTML = renderFieldStatus(mustFields, capturedLower);
+            }
+            if (shouldStatusEl) {
+                const shouldFields = config.captureGoals?.should?.fields || ['phone', 'address'];
+                shouldStatusEl.innerHTML = renderFieldStatus(shouldFields, capturedLower);
+            }
+            if (niceStatusEl) {
+                const niceFields = config.captureGoals?.nice?.fields || [];
+                niceStatusEl.innerHTML = renderFieldStatus(niceFields, capturedLower);
+            }
+            
+            // Display turns
+            if (v111TurnsContainer && v111.turns) {
+                v111TurnsContainer.innerHTML = v111.turns.map((turn, idx) => renderTurnCard(turn, idx)).join('');
+                
+                // Add click handlers for expanding turns
+                v111TurnsContainer.querySelectorAll('.v111-turn-header').forEach(header => {
+                    header.addEventListener('click', () => {
+                        const details = header.nextElementSibling;
+                        if (details) {
+                            details.style.display = details.style.display === 'none' ? 'block' : 'none';
+                        }
+                    });
+                });
+            }
+        };
+        
+        // Render a single turn card
+        const renderTurnCard = (turn, idx) => {
+            const handler = turn?.routing?.selectedHandler || 'UNKNOWN';
+            const callerText = turn?.caller?.cleaned || turn?.caller?.raw || '';
+            const responseText = turn?.response?.text || '';
+            const latencyMs = turn?.response?.latencyMs || 0;
+            const factsAdded = turn?.delta?.factsAdded || [];
+            const why = (turn?.routing?.why || []).map(w => w.rule || w).join(' → ') || 'unknown';
+            const sttOps = turn?.caller?.sttOps || {};
+            const fillersRemoved = sttOps.fillersRemoved || [];
+            
+            // V111 Phase 4: Extract governance info
+            const v111 = turn?.v111 || {};
+            const governance = v111.governance || [];
+            const captureInjection = v111.captureInjection || null;
+            const escalation = v111.escalation || null;
+            const memorySnapshot = turn?.memorySnapshot || {};
+            
+            // Check for special V111 indicators in routing why
+            const hasCaptureRecommendation = why.includes('capture_injection');
+            const hasLoopDetection = why.includes('loop_detected');
+            
+            // Color based on handler
+            const handlerColors = {
+                'LLM': '#f0883e',
+                'LLM_DEFAULT': '#f0883e',
+                'SCENARIO': '#3fb950',
+                'SCENARIO_MATCHED': '#3fb950',
+                'BOOKING': '#58a6ff',
+                'BOOKING_RUNNER': '#58a6ff',
+                'BOOKING_FLOW_RUNNER': '#58a6ff',
+                'ERROR': '#f85149',
+                'ESCALATION': '#f85149',
+                'V111_ESCALATION': '#f85149',
+                'CAPTURE_INJECTION': '#a371f7',
+                'V111_CAPTURE_INJECTION': '#a371f7'
+            };
+            const handlerColor = handlerColors[handler] || '#8b949e';
+            
+            // Build V111 badges
+            const v111Badges = [];
+            if (captureInjection?.inject) {
+                v111Badges.push('<span style="background:#a371f720; color:#a371f7; padding:2px 6px; border-radius:4px; font-size:0.65rem;">📝 capture</span>');
+            }
+            if (hasLoopDetection) {
+                v111Badges.push('<span style="background:#f8514920; color:#f85149; padding:2px 6px; border-radius:4px; font-size:0.65rem;">🔄 loop</span>');
+            }
+            if (hasCaptureRecommendation) {
+                v111Badges.push('<span style="background:#f0883e20; color:#f0883e; padding:2px 6px; border-radius:4px; font-size:0.65rem;">🎯 goal</span>');
+            }
+            
+            return `
+                <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; overflow:hidden;">
+                    <div class="v111-turn-header" style="padding:12px 16px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#161b22;">
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="background:#21262d; color:#8b949e; padding:4px 10px; border-radius:4px; font-size:0.75rem; font-weight:600;">T${turn?.turn ?? idx}</span>
+                            <span style="color:#c9d1d9; font-size:0.9rem; max-width:400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">"${callerText.substring(0, 60)}${callerText.length > 60 ? '...' : ''}"</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            ${v111Badges.join(' ')}
+                            ${factsAdded.length > 0 ? '<span style="background:#238636; color:#fff; padding:2px 8px; border-radius:4px; font-size:0.7rem;">+' + factsAdded.join(', ') + '</span>' : ''}
+                            <span style="background:${handlerColor}30; color:${handlerColor}; padding:4px 10px; border-radius:4px; font-size:0.75rem; font-weight:600;">${handler}</span>
+                            <span style="color:#8b949e; font-size:0.75rem;">${latencyMs}ms</span>
+                        </div>
+                    </div>
+                    <div class="v111-turn-details" style="display:none; padding:16px; border-top:1px solid #30363d;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                            <div>
+                                <div style="color:#8b949e; font-size:0.7rem; margin-bottom:6px;">CALLER INPUT</div>
+                                <div style="background:#161b22; padding:10px; border-radius:6px; color:#c9d1d9; font-size:0.85rem;">${callerText || '<em>empty</em>'}</div>
+                                ${fillersRemoved.length > 0 ? '<div style="margin-top:6px; color:#f0883e; font-size:0.75rem;">🔇 Fillers removed: ' + fillersRemoved.join(', ') + '</div>' : ''}
+                            </div>
+                            <div>
+                                <div style="color:#8b949e; font-size:0.7rem; margin-bottom:6px;">AGENT RESPONSE</div>
+                                <div style="background:#161b22; padding:10px; border-radius:6px; color:#c9d1d9; font-size:0.85rem;">${responseText || '<em>empty</em>'}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:12px; padding-top:12px; border-top:1px solid #21262d;">
+                            <div style="color:#8b949e; font-size:0.7rem; margin-bottom:6px;">ROUTING DECISION</div>
+                            <div style="color:#58a6ff; font-size:0.8rem;">${why}</div>
+                        </div>
+                        ${factsAdded.length > 0 ? `
+                            <div style="margin-top:12px; padding-top:12px; border-top:1px solid #21262d;">
+                                <div style="color:#8b949e; font-size:0.7rem; margin-bottom:6px;">FACTS CAPTURED</div>
+                                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                                    ${factsAdded.map(f => '<span style="background:#238636; color:#fff; padding:4px 10px; border-radius:12px; font-size:0.75rem;">' + f + '</span>').join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        ${governance.length > 0 ? `
+                            <div style="margin-top:12px; padding-top:12px; border-top:1px solid #21262d;">
+                                <div style="color:#8b949e; font-size:0.7rem; margin-bottom:6px;">🎛️ V111 GOVERNANCE TRAIL</div>
+                                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                                    ${governance.map(g => {
+                                        const stepColor = g.result === 'triggered' || g.result === 'inject' ? '#f85149' : 
+                                                         g.result === 'matched' || g.result === 'allowed' || g.result === 'locked' ? '#3fb950' : 
+                                                         g.result === 'rejected' ? '#f0883e' : '#8b949e';
+                                        return '<span style="background:' + stepColor + '20; color:' + stepColor + '; padding:4px 8px; border-radius:4px; font-size:0.7rem;">' + g.step + ': ' + g.result + '</span>';
+                                    }).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        ${memorySnapshot?.captureProgress ? `
+                            <div style="margin-top:12px; padding-top:12px; border-top:1px solid #21262d;">
+                                <div style="color:#8b949e; font-size:0.7rem; margin-bottom:6px;">📊 CAPTURE PROGRESS</div>
+                                <div style="display:flex; gap:16px; font-size:0.75rem;">
+                                    <span style="color:#8b949e;">Phase: <strong style="color:#c9d1d9;">${memorySnapshot.phase || 'DISCOVERY'}</strong></span>
+                                    <span style="color:#8b949e;">Booking: <strong style="color:${memorySnapshot.bookingMode ? '#58a6ff' : '#8b949e'};">${memorySnapshot.bookingMode ? 'LOCKED' : 'open'}</strong></span>
+                                    <span style="color:#8b949e;">No-progress turns: <strong style="color:${(memorySnapshot.captureProgress?.turnsWithoutProgress || 0) >= 2 ? '#f0883e' : '#c9d1d9'};">${memorySnapshot.captureProgress?.turnsWithoutProgress || 0}</strong></span>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        };
+        
+        // Event handlers
+        if (v111RefreshBtn) {
+            v111RefreshBtn.addEventListener('click', loadRecentCalls);
+        }
+        
+        if (v111LoadBtn) {
+            v111LoadBtn.addEventListener('click', () => {
+                const callId = v111CallSelect?.value;
+                if (callId) {
+                    loadCallMemory(callId);
+                } else {
+                    alert('Please select a call first');
+                }
+            });
+        }
+        
+        if (v111ExpandAll) {
+            v111ExpandAll.addEventListener('click', () => {
+                const details = v111TurnsContainer?.querySelectorAll('.v111-turn-details');
+                const anyHidden = Array.from(details || []).some(d => d.style.display === 'none');
+                details?.forEach(d => d.style.display = anyHidden ? 'block' : 'none');
+                v111ExpandAll.textContent = anyHidden ? 'Collapse All' : 'Expand All';
+            });
+        }
+        
+        // Load recent calls on tab init
+        loadRecentCalls();
         
         // ═══════════════════════════════════════════════════════════════════════════
         // STT INTELLIGENCE MODAL - View filler words, corrections, synonyms inline
@@ -12506,6 +13278,62 @@ Sean → Shawn, Shaun`;
                 verifyBtn.innerHTML = '🔬 Verify Now';
             }
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V111: Update Conversation Memory Config with deep merge
+    // ═══════════════════════════════════════════════════════════════════════════
+    updateV111Config(partial) {
+        // Initialize conversationMemory if it doesn't exist
+        if (!this.config.conversationMemory) {
+            this.config.conversationMemory = {
+                version: 'v111',
+                enabled: false,
+                captureGoals: {
+                    must: { fields: ['name', 'issue'], deadline: 'before_booking_confirmation', onMissing: 'router_prompts' },
+                    should: { fields: ['phone', 'address'], deadline: 'end_of_discovery', onMissing: 'log_warning' },
+                    nice: { fields: [], deadline: 'none', onMissing: 'ignore' }
+                },
+                contextWindow: { maxTurns: 6, summarizeOlderTurns: true, alwaysIncludeFacts: true, maxTokenBudget: 600 },
+                handlerGovernance: {
+                    scenarioHandler: { enabled: true, minConfidence: 0.75, allowInBookingMode: false },
+                    bookingHandler: { enabled: true, requiresConsent: true, consentConfidence: 0.8, lockAfterConsent: true },
+                    llmHandler: { enabled: true, isDefaultFallback: true, canWriteFacts: false },
+                    escalationHandler: { enabled: true, triggers: ['explicit_request', 'frustration_detected', 'loop_detected'] }
+                },
+                routerRules: {
+                    priority: ['escalation', 'booking_locked', 'scenario_match', 'llm_default'],
+                    captureInjection: { enabled: true, maxTurnsWithoutProgress: 2 },
+                    loopDetection: { enabled: true, maxRepeatedResponses: 2, onLoop: 'escalate' }
+                },
+                blackbox: { logTurnRecords: true, logMilestones: true, verbosity: 'standard' }
+            };
+        }
+        
+        // Deep merge helper
+        const deepMerge = (target, source) => {
+            for (const key in source) {
+                if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+                    if (!target[key]) target[key] = {};
+                    deepMerge(target[key], source[key]);
+                } else {
+                    target[key] = source[key];
+                }
+            }
+            return target;
+        };
+        
+        // Merge the partial update into the config
+        deepMerge(this.config.conversationMemory, partial);
+        
+        // Mark as dirty so save will include these changes
+        this.isDirty = true;
+        
+        console.log('[FRONT DESK] V111 config updated:', {
+            partial,
+            enabled: this.config.conversationMemory.enabled,
+            captureGoals: this.config.conversationMemory.captureGoals
+        });
     }
 
     showNotification(message, type = 'info') {
