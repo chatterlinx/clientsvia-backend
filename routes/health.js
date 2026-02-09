@@ -446,6 +446,98 @@ router.get('/ping', (req, res) => {
 });
 
 // ============================================================================
+// V111 HEALTH ENDPOINT (PUBLIC - No Auth Required)
+// ============================================================================
+// Quick check to verify V111 Conversation Memory system is healthy
+// Usage: curl https://clientsvia-backend.onrender.com/api/v111-health
+// ============================================================================
+router.get('/v111-health', async (req, res) => {
+    const startTime = Date.now();
+    const checks = {
+        timestamp: new Date().toISOString(),
+        version: 'v111.health.1',
+        modules: {},
+        redis: { status: 'unchecked' },
+        mongodb: { status: 'unchecked' },
+        integration: { status: 'unchecked' },
+        summary: { passed: 0, failed: 0, warnings: 0 }
+    };
+
+    // 1. MODULE IMPORTS
+    const modules = [
+        { name: 'ConversationMemory', path: '../services/engine/ConversationMemory' },
+        { name: 'TurnRecordBuilder', path: '../services/engine/TurnRecordBuilder' },
+        { name: 'V111Router', path: '../services/engine/V111Router' },
+        { name: 'TranscriptGenerator', path: '../services/TranscriptGenerator' },
+        { name: 'CallTranscript', path: '../models/CallTranscript' }
+    ];
+
+    for (const mod of modules) {
+        try {
+            const loaded = require(mod.path);
+            checks.modules[mod.name] = { status: 'ok', version: loaded.VERSION || null };
+            checks.summary.passed++;
+        } catch (e) {
+            checks.modules[mod.name] = { status: 'error', error: e.message };
+            checks.summary.failed++;
+        }
+    }
+
+    // 2. REDIS
+    try {
+        if (!isRedisConfigured()) {
+            checks.redis = { status: 'not_configured' };
+            checks.summary.warnings++;
+        } else {
+            const { getSharedRedisClient } = require('../services/redisClientFactory');
+            const redis = await getSharedRedisClient();
+            if (redis) {
+                const pong = await redis.ping();
+                checks.redis = { status: pong === 'PONG' ? 'ok' : 'error' };
+                pong === 'PONG' ? checks.summary.passed++ : checks.summary.failed++;
+            }
+        }
+    } catch (e) {
+        checks.redis = { status: 'error', error: e.message };
+        checks.summary.failed++;
+    }
+
+    // 3. MONGODB
+    if (mongoose.connection.readyState === 1) {
+        checks.mongodb = { status: 'ok' };
+        checks.summary.passed++;
+    } else {
+        checks.mongodb = { status: 'disconnected' };
+        checks.summary.warnings++;
+    }
+
+    // 4. INTEGRATION TEST
+    try {
+        const { ConversationMemory } = require('../services/engine/ConversationMemory');
+        const memory = new ConversationMemory({
+            callId: `health-${Date.now()}`,
+            companyId: 'health-check',
+            callerPhone: '+10000000000'
+        });
+        const tb = memory.startTurn(0);
+        tb.setCallerInput('test', 'test', 0.9, {});
+        tb.setRouting('LLM', [], [], 'DISCOVERY');
+        tb.setResponse('LLM', 'Test', 100);
+        const turn = memory.commitTurn();
+        checks.integration = { status: turn ? 'ok' : 'error' };
+        turn ? checks.summary.passed++ : checks.summary.failed++;
+    } catch (e) {
+        checks.integration = { status: 'error', error: e.message };
+        checks.summary.failed++;
+    }
+
+    checks.durationMs = Date.now() - startTime;
+    checks.healthy = checks.summary.failed === 0;
+
+    res.status(checks.healthy ? 200 : 503).json(checks);
+});
+
+// ============================================================================
 // VERSION ENDPOINT (PUBLIC - No Auth Required)
 // ============================================================================
 // Quick check to verify which version of code is deployed
