@@ -295,6 +295,18 @@ const wiringRegistryV2 = {
                             defaultValue: ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok']
                         },
                         {
+                            // V111: Connection Quality Gate - bad connection detection
+                            id: 'frontDesk.connectionQualityGate',
+                            label: 'Connection Quality Gate',
+                            ui: { inputId: 'connectionQualityGate', path: 'Front Desk → Discovery & Consent → Connection Quality Gate' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.connectionQualityGate'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: { enabled: true, confidenceThreshold: 0.72, maxRetries: 3 }
+                        },
+                        {
                             // V111: Company-configurable protected words for STT filler removal
                             id: 'frontDesk.sttProtectedWords',
                             label: 'STT Protected Words',

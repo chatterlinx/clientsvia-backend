@@ -193,6 +193,126 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // GATE 1.5: CONNECTION QUALITY GATE (V111)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // On early turns (1-2), if STT confidence is garbage or caller says
+    // "hello? are you there?", intercept BEFORE the LLM gets garbage input.
+    // After maxRetries, offer DTMF escape (press 1 / press 2).
+    // ═══════════════════════════════════════════════════════════════════════════
+    const cqGate = effectiveConfig?.frontDeskBehavior?.connectionQualityGate;
+    const cqEnabled = cqGate?.enabled !== false;
+    
+    if (cqEnabled && turnCount <= 2 && !callState?.bookingModeLocked) {
+        const sttConfidence = context.sttConfidence || 0;
+        const threshold = cqGate?.confidenceThreshold || 0.72;
+        const maxRetries = cqGate?.maxRetries || 3;
+        const troublePhrases = cqGate?.troublePhrases || [
+            'hello', 'hello?', 'hi', 'hi?', 'are you there',
+            'can you hear me', 'is anyone there', 'is somebody there',
+            'hey', 'hey?', 'anybody there'
+        ];
+        
+        // Normalize input for trouble phrase matching
+        const normalizedInput = (userTurn || '').toLowerCase().trim()
+            .replace(/[.,!?;:]+/g, '').trim();
+        
+        // Check: is this a trouble phrase?
+        const isTroublePhrase = troublePhrases.some(phrase => {
+            const p = phrase.toLowerCase().trim();
+            return normalizedInput === p || normalizedInput.startsWith(p + ' ') || normalizedInput.endsWith(' ' + p);
+        });
+        
+        // Check: is STT confidence below threshold?
+        const isLowConfidence = sttConfidence > 0 && sttConfidence < threshold;
+        
+        if (isTroublePhrase || isLowConfidence) {
+            // Increment connection trouble counter in call state
+            const troubleCount = (callState._connectionTroubleCount || 0) + 1;
+            callState._connectionTroubleCount = troubleCount;
+            
+            const reason = isTroublePhrase 
+                ? `trouble_phrase_detected: "${normalizedInput}"`
+                : `low_stt_confidence: ${(sttConfidence * 100).toFixed(0)}% < ${(threshold * 100).toFixed(0)}%`;
+            
+            logger.info('[FRONT_DESK_RUNTIME] CONNECTION QUALITY GATE TRIGGERED', {
+                callSid,
+                companyId,
+                turnCount,
+                troubleCount,
+                maxRetries,
+                reason,
+                sttConfidence: (sttConfidence * 100).toFixed(1) + '%',
+                userTurnPreview: userTurn?.substring(0, 50)
+            });
+            
+            trace.addDecisionReason('CONNECTION_QUALITY_GATE', {
+                triggered: true,
+                reason,
+                troubleCount,
+                maxRetries,
+                sttConfidence
+            });
+            
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'CONNECTION_QUALITY_GATE',
+                    turn: turnCount,
+                    data: {
+                        triggered: true,
+                        reason,
+                        troubleCount,
+                        maxRetries,
+                        sttConfidence,
+                        isTroublePhrase,
+                        isLowConfidence,
+                        normalizedInput: normalizedInput?.substring(0, 50)
+                    }
+                }).catch(() => {});
+            }
+            
+            // Decide: re-greeting or DTMF escape?
+            if (troubleCount >= maxRetries) {
+                // DTMF ESCAPE — offer press 1 / press 2
+                const dtmfMessage = cqGate?.dtmfEscapeMessage || 
+                    "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.";
+                const transferDest = cqGate?.transferDestination || '';
+                
+                logger.info('[FRONT_DESK_RUNTIME] CONNECTION QUALITY GATE → DTMF ESCAPE', {
+                    callSid, troubleCount, maxRetries, transferDest
+                });
+                
+                return {
+                    response: dtmfMessage,
+                    state: callState,
+                    lane: LANES.ESCALATE,
+                    action: 'DTMF_ESCAPE',
+                    signals: { 
+                        escalate: false,
+                        dtmfEscape: true,
+                        transferDestination: transferDest
+                    },
+                    matchSource: 'CONNECTION_QUALITY_GATE',
+                    metadata: { connectionTroubleCount: troubleCount }
+                };
+            } else {
+                // RE-GREETING — try again
+                const reGreeting = cqGate?.reGreeting || 'Hi there! How can I help you today?';
+                
+                return {
+                    response: reGreeting,
+                    state: callState,
+                    lane: LANES.DISCOVERY,
+                    signals: {},
+                    matchSource: 'CONNECTION_QUALITY_GATE',
+                    metadata: { connectionTroubleCount: troubleCount }
+                };
+            }
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
     // ABSOLUTE BOOKING GATE (V109) - PLATFORM LAW
     // ═══════════════════════════════════════════════════════════════════════════
     // If bookingModeLocked === true, ONLY BookingFlowRunner can respond.

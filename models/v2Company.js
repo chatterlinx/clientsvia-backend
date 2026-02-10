@@ -2193,6 +2193,31 @@ const companySchema = new mongoose.Schema({
             sttProtectedWords: { type: mongoose.Schema.Types.Mixed, default: [] },
             
             // ═══════════════════════════════════════════════════════════════
+            // V111: CONNECTION QUALITY GATE - Detect bad connections, low
+            // STT confidence, and "hello? are you there?" patterns on early
+            // turns. Configured via Discovery & Consent tab.
+            // ═══════════════════════════════════════════════════════════════
+            connectionQualityGate: {
+                enabled: { type: Boolean, default: true },
+                // STT confidence below this on turns 1-2 triggers re-greeting
+                confidenceThreshold: { type: Number, default: 0.72, min: 0.3, max: 0.95 },
+                // How many consecutive trouble turns before DTMF escape
+                maxRetries: { type: Number, default: 3, min: 1, max: 5 },
+                // Phrases that signal caller can't hear the agent
+                troublePhrases: { type: [String], default: [
+                    'hello', 'hello?', 'hi', 'hi?', 'are you there',
+                    'can you hear me', 'is anyone there', 'is somebody there',
+                    'hey', 'hey?', 'anybody there'
+                ]},
+                // The re-greeting when confidence is low or trouble detected
+                reGreeting: { type: String, default: 'Hi there! How can I help you today?' },
+                // The DTMF escape message after maxRetries
+                dtmfEscapeMessage: { type: String, default: "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail." },
+                // Where Press 1 routes (phone number or SIP)
+                transferDestination: { type: String, default: '' }
+            },
+            
+            // ═══════════════════════════════════════════════════════════════
             // V92: DEBUG LOGGING - Enhanced diagnostics for consent/booking flow
             // ═══════════════════════════════════════════════════════════════
             // When enabled, adds verbose logging at key checkpoints:

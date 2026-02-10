@@ -4221,6 +4221,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 companyId: companyID,
                 callState,  // V101 fix: pass callState instead of undefined 'session'
                 callerPhone: fromNumber,
+                // V111: STT confidence for Connection Quality Gate
+                sttConfidence: parseFloat(req.body.Confidence) || 0,
                 // V111 Phase 4: Pass ConversationMemory for governance enforcement
                 v111Memory: v111Memory || null,
                 // V111: Signals will be determined by FrontDeskRuntime internally
@@ -4242,8 +4244,32 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 Object.assign(callState, runtimeResult.state);
               }
               
+              // V111: Handle Connection Quality Gate DTMF escape
+              if (runtimeResult.action === 'DTMF_ESCAPE' && runtimeResult.signals?.dtmfEscape) {
+                const transferDest = runtimeResult.signals?.transferDestination || 
+                    company?.aiAgentSettings?.frontDeskBehavior?.connectionQualityGate?.transferDestination || '';
+                result = {
+                  response: runtimeResult.response,
+                  text: runtimeResult.response,
+                  conversationMode: 'catastrophic_fallback',
+                  matchSource: 'CONNECTION_QUALITY_GATE',
+                  catastrophicFallback: {
+                    enabled: true,
+                    forwardNumber: transferDest || company?.phoneNumber || '',
+                    announcement: runtimeResult.response,
+                    option2Action: 'voicemail'
+                  }
+                };
+                
+                logger.info('[V111] CONNECTION QUALITY GATE → DTMF ESCAPE', {
+                  callSid,
+                  companyId: companyID,
+                  transferDest: transferDest?.replace(/\d(?=\d{4})/g, '*'),
+                  troubleCount: runtimeResult.metadata?.connectionTroubleCount
+                });
+              }
               // Handle escalation/transfer
-              if (runtimeResult.signals?.escalate || runtimeResult.action === 'TRANSFER') {
+              else if (runtimeResult.signals?.escalate || runtimeResult.action === 'TRANSFER') {
                 result = {
                   response: runtimeResult.response,
                   text: runtimeResult.response,

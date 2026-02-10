@@ -553,6 +553,8 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 architectureNotesUpdated: config.architectureNotesUpdated || null,
                 // 🧠 V111: Conversation Memory Config - Runtime truth configuration
                 conversationMemory: config.conversationMemory || null,
+                // 📡 V111: Connection Quality Gate - Bad connection / low confidence
+                connectionQualityGate: config.connectionQualityGate || null,
                 // 🛡️ V111: STT Protected Words - Company-specific words never stripped by STT
                 sttProtectedWords: config.sttProtectedWords || [],
                 lastUpdated: saved.lastUpdated || null
@@ -717,6 +719,20 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         
         if (updates.forbiddenPhrases) {
             updateObj['aiAgentSettings.frontDeskBehavior.forbiddenPhrases'] = updates.forbiddenPhrases;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V111: CONNECTION QUALITY GATE - Bad connection / low confidence handling
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (updates.connectionQualityGate !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.connectionQualityGate'] = updates.connectionQualityGate;
+            logger.info('[FRONT DESK BEHAVIOR] V111: Saving connectionQualityGate', {
+                companyId,
+                enabled: updates.connectionQualityGate?.enabled,
+                confidenceThreshold: updates.connectionQualityGate?.confidenceThreshold,
+                maxRetries: updates.connectionQualityGate?.maxRetries,
+                troublePhrasesCount: (updates.connectionQualityGate?.troublePhrases || []).length
+            });
         }
         
         // ═══════════════════════════════════════════════════════════════════════════

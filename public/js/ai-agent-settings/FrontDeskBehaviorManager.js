@@ -9663,6 +9663,14 @@ Sean → Shawn, Shaun`;
     renderDiscoveryConsentTab() {
         const dc = this.config.discoveryConsent || {};
         const dt = this.config.detectionTriggers || {};
+        const cq = this.config.connectionQualityGate || {};
+        const cqEnabled = cq.enabled !== false;
+        const cqThreshold = cq.confidenceThreshold || 0.72;
+        const cqMaxRetries = cq.maxRetries || 3;
+        const cqTroublePhrases = (cq.troublePhrases || ['hello', 'hello?', 'hi', 'hi?', 'are you there', 'can you hear me', 'is anyone there', 'is somebody there', 'hey', 'hey?', 'anybody there']).join('\n');
+        const cqReGreeting = cq.reGreeting || 'Hi there! How can I help you today?';
+        const cqDtmfMessage = cq.dtmfEscapeMessage || "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.";
+        const cqTransferDest = cq.transferDestination || '';
         const recommendedConsentPhrases = [
             'schedule a visit',
             'book an appointment',
@@ -9692,6 +9700,112 @@ Sean → Shawn, Shaun`;
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
                     <strong>V22 Architecture:</strong> LLM speaks first during discovery. Booking ONLY starts after explicit caller consent.
                 </p>
+                
+                <!-- V111: Connection Quality Gate (FIRST CHECKPOINT) -->
+                <div style="background: #0d1117; border: 2px solid #58a6ff; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                    <h4 style="margin: 0 0 4px 0; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
+                        📡 Connection Quality Gate
+                        <span style="background: #58a6ff30; color: #58a6ff; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: normal;">V111</span>
+                        <span style="background: #da363330; color: #da3633; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: normal;">PRE-DISCOVERY</span>
+                    </h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                        Detects bad connections, low-confidence STT, and "hello? are you there?" patterns on early turns.
+                        Prevents the LLM from responding to garbage input. After max retries, offers DTMF transfer.
+                    </p>
+                    
+                    <!-- Enable Toggle -->
+                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 16px;">
+                        <input type="checkbox" id="fdb-cq-enabled" ${cqEnabled ? 'checked' : ''} 
+                            style="accent-color: #58a6ff; width: 20px; height: 20px;">
+                        <div>
+                            <span style="color: #c9d1d9; font-weight: 600;">Enable Connection Quality Gate</span>
+                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                When enabled, intercepts low-confidence STT and trouble phrases on turns 1-2 before they reach the LLM.
+                            </p>
+                        </div>
+                    </label>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <!-- Confidence Threshold -->
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
+                                STT Confidence Threshold
+                            </label>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="range" id="fdb-cq-threshold" min="30" max="95" value="${Math.round(cqThreshold * 100)}" 
+                                    style="flex: 1; accent-color: #58a6ff;"
+                                    oninput="document.getElementById('fdb-cq-threshold-val').textContent = this.value + '%'">
+                                <span id="fdb-cq-threshold-val" style="color: #58a6ff; font-weight: 600; font-size: 0.9rem; min-width: 40px;">${Math.round(cqThreshold * 100)}%</span>
+                            </div>
+                            <p style="color: #8b949e; font-size: 0.7rem; margin: 4px 0 0 0;">
+                                STT below this on turns 1-2 triggers re-greeting instead of LLM. (Recommended: 72%)
+                            </p>
+                        </div>
+                        
+                        <!-- Max Retries -->
+                        <div>
+                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
+                                Max Retries Before DTMF Escape
+                            </label>
+                            <select id="fdb-cq-maxRetries" style="width: 100%; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; padding: 10px; border-radius: 6px; font-size: 0.9rem;">
+                                <option value="1" ${cqMaxRetries === 1 ? 'selected' : ''}>1 retry</option>
+                                <option value="2" ${cqMaxRetries === 2 ? 'selected' : ''}>2 retries</option>
+                                <option value="3" ${cqMaxRetries === 3 ? 'selected' : ''}>3 retries (recommended)</option>
+                                <option value="4" ${cqMaxRetries === 4 ? 'selected' : ''}>4 retries</option>
+                                <option value="5" ${cqMaxRetries === 5 ? 'selected' : ''}>5 retries</option>
+                            </select>
+                            <p style="color: #8b949e; font-size: 0.7rem; margin: 4px 0 0 0;">
+                                After this many failed turns, offer caller press-1/press-2 escape.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Trouble Phrases -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
+                            Connection Trouble Phrases <span style="color: #8b949e; font-weight: normal;">(one per line)</span>
+                        </label>
+                        <textarea id="fdb-cq-troublePhrases" rows="4" 
+                            style="width: 100%; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; padding: 10px; border-radius: 6px; font-size: 0.85rem; font-family: monospace; resize: vertical;"
+                            placeholder="hello&#10;are you there&#10;can you hear me">${cqTroublePhrases}</textarea>
+                        <p style="color: #8b949e; font-size: 0.7rem; margin: 4px 0 0 0;">
+                            If caller says any of these on early turns, treated as connection trouble — not a real request.
+                        </p>
+                    </div>
+                    
+                    <!-- Re-Greeting -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
+                            Re-Greeting Message <span style="color: #8b949e; font-weight: normal;">(spoken when gate triggers)</span>
+                        </label>
+                        <input type="text" id="fdb-cq-reGreeting" value="${cqReGreeting}"
+                            placeholder="Hi there! How can I help you today?"
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
+                    </div>
+                    
+                    <!-- DTMF Escape Message -->
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
+                            DTMF Escape Message <span style="color: #8b949e; font-weight: normal;">(spoken after max retries)</span>
+                        </label>
+                        <textarea id="fdb-cq-dtmfMessage" rows="2" 
+                            style="width: 100%; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; padding: 10px; border-radius: 6px; font-size: 0.85rem; resize: vertical;"
+                            placeholder="I'm sorry, we seem to have a bad connection...">${cqDtmfMessage}</textarea>
+                    </div>
+                    
+                    <!-- Transfer Destination -->
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
+                            Press 1 Transfer Destination <span style="color: #8b949e; font-weight: normal;">(phone number)</span>
+                        </label>
+                        <input type="text" id="fdb-cq-transferDest" value="${cqTransferDest}"
+                            placeholder="+15551234567"
+                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
+                        <p style="color: #8b949e; font-size: 0.7rem; margin: 4px 0 0 0;">
+                            Where "Press 1" routes to. Leave empty to use company's default transfer number.
+                        </p>
+                    </div>
+                </div>
                 
                 <!-- Kill Switches Section -->
                 <div style="background: #0d1117; border: 2px solid #f85149; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
@@ -11730,6 +11844,25 @@ Sean → Shawn, Shaun`;
                 autoRescueOnFrustration: getChecked('fdb-ms-autoRescue'),
                 autoTriageOnProblem: getChecked('fdb-ms-autoTriage')
             };
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // V111: Connection Quality Gate Settings
+        // ════════════════════════════════════════════════════════════════════════════
+        if (document.getElementById('fdb-cq-enabled')) {
+            const cqTroublePhrases = (get('fdb-cq-troublePhrases') || '')
+                .split('\n').map(p => p.trim().toLowerCase()).filter(p => p);
+            
+            this.config.connectionQualityGate = {
+                enabled: getChecked('fdb-cq-enabled'),
+                confidenceThreshold: parseInt(document.getElementById('fdb-cq-threshold')?.value || '72', 10) / 100,
+                maxRetries: parseInt(get('fdb-cq-maxRetries') || '3', 10),
+                troublePhrases: cqTroublePhrases.length > 0 ? cqTroublePhrases : ['hello', 'hello?', 'are you there', 'can you hear me', 'is anyone there'],
+                reGreeting: get('fdb-cq-reGreeting') || 'Hi there! How can I help you today?',
+                dtmfEscapeMessage: get('fdb-cq-dtmfMessage') || "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.",
+                transferDestination: get('fdb-cq-transferDest') || ''
+            };
+            console.log('[FRONT DESK BEHAVIOR] 📡 V111 Connection Quality Gate saved:', this.config.connectionQualityGate);
         }
         
         // ════════════════════════════════════════════════════════════════════════════
