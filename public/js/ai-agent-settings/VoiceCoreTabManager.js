@@ -92,7 +92,7 @@ class VoiceCoreTabManager {
             }
         }
         
-        // NOTE: LLM-0 Controls moved to Control Plane → Live Agent Status
+        // NOTE: LLM-0 Controls: Control Plane → Front Desk → LLM-0 Controls tab
     }
 
     /**

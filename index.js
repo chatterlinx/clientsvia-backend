@@ -674,8 +674,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/diag', require('./routes/admin/diag')); // Diagnostics - DB/Redis fingerprint
     app.use('/api/admin/emergency', require('./routes/admin/emergency-repair')); // 🚨 Emergency database repair endpoints
     app.use('/api/admin/ai-costs', require('./routes/admin/aiCosts')); // 📊 AI Cost Tracking & Budget Monitoring
-    app.use('/api/admin/agent-status', require('./routes/admin/agentStatus')); // 🔴 Live Agent Status & System Health (Enterprise Visibility)
-    app.use('/api/admin/agent-excellence', require('./routes/admin/agentExcellence')); // 🧠 AI Agent Excellence Center (Scores, Suggestions, Learning)
+    // REMOVED Feb 2026: agent-status and agent-excellence - orphaned ghost code (frontend never wired up after Dec 2025 clean sweep)
     app.use('/api/debug', require('./routes/api/debug')); // 🔍 Debug API - Session inspection for troubleshooting
     app.use('/api/openai-health', require('./routes/api/openai-health')); // 🏥 OpenAI Health - ACTUALLY tests if OpenAI API works
     app.use('/api/admin/call-center', require('./routes/admin/callCenter')); // 📞 Call Center Module V2 (Call History, Customers, Analytics)
