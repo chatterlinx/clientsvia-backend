@@ -6978,7 +6978,8 @@ async function processTurn({
             });
             
             // Inject consent question if LLM implies scheduling but hasn't asked yet
-            if (autoInjectConsentLLM && llmImpliesScheduling && !consentAlreadyGivenLLM && !alreadyAskedConsentLLM) {
+            // V82 FIX: Also check if LLM already asked in THIS response (llmAskedSchedulingQuestion)
+            if (autoInjectConsentLLM && llmImpliesScheduling && !consentAlreadyGivenLLM && !alreadyAskedConsentLLM && !llmAskedSchedulingQuestion) {
                 const consentQuestionLLM = discoveryBehaviorLLM.consentQuestionTemplate || 
                     "Would you like me to schedule an appointment for you?";
                 
