@@ -1066,6 +1066,7 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('detection', '🔍 Detection')}
                     ${this.renderTab('fallbacks', '🆘 Fallbacks')}
                     ${this.renderTab('modes', '🔀 Modes')}
+                    ${this.renderTab('llm0-controls', '🧠 LLM-0 Controls')}
                     ${this.renderTab('test', '🧪 Test')}
                 </div>
 
@@ -12034,6 +12035,31 @@ Sean → Shawn, Shaun`;
         `;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LLM-0 CONTROLS TAB - Connection recovery, silence handling, spam filter
+    // ═══════════════════════════════════════════════════════════════════════════
+    renderLLM0ControlsTab() {
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div>
+                        <h3 style="margin: 0; color: #8b5cf6;">🧠 LLM-0 Intelligence Controls</h3>
+                        <p style="margin: 6px 0 0 0; color: #8b949e; font-size: 0.875rem;">
+                            Silence handling, spam detection, confidence thresholds, and recovery messages
+                        </p>
+                    </div>
+                </div>
+                
+                <div id="llm0-controls-container" style="min-height: 200px;">
+                    <div style="text-align: center; padding: 40px; color: #8b949e;">
+                        <p style="font-size: 2rem; margin-bottom: 12px;">⏳</p>
+                        <p>Loading LLM-0 Controls...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     renderTestTab() {
         return `
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
@@ -12248,6 +12274,7 @@ Sean → Shawn, Shaun`;
             case 'detection': content.innerHTML = this.renderDetectionTab(); break;
             case 'fallbacks': content.innerHTML = this.renderFallbacksTab(); break;
             case 'modes': content.innerHTML = this.renderModesTab(); break;
+            case 'llm0-controls': content.innerHTML = this.renderLLM0ControlsTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
         }
         console.log(`[FRONT DESK] ⏱️ CHECKPOINT 2: Tab '${tabId}' rendered in ${(performance.now() - renderStart).toFixed(1)}ms`);
@@ -12317,7 +12344,44 @@ Sean → Shawn, Shaun`;
             case 'test':
                 content.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(content));
                 break;
+            case 'llm0-controls':
+                // Initialize LLM0ControlsManager in the container
+                this.initLLM0Controls(content);
+                break;
             // Other tabs don't need special listeners or use delegated events
+        }
+    }
+    
+    // Initialize LLM-0 Controls using the dedicated manager
+    async initLLM0Controls(content) {
+        const container = content.querySelector('#llm0-controls-container');
+        if (!container) return;
+        
+        try {
+            // Check if LLM0ControlsManager is loaded
+            if (typeof LLM0ControlsManager === 'undefined') {
+                // Load the script dynamically
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = '/js/ai-agent-settings/LLM0ControlsManager.js?v=' + Date.now();
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+            
+            // Initialize the manager
+            if (typeof window.initLLM0Controls === 'function') {
+                window.initLLM0Controls(this.companyId, 'llm0-controls-container');
+            } else if (typeof LLM0ControlsManager !== 'undefined') {
+                window.llm0ControlsManager = new LLM0ControlsManager(this.companyId);
+                window.llm0ControlsManager.init('llm0-controls-container');
+            } else {
+                container.innerHTML = '<p style="color: #f85149;">Failed to load LLM-0 Controls Manager</p>';
+            }
+        } catch (err) {
+            console.error('[FRONT DESK] Failed to init LLM-0 Controls:', err);
+            container.innerHTML = '<p style="color: #f85149;">Error loading LLM-0 Controls: ' + err.message + '</p>';
         }
     }
 
