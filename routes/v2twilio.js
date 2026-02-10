@@ -2614,13 +2614,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // Get template ID for this company
     // 📛 FEB 2026 FIX: Renamed to sttCompany to avoid TDZ conflict with outer `let company` at line ~2846
     // The original `const company` here caused ReferenceError: Cannot access 'company' before initialization
-    const sttCompany = await Company.findById(companyID).select('aiAgentSettings.templateReferences aiAgentSettings.llm0Controls.recoveryMessages').lean();
+    const sttCompany = await Company.findById(companyID).select('aiAgentSettings.templateReferences aiAgentSettings.llm0Controls.recoveryMessages aiAgentSettings.frontDeskBehavior.sttProtectedWords').lean();
     const templateId = sttCompany?.aiAgentSettings?.templateReferences?.[0]?.templateId;
     
     if (templateId && speechResult) {
+      // V111: Pass company-configured protected words from UI
+      const companyProtectedWords = sttCompany?.aiAgentSettings?.frontDeskBehavior?.sttProtectedWords || [];
       sttProcessResult = await STTPreprocessor.process(speechResult, templateId, {
         callId: callSid,
-        companyId: companyID
+        companyId: companyID,
+        companyProtectedWords
       });
       
       // Use cleaned speech for all subsequent processing

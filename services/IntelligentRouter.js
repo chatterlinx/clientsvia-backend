@@ -253,9 +253,12 @@ class IntelligentRouter {
             
             if (STTPreprocessor && template?._id) {
                 try {
+                    // V111: Pass company-configured protected words from UI
+                    const companyProtectedWords = company?.aiAgentSettings?.frontDeskBehavior?.sttProtectedWords || [];
                     sttResult = await STTPreprocessor.process(callerInput, template._id, {
                         callId,
-                        companyId: company?._id?.toString() || company?.companyId
+                        companyId: company?._id?.toString() || company?.companyId,
+                        companyProtectedWords
                     });
                     
                     if (sttResult && sttResult.cleaned !== callerInput) {

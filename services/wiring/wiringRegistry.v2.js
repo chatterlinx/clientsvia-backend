@@ -285,14 +285,26 @@ const wiringRegistryV2 = {
                         },
                         {
                             id: 'frontDesk.discoveryConsent.consentPhrases',
-                            label: 'Consent Phrases',
-                            ui: { inputId: 'consentPhrases', path: 'Front Desk → Discovery & Consent → Consent Phrases' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.consentPhrases' },
+                            label: 'Consent Yes Words',
+                            ui: { inputId: 'consentYesWords', path: 'Front Desk → Discovery & Consent → Yes Words' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.consentYesWords' },
                             runtime: RUNTIME_READERS_MAP['frontDesk.discoveryConsent.consentPhrases'],
                             scope: 'company',
                             required: false,
                             validators: [],
-                            defaultValue: ['yes', 'sure', 'okay', 'please', 'go ahead', 'schedule', 'book']
+                            defaultValue: ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok']
+                        },
+                        {
+                            // V111: Company-configurable protected words for STT filler removal
+                            id: 'frontDesk.sttProtectedWords',
+                            label: 'STT Protected Words',
+                            ui: { inputId: 'sttProtectedWords', path: 'Front Desk → Discovery Flow → Protected Words' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.sttProtectedWords' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.sttProtectedWords'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: []
                         },
                         {
                             id: 'frontDesk.discoveryConsent.autoReplyAllowedScenarioTypes',

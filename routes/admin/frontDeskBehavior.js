@@ -553,6 +553,8 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 architectureNotesUpdated: config.architectureNotesUpdated || null,
                 // 🧠 V111: Conversation Memory Config - Runtime truth configuration
                 conversationMemory: config.conversationMemory || null,
+                // 🛡️ V111: STT Protected Words - Company-specific words never stripped by STT
+                sttProtectedWords: config.sttProtectedWords || [],
                 lastUpdated: saved.lastUpdated || null
             }
         });
@@ -715,6 +717,18 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         
         if (updates.forbiddenPhrases) {
             updateObj['aiAgentSettings.frontDeskBehavior.forbiddenPhrases'] = updates.forbiddenPhrases;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V111: STT PROTECTED WORDS - Company-specific words never stripped by STT
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (updates.sttProtectedWords !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.sttProtectedWords'] = updates.sttProtectedWords;
+            logger.info('[FRONT DESK BEHAVIOR] V111: Saving sttProtectedWords', {
+                companyId,
+                count: (updates.sttProtectedWords || []).length,
+                sample: (updates.sttProtectedWords || []).slice(0, 5)
+            });
         }
         
         // 🚨 CRITICAL: Save dynamic booking slots

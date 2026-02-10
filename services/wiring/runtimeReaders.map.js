@@ -192,6 +192,7 @@ const RUNTIME_READERS_MAP = {
         defaultValue: true
     },
 
+    // V110: DB path fixed to consentYesWords (matches UI save field)
     'frontDesk.discoveryConsent.consentPhrases': {
         readers: [
             {
@@ -202,9 +203,36 @@ const RUNTIME_READERS_MAP = {
                 required: true
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryConsent.consentPhrases',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryConsent.consentYesWords',
         scope: 'company',
-        defaultValue: ['yes', 'sure', 'okay', 'please', 'go ahead', 'schedule', 'book']
+        defaultValue: ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok']
+    },
+
+    // V111: Company-configurable protected words for STT filler removal
+    'frontDesk.sttProtectedWords': {
+        readers: [
+            {
+                file: 'services/STTPreprocessor.js',
+                function: 'stripFillers',
+                description: 'Words that are never stripped by filler removal',
+                required: false
+            },
+            {
+                file: 'routes/v2twilio.js',
+                function: 'handleGather',
+                description: 'Passes company protected words to STT preprocessing',
+                required: false
+            },
+            {
+                file: 'services/IntelligentRouter.js',
+                function: 'route',
+                description: 'Passes company protected words to STT preprocessing',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.sttProtectedWords',
+        scope: 'company',
+        defaultValue: []
     },
 
     'frontDesk.discoveryConsent.autoReplyAllowedScenarioTypes': {

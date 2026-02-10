@@ -1785,6 +1785,9 @@ class FrontDeskBehaviorManager {
                         <button id="fdb-stt-modal-btn" style="background:#6e40c9; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem; display:flex; align-items:center; gap:6px;">
                             🔇 STT Intelligence
                         </button>
+                        <button id="fdb-protected-words-btn" style="background:#da3633; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem; display:flex; align-items:center; gap:6px;">
+                            🛡️ Protected Words
+                        </button>
                         <span style="background:#3fb95020; color:#3fb950; padding:6px 12px; border-radius:16px; font-size:0.75rem; font-weight:600;">
                             V110 CANONICAL
                         </span>
@@ -1890,6 +1893,84 @@ class FrontDeskBehaviorManager {
                             <div style="display:flex; gap:12px;">
                                 <button id="fdb-stt-modal-done" style="background:#238636; color:#fff; border:none; padding:8px 24px; border-radius:6px; cursor:pointer; font-weight:500;">
                                     Done
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Protected Words Modal (Hidden by default) - V111 -->
+                <div id="fdb-pw-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center;">
+                    <div style="background:#0d1117; border:1px solid #30363d; border-radius:12px; width:95%; max-width:900px; max-height:90vh; overflow:hidden; display:flex; flex-direction:column;">
+                        <!-- Modal Header -->
+                        <div style="padding:20px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; align-items:center; background:#161b22;">
+                            <div>
+                                <h3 style="margin:0; color:#c9d1d9; display:flex; align-items:center; gap:8px;">
+                                    🛡️ Protected Words Manager
+                                    <span style="background:#da363330; color:#da3633; padding:4px 8px; border-radius:4px; font-size:0.7rem; font-weight:normal;">COMPANY</span>
+                                </h3>
+                                <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.8rem;">
+                                    Words that are <strong style="color:#3fb950;">never stripped</strong> by STT filler removal, even if they appear in the template's filler list.
+                                </p>
+                            </div>
+                            <button id="fdb-pw-modal-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:8px;">&times;</button>
+                        </div>
+                        
+                        <!-- Info Banner -->
+                        <div style="padding:12px 20px; background:#1f6feb15; border-bottom:1px solid #1f6feb30;">
+                            <p style="margin:0; color:#58a6ff; font-size:0.825rem; display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:1.1rem;">ℹ️</span>
+                                <span><strong>System words</strong> (locked) are always protected. Add <strong>company words</strong> for your business vocabulary that should never be stripped.</span>
+                            </p>
+                        </div>
+                        
+                        <!-- Add New Word Bar -->
+                        <div style="padding:16px 20px; border-bottom:1px solid #30363d; background:#161b22; display:flex; gap:12px; align-items:center;">
+                            <input type="text" id="fdb-pw-new-word" placeholder="Type a word to protect..." 
+                                   style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:10px 16px; border-radius:8px; font-size:0.95rem;"
+                                   onkeydown="if(event.key==='Enter'){document.getElementById('fdb-pw-add-btn').click();}">
+                            <select id="fdb-pw-new-category" style="background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:10px 12px; border-radius:8px; font-size:0.9rem;">
+                                <option value="business">🏢 Business</option>
+                                <option value="confirmation">✅ Confirmation</option>
+                                <option value="greeting">👋 Greeting</option>
+                                <option value="verb">🔧 Verb</option>
+                                <option value="other">📝 Other</option>
+                            </select>
+                            <button id="fdb-pw-add-btn" style="background:#238636; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.9rem; white-space:nowrap;">
+                                + Add Word
+                            </button>
+                        </div>
+                        
+                        <!-- Search/Filter -->
+                        <div style="padding:12px 20px; border-bottom:1px solid #30363d; background:#0d1117; display:flex; gap:12px; align-items:center;">
+                            <input type="text" id="fdb-pw-search" placeholder="🔍 Filter protected words..." 
+                                   style="flex:1; background:#161b22; color:#c9d1d9; border:1px solid #30363d; padding:8px 14px; border-radius:6px; font-size:0.875rem;">
+                            <div id="fdb-pw-filter-btns" style="display:flex; gap:6px;">
+                                <button class="pw-filter-btn pw-filter-active" data-filter="all" style="background:#30363d; color:#c9d1d9; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.8rem;">All</button>
+                                <button class="pw-filter-btn" data-filter="system" style="background:transparent; color:#8b949e; border:1px solid #30363d; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.8rem;">🔒 System</button>
+                                <button class="pw-filter-btn" data-filter="company" style="background:transparent; color:#8b949e; border:1px solid #30363d; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:0.8rem;">🏢 Company</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Body (Scrollable word grid) -->
+                        <div id="fdb-pw-modal-body" style="padding:20px; overflow-y:auto; flex:1; background:#0d1117; min-height:300px;">
+                            <div style="text-align:center; padding:40px; color:#8b949e;">
+                                <span style="font-size:2rem;">⏳</span>
+                                <p>Loading protected words...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Modal Footer -->
+                        <div style="padding:16px 20px; border-top:1px solid #30363d; display:flex; justify-content:space-between; align-items:center; background:#161b22;">
+                            <div style="color:#8b949e; font-size:0.875rem;">
+                                <span id="fdb-pw-stats">— system | — company</span>
+                            </div>
+                            <div style="display:flex; gap:12px;">
+                                <button id="fdb-pw-save-btn" style="background:#238636; color:#fff; border:none; padding:8px 24px; border-radius:6px; cursor:pointer; font-weight:500;">
+                                    Save Changes
+                                </button>
+                                <button id="fdb-pw-done-btn" style="background:#30363d; color:#c9d1d9; border:none; padding:8px 24px; border-radius:6px; cursor:pointer; font-weight:500;">
+                                    Close
                                 </button>
                             </div>
                         </div>
@@ -4147,6 +4228,263 @@ class FrontDeskBehaviorManager {
             });
         }
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // 🛡️ PROTECTED WORDS MODAL - V111 Enterprise protected words manager
+        // ═══════════════════════════════════════════════════════════════════════════
+        const pwModal = contentElement.querySelector('#fdb-pw-modal');
+        const pwModalBtn = contentElement.querySelector('#fdb-protected-words-btn');
+        const pwModalClose = contentElement.querySelector('#fdb-pw-modal-close');
+        const pwDoneBtn = contentElement.querySelector('#fdb-pw-done-btn');
+        const pwSaveBtn = contentElement.querySelector('#fdb-pw-save-btn');
+        const pwAddBtn = contentElement.querySelector('#fdb-pw-add-btn');
+        const pwNewWord = contentElement.querySelector('#fdb-pw-new-word');
+        const pwNewCategory = contentElement.querySelector('#fdb-pw-new-category');
+        const pwSearch = contentElement.querySelector('#fdb-pw-search');
+        const pwBody = contentElement.querySelector('#fdb-pw-modal-body');
+        const pwStats = contentElement.querySelector('#fdb-pw-stats');
+        
+        // System default protected words (organized by category)
+        const SYSTEM_PROTECTED_WORDS = {
+            confirmation: ['yes', 'no', 'yeah', 'yep', 'nope', 'yup', 'nah', 'okay', 'ok', 'alright', 'sure', 'correct', 'right', 'absolutely', 'definitely', 'certainly', 'exactly', 'affirmative', 'negative', 'confirmed', 'denied'],
+            politeness: ['please', 'thanks', 'thank', 'hi', 'hello', 'well'],
+            pronoun: ['i', 'a', 'u', 'you', 'we', 'they', 'he', 'she', 'it', 'me', 'us', 'them', 'your', 'my', 'our', 'their', 'his', 'her', 'its'],
+            question: ['what', 'when', 'where', 'who', 'how', 'why', 'which'],
+            negation: ['not', 'dont', "don't", 'never', 'none', 'nothing'],
+            verb: ['do', 'does', 'did', 'done', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'can', 'could', 'will', 'would', 'should', 'may', 'might', 'must', 'need', 'want', 'get', 'got', 'like', 'liked', 'know', 'knew', 'known', 'mean', 'meant', 'think', 'thought', 'say', 'said', 'saying', 'tell', 'told', 'telling', 'ask', 'asked', 'asking', 'call', 'called', 'calling', 'help', 'helped', 'helping', 'hear', 'heard', 'see', 'saw', 'seen', 'feel', 'felt', 'look', 'looked', 'looking', 'try', 'tried', 'trying', 'work', 'worked', 'working', 'fix', 'fixed', 'fixing', 'come', 'came', 'coming', 'go', 'went', 'going', 'gone', 'make', 'made', 'making', 'take', 'took', 'taking', 'give', 'gave', 'giving', 'send', 'sent', 'sending', 'start', 'started', 'stop', 'stopped', 'turn', 'turned'],
+            conjunction: ['and', 'or', 'but', 'if', 'then', 'so', 'because'],
+            article: ['the', 'an'],
+            number: ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero']
+        };
+        
+        const CATEGORY_META = {
+            confirmation: { emoji: '✅', label: 'Confirmation', color: '#3fb950' },
+            politeness: { emoji: '🤝', label: 'Politeness', color: '#da3633' },
+            pronoun: { emoji: '👤', label: 'Pronoun', color: '#58a6ff' },
+            question: { emoji: '❓', label: 'Question', color: '#d2a8ff' },
+            negation: { emoji: '🚫', label: 'Negation', color: '#f85149' },
+            verb: { emoji: '🔧', label: 'Verb', color: '#f0883e' },
+            conjunction: { emoji: '🔗', label: 'Conjunction', color: '#8b949e' },
+            article: { emoji: '📝', label: 'Article', color: '#6e7681' },
+            number: { emoji: '🔢', label: 'Number', color: '#79c0ff' },
+            business: { emoji: '🏢', label: 'Business', color: '#f778ba' },
+            greeting: { emoji: '👋', label: 'Greeting', color: '#7ee787' },
+            other: { emoji: '📝', label: 'Other', color: '#8b949e' }
+        };
+        
+        // Company custom protected words (loaded from config)
+        let companyProtectedWords = [...(this.config.sttProtectedWords || [])];
+        let pwHasChanges = false;
+        
+        const renderProtectedWords = (filter = 'all', searchTerm = '') => {
+            if (!pwBody) return;
+            
+            // Build full word list
+            const allWords = [];
+            
+            // System words
+            for (const [category, words] of Object.entries(SYSTEM_PROTECTED_WORDS)) {
+                for (const word of words) {
+                    allWords.push({ word, category, source: 'system' });
+                }
+            }
+            
+            // Company words
+            for (const item of companyProtectedWords) {
+                const word = typeof item === 'string' ? item : item.word;
+                const category = (typeof item === 'object' && item.category) || 'business';
+                // Skip if already in system list
+                if (!allWords.find(w => w.word === word)) {
+                    allWords.push({ word, category, source: 'company' });
+                }
+            }
+            
+            // Apply filters
+            let filtered = allWords;
+            if (filter === 'system') filtered = filtered.filter(w => w.source === 'system');
+            if (filter === 'company') filtered = filtered.filter(w => w.source === 'company');
+            if (searchTerm) {
+                const s = searchTerm.toLowerCase();
+                filtered = filtered.filter(w => w.word.toLowerCase().includes(s) || w.category.toLowerCase().includes(s));
+            }
+            
+            // Sort: company first, then alphabetical
+            filtered.sort((a, b) => {
+                if (a.source !== b.source) return a.source === 'company' ? -1 : 1;
+                return a.word.localeCompare(b.word);
+            });
+            
+            // Group by category
+            const groups = {};
+            for (const item of filtered) {
+                const key = item.category;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(item);
+            }
+            
+            // Render
+            const systemCount = allWords.filter(w => w.source === 'system').length;
+            const companyCount = allWords.filter(w => w.source === 'company').length;
+            if (pwStats) pwStats.textContent = \`\${systemCount} system | \${companyCount} company | \${allWords.length} total\`;
+            
+            if (filtered.length === 0) {
+                pwBody.innerHTML = '<div style="text-align:center; padding:40px; color:#8b949e;"><span style="font-size:2rem;">🔍</span><p>No words match your filter.</p></div>';
+                return;
+            }
+            
+            let html = '';
+            for (const [category, items] of Object.entries(groups)) {
+                const meta = CATEGORY_META[category] || CATEGORY_META.other;
+                html += \`
+                    <div style="margin-bottom:20px;">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #21262d;">
+                            <span style="font-size:1.1rem;">\${meta.emoji}</span>
+                            <span style="color:\${meta.color}; font-weight:600; font-size:0.9rem;">\${meta.label}</span>
+                            <span style="background:#30363d; color:#8b949e; padding:2px 8px; border-radius:10px; font-size:0.7rem;">\${items.length}</span>
+                        </div>
+                        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                \`;
+                for (const item of items) {
+                    const isSystem = item.source === 'system';
+                    html += \`
+                        <div class="pw-word-chip" data-word="\${item.word}" data-source="\${item.source}" style="
+                            display:inline-flex; align-items:center; gap:6px;
+                            background:\${isSystem ? '#161b22' : '#0d419d20'}; 
+                            border:1px solid \${isSystem ? '#30363d' : '#1f6feb60'};
+                            padding:6px 12px; border-radius:20px; font-size:0.85rem;
+                            color:\${isSystem ? '#8b949e' : '#58a6ff'};
+                            transition:all 0.15s;
+                        ">
+                            <span>\${item.word}</span>
+                            \${isSystem 
+                                ? '<span style="font-size:0.7rem; opacity:0.5;" title="System default — cannot be removed">🔒</span>'
+                                : \`<button class="pw-delete-word" data-word="\${item.word}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:0.9rem; padding:0 2px; line-height:1;" title="Remove this word">&times;</button>\`
+                            }
+                        </div>
+                    \`;
+                }
+                html += '</div></div>';
+            }
+            
+            pwBody.innerHTML = html;
+            
+            // Attach delete handlers
+            pwBody.querySelectorAll('.pw-delete-word').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const word = e.target.dataset.word;
+                    companyProtectedWords = companyProtectedWords.filter(w => {
+                        const wStr = typeof w === 'string' ? w : w.word;
+                        return wStr !== word;
+                    });
+                    pwHasChanges = true;
+                    renderProtectedWords(getCurrentFilter(), pwSearch?.value || '');
+                });
+            });
+        };
+        
+        const getCurrentFilter = () => {
+            const active = contentElement.querySelector('.pw-filter-btn.pw-filter-active');
+            return active?.dataset?.filter || 'all';
+        };
+        
+        // Open modal
+        if (pwModalBtn && pwModal) {
+            pwModalBtn.addEventListener('click', () => {
+                companyProtectedWords = [...(this.config.sttProtectedWords || [])];
+                pwHasChanges = false;
+                pwModal.style.display = 'flex';
+                renderProtectedWords();
+            });
+        }
+        
+        // Close modal
+        if (pwModalClose) pwModalClose.addEventListener('click', () => { pwModal.style.display = 'none'; });
+        if (pwDoneBtn) pwDoneBtn.addEventListener('click', () => { pwModal.style.display = 'none'; });
+        if (pwModal) pwModal.addEventListener('click', (e) => { if (e.target === pwModal) pwModal.style.display = 'none'; });
+        
+        // Add word
+        if (pwAddBtn) {
+            pwAddBtn.addEventListener('click', () => {
+                const word = (pwNewWord?.value || '').trim().toLowerCase();
+                const category = pwNewCategory?.value || 'business';
+                if (!word) return;
+                
+                // Check if already exists
+                const allSystemWords = Object.values(SYSTEM_PROTECTED_WORDS).flat();
+                const allCompanyWords = companyProtectedWords.map(w => typeof w === 'string' ? w : w.word);
+                if (allSystemWords.includes(word) || allCompanyWords.includes(word)) {
+                    alert(\`"\${word}" is already protected.\`);
+                    return;
+                }
+                
+                companyProtectedWords.push({ word, category });
+                pwHasChanges = true;
+                pwNewWord.value = '';
+                renderProtectedWords(getCurrentFilter(), pwSearch?.value || '');
+            });
+        }
+        
+        // Filter buttons
+        contentElement.querySelectorAll('.pw-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                contentElement.querySelectorAll('.pw-filter-btn').forEach(b => {
+                    b.classList.remove('pw-filter-active');
+                    b.style.background = 'transparent';
+                    b.style.color = '#8b949e';
+                });
+                btn.classList.add('pw-filter-active');
+                btn.style.background = '#30363d';
+                btn.style.color = '#c9d1d9';
+                renderProtectedWords(btn.dataset.filter, pwSearch?.value || '');
+            });
+        });
+        
+        // Search
+        if (pwSearch) {
+            pwSearch.addEventListener('input', () => {
+                renderProtectedWords(getCurrentFilter(), pwSearch.value);
+            });
+        }
+        
+        // Save
+        if (pwSaveBtn) {
+            pwSaveBtn.addEventListener('click', async () => {
+                try {
+                    pwSaveBtn.textContent = 'Saving...';
+                    pwSaveBtn.disabled = true;
+                    
+                    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+                    const res = await fetch(\`/api/admin/front-desk-behavior/\${this.companyId}\`, {
+                        method: 'PATCH',
+                        headers: { 'Authorization': \`Bearer \${token}\`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sttProtectedWords: companyProtectedWords })
+                    });
+                    
+                    if (!res.ok) throw new Error('Failed to save');
+                    
+                    // Update local config
+                    this.config.sttProtectedWords = [...companyProtectedWords];
+                    pwHasChanges = false;
+                    
+                    pwSaveBtn.textContent = '✓ Saved!';
+                    pwSaveBtn.style.background = '#238636';
+                    setTimeout(() => {
+                        pwSaveBtn.textContent = 'Save Changes';
+                        pwSaveBtn.disabled = false;
+                    }, 2000);
+                    
+                } catch (err) {
+                    console.error('[PROTECTED WORDS] Save error:', err);
+                    pwSaveBtn.textContent = '✗ Error';
+                    pwSaveBtn.style.background = '#da3633';
+                    setTimeout(() => {
+                        pwSaveBtn.textContent = 'Save Changes';
+                        pwSaveBtn.style.background = '#238636';
+                        pwSaveBtn.disabled = false;
+                    }, 2000);
+                }
+            });
+        }
+
         // ═══════════════════════════════════════════════════════════════════════════
         // ARCHITECTURE NOTES MODAL - Documentation for system wiring
         // ═══════════════════════════════════════════════════════════════════════════

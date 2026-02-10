@@ -2184,6 +2184,15 @@ const companySchema = new mongoose.Schema({
             enabled: { type: Boolean, default: true },
             
             // ═══════════════════════════════════════════════════════════════
+            // V111: STT PROTECTED WORDS - Company-specific words that must
+            // never be stripped by filler removal, even if they appear in
+            // the global STT template's filler list. Configured via UI in
+            // Discovery Flow tab → Protected Words button.
+            // Each item: { word: String, category: String }
+            // ═══════════════════════════════════════════════════════════════
+            sttProtectedWords: { type: mongoose.Schema.Types.Mixed, default: [] },
+            
+            // ═══════════════════════════════════════════════════════════════
             // V92: DEBUG LOGGING - Enhanced diagnostics for consent/booking flow
             // ═══════════════════════════════════════════════════════════════
             // When enabled, adds verbose logging at key checkpoints:

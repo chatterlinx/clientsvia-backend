@@ -1521,6 +1521,15 @@ function stripFillerWords(userText, company, template) {
         'well'     // "It's working well" - adverb, NOT a filler in most contexts
     ]);
     
+    // V111: Merge company-configured protected words from UI
+    const companyProtected = company?.aiAgentSettings?.frontDeskBehavior?.sttProtectedWords;
+    if (companyProtected && Array.isArray(companyProtected)) {
+        for (const item of companyProtected) {
+            const word = (typeof item === 'string' ? item : item?.word || '').toLowerCase().trim();
+            if (word) PROTECTED_WORDS.add(word);
+        }
+    }
+    
     // Sort fillers by length (longest first) to handle multi-word fillers
     const sortedFillers = [...fillerSet]
         .filter(f => !PROTECTED_WORDS.has(f.toLowerCase()))
@@ -4909,6 +4918,13 @@ async function processTurn({
             // Now check for booking intent (same level - inside the strictMode check)
             const lowerText = (userText || '').toLowerCase().trim();
             
+            // V110: Strip STT artifact punctuation for consent matching.
+            // STT filler removal can leave orphaned punctuation (e.g., "Uh, yes, please." → ", yes, .")
+            // The ^-anchored consentRegex needs a clean start-of-string to match.
+            const cleanedForConsent = lowerText
+                .replace(/^[\s,.:;!?]+/, '')   // strip leading punctuation from filler removal
+                .replace(/[\s,.:;!?]+$/, '');   // strip trailing punctuation
+            
             // ═══════════════════════════════════════════════════════════════════
             // V98 FIX 1: Check if agent offered scheduling and caller responded
             // ═══════════════════════════════════════════════════════════════════
@@ -4916,13 +4932,13 @@ async function processTurn({
             // treat affirmative and urgency phrases as YES → start booking
             // ═══════════════════════════════════════════════════════════════════
             if (bookingConsentPending) {
-                const isAffirmative = consentRegex.test(lowerText) || urgencyRegex.test(lowerText);
+                const isAffirmative = consentRegex.test(cleanedForConsent) || urgencyRegex.test(lowerText);
                 
                 if (isAffirmative) {
                     log('📅 V98: CONSENT DETECTED - Affirmative/urgency response to booking offer', {
                         userText: userText.substring(0, 60),
                         consentPending: true,
-                        matchType: consentRegex.test(lowerText) ? 'affirmative' : 'urgency',
+                        matchType: consentRegex.test(cleanedForConsent) ? 'affirmative' : 'urgency',
                         source: awReader ? 'control_plane' : 'defaults'
                     });
                     bookingIntentDetected = true;

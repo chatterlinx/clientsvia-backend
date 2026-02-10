@@ -67,8 +67,11 @@ class STTPreprocessor {
             let transcript = rawTranscript.toLowerCase().trim();
             
             // Stage 1: Strip filler words
+            // V111: Pass company-configured protected words from UI
             if (profile.provider.applyFillers) {
-                const fillerResult = this.stripFillers(transcript, profile.fillers);
+                const fillerResult = this.stripFillers(transcript, profile.fillers, {
+                    companyProtectedWords: options.companyProtectedWords || []
+                });
                 transcript = fillerResult.cleaned;
                 result.transformations.fillersRemoved = fillerResult.removed;
                 result.metrics.fillerCount = fillerResult.removed.length;
@@ -172,9 +175,11 @@ class STTPreprocessor {
      * Uses regex for O(n) performance
      * @param {string} transcript - Input transcript
      * @param {Array} fillers - Filler definitions from profile
+     * @param {Object} [options] - V111: Additional options
+     * @param {Array} [options.companyProtectedWords] - Company-configured protected words
      * @returns {Object} { cleaned, removed }
      */
-    static stripFillers(transcript, fillers) {
+    static stripFillers(transcript, fillers, options = {}) {
         const removed = [];
         let cleaned = transcript;
         
@@ -192,6 +197,9 @@ class STTPreprocessor {
             'okay', 'ok', 'alright', 'sure', 'correct', 'right',
             'absolutely', 'definitely', 'certainly', 'exactly',
             'affirmative', 'negative', 'confirmed', 'denied',
+            
+            // POLITENESS/GREETING - Critical for consent detection ("yes, please")
+            'please', 'thanks', 'thank', 'hi', 'hello', 'well',
             
             // ESSENTIAL PRONOUNS - Removing these destroys sentences
             'you', 'we', 'they', 'he', 'she', 'it', 'me', 'us', 'them',
@@ -246,6 +254,14 @@ class STTPreprocessor {
             // NUMBERS - Often part of addresses/phone numbers
             'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'zero'
         ]);
+        
+        // V111: Merge company-configured protected words from UI
+        if (options.companyProtectedWords && Array.isArray(options.companyProtectedWords)) {
+            for (const item of options.companyProtectedWords) {
+                const word = (typeof item === 'string' ? item : item?.word || '').toLowerCase().trim();
+                if (word) PROTECTED_WORDS.add(word);
+            }
+        }
         
         // Sort fillers by length (longest first) to handle multi-word fillers
         const sortedFillers = fillers

@@ -397,9 +397,17 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         const consentPhrases = getConfig('frontDesk.discoveryConsent.consentPhrases',
             ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please']);
         
-        const isConsent = consentPhrases.some(phrase => {
+        // V110: Strip STT artifact punctuation before consent matching.
+        // When STT preprocessing removes fillers (e.g., "Uh", "please"), it leaves
+        // orphaned punctuation: "Uh, yes, please." → ", yes, ."
+        // The ^-anchored regex needs a clean start-of-string to match.
+        const cleanedForConsent = userTurnLower.trim()
+            .replace(/^[\s,.:;!?]+/, '')   // strip leading punctuation from filler removal
+            .replace(/[\s,.:;!?]+$/, '');   // strip trailing punctuation
+        
+        const isConsent = cleanedForConsent.length > 0 && consentPhrases.some(phrase => {
             const regex = new RegExp(`^${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s.,!]*$`, 'i');
-            return regex.test(userTurnLower.trim());
+            return regex.test(cleanedForConsent);
         });
         
         if (isConsent) {
