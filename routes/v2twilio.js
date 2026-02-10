@@ -4313,19 +4313,93 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   error: strictModeError.message?.substring(0, 200),
                   stack: strictModeError.stack?.substring(0, 500),
                   latencyMs: strictLatencyMs,
-                  recovery: 'simple_response'
+                  recovery: 'attempting_llm_fallback'
                 }
               }).catch(() => {});
             }
             
-            // Simple recovery - use UI-controlled message
-            const recoveryMsgs = company.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
-            result = {
-              text: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
-              response: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
-              conversationMode: 'discovery',
-              matchSource: 'FRONT_DESK_RUNTIME_ERROR_RECOVERY'
-            };
+            // ════════════════════════════════════════════════════════════════════════
+            // V111: SMART ERROR RECOVERY - Try LLM before giving up
+            // ════════════════════════════════════════════════════════════════════════
+            // Instead of immediately returning a hardcoded message, try LLM as fallback
+            // This ensures we don't lose calls due to bugs in the runtime
+            // ════════════════════════════════════════════════════════════════════════
+            try {
+              logger.info('[V111] Attempting LLM fallback after runtime error', { callSid, speechResult: speechResult?.substring(0, 50) });
+              
+              const llmFallbackResult = await HybridReceptionistLLM.processConversation({
+                company,
+                userInput: speechResult || '',
+                conversationHistory: callState?.conversationHistory || [],
+                callState: callState || {},
+                mode: 'DISCOVERY',
+                turnCount,
+                callerPhone: fromNumber,
+                // Tell LLM this is error recovery so it can be extra helpful
+                systemNote: 'Previous processing failed. Respond naturally to the caller input.'
+              });
+              
+              if (llmFallbackResult && llmFallbackResult.text) {
+                logger.info('[V111] LLM fallback succeeded', { 
+                  callSid, 
+                  responseLength: llmFallbackResult.text.length,
+                  tokensUsed: llmFallbackResult.tokensUsed || 0
+                });
+                
+                if (BlackBoxLogger) {
+                  BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId: companyID,
+                    type: 'ERROR_RECOVERY_LLM_SUCCESS',
+                    turn: turnCount,
+                    data: {
+                      originalError: strictModeError.message?.substring(0, 100),
+                      llmResponseLength: llmFallbackResult.text.length,
+                      tokensUsed: llmFallbackResult.tokensUsed || 0
+                    }
+                  }).catch(() => {});
+                }
+                
+                result = {
+                  text: llmFallbackResult.text,
+                  response: llmFallbackResult.text,
+                  conversationMode: 'discovery',
+                  matchSource: 'ERROR_RECOVERY_LLM_FALLBACK',
+                  tier: 'tier3',
+                  tokensUsed: llmFallbackResult.tokensUsed || 0
+                };
+              } else {
+                throw new Error('LLM returned empty response');
+              }
+            } catch (llmFallbackError) {
+              // LLM also failed - use simple recovery as last resort
+              logger.error('[V111] LLM fallback also failed, using simple recovery', {
+                callSid,
+                llmError: llmFallbackError.message
+              });
+              
+              if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'ERROR_RECOVERY_LLM_FAILED',
+                  turn: turnCount,
+                  data: {
+                    originalError: strictModeError.message?.substring(0, 100),
+                    llmError: llmFallbackError.message?.substring(0, 100)
+                  }
+                }).catch(() => {});
+              }
+              
+              // Last resort: Simple recovery message
+              const recoveryMsgs = company.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+              result = {
+                text: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
+                response: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
+                conversationMode: 'discovery',
+                matchSource: 'FRONT_DESK_RUNTIME_ERROR_RECOVERY_FINAL'
+              };
+            }
           }
         } else if (strictControlPlaneMode && !result) {
           // ════════════════════════════════════════════════════════════════════════
