@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V81.0'; // V81: Nuked Fallbacks tab → 12 tabs
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V82.0'; // V82: Removed broken verification score widget
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -851,8 +851,7 @@ class FrontDeskBehaviorManager {
             // This gives admins immediate feedback without rebuilding verifier logic.
             setTimeout(() => {
                 try {
-                    const bar = document.getElementById('fdb-verification-bar');
-                    if (bar) this.runDeepVerification();
+                    // V82: Verification bar removed - was cosmetic/broken
                 } catch (e) {
                     // Never let verifier refresh impact save UX
                 }
@@ -1019,33 +1018,6 @@ class FrontDeskBehaviorManager {
                         <button id="fdb-save-btn" style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                             💾 Save Changes
                         </button>
-                    </div>
-                </div>
-
-                <!-- V57: Deep Verification Health Bar -->
-                <div id="fdb-verification-bar" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #0d1117, #161b22); border: 1px solid #30363d; border-radius: 12px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span id="fdb-verify-score" style="font-size: 24px; font-weight: 800; color: #9ca3af;">—%</span>
-                            <div>
-                                <div id="fdb-verify-status" style="font-size: 13px; font-weight: 600; color: #9ca3af;">Loading verification...</div>
-                                <div id="fdb-verify-trade" style="font-size: 11px; color: #6b7280;">Trade: —</div>
-                            </div>
-                        </div>
-                        <button id="fdb-verify-btn" style="padding: 8px 14px; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; border-radius: 8px; color: white; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                            🔬 Verify Now
-                        </button>
-                    </div>
-                    <div style="margin-top: 12px;">
-                        <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                            <div id="fdb-verify-progress" style="height: 100%; width: 0%; background: #9ca3af; transition: width 0.5s, background 0.3s;"></div>
-                        </div>
-                    </div>
-                    <div id="fdb-verify-subtabs" style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px;">
-                        <!-- Sub-tab badges will be injected here -->
-                    </div>
-                    <div id="fdb-verify-issues" style="margin-top: 12px; display: none;">
-                        <!-- Issues will be shown here -->
                     </div>
                 </div>
 
@@ -12263,11 +12235,7 @@ Sean → Shawn, Shaun`;
         // Reset button
         container.querySelector('#fdb-reset-btn')?.addEventListener('click', () => this.resetToDefaults());
 
-        // V57: Deep Verification
-        container.querySelector('#fdb-verify-btn')?.addEventListener('click', () => this.runDeepVerification());
-        
-        // Auto-run verification on load
-        setTimeout(() => this.runDeepVerification(), 500);
+        // V82: Deep Verification removed - was cosmetic/broken
 
         // --------------------------------------------------------------------
         // Delegated listeners (work across tab re-renders)
