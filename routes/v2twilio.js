@@ -8501,11 +8501,16 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
       });
       
       twiml.say(escapeTwiML("Connecting you now. Please hold."));
-      twiml.dial({
+      // V111 FIX: twiml.dial(attributes) returns a Dial object — you MUST
+      // call .number() to add the destination. The two-arg form dial(attrs, num)
+      // is NOT supported; the second arg was silently ignored, producing an
+      // empty <Dial> that Twilio rejected with "check your webhook settings".
+      const dial = twiml.dial({
         callerId: dialCallerId,
         timeout: 30,
         action: `${getSecureBaseUrl(req)}/api/twilio/status-callback/${companyId}`
-      }, config.forwardNumber);
+      });
+      dial.number(config.forwardNumber);
       
     } else if (Digits === '2') {
       // Option 2: Handle based on configured action
