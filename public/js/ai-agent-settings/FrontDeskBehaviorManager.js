@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V79.4';
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V80.0'; // V80: Consolidated 17→13 tabs
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -1050,6 +1050,7 @@ class FrontDeskBehaviorManager {
                 </div>
 
                 <!-- Tab Navigation -->
+                <!-- V80: Consolidated from 17→13 tabs (merged Frustration→Detection, Escalation→Emotions, Forbidden→Personality, Modes→Discovery) -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
                     ${this.renderTab('personality', '🎭 Personality', true)}
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
@@ -1059,13 +1060,9 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('booking', '📅 Booking Prompts')}
                     ${this.renderTab('flows', '🧠 Dynamic Flows')}
                     ${this.renderTab('emotions', '💭 Emotions')}
-                    ${this.renderTab('frustration', '😤 Frustration')}
-                    ${this.renderTab('escalation', '🆘 Escalation')}
                     ${this.renderTab('loops', '🔄 Loops')}
-                    ${this.renderTab('forbidden', '🚫 Forbidden')}
                     ${this.renderTab('detection', '🔍 Detection')}
                     ${this.renderTab('fallbacks', '🆘 Fallbacks')}
-                    ${this.renderTab('modes', '🔀 Modes')}
                     ${this.renderTab('llm0-controls', '🧠 LLM-0 Controls')}
                     ${this.renderTab('test', '🧪 Test')}
                 </div>
@@ -1377,7 +1374,52 @@ class FrontDeskBehaviorManager {
                     </div>
                 </div>
             </div>
+            
+            <!-- V80: Forbidden Phrases (merged from separate tab) -->
+            ${this.renderForbiddenSection()}
         `;
+    }
+
+    // V80: Forbidden phrases merged into Personality tab
+    renderForbiddenSection() {
+        const phrases = this.config.forbiddenPhrases || [];
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 20px;">
+                <h3 style="margin: 0 0 16px 0; color: #f85149;">🚫 Forbidden Phrases</h3>
+                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">The AI will never say these phrases. Add anything that sounds robotic or annoying.</p>
+                
+                <div id="fdb-forbidden-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
+                    ${phrases.map((p, i) => `
+                        <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                            <span style="color: #f85149; font-size: 1.2rem;">🚫</span>
+                            <span style="flex: 1; color: #c9d1d9;">"${p}"</span>
+                            <button onclick="window.frontDeskBehaviorManager.removeTrigger('forbidden', ${i})" 
+                                style="background: none; border: none; color: #f85149; cursor: pointer; font-size: 1.2rem;">×</button>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="fdb-new-forbidden" placeholder="Add forbidden phrase..." 
+                        style="flex: 1; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    <button id="fdb-add-forbidden" style="padding: 10px 20px; background: #f85149; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                        + Add
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // V80: Helper to attach forbidden phrase listeners in Personality tab
+    attachForbiddenListeners(content) {
+        const addBtn = content.querySelector('#fdb-add-forbidden');
+        const input = content.querySelector('#fdb-new-forbidden');
+        if (addBtn && input) {
+            addBtn.addEventListener('click', () => this.addTrigger('forbidden', input.value, content));
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.addTrigger('forbidden', input.value, content);
+            });
+        }
     }
 
     // ============================================================================
@@ -10106,11 +10148,75 @@ Sean → Shawn, Shaun`;
                     
                 </div>
             </div>
+            
+            <!-- V80: Escalation Settings (merged from separate tab) -->
+            ${this.renderEscalationSection()}
         `;
     }
 
     // REMOVED: renderEmotionSection - No longer needed
     // AI generates its own words. We only control behavior rules via toggles.
+
+    // V80: Escalation settings merged into Emotions tab
+    renderEscalationSection() {
+        const e = this.config.escalation || {};
+        const triggers = e.triggerPhrases || [];
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 20px;">
+                <h3 style="margin: 0 0 16px 0; color: #f85149;">🆘 Escalation Settings</h3>
+                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">When to offer connecting the caller to a human.</p>
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="fdb-escalation-enabled" ${e.enabled !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                        <span style="color: #c9d1d9; font-weight: 500;">Enable escalation system</span>
+                    </label>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                        Max loops before offering escalation: <span style="color: #58a6ff;">${e.maxLoopsBeforeOffer || 3}</span>
+                    </label>
+                    <input type="range" id="fdb-max-loops" min="1" max="5" value="${e.maxLoopsBeforeOffer || 3}" style="width: 50%; accent-color: #58a6ff;">
+                </div>
+                
+                <h4 style="color: #c9d1d9; margin: 20px 0 12px 0;">Escalation Trigger Phrases</h4>
+                <div id="fdb-escalation-list" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+                    ${triggers.map((t, i) => this.renderTriggerChip(t, i, 'escalation')).join('')}
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <input type="text" id="fdb-new-escalation" placeholder="Add escalation trigger..." 
+                        style="flex: 1; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                    <button id="fdb-add-escalation" style="padding: 10px 20px; background: #f85149; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                        + Add
+                    </button>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Offer Message</label>
+                    <textarea id="fdb-escalation-offer" rows="2" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical;">${e.offerMessage || ''}</textarea>
+                </div>
+                
+                <div style="margin-top: 12px;">
+                    <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Transfer Message</label>
+                    <input type="text" id="fdb-escalation-transfer" value="${e.transferMessage || ''}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                </div>
+            </div>
+        `;
+    }
+
+    // V80: Helper to attach escalation listeners in Emotions tab
+    attachEscalationListeners(content) {
+        const addBtn = content.querySelector('#fdb-add-escalation');
+        const input = content.querySelector('#fdb-new-escalation');
+        if (addBtn && input) {
+            addBtn.addEventListener('click', () => this.addTrigger('escalation', input.value, content));
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.addTrigger('escalation', input.value, content);
+            });
+        }
+    }
 
     renderFrustrationTab() {
         const triggers = this.config.frustrationTriggers || [];
@@ -11091,7 +11197,74 @@ Sean → Shawn, Shaun`;
                     </label>
                 </div>
                 
+                <!-- V80: Mode Switching (merged from separate tab) -->
+                ${this.renderModeSwitchingSection()}
+                
                 ${this.renderFastPathSection()}
+            </div>
+        `;
+    }
+
+    // V80: Mode switching merged into Discovery & Consent tab
+    renderModeSwitchingSection() {
+        const ms = this.config.modeSwitching || {};
+        return `
+            <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-top: 24px;">
+                <h4 style="margin: 0 0 12px 0; color: #a371f7; display: flex; align-items: center; gap: 8px;">
+                    🔀 Mode Switching
+                    <span style="font-size: 10px; background: #a371f7; padding: 2px 6px; border-radius: 4px; color: white;">V80</span>
+                </h4>
+                <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
+                    Control when the AI switches between Discovery, Booking, Triage, and Rescue modes.
+                </p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Minimum Turns Before Booking: <span style="color: #58a6ff;">${ms.minTurnsBeforeBooking || 2}</span>
+                        </label>
+                        <p style="color: #8b949e; font-size: 0.75rem; margin-bottom: 8px;">
+                            AI won't jump to booking until this many conversation turns
+                        </p>
+                        <input type="range" id="fdb-ms-minTurns" min="0" max="5" value="${ms.minTurnsBeforeBooking || 2}" 
+                            style="width: 100%; accent-color: #58a6ff;">
+                    </div>
+                    
+                    <div>
+                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
+                            Booking Confidence Threshold: <span style="color: #58a6ff;">${((ms.bookingConfidenceThreshold || 0.75) * 100).toFixed(0)}%</span>
+                        </label>
+                        <p style="color: #8b949e; font-size: 0.75rem; margin-bottom: 8px;">
+                            How confident AI must be before locking into booking mode
+                        </p>
+                        <input type="range" id="fdb-ms-confidence" min="50" max="100" value="${((ms.bookingConfidenceThreshold || 0.75) * 100).toFixed(0)}" 
+                            style="width: 100%; accent-color: #58a6ff;">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 12px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
+                        <input type="checkbox" id="fdb-ms-autoRescue" ${ms.autoRescueOnFrustration !== false ? 'checked' : ''} 
+                            style="accent-color: #f85149; width: 18px; height: 18px;">
+                        <div>
+                            <span style="color: #c9d1d9; font-weight: 500;">🆘 Auto-switch to Rescue on Frustration</span>
+                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                When frustration is detected, immediately switch to rescue mode
+                            </p>
+                        </div>
+                    </label>
+                    
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
+                        <input type="checkbox" id="fdb-ms-autoTriage" ${ms.autoTriageOnProblem !== false ? 'checked' : ''} 
+                            style="accent-color: #58a6ff; width: 18px; height: 18px;">
+                        <div>
+                            <span style="color: #c9d1d9; font-weight: 500;">🔧 Auto-switch to Triage on Problem Description</span>
+                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                When caller describes their issue, switch to diagnostic mode
+                            </p>
+                        </div>
+                    </label>
+                </div>
             </div>
         `;
     }
@@ -12267,13 +12440,10 @@ Sean → Shawn, Shaun`;
                 this.initDynamicFlowsTab(container);
                 break;
             case 'emotions': content.innerHTML = this.renderEmotionsTab(); break;
-            case 'frustration': content.innerHTML = this.renderFrustrationTab(); break;
-            case 'escalation': content.innerHTML = this.renderEscalationTab(); break;
+            // V80: frustration, escalation, forbidden, modes tabs merged into other tabs
             case 'loops': content.innerHTML = this.renderLoopsTab(); break;
-            case 'forbidden': content.innerHTML = this.renderForbiddenTab(); break;
             case 'detection': content.innerHTML = this.renderDetectionTab(); break;
             case 'fallbacks': content.innerHTML = this.renderFallbacksTab(); break;
-            case 'modes': content.innerHTML = this.renderModesTab(); break;
             case 'llm0-controls': content.innerHTML = this.renderLLM0ControlsTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
         }
@@ -12327,19 +12497,13 @@ Sean → Shawn, Shaun`;
                     });
                 });
                 break;
-            case 'frustration':
-            case 'escalation':
-            case 'forbidden':
-                // Trigger add/remove buttons
-                const type = tabId;
-                const addBtn = content.querySelector(`#fdb-add-${type}`);
-                const input = content.querySelector(`#fdb-new-${type}`);
-                if (addBtn && input) {
-                    addBtn.addEventListener('click', () => this.addTrigger(type, input.value, content));
-                    input.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') this.addTrigger(type, input.value, content);
-                    });
-                }
+            case 'personality':
+                // V80: Forbidden phrases merged into Personality tab
+                this.attachForbiddenListeners(content);
+                break;
+            case 'emotions':
+                // V80: Escalation merged into Emotions tab
+                this.attachEscalationListeners(content);
                 break;
             case 'test':
                 content.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(content));
