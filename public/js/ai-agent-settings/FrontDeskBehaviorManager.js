@@ -9704,13 +9704,18 @@ Sean → Shawn, Shaun`;
                 <!-- V111: Connection Quality Gate (FIRST CHECKPOINT) -->
                 <div style="background: #0d1117; border: 2px solid #58a6ff; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
                     <h4 style="margin: 0 0 4px 0; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
-                        📡 Connection Quality Gate
+                        📡 Connection Issue Detection
                         <span style="background: #58a6ff30; color: #58a6ff; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: normal;">V111</span>
                         <span style="background: #da363330; color: #da3633; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: normal;">PRE-DISCOVERY</span>
                     </h4>
+                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 4px;">
+                        <strong>Caller can't hear the agent or bad connection.</strong>
+                    </p>
                     <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
-                        Detects bad connections, low-confidence STT, and "hello? are you there?" patterns on early turns.
-                        Prevents the LLM from responding to garbage input. After max retries, offers DTMF transfer.
+                        When a caller experiences dead silence, line noise, or can't hear the agent — they say things like
+                        "hello?" or "are you there?". Without this gate, the AI treats that as a real question and gives a wrong answer.
+                        This detects those patterns and low-quality STT on the first turns, re-greets the caller, and after
+                        repeated failures offers a press-1/press-2 escape to reach a human or leave a voicemail.
                     </p>
                     
                     <!-- Enable Toggle -->
