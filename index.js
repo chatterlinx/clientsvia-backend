@@ -148,7 +148,7 @@ async function loadAllRoutes() {
         routes.blackboxRoutes = await loadRouteWithTimeout('./routes/company/blackbox', 'blackboxRoutes'); // 📼 Black Box Recorder (Enterprise Call Flight Recorder)
         routes.dynamicFlowsRoutes = await loadRouteWithTimeout('./routes/company/dynamicFlows', 'dynamicFlowsRoutes'); // 🧠 Dynamic Flow Engine (Trigger → Event → State → Action)
         routes.systemSnapshotRoutes = await loadRouteWithTimeout('./routes/company/systemSnapshot', 'systemSnapshotRoutes'); // 📸 System Snapshot (Flow Tree JSON - Single Source of Truth)
-        routes.fullInventoryRoutes = await loadRouteWithTimeout('./routes/company/fullInventory', 'fullInventoryRoutes'); // 📦 Full Inventory (Prove Nothing Lost - Migration Safety)
+        // REMOVED Feb 2026: fullInventoryRoutes - Legacy tab nuked (migration complete, tab was broken)
         routes.companyOverridesRoutes = await loadRouteWithTimeout('./routes/company/companyOverrides', 'companyOverridesRoutes'); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
         routes.scopeOverridesRoutes = await loadRouteWithTimeout('./routes/company/scopeOverrides', 'scopeOverridesRoutes'); // 🔒 Scope Overrides (GLOBAL vs COMPANY clone-to-override)
         routes.scenarioExportRoutes = await loadRouteWithTimeout('./routes/company/scenarioExport', 'scenarioExportRoutes'); // 📦 Full Scenario Export (Deep JSON export with all fields)
@@ -691,7 +691,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId/blackbox', routes.blackboxRoutes); // 📼 Black Box Recorder (Enterprise Call Flight Recorder)
     app.use('/api/company/:companyId/dynamic-flows', routes.dynamicFlowsRoutes); // 🧠 Dynamic Flow Engine (Trigger → Event → State → Action)
     app.use('/api/company/:companyId/system-snapshot', routes.systemSnapshotRoutes); // 📸 System Snapshot (Flow Tree JSON - Single Source of Truth)
-    app.use('/api/company/:companyId/full-inventory', routes.fullInventoryRoutes); // 📦 Full Inventory (Prove Nothing Lost - Migration Safety)
+    // REMOVED Feb 2026: /api/company/:companyId/full-inventory - Legacy tab nuked
     app.use('/api/company/:companyId', routes.companyOverridesRoutes); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
     app.use('/api/company/:companyId', routes.scopeOverridesRoutes); // 🔒 Scope Overrides (GLOBAL vs COMPANY clone-to-override)
     app.use('/api/company/:companyId/scenario-export', routes.scenarioExportRoutes); // 📦 Full Scenario Export (Deep JSON export with all fields)

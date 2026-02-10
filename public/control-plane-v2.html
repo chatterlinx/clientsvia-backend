@@ -1160,14 +1160,7 @@
       <span>🎯 Gaps</span>
       <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('scenario-gaps')"></i>
     </button>
-    
-    <div class="nav-divider"></div>
-    
-    <button class="nav-tab" data-tab="legacy" style="color: #f59e0b;">
-      <i class="fas fa-archive"></i>
-      <span>📦 Legacy</span>
-      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('legacy')"></i>
-    </button>
+    <!-- REMOVED Feb 2026: Legacy tab - migration complete, tab was broken -->
   </nav>
   
   <!-- Tab Info Modal -->
@@ -2840,133 +2833,7 @@
       </script>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         LEGACY (Read-Only + Migration)
-         Temporary tab to view old data modules during migration
-         DO NOT DELETE DATA until migration is verified complete
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="legacy">
-      <div class="card" style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-          <span style="font-size: 32px;">📦</span>
-          <div>
-            <h2 style="margin: 0; color: #92400e;">Legacy Data (Read-Only)</h2>
-            <p class="muted" style="color: #a16207;">This tab shows old data that existed before the Control Plane cleanup. Nothing has been deleted.</p>
-          </div>
-        </div>
-        
-        <!-- Full Inventory Button -->
-        <div style="margin-bottom: 24px;">
-          <button onclick="loadFullInventory()" id="btn-load-inventory" class="btn" style="background: #f59e0b; color: white; padding: 14px 24px; font-size: 15px;">
-            <i class="fas fa-search"></i> Load Full Inventory (Prove Nothing Lost)
-          </button>
-          <button onclick="copyInventoryJson()" id="btn-copy-inventory" class="btn btn-secondary" style="margin-left: 12px;">
-            <i class="fas fa-copy"></i> Copy JSON
-          </button>
-      </div>
-        
-        <!-- Inventory Stats Summary -->
-        <div id="inventory-summary" style="display: none; margin-bottom: 24px;">
-          <h3 style="font-size: 16px; font-weight: 600; color: #92400e; margin-bottom: 12px;">📊 Inventory Summary</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;" id="inventory-stats-grid">
-            <!-- Stats will be populated here -->
-      </div>
-        </div>
-        
-        <!-- Legacy Sections Accordion -->
-        <div id="legacy-sections" style="display: flex; flex-direction: column; gap: 12px;">
-          
-          <!-- TRIAGE CARDS -->
-          <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
-            <button onclick="toggleLegacySection('triage')" style="width: 100%; padding: 16px; background: #f8fafc; border: none; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-weight: 600; color: #1e293b;"><i class="fas fa-clipboard-list" style="margin-right: 8px; color: #f59e0b;"></i>Triage Cards</span>
-              <span id="triage-count" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">—</span>
-            </button>
-            <div id="legacy-triage" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
-              <pre id="legacy-triage-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-        </div>
-        </div>
-          
-          <!-- MISSION CONTROL -->
-          <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
-            <button onclick="toggleLegacySection('mission')" style="width: 100%; padding: 16px; background: #f8fafc; border: none; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-weight: 600; color: #1e293b;"><i class="fas fa-rocket" style="margin-right: 8px; color: #8b5cf6;"></i>Mission Control</span>
-              <span id="mission-count" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">—</span>
-            </button>
-            <div id="legacy-mission" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
-              <pre id="legacy-mission-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-        </div>
-        </div>
-          
-          <!-- BEHAVIOR RULES -->
-          <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
-            <button onclick="toggleLegacySection('behavior')" style="width: 100%; padding: 16px; background: #f8fafc; border: none; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-weight: 600; color: #1e293b;"><i class="fas fa-sliders-h" style="margin-right: 8px; color: #3b82f6;"></i>Behavior Rules</span>
-              <span id="behavior-count" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">—</span>
-            </button>
-            <div id="legacy-behavior" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
-              <pre id="legacy-behavior-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-    </div>
-  </div>
-
-          <!-- GUARDRAILS -->
-          <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
-            <button onclick="toggleLegacySection('guardrails')" style="width: 100%; padding: 16px; background: #f8fafc; border: none; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-weight: 600; color: #1e293b;"><i class="fas fa-shield-alt" style="margin-right: 8px; color: #10b981;"></i>Guardrails</span>
-              <span id="guardrails-count" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">—</span>
-            </button>
-            <div id="legacy-guardrails" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
-              <pre id="legacy-guardrails-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-            </div>
-          </div>
-          
-          <!-- LEGACY VARIABLES -->
-          <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
-            <button onclick="toggleLegacySection('variables')" style="width: 100%; padding: 16px; background: #f8fafc; border: none; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-weight: 600; color: #1e293b;"><i class="fas fa-code" style="margin-right: 8px; color: #06b6d4;"></i>Legacy Variables</span>
-              <span id="variables-count" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">—</span>
-            </button>
-            <div id="legacy-variables" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
-              <pre id="legacy-variables-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-            </div>
-          </div>
-          
-          <!-- CALCULATORS -->
-          <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
-            <button onclick="toggleLegacySection('calculators')" style="width: 100%; padding: 16px; background: #f8fafc; border: none; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-weight: 600; color: #1e293b;"><i class="fas fa-calculator" style="margin-right: 8px; color: #ec4899;"></i>Calculators</span>
-              <span id="calculators-count" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">—</span>
-            </button>
-            <div id="legacy-calculators" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
-              <pre id="legacy-calculators-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-            </div>
-          </div>
-          
-          <!-- BLACK BOX RECORDINGS -->
-          <div class="legacy-section" style="background: white; border-radius: 12px; overflow: hidden;">
-            <button onclick="toggleLegacySection('blackbox')" style="width: 100%; padding: 16px; background: #f8fafc; border: none; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-weight: 600; color: #1e293b;"><i class="fas fa-video" style="margin-right: 8px; color: #f97316;"></i>Black Box Recordings</span>
-              <span id="blackbox-count" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 12px;">—</span>
-            </button>
-            <div id="legacy-blackbox" style="display: none; padding: 16px; max-height: 400px; overflow-y: auto;">
-              <pre id="legacy-blackbox-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 8px; font-size: 11px; overflow-x: auto;">Click "Load Full Inventory" to view</pre>
-            </div>
-          </div>
-          
-        </div>
-        
-        <!-- Full JSON Display -->
-        <div style="margin-top: 24px;">
-          <h3 style="font-size: 16px; font-weight: 600; color: #92400e; margin-bottom: 12px;">📝 Full Inventory JSON</h3>
-          <pre id="legacy-full-json" style="background: #0d1117; color: #c9d1d9; padding: 16px; border-radius: 12px; font-size: 11px; max-height: 500px; overflow: auto; white-space: pre-wrap;">
-{
-  "message": "Click 'Load Full Inventory' to fetch all legacy data",
-  "hint": "This proves nothing has been deleted during the cleanup"
-}
-          </pre>
-        </div>
-      </div>
-    </div>
+    <!-- REMOVED Feb 2026: Legacy tab panel - migration complete, tab was broken -->
     
   </main>
 
@@ -3430,9 +3297,7 @@
           case 'data-config':
             await initDataConfig();
             break;
-          case 'legacy':
-            await initLegacy();
-            break;
+          // REMOVED Feb 2026: case 'legacy' - tab nuked
         }
         initializedTabs.add(tabId);
       } catch (error) {
@@ -7421,142 +7286,7 @@
       return div.innerHTML;
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
-    // LEGACY TAB - Full Inventory & Read-Only View
-    // ═══════════════════════════════════════════════════════════════════════════
-    let fullInventory = null;
-    
-    async function initLegacy() {
-      console.log('📦 [INIT] Initializing Legacy tab...');
-      // Auto-load inventory when tab is first opened
-      await loadFullInventory();
-      console.log('✅ [INIT] Legacy tab initialized');
-    }
-    
-    async function loadFullInventory() {
-      const btn = document.getElementById('btn-load-inventory');
-      const jsonDisplay = document.getElementById('legacy-full-json');
-      
-      try {
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-        btn.disabled = true;
-        
-        const response = await fetch(`/api/company/${currentCompanyId}/full-inventory`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch inventory: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.inventory) {
-          fullInventory = data.inventory;
-          
-          // Update full JSON display
-          jsonDisplay.textContent = JSON.stringify(data.inventory, null, 2);
-          
-          // Update summary stats
-          const summaryDiv = document.getElementById('inventory-summary');
-          const statsGrid = document.getElementById('inventory-stats-grid');
-          summaryDiv.style.display = 'block';
-          
-          const inv = data.inventory;
-          const collections = inv.collections || {};
-          const separate = inv.separateCollections || {};
-          
-          statsGrid.innerHTML = `
-            <div style="background: #fef3c7; padding: 12px; border-radius: 8px; text-align: center;">
-              <div style="font-size: 24px; font-weight: 700; color: #92400e;">${collections.triage?.count || 0}</div>
-              <div style="font-size: 11px; color: #a16207;">Triage Cards</div>
-            </div>
-            <div style="background: #e0e7ff; padding: 12px; border-radius: 8px; text-align: center;">
-              <div style="font-size: 24px; font-weight: 700; color: #4338ca;">${collections.behaviorRules?.count || 0}</div>
-              <div style="font-size: 11px; color: #6366f1;">Behavior Rules</div>
-            </div>
-            <div style="background: #d1fae5; padding: 12px; border-radius: 8px; text-align: center;">
-              <div style="font-size: 24px; font-weight: 700; color: #059669;">${collections.guardrails?.count || 0}</div>
-              <div style="font-size: 11px; color: #10b981;">Guardrails</div>
-            </div>
-            <div style="background: #cffafe; padding: 12px; border-radius: 8px; text-align: center;">
-              <div style="font-size: 24px; font-weight: 700; color: #0891b2;">${collections.variablesLegacy?.count || 0}</div>
-              <div style="font-size: 11px; color: #06b6d4;">Variables</div>
-            </div>
-            <div style="background: #fce7f3; padding: 12px; border-radius: 8px; text-align: center;">
-              <div style="font-size: 24px; font-weight: 700; color: #be185d;">${collections.calculators?.count || 0}</div>
-              <div style="font-size: 11px; color: #ec4899;">Calculators</div>
-            </div>
-            <div style="background: #ffedd5; padding: 12px; border-radius: 8px; text-align: center;">
-              <div style="font-size: 24px; font-weight: 700; color: #c2410c;">${separate.blackBoxRecordings?.count || 0}</div>
-              <div style="font-size: 11px; color: #f97316;">Black Box</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; text-align: center;">
-              <div style="font-size: 24px; font-weight: 700; color: #475569;">${separate.dynamicFlows?.count || 0}</div>
-              <div style="font-size: 11px; color: #64748b;">Dynamic Flows</div>
-            </div>
-            <div style="background: #f1f5f9; padding: 12px; border-radius: 8px; text-align: center;">
-              <div style="font-size: 24px; font-weight: 700; color: #475569;">${collections.transferRules?.count || 0}</div>
-              <div style="font-size: 11px; color: #64748b;">Transfer Rules</div>
-            </div>
-          `;
-          
-          // Update individual section counts
-          document.getElementById('triage-count').textContent = collections.triage?.count || 0;
-          document.getElementById('mission-count').textContent = collections.missionControl?.exists ? '✓' : '—';
-          document.getElementById('behavior-count').textContent = collections.behaviorRules?.count || 0;
-          document.getElementById('guardrails-count').textContent = collections.guardrails?.count || 0;
-          document.getElementById('variables-count').textContent = collections.variablesLegacy?.count || 0;
-          document.getElementById('calculators-count').textContent = collections.calculators?.count || 0;
-          document.getElementById('blackbox-count').textContent = separate.blackBoxRecordings?.count || 0;
-          
-          // Update section JSON displays
-          document.getElementById('legacy-triage-json').textContent = JSON.stringify(collections.triage, null, 2);
-          document.getElementById('legacy-mission-json').textContent = JSON.stringify(collections.missionControl, null, 2);
-          document.getElementById('legacy-behavior-json').textContent = JSON.stringify(collections.behaviorRules, null, 2);
-          document.getElementById('legacy-guardrails-json').textContent = JSON.stringify(collections.guardrails, null, 2);
-          document.getElementById('legacy-variables-json').textContent = JSON.stringify(collections.variablesLegacy, null, 2);
-          document.getElementById('legacy-calculators-json').textContent = JSON.stringify(collections.calculators, null, 2);
-          document.getElementById('legacy-blackbox-json').textContent = JSON.stringify(separate.blackBoxRecordings, null, 2);
-          
-          console.log('✅ [INVENTORY] Loaded:', {
-            triage: collections.triage?.count,
-            variables: collections.variablesLegacy?.count,
-            dynamicFlows: separate.dynamicFlows?.count
-          });
-        }
-        
-      } catch (error) {
-        console.error('❌ [INVENTORY] Error:', error);
-        jsonDisplay.textContent = JSON.stringify({
-          error: true,
-          message: error.message,
-          timestamp: new Date().toISOString()
-        }, null, 2);
-      } finally {
-        btn.innerHTML = '<i class="fas fa-search"></i> Load Full Inventory (Prove Nothing Lost)';
-        btn.disabled = false;
-      }
-    }
-    
-    function toggleLegacySection(section) {
-      const content = document.getElementById(`legacy-${section}`);
-      if (content) {
-        content.style.display = content.style.display === 'none' ? 'block' : 'none';
-      }
-    }
-    
-    function copyInventoryJson() {
-      const jsonDisplay = document.getElementById('legacy-full-json');
-      navigator.clipboard.writeText(jsonDisplay.textContent).then(() => {
-        const btn = document.getElementById('btn-copy-inventory');
-        const originalHTML = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-        setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
-      }).catch(err => {
-        alert('Failed to copy: ' + err.message);
-      });
-    }
+    // REMOVED Feb 2026: Legacy tab JavaScript functions - migration complete
     
     // ═══════════════════════════════════════════════════════════════════════════
     // AI TEST CONSOLE

@@ -24,7 +24,6 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
 | Company Contacts | `initCompanyContacts()` | `CheatSheetManager` |
 | Links | `initLinks()` | `CheatSheetManager` |
 | Version History | `initVersionHistory()` | `CheatSheetManager` |
-| Legacy (Full Inventory) | `initLegacy()` | inline (calls inventory endpoint) |
 
 ---
 
@@ -79,9 +78,7 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
 - **Route**: `routes/company/rawCompanyData.js`
 - **Purpose**: direct DB echo to compare “saved state” vs “runtime snapshot”.
 
-### Full Inventory (prove nothing is lost)
-- **Endpoint**: `GET /api/company/:companyId/full-inventory`
-- **Route**: `routes/company/fullInventory.js`
+<!-- REMOVED Feb 2026: Full Inventory endpoint - Legacy tab nuked, migration complete -->
 
 ---
 
