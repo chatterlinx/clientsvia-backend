@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V80.0'; // V80: Consolidated 17→13 tabs
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V81.0'; // V81: Nuked Fallbacks tab → 12 tabs
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -1050,7 +1050,7 @@ class FrontDeskBehaviorManager {
                 </div>
 
                 <!-- Tab Navigation -->
-                <!-- V80: Consolidated from 17→13 tabs (merged Frustration→Detection, Escalation→Emotions, Forbidden→Personality, Modes→Discovery) -->
+                <!-- V81: Consolidated from 17→12 tabs (nuked Fallbacks - use LLM-0 Controls for recovery settings) -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
                     ${this.renderTab('personality', '🎭 Personality', true)}
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
@@ -1062,7 +1062,6 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('emotions', '💭 Emotions')}
                     ${this.renderTab('loops', '🔄 Loops')}
                     ${this.renderTab('detection', '🔍 Detection')}
-                    ${this.renderTab('fallbacks', '🆘 Fallbacks')}
                     ${this.renderTab('llm0-controls', '🧠 LLM-0 Controls')}
                     ${this.renderTab('test', '🧪 Test')}
                 </div>
@@ -12443,7 +12442,7 @@ Sean → Shawn, Shaun`;
             // V80: frustration, escalation, forbidden, modes tabs merged into other tabs
             case 'loops': content.innerHTML = this.renderLoopsTab(); break;
             case 'detection': content.innerHTML = this.renderDetectionTab(); break;
-            case 'fallbacks': content.innerHTML = this.renderFallbacksTab(); break;
+            // V81: fallbacks tab nuked - recovery settings in LLM-0 Controls
             case 'llm0-controls': content.innerHTML = this.renderLLM0ControlsTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
         }
