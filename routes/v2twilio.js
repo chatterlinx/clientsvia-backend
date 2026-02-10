@@ -4220,10 +4220,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 callerPhone: fromNumber,
                 // V111 Phase 4: Pass ConversationMemory for governance enforcement
                 v111Memory: v111Memory || null,
-                // V111: Pass scenario match for router (if available from earlier in pipeline)
-                scenarioMatch: checkpointE?.scenarioMatch || null,
-                consentSignal: checkpointE?.consentSignal || { detected: false },
-                escalationSignal: checkpointE?.escalationSignal || { explicit: false, frustration: false }
+                // V111: Signals will be determined by FrontDeskRuntime internally
+                scenarioMatch: null,
+                consentSignal: { detected: false },
+                escalationSignal: { explicit: false, frustration: false }
               };
               
               // Call FrontDeskRuntime - THE SINGLE ORCHESTRATOR
