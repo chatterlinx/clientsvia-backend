@@ -195,14 +195,21 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     // ═══════════════════════════════════════════════════════════════════════════
     // GATE 1.5: CONNECTION QUALITY GATE (V111)
     // ═══════════════════════════════════════════════════════════════════════════
-    // On early turns (1-2), if STT confidence is garbage or caller says
+    // On early turns (1-3), if STT confidence is garbage or caller says
     // "hello? are you there?", intercept BEFORE the LLM gets garbage input.
+    // If trouble was already detected, continues checking on any turn.
     // After maxRetries, offer DTMF escape (press 1 / press 2).
     // ═══════════════════════════════════════════════════════════════════════════
     const cqGate = effectiveConfig?.frontDeskBehavior?.connectionQualityGate;
     const cqEnabled = cqGate?.enabled !== false;
     
-    if (cqEnabled && turnCount <= 2 && !callState?.bookingModeLocked) {
+    // V111 FIX: Use actual turn count from callState (Redis), not context.turnCount
+    // which is always 1 on stateless servers (Render). Gate fires on early turns (1-3)
+    // or on ANY turn if connection trouble was already detected in this call.
+    const actualTurnCount = callState?.turnCount || turnCount;
+    const hasPriorTrouble = (callState?._connectionTroubleCount || 0) > 0;
+    
+    if (cqEnabled && (actualTurnCount <= 3 || hasPriorTrouble) && !callState?.bookingModeLocked) {
         const sttConfidence = context.sttConfidence || 0;
         const threshold = cqGate?.confidenceThreshold || 0.72;
         const maxRetries = cqGate?.maxRetries || 3;
@@ -237,7 +244,8 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
             logger.info('[FRONT_DESK_RUNTIME] CONNECTION QUALITY GATE TRIGGERED', {
                 callSid,
                 companyId,
-                turnCount,
+                turnCount: actualTurnCount,
+                contextTurnCount: turnCount,
                 troubleCount,
                 maxRetries,
                 reason,

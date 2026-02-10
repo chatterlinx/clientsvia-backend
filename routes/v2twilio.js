@@ -6215,7 +6215,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Use ElevenLabs for announcement if configured
       const elevenLabsVoice = company?.aiAgentSettings?.voiceSettings?.voiceId;
       
+      // V111 FIX: Explicitly set input="dtmf" to ensure ONLY keypad presses
+      // are captured. Without this, Twilio defaults to "dtmf speech" which can
+      // capture speech input ("one") instead of the digit press, causing Digits
+      // to be undefined in the handler and the forward to fail.
       const gather = twiml.gather({
+        input: 'dtmf',
         numDigits: 1,
         action: `${getSecureBaseUrl(req)}/api/twilio/catastrophic-dtmf/${companyID}`,
         method: 'POST',
@@ -6258,7 +6263,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           await redisClient.setEx(`catastrophic:${callSid}`, 300, JSON.stringify({
             forwardNumber: result.catastrophicFallback.forwardNumber,
             option2Action: result.catastrophicFallback.option2Action,
-            companyId: companyID
+            companyId: companyID,
+            // V111 FIX: Store the Twilio number so the DTMF handler can use it
+            // as callerId for outbound Dial (Twilio requires a number owned by the account)
+            twilioNumber: req.body.To || ''
           }));
         }
       } catch (redisErr) {
@@ -8404,13 +8412,16 @@ router.post('/status-callback/:companyId', async (req, res) => {
 // ════════════════════════════════════════════════════════════════════════════════
 router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
   const { companyId } = req.params;
-  const { CallSid, Digits, From } = req.body;
+  const { CallSid, Digits, From, To } = req.body;
   
   logger.warn('🚨 [CATASTROPHIC DTMF] Processing caller choice', {
     companyId,
     callSid: CallSid,
     digits: Digits,
-    from: From
+    from: From,
+    to: To,
+    // V111: Log all body keys for debugging
+    bodyKeys: Object.keys(req.body || {}).join(',')
   });
   
   const twiml = new twilio.twiml.VoiceResponse();
@@ -8418,6 +8429,7 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
   try {
     // Get stored config from Redis
     let config = null;
+    let configSource = 'none';
     try {
       const { getSharedRedisClient } = require('../services/redisClientFactory');
       const redisClient = await getSharedRedisClient();
@@ -8425,6 +8437,7 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
         const stored = await redisClient.get(`catastrophic:${CallSid}`);
         if (stored) {
           config = JSON.parse(stored);
+          configSource = 'redis';
         }
       }
     } catch (redisErr) {
@@ -8434,16 +8447,36 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
     // Fallback: load from company settings if Redis failed
     if (!config) {
       const Company = require('../models/v2Company');
-      const company = await Company.findById(companyId).select('aiAgentSettings.llm0Controls.recoveryMessages').lean();
+      const company = await Company.findById(companyId)
+        .select('aiAgentSettings.llm0Controls.recoveryMessages aiAgentSettings.frontDeskBehavior.connectionQualityGate phoneNumber')
+        .lean();
       const rm = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+      const cqGate = company?.aiAgentSettings?.frontDeskBehavior?.connectionQualityGate || {};
+      
+      // V111: Check both catastrophic config sources (LLM-0 and Connection Quality Gate)
       config = {
-        forwardNumber: rm.catastrophicForwardNumber,
+        forwardNumber: rm.catastrophicForwardNumber || cqGate.transferDestination || company?.phoneNumber || '',
         option2Action: rm.catastrophicOption2Action || 'voicemail',
-        companyId
+        companyId,
+        twilioNumber: '' // Not available from DB, will use req.body.To
       };
+      configSource = 'mongodb_fallback';
     }
     
-    // Log to BlackBox
+    // V111 FIX: Determine callerId for outbound Dial — Twilio requires a number
+    // owned by the account. Chain: req.body.To (the Twilio number) → config.twilioNumber → From
+    const dialCallerId = To || config.twilioNumber || From;
+    
+    logger.info('🚨 [CATASTROPHIC DTMF] Config resolved', {
+      callSid: CallSid,
+      configSource,
+      hasForwardNumber: !!config.forwardNumber,
+      forwardNumberMasked: config.forwardNumber?.replace(/\d(?=\d{4})/g, '*'),
+      option2Action: config.option2Action,
+      dialCallerId: dialCallerId?.replace(/\d(?=\d{4})/g, '*')
+    });
+    
+    // Log to BlackBox (fire-and-forget but BEFORE twiml generation)
     const BlackBoxLogger = require('../services/BlackBoxLogger');
     BlackBoxLogger.logEvent({
       callId: CallSid,
@@ -8452,7 +8485,10 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
       turn: 0,
       data: {
         digits: Digits,
-        action: Digits === '1' ? 'forward' : config.option2Action
+        action: Digits === '1' ? 'forward' : (Digits === '2' ? config.option2Action : 'unknown'),
+        configSource,
+        hasForwardNumber: !!config.forwardNumber,
+        dialCallerId: dialCallerId?.replace(/\d(?=\d{4})/g, '*')
       }
     }).catch(() => {});
     
@@ -8460,12 +8496,13 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
       // Option 1: Forward to human
       logger.info('🚨 [CATASTROPHIC] Forwarding call to human', {
         callSid: CallSid,
-        forwardTo: config.forwardNumber.replace(/\d(?=\d{4})/g, '*')
+        forwardTo: config.forwardNumber.replace(/\d(?=\d{4})/g, '*'),
+        callerId: dialCallerId?.replace(/\d(?=\d{4})/g, '*')
       });
       
       twiml.say(escapeTwiML("Connecting you now. Please hold."));
       twiml.dial({
-        callerId: From,
+        callerId: dialCallerId,
         timeout: 30,
         action: `${getSecureBaseUrl(req)}/api/twilio/status-callback/${companyId}`
       }, config.forwardNumber);
