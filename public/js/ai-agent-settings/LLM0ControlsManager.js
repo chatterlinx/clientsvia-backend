@@ -873,6 +873,65 @@ class LLM0ControlsManager {
                             <span style="font-size: 11px; color: #6b7280;">When transferring due to tech issues</span>
                         </div>
                     </div>
+                    
+                    <!-- CATASTROPHIC FALLBACK - When EVERYTHING fails -->
+                    <div style="margin-top: 24px; padding: 20px; background: linear-gradient(135deg, #7f1d1d, #991b1b); border-radius: 12px; border: 2px solid #dc2626;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                            <span style="font-size: 24px;">🚨</span>
+                            <div>
+                                <h4 style="margin: 0; color: #fecaca; font-size: 16px; font-weight: 600;">Catastrophic Fallback</h4>
+                                <p style="margin: 4px 0 0 0; color: #fca5a5; font-size: 12px;">When AI + LLM both fail - offer caller DTMF options</p>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                            <label style="display: flex; align-items: center; gap: 8px; color: #fecaca; cursor: pointer;">
+                                <input type="checkbox" data-section="recoveryMessages" data-field="catastrophicFallbackEnabled"
+                                       ${rm.catastrophicFallbackEnabled ? 'checked' : ''}
+                                       style="width: 18px; height: 18px; accent-color: #dc2626;">
+                                <span style="font-weight: 500;">Enable DTMF Fallback Menu</span>
+                            </label>
+                        </div>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div>
+                                <label style="display: block; font-size: 12px; color: #fecaca; margin-bottom: 4px;">
+                                    📢 Announcement Message
+                                </label>
+                                <textarea class="llm0-input" data-section="recoveryMessages" data-field="catastrophicAnnouncement"
+                                          placeholder="We're experiencing technical difficulties. Press 1 to speak with a representative, or press 2 to leave a message."
+                                          style="width: 100%; padding: 10px; border: 1px solid #f87171; border-radius: 6px; background: #1f2937; color: #f3f4f6; min-height: 60px;"
+                                >${rm.catastrophicAnnouncement || ''}</textarea>
+                            </div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #fecaca; margin-bottom: 4px;">
+                                        1️⃣ Press 1 → Forward to Number
+                                    </label>
+                                    <input type="text" class="llm0-input" value="${rm.catastrophicForwardNumber || ''}"
+                                           data-section="recoveryMessages" data-field="catastrophicForwardNumber"
+                                           placeholder="+1234567890"
+                                           style="width: 100%; padding: 10px; border: 1px solid #f87171; border-radius: 6px; background: #1f2937; color: #f3f4f6;">
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 12px; color: #fecaca; margin-bottom: 4px;">
+                                        2️⃣ Press 2 → Action
+                                    </label>
+                                    <select class="llm0-input" data-section="recoveryMessages" data-field="catastrophicOption2Action"
+                                            style="width: 100%; padding: 10px; border: 1px solid #f87171; border-radius: 6px; background: #1f2937; color: #f3f4f6;">
+                                        <option value="voicemail" ${rm.catastrophicOption2Action === 'voicemail' ? 'selected' : ''}>Leave Voicemail</option>
+                                        <option value="callback" ${rm.catastrophicOption2Action === 'callback' ? 'selected' : ''}>Request Callback</option>
+                                        <option value="hangup" ${rm.catastrophicOption2Action === 'hangup' ? 'selected' : ''}>End Call Politely</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <p style="font-size: 11px; color: #fca5a5; margin: 8px 0 0 0;">
+                                ⚠️ This only triggers if AI + LLM both fail completely. Under normal operation, this should never be reached.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;

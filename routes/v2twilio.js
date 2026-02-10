@@ -4372,11 +4372,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 throw new Error('LLM returned empty response');
               }
             } catch (llmFallbackError) {
-              // LLM also failed - use simple recovery as last resort
-              logger.error('[V111] LLM fallback also failed, using simple recovery', {
+              // LLM also failed - check for catastrophic fallback settings
+              logger.error('[V111] LLM fallback also failed, checking catastrophic fallback', {
                 callSid,
                 llmError: llmFallbackError.message
               });
+              
+              const recoveryMsgs = company.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
               
               if (BlackBoxLogger) {
                 BlackBoxLogger.logEvent({
@@ -4386,19 +4388,56 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   turn: turnCount,
                   data: {
                     originalError: strictModeError.message?.substring(0, 100),
-                    llmError: llmFallbackError.message?.substring(0, 100)
+                    llmError: llmFallbackError.message?.substring(0, 100),
+                    catastrophicFallbackEnabled: recoveryMsgs.catastrophicFallbackEnabled || false
                   }
                 }).catch(() => {});
               }
               
-              // Last resort: Simple recovery message
-              const recoveryMsgs = company.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
-              result = {
-                text: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
-                response: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
-                conversationMode: 'discovery',
-                matchSource: 'FRONT_DESK_RUNTIME_ERROR_RECOVERY_FINAL'
-              };
+              // ════════════════════════════════════════════════════════════════════════
+              // V111: CATASTROPHIC FALLBACK - Offer DTMF menu when everything fails
+              // ════════════════════════════════════════════════════════════════════════
+              if (recoveryMsgs.catastrophicFallbackEnabled && recoveryMsgs.catastrophicForwardNumber) {
+                logger.warn('[V111] 🚨 CATASTROPHIC FALLBACK ACTIVATED - Offering DTMF menu', {
+                  callSid,
+                  forwardNumber: recoveryMsgs.catastrophicForwardNumber
+                });
+                
+                if (BlackBoxLogger) {
+                  BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId: companyID,
+                    type: 'CATASTROPHIC_FALLBACK_ACTIVATED',
+                    turn: turnCount,
+                    data: {
+                      forwardNumber: recoveryMsgs.catastrophicForwardNumber?.replace(/\d(?=\d{4})/g, '*'),
+                      option2Action: recoveryMsgs.catastrophicOption2Action || 'voicemail'
+                    }
+                  }).catch(() => {});
+                }
+                
+                // Return special result that triggers DTMF menu in TwiML generation
+                result = {
+                  text: recoveryMsgs.catastrophicAnnouncement || "We're experiencing technical difficulties. Press 1 to speak with a representative, or press 2 to leave a message.",
+                  response: recoveryMsgs.catastrophicAnnouncement || "We're experiencing technical difficulties. Press 1 to speak with a representative, or press 2 to leave a message.",
+                  conversationMode: 'catastrophic_fallback',
+                  matchSource: 'CATASTROPHIC_FALLBACK',
+                  catastrophicFallback: {
+                    enabled: true,
+                    forwardNumber: recoveryMsgs.catastrophicForwardNumber,
+                    option2Action: recoveryMsgs.catastrophicOption2Action || 'voicemail',
+                    announcement: recoveryMsgs.catastrophicAnnouncement
+                  }
+                };
+              } else {
+                // No catastrophic fallback configured - use simple recovery message
+                result = {
+                  text: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
+                  response: recoveryMsgs.connectionCutOut || "I'm sorry, the connection cut out for a second. What can I help you with?",
+                  conversationMode: 'discovery',
+                  matchSource: 'FRONT_DESK_RUNTIME_ERROR_RECOVERY_FINAL'
+                };
+              }
             }
           }
         } else if (strictControlPlaneMode && !result) {
@@ -6129,6 +6168,93 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     
     // Handle different response types
+    
+    // ════════════════════════════════════════════════════════════════════════════
+    // V111: CATASTROPHIC FALLBACK - DTMF Menu when everything fails
+    // ════════════════════════════════════════════════════════════════════════════
+    if (result.conversationMode === 'catastrophic_fallback' && result.catastrophicFallback?.enabled) {
+      logger.warn('🚨 CHECKPOINT 17A: CATASTROPHIC FALLBACK - Generating DTMF menu', {
+        callSid,
+        forwardNumber: result.catastrophicFallback.forwardNumber?.replace(/\d(?=\d{4})/g, '*'),
+        option2Action: result.catastrophicFallback.option2Action
+      });
+      
+      // Generate TwiML with DTMF gather
+      const catastrophicAnnouncement = result.catastrophicFallback.announcement || 
+        "We're experiencing technical difficulties. Press 1 to speak with a representative, or press 2 to leave a message.";
+      
+      // Use ElevenLabs for announcement if configured
+      const elevenLabsVoice = company?.aiAgentSettings?.voiceSettings?.voiceId;
+      
+      const gather = twiml.gather({
+        numDigits: 1,
+        action: `${getSecureBaseUrl(req)}/api/twilio/catastrophic-dtmf/${companyID}`,
+        method: 'POST',
+        timeout: 10
+      });
+      
+      if (elevenLabsVoice) {
+        try {
+          const buffer = await synthesizeSpeech({
+            text: catastrophicAnnouncement,
+            voiceId: elevenLabsVoice,
+            stability: company?.aiAgentSettings?.voiceSettings?.stability,
+            similarity_boost: company?.aiAgentSettings?.voiceSettings?.similarityBoost,
+            company
+          });
+          const fileName = `catastrophic_${Date.now()}.mp3`;
+          const audioDir = path.join(__dirname, '../public/audio');
+          if (!fs.existsSync(audioDir)) { fs.mkdirSync(audioDir, { recursive: true }); }
+          const filePath = path.join(audioDir, fileName);
+          fs.writeFileSync(filePath, buffer);
+          const audioUrl = `${getSecureBaseUrl(req)}/audio/${fileName}`;
+          gather.play(audioUrl);
+        } catch (err) {
+          logger.error('ElevenLabs catastrophic TTS failed, using Say:', err);
+          gather.say(escapeTwiML(catastrophicAnnouncement));
+        }
+      } else {
+        gather.say(escapeTwiML(catastrophicAnnouncement));
+      }
+      
+      // If no input, repeat the message
+      twiml.say(escapeTwiML("I didn't receive a response. Please call back or try again later."));
+      twiml.hangup();
+      
+      // Store catastrophic fallback config in Redis for the DTMF handler
+      try {
+        const { getSharedRedisClient } = require('../services/redisClientFactory');
+        const redisClient = await getSharedRedisClient();
+        if (redisClient) {
+          await redisClient.setEx(`catastrophic:${callSid}`, 300, JSON.stringify({
+            forwardNumber: result.catastrophicFallback.forwardNumber,
+            option2Action: result.catastrophicFallback.option2Action,
+            companyId: companyID
+          }));
+        }
+      } catch (redisErr) {
+        logger.error('Failed to store catastrophic config in Redis', { error: redisErr.message });
+      }
+      
+      // BlackBox logging
+      if (BlackBoxLogger) {
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'CATASTROPHIC_DTMF_MENU_SENT',
+          turn: turnCount,
+          data: {
+            announcement: catastrophicAnnouncement.substring(0, 100),
+            forwardNumber: result.catastrophicFallback.forwardNumber?.replace(/\d(?=\d{4})/g, '*'),
+            option2Action: result.catastrophicFallback.option2Action
+          }
+        }).catch(() => {});
+      }
+      
+      res.type('text/xml');
+      return res.send(twiml.toString());
+    }
+    
     if (result.shouldHangup) {
       logger.info('🎯 CHECKPOINT 17: AI decided to hang up');
       logger.info(`🗣️ Final message: "${result.text}"`);
@@ -8240,6 +8366,143 @@ router.post('/status-callback/:companyId', async (req, res) => {
     });
     res.status(200).send('OK');
   }
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// 🚨 V111: CATASTROPHIC DTMF HANDLER - Process caller's choice when everything fails
+// ════════════════════════════════════════════════════════════════════════════════
+// Called when caller presses 1 (forward to human) or 2 (leave message/callback)
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
+  const { companyId } = req.params;
+  const { CallSid, Digits, From } = req.body;
+  
+  logger.warn('🚨 [CATASTROPHIC DTMF] Processing caller choice', {
+    companyId,
+    callSid: CallSid,
+    digits: Digits,
+    from: From
+  });
+  
+  const twiml = new twilio.twiml.VoiceResponse();
+  
+  try {
+    // Get stored config from Redis
+    let config = null;
+    try {
+      const { getSharedRedisClient } = require('../services/redisClientFactory');
+      const redisClient = await getSharedRedisClient();
+      if (redisClient) {
+        const stored = await redisClient.get(`catastrophic:${CallSid}`);
+        if (stored) {
+          config = JSON.parse(stored);
+        }
+      }
+    } catch (redisErr) {
+      logger.error('Failed to get catastrophic config from Redis', { error: redisErr.message });
+    }
+    
+    // Fallback: load from company settings if Redis failed
+    if (!config) {
+      const Company = require('../models/v2Company');
+      const company = await Company.findById(companyId).select('aiAgentSettings.llm0Controls.recoveryMessages').lean();
+      const rm = company?.aiAgentSettings?.llm0Controls?.recoveryMessages || {};
+      config = {
+        forwardNumber: rm.catastrophicForwardNumber,
+        option2Action: rm.catastrophicOption2Action || 'voicemail',
+        companyId
+      };
+    }
+    
+    // Log to BlackBox
+    const BlackBoxLogger = require('../services/BlackBoxLogger');
+    BlackBoxLogger.logEvent({
+      callId: CallSid,
+      companyId,
+      type: 'CATASTROPHIC_DTMF_RECEIVED',
+      turn: 0,
+      data: {
+        digits: Digits,
+        action: Digits === '1' ? 'forward' : config.option2Action
+      }
+    }).catch(() => {});
+    
+    if (Digits === '1' && config.forwardNumber) {
+      // Option 1: Forward to human
+      logger.info('🚨 [CATASTROPHIC] Forwarding call to human', {
+        callSid: CallSid,
+        forwardTo: config.forwardNumber.replace(/\d(?=\d{4})/g, '*')
+      });
+      
+      twiml.say(escapeTwiML("Connecting you now. Please hold."));
+      twiml.dial({
+        callerId: From,
+        timeout: 30,
+        action: `${getSecureBaseUrl(req)}/api/twilio/status-callback/${companyId}`
+      }, config.forwardNumber);
+      
+    } else if (Digits === '2') {
+      // Option 2: Handle based on configured action
+      const action = config.option2Action || 'voicemail';
+      
+      if (action === 'voicemail') {
+        logger.info('🚨 [CATASTROPHIC] Recording voicemail', { callSid: CallSid });
+        
+        twiml.say(escapeTwiML("Please leave your message after the tone. Press pound when finished."));
+        twiml.record({
+          maxLength: 120,
+          finishOnKey: '#',
+          transcribe: true,
+          transcribeCallback: `${getSecureBaseUrl(req)}/api/twilio/voicemail-transcribe/${companyId}`,
+          action: `${getSecureBaseUrl(req)}/api/twilio/voicemail-complete/${companyId}`
+        });
+        
+      } else if (action === 'callback') {
+        logger.info('🚨 [CATASTROPHIC] Callback requested', { callSid: CallSid, from: From });
+        
+        // Store callback request
+        try {
+          const CallbackRequest = require('../models/CallbackRequest');
+          if (CallbackRequest) {
+            await CallbackRequest.create({
+              companyId,
+              callSid: CallSid,
+              callerPhone: From,
+              requestedAt: new Date(),
+              status: 'pending',
+              source: 'catastrophic_fallback'
+            });
+          }
+        } catch (cbErr) {
+          logger.error('Failed to create callback request', { error: cbErr.message });
+        }
+        
+        twiml.say(escapeTwiML("We've noted your callback request. Someone will call you back as soon as possible. Goodbye."));
+        twiml.hangup();
+        
+      } else {
+        // hangup option
+        twiml.say(escapeTwiML("Thank you for calling. Please try again later. Goodbye."));
+        twiml.hangup();
+      }
+      
+    } else {
+      // Invalid input - repeat menu or end
+      twiml.say(escapeTwiML("I didn't understand that option. Please try again later. Goodbye."));
+      twiml.hangup();
+    }
+    
+  } catch (err) {
+    logger.error('🚨 [CATASTROPHIC DTMF] Error processing choice', {
+      error: err.message,
+      callSid: CallSid
+    });
+    twiml.say(escapeTwiML("An error occurred. Please try again later."));
+    twiml.hangup();
+  }
+  
+  res.type('text/xml');
+  res.send(twiml.toString());
 });
 
 // ════════════════════════════════════════════════════════════════════════════════
