@@ -8340,8 +8340,11 @@ router.post('/status-callback', async (req, res) => {
       // ────────────────────────────────────────────────────────────────
     }
     
-    // Always return 200 to Twilio
-    res.status(200).send('OK');
+    // Always return 200 to Twilio.
+    // IMPORTANT: Return valid TwiML (not plain text). This endpoint is sometimes
+    // (incorrectly) referenced by <Dial action="..."> in legacy paths, where Twilio
+    // expects TwiML and will throw "check your webhook settings" if it receives "OK".
+    res.type('text/xml').status(200).send('<Response></Response>');
     
   } catch (error) {
     logger.error('[CALL STATUS] Status callback error', {
@@ -8349,7 +8352,7 @@ router.post('/status-callback', async (req, res) => {
       callSid: CallSid
     });
     // Still return 200 to prevent Twilio retries
-    res.status(200).send('OK');
+    res.type('text/xml').status(200).send('<Response></Response>');
   }
 });
 
@@ -8394,14 +8397,15 @@ router.post('/status-callback/:companyId', async (req, res) => {
       }
     }
     
-    res.status(200).send('OK');
+    // Return TwiML so this can safely be used in any TwiML action path.
+    res.type('text/xml').status(200).send('<Response></Response>');
     
   } catch (error) {
     logger.error('[CALL STATUS] Company callback error', {
       companyId,
       error: error.message
     });
-    res.status(200).send('OK');
+    res.type('text/xml').status(200).send('<Response></Response>');
   }
 });
 
