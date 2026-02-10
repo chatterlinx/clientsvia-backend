@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V82.0'; // V82: Removed broken verification score widget
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V83.0'; // V83: Table-based UI for Consent Phrases and Yes Words
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -5657,6 +5657,190 @@ Sean → Shawn, Shaun"
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // CONSENT PHRASES - V83 Table-Based UI
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    renderConsentPhraseRows() {
+        // Initialize from config if not already set
+        if (!this.consentPhrases) {
+            const dt = this.config.detectionTriggers || {};
+            const phrases = dt.wantsBooking || [];
+            this.consentPhrases = phrases.length > 0 ? [...phrases] : [
+                'schedule an appointment',
+                'book a service',
+                'send someone out',
+                'when can you come',
+                'set up a time'
+            ];
+        }
+        
+        if (this.consentPhrases.length === 0) {
+            return `
+                <div style="padding: 30px; text-align: center; color: #6e7681;">
+                    <div style="font-size: 2rem; margin-bottom: 8px; opacity: 0.5;">🎯</div>
+                    <p style="margin: 0; font-size: 0.85rem;">No consent phrases configured</p>
+                    <p style="margin: 4px 0 0 0; font-size: 0.75rem;">Click "Add Phrase" to create your first trigger</p>
+                </div>
+            `;
+        }
+        
+        return this.consentPhrases.map((phrase, idx) => `
+            <div class="consent-phrase-row" data-idx="${idx}" style="display: grid; grid-template-columns: 1fr 50px; border-bottom: 1px solid #30363d; transition: background 0.15s;"
+                onmouseover="this.style.background='#21262d'" onmouseout="this.style.background='transparent'">
+                <div style="padding: 8px 16px;">
+                    <input type="text" 
+                        class="consent-phrase-input" 
+                        value="${this.escapeHtml(phrase || '')}" 
+                        placeholder="e.g., schedule an appointment"
+                        onchange="window.frontDeskBehaviorManager.updateConsentPhrase(${idx}, this.value)"
+                        style="width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
+                </div>
+                <div style="padding: 8px; display: flex; align-items: center; justify-content: center;">
+                    <button type="button" 
+                        onclick="window.frontDeskBehaviorManager.removeConsentPhrase(${idx})"
+                        style="width: 28px; height: 28px; background: transparent; border: 1px solid #f8514940; border-radius: 6px; color: #f85149; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; transition: all 0.15s;"
+                        onmouseover="this.style.background='#f8514920'; this.style.borderColor='#f85149'"
+                        onmouseout="this.style.background='transparent'; this.style.borderColor='#f8514940'"
+                        title="Remove phrase">×</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    addConsentPhrase() {
+        if (!this.consentPhrases) {
+            this.consentPhrases = [];
+        }
+        
+        this.consentPhrases.push('');
+        
+        const container = document.getElementById('fdb-consent-phrase-rows');
+        if (container) {
+            container.innerHTML = this.renderConsentPhraseRows();
+            // Focus the new input
+            const inputs = container.querySelectorAll('.consent-phrase-input');
+            if (inputs.length > 0) {
+                inputs[inputs.length - 1].focus();
+            }
+        }
+        
+        this.isDirty = true;
+        console.log('[FRONT DESK] 🎯 Added new consent phrase');
+    }
+    
+    updateConsentPhrase(idx, value) {
+        if (!this.consentPhrases) return;
+        
+        this.consentPhrases[idx] = value.trim().toLowerCase();
+        this.isDirty = true;
+        console.log(`[FRONT DESK] 🎯 Updated consent phrase ${idx}: ${value}`);
+    }
+    
+    removeConsentPhrase(idx) {
+        if (!this.consentPhrases) return;
+        
+        const removed = this.consentPhrases.splice(idx, 1);
+        console.log('[FRONT DESK] 🎯 Removed consent phrase:', removed[0]);
+        
+        const container = document.getElementById('fdb-consent-phrase-rows');
+        if (container) {
+            container.innerHTML = this.renderConsentPhraseRows();
+        }
+        
+        this.isDirty = true;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // YES WORDS - V83 Table-Based UI
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    renderYesWordRows() {
+        // Initialize from config if not already set
+        if (!this.yesWords) {
+            const dc = this.config.discoveryConsent || {};
+            const words = dc.consentYesWords || [];
+            this.yesWords = words.length > 0 ? [...words] : [
+                'yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok'
+            ];
+        }
+        
+        if (this.yesWords.length === 0) {
+            return `
+                <div style="padding: 30px; text-align: center; color: #6e7681;">
+                    <div style="font-size: 2rem; margin-bottom: 8px; opacity: 0.5;">✅</div>
+                    <p style="margin: 0; font-size: 0.85rem;">No yes words configured</p>
+                    <p style="margin: 4px 0 0 0; font-size: 0.75rem;">Click "Add Word" to create your first confirmation word</p>
+                </div>
+            `;
+        }
+        
+        return this.yesWords.map((word, idx) => `
+            <div class="yes-word-row" data-idx="${idx}" style="display: grid; grid-template-columns: 1fr 50px; border-bottom: 1px solid #30363d; transition: background 0.15s;"
+                onmouseover="this.style.background='#21262d'" onmouseout="this.style.background='transparent'">
+                <div style="padding: 8px 16px;">
+                    <input type="text" 
+                        class="yes-word-input" 
+                        value="${this.escapeHtml(word || '')}" 
+                        placeholder="e.g., yes, sure, okay"
+                        onchange="window.frontDeskBehaviorManager.updateYesWord(${idx}, this.value)"
+                        style="width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
+                </div>
+                <div style="padding: 8px; display: flex; align-items: center; justify-content: center;">
+                    <button type="button" 
+                        onclick="window.frontDeskBehaviorManager.removeYesWord(${idx})"
+                        style="width: 28px; height: 28px; background: transparent; border: 1px solid #f8514940; border-radius: 6px; color: #f85149; cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; transition: all 0.15s;"
+                        onmouseover="this.style.background='#f8514920'; this.style.borderColor='#f85149'"
+                        onmouseout="this.style.background='transparent'; this.style.borderColor='#f8514940'"
+                        title="Remove word">×</button>
+                </div>
+            </div>
+        `).join('');
+    }
+    
+    addYesWord() {
+        if (!this.yesWords) {
+            this.yesWords = [];
+        }
+        
+        this.yesWords.push('');
+        
+        const container = document.getElementById('fdb-yes-word-rows');
+        if (container) {
+            container.innerHTML = this.renderYesWordRows();
+            // Focus the new input
+            const inputs = container.querySelectorAll('.yes-word-input');
+            if (inputs.length > 0) {
+                inputs[inputs.length - 1].focus();
+            }
+        }
+        
+        this.isDirty = true;
+        console.log('[FRONT DESK] ✅ Added new yes word');
+    }
+    
+    updateYesWord(idx, value) {
+        if (!this.yesWords) return;
+        
+        this.yesWords[idx] = value.trim().toLowerCase();
+        this.isDirty = true;
+        console.log(`[FRONT DESK] ✅ Updated yes word ${idx}: ${value}`);
+    }
+    
+    removeYesWord(idx) {
+        if (!this.yesWords) return;
+        
+        const removed = this.yesWords.splice(idx, 1);
+        console.log('[FRONT DESK] ✅ Removed yes word:', removed[0]);
+        
+        const container = document.getElementById('fdb-yes-word-rows');
+        if (container) {
+            container.innerHTML = this.renderYesWordRows();
+        }
+        
+        this.isDirty = true;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
     // NAME SPELLING VARIANTS (V30)
     // ═══════════════════════════════════════════════════════════════════════════
     
@@ -11025,40 +11209,80 @@ Sean → Shawn, Shaun`;
                     </div>
                 </div>
                 
-                <!-- Consent Detection Section -->
-                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-                    <h4 style="margin: 0 0 12px 0; color: #58a6ff;">🎯 Consent Detection</h4>
-                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
-                        These phrases trigger booking mode. Caller must say one of these to start scheduling.
-                    </p>
-                    
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                            📝 Consent Phrases (one per line)
-                        </label>
-                        <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap: wrap;">
-                            <button class="btn btn-secondary" style="padding: 8px 10px; font-size: 12px;" onclick="window.frontDeskBehaviorManager.applyRecommendedConsentPhrases()">
-                                <i class="fas fa-magic"></i> Apply Recommended
+                <!-- Consent Phrases Section - V83 Table-Based UI -->
+                <div style="margin-bottom: 24px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <label style="color: #c9d1d9; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                                🎯 Consent Phrases
+                                <span style="background: #58a6ff; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">TRIGGERS BOOKING</span>
+                            </label>
+                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                When caller says these phrases, booking mode is triggered.
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button type="button" onclick="window.frontDeskBehaviorManager.applyRecommendedConsentPhrases()" 
+                                style="padding: 8px 12px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;"
+                                onmouseover="this.style.background='#30363d'" onmouseout="this.style.background='#21262d'">
+                                <i class="fas fa-magic"></i> Recommended
+                            </button>
+                            <button type="button" onclick="window.frontDeskBehaviorManager.addConsentPhrase()" 
+                                style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);">
+                                <span style="font-size: 1.1rem;">+</span> Add Phrase
                             </button>
                         </div>
-                        <textarea id="fdb-dc-wantsBooking" rows="6" 
-                            placeholder="schedule an appointment\nbook a service\nsend someone out\nwhen can you come\nset up a time"
-                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 0.85rem; resize: vertical;">${wantsBookingPhrases}</textarea>
-                        <p style="color: #8b949e; font-size: 0.7rem; margin-top: 4px;">
-                            Examples: "schedule", "book", "send someone", "appointment", "when can you come"
-                        </p>
                     </div>
                     
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                            ✅ "Yes" Words (comma-separated)
-                        </label>
-                        <input type="text" id="fdb-dc-yesWords" value="${consentYesWords}"
-                            placeholder="yes, yeah, yep, please, sure, okay, ok, correct"
-                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.85rem;">
-                        <p style="color: #8b949e; font-size: 0.7rem; margin-top: 4px;">
-                            Words that count as "yes" after AI asks the consent question
-                        </p>
+                    <!-- Consent Phrases Table -->
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;">
+                        <!-- Table Header -->
+                        <div style="display: grid; grid-template-columns: 1fr 50px; background: #21262d; border-bottom: 1px solid #30363d;">
+                            <div style="padding: 10px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Phrase (triggers booking when caller says this)
+                            </div>
+                            <div></div>
+                        </div>
+                        
+                        <!-- Table Body -->
+                        <div id="fdb-consent-phrase-rows" style="display: flex; flex-direction: column; max-height: 300px; overflow-y: auto;">
+                            ${this.renderConsentPhraseRows()}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Yes Words Section - V83 Table-Based UI -->
+                <div style="margin-bottom: 24px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <label style="color: #c9d1d9; font-weight: 500; display: flex; align-items: center; gap: 8px;">
+                                ✅ Yes Words
+                                <span style="background: #3fb950; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">CONFIRMS CONSENT</span>
+                            </label>
+                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                Words that count as "yes" after AI asks the consent question.
+                            </p>
+                        </div>
+                        <button type="button" onclick="window.frontDeskBehaviorManager.addYesWord()" 
+                            style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);">
+                            <span style="font-size: 1.1rem;">+</span> Add Word
+                        </button>
+                    </div>
+                    
+                    <!-- Yes Words Table -->
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;">
+                        <!-- Table Header -->
+                        <div style="display: grid; grid-template-columns: 1fr 50px; background: #21262d; border-bottom: 1px solid #30363d;">
+                            <div style="padding: 10px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Word (confirms "yes" to booking)
+                            </div>
+                            <div></div>
+                        </div>
+                        
+                        <!-- Table Body -->
+                        <div id="fdb-yes-word-rows" style="display: flex; flex-direction: column; max-height: 200px; overflow-y: auto;">
+                            ${this.renderYesWordRows()}
+                        </div>
                     </div>
                 </div>
 
@@ -11241,6 +11465,7 @@ Sean → Shawn, Shaun`;
     }
 
     applyRecommendedConsentPhrases() {
+        // V83: Use table-based UI
         const recommended = [
             'schedule a visit',
             'book an appointment',
@@ -11251,13 +11476,23 @@ Sean → Shawn, Shaun`;
             'can you schedule this',
             'schedule service today'
         ];
-        const textarea = document.getElementById('fdb-dc-wantsBooking');
-        const yesWordsInput = document.getElementById('fdb-dc-yesWords');
-        if (textarea) textarea.value = recommended.join('\\n');
-        // Only populate yes-words if empty to avoid clobbering admin content
-        if (yesWordsInput && !yesWordsInput.value.trim()) {
-            yesWordsInput.value = 'yes, yeah, yep, please, sure, okay, ok';
+        
+        // Update consent phrases array and re-render
+        this.consentPhrases = [...recommended];
+        const container = document.getElementById('fdb-consent-phrase-rows');
+        if (container) {
+            container.innerHTML = this.renderConsentPhraseRows();
         }
+        
+        // Also set default yes words if not already set
+        if (!this.yesWords || this.yesWords.length === 0 || (this.yesWords.length === 1 && !this.yesWords[0])) {
+            this.yesWords = ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok'];
+            const yesContainer = document.getElementById('fdb-yes-word-rows');
+            if (yesContainer) {
+                yesContainer.innerHTML = this.renderYesWordRows();
+            }
+        }
+        
         this.showNotification('✅ Applied recommended consent phrases (not saved yet)', 'success');
         this.isDirty = true;
     }
@@ -12986,9 +13221,8 @@ Sean → Shawn, Shaun`;
             if (getChecked('fdb-dc-autoReply-TROUBLESHOOT')) autoReplyAllowedScenarioTypes.push('TROUBLESHOOT');
             if (getChecked('fdb-dc-autoReply-EMERGENCY')) autoReplyAllowedScenarioTypes.push('EMERGENCY');
             
-            // Parse yes words from comma-separated input
-            const yesWordsRaw = get('fdb-dc-yesWords') || '';
-            const yesWords = yesWordsRaw.split(',').map(w => w.trim().toLowerCase()).filter(w => w);
+            // V83: Get yes words from table-based UI (filtered for non-empty)
+            const yesWords = (this.yesWords || []).filter(w => w && w.trim());
             
             this.config.discoveryConsent = {
                 // Kill switches
@@ -13010,11 +13244,11 @@ Sean → Shawn, Shaun`;
             console.log('[FRONT DESK BEHAVIOR] 🔍 V92 Debug Logging:', this.config.debugLogging ? 'ENABLED' : 'disabled');
             console.log('[FRONT DESK BEHAVIOR] 🧠 V22 Discovery consent saved:', this.config.discoveryConsent);
             
-            // Also update detectionTriggers.wantsBooking from the textarea
-            const wantsBookingRaw = get('fdb-dc-wantsBooking') || '';
-            const wantsBookingPhrases = wantsBookingRaw.split('\n').map(p => p.trim().toLowerCase()).filter(p => p);
+            // V83: Get consent phrases from table-based UI (filtered for non-empty)
+            const wantsBookingPhrases = (this.consentPhrases || []).filter(p => p && p.trim());
             if (this.config.discoveryConsent.bookingRequiresExplicitConsent && wantsBookingPhrases.length === 0) {
-                wantsBookingPhrases.push(
+                // Apply recommended defaults
+                this.consentPhrases = [
                     'schedule a visit',
                     'book an appointment',
                     'send a technician',
@@ -13023,7 +13257,8 @@ Sean → Shawn, Shaun`;
                     'schedule me',
                     'can you schedule this',
                     'schedule service today'
-                );
+                ];
+                wantsBookingPhrases.push(...this.consentPhrases);
                 this.showNotification('⚠️ Consent is required but no phrases were provided. Added recommended consent phrases before saving.', 'warning');
             }
             
