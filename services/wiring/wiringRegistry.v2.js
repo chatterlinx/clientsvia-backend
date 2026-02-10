@@ -1340,6 +1340,256 @@ const wiringRegistryV2 = {
         },
         
         // ---------------------------------------------------------------------
+        // LLM-0 CONTROLS TAB (V83)
+        // Brain-1 behavior: silence handling, loop detection, spam filter, patience
+        // ---------------------------------------------------------------------
+        {
+            id: 'tab.llm0Controls',
+            label: 'LLM-0 Controls',
+            description: 'Brain-1 behavior settings: silence, loops, spam, patience, bailout',
+            ui: { tabId: 'llm0-controls', navSelector: '[data-tab="llm0-controls"]' },
+            db: { collection: 'companies', basePath: 'aiAgentSettings.llm0Controls' },
+            scope: 'company',
+            critical: false,
+            sections: [
+                // SILENCE HANDLING
+                {
+                    id: 'llm0Controls.silenceHandling',
+                    label: 'Silence Handling',
+                    description: 'How to handle caller going quiet',
+                    ui: { sectionId: 'silenceHandling', path: 'LLM-0 Controls → Silence Handling' },
+                    fields: [
+                        {
+                            id: 'llm0Controls.silenceHandling.enabled',
+                            label: 'Silence Handling Enabled',
+                            ui: { inputId: 'llm0-silence-enabled', path: 'LLM-0 Controls → Silence Handling → Enabled' },
+                            db: { path: 'aiAgentSettings.llm0Controls.silenceHandling.enabled' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.silenceHandling.enabled'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: true
+                        },
+                        {
+                            id: 'llm0Controls.silenceHandling.thresholdSeconds',
+                            label: 'Silence Threshold (seconds)',
+                            ui: { inputId: 'llm0-silence-threshold', path: 'LLM-0 Controls → Silence Handling → Threshold' },
+                            db: { path: 'aiAgentSettings.llm0Controls.silenceHandling.thresholdSeconds' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.silenceHandling.thresholdSeconds'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 5
+                        },
+                        {
+                            id: 'llm0Controls.silenceHandling.maxPrompts',
+                            label: 'Max Silence Prompts',
+                            ui: { inputId: 'llm0-silence-max-prompts', path: 'LLM-0 Controls → Silence Handling → Max Prompts' },
+                            db: { path: 'aiAgentSettings.llm0Controls.silenceHandling.maxPrompts' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.silenceHandling.maxPrompts'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 3
+                        }
+                    ]
+                },
+                // LOOP DETECTION
+                {
+                    id: 'llm0Controls.loopDetection',
+                    label: 'Loop Detection',
+                    description: 'Prevent repeated response patterns',
+                    ui: { sectionId: 'loopDetection', path: 'LLM-0 Controls → Loop Detection' },
+                    fields: [
+                        {
+                            id: 'llm0Controls.loopDetection.enabled',
+                            label: 'Loop Detection Enabled',
+                            ui: { inputId: 'llm0-loop-enabled', path: 'LLM-0 Controls → Loop Detection → Enabled' },
+                            db: { path: 'aiAgentSettings.llm0Controls.loopDetection.enabled' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.loopDetection.enabled'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: true
+                        },
+                        {
+                            id: 'llm0Controls.loopDetection.maxRepeatedResponses',
+                            label: 'Max Repeated Responses',
+                            ui: { inputId: 'llm0-loop-max', path: 'LLM-0 Controls → Loop Detection → Max Repeats' },
+                            db: { path: 'aiAgentSettings.llm0Controls.loopDetection.maxRepeatedResponses' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.loopDetection.maxRepeatedResponses'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 3
+                        },
+                        {
+                            id: 'llm0Controls.loopDetection.onLoopAction',
+                            label: 'On Loop Action',
+                            ui: { inputId: 'llm0-loop-action', path: 'LLM-0 Controls → Loop Detection → On Loop Action' },
+                            db: { path: 'aiAgentSettings.llm0Controls.loopDetection.onLoopAction' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.loopDetection.onLoopAction'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 'escalate'
+                        }
+                    ]
+                },
+                // SPAM FILTER
+                {
+                    id: 'llm0Controls.spamFilter',
+                    label: 'Spam Filter',
+                    description: 'Telemarketer and spam call detection',
+                    ui: { sectionId: 'spamFilter', path: 'LLM-0 Controls → Spam Filter' },
+                    fields: [
+                        {
+                            id: 'llm0Controls.spamFilter.enabled',
+                            label: 'Spam Filter Enabled',
+                            ui: { inputId: 'llm0-spam-enabled', path: 'LLM-0 Controls → Spam Filter → Enabled' },
+                            db: { path: 'aiAgentSettings.llm0Controls.spamFilter.enabled' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.spamFilter.enabled'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: true
+                        },
+                        {
+                            id: 'llm0Controls.spamFilter.telemarketerPhrases',
+                            label: 'Telemarketer Phrases',
+                            ui: { inputId: 'llm0-spam-phrases', path: 'LLM-0 Controls → Spam Filter → Telemarketer Phrases' },
+                            db: { path: 'aiAgentSettings.llm0Controls.spamFilter.telemarketerPhrases' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.spamFilter.telemarketerPhrases'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: []
+                        },
+                        {
+                            id: 'llm0Controls.spamFilter.onSpamDetected',
+                            label: 'On Spam Detected',
+                            ui: { inputId: 'llm0-spam-action', path: 'LLM-0 Controls → Spam Filter → On Spam Detected' },
+                            db: { path: 'aiAgentSettings.llm0Controls.spamFilter.onSpamDetected' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.spamFilter.onSpamDetected'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 'polite_dismiss'
+                        }
+                    ]
+                },
+                // CUSTOMER PATIENCE
+                {
+                    id: 'llm0Controls.customerPatience',
+                    label: 'Customer Patience',
+                    description: 'Never hang up on customers',
+                    ui: { sectionId: 'customerPatience', path: 'LLM-0 Controls → Customer Patience' },
+                    fields: [
+                        {
+                            id: 'llm0Controls.customerPatience.enabled',
+                            label: 'Customer Patience Enabled',
+                            ui: { inputId: 'llm0-patience-enabled', path: 'LLM-0 Controls → Customer Patience → Enabled' },
+                            db: { path: 'aiAgentSettings.llm0Controls.customerPatience.enabled' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.customerPatience.enabled'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: true
+                        },
+                        {
+                            id: 'llm0Controls.customerPatience.neverAutoHangup',
+                            label: 'Never Auto Hangup',
+                            ui: { inputId: 'llm0-patience-never-hangup', path: 'LLM-0 Controls → Customer Patience → Never Auto Hangup' },
+                            db: { path: 'aiAgentSettings.llm0Controls.customerPatience.neverAutoHangup' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.customerPatience.neverAutoHangup'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: true
+                        }
+                    ]
+                },
+                // BAILOUT RULES
+                {
+                    id: 'llm0Controls.bailoutRules',
+                    label: 'Bailout Rules',
+                    description: 'When to escalate or transfer',
+                    ui: { sectionId: 'bailoutRules', path: 'LLM-0 Controls → Bailout Rules' },
+                    fields: [
+                        {
+                            id: 'llm0Controls.bailoutRules.enabled',
+                            label: 'Bailout Rules Enabled',
+                            ui: { inputId: 'llm0-bailout-enabled', path: 'LLM-0 Controls → Bailout Rules → Enabled' },
+                            db: { path: 'aiAgentSettings.llm0Controls.bailoutRules.enabled' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.bailoutRules.enabled'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: true
+                        },
+                        {
+                            id: 'llm0Controls.bailoutRules.maxTurnsBeforeEscalation',
+                            label: 'Max Turns Before Escalation',
+                            ui: { inputId: 'llm0-bailout-max-turns', path: 'LLM-0 Controls → Bailout Rules → Max Turns' },
+                            db: { path: 'aiAgentSettings.llm0Controls.bailoutRules.maxTurnsBeforeEscalation' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.bailoutRules.maxTurnsBeforeEscalation'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 10
+                        },
+                        {
+                            id: 'llm0Controls.bailoutRules.confusionThreshold',
+                            label: 'Confusion Threshold',
+                            ui: { inputId: 'llm0-bailout-confusion', path: 'LLM-0 Controls → Bailout Rules → Confusion Threshold' },
+                            db: { path: 'aiAgentSettings.llm0Controls.bailoutRules.confusionThreshold' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.bailoutRules.confusionThreshold'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 0.3
+                        }
+                    ]
+                },
+                // CONFIDENCE THRESHOLDS
+                {
+                    id: 'llm0Controls.confidenceThresholds',
+                    label: 'Confidence Thresholds',
+                    description: 'Decision-making confidence levels',
+                    ui: { sectionId: 'confidenceThresholds', path: 'LLM-0 Controls → Confidence Thresholds' },
+                    fields: [
+                        {
+                            id: 'llm0Controls.confidenceThresholds.highConfidence',
+                            label: 'High Confidence',
+                            ui: { inputId: 'llm0-confidence-high', path: 'LLM-0 Controls → Confidence Thresholds → High' },
+                            db: { path: 'aiAgentSettings.llm0Controls.confidenceThresholds.highConfidence' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.confidenceThresholds.highConfidence'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 0.85
+                        },
+                        {
+                            id: 'llm0Controls.confidenceThresholds.mediumConfidence',
+                            label: 'Medium Confidence',
+                            ui: { inputId: 'llm0-confidence-medium', path: 'LLM-0 Controls → Confidence Thresholds → Medium' },
+                            db: { path: 'aiAgentSettings.llm0Controls.confidenceThresholds.mediumConfidence' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.confidenceThresholds.mediumConfidence'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 0.65
+                        },
+                        {
+                            id: 'llm0Controls.confidenceThresholds.lowConfidence',
+                            label: 'Low Confidence',
+                            ui: { inputId: 'llm0-confidence-low', path: 'LLM-0 Controls → Confidence Thresholds → Low' },
+                            db: { path: 'aiAgentSettings.llm0Controls.confidenceThresholds.lowConfidence' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.confidenceThresholds.lowConfidence'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 0.45
+                        },
+                        {
+                            id: 'llm0Controls.confidenceThresholds.fallbackToLLM',
+                            label: 'Fallback to LLM Threshold',
+                            ui: { inputId: 'llm0-confidence-fallback', path: 'LLM-0 Controls → Confidence Thresholds → Fallback to LLM' },
+                            db: { path: 'aiAgentSettings.llm0Controls.confidenceThresholds.fallbackToLLM' },
+                            runtime: RUNTIME_READERS_MAP['llm0Controls.confidenceThresholds.fallbackToLLM'],
+                            scope: 'company',
+                            required: false,
+                            defaultValue: 0.4
+                        }
+                    ]
+                }
+            ]
+        },
+        
+        // ---------------------------------------------------------------------
         // DATA & CONFIG TAB
         // ---------------------------------------------------------------------
         {

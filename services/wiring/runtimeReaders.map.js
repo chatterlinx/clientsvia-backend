@@ -1105,6 +1105,262 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // LLM-0 CONTROLS - BRAIN-1 BEHAVIOR (V83)
+    // =========================================================================
+    'llm0Controls.silenceHandling.enabled': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 120,
+                description: 'Enables silence detection and prompts',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.silenceHandling.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+    'llm0Controls.silenceHandling.thresholdSeconds': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 121,
+                description: 'Seconds of silence before prompting',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.silenceHandling.thresholdSeconds',
+        scope: 'company',
+        defaultValue: 5
+    },
+    'llm0Controls.silenceHandling.maxPrompts': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 122,
+                description: 'Max silence prompts before escalation',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.silenceHandling.maxPrompts',
+        scope: 'company',
+        defaultValue: 3
+    },
+    'llm0Controls.loopDetection.enabled': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 130,
+                description: 'Enables loop detection',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.loopDetection.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+    'llm0Controls.loopDetection.maxRepeatedResponses': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 131,
+                description: 'Max repeated responses before action',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.loopDetection.maxRepeatedResponses',
+        scope: 'company',
+        defaultValue: 3
+    },
+    'llm0Controls.loopDetection.onLoopAction': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 132,
+                description: 'Action on loop detection (escalate/warn/ignore)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.loopDetection.onLoopAction',
+        scope: 'company',
+        defaultValue: 'escalate'
+    },
+    'llm0Controls.spamFilter.enabled': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 140,
+                description: 'Enables spam/telemarketer filter',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.spamFilter.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+    'llm0Controls.spamFilter.telemarketerPhrases': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 141,
+                description: 'Phrases that trigger spam detection',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.spamFilter.telemarketerPhrases',
+        scope: 'company',
+        defaultValue: []
+    },
+    'llm0Controls.spamFilter.onSpamDetected': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 142,
+                description: 'Action when spam detected (polite_dismiss/hang_up/escalate)',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.spamFilter.onSpamDetected',
+        scope: 'company',
+        defaultValue: 'polite_dismiss'
+    },
+    'llm0Controls.customerPatience.enabled': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 150,
+                description: 'Enables customer patience mode',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.customerPatience.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+    'llm0Controls.customerPatience.neverAutoHangup': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 151,
+                description: 'Never auto-hangup on customers',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.customerPatience.neverAutoHangup',
+        scope: 'company',
+        defaultValue: true
+    },
+    'llm0Controls.bailoutRules.enabled': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 160,
+                description: 'Enables bailout/escalation rules',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.bailoutRules.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+    'llm0Controls.bailoutRules.maxTurnsBeforeEscalation': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 161,
+                description: 'Max conversation turns before escalating',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.bailoutRules.maxTurnsBeforeEscalation',
+        scope: 'company',
+        defaultValue: 10
+    },
+    'llm0Controls.bailoutRules.confusionThreshold': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 162,
+                description: 'Confusion score threshold for bailout',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.bailoutRules.confusionThreshold',
+        scope: 'company',
+        defaultValue: 0.3
+    },
+    'llm0Controls.confidenceThresholds.highConfidence': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 170,
+                description: 'High confidence threshold for decisions',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.confidenceThresholds.highConfidence',
+        scope: 'company',
+        defaultValue: 0.85
+    },
+    'llm0Controls.confidenceThresholds.mediumConfidence': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 171,
+                description: 'Medium confidence threshold',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.confidenceThresholds.mediumConfidence',
+        scope: 'company',
+        defaultValue: 0.65
+    },
+    'llm0Controls.confidenceThresholds.lowConfidence': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 172,
+                description: 'Low confidence threshold',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.confidenceThresholds.lowConfidence',
+        scope: 'company',
+        defaultValue: 0.45
+    },
+    'llm0Controls.confidenceThresholds.fallbackToLLM': {
+        readers: [
+            {
+                file: 'services/LLM0ControlsLoader.js',
+                function: 'load',
+                line: 173,
+                description: 'Threshold below which to fallback to LLM',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.llm0Controls.confidenceThresholds.fallbackToLLM',
+        scope: 'company',
+        defaultValue: 0.4
+    },
+
+    // =========================================================================
     // DATA CONFIG - TEMPLATE REFERENCES (CRITICAL)
     // =========================================================================
     'dataConfig.templateReferences': {

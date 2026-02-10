@@ -515,6 +515,11 @@ router.get('/', async (req, res) => {
                 verbosity: frontDeskBehavior.personality?.verbosity || null,
                 maxResponseWords: frontDeskBehavior.personality?.maxResponseWords ?? null,
                 useCallerName: frontDeskBehavior.personality?.useCallerName ?? null,
+                // V83: Added warmth and speakingPace (used by HybridReceptionistLLM for LLM prompt tuning)
+                warmth: typeof frontDeskBehavior.personality?.warmth === 'number' 
+                    ? frontDeskBehavior.personality.warmth 
+                    : null,
+                speakingPace: frontDeskBehavior.personality?.speakingPace || null,
                 conversationStyle: frontDeskBehavior.conversationStyle || 'balanced',
                 styleAcknowledgmentsConfigured: !!frontDeskBehavior.styleAcknowledgments,
                 styleAcknowledgments: frontDeskBehavior.styleAcknowledgments || null
@@ -965,6 +970,69 @@ router.get('/', async (req, res) => {
                 hasFinalScriptMulti: !!uow.confirmation?.finalScriptMulti
             }
         };
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // V83: BUILD LLM-0 CONTROLS - Brain-1 behavior settings (silence, loops, spam, patience)
+        // Source: aiAgentSettings.llm0Controls (loaded by LLM0ControlsLoader.js)
+        // ═══════════════════════════════════════════════════════════════════════
+        const llm0Raw = company.aiAgentSettings?.llm0Controls || {};
+        const llm0Controls = {
+            source: 'aiAgentSettings.llm0Controls',
+            // Silence Handling (detects caller going quiet)
+            silenceHandling: {
+                enabled: llm0Raw.silenceHandling?.enabled !== false,
+                thresholdSeconds: llm0Raw.silenceHandling?.thresholdSeconds ?? 5,
+                maxPrompts: llm0Raw.silenceHandling?.maxPrompts ?? 3,
+                offerCallback: llm0Raw.silenceHandling?.offerCallback !== false,
+                hasFirstPrompt: !!llm0Raw.silenceHandling?.firstPrompt,
+                hasSecondPrompt: !!llm0Raw.silenceHandling?.secondPrompt,
+                hasThirdPrompt: !!llm0Raw.silenceHandling?.thirdPrompt,
+                hasCallbackMessage: !!llm0Raw.silenceHandling?.callbackMessage
+            },
+            // Loop Detection (prevents repeated responses)
+            loopDetection: {
+                enabled: llm0Raw.loopDetection?.enabled !== false,
+                maxRepeatedResponses: llm0Raw.loopDetection?.maxRepeatedResponses ?? 3,
+                detectionWindow: llm0Raw.loopDetection?.detectionWindow ?? 5,
+                onLoopAction: llm0Raw.loopDetection?.onLoopAction || 'escalate',
+                hasEscalationMessage: !!llm0Raw.loopDetection?.escalationMessage
+            },
+            // Spam Filter (telemarketer detection)
+            spamFilter: {
+                enabled: llm0Raw.spamFilter?.enabled !== false,
+                phraseCount: Array.isArray(llm0Raw.spamFilter?.telemarketerPhrases) 
+                    ? llm0Raw.spamFilter.telemarketerPhrases.length 
+                    : 0,
+                onSpamDetected: llm0Raw.spamFilter?.onSpamDetected || 'polite_dismiss',
+                autoAddToBlacklist: llm0Raw.spamFilter?.autoAddToBlacklist === true,
+                logToBlackBox: llm0Raw.spamFilter?.logToBlackBox !== false,
+                hasDismissMessage: !!llm0Raw.spamFilter?.dismissMessage
+            },
+            // Customer Patience (never hang up on customers)
+            customerPatience: {
+                enabled: llm0Raw.customerPatience?.enabled !== false,
+                neverAutoHangup: llm0Raw.customerPatience?.neverAutoHangup !== false,
+                maxPatiencePrompts: llm0Raw.customerPatience?.maxPatiencePrompts ?? 5,
+                alwaysOfferCallback: llm0Raw.customerPatience?.alwaysOfferCallback !== false,
+                hasPatienceMessage: !!llm0Raw.customerPatience?.patienceMessage
+            },
+            // Bailout Rules (when to escalate/transfer)
+            bailoutRules: {
+                enabled: llm0Raw.bailoutRules?.enabled !== false,
+                maxTurnsBeforeEscalation: llm0Raw.bailoutRules?.maxTurnsBeforeEscalation ?? 10,
+                confusionThreshold: llm0Raw.bailoutRules?.confusionThreshold ?? 0.3,
+                escalateOnBailout: llm0Raw.bailoutRules?.escalateOnBailout !== false,
+                hasBailoutMessage: !!llm0Raw.bailoutRules?.bailoutMessage,
+                hasTransferTarget: !!llm0Raw.bailoutRules?.transferTarget
+            },
+            // Confidence Thresholds (for decision making)
+            confidenceThresholds: {
+                highConfidence: llm0Raw.confidenceThresholds?.highConfidence ?? 0.85,
+                mediumConfidence: llm0Raw.confidenceThresholds?.mediumConfidence ?? 0.65,
+                lowConfidence: llm0Raw.confidenceThresholds?.lowConfidence ?? 0.45,
+                fallbackToLLM: llm0Raw.confidenceThresholds?.fallbackToLLM ?? 0.4
+            }
+        };
         
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD WIRING MAP - The Critical Link (Scenario → Action → Flow → Booking)
@@ -1254,6 +1322,8 @@ router.get('/', async (req, res) => {
                 booking,
                 vendor,
                 unitOfWork,
+                // V83: LLM-0 Controls (Brain-1 behavior: silence, loops, spam, patience, bailout)
+                llm0Controls,
                 fallbacks: {
                     notOffered: { 
                         text: controlPlane.fallbacks.notOfferedReply, 
