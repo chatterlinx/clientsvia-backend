@@ -395,7 +395,7 @@ function validateConfig(effectiveConfig, callId = 'unknown') {
             key.startsWith('booking.') || 
             key.startsWith('slotExtraction.') ||
             key.startsWith('integrations.') ||
-            key.startsWith('dynamicFlow.') ||
+            // ☢️ NUKED Feb 2026: 'dynamicFlow.' prefix removed - V110 architecture replaces Dynamic Flows
             key.startsWith('dataConfig.') ||
             key.startsWith('transfers.') ||
             key.startsWith('infra.')) {

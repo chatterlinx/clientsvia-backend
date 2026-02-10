@@ -123,7 +123,7 @@ const WIRING_CHECKS = [
         files: ['ConversationEngine.js', 'v2twilio.js'],
         codePattern: /consentObtained|explicitConsent|checkConsent/g,
         requiredDbPath: 'aiAgentSettings.frontDeskBehavior.discoveryConsent.explicitConsentRequired',
-        requiredEdge: 'section_discoveryConsent → dynamicFlows_booking_intent',
+        requiredEdge: 'section_discoveryConsent → booking_mode',
         severity: 'critical'
     },
     

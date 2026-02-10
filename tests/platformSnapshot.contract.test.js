@@ -38,15 +38,7 @@ const createMockSnapshot = (overrides = {}) => {
                 warnings: [],
                 data: { greetingConfigured: true }
             },
-            dynamicFlow: {
-                provider: 'dynamicFlow',
-                providerVersion: '1.0',
-                schemaVersion: SCHEMA_VERSION,
-                enabled: true,
-                health: 'GREEN',
-                warnings: [],
-                data: { flowsTotal: 5, flowsEnabled: 5, duplicateFlowKeys: [], priorityOrderValid: true }
-            },
+            // ☢️ NUKED Feb 2026: dynamicFlow mock removed - V110 architecture replaces Dynamic Flows
             scenarioBrain: {
                 provider: 'scenarioBrain',
                 providerVersion: '1.0',
@@ -104,7 +96,6 @@ const createMockSnapshot = (overrides = {}) => {
                         intelligentRouterWired: true,
                         scenarioEngineWired: true,
                         overrideResolverWired: true,
-                        dynamicFlowWired: true,
                         placeholdersWired: true
                     },
                     lastCallStats: { avgResponseMs: null, llmFallbackRate: null }
@@ -133,7 +124,7 @@ describe('Platform Snapshot Contract Tests', () => {
             
             const expectedProviders = [
                 'controlPlane',
-                'dynamicFlow',
+                // ☢️ NUKED Feb 2026: dynamicFlow removed - V110 architecture replaces Dynamic Flows
                 'scenarioBrain',
                 'callProtection',
                 'transfers',
@@ -231,14 +222,7 @@ describe('Platform Snapshot Contract Tests', () => {
             expect(result.penalties.some(p => p.code === 'PLACEHOLDER_CRITICAL_MISSING')).toBe(true);
         });
         
-        it('should penalize duplicate flowKeys', () => {
-            const snapshot = createMockSnapshot();
-            snapshot.providers.dynamicFlow.data.duplicateFlowKeys = ['booking_intent'];
-            
-            const result = computeCompleteness(snapshot);
-            
-            expect(result.penalties.some(p => p.code === 'DUPLICATE_FLOWKEYS')).toBe(true);
-        });
+        // ☢️ NUKED Feb 2026: "should penalize duplicate flowKeys" test removed - V110 architecture replaces Dynamic Flows
         
     });
     
@@ -257,7 +241,6 @@ describe('Platform Snapshot Contract Tests', () => {
             const snapshot = createMockSnapshot();
             // Remove multiple providers to force low score
             delete snapshot.providers.scenarioBrain;
-            delete snapshot.providers.dynamicFlow;
             delete snapshot.providers.runtimeBindings;
             
             const result = computeCompleteness(snapshot);
@@ -276,8 +259,7 @@ describe('Platform Snapshot Contract Tests', () => {
                 'MISSING_PROVIDER',
                 'DISABLED_CATEGORY_NO_DEFAULT_REPLY',
                 'DISABLED_SCENARIO_NO_ALT_REPLY',
-                'PLACEHOLDER_CRITICAL_MISSING',
-                'DUPLICATE_FLOWKEYS'
+                'PLACEHOLDER_CRITICAL_MISSING'
             ];
             
             requiredCodes.forEach(code => {

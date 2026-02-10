@@ -458,39 +458,17 @@ async function checkScenarioAlignment(companyId) {
 
 // ============================================================================
 // DYNAMIC FLOW CHECK
+// ☢️ NUKED Feb 2026: DynamicFlow model + engine removed - V110 architecture replaces Dynamic Flows
 // ============================================================================
 
-async function checkDynamicFlows(companyId) {
-    try {
-        const DynamicFlow = require('../../models/DynamicFlow');
-        
-        const companyFlows = await DynamicFlow.countDocuments({
-            companyId,
-            isTemplate: false,
-            enabled: true
-        });
-        
-        const templates = await DynamicFlow.countDocuments({
-            isTemplate: true,
-            enabled: true
-        });
-        
-        return {
-            status: companyFlows > 0 ? 'ACTIVE' : 'NO_COMPANY_FLOWS',
-            health: companyFlows > 0 ? 'GREEN' : 'YELLOW',
-            companyFlowCount: companyFlows,
-            templateCount: templates,
-            message: companyFlows > 0 
-                ? `${companyFlows} active company flows`
-                : 'No company flows - only templates exist (use Copy Templates to Company)'
-        };
-    } catch (error) {
-        return {
-            status: 'ERROR',
-            health: 'RED',
-            error: error.message
-        };
-    }
+function checkDynamicFlows() {
+    return {
+        status: 'REMOVED',
+        health: 'GRAY',
+        companyFlowCount: 0,
+        templateCount: 0,
+        message: 'Dynamic Flows removed in V110 architecture'
+    };
 }
 
 // ============================================================================
@@ -1649,8 +1627,8 @@ async function buildWiringReport({
     // Scenario alignment check (Gap Fill + Audit + Agent harmony)
     specialChecks.scenarioAlignment = await checkScenarioAlignment(companyId);
     
-    // Dynamic flows check
-    specialChecks.dynamicFlows = await checkDynamicFlows(companyId);
+    // ☢️ NUKED Feb 2026: Dynamic Flows removed - V110 architecture replaces Dynamic Flows
+    specialChecks.dynamicFlows = checkDynamicFlows();
     
     // Service type resolution check (V89)
     specialChecks.serviceTypeResolution = await checkServiceTypeResolution(companyId, companyDoc);

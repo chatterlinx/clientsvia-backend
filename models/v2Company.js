@@ -944,7 +944,6 @@ const companySchema = new mongoose.Schema({
         // -------------------------------------------------------------------
         // Used by:
         // - AfterHoursEvaluator (single source of truth)
-        // - DynamicFlowEngine trigger: after_hours
         //
         // Shape (validated in runtime/evaluator; stored as object):
         // {

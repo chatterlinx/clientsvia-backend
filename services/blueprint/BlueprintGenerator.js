@@ -685,8 +685,8 @@ class BlueprintGenerator {
             // Call protection rules (for conflict checking)
             callProtectionRules: this._extractCallProtectionRules(providers.callProtection),
             
-            // Existing dynamic flows (for linking)
-            dynamicFlows: this._extractDynamicFlows(providers.dynamicFlow),
+            // ☢️ NUKED Feb 2026: dynamicFlows extraction removed - V110 architecture replaces Dynamic Flows
+            dynamicFlows: [],
             
             // Existing scenarios (for priority conflict checking)
             existingScenarios: this._extractExistingScenarios(providers.scenarioBrain)
@@ -731,15 +731,7 @@ class BlueprintGenerator {
         }));
     }
 
-    _extractDynamicFlows(dynamicFlowProvider) {
-        if (!dynamicFlowProvider?.data?.flows) return [];
-        
-        return dynamicFlowProvider.data.flows.map(f => ({
-            flowKey: f.flowKey,
-            enabled: f.enabled,
-            priority: f.priority
-        }));
-    }
+    // ☢️ NUKED Feb 2026: _extractDynamicFlows removed - V110 architecture replaces Dynamic Flows
 
     _extractExistingScenarios(scenarioBrainProvider) {
         if (!scenarioBrainProvider?.data?.templates) return [];

@@ -17,7 +17,6 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
 |---|---|---|
 | Front Desk | `initFrontDesk()` | `public/js/ai-agent-settings/FrontDeskBehaviorManager.js` |
 | Flow Tree | `initFlowTree()` | inline in `control-plane-v2.html` (plus snapshot loader) |
-| Dynamic Flow | `initDynamicFlow()` | **reuses** `FrontDeskBehaviorManager` to render only flows tab |
 | Data & Config | `initDataConfig()` | `AiCoreTemplatesManager`, `AiCoreLiveScenariosManager`, plus inline handlers |
 | Call Protection | `initCallProtection()` | `CheatSheetManager` (edge cases) |
 | Transfer Calls | `initTransferCalls()` | `CheatSheetManager` (transfer rules) |
@@ -44,11 +43,7 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
     - Applies placeholder substitution via `CompanyPlaceholders`
     - Resolution order is deterministic (no LLM required)
 
-### Dynamic flows (trigger → event → state → action)
-- Each turn can run:
-  - `services/DynamicFlowEngine.processTurn()`
-- Data source:
-  - `DynamicFlow` collection (company-scoped)
+<!-- ☢️ NUKED Feb 2026: Dynamic Flows removed - V110 architecture replaces this feature -->
 
 ### Call Protection + Transfer Calls (Cheat Sheet system)
 - Control Plane V2 currently uses the Cheat Sheet UI for:
@@ -69,7 +64,6 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
   - `CompanyResponseDefaults` (company default replies)
   - `CompanyPlaceholders` (company placeholders)
   - `GlobalInstantResponseTemplate` (templates/scenarios, based on `templateReferences`)
-  - `DynamicFlow` (company flows)
 - **Purpose**
   - Shows what is active/configured and provides health warnings (e.g. unknown scenario types).
 
@@ -96,7 +90,6 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
 - `POST /api/admin/front-desk-behavior/:companyId/test-emotion` (test)
 - Uses template helpers:
   - `GET /api/company/:companyId` (company metadata)
-  - `GET /api/company/:companyId/dynamic-flows?includeTemplates=true` (flows list/templates)
 
 ### Backend routes
 - `routes/admin/frontDeskBehavior.js`
@@ -113,41 +106,17 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
 
 ---
 
-## Dynamic Flow (tab)
-
-### UI
-- Rendered from `FrontDeskBehaviorManager.renderDynamicFlowsTab()` inside Control Plane V2.
-
-### API
-- `GET /api/company/:companyId/dynamic-flows`
-- `POST /api/company/:companyId/dynamic-flows`
-- `PUT /api/company/:companyId/dynamic-flows/:flowId`
-- `DELETE /api/company/:companyId/dynamic-flows/:flowId`
-- `POST /api/company/:companyId/dynamic-flows/:flowId/toggle`
-- `POST /api/company/:companyId/dynamic-flows/from-template`
-
-### Backend route
-- `routes/company/dynamicFlows.js`
-
-### Persistence
-- `DynamicFlow` collection (company scoped by `companyId`)
-
-### Runtime readers/enforcement
-- Dynamic Flow engine reads `DynamicFlow` per company to compute triggers/actions each turn.
-
----
+<!-- ☢️ NUKED Feb 2026: Dynamic Flow tab and Flow Tree removed - V110 architecture replaces this feature -->
 
 ## Flow Tree (visualization)
 
 ### UI
-- Inline: loads flows and renders nodes; also refreshes snapshot.
+- Inline: loads snapshot and renders nodes.
 
 ### API
-- `GET /api/company/:companyId/dynamic-flows` (to draw the tree)
 - `GET /api/company/:companyId/system-snapshot` (used by Flow Tree view)
 
 ### Backend routes
-- `routes/company/dynamicFlows.js`
 - `routes/company/systemSnapshot.js`
 
 ---
@@ -237,7 +206,6 @@ Allowlist maps patch paths → storage targets across:
 - `v2Company` (e.g., greeting text)
 - `CompanyResponseDefaults`
 - `CompanyPlaceholders`
-- `DynamicFlow`
 - scenario/company overrides
 
 ---
@@ -259,6 +227,6 @@ Allowlist maps patch paths → storage targets across:
 2) **No hidden defaults**: any “default” used at runtime must be either:
    - stored in company-scoped DB, or
    - stored as a global preset/template and explicitly applied, never silently injected.
-3) **One source of truth for routing**: scenarios + dynamic flows must be reconciled via Runtime Truth (the “Ferrari in 6th gear” target).
+3) **One source of truth for routing**: scenarios must be reconciled via Runtime Truth (the “Ferrari in 6th gear” target). ☢️ Dynamic Flows nuked Feb 2026 — V110 architecture replaces this.
 
 

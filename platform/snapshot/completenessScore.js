@@ -31,7 +31,7 @@ const PENALTY_CODES = {
     TRADE_SCOPE_MISSING: { severity: 'RED', weight: 35 },
     CROSS_TENANT_RISK: { severity: 'RED', weight: 35 },
     OVERRIDES_NOT_ENFORCED: { severity: 'RED', weight: 30 },
-    DYFLOW_ENABLED_ZERO: { severity: 'RED', weight: 25 },
+    // ☢️ NUKED Feb 2026: DYFLOW_ENABLED_ZERO removed - V110 architecture replaces Dynamic Flows
     SCENARIO_ENABLED_ZERO: { severity: 'RED', weight: 25 },
     BOOKING_WIRED_BUT_MISSING_FIELDS: { severity: 'RED', weight: 25 },
     
@@ -45,14 +45,13 @@ const PENALTY_CODES = {
     RESPONSE_SLOW_1500: { severity: 'YELLOW', weight: 8 },
     RESPONSE_SLOW_2500: { severity: 'YELLOW', weight: 12 },
     RESPONSE_SLOW_4000: { severity: 'YELLOW', weight: 18 },
-    DUPLICATE_FLOWKEYS: { severity: 'YELLOW', weight: 12 },
-    PRIORITY_ORDER_INVALID: { severity: 'YELLOW', weight: 10 },
+    // ☢️ NUKED Feb 2026: DUPLICATE_FLOWKEYS, PRIORITY_ORDER_INVALID removed - V110 architecture replaces Dynamic Flows
     TEMPLATE_NOT_TRADE_SCOPED: { severity: 'YELLOW', weight: 15 },
     
     // December 2025 Directive - New validation penalties
     NO_GREETING_CONFIGURED: { severity: 'YELLOW', weight: 8 },
     INVALID_CALL_PROTECTION_RULE: { severity: 'YELLOW', weight: 10 },
-    INVALID_DYNAMIC_FLOW: { severity: 'YELLOW', weight: 10 },
+    // ☢️ NUKED Feb 2026: INVALID_DYNAMIC_FLOW removed - V110 architecture replaces Dynamic Flows
     BOOKING_ENABLED_NO_SLOTS: { severity: 'YELLOW', weight: 8 },
     
     // MINOR - GREEN
@@ -179,48 +178,7 @@ function computeCompleteness(snapshot, scopeOverride = null) {
         }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // 3. CHECK DYNAMIC FLOW (MAJOR)
-    // ═══════════════════════════════════════════════════════════════════════
-    const dynamicFlow = providers.dynamicFlow?.data;
-    if (dynamicFlow && providers.dynamicFlow.enabled) {
-        // Enabled but zero flows
-        if (dynamicFlow.flowsEnabled === 0 && dynamicFlow.flowsTotal > 0) {
-            penalties.push({
-                code: 'DYFLOW_ENABLED_ZERO',
-                severity: 'RED',
-                weight: PENALTY_CODES.DYFLOW_ENABLED_ZERO.weight,
-                message: 'Dynamic Flow has flows but none are enabled'
-            });
-            score -= PENALTY_CODES.DYFLOW_ENABLED_ZERO.weight;
-            hasRedPenalty = true;
-            recommendations.push('Enable at least one dynamic flow or disable the feature');
-        }
-        
-        // Duplicate flowKeys
-        if (dynamicFlow.duplicateFlowKeys?.length > 0) {
-            penalties.push({
-                code: 'DUPLICATE_FLOWKEYS',
-                severity: 'YELLOW',
-                weight: PENALTY_CODES.DUPLICATE_FLOWKEYS.weight,
-                message: `Duplicate flowKeys: ${dynamicFlow.duplicateFlowKeys.join(', ')}`
-            });
-            score -= PENALTY_CODES.DUPLICATE_FLOWKEYS.weight;
-            recommendations.push(`Resolve duplicate flowKeys: ${dynamicFlow.duplicateFlowKeys.join(', ')}`);
-        }
-        
-        // Priority order invalid
-        if (!dynamicFlow.priorityOrderValid) {
-            penalties.push({
-                code: 'PRIORITY_ORDER_INVALID',
-                severity: 'YELLOW',
-                weight: PENALTY_CODES.PRIORITY_ORDER_INVALID.weight,
-                message: 'Dynamic flows have duplicate priorities (tie risk)'
-            });
-            score -= PENALTY_CODES.PRIORITY_ORDER_INVALID.weight;
-            recommendations.push('Assign unique priorities to all dynamic flows');
-        }
-    }
+    // ☢️ NUKED Feb 2026: Section 3 "CHECK DYNAMIC FLOW" removed - V110 architecture replaces Dynamic Flows
     
     // ═══════════════════════════════════════════════════════════════════════
     // 4. CHECK PLACEHOLDERS (MAJOR)
@@ -433,21 +391,7 @@ function computeCompleteness(snapshot, scopeOverride = null) {
         });
     }
     
-    // Dynamic Flow warnings (invalid enabled flows)
-    if (dynamicFlow && providers.dynamicFlow?.warnings?.length > 0) {
-        providers.dynamicFlow.warnings.forEach(warning => {
-            if (warning.includes('invalid') || warning.includes('0 trigger phrases')) {
-                penalties.push({
-                    code: 'INVALID_DYNAMIC_FLOW',
-                    severity: 'YELLOW',
-                    weight: PENALTY_CODES.INVALID_DYNAMIC_FLOW.weight,
-                    message: warning
-                });
-                score -= PENALTY_CODES.INVALID_DYNAMIC_FLOW.weight;
-                recommendations.push('Fix or disable invalid dynamic flows');
-            }
-        });
-    }
+    // ☢️ NUKED Feb 2026: Dynamic Flow warnings processing removed - V110 architecture replaces Dynamic Flows
     
     // ═══════════════════════════════════════════════════════════════════════
     // 7. COMPUTE FINAL STATUS (December 2025 - Fixed logic)

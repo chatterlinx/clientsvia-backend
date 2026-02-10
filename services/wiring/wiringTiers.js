@@ -610,20 +610,7 @@ const TIER_MAX = {
             // No recommendedValue - requires user's actual company info
             requiresUserInput: true
         },
-        {
-            fieldId: 'dynamicFlow.companyFlows',
-            purpose: 'Custom trigger-action automation',
-            failureMode: 'No business-specific flow customization',
-            impact: 'conversion',
-            priority: 4,
-            payoff: 'Custom flows for specific business needs',
-            validator: (val) => Array.isArray(val) && val.length > 0,
-            fixInstructions: 'Create company-specific flows',
-            nav: { tab: 'dynamic-flow', section: 'company-flows', field: 'companyFlows' },
-            dbPath: 'aiAgentSettings.dynamicFlow.companyFlows',
-            // No recommendedValue - too business-specific
-            requiresUserInput: true
-        },
+        // ☢️ NUKED Feb 2026: dynamicFlow.companyFlows removed - V110 architecture replaces Dynamic Flows
         
         // ═══════════════════════════════════════════════════════════════════
         // V92: INTEGRATIONS - API wiring for enhanced booking experience

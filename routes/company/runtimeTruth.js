@@ -28,7 +28,8 @@ const v2Company = require('../../models/v2Company');
 const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const DynamicFlow = require('../../models/DynamicFlow');
+// ☢️ NUKED Feb 2026: DynamicFlow - V110 architecture replaces Dynamic Flows
+// const DynamicFlow = require('../../models/DynamicFlow');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const { unifyConfig } = require('../../utils/configUnifier');
 const { substitutePlaceholders } = require('../../utils/placeholderStandard');
@@ -44,7 +45,7 @@ const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVe
 const PROVIDER_VERSIONS = {
     controlPlane: 'controlPlane:v3',
     scenarioBrain: 'scenarioBrain:v2',
-    dynamicFlow: 'dynamicFlow:v2',
+    // ☢️ NUKED Feb 2026: dynamicFlow removed - V110 architecture replaces it
     matchingPolicy: 'matchingPolicy:v1',
     placeholders: 'placeholders:v1'
 };
@@ -87,11 +88,11 @@ router.get('/', async (req, res) => {
         // ═══════════════════════════════════════════════════════════════════════
         // PARALLEL LOAD ALL DATA SOURCES
         // ═══════════════════════════════════════════════════════════════════════
-        const [company, responseDefaults, placeholdersDoc, allDynamicFlows] = await Promise.all([
+        const [company, responseDefaults, placeholdersDoc] = await Promise.all([
             v2Company.findById(companyId).lean(),
             CompanyResponseDefaults.getOrCreate(companyId),
-            CompanyPlaceholders.findOne({ companyId }).lean(),
-            DynamicFlow.find({ companyId }).lean() // Get ALL flows, not just enabled
+            CompanyPlaceholders.findOne({ companyId }).lean()
+            // ☢️ NUKED Feb 2026: DynamicFlow.find() - V110 architecture replaces Dynamic Flows
         ]);
         
         if (!company) {
@@ -293,45 +294,9 @@ router.get('/', async (req, res) => {
             });
         });
         
-        // ═══════════════════════════════════════════════════════════════════════
-        // FORMAT DYNAMIC FLOWS - Include ALL with enabled flag
-        // ═══════════════════════════════════════════════════════════════════════
-        const flows = allDynamicFlows.map(flow => ({
-            id: flow._id.toString(),
-            flowKey: flow.flowKey,
-            name: flow.name,
-            enabled: flow.enabled,
-            priority: flow.priority || 0,
-            
-            // Scope info
-            scope: flow.scope || 'COMPANY',
-            editable: (flow.scope || 'COMPANY') === 'COMPANY',
-            
-            // Entry conditions - phrases are in t.config.phrases per schema
-            triggers: (flow.triggers || []).map(t => {
-                const phrases = t.config?.phrases || t.phrases || [];
-                return {
-                    type: t.type || 'phrase',
-                    phrases: phrases.slice(0, 5),
-                    phraseCount: phrases.length,
-                    matchMode: t.config?.matchMode || t.matchMode || 'contains',
-                    minConfidence: t.config?.minConfidence || t.minConfidence || 0.7
-                };
-            }),
-            
-            // Actions
-            actions: (flow.actions || []).map(a => ({
-                type: a.type,
-                key: a.key,
-                value: a.value
-            })),
-            
-            // Settings
-            allowConcurrent: flow.allowConcurrent || false,
-            minConfidence: flow.minConfidence || 0.7
-        }));
-        
-        const enabledFlows = flows.filter(f => f.enabled);
+        // ☢️ NUKED Feb 2026: Dynamic Flows formatting removed - V110 architecture replaces it
+        // const flows = allDynamicFlows.map(...);
+        // const enabledFlows = flows.filter(f => f.enabled);
         
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD MATCHING POLICY
@@ -1145,9 +1110,8 @@ router.get('/', async (req, res) => {
             issues.push({ severity: 'ERROR', area: 'scenarios', message: 'No scenarios loaded', fix: 'Enable a template in aiAgentSettings.templateReferences' });
         }
         
-        if (enabledFlows.length === 0) {
-            issues.push({ severity: 'WARNING', area: 'flows', message: 'No dynamic flows enabled - scenarios will reply but not coordinate', fix: 'Enable at least one flow in dynamicFlows' });
-        }
+        // ☢️ NUKED Feb 2026: Dynamic Flows health check removed - V110 architecture replaces it
+        // if (enabledFlows.length === 0) { ... }
 
         // ☢️ NUKED: Booking Contract V2 health check removed Jan 2026
         
@@ -1296,7 +1260,7 @@ router.get('/', async (req, res) => {
                 sources: [
                     PROVIDER_VERSIONS.controlPlane,
                     PROVIDER_VERSIONS.scenarioBrain,
-                    PROVIDER_VERSIONS.dynamicFlow,
+                    // ☢️ NUKED Feb 2026: dynamicFlow provider version removed
                     PROVIDER_VERSIONS.matchingPolicy,
                     PROVIDER_VERSIONS.placeholders
                 ]
@@ -1366,14 +1330,8 @@ router.get('/', async (req, res) => {
                 }
             },
             
-            // Dynamic Flows
-            dynamicFlows: {
-                source: PROVIDER_VERSIONS.dynamicFlow,
-                enabled: enabledFlows.length > 0,
-                flows, // All flows, not just enabled
-                enabledCount: enabledFlows.length,
-                totalCount: flows.length
-            },
+            // ☢️ NUKED Feb 2026: dynamicFlows section removed - V110 architecture replaces it
+            // dynamicFlows: { ... },
             
             // Matching Policy
             matchingPolicy,

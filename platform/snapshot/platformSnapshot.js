@@ -23,7 +23,7 @@ const logger = require('../../utils/logger');
 // Import all providers
 const providers = [
     require('./providers/controlPlane.snapshot'),
-    require('./providers/dynamicFlow.snapshot'),
+    // ☢️ NUKED Feb 2026: dynamicFlow.snapshot removed - V110 architecture replaces Dynamic Flows
     require('./providers/scenarioBrain.snapshot'),
     require('./providers/callProtection.snapshot'),
     require('./providers/transfers.snapshot'),
@@ -34,7 +34,7 @@ const providers = [
 // Map provider files to their keys
 const PROVIDER_KEYS = [
     'controlPlane',
-    'dynamicFlow',
+    // ☢️ NUKED Feb 2026: dynamicFlow removed - V110 architecture replaces Dynamic Flows
     'scenarioBrain',
     'callProtection',
     'transfers',
@@ -108,7 +108,7 @@ async function generateSnapshot(companyId, options = {}) {
             const PROVIDER_VERSIONS_FOR_ECV = {
                 controlPlane: 'controlPlane:v3',
                 scenarioBrain: 'scenarioBrain:v2',
-                dynamicFlow: 'dynamicFlow:v2',
+                // ☢️ NUKED Feb 2026: dynamicFlow:v2 removed - V110 architecture replaces Dynamic Flows
                 matchingPolicy: 'matchingPolicy:v1',
                 placeholders: 'placeholders:v1'
             };
@@ -255,13 +255,13 @@ async function generateSnapshot(companyId, options = {}) {
 function getProvidersForScope(scope) {
     switch (scope) {
         case 'control':
-            return ['controlPlane', 'dynamicFlow', 'callProtection', 'transfers', 'placeholders'];
+            return ['controlPlane', 'callProtection', 'transfers', 'placeholders'];
         case 'scenarios':
             return ['scenarioBrain', 'placeholders'];
         case 'runtime':
             // CRITICAL: Include callProtection + transfers for runtime scope
             // These are required by REQUIRED_PROVIDERS_BY_SCOPE.runtime
-            return ['runtimeBindings', 'dynamicFlow', 'callProtection', 'transfers'];
+            return ['runtimeBindings', 'callProtection', 'transfers'];
         case 'full':
         default:
             return PROVIDER_KEYS;

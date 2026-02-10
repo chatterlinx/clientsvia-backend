@@ -177,13 +177,7 @@
 
 ---
 
-## Tab 13: Dynamic Flows
-
-| UI Key | Runtime Reader | Trace Source | Status |
-|--------|----------------|--------------|--------|
-| `dynamicFlow.companyFlows` | DynamicFlowRouter | `source: controlPlane` | ✅ WIRED |
-
-**Rogue Behaviors**: None detected
+## ~~Tab 13: Dynamic Flows~~ — ☢️ NUKED Feb 2026: Dynamic Flows removed - V110 architecture replaces this feature
 
 ---
 
@@ -246,10 +240,10 @@
 | Forbidden | 1 | 0 | 0 | 0 |
 | Loop Prevention | 2 | 0 | 0 | 0 |
 | Fallbacks | 1 | 0 | 0 | 0 |
-| Dynamic Flows | 1 | 0 | 0 | 0 |
+| ~~Dynamic Flows~~ | ~~1~~ | - | - | - | ☢️ NUKED Feb 2026 |
 | Integrations | 3 | 0 | 0 | 0 |
 | Enforcement | 3 | 0 | 0 | 0 |
-| **TOTAL** | **51** | **1** | **0** | **0** |
+| **TOTAL** | **50** | **1** | **0** | **0** |
 
 ---
 

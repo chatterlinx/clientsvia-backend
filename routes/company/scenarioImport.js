@@ -25,7 +25,7 @@ const router = express.Router({ mergeParams: true });
 const crypto = require('crypto');
 const v2Company = require('../../models/v2Company');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const DynamicFlow = require('../../models/DynamicFlow');
+// ☢️ NUKED Feb 2026: DynamicFlow import removed - V110 architecture replaces Dynamic Flows
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
@@ -432,10 +432,10 @@ router.post('/', async (req, res) => {
         // LOAD CONTEXT (company data for validation)
         // ═══════════════════════════════════════════════════════════════════════
         
-        const [company, placeholdersDoc, dynamicFlows, templates] = await Promise.all([
+        // ☢️ NUKED Feb 2026: DynamicFlow.find() removed - V110 architecture replaces Dynamic Flows
+        const [company, placeholdersDoc, templates] = await Promise.all([
             v2Company.findById(companyId).lean(),
             CompanyPlaceholders.findOne({ companyId }).lean(),
-            DynamicFlow.find({ companyId }).lean(),
             GlobalInstantResponseTemplate.find({ isActive: true }).lean()
         ]);
         
@@ -449,7 +449,7 @@ router.post('/', async (req, res) => {
         // Build context for validation
         const context = {
             companyId,
-            flowIds: dynamicFlows.map(f => f._id.toString()),
+            flowIds: [], // ☢️ NUKED Feb 2026: DynamicFlow flowIds removed - V110 architecture replaces Dynamic Flows
             placeholderKeys: (placeholdersDoc?.placeholders || []).map(p => p.key),
             templateId,
             categoryId

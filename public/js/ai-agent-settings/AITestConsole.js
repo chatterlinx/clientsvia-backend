@@ -966,7 +966,8 @@ class AITestConsole {
                     bookingConfig: debug.bookingConfig,  // Shows what prompts AI was given
                     slotDiagnostics: debug.slotDiagnostics,  // Slot extraction details
                     llmBrain: debug.llmBrain,  // 🧠 LLM decision details
-                    dynamicFlow: debug.dynamicFlow,  // 🧠 V41: Dynamic Flow Engine trace
+                    // ☢️ NUKED Feb 2026: dynamicFlow debug trace removed - V110 architecture replaces Dynamic Flows
+                    dynamicFlow: null,
                     timestamp: new Date().toISOString(),
                     // 🎯 LIVE SESSION INSPECTOR: Store FULL debug for inspector access
                     debug: debug,  // Full debug object for Live Session Inspector
@@ -2063,7 +2064,7 @@ ${aiResponse}
             
             liveInspector: {
                 mode: lastEntry?.debug?.v22BlackBox?.mode || lastEntry?.mode || 'UNKNOWN',
-                activeFlow: lastEntry?.dynamicFlow || null,
+                activeFlow: null, // ☢️ NUKED Feb 2026: dynamicFlow removed - V110 architecture replaces Dynamic Flows
                 bookingConfig: lastEntry?.bookingConfig || lastEntry?.debug?.bookingConfig || null,
                 slotDiagnostics: lastEntry?.slotDiagnostics || lastEntry?.debug?.slotDiagnostics || null
             },
@@ -3068,7 +3069,8 @@ ${separator}`;
         
         // Extract key runtime state
         const currentMode = lastDebug?.v22BlackBox?.mode || lastDebug?.v22?.mode || lastDebugEntry?.mode || 'DISCOVERY';
-        const activeFlow = lastDebug?.dynamicFlow || null;
+        // ☢️ NUKED Feb 2026: activeFlow from dynamicFlow removed - V110 architecture replaces Dynamic Flows
+        const activeFlow = null;
         const stageInfo = lastDebug?.stageInfo || {};
         const slotDiagnostics = lastDebug?.slotDiagnostics || {};
         const bookingConfig = lastDebugEntry?.bookingConfig || lastDebug?.bookingConfig || {};
@@ -3283,28 +3285,7 @@ ${separator}`;
                     `;
                 }
                 
-                // 🧠 V41: DYNAMIC FLOW TRACE - Show what flows were triggered
-                let dynamicFlowHtml = '';
-                if (entry.dynamicFlow && entry.dynamicFlow.trace) {
-                    const t = entry.dynamicFlow.trace;
-                    const firedHtml = (t.triggersFired || []).map(f => `<span style="background:#f0883e20;color:#f0883e;padding:1px 4px;border-radius:3px;font-size:9px;margin-right:4px;">${f.key}${f.matchScore ? ' (' + Math.round(f.matchScore * 100) + '% ' + (f.matchScoreSource || 'heuristic') + ')' : ''}</span>`).join('');
-                    const actionsHtml = (t.actionsExecuted || []).map(a => `<div style="color:#58a6ff;font-size:9px;">• ${a.type}${a.payload ? ' ' + JSON.stringify(a.payload) : ''}</div>`).join('');
-                    const ledgerHtml = (t.ledgerAppends || []).map(l => `<div style="color:#8b949e;font-size:9px;">• ${l.type || ''}:${l.key || ''}</div>`).join('');
-                    const modeChange = t.modeChange ? `<div style="color:#f0883e;font-size:9px;">Mode: ${t.modeChange.from || 'unknown'} → ${t.modeChange.to}</div>` : '';
-                    
-                    dynamicFlowHtml = `
-                        <div style="background: #1a2d1a; border: 1px solid #238636; border-radius: 4px; padding: 6px 8px; margin: 6px 0; font-size: 10px;">
-                            <div style="color: #3fb950; font-weight: bold; margin-bottom: 4px;">🧠 Dynamic Flow Trace (Turn ${t.turn})</div>
-                            <div style="color:#8b949e;font-size:9px; margin-bottom:2px;">Time: ${new Date(t.timestamp).toLocaleTimeString()}</div>
-                            <div style="color:#8b949e;font-size:9px; margin-bottom:2px;">Input: ${(t.inputSnippet || '').substring(0,120)}</div>
-                            <div style="color:#8b949e;font-size:9px; margin-bottom:2px;">Evaluated: ${t.evaluatedCount || 0}</div>
-                            ${firedHtml ? `<div style="margin-bottom:4px;"><div style="color:#f0883e;font-size:9px;">Fired:</div><div>${firedHtml}</div></div>` : ''}
-                            ${actionsHtml ? `<div style="margin-bottom:4px;"><div style="color:#58a6ff;font-size:9px;">Actions:</div>${actionsHtml}</div>` : ''}
-                            ${ledgerHtml ? `<div style="margin-bottom:4px;"><div style="color:#8b949e;font-size:9px;">Ledger:</div>${ledgerHtml}</div>` : ''}
-                            ${modeChange}
-                        </div>
-                    `;
-                }
+                // ☢️ NUKED Feb 2026: Dynamic Flow trace rendering removed - V110 architecture replaces Dynamic Flows
                 
                 return `
                 <div style="padding: 8px 0; ${i > 0 ? 'border-top: 1px dashed #30363d;' : ''}">
@@ -3324,7 +3305,6 @@ ${separator}`;
                         <span>📍${entry.mode}</span>
                         <span>📨${entry.historySent} hist</span>
                     </div>
-                    ${dynamicFlowHtml}
                     ${thinkingHtml}
                     ${llmBrainHtml}
                     ${bookingHtml}

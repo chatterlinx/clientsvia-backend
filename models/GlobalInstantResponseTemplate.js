@@ -631,23 +631,15 @@ const scenarioSchema = new Schema({
     
     actionType: {
         type: String,
-        enum: ['REPLY_ONLY', 'START_FLOW', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'],
+        enum: ['REPLY_ONLY', 'REQUIRE_BOOKING', 'TRANSFER', 'SMS_FOLLOWUP'],
         default: 'REPLY_ONLY'
         // REPLY_ONLY: Just respond with quickReply/fullReply (FAQ, small talk)
-        // START_FLOW: Start a Dynamic Flow (flowId REQUIRED)
         // REQUIRE_BOOKING: Lock into booking collection mode (bookingIntent auto-true)
         // TRANSFER: Immediately transfer to transferTarget
         // SMS_FOLLOWUP: Send SMS follow-up, continue call
     },
     
-    flowId: {
-        type: Schema.Types.ObjectId,
-        ref: 'DynamicFlow',
-        default: null
-        // REQUIRED if actionType = 'START_FLOW'
-        // Points to the Dynamic Flow to execute
-        // Runtime validates this exists before allowing START_FLOW
-    },
+    // ☢️ NUKED Feb 2026: flowId (ref: DynamicFlow) and START_FLOW actionType removed - V110 architecture replaces Dynamic Flows
     
     bookingIntent: {
         type: Boolean,

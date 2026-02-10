@@ -59,7 +59,7 @@ These fields are properly wired:
 |----------|-------------|--------|
 | `dataConfig.templateReferences` | Data & Config → Templates | ✅ WIRED |
 | `dataConfig.scenarios` | Data & Config → Scenarios | ✅ WIRED |
-| `dynamicFlow.companyFlows` | Dynamic Flow | ✅ WIRED |
+| ~~`dynamicFlow.companyFlows`~~ | ~~Dynamic Flow~~ | ☢️ NUKED Feb 2026 (V110 replaces) |
 
 ### Integrations
 | Field ID | UI Location | Status |

@@ -257,7 +257,11 @@ class CallExecutionMapper {
                 break;
                 
             case 'DYNAMIC_FLOW_CHECK':
-                this._buildDynamicFlowStage(stage, providers.dynamicFlow);
+                // ☢️ NUKED Feb 2026: DynamicFlow provider removed - V110 architecture replaces Dynamic Flows
+                stage.status = 'disabled';
+                stage.enabled = false;
+                stage.config = { totalFlows: 0, enabledFlows: 0, flowNames: [] };
+                stage.warnings.push('Dynamic Flows removed (V110 architecture)');
                 break;
                 
             case 'SCENARIO_MATCHING':
@@ -339,32 +343,7 @@ class CallExecutionMapper {
         }
     }
 
-    _buildDynamicFlowStage(stage, dynamicFlow) {
-        if (!dynamicFlow || dynamicFlow.health !== 'GREEN') {
-            stage.status = dynamicFlow?.health === 'YELLOW' ? 'warning' : 'disabled';
-        } else {
-            stage.status = 'active';
-        }
-        
-        const flows = dynamicFlow?.data?.flows || [];
-        const enabledFlows = flows.filter(f => f.enabled);
-        
-        stage.config = {
-            totalFlows: flows.length,
-            enabledFlows: enabledFlows.length,
-            flowNames: enabledFlows.slice(0, 5).map(f => f.name || f.flowKey)
-        };
-        
-        stage.actions = enabledFlows.map(f => ({
-            trigger: f.flowKey,
-            action: `Priority ${f.priority}`,
-            priority: f.priority
-        })).sort((a, b) => b.priority - a.priority);
-        
-        if (enabledFlows.length === 0) {
-            stage.warnings.push('No dynamic flows enabled');
-        }
-    }
+    // ☢️ NUKED Feb 2026: _buildDynamicFlowStage removed - V110 architecture replaces Dynamic Flows
 
     _buildScenarioMatchingStage(stage, scenarioBrain) {
         if (!scenarioBrain || scenarioBrain.health !== 'GREEN') {

@@ -146,7 +146,8 @@ async function loadAllRoutes() {
         routes.v2CompanyConfigurationRoutes = await loadRouteWithTimeout('./routes/company/v2companyConfiguration', 'v2CompanyConfigurationRoutes');
         routes.triageCardsRoutes = await loadRouteWithTimeout('./routes/company/triageCards', 'triageCardsRoutes'); // 🎯 Triage Cards Management (atomic source of truth)
         routes.blackboxRoutes = await loadRouteWithTimeout('./routes/company/blackbox', 'blackboxRoutes'); // 📼 Black Box Recorder (Enterprise Call Flight Recorder)
-        routes.dynamicFlowsRoutes = await loadRouteWithTimeout('./routes/company/dynamicFlows', 'dynamicFlowsRoutes'); // 🧠 Dynamic Flow Engine (Trigger → Event → State → Action)
+        // ☢️ NUKED Feb 2026: dynamicFlowsRoutes - V110 architecture replaces Dynamic Flows
+        // routes.dynamicFlowsRoutes = await loadRouteWithTimeout('./routes/company/dynamicFlows', 'dynamicFlowsRoutes');
         routes.systemSnapshotRoutes = await loadRouteWithTimeout('./routes/company/systemSnapshot', 'systemSnapshotRoutes'); // 📸 System Snapshot (Flow Tree JSON - Single Source of Truth)
         // REMOVED Feb 2026: fullInventoryRoutes - Legacy tab nuked (migration complete, tab was broken)
         routes.companyOverridesRoutes = await loadRouteWithTimeout('./routes/company/companyOverrides', 'companyOverridesRoutes'); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
@@ -255,7 +256,8 @@ async function loadAllRoutes() {
         routes.transcriptsRoutes = await loadRouteWithTimeout('./routes/admin/transcripts', 'transcriptsRoutes'); // 📝 V111 Call Transcripts
         routes.v111HealthRoutes = await loadRouteWithTimeout('./routes/admin/v111Health', 'v111HealthRoutes'); // 🩺 V111 Health Check API
         // promptPacksRoutes REMOVED Jan 2026 - nuked (static packs = maintenance overhead, schema defaults preferred)
-        routes.dynamicFlowAdminRoutes = await loadRouteWithTimeout('./routes/admin/dynamicFlowAdmin', 'dynamicFlowAdminRoutes'); // 🧠 Dynamic Flow Admin (Seed templates, manage global flows)
+        // ☢️ NUKED Feb 2026: dynamicFlowAdminRoutes - V110 architecture replaces Dynamic Flows
+        // routes.dynamicFlowAdminRoutes = await loadRouteWithTimeout('./routes/admin/dynamicFlowAdmin', 'dynamicFlowAdminRoutes');
         routes.quickAnswersRoutes = await loadRouteWithTimeout('./routes/admin/quickAnswers', 'quickAnswersRoutes'); // ❓ Quick Answers (common questions - NO LEGACY)
         routes.sttProfileRoutes = await loadRouteWithTimeout('./routes/admin/sttProfile', 'sttProfileRoutes'); // 🎤 STT Profile (Speech-to-Text intelligence per template)
         routes.adminNotificationsRoutes = await loadRouteWithTimeout('./routes/admin/adminNotifications', 'adminNotificationsRoutes');
@@ -267,7 +269,7 @@ async function loadAllRoutes() {
         routes.adminIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/adminIntelligence', 'adminIntelligenceRoutes');
         routes.globalIntelligenceRoutes = await loadRouteWithTimeout('./routes/admin/globalIntelligence', 'globalIntelligenceRoutes'); // ADMIN: Global Production Intelligence (platform-wide 3-tier defaults, inheritance system)
         routes.enterpriseSuggestionsRoutes = await loadRouteWithTimeout('./routes/admin/enterpriseSuggestions', 'enterpriseSuggestionsRoutes'); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost)
-        routes.seedDynamicFlowTemplatesRoutes = await loadRouteWithTimeout('./routes/admin/seedDynamicFlowTemplates', 'seedDynamicFlowTemplatesRoutes'); // ADMIN: Dynamic Flow Template Validation
+        // ☢️ NUKED Feb 2026: seedDynamicFlowTemplatesRoutes - V110 architecture replaces Dynamic Flows
         routes.jsonExportImportRoutes = await loadRouteWithTimeout('./routes/admin/jsonExportImport', 'jsonExportImportRoutes'); // ADMIN: JSON Export/Import/Patch (ChatGPT workflow)
         routes.healthRoutes = await loadRouteWithTimeout('./routes/health', 'healthRoutes');
         // llm0TraceRoutes REMOVED Dec 2025 - LLM-0 Cortex-Intel nuked, Black Box is better
@@ -689,7 +691,8 @@ function registerRoutes(routes) {
     app.use('/api/company', routes.v2CompanyConfigurationRoutes); // V2: AI Agent Settings (Variables, Filler Words, Scenarios) - 100% ISOLATED
     app.use('/api/company/:companyId/triage-cards', routes.triageCardsRoutes); // V2: Triage Cards Management (atomic source of truth)
     app.use('/api/company/:companyId/blackbox', routes.blackboxRoutes); // 📼 Black Box Recorder (Enterprise Call Flight Recorder)
-    app.use('/api/company/:companyId/dynamic-flows', routes.dynamicFlowsRoutes); // 🧠 Dynamic Flow Engine (Trigger → Event → State → Action)
+    // ☢️ NUKED Feb 2026: /api/company/:companyId/dynamic-flows - V110 architecture replaces Dynamic Flows
+    // app.use('/api/company/:companyId/dynamic-flows', routes.dynamicFlowsRoutes);
     app.use('/api/company/:companyId/system-snapshot', routes.systemSnapshotRoutes); // 📸 System Snapshot (Flow Tree JSON - Single Source of Truth)
     // REMOVED Feb 2026: /api/company/:companyId/full-inventory - Legacy tab nuked
     app.use('/api/company/:companyId', routes.companyOverridesRoutes); // 🎚️ Company Overrides (Scenario/Category disable + Placeholders)
@@ -744,7 +747,8 @@ function registerRoutes(routes) {
     app.use('/api/admin/transcripts', routes.transcriptsRoutes); // 📝 V111 Call Transcripts
     app.use('/api/admin/v111', routes.v111HealthRoutes); // 🩺 V111 Health Check API
     // /api/admin/prompt-packs REMOVED Jan 2026 - nuked (static packs = maintenance overhead)
-    app.use('/api/admin/dynamic-flows', routes.dynamicFlowAdminRoutes); // 🧠 Dynamic Flow Admin (Seed templates, manage global flows)
+    // ☢️ NUKED Feb 2026: /api/admin/dynamic-flows - V110 architecture replaces Dynamic Flows
+    // app.use('/api/admin/dynamic-flows', routes.dynamicFlowAdminRoutes);
     app.use('/api/admin/quick-answers', routes.quickAnswersRoutes); // ❓ Quick Answers (common questions - NO LEGACY connection)
     app.use('/api/admin/stt-profile', routes.sttProfileRoutes); // 🎤 STT Profile (Speech-to-Text intelligence per template)
     app.use('/api/admin/notifications', routes.adminNotificationsRoutes); // ADMIN: Notification Center (platform alerts, SMS delivery, health checks)
@@ -756,7 +760,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/intelligence', routes.adminIntelligenceRoutes); // ADMIN: 3-Tier Intelligence System (LLM, pattern learning, cost tracking, global patterns)
     app.use('/api/admin', routes.globalIntelligenceRoutes); // ADMIN: Global Production Intelligence API (platform-wide 3-tier defaults, inheritance system)
     app.use('/api/admin/suggestions', routes.enterpriseSuggestionsRoutes); // ADMIN: Enterprise Test Pilot (deep analysis, suggestions, trends, conflicts, cost projections)
-    app.use('/api/admin/dynamic-flow-templates', routes.seedDynamicFlowTemplatesRoutes); // ADMIN: Dynamic Flow Template Validation
+    // ☢️ NUKED Feb 2026: /api/admin/dynamic-flow-templates - V110 architecture replaces Dynamic Flows
     app.use('/api/export', routes.jsonExportImportRoutes); // ADMIN: JSON Export/Import/Patch (ChatGPT workflow)
     // healthRoutes moved to top of routes (before auth-protected routes) for public access
     // llm0TraceRoutes REMOVED Dec 2025 - nuked

@@ -14,9 +14,9 @@
 
 module.exports = {
     // Required providers for a complete platform snapshot (FULL scope)
+    // ☢️ NUKED Feb 2026: dynamicFlow removed - V110 architecture replaces it
     REQUIRED_PROVIDERS: [
         'controlPlane',
-        'dynamicFlow',
         'scenarioBrain',
         'callProtection',
         'transfers',
@@ -31,7 +31,6 @@ module.exports = {
     REQUIRED_PROVIDERS_BY_SCOPE: {
         full: [
             'controlPlane',
-            'dynamicFlow',
             'scenarioBrain',
             'callProtection',
             'transfers',
@@ -44,12 +43,10 @@ module.exports = {
         ],
         control: [
             'controlPlane',
-            'dynamicFlow',
             'placeholders'
         ],
         runtime: [
             'runtimeBindings',
-            'dynamicFlow',
             'callProtection',
             'transfers'
         ]
@@ -62,11 +59,7 @@ module.exports = {
             description: 'Front desk, greeting, tone, booking configuration',
             criticality: 'HIGH'
         },
-        dynamicFlow: {
-            name: 'Dynamic Flow Engine',
-            description: 'Trigger → Event → State → Action routing',
-            criticality: 'HIGH'
-        },
+        // ☢️ NUKED Feb 2026: dynamicFlow metadata removed
         scenarioBrain: {
             name: 'Scenario Brain (3-Tier)',
             description: 'Scenario matching, templates, categories, overrides',

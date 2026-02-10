@@ -45,7 +45,8 @@ const ResponseRenderer = require('./ResponseRenderer');
 const LLMDiscoveryEngine = require('./LLMDiscoveryEngine');
 const AddressValidationService = require('./AddressValidationService');
 const DiscoveryExtractor = require('./engine/booking/DiscoveryExtractor');
-const DynamicFlowEngine = require('./DynamicFlowEngine');
+// ☢️ NUKED Feb 2026: DynamicFlowEngine removed - V110 architecture replaces it
+// const DynamicFlowEngine = require('./DynamicFlowEngine');
 const GoogleCalendarService = require('./GoogleCalendarService');
 const SMSNotificationService = require('./SMSNotificationService');
 const PricingPolicyResponder = require('./pricing/PricingPolicyResponder');
@@ -3912,61 +3913,14 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════
         // 🆕 PHASE 3: DYNAMIC FLOW ENGINE - Trigger → Event → State → Action
         // ═══════════════════════════════════════════════════════════════════
-        // The Dynamic Flow Engine evaluates triggers BEFORE AI processing.
-        // It can:
-        // - Activate flows based on triggers (phrases, keywords, slots, etc.)
-        // - Execute actions (mode transitions, set flags, send responses)
-        // - Apply guardrails (no re-greet, no restart booking)
-        // - Log trace for debugging
+        // ☢️ NUKED Feb 2026: Dynamic Flow Engine (Phase 3) removed
+        // V110 architecture (Slot Registry + Discovery Flow + Booking Flow) replaces it
+        // Routing now handled by:
+        // - Scenario matching (HybridScenarioSelector)
+        // - Consent gate logic
+        // - Booking mode triggers
         // ═══════════════════════════════════════════════════════════════════
-        let dynamicFlowResult = null;
-        try {
-            const flowStartTime = Date.now();
-            
-            dynamicFlowResult = await DynamicFlowEngine.processTurn({
-                companyId,
-                session,
-                userText,
-                slots: session.collectedSlots || {},
-                customer,
-                company
-            });
-            
-            const flowLatency = Date.now() - flowStartTime;
-            
-            log('🧠 PHASE 3: Dynamic Flow Engine processed', {
-                latencyMs: flowLatency,
-                triggersEvaluated: dynamicFlowResult.triggersEvaluated?.length || 0,
-                triggersFired: dynamicFlowResult.triggersFired?.length || 0,
-                flowsActivated: dynamicFlowResult.flowsActivated?.length || 0,
-                actionsExecuted: dynamicFlowResult.actionsExecuted?.length || 0,
-                stateChanges: dynamicFlowResult.stateChanges
-            });
-            
-            // Apply state changes from flow engine
-            if (dynamicFlowResult.stateChanges?.mode) {
-                log('🧠 PHASE 3: Mode changed by flow engine', {
-                    from: session.mode,
-                    to: dynamicFlowResult.stateChanges.mode
-                });
-                session.mode = dynamicFlowResult.stateChanges.mode;
-            }
-            
-            // Check for pending responses from flows (prepend to AI response)
-            const flowResponses = dynamicFlowResult.actionsExecuted
-                ?.filter(a => a.type === 'send_response' && a.response)
-                ?.map(a => a.response) || [];
-                
-            if (flowResponses.length > 0) {
-                log('🧠 PHASE 3: Flow generated responses', { count: flowResponses.length });
-            }
-            
-        } catch (flowErr) {
-            // Non-fatal - system works without dynamic flows
-            log('⚠️ PHASE 3: Dynamic Flow Engine failed (non-fatal)', { 
-                error: flowErr.message 
-            });
-        }
+        // ☢️ NUKED Feb 2026: dynamicFlowResult removed - V110 architecture replaces Dynamic Flows
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 4: Build customer context for AI
@@ -8317,20 +8271,8 @@ async function processTurn({
                     }
                     // promptPacks REMOVED Jan 2026
                 },
-                // ════════════════════════════════════════════════════════════════
-                // 🧠 V41: DYNAMIC FLOW TRACE - What the flow engine decided
-                // ════════════════════════════════════════════════════════════════
-                dynamicFlow: dynamicFlowResult ? {
-                    triggersEvaluated: dynamicFlowResult.triggersEvaluated?.length || 0,
-                    triggersFired: dynamicFlowResult.triggersFired || [],
-                    flowsActivated: dynamicFlowResult.flowsActivated || [],
-                    flowsDeactivated: dynamicFlowResult.flowsDeactivated || [],
-                    actionsExecuted: dynamicFlowResult.actionsExecuted || [],
-                    guardrailsApplied: dynamicFlowResult.guardrailsApplied || [],
-                    stateChanges: dynamicFlowResult.stateChanges || {},
-                    trace: dynamicFlowResult.trace,
-                    callLedger: session.callLedger || {}
-                } : null
+                // ☢️ NUKED Feb 2026: dynamicFlow trace removed - V110 architecture replaces Dynamic Flows
+                dynamicFlow: null
             };
 
             // ════════════════════════════════════════════════════════════════
@@ -8406,12 +8348,8 @@ async function processTurn({
                 confirmBackTrace,
                 property: buildAccessSnapshot(session.booking?.meta?.address || {}).property,
                 access: buildAccessSnapshot(session.booking?.meta?.address || {}).access,
-                flow: {
-                    triggersFired: (dynamicFlowResult?.triggersFired || []).length,
-                    flowsActivated: (dynamicFlowResult?.flowsActivated || []).length,
-                    actionsExecuted: (dynamicFlowResult?.actionsExecuted || []).length,
-                    stateChanges: dynamicFlowResult?.stateChanges || {}
-                },
+                // ☢️ NUKED Feb 2026: flow trace removed - V110 architecture replaces Dynamic Flows
+                flow: { triggersFired: 0, flowsActivated: 0, actionsExecuted: 0, stateChanges: {} },
                 scenarios: {
                     toolCount: scenarioToolCount,
                     tools: scenarioToolsExpanded
@@ -8481,23 +8419,7 @@ async function processTurn({
                     source: aiResult?.debug?.source || (aiResult?.fromStateMachine ? 'STATE_MACHINE' : 'LLM')
                 });
 
-                // Log dynamic flow trace for this turn (V1)
-                if (dynamicFlowResult?.trace) {
-                    await BlackBoxLogger.logDynamicFlowTrace(
-                        session._id.toString(),
-                        companyId,
-                        dynamicFlowResult.trace.turn,
-                        {
-                            timestamp: dynamicFlowResult.trace.timestamp,
-                            inputSnippet: dynamicFlowResult.trace.inputSnippet,
-                            triggersEvaluated: dynamicFlowResult.trace.triggersEvaluated,
-                            triggersFired: dynamicFlowResult.trace.triggersFired,
-                            actionsExecuted: dynamicFlowResult.trace.actionsExecuted,
-                            ledgerAppends: dynamicFlowResult.trace.ledgerAppends,
-                            modeChange: dynamicFlowResult.trace.modeChange
-                        }
-                    );
-                }
+                // ☢️ NUKED Feb 2026: dynamicFlowTrace logging removed - V110 architecture replaces Dynamic Flows
                 
                 // Update session snapshot
                 await BlackBoxLogger.updateSessionSnapshot(session._id.toString(), companyId, session);

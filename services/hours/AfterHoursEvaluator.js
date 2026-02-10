@@ -6,7 +6,7 @@
  * This module is the ONLY place that decides "is it after hours?".
  * Both:
  * - `services/AfterHoursCallTurnHandler.js`
- * - `services/DynamicFlowEngine.js` (trigger: after_hours)
+ * - (☢️ NUKED Feb 2026: DynamicFlowEngine removed - V110 architecture replaces Dynamic Flows)
  * must delegate here to prevent drift.
  *
  * Multi-tenant safety:

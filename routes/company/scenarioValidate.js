@@ -31,7 +31,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const DynamicFlow = require('../../models/DynamicFlow');
+// ☢️ NUKED Feb 2026: DynamicFlow import removed - V110 architecture replaces Dynamic Flows
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const v2Company = require('../../models/v2Company');
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
@@ -459,10 +459,10 @@ router.post('/', async (req, res) => {
         // LOAD CONTEXT
         // ═══════════════════════════════════════════════════════════════════════
         
-        const [company, placeholdersDoc, dynamicFlows] = await Promise.all([
+        // ☢️ NUKED Feb 2026: DynamicFlow.find() removed - V110 architecture replaces Dynamic Flows
+        const [company, placeholdersDoc] = await Promise.all([
             v2Company.findById(companyId).lean(),
-            CompanyPlaceholders.findOne({ companyId }).lean(),
-            DynamicFlow.find({ companyId }).lean()
+            CompanyPlaceholders.findOne({ companyId }).lean()
         ]);
         
         if (!company) {
@@ -474,7 +474,7 @@ router.post('/', async (req, res) => {
         
         const context = {
             companyId,
-            flowIds: dynamicFlows.map(f => f._id.toString()),
+            flowIds: [], // ☢️ NUKED Feb 2026: DynamicFlow flowIds removed - V110 architecture replaces Dynamic Flows
             placeholderKeys: (placeholdersDoc?.placeholders || []).map(p => p.key)
         };
         

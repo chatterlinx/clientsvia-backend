@@ -183,34 +183,7 @@ const BlackBoxRecordingSchema = new Schema({
     }
   },
   
-  // Dynamic Flow trace (per turn)
-  dynamicFlowTrace: [{
-    turn: { type: Number },
-    timestamp: { type: Date },
-    inputSnippet: { type: String },
-    triggersEvaluated: [{ type: String }],
-    fired: [{
-      key: { type: String },
-      matchScore: { type: Number },
-      matchScoreSource: { type: String }
-    }],
-    actionsExecuted: [{
-      type: { type: String },
-      payload: { type: Schema.Types.Mixed },
-      flowKey: { type: String }
-    }],
-    ledgerAppends: [{
-      type: { type: String },
-      key: { type: String },
-      note: { type: String },
-      flowKey: { type: String }
-    }],
-    modeChange: {
-      from: { type: String },
-      to: { type: String },
-      flowKey: { type: String }
-    }
-  }],
+  // ☢️ NUKED Feb 2026: dynamicFlowTrace schema field removed - V110 architecture replaces Dynamic Flows
   
   // ─────────────────────────────────────────────────────────────────────────
   // CUSTOMER CONTEXT (link to existing customer record)

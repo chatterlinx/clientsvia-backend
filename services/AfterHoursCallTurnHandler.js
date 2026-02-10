@@ -149,7 +149,7 @@ class AfterHoursCallTurnHandler {
     const contract = resolveAfterHoursContract(company);
 
     // Enterprise truth: even if the caller is in an "after-hours" flow already,
-    // we compute after-hours using the SAME evaluator used by DynamicFlowEngine.
+    // we compute after-hours using the SAME evaluator (AfterHoursEvaluator).
     // This is debug-only metadata; routing decisions happen outside this handler.
     const afterHoursEval = evaluateAfterHours({ company, now: new Date(), triggerConfig: { useCompanyHours: true } });
     state.afterHoursFlow = state.afterHoursFlow || {

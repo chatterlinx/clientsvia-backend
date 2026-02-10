@@ -29,7 +29,7 @@ const v2Company = require('../../models/v2Company');
 const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
-const DynamicFlow = require('../../models/DynamicFlow');
+// ☢️ NUKED Feb 2026: DynamicFlow import removed - V110 architecture replaces Dynamic Flows
 const { authenticateJWT, requireCompanyAccess } = require('../../middleware/auth');
 const logger = require('../../utils/logger');
 const { ALL_SCENARIO_TYPES } = require('../../utils/scenarioTypes');
@@ -98,21 +98,7 @@ const ALLOWED_PATHS = {
         storage: 'v2Company.frontDeskBehavior.booking.confirmPhone'
     },
     
-    // Dynamic Flow paths
-    'dynamicFlows.flows.*.enabled': {
-        type: 'boolean',
-        scope: 'companyOverride',
-        storage: 'DynamicFlow.enabled',
-        requiresId: true
-    },
-    'dynamicFlows.flows.*.priority': {
-        type: 'number',
-        min: 0,
-        max: 100,
-        scope: 'companyOverride',
-        storage: 'DynamicFlow.priority',
-        requiresId: true
-    },
+    // ☢️ NUKED Feb 2026: DynamicFlow patch paths removed - V110 architecture replaces Dynamic Flows
     
     // Matching Policy paths
     'matchingPolicy.thresholds.tier1': {
@@ -330,7 +316,7 @@ function parsePatchPath(path) {
     }
     
     if (parts.length === 6) {
-        // Path with double ID: /dynamicFlows/flows/flowId/triggers/0/phrases
+        // Path with double ID: /section/subsection/id/nested/subId/field
         const [section, subsection, id, nested, subId, field] = parts;
         return {
             fullPath: `${section}.${subsection}.*.${nested}.*.${field}`,
@@ -356,7 +342,7 @@ function findAllowedPath(parsedPath) {
     
     // Try pattern matching with wildcards
     for (const [pattern, config] of Object.entries(ALL_ALLOWED_PATHS)) {
-        // Convert pattern to regex: dynamicFlows.flows.*.enabled -> dynamicFlows\.flows\.[^.]+\.enabled
+        // Convert pattern to regex: section.subsection.*.field -> section\.subsection\.[^.]+\.field
         const regexStr = pattern.replace(/\./g, '\\.').replace(/\*/g, '[^.]+');
         const regex = new RegExp(`^${regexStr}$`);
         
@@ -517,9 +503,7 @@ async function applyPatch(patch, companyId, validationResult) {
             return await applyToResponseDefaults(patch, companyId, storage);
         }
         
-        if (storage?.startsWith('DynamicFlow.')) {
-            return await applyToDynamicFlow(patch, companyId, storage, parsed);
-        }
+        // ☢️ NUKED Feb 2026: DynamicFlow patch routing removed - V110 architecture replaces Dynamic Flows
         
         if (storage?.startsWith('CompanyPlaceholders.')) {
             return await applyToPlaceholders(patch, companyId, storage, parsed);
@@ -596,42 +580,7 @@ async function applyToResponseDefaults(patch, companyId, storage) {
     };
 }
 
-/**
- * Apply patch to DynamicFlow
- */
-async function applyToDynamicFlow(patch, companyId, storage, parsed) {
-    const field = storage.replace('DynamicFlow.', '');
-    const flowId = parsed.id;
-    
-    if (!flowId) {
-        return { success: false, error: 'Flow ID required' };
-    }
-    
-    const update = {};
-    if (patch.op === 'remove') {
-        update.$unset = { [field]: 1 };
-    } else {
-        update.$set = { [field]: patch.value };
-    }
-    
-    const result = await DynamicFlow.findOneAndUpdate(
-        { _id: flowId, companyId },
-        update,
-        { new: true }
-    );
-    
-    if (!result) {
-        return { success: false, error: `Flow not found: ${flowId}` };
-    }
-    
-    return {
-        success: true,
-        storage: 'DynamicFlow',
-        flowId,
-        field,
-        newValue: patch.value
-    };
-}
+// ☢️ NUKED Feb 2026: applyToDynamicFlow function removed - V110 architecture replaces Dynamic Flows
 
 /**
  * Apply patch to CompanyPlaceholders
@@ -985,7 +934,6 @@ router.get('/schema', async (req, res) => {
             expectedVersion: '{{version from runtime-truth}}',
             patches: [
                 { op: 'replace', path: '/controlPlane/greeting/text', value: 'Thanks for calling {{companyName}}!' },
-                { op: 'replace', path: '/dynamicFlows/flows/{{flowId}}/enabled', value: true },
                 { op: 'replace', path: '/scenarioBrain/scenarios/{{scenarioId}}/scenarioType', value: 'EMERGENCY' }
             ]
         }

@@ -1202,7 +1202,7 @@
                     ${renderCheckCard('👋 Greeting Intercept', sc.greetingIntercept)}
                     ${renderCheckCard('💾 Redis Cache', sc.redisCache)}
                     ${renderCheckCard('📝 Booking Contract', sc.bookingContract)}
-                    ${renderCheckCard('🔀 Dynamic Flows', sc.dynamicFlows)}
+                    <!-- ☢️ NUKED Feb 2026: Dynamic Flows check card removed - V110 architecture replaces Dynamic Flows -->
                 </div>
             </div>
         `;
@@ -2825,7 +2825,7 @@
         const tabNames = {
             'front-desk': 'Front Desk',
             'data-config': 'Data & Config',
-            'dynamic-flow': 'Dynamic Flow',
+            // ☢️ NUKED Feb 2026: 'dynamic-flow' tab name mapping removed - V110 architecture replaces Dynamic Flows
             'transfer-calls': 'Transfer Calls'
         };
         

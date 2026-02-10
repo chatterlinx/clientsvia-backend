@@ -17,11 +17,15 @@
       },
       {
         "version": "1.0.2",
-        "changes": "V92: Added discovery clarification node - agent now asks clarifying questions for vague issues (e.g., 'AC problems' → 'Is it not cooling, not heating, or something else?') BEFORE offering to schedule."
+        "changes": "V92: Added discovery clarification node - agent now asks clarifying questions for vague issues (e.g., 'AC problems' \u2192 'Is it not cooling, not heating, or something else?') BEFORE offering to schedule."
       },
       {
         "version": "1.0.3",
-        "changes": "V92: (1) Added EmptyUtteranceGuard - routes filler-only inputs ('uh,' → ',') to SilenceHandler instead of tier3 LLM, (2) Added DirectBookingIntentDetector patterns for 'how soon can you get somebody out here', (3) Fixed fast-path to actually trigger bookingModeLocked state transition."
+        "changes": "V92: (1) Added EmptyUtteranceGuard - routes filler-only inputs ('uh,' \u2192 ',') to SilenceHandler instead of tier3 LLM, (2) Added DirectBookingIntentDetector patterns for 'how soon can you get somebody out here', (3) Fixed fast-path to actually trigger bookingModeLocked state transition."
+      },
+      {
+        "version": "1.0.4",
+        "changes": "\u2622\ufe0f NUKED Feb 2026: Removed all Dynamic Flow nodes/edges (tab_dynamicFlow, dynamicFlows_booking_intent). V110 architecture replaces this feature."
       }
     ],
     "fixedInV92": [
@@ -77,8 +81,14 @@
         "type": "tab",
         "description": "Core AI behavior settings. Score: 93% Yellow (Mostly Ready). Includes personality, discovery/consent, booking prompts.",
         "health": "IMPROVED: Consent gating now catches more patterns (V92 fix).",
-        "dependencies": ["dataConfig_templateReferences", "integrations_googleCalendar"],
-        "position": { "x": 100, "y": 100 }
+        "dependencies": [
+          "dataConfig_templateReferences",
+          "integrations_googleCalendar"
+        ],
+        "position": {
+          "x": 100,
+          "y": 100
+        }
       },
       {
         "id": "section_personality",
@@ -86,8 +96,13 @@
         "type": "section",
         "description": "AI name, tone, style. 100% complete. Wired to greeting/responses.",
         "health": "Healthy: Used in all responses (e.g., warm/concise).",
-        "dependencies": ["placeholders_companyName"],
-        "position": { "x": 200, "y": 200 }
+        "dependencies": [
+          "placeholders_companyName"
+        ],
+        "position": {
+          "x": 200,
+          "y": 200
+        }
       },
       {
         "id": "section_discoveryConsent",
@@ -95,21 +110,29 @@
         "type": "section",
         "description": "Consent phrases, explicit consent required. 100% complete. Includes debugLogging toggle.",
         "health": "FIXED (V92): LLM responses now inject consent question when implying scheduling.",
-        "dependencies": ["section_discoveryClarification", "dynamicFlows_booking_intent"],
-        "position": { "x": 200, "y": 300 }
+        "dependencies": [
+          "section_discoveryClarification"
+        ],
+        "position": {
+          "x": 200,
+          "y": 300
+        }
       },
       {
         "id": "section_discoveryClarification",
         "label": "Discovery Clarification",
         "type": "section",
-        "description": "V92: Asks clarifying questions when issue is vague (e.g., 'AC problems' → 'Is it not cooling, not heating, or something else?'). Trade-specific questions for HVAC, plumbing, electrical.",
+        "description": "V92: Asks clarifying questions when issue is vague (e.g., 'AC problems' \u2192 'Is it not cooling, not heating, or something else?'). Trade-specific questions for HVAC, plumbing, electrical.",
         "health": "NEW (V92): Prevents rushing to booking without understanding the problem.",
         "config": {
           "enabled": "discovery.clarifyingQuestions.enabled",
           "vaguePatterns": "discovery.clarifyingQuestions.vaguePatterns"
         },
-        "dependencies": ["dynamicFlows_booking_intent"],
-        "position": { "x": 200, "y": 350 }
+        "dependencies": [],
+        "position": {
+          "x": 200,
+          "y": 350
+        }
       },
       {
         "id": "section_bookingPrompts",
@@ -117,8 +140,14 @@
         "type": "section",
         "description": "Step-by-step slots (e.g., name with confirmSpelling, askFullName). 100% complete.",
         "health": "FIXED (V92): Custom fields now wired through step.options to BookingFlowRunner.",
-        "dependencies": ["slots_name", "integrations_googleGeo"],
-        "position": { "x": 200, "y": 400 }
+        "dependencies": [
+          "slots_name",
+          "integrations_googleGeo"
+        ],
+        "position": {
+          "x": 200,
+          "y": 400
+        }
       },
       {
         "id": "slots_name",
@@ -127,7 +156,10 @@
         "description": "Custom JSON: question, confirmPrompt, spelling, full name asks. Required, type: name.",
         "health": "FIXED (V92): askFullName + lastNameQuestion now wired. confirmPrompt used.",
         "dependencies": [],
-        "position": { "x": 300, "y": 450 }
+        "position": {
+          "x": 300,
+          "y": 450
+        }
       },
       {
         "id": "section_greetings",
@@ -136,7 +168,10 @@
         "description": "Custom greetings (e.g., good morning responses). 100% complete.",
         "health": "Healthy: Used in CALL_START.",
         "dependencies": [],
-        "position": { "x": 200, "y": 500 }
+        "position": {
+          "x": 200,
+          "y": 500
+        }
       },
       {
         "id": "section_vocabulary",
@@ -145,7 +180,10 @@
         "description": "Filler words, name stop words. 70% (Yellow).",
         "health": "Needs Review: Underutilized in STT_PREPROCESSING.",
         "dependencies": [],
-        "position": { "x": 200, "y": 600 }
+        "position": {
+          "x": 200,
+          "y": 600
+        }
       },
       {
         "id": "section_loopPrevention",
@@ -154,7 +192,10 @@
         "description": "Max loops, rephrase. 75% (Yellow).",
         "health": "Healthy: Wired to silencePolicy/timedFollowUp.",
         "dependencies": [],
-        "position": { "x": 200, "y": 700 }
+        "position": {
+          "x": 200,
+          "y": 700
+        }
       },
       {
         "id": "tab_flowTree",
@@ -162,26 +203,11 @@
         "type": "tab",
         "description": "Visual flow builder (not fully used).",
         "health": "Underutilized: Could integrate with new chart.",
-        "dependencies": ["dynamicFlows"],
-        "position": { "x": 400, "y": 100 }
-      },
-      {
-        "id": "tab_dynamicFlow",
-        "label": "Dynamic Flow Tab",
-        "type": "tab",
-        "description": "Custom flows (4 enabled: booking_intent, emergency, after_hours, technician_request).",
-        "health": "Healthy: Wired to transition_mode.",
-        "dependencies": ["scenarios_switchboard"],
-        "position": { "x": 500, "y": 200 }
-      },
-      {
-        "id": "dynamicFlows_booking_intent",
-        "label": "Booking Intent Flow",
-        "type": "flow",
-        "description": "Triggers on 'schedule', actions: set_flag, transition_mode.",
-        "health": "IMPROVED: Works with V92 consent gating.",
-        "dependencies": ["section_discoveryConsent"],
-        "position": { "x": 600, "y": 250 }
+        "dependencies": [],
+        "position": {
+          "x": 400,
+          "y": 100
+        }
       },
       {
         "id": "tab_dataConfig",
@@ -189,8 +215,13 @@
         "type": "tab",
         "description": "Templates, scenarios, cheat sheets, placeholders.",
         "health": "Yellow: 80% DB coverage; dead configs like cheatSheets not wired.",
-        "dependencies": ["activeTemplates_hvac_v1.1"],
-        "position": { "x": 700, "y": 100 }
+        "dependencies": [
+          "activeTemplates_hvac_v1.1"
+        ],
+        "position": {
+          "x": 700,
+          "y": 100
+        }
       },
       {
         "id": "activeTemplates_hvac_v1.1",
@@ -198,8 +229,13 @@
         "type": "template",
         "description": "245 scenarios, 40 categories, 2669 triggers.",
         "health": "Needs Review: 178 not enterprise-ready (low triggers/replies).",
-        "dependencies": ["scenarios"],
-        "position": { "x": 800, "y": 150 }
+        "dependencies": [
+          "scenarios"
+        ],
+        "position": {
+          "x": 800,
+          "y": 150
+        }
       },
       {
         "id": "scenarios",
@@ -207,17 +243,27 @@
         "type": "scenario_pool",
         "description": "E.g., Thermostat Not Turning On (EMERGENCY, stopRouting: true).",
         "health": "Healthy: Matching works; consent injection improved.",
-        "dependencies": ["scenarios_switchboard"],
-        "position": { "x": 900, "y": 200 }
+        "dependencies": [
+          "scenarios_switchboard"
+        ],
+        "position": {
+          "x": 900,
+          "y": 200
+        }
       },
       {
         "id": "scenarios_switchboard",
         "label": "Scenario Switchboard",
         "type": "switchboard",
-        "description": "Action types (REPLY_ONLY 245, others 0). Wiring map for types like EMERGENCY → ESCALATE_OR_BOOK.",
+        "description": "Action types (REPLY_ONLY 245, others 0). Wiring map for types like EMERGENCY \u2192 ESCALATE_OR_BOOK.",
         "health": "Underutilized: No REQUIRE_BOOKING or TRANSFER wired; coverage 27% enterprise-ready.",
-        "dependencies": ["transfers_directory"],
-        "position": { "x": 1000, "y": 250 }
+        "dependencies": [
+          "transfers_directory"
+        ],
+        "position": {
+          "x": 1000,
+          "y": 250
+        }
       },
       {
         "id": "tab_callProtection",
@@ -226,7 +272,10 @@
         "description": "Frustration/escalation triggers.",
         "health": "Healthy: Wired to escalation (triggerCount: 4).",
         "dependencies": [],
-        "position": { "x": 1100, "y": 100 }
+        "position": {
+          "x": 1100,
+          "y": 100
+        }
       },
       {
         "id": "tab_transferCalls",
@@ -234,8 +283,13 @@
         "type": "tab",
         "description": "Directory for transfers.",
         "health": "Underutilized: No transfers in logs.",
-        "dependencies": ["scenarios_switchboard"],
-        "position": { "x": 1200, "y": 200 }
+        "dependencies": [
+          "scenarios_switchboard"
+        ],
+        "position": {
+          "x": 1200,
+          "y": 200
+        }
       },
       {
         "id": "transfers_directory",
@@ -244,7 +298,10 @@
         "description": "Targets for escalation/transfer.",
         "health": "Healthy: Wired but not triggered.",
         "dependencies": [],
-        "position": { "x": 1300, "y": 250 }
+        "position": {
+          "x": 1300,
+          "y": 250
+        }
       },
       {
         "id": "tab_callCenter",
@@ -253,7 +310,10 @@
         "description": "Call handling configs.",
         "health": "Unknown: Not in logs.",
         "dependencies": [],
-        "position": { "x": 1400, "y": 100 }
+        "position": {
+          "x": 1400,
+          "y": 100
+        }
       },
       {
         "id": "tab_links",
@@ -261,8 +321,13 @@
         "type": "tab",
         "description": "External links (e.g., websiteurl).",
         "health": "Healthy: Used in placeholders.",
-        "dependencies": ["placeholders"],
-        "position": { "x": 1500, "y": 200 }
+        "dependencies": [
+          "placeholders"
+        ],
+        "position": {
+          "x": 1500,
+          "y": 200
+        }
       },
       {
         "id": "placeholders",
@@ -271,7 +336,10 @@
         "description": "e.g., {companyName}, {websiteurl}. Not configured in dataConfig.placeholders (dead).",
         "health": "Needs Review: Not wired to all responses.",
         "dependencies": [],
-        "position": { "x": 1600, "y": 250 }
+        "position": {
+          "x": 1600,
+          "y": 250
+        }
       },
       {
         "id": "integrations_googleCalendar",
@@ -279,8 +347,13 @@
         "type": "integration",
         "description": "Connected, colorMapping. Not called in logs.",
         "health": "Failing Point: Not wired to time slot step.",
-        "dependencies": ["section_bookingPrompts"],
-        "position": { "x": 300, "y": 500 }
+        "dependencies": [
+          "section_bookingPrompts"
+        ],
+        "position": {
+          "x": 300,
+          "y": 500
+        }
       },
       {
         "id": "integrations_googleGeo",
@@ -288,8 +361,13 @@
         "type": "integration",
         "description": "For address validation. AddressValidationService exists.",
         "health": "WIRED: Called in BookingFlowRunner address step.",
-        "dependencies": ["section_bookingPrompts"],
-        "position": { "x": 400, "y": 550 }
+        "dependencies": [
+          "section_bookingPrompts"
+        ],
+        "position": {
+          "x": 400,
+          "y": 550
+        }
       },
       {
         "id": "integrations_smsNotifications",
@@ -298,7 +376,10 @@
         "description": "Enabled, templates. Not used post-booking.",
         "health": "Underutilized: Wire to COMPLETE action.",
         "dependencies": [],
-        "position": { "x": 500, "y": 600 }
+        "position": {
+          "x": 500,
+          "y": 600
+        }
       },
       {
         "id": "call_start",
@@ -306,20 +387,30 @@
         "type": "entry_point",
         "description": "Inbound call entry. Wires to greeting.",
         "health": "Healthy.",
-        "dependencies": ["section_greetings"],
-        "position": { "x": 0, "y": 0 }
+        "dependencies": [
+          "section_greetings"
+        ],
+        "position": {
+          "x": 0,
+          "y": 0
+        }
       },
       {
         "id": "guard_emptyUtterance",
         "label": "Empty Utterance Guard",
         "type": "guard",
-        "description": "V92: Routes empty/punctuation-only inputs to SilenceHandler instead of LLM. Prevents 'uh,' → ',' from burning 820 tokens on tier3 fallback.",
+        "description": "V92: Routes empty/punctuation-only inputs to SilenceHandler instead of LLM. Prevents 'uh,' \u2192 ',' from burning 820 tokens on tier3 fallback.",
         "health": "NEW (V92): Saves ~$0.002/call on filler-only utterances.",
         "config": {
           "enabled": "routing.emptyUtteranceGuard.enabled"
         },
-        "dependencies": ["silenceHandler"],
-        "position": { "x": 150, "y": 50 }
+        "dependencies": [
+          "silenceHandler"
+        ],
+        "position": {
+          "x": 150,
+          "y": 50
+        }
       },
       {
         "id": "detector_directBookingIntent",
@@ -330,8 +421,11 @@
         "config": {
           "patterns": "booking.directIntentPatterns"
         },
-        "dependencies": ["dynamicFlows_booking_intent"],
-        "position": { "x": 350, "y": 350 }
+        "dependencies": [],
+        "position": {
+          "x": 350,
+          "y": 350
+        }
       },
       {
         "id": "booking_complete",
@@ -339,8 +433,13 @@
         "type": "exit_point",
         "description": "End of booking. Should trigger SMS/confirmation.",
         "health": "Needs Review: SMS not wired.",
-        "dependencies": ["integrations_smsNotifications"],
-        "position": { "x": 1700, "y": 700 }
+        "dependencies": [
+          "integrations_smsNotifications"
+        ],
+        "position": {
+          "x": 1700,
+          "y": 700
+        }
       }
     ],
     "edges": [
@@ -360,19 +459,13 @@
         "id": "e1c",
         "source": "guard_emptyUtterance",
         "target": "section_discoveryConsent",
-        "label": "Has real content → Continue routing"
+        "label": "Has real content \u2192 Continue routing"
       },
       {
         "id": "e3c",
         "source": "section_discoveryConsent",
         "target": "detector_directBookingIntent",
         "label": "V92: Check for direct booking intent"
-      },
-      {
-        "id": "e3d",
-        "source": "detector_directBookingIntent",
-        "target": "dynamicFlows_booking_intent",
-        "label": "Direct intent detected → Skip consent"
       },
       {
         "id": "e2",
@@ -384,19 +477,7 @@
         "id": "e3",
         "source": "section_discoveryConsent",
         "target": "section_discoveryClarification",
-        "label": "Issue Vague? → Ask Clarification (V92)"
-      },
-      {
-        "id": "e3b",
-        "source": "section_discoveryClarification",
-        "target": "dynamicFlows_booking_intent",
-        "label": "Issue Clear → Trigger Mode Switch"
-      },
-      {
-        "id": "e4",
-        "source": "dynamicFlows_booking_intent",
-        "target": "section_bookingPrompts",
-        "label": "Enter Booking Mode"
+        "label": "Issue Vague? \u2192 Ask Clarification (V92)"
       },
       {
         "id": "e5",
@@ -447,12 +528,6 @@
         "label": "Dynamic Values"
       },
       {
-        "id": "e13",
-        "source": "tab_dynamicFlow",
-        "target": "dynamicFlows_booking_intent",
-        "label": "Custom Flows"
-      },
-      {
         "id": "e14",
         "source": "section_bookingPrompts",
         "target": "booking_complete",
@@ -501,10 +576,16 @@
         "label": "Silence/Loop Handling"
       },
       {
-        "id": "e22",
-        "source": "tab_flowTree",
-        "target": "tab_dynamicFlow",
-        "label": "Visual Builder Integration"
+        "id": "e3d_v110",
+        "source": "detector_directBookingIntent",
+        "target": "section_bookingPrompts",
+        "label": "Direct intent detected \u2192 Enter Booking Mode (V110: Dynamic Flows removed)"
+      },
+      {
+        "id": "e3b_v110",
+        "source": "section_discoveryClarification",
+        "target": "section_bookingPrompts",
+        "label": "Issue Clear \u2192 Enter Booking Mode (V110: Dynamic Flows removed)"
       }
     ]
   }

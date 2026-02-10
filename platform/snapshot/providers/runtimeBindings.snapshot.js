@@ -11,7 +11,8 @@
 const logger = require('../../../utils/logger');
 
 // Runtime services to verify
-let IntelligentRouter, ScenarioEngine, OverrideResolver, DynamicFlowEngine;
+// ☢️ NUKED Feb 2026: DynamicFlowEngine removed - V110 architecture replaces Dynamic Flows
+let IntelligentRouter, ScenarioEngine, OverrideResolver;
 
 try {
     IntelligentRouter = require('../../../services/IntelligentRouter');
@@ -31,12 +32,6 @@ try {
     logger.warn('[SNAPSHOT:runtimeBindings] OverrideResolver not found');
 }
 
-try {
-    DynamicFlowEngine = require('../../../services/DynamicFlowEngine');
-} catch (e) {
-    logger.warn('[SNAPSHOT:runtimeBindings] DynamicFlowEngine not found');
-}
-
 module.exports.getSnapshot = async function(companyId) {
     const startTime = Date.now();
     
@@ -45,7 +40,7 @@ module.exports.getSnapshot = async function(companyId) {
             intelligentRouterWired: false,
             scenarioEngineWired: false,
             overrideResolverWired: false,
-            dynamicFlowWired: false,
+            // ☢️ NUKED Feb 2026: dynamicFlowWired removed - V110 architecture replaces Dynamic Flows
             placeholdersWired: false,
             llmGuardrailsActive: false
         };
@@ -79,15 +74,7 @@ module.exports.getSnapshot = async function(companyId) {
             decisionOrder.push('OverrideResolver (Disabled Handling)');
         }
         
-        // Check DynamicFlowEngine
-        if (DynamicFlowEngine) {
-            const hasProcessTurn = typeof DynamicFlowEngine.processTurn === 'function' ||
-                                   typeof DynamicFlowEngine.prototype?.processTurn === 'function';
-            if (hasProcessTurn) {
-                wiringChecks.dynamicFlowWired = true;
-                decisionOrder.unshift('DynamicFlowEngine'); // First in decision order
-            }
-        }
+        // ☢️ NUKED Feb 2026: DynamicFlowEngine wiring check removed - V110 architecture replaces Dynamic Flows
         
         // LLM Guardrails check (simplified - check if tier3 has budget controls)
         if (IntelligentRouter && typeof IntelligentRouter.checkBudget === 'function') {
@@ -97,7 +84,7 @@ module.exports.getSnapshot = async function(companyId) {
         // Build full decision order
         const fullDecisionOrder = [
             'Call Protection',
-            'Dynamic Flow',
+            // ☢️ NUKED Feb 2026: 'Dynamic Flow' removed - V110 architecture replaces Dynamic Flows
             'Scenario Match (Tier 1/2/3)',
             'Disabled Override Resolution',
             'Placeholder Substitution',
@@ -121,12 +108,6 @@ module.exports.getSnapshot = async function(companyId) {
         if (!wiringChecks.overrideResolverWired) {
             warnings.push('OverrideResolver not wired - disabled scenarios will not have fallback');
             health = 'YELLOW';
-        }
-        
-        if (!wiringChecks.dynamicFlowWired) {
-            warnings.push('DynamicFlowEngine not wired');
-            // Not RED - dynamic flow is optional for some setups
-            if (health === 'GREEN') health = 'YELLOW';
         }
         
         return {
@@ -159,10 +140,7 @@ module.exports.getSnapshot = async function(companyId) {
                         hasResolveResponse: typeof OverrideResolver?.resolveResponse === 'function',
                         hasResolveAndRender: typeof OverrideResolver?.resolveAndRender === 'function'
                     },
-                    dynamicFlowEngine: {
-                        loaded: !!DynamicFlowEngine,
-                        type: typeof DynamicFlowEngine
-                    }
+                    // ☢️ NUKED Feb 2026: dynamicFlowEngine entry removed - V110 architecture replaces Dynamic Flows
                 },
                 
                 // Performance stats placeholder (would need redis/db for real stats)

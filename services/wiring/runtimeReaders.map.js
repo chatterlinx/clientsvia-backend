@@ -1450,24 +1450,7 @@ const RUNTIME_READERS_MAP = {
         defaultValue: []
     },
 
-    // =========================================================================
-    // DYNAMIC FLOWS
-    // =========================================================================
-    'dynamicFlow.companyFlows': {
-        readers: [
-            {
-                file: 'services/DynamicFlowEngine.js',
-                function: 'processFlows',
-                line: 100,
-                description: 'Evaluates trigger-action flows each turn',
-                checkpoint: 'CHECKPOINT 3 (V41)',
-                required: false
-            }
-        ],
-        dbPath: 'DynamicFlow collection (companyId filter, isTemplate=false)',
-        scope: 'company',
-        defaultValue: []
-    },
+    // ☢️ NUKED Feb 2026: dynamicFlow.companyFlows removed - V110 architecture replaces it
 
     // =========================================================================
     // BUSINESS HOURS (Canonical) - After-hours truth used by multiple subsystems
@@ -1481,13 +1464,7 @@ const RUNTIME_READERS_MAP = {
                 description: 'Single source of truth: determines after-hours based on company.aiAgentSettings.businessHours',
                 required: false
             },
-            {
-                file: 'services/DynamicFlowEngine.js',
-                function: 'evaluateTrigger',
-                line: 520,
-                description: 'Dynamic Flow trigger type after_hours delegates to AfterHoursEvaluator',
-                required: false
-            },
+            // ☢️ NUKED Feb 2026: DynamicFlowEngine reader removed - V110 architecture replaces Dynamic Flows
             {
                 file: 'services/AfterHoursCallTurnHandler.js',
                 function: 'handleTurn',

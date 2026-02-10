@@ -17,13 +17,13 @@ const router = express.Router();
 const mongoose = require('mongoose');
 
 // Models - with defensive loading
-let Company, DynamicFlow, ConversationSession, GlobalInstantResponseTemplate;
+// ☢️ NUKED Feb 2026: DynamicFlow import removed - V110 architecture replaces Dynamic Flows
+let Company, ConversationSession, GlobalInstantResponseTemplate;
 let CompanyScenarioOverride, CompanyCategoryOverride, CompanyResponseDefaults, CompanyPlaceholders;
 let ScenarioEngine;
 
 try {
   Company = require('../../models/v2Company');
-  DynamicFlow = require('../../models/DynamicFlow');
   ConversationSession = require('../../models/ConversationSession');
   GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
   
@@ -213,13 +213,7 @@ router.get('/', async (req, res) => {
       });
     }
     
-    // ═══════════════════════════════════════════════════════════════════
-    // 2. FETCH DYNAMIC FLOWS
-    // ═══════════════════════════════════════════════════════════════════
-    const dynamicFlows = await DynamicFlow.find({
-      companyId: companyId,
-      isTemplate: { $ne: true }
-    }).lean();
+    // ☢️ NUKED Feb 2026: DynamicFlow.find() removed - V110 architecture replaces Dynamic Flows
     
     // ═══════════════════════════════════════════════════════════════════
     // 3. CHECK FOR ACTIVE SESSION (Live Call)
@@ -318,33 +312,8 @@ router.get('/', async (req, res) => {
         }))
       },
       
-      // ─────────────────────────────────────────────────────────────────
-      // DYNAMIC FLOWS (The ONLY Routing Brain)
-      // ─────────────────────────────────────────────────────────────────
-      dynamicFlows: dynamicFlows.map(flow => ({
-        flowId: flow._id,
-        flowKey: flow.flowKey,
-        name: flow.name,
-        priority: flow.priority || 0,
-        enabled: flow.isActive !== false,
-        allowConcurrent: flow.settings?.allowConcurrent ?? true,
-        triggers: {
-          type: flow.trigger?.type || 'PHRASE_MATCH',
-          phrases: flow.trigger?.phrases || [],
-          minConfidence: flow.trigger?.minConfidence || 0.7
-        },
-        conditions: flow.conditions || {},
-        actions: (flow.actions || []).map(action => ({
-          type: action.type,
-          order: action.order || 0,
-          config: action.config || {}
-        })),
-        settings: {
-          allowConcurrent: flow.settings?.allowConcurrent ?? true,
-          maxTriggersPerCall: flow.settings?.maxTriggersPerCall || 1
-        },
-        tradeCategoryId: flow.tradeCategoryId || null
-      })).sort((a, b) => (b.priority || 0) - (a.priority || 0)),
+      // ☢️ NUKED Feb 2026: DynamicFlow data removed - V110 architecture replaces Dynamic Flows
+      dynamicFlows: [],
       
       // ─────────────────────────────────────────────────────────────────
       // TRANSFER TARGETS
@@ -395,9 +364,10 @@ router.get('/', async (req, res) => {
         channel: activeSession.channel || 'voice',
         startedAt: activeSession.createdAt,
         mode: activeSession.mode || 'DISCOVERY',
-        activeFlow: activeSession.dynamicFlows?.currentFlowKey || null,
-        matchedTriggers: activeSession.dynamicFlows?.trace?.slice(-1)[0]?.fired?.map(f => f.key) || [],
-        confidence: activeSession.dynamicFlows?.trace?.slice(-1)[0]?.fired?.[0]?.matchScore || null,
+        // ☢️ NUKED Feb 2026: DynamicFlow session fields neutralized - V110 architecture replaces Dynamic Flows
+        activeFlow: null,
+        matchedTriggers: [],
+        confidence: null,
         entitiesCollected: {
           name: activeSession.collectedData?.name || null,
           phone: activeSession.collectedData?.phone || activeSession.callerPhone || null,
@@ -414,10 +384,7 @@ router.get('/', async (req, res) => {
           bookingLocked: activeSession.locks?.bookingLocked || false,
           flowAcked: activeSession.locks?.flowAcked || {}
         },
-        actionsTaken: (activeSession.dynamicFlows?.trace || [])
-          .flatMap(t => t.actionsExecuted || [])
-          .map(a => a.type)
-          .slice(-20)
+        actionsTaken: [] // ☢️ NUKED Feb 2026: DynamicFlow trace removed - V110 architecture replaces Dynamic Flows
       } : null,
       
       // ─────────────────────────────────────────────────────────────────
@@ -462,7 +429,6 @@ router.get('/', async (req, res) => {
     
     console.log(`✅ [SYSTEM SNAPSHOT] Generated in ${snapshot.generatedIn}`);
     console.log(`   - Mode: ${snapshot.mode}`);
-    console.log(`   - Dynamic Flows: ${snapshot.dynamicFlows.length}`);
     console.log(`   - Transfer Targets: ${snapshot.transferTargets.length}`);
     console.log(`   - Company Contacts: ${snapshot.companyContacts.length}`);
     console.log(`   - Links: ${snapshot.links.length}`);

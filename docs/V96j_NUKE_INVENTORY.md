@@ -17,7 +17,7 @@
 | `services/ConversationStateMachine.js` | Rule-based conversation | SHOULD NOT | ⚠️ NEEDS REVIEW |
 | `services/HybridReceptionistLLM.js` | LLM tier 3 fallback | SHOULD NOT when locked | ✅ GATED BY ENGINE |
 | `services/ResponseEngine.js` | Response building | N/A (not a speaker) | ✅ OK |
-| `services/DynamicFlowEngine.js` | Dynamic flows | SHOULD NOT when locked | ⚠️ NEEDS REVIEW |
+| ~~`services/DynamicFlowEngine.js`~~ | ~~Dynamic flows~~ | N/A | ☢️ NUKED Feb 2026 (V110 replaces) |
 | `services/SMSConversationHandler.js` | SMS channel | Different channel | ✅ OK |
 | `services/ServiceAreaHandler.js` | Service area responses | N/A | ✅ OK |
 | `services/AIBrain3tierllm.js` | Legacy AI brain | DEPRECATED? | ⚠️ CHECK IF USED |
@@ -95,7 +95,7 @@ ctx.slots.* = (BookingNameHandler.js: multiple)
 
 ### Remaining Work
 - [ ] Review BookingNameHandler.js slot writes (CONFIRMED UNUSED - safe to deprecate)
-- [ ] Review DynamicFlowEngine.js for booking mode bypass
+- [x] ~~Review DynamicFlowEngine.js for booking mode bypass~~ — ☢️ NUKED Feb 2026: DynamicFlowEngine removed entirely (V110 replaces)
 - [ ] Check if AIBrain3tierllm.js is still used (deprecate if not)
 - [ ] Remove remaining BOOKING_SNAP references in ConversationEngine.js comments
 

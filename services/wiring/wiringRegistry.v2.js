@@ -378,7 +378,7 @@ const wiringRegistryV2 = {
                             required: false,
                             validators: [],
                             defaultValue: null,
-                            notes: 'Used by AfterHoursEvaluator and DynamicFlowEngine trigger after_hours'
+                            notes: 'Used by AfterHoursEvaluator'
                         }
                     ]
                 },
@@ -1709,40 +1709,7 @@ const wiringRegistryV2 = {
             ]
         },
         
-        // ---------------------------------------------------------------------
-        // DYNAMIC FLOW TAB
-        // ---------------------------------------------------------------------
-        {
-            id: 'tab.dynamicFlow',
-            label: 'Dynamic Flow',
-            description: 'Trigger-based conversation flows',
-            ui: { tabId: 'dynamic-flow', navSelector: '[data-tab="dynamic-flow"]' },
-            db: { collection: 'dynamicflows', basePath: '' },
-            scope: 'company',
-            sections: [
-                {
-                    id: 'dynamicFlow.companyFlows',
-                    label: 'Company Flows',
-                    description: 'Active flows for this company',
-                    // IMPORTANT: Match ControlPlaneNav deep-link contract
-                    // section=company-flows (URL / Wiring Next Actions)
-                    ui: { sectionId: 'company-flows', path: 'Dynamic Flow → Company Flows' },
-                    fields: [
-                        {
-                            id: 'dynamicFlow.companyFlows',
-                            label: 'Company Flows',
-                            ui: { inputId: 'companyFlows', path: 'Dynamic Flow → Company Flows → List' },
-                            db: { collection: 'dynamicflows', path: '(companyId filter, isTemplate=false)' },
-                            runtime: RUNTIME_READERS_MAP['dynamicFlow.companyFlows'],
-                            scope: 'company',
-                            required: false,
-                            validators: [],
-                            defaultValue: []
-                        }
-                    ]
-                }
-            ]
-        },
+        // ☢️ NUKED Feb 2026: tab.dynamicFlow removed - V110 architecture replaces it
         
         // ---------------------------------------------------------------------
         // TRANSFER CALLS TAB

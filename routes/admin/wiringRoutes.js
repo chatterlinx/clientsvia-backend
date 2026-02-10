@@ -748,8 +748,8 @@ router.post('/:companyId/apply', async (req, res) => {
         const ALLOWED_PREFIXES = [
             'aiAgentSettings.',
             'transfers.',
-            'dataConfig.',
-            'dynamicFlow.'
+            'dataConfig.'
+            // ☢️ NUKED Feb 2026: 'dynamicFlow.' removed - V110 architecture replaces Dynamic Flows
         ];
         
         const isAllowedPath = ALLOWED_PREFIXES.some(prefix => dbPath.startsWith(prefix));

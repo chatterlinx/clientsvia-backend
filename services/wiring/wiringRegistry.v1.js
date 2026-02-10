@@ -61,7 +61,7 @@ const wiringRegistryV1 = {
     "HybridScenarioSelector": "services/HybridScenarioSelector.js",
     
     // Flow & State
-    "DynamicFlowEngine": "services/DynamicFlowEngine.js",
+    // ☢️ NUKED Feb 2026: DynamicFlowEngine removed - V110 architecture replaces Dynamic Flows
     "FlowEngine": "services/FlowEngine.js",
     // REMOVED: BookingStateMachine - dead code, deleted
     // REMOVED: ConversationStateMachine - dead code, deleted
@@ -403,51 +403,7 @@ const wiringRegistryV1 = {
       requiredFields: []
     },
 
-    // =========================================================================
-    // TAB: DYNAMIC FLOW (PER-TURN RULES)
-    // =========================================================================
-    {
-      id: "tab.dynamicFlow",
-      type: "TAB",
-      label: "Dynamic Flow",
-      description: "Trigger-based rules evaluated EVERY turn (emergency, after-hours, etc.)",
-      expectedDbPaths: [
-        "DynamicFlow collection"
-      ],
-      expectedConsumers: ["DynamicFlowEngine"],
-      expectedTraceKeys: ["trace.dynamicFlow.evaluated", "CHECKPOINT 3"],
-      children: [
-        "dynamicFlow.companyFlows",
-        "dynamicFlow.templates"
-      ]
-    },
-
-    {
-      id: "dynamicFlow.companyFlows",
-      type: "SECTION",
-      label: "Company Flows",
-      parentId: "tab.dynamicFlow",
-      description: "Active flows for this company",
-      expectedDbPaths: [
-        "DynamicFlow collection (companyId=X, isTemplate=false)"
-      ],
-      expectedConsumers: ["DynamicFlowEngine"],
-      expectedTraceKeys: ["trace.flow.activated"],
-      requiredFields: ["flowKey", "triggers", "enabled"]
-    },
-
-    {
-      id: "dynamicFlow.templates",
-      type: "SECTION",
-      label: "Available Templates",
-      parentId: "tab.dynamicFlow",
-      description: "Global templates that can be copied to company",
-      expectedDbPaths: [
-        "DynamicFlow collection (isTemplate=true)"
-      ],
-      expectedConsumers: [],
-      requiredFields: []
-    },
+    // ☢️ NUKED Feb 2026: tab.dynamicFlow, dynamicFlow.companyFlows, dynamicFlow.templates removed - V110 architecture replaces Dynamic Flows
 
     // =========================================================================
     // TAB: DATA & CONFIG
@@ -1090,7 +1046,7 @@ const wiringRegistryV1 = {
     { id: "CHECKPOINT 2.5", description: "Cheat sheets loaded", file: "ConversationEngine.js" },
     { id: "CHECKPOINT 2.6", description: "Template loaded", file: "ConversationEngine.js" },
     { id: "CHECKPOINT 2.7", description: "GREETING INTERCEPT (0 tokens)", file: "ConversationEngine.js" },
-    { id: "CHECKPOINT 3", description: "Customer lookup / Dynamic Flow Engine", file: "ConversationEngine.js" },
+    { id: "CHECKPOINT 3", description: "Customer lookup", file: "ConversationEngine.js" },
     { id: "CHECKPOINT 4", description: "Session management", file: "ConversationEngine.js" },
     { id: "CHECKPOINT 5", description: "Building customer context", file: "ConversationEngine.js" },
     { id: "CHECKPOINT 6", description: "Building running summary", file: "ConversationEngine.js" },

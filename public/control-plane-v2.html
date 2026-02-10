@@ -14,7 +14,7 @@
   <style>
     /* ═══════════════════════════════════════════════════════════════════════════
        CLEAN SWEEP ARCHITECTURE - December 2025
-       Single Source of Truth: Dynamic Flow → All Routing
+       Single Source of Truth: V110 Architecture → All Routing
        ═══════════════════════════════════════════════════════════════════════════ */
     
     :root {
@@ -1092,9 +1092,9 @@
 
   <!-- ═══════════════════════════════════════════════════════════════════════════
        MAIN NAVIGATION - SINGLE LEVEL, FLAT STRUCTURE
-       Final Navigation (Jan 2026): Front Desk | Flow Tree | Dynamic Flow | Call Protection | 
-                                   Transfer Calls | Call Center | Links | Test Console | Data & Config
-       REMOVED: Company Contacts (merged into Transfer Calls), Version History (save per tab), Cheat Sheets (replaced)
+       Final Navigation (Feb 2026): Front Desk | Flow Tree | Data & Config | Call Protection | 
+                                   Transfer Calls | Call Center | Links | Test Console
+       REMOVED: Dynamic Flow (Feb 2026 - V110 replaces it), Company Contacts, Version History, Cheat Sheets
        ═══════════════════════════════════════════════════════════════════════════ -->
   <nav class="main-nav">
     <button class="nav-tab active" data-tab="front-desk">
@@ -1107,11 +1107,7 @@
       <span>Flow Tree</span>
       <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('flow-tree')"></i>
     </button>
-    <button class="nav-tab" data-tab="dynamic-flow">
-      <i class="fas fa-code-branch"></i>
-      <span>Dynamic Flow</span>
-      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('dynamic-flow')"></i>
-    </button>
+    <!-- ☢️ NUKED: Dynamic Flow tab removed Feb 2026 - V110 architecture replaces it -->
     <button class="nav-tab" data-tab="data-config">
       <i class="fas fa-database"></i>
       <span>Data & Config</span>
@@ -1284,58 +1280,7 @@
                 </div>
               </div>
               
-              <!-- Dynamic Flow Router -->
-              <div class="tree-node">
-                <div class="tree-item">
-                  <div class="tree-icon">🔀</div>
-                  <div class="tree-content">
-                    <h4>Dynamic Flow Router</h4>
-                    <p>Single source of truth for all routing decisions</p>
-                    <div class="tree-meta">
-                      <span class="meta-badge">Priority-based</span>
-                      <span class="meta-badge">Trigger matching</span>
-            </div>
-                  </div>
-                </div>
-                
-                <!-- Flow Nodes (populated from Dynamic Flows) -->
-                <div class="tree-node" id="dynamic-flows-tree">
-                  <div class="tree-item" style="border-left-color: #f97316;">
-                    <div class="tree-icon">⚡</div>
-                    <div class="tree-content">
-                      <h4>Emergency Service</h4>
-                      <p>Trigger: "no heat", "no air", "emergency"</p>
-                      <div class="tree-meta">
-                        <span class="meta-badge warning">Priority: 200</span>
-                        <span class="meta-badge">→ Booking</span>
-          </div>
-        </div>
-      </div>
-
-                  <div class="tree-item" style="border-left-color: #3b82f6;">
-                    <div class="tree-icon">📅</div>
-                    <div class="tree-content">
-                      <h4>Booking Intent</h4>
-                      <p>Trigger: "schedule", "appointment", "book"</p>
-                      <div class="tree-meta">
-                        <span class="meta-badge">Priority: 100</span>
-                        <span class="meta-badge">→ Booking</span>
-            </div>
-          </div>
-        </div>
-                  
-                  <div class="tree-item" style="border-left-color: #8b5cf6;">
-                    <div class="tree-icon">❓</div>
-                    <div class="tree-content">
-                      <h4>General Inquiry</h4>
-                      <p>Trigger: "question", "information", "help"</p>
-                      <div class="tree-meta">
-                        <span class="meta-badge">Priority: 50</span>
-                        <span class="meta-badge">→ Discovery</span>
-      </div>
-                    </div>
-                  </div>
-                </div>
+              <!-- ☢️ NUKED Feb 2026: Dynamic Flow Router tree node and dynamic-flows-tree removed - V110 architecture replaces Dynamic Flows -->
                 
                 <!-- Action Handler -->
                 <div class="tree-item">
@@ -1522,26 +1467,7 @@
       </div>
     </div>
     
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         DYNAMIC FLOW - The ONLY Routing Brain
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="dynamic-flow">
-      <div class="card">
-        <!--
-          Deep-link contract (ControlPlaneNav):
-          - tab=dynamic-flow
-          - section=company-flows
-          - field=companyFlows
-          This tab must expose stable anchors so Wiring "Fix" links can highlight correctly.
-        -->
-        <div id="dynamic-flow-container" data-section-id="company-flows" data-field-id="companyFlows">
-          <div class="loading-container">
-            <i class="fas fa-code-branch fa-spin"></i>
-            <p>Loading Dynamic Flow Configuration...</p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- ☢️ NUKED: Dynamic Flow tab panel removed Feb 2026 - V110 architecture replaces it -->
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          DATA & CONFIG - Placeholders, Templates, Scenarios
@@ -2391,7 +2317,7 @@
     <div class="tab-panel" data-panel="call-protection">
         <div class="card">
         <h2>🛡️ Call Protection</h2>
-        <p class="muted">Pre-answer filters that execute BEFORE Dynamic Flow. Cannot route — only short-circuit or pass forward.</p>
+        <p class="muted">Pre-answer filters that execute before routing. Cannot route — only short-circuit or pass forward.</p>
         <div id="call-protection-container">
           <!-- CheatSheetManager will render Edge Cases here -->
           <div id="cheatsheet-subtab-edge-cases">
@@ -2939,20 +2865,9 @@
             <li><strong>System Snapshot:</strong> Runtime truth (JSON) - what's actually running</li>
             <li><strong>Health Status:</strong> Flows, transfers, contacts count</li>
           </ul>
-          <p><strong>Note:</strong> This tab does NOT control behavior — it visualizes it. Use "Dynamic Flow" to add/edit flows.</p>`
+          <p><strong>Note:</strong> This tab does NOT control behavior — it visualizes it.</p>`
       },
-      'dynamic-flow': {
-        title: '🧠 Dynamic Flow (Per-Turn Rules)',
-        content: `<p><strong>Purpose:</strong> Create trigger-based rules that fire EVERY TURN during a conversation.</p>
-          <p><strong>Examples:</strong></p>
-          <ul style="margin: 8px 0; padding-left: 20px;">
-            <li><strong>Emergency Service Detection:</strong> Detect keywords like "no heat", "flooding"</li>
-            <li><strong>After Hours Detection:</strong> Apply special rules outside business hours</li>
-            <li><strong>Technician Request:</strong> When caller asks for a specific technician</li>
-          </ul>
-          <p><strong>How It Works:</strong> DynamicFlowEngine evaluates these each turn → fires events → applies state changes.</p>
-          <p><strong>vs FlowEngine:</strong> FlowEngine routes the CALL TYPE once. DynamicFlow applies RULES every turn.</p>`
-      },
+      // ☢️ NUKED: 'dynamic-flow' tab info removed Feb 2026 - V110 architecture replaces it
       'data-config': {
         title: '📊 Data & Config',
         content: `<p><strong>Purpose:</strong> Manage Q&A scenarios, execution map, and data configuration.</p>
@@ -3113,7 +3028,7 @@
       /**
        * Navigate to a specific tab, section, and/or field
        * @param {Object} opts - { tab, section, field }
-       * @param {string} opts.tab - Tab ID (e.g., 'front-desk', 'dynamic-flow')
+       * @param {string} opts.tab - Tab ID (e.g., 'front-desk', 'data-config')
        * @param {string} opts.section - Section ID within the tab
        * @param {string} opts.field - Field ID to highlight
        */
@@ -3155,7 +3070,7 @@
               'forbidden': 'forbidden',
               'loops': 'loops',
               'fallbacks': 'fallbacks',
-              'dynamic-flows': 'dynamic-flows'
+              // ☢️ NUKED Feb 2026: 'dynamic-flows' section mapping removed - V110 architecture replaces Dynamic Flows
             };
             
             const internalTab = sectionToTab[section] || section;
@@ -3188,7 +3103,7 @@
           }
           
           // 5) Highlight specific field
-          // ENTERPRISE: support canonical ids + dotted registry ids (e.g. dynamicFlow.companyFlows → companyFlows)
+          // ENTERPRISE: support canonical ids + dotted registry ids
           if (field) {
             setTimeout(() => {
               const candidates = Array.from(new Set([
@@ -3277,9 +3192,7 @@
           case 'flow-tree':
             await initFlowTree();
             break;
-          case 'dynamic-flow':
-            await initDynamicFlow();
-            break;
+          // ☢️ NUKED: 'dynamic-flow' case removed Feb 2026
           case 'call-protection':
             await initCallProtection();
             break;
@@ -3348,84 +3261,12 @@
     // ═══════════════════════════════════════════════════════════════════════════
     async function initFlowTree() {
       console.log('🌳 [INIT] Initializing Flow Tree...');
-      
-      // Load company's dynamic flows to populate the tree
-      try {
-        const response = await fetch(`/api/company/${currentCompanyId}/dynamic-flows`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.flows && data.flows.length > 0) {
-            renderFlowTreeNodes(data.flows);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to load flows for tree:', error);
-      }
+      // ☢️ NUKED Feb 2026: dynamic-flows fetch and renderFlowTreeNodes removed - V110 architecture replaces Dynamic Flows
       
       // Auto-load system snapshot
       await refreshSystemSnapshot();
       
       console.log('✅ [INIT] Flow Tree initialized with System Snapshot');
-    }
-    
-    function renderFlowTreeNodes(flows) {
-      const container = document.getElementById('dynamic-flows-tree');
-      if (!container) return;
-      
-      // Sort by priority descending
-      const sortedFlows = flows.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-      
-      container.innerHTML = sortedFlows.map(flow => {
-        const triggerPhrases = flow.trigger?.phrases?.slice(0, 3).join('", "') || 'No triggers';
-        const priority = flow.priority || 0;
-        const actions = flow.actions?.map(a => a.type).join(', ') || 'No actions';
-        
-        // Color based on priority
-        let borderColor = '#8b5cf6'; // Default purple
-        if (priority >= 200) borderColor = '#dc2626'; // Red for emergency
-        else if (priority >= 100) borderColor = '#f97316'; // Orange for high
-        else if (priority >= 50) borderColor = '#3b82f6'; // Blue for medium
-        
-        return `
-          <div class="tree-item" style="border-left-color: ${borderColor};">
-            <div class="tree-icon">${flow.isActive ? '✅' : '⏸️'}</div>
-            <div class="tree-content">
-              <h4>${flow.name || flow.flowKey || 'Unnamed Flow'}</h4>
-              <p>Trigger: "${triggerPhrases}"</p>
-              <div class="tree-meta">
-                <span class="meta-badge ${priority >= 100 ? 'warning' : ''}">Priority: ${priority}</span>
-                <span class="meta-badge">→ ${actions}</span>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-    
-    // ═══════════════════════════════════════════════════════════════════════════
-    // DYNAMIC FLOW INITIALIZATION
-    // Renders the Dynamic Flows tab from FrontDeskBehaviorManager
-    // ═══════════════════════════════════════════════════════════════════════════
-    async function initDynamicFlow() {
-      console.log('🔀 [INIT] Initializing Dynamic Flow...');
-      
-      // Ensure FrontDeskBehaviorManager is loaded
-      if (!window.frontDeskManager) {
-        await loadScript('/js/ai-agent-settings/FrontDeskBehaviorManager.js');
-        window.frontDeskManager = new window.FrontDeskBehaviorManager(currentCompanyId);
-        await window.frontDeskManager.load();
-      }
-      
-      const container = document.getElementById('dynamic-flow-container');
-      if (container && window.frontDeskManager) {
-        // Render just the Dynamic Flows tab content
-        container.innerHTML = window.frontDeskManager.renderDynamicFlowsTab();
-        window.frontDeskManager.initDynamicFlowsTab(container);
-        console.log('✅ [INIT] Dynamic Flow initialized');
-      }
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -7346,19 +7187,11 @@
         }
       }
       
-      // Dynamic Flow warnings
-      if (rt.dynamicFlows?.warnings) {
-        warnings.push(...rt.dynamicFlows.warnings.map(w => ({ source: 'Flows', message: w })));
-      }
+      // ☢️ NUKED Feb 2026: Dynamic Flow warnings removed - V110 architecture replaces Dynamic Flows
       
       // Control Plane warnings
       if (rt.controlPlane?.warnings) {
         warnings.push(...rt.controlPlane.warnings.map(w => ({ source: 'Control Plane', message: w })));
-      }
-      
-      // Check if flows are all disabled
-      if (rt.dynamicFlows?.enabledCount === 0 && rt.dynamicFlows?.totalCount > 0) {
-        warnings.push({ source: 'Flows', message: 'All dynamic flows are disabled' });
       }
       
       const healthStatus = rt.health?.status || 'UNKNOWN';
@@ -7461,7 +7294,8 @@
           jsonDisplay.textContent = JSON.stringify(rt, null, 2);
           
           // Update stats (map from Runtime Truth format)
-          document.getElementById('stat-flows').textContent = rt.dynamicFlows?.flows?.length || rt.dynamicFlows?.totalCount || 0;
+          // ☢️ NUKED Feb 2026: stat-flows from dynamicFlows removed - V110 architecture replaces Dynamic Flows
+          document.getElementById('stat-flows').textContent = 0;
           document.getElementById('stat-transfers').textContent = rt.controlPlane?.booking?.slotsCount || 0;
           document.getElementById('stat-contacts').textContent = rt.scenarioBrain?.totals?.scenarios || 0;
           
@@ -7492,26 +7326,11 @@
             statusDiv.style.color = 'var(--accent-red)';
           }
           
-          // Update Flow Tree status
-          const flowTreeStatus = document.getElementById('flow-tree-status');
-          if (flowTreeStatus) {
-            const enabledFlows = rt.dynamicFlows?.enabledCount || 0;
-            if (enabledFlows > 0) {
-              flowTreeStatus.innerHTML = `<i class="fas fa-circle" style="color: var(--accent-green);"></i><span>${enabledFlows} Flows Active</span>`;
-              flowTreeStatus.style.background = 'rgba(16, 185, 129, 0.2)';
-              flowTreeStatus.style.color = 'var(--accent-green)';
-            } else {
-              flowTreeStatus.innerHTML = '<i class="fas fa-circle" style="color: var(--accent-orange);"></i><span>No Flows</span>';
-              flowTreeStatus.style.background = 'rgba(249, 115, 22, 0.2)';
-              flowTreeStatus.style.color = 'var(--accent-orange)';
-              
-            }
-          }
+          // ☢️ NUKED Feb 2026: Flow Tree status from dynamicFlows removed - V110 architecture replaces Dynamic Flows
           
           console.log('✅ [RUNTIME TRUTH] Loaded:', {
             health: rt.health?.status,
             scenarios: rt.scenarioBrain?.totals?.scenarios,
-            flows: rt.dynamicFlows?.totalCount,
             generatedIn: rt._meta?.generationTimeMs + 'ms'
           });
           
@@ -8142,7 +7961,8 @@
           document.getElementById('stat-categories').textContent = summary.categoriesCount ?? currentExportData.categories?.length ?? 0;
           document.getElementById('stat-scenarios').textContent = summary.scenariosCount ?? currentExportData.scenarios?.length ?? 0;
           document.getElementById('stat-triggers').textContent = summary.totalTriggers ?? (currentExportData.scenarios || []).reduce((sum, s) => sum + (s.triggers?.length || 0), 0);
-          document.getElementById('stat-flows').textContent = summary.dynamicFlowsCount ?? currentExportData.dynamicFlows?.length ?? 0;
+          // ☢️ NUKED Feb 2026: stat-flows from dynamicFlows export removed - V110 architecture replaces Dynamic Flows
+          document.getElementById('stat-flows').textContent = 0;
           
           console.log('[EXPORT] Summary:', summary);
           
@@ -8711,18 +8531,7 @@ Loading field report...
           <!-- Issues Panel -->
           <div id="runtime-truth-issues" style="margin-bottom: 20px;"></div>
           
-          <!-- Dynamic Flow Toggle Panel -->
-          <div id="runtime-truth-flows" style="background: #1e293b; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-              <h4 style="margin: 0; color: #f1f5f9; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-                <span>⚡</span> Dynamic Flows (Toggle ON/OFF)
-              </h4>
-              <span id="flows-enabled-count" style="color: #94a3b8; font-size: 12px;"></span>
-            </div>
-            <div id="flows-toggle-list" style="display: flex; flex-direction: column; gap: 8px;">
-              <!-- Flow toggles will be rendered here -->
-            </div>
-          </div>
+          <!-- ☢️ NUKED Feb 2026: Dynamic Flow Toggle Panel removed - V110 architecture replaces Dynamic Flows -->
         </div>
         
         <!-- ═══════════════════════════════════════════════════════════════════════
@@ -8940,7 +8749,7 @@ Loading field report...
         
         // Summary cards
         const sb = result.data.scenarioBrain;
-        const df = result.data.dynamicFlows;
+        // ☢️ NUKED Feb 2026: dynamicFlows extraction removed - V110 architecture replaces Dynamic Flows
         const cp = result.data.controlPlane;
         
         // Safe access with defaults
@@ -8961,10 +8770,7 @@ Loading field report...
             <div style="font-size: 28px; font-weight: 700; color: #fbbf24;">${totals.triggers}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Triggers</div>
           </div>
-          <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
-            <div style="font-size: 28px; font-weight: 700; color: ${df?.enabled ? '#34d399' : '#ef4444'};">${df?.enabledCount || 0}/${df?.totalCount || 0}</div>
-            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Flows ${df?.enabled ? '✓' : '⚠️'}</div>
-          </div>
+          <!-- ☢️ NUKED Feb 2026: Flows summary card removed - V110 architecture replaces Dynamic Flows -->
           <div style="background: #1e293b; padding: 14px; border-radius: 10px; text-align: center;">
             <div style="font-size: 28px; font-weight: 700; color: ${greetingConfigured ? '#34d399' : '#ef4444'};">${greetingConfigured ? '✓' : '✗'}</div>
             <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Greeting</div>
@@ -8995,8 +8801,7 @@ Loading field report...
           `;
         }
         
-        // Render Dynamic Flow Toggles
-        renderFlowToggles(result.data.dynamicFlows);
+        // ☢️ NUKED Feb 2026: renderFlowToggles call removed - V110 architecture replaces Dynamic Flows
         
         // JSON output
         const jsonStr = JSON.stringify(result.data, null, 2);
@@ -9060,106 +8865,7 @@ Loading field report...
       showSnapshotToast(`Downloaded: ${filename} (${(jsonStr.length / 1024).toFixed(1)} KB)`, 'success');
     }
     
-    // ============================================================================
-    // DYNAMIC FLOW TOGGLE CONTROLS
-    // ============================================================================
-    
-    function renderFlowToggles(dynamicFlows) {
-      const listEl = document.getElementById('flows-toggle-list');
-      const countEl = document.getElementById('flows-enabled-count');
-      
-      const flows = dynamicFlows?.flows || [];
-      const enabledCount = flows.filter(f => f.enabled).length;
-      
-      countEl.textContent = `${enabledCount}/${flows.length} enabled`;
-      
-      if (flows.length === 0) {
-        listEl.innerHTML = `
-          <div style="text-align: center; padding: 20px; color: #94a3b8;">
-            <i class="fas fa-info-circle" style="font-size: 24px; margin-bottom: 8px; display: block;"></i>
-            No dynamic flows configured. Create flows in the Dynamic Flow tab.
-          </div>
-        `;
-        return;
-      }
-      
-      listEl.innerHTML = flows.map(flow => `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: ${flow.enabled ? '#064e3b' : '#1e293b'}; border: 1px solid ${flow.enabled ? '#10b981' : '#334155'}; border-radius: 8px; transition: all 0.2s;">
-          <div style="flex: 1;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="color: ${flow.enabled ? '#34d399' : '#94a3b8'}; font-weight: 600; font-size: 14px;">
-                ${flow.enabled ? '✓' : '○'} ${flow.name || flow.flowKey}
-              </span>
-              <span style="background: ${flow.enabled ? '#10b981' : '#475569'}; color: white; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600;">
-                ${flow.enabled ? 'ENABLED' : 'DISABLED'}
-              </span>
-              <span style="color: #64748b; font-size: 11px;">
-                Priority: ${flow.priority} | Triggers: ${flow.triggers?.reduce((sum, t) => sum + (t.phraseCount || 0), 0) || 0}
-              </span>
-            </div>
-            <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
-              flowKey: <code style="background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #22d3ee;">${flow.flowKey}</code>
-              | ID: <code style="background: #0f172a; padding: 2px 6px; border-radius: 4px; color: #a5b4fc;">${flow.id}</code>
-            </div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <label class="flow-toggle-switch" style="position: relative; display: inline-block; width: 50px; height: 26px;">
-              <input type="checkbox" ${flow.enabled ? 'checked' : ''} 
-                     onchange="toggleFlowEnabled('${flow.id}', this.checked)"
-                     style="opacity: 0; width: 0; height: 0;">
-              <span style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: ${flow.enabled ? '#10b981' : '#475569'}; transition: 0.3s; border-radius: 26px;">
-                <span style="position: absolute; content: ''; height: 20px; width: 20px; left: ${flow.enabled ? '26px' : '3px'}; bottom: 3px; background: white; transition: 0.3s; border-radius: 50%;"></span>
-              </span>
-            </label>
-          </div>
-        </div>
-      `).join('');
-    }
-    
-    async function toggleFlowEnabled(flowId, enabled) {
-      console.log(`[FLOW TOGGLE] ${flowId} → ${enabled}`);
-      
-      const toggleEl = event.target;
-      toggleEl.disabled = true;
-      
-      try {
-        // Use the patch endpoint to toggle flow
-        const response = await fetch(`/api/company/${currentCompanyId}/runtime-patch`, {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${authToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            companyId: currentCompanyId,
-            scope: 'companyOverride',
-            patches: [
-              { op: 'replace', path: `/dynamicFlows/flows/${flowId}/enabled`, value: enabled }
-            ]
-          })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success && result.appliedCount > 0) {
-          lastPatchTimestamp = new Date().toISOString();
-          showSnapshotToast(`Flow ${enabled ? 'enabled' : 'disabled'} successfully!`, 'success');
-          // Reload runtime truth to refresh the view
-          await loadRuntimeTruth();
-        } else {
-          showSnapshotToast(`Failed to toggle flow: ${result.errors?.[0]?.message || 'Unknown error'}`, 'error');
-          // Revert the checkbox
-          toggleEl.checked = !enabled;
-        }
-        
-      } catch (error) {
-        console.error('[FLOW TOGGLE] Error:', error);
-        showSnapshotToast(`Error: ${error.message}`, 'error');
-        toggleEl.checked = !enabled;
-      } finally {
-        toggleEl.disabled = false;
-      }
-    }
+    // ☢️ NUKED Feb 2026: renderFlowToggles() and toggleFlowEnabled() removed - V110 architecture replaces Dynamic Flows
     
     // ============================================================================
     // SCENARIO WIRING PANEL
@@ -9175,7 +8881,8 @@ Loading field report...
       }
       
       const scenarios = currentRuntimeTruth.scenarioBrain?.scenarios || [];
-      const flows = currentRuntimeTruth.dynamicFlows?.flows || [];
+      // ☢️ NUKED Feb 2026: dynamicFlows.flows extraction removed - V110 architecture replaces Dynamic Flows
+      const flows = [];
       const bookingEnabled = currentRuntimeTruth.controlPlane?.booking?.enabled;
       
       // Populate flow dropdown
@@ -10684,8 +10391,7 @@ Loading field report...
   "companyId": "{{companyId}}",
   "scope": "companyOverride",
   "patches": [
-    { "op": "replace", "path": "/controlPlane/greeting/text", "value": "Thanks for calling!" },
-    { "op": "replace", "path": "/dynamicFlows/flows/{{flowId}}/enabled", "value": true }
+    { "op": "replace", "path": "/controlPlane/greeting/text", "value": "Thanks for calling!" }
   ]
 }'></textarea>
         </div>
@@ -10805,15 +10511,7 @@ Loading field report...
         });
       }
       
-      // Add flow enable if none enabled
-      if (currentRuntimeTruth.dynamicFlows?.flows?.length > 0 && !currentRuntimeTruth.dynamicFlows?.enabled) {
-        const firstFlow = currentRuntimeTruth.dynamicFlows.flows[0];
-        skeleton.patches.push({
-          op: "replace",
-          path: `/dynamicFlows/flows/${firstFlow.id}/enabled`,
-          value: true
-        });
-      }
+      // ☢️ NUKED Feb 2026: flow enable patch skeleton removed - V110 architecture replaces Dynamic Flows
       
       // Add scenarioType fixes for UNKNOWN scenarios
       const unknownScenarios = (currentRuntimeTruth.scenarioBrain?.scenarios || [])

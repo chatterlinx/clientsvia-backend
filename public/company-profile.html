@@ -2269,13 +2269,9 @@
                                     style="padding: 8px 14px; font-size: 12px; background-color: #f59e0b; color: #1e293b; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
                                 <i class="fas fa-comment" id="write-test-greeting-icon"></i> Greeting
                             </button>
-                            <button onclick="writeTestDynamicFlow()" 
-                                    style="padding: 8px 14px; font-size: 12px; background-color: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                                <i class="fas fa-project-diagram" id="write-test-flow-icon"></i> New Flow
-                            </button>
-                            <button onclick="cleanupTestFlows()" 
-                                    style="padding: 8px 14px; font-size: 12px; background-color: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer;"
-                                    title="Delete test flows">
+                            <!-- ☢️ NUKED Feb 2026: writeTestDynamicFlow button removed - V110 architecture replaces Dynamic Flows -->
+                            <!-- ☢️ NUKED Feb 2026: cleanupTestFlows button removed - V110 architecture replaces Dynamic Flows -->
+                            <button style="display:none;">
                                 <i class="fas fa-trash-alt"></i>
                             </button>
                         </div>
@@ -2285,20 +2281,7 @@
                 
                 <!-- Fix Legacy Flows Panel -->
                 <div style="padding: 12px 24px; background-color: #581c87; border-bottom: 1px solid #7c3aed;">
-                    <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px;">
-                        <i class="fas fa-wrench" style="color: #c4b5fd;"></i>
-                        <span style="font-weight: 600; color: #f3e8ff; font-size: 14px;">Fix Legacy Flows</span>
-                        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
-                            <select id="legacy-flow-selector" style="padding: 8px 12px; font-size: 12px; border: 2px solid #a855f7; border-radius: 6px; background-color: #1e293b; color: #f1f5f9;">
-                                <option value="">Loading...</option>
-                            </select>
-                            <button onclick="convertFlowToV2()" 
-                                    style="padding: 8px 14px; font-size: 12px; background-color: #a855f7; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                                <i class="fas fa-magic" id="convert-flow-icon"></i> Convert to V2
-                            </button>
-                        </div>
-                    </div>
-                    <div id="convert-result" style="margin-top: 8px; font-size: 12px; display: none;"></div>
+                    <!-- ☢️ NUKED Feb 2026: Fix Legacy Flows panel removed - V110 architecture replaces Dynamic Flows -->
                 </div>
                 
                 <!-- Manual Save Panel - DARK THEME -->
@@ -2321,29 +2304,7 @@
                         </div>
                     </div>
                     
-                    <!-- Flow JSON Input -->
-                    <div>
-                        <label style="display: block; font-size: 12px; font-weight: 600; color: #86efac; margin-bottom: 6px;">
-                            Emergency Flow JSON (paste V2 schema)
-                            <button onclick="loadEmergencyFlowTemplate()" 
-                                    style="margin-left: 12px; padding: 6px 14px; font-size: 12px; font-weight: 700; background-color: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                                📄 LOAD TEMPLATE
-                            </button>
-                        </label>
-                        <textarea id="manual-flow-json-input" 
-                                  style="width: 100%; height: 160px; padding: 12px; font-size: 12px; font-family: monospace; border: 2px solid #22c55e; border-radius: 6px; color: #1e293b; background: #f0fdf4; resize: vertical;"
-                                  placeholder='{"flowKey": "emergency_service", "trigger": {...}, "actions": [...]}'></textarea>
-                        <div style="display: flex; gap: 8px; margin-top: 10px;">
-                            <button onclick="validateFlowJson()" 
-                                    style="padding: 10px 18px; font-size: 12px; font-weight: 600; background-color: #64748b; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                                <i class="fas fa-check-circle"></i> Validate
-                            </button>
-                            <button onclick="saveManualFlowJson()" 
-                                    style="padding: 10px 18px; font-size: 12px; font-weight: 600; background-color: #22c55e; color: #052e16; border: none; border-radius: 6px; cursor: pointer;">
-                                <i class="fas fa-save" id="save-flow-icon"></i> Save Flow
-                            </button>
-                        </div>
-                    </div>
+                    <!-- ☢️ NUKED Feb 2026: Emergency Flow JSON input panel removed - V110 architecture replaces Dynamic Flows -->
                     
                     <div id="manual-save-result" style="margin-top: 10px; font-size: 12px; display: none;"></div>
                 </div>
@@ -2969,8 +2930,7 @@
                 // Also load DB Echo
                 await loadDbEcho();
                 
-                // Populate legacy flow selector for conversion tools
-                await populateLegacyFlowSelector();
+                // ☢️ NUKED Feb 2026: populateLegacyFlowSelector() call removed - V110 architecture replaces Dynamic Flows
                 
             } catch (error) {
                 console.error('[PLATFORM SNAPSHOT] Error:', error);
@@ -3393,7 +3353,7 @@
             
             // Extract key metrics
             const controlPlane = snapshot.providers?.controlPlane?.data || {};
-            const dynamicFlow = snapshot.providers?.dynamicFlow?.data || {};
+            // ☢️ NUKED Feb 2026: dynamicFlow snapshot provider removed - V110 architecture replaces Dynamic Flows
             const callProtection = snapshot.providers?.callProtection?.data || {};
             const drift = snapshot.drift || {};
             const completeness = snapshot.completeness || {};
@@ -3418,8 +3378,6 @@
             } catch {}
             
             const frontDesk = controlPlane.frontDesk || {};
-            const flows = dynamicFlow.flows || [];
-            const firstFlow = flows[0] || {};
             
             // Build health metrics
             const metrics = [
@@ -3429,24 +3387,7 @@
                     detail: frontDesk.greetingSource || 'none',
                     ok: frontDesk.greetingConfigured
                 },
-                {
-                    label: 'Dynamic Flow',
-                    value: dynamicFlow.flowsInvalid === 0 ? '✅ Valid' : `❌ ${dynamicFlow.flowsInvalid} Invalid`,
-                    detail: `${dynamicFlow.flowsTotal || 0} flows`,
-                    ok: dynamicFlow.flowsInvalid === 0
-                },
-                {
-                    label: 'Trigger Phrases',
-                    value: firstFlow.triggerPhraseCount > 0 ? `✅ ${firstFlow.triggerPhraseCount}` : '❌ 0',
-                    detail: firstFlow.flowKey || '-',
-                    ok: firstFlow.triggerPhraseCount > 0
-                },
-                {
-                    label: 'Actions',
-                    value: firstFlow.actionsCount || 0,
-                    detail: (dynamicFlow.actionTypesUsed || []).join(', ') || '-',
-                    ok: firstFlow.actionsCount >= 4
-                },
+                // ☢️ NUKED Feb 2026: Dynamic Flow, Trigger Phrases, and Actions metric cards removed - V110 architecture replaces Dynamic Flows
                 {
                     label: 'Call Protection',
                     value: (callProtection.invalidRules || []).length === 0 ? '✅ Valid' : `❌ ${callProtection.invalidRules?.length} Invalid`,
@@ -3813,222 +3754,14 @@
             modal.classList.add('hidden');
         }
         
-        // ═══════════════════════════════════════════════════════════════════════════
-        // WRITE TEST DYNAMIC FLOW - End-to-End Verification
-        // ═══════════════════════════════════════════════════════════════════════════
-        async function writeTestDynamicFlow() {
-            const companyId = window.currentCompanyId || window.companyId;
-            if (!companyId) {
-                alert('No company ID found');
-                return;
-            }
-            
-            const icon = document.getElementById('write-test-flow-icon');
-            const resultEl = document.getElementById('write-test-result');
-            
-            if (icon) icon.className = 'fas fa-spinner fa-spin';
-            if (resultEl) resultEl.classList.add('hidden');
-            
-            try {
-                const authToken = localStorage.getItem('adminToken');
-                
-                // Step 1: Write test dynamic flow
-                const writeResponse = await fetch(`/api/company/${companyId}/raw/write-test-dynamic-flow`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!writeResponse.ok) {
-                    throw new Error(`Write failed: HTTP ${writeResponse.status}`);
-                }
-                
-                const writeResult = await writeResponse.json();
-                
-                // Step 2: Refresh Platform Snapshot
-                await loadTruthReport();
-                
-                // Step 3: Check snapshot for the test flow
-                const verifySnapshot = currentTruthSnapshot;
-                const flows = verifySnapshot?.providers?.dynamicFlow?.data?.flows || [];
-                const testFlow = flows.find(f => f.flowKey === 'emergency_service_test');
-                
-                // Show result
-                if (resultEl) {
-                    const v = writeResult.verification;
-                    if (writeResult.success && testFlow && testFlow.triggerPhraseCount > 0 && testFlow.actionsCount === 4) {
-                        resultEl.innerHTML = `
-                            <div class="p-2 bg-green-100 rounded">
-                                <strong class="text-green-800">✅ DYNAMIC FLOW TEST PASSED</strong><br>
-                                <span class="text-green-700">
-                                    DB: triggerType=${v.triggerType}, phrases=${v.triggerPhrasesCount}, actions=${v.actionsCount}<br>
-                                    Snapshot: triggerType=${testFlow.triggerType}, phrases=${testFlow.triggerPhraseCount}, actions=${testFlow.actionsCount}<br>
-                                    Schema: ${testFlow.schemaUsed || 'unknown'}
-                                </span>
-                            </div>
-                        `;
-                        showSaveVerifyToast(true, 'Dynamic Flow Test PASSED', `${v.actionsCount} actions, ${v.triggerPhrasesCount} phrases`);
-                    } else {
-                        resultEl.innerHTML = `
-                            <div class="p-2 bg-red-100 rounded">
-                                <strong class="text-red-800">❌ DYNAMIC FLOW TEST FAILED</strong><br>
-                                <span class="text-red-700">
-                                    DB Verification: ${JSON.stringify(v, null, 2)}<br>
-                                    Snapshot Flow: ${testFlow ? JSON.stringify(testFlow, null, 2) : 'NOT FOUND IN SNAPSHOT'}
-                                </span>
-                            </div>
-                        `;
-                        showSaveVerifyToast(false, 'Dynamic Flow Test FAILED', 'Check result details');
-                    }
-                    resultEl.classList.remove('hidden');
-                }
-                
-            } catch (error) {
-                console.error('[WRITE TEST] Dynamic Flow Error:', error);
-                if (resultEl) {
-                    resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ ERROR: ${error.message}</div>`;
-                    resultEl.classList.remove('hidden');
-                }
-                showSaveVerifyToast(false, 'Write Test Error', error.message);
-            } finally {
-                if (icon) icon.className = 'fas fa-project-diagram';
-            }
-        }
+        // ☢️ NUKED Feb 2026: writeTestDynamicFlow() removed - V110 architecture replaces Dynamic Flows
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // MANUAL SAVE - Greeting and Flow JSON
+        // MANUAL SAVE - Greeting
         // ═══════════════════════════════════════════════════════════════════════════
         
-        // Load the V2 emergency flow template into the textarea
-        function loadEmergencyFlowTemplate() {
-            const template = {
-                flowKey: "emergency_service",
-                name: "Emergency Service Detection",
-                enabled: true,
-                priority: 200,
-                
-                trigger: {
-                    type: "phrase",
-                    config: {
-                        phrases: [
-                            "emergency",
-                            "urgent",
-                            "no AC",
-                            "ac not working",
-                            "water leaking",
-                            "flooding",
-                            "smell gas",
-                            "burning smell",
-                            "sparking",
-                            "smoke"
-                        ],
-                        fuzzy: true,
-                        minConfidence: 0.7
-                    }
-                },
-                
-                actions: [
-                    {
-                        timing: "on_activate",
-                        type: "set_flag",
-                        config: {
-                            flagName: "isEmergency",
-                            flagValue: true,
-                            alsoWriteToCallLedgerFacts: true
-                        }
-                    },
-                    {
-                        timing: "on_activate",
-                        type: "append_ledger",
-                        config: {
-                            key: "alerts",
-                            value: "Emergency detected by phrase trigger"
-                        }
-                    },
-                    {
-                        timing: "on_activate",
-                        type: "ack_once",
-                        config: {
-                            key: "ack_emergency_service",
-                            response: "Understood — this sounds urgent. I'm going to prioritize this right now."
-                        }
-                    },
-                    {
-                        timing: "on_activate",
-                        type: "transition_mode",
-                        config: {
-                            mode: "EMERGENCY"
-                        }
-                    }
-                ],
-                
-                settings: {
-                    allowConcurrent: false
-                }
-            };
-            
-            document.getElementById('manual-flow-json-input').value = JSON.stringify(template, null, 2);
-            showSaveVerifyToast(true, 'Template Loaded', 'V2 emergency flow template ready to save');
-        }
-        
-        // Validate flow JSON without saving
-        function validateFlowJson() {
-            const textarea = document.getElementById('manual-flow-json-input');
-            const resultEl = document.getElementById('manual-save-result');
-            
-            try {
-                const flow = JSON.parse(textarea.value);
-                
-                const errors = [];
-                if (!flow.flowKey) errors.push('Missing flowKey');
-                if (!flow.trigger?.type) errors.push('Missing trigger.type');
-                if (flow.trigger?.type === 'phrase' && (!flow.trigger?.config?.phrases || flow.trigger.config.phrases.length === 0)) {
-                    errors.push('Missing trigger.config.phrases for phrase trigger');
-                }
-                if (!flow.actions || flow.actions.length === 0) errors.push('Missing actions array');
-                
-                const actionTypes = (flow.actions || []).map(a => a.type);
-                const required = ['set_flag', 'append_ledger', 'ack_once', 'transition_mode'];
-                const missing = required.filter(t => !actionTypes.includes(t));
-                if (missing.length > 0) errors.push(`Missing actions: ${missing.join(', ')}`);
-                
-                if (errors.length > 0) {
-                    resultEl.innerHTML = `<div style="padding: 10px; background-color: #fef3c7; border-radius: 6px; color: #92400e; border: 1px solid #f59e0b;">⚠️ Validation Issues:<br>${errors.join('<br>')}</div>`;
-                    showFlowActionPopup({
-                        status: 'warning',
-                        title: 'Validate Flow',
-                        message: 'Flow JSON parsed, but the schema has validation issues. Nothing was saved.',
-                        details: errors.join('\n'),
-                        next: 'Fix the listed issues, then click Validate again. Only click “Save Flow” after Validate is clean.'
-                    });
-                } else {
-                    resultEl.innerHTML = `<div style="padding: 10px; background-color: #dcfce7; border-radius: 6px; color: #166534; border: 1px solid #16a34a;">✅ Valid V2 schema! Ready to save.</div>`;
-                    showFlowActionPopup({
-                        status: 'success',
-                        title: 'Validate Flow',
-                        message: 'Validation passed. This flow JSON is valid and ready to save.',
-                        details: `flowKey: ${flow.flowKey}\ntrigger.type: ${flow.trigger?.type}\nactions: ${(flow.actions || []).length}`,
-                        next: 'If you intended to write this flow into the database, click “Save Flow”. Otherwise, close this panel.'
-                    });
-                }
-                resultEl.style.display = 'block';
-                
-            } catch (e) {
-                resultEl.innerHTML = `<div style="padding: 10px; background-color: #fee2e2; border-radius: 6px; color: #991b1b; border: 1px solid #ef4444;">❌ Invalid JSON: ${e.message}</div>`;
-                resultEl.style.display = 'block';
-                showFlowActionPopup({
-                    status: 'error',
-                    title: 'Validate Flow',
-                    message: 'Validation failed because the JSON is not valid. Nothing was saved.',
-                    details: e.message,
-                    next: 'Click “LOAD TEMPLATE” or paste a complete JSON object, then click Validate again.'
-                });
-            }
-        }
-        
-        // Save greeting to DB
+        // ☢️ NUKED Feb 2026: loadEmergencyFlowTemplate(), validateFlowJson(), saveManualFlowJson() removed - V110 architecture replaces Dynamic Flows
+                // Save greeting to DB
         async function saveManualGreeting() {
             const companyId = window.currentCompanyId || window.companyId;
             if (!companyId) return alert('No company ID');
@@ -4142,7 +3875,7 @@
                         title: 'Save Flow',
                         message: 'Flow saved successfully to the database and snapshot refreshed.',
                         details: `flowKey: ${v.flowKey}\nschemaUsed: ${v.schemaUsed}\ntriggerPhrases: ${v.triggerPhrasesCount}\nactions: ${v.actionsCount}\nactionTypes: ${Array.isArray(v.actionTypes) ? v.actionTypes.join(', ') : ''}`,
-                        next: 'Click Refresh at the top of this modal and confirm Dynamic Flow shows Valid. Then use Runtime Truth (Canonical) to prove enforcement.'
+                        next: 'Click Refresh at the top of this modal and use Runtime Truth (Canonical) to prove enforcement.'
                     });
                 } else {
                     const errorsHtml = result.validationErrors ? 
@@ -4175,155 +3908,9 @@
             }
         }
         
-        // ═══════════════════════════════════════════════════════════════════════════
-        // CONVERT FLOW TO V2 - Fix legacy flows
-        // ═══════════════════════════════════════════════════════════════════════════
-        async function populateLegacyFlowSelector() {
-            const selector = document.getElementById('legacy-flow-selector');
-            if (!selector) return;
-            
-            // Get flows from current snapshot
-            const flows = currentTruthSnapshot?.providers?.dynamicFlow?.data?.flows || [];
-            
-            selector.innerHTML = '';
-            
-            if (flows.length === 0) {
-                selector.innerHTML = '<option value="">No flows found</option>';
-                return;
-            }
-            
-            // Add each flow, highlighting legacy ones
-            flows.forEach(f => {
-                const option = document.createElement('option');
-                option.value = f.flowKey;
-                const status = f.schemaUsed === 'legacy' ? '⚠️ LEGACY' : '✓ v2';
-                const issues = f.isValid ? '' : ' (INVALID)';
-                option.textContent = `${f.flowKey} [${status}]${issues}`;
-                if (f.schemaUsed === 'legacy' || !f.isValid) {
-                    option.style.color = '#dc2626';
-                    option.style.fontWeight = 'bold';
-                }
-                selector.appendChild(option);
-            });
-        }
+        // ☢️ NUKED Feb 2026: populateLegacyFlowSelector() and convertFlowToV2() removed - V110 architecture replaces Dynamic Flows
         
-        async function convertFlowToV2() {
-            const companyId = window.currentCompanyId || window.companyId;
-            const selector = document.getElementById('legacy-flow-selector');
-            const flowKey = selector?.value;
-            
-            if (!companyId || !flowKey) {
-                alert('Please select a flow to convert');
-                return;
-            }
-            
-            const icon = document.getElementById('convert-flow-icon');
-            const resultEl = document.getElementById('convert-result');
-            
-            if (icon) icon.className = 'fas fa-spinner fa-spin';
-            if (resultEl) resultEl.classList.add('hidden');
-            
-            try {
-                const authToken = localStorage.getItem('adminToken');
-                
-                // Step 1: Convert the flow
-                const convertResponse = await fetch(`/api/company/${companyId}/raw/convert-flow-to-v2`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ flowKey })
-                });
-                
-                if (!convertResponse.ok) {
-                    const errData = await convertResponse.json();
-                    throw new Error(errData.error || `HTTP ${convertResponse.status}`);
-                }
-                
-                const convertResult = await convertResponse.json();
-                
-                // Step 2: Refresh Platform Snapshot
-                await loadTruthReport();
-                
-                // Step 3: Verify in snapshot
-                const flows = currentTruthSnapshot?.providers?.dynamicFlow?.data?.flows || [];
-                const updatedFlow = flows.find(f => f.flowKey === flowKey);
-                
-                // Update selector
-                await populateLegacyFlowSelector();
-                
-                // Show result
-                if (resultEl) {
-                    const v = convertResult.verification;
-                    if (convertResult.success && updatedFlow && updatedFlow.schemaUsed === 'v2') {
-                        resultEl.innerHTML = `
-                            <div class="p-2 bg-green-100 rounded">
-                                <strong class="text-green-800">✅ CONVERSION SUCCESSFUL</strong><br>
-                                <span class="text-green-700">
-                                    Previous: ${convertResult.previousSchema}<br>
-                                    Now: schema=${v.schemaUsed}, phrases=${v.triggerPhrasesCount}, actions=${v.actionsCount}<br>
-                                    Phrases: ${v.triggerPhrasesSample?.join(', ') || 'none'}
-                                </span>
-                            </div>
-                        `;
-                        showSaveVerifyToast(true, 'Conversion PASSED', `${flowKey} is now V2`);
-                    } else {
-                        resultEl.innerHTML = `
-                            <div class="p-2 bg-yellow-100 rounded">
-                                <strong class="text-yellow-800">⚠️ CONVERSION PARTIAL</strong><br>
-                                <span class="text-yellow-700">
-                                    Result: ${JSON.stringify(v, null, 2)}<br>
-                                    Snapshot: ${updatedFlow ? JSON.stringify(updatedFlow, null, 2) : 'NOT FOUND'}
-                                </span>
-                            </div>
-                        `;
-                        showSaveVerifyToast(false, 'Conversion needs review', 'Check details');
-                    }
-                    resultEl.classList.remove('hidden');
-                }
-                
-            } catch (error) {
-                console.error('[CONVERT] Error:', error);
-                if (resultEl) {
-                    resultEl.innerHTML = `<div class="p-2 bg-red-100 rounded text-red-800">❌ ERROR: ${error.message}</div>`;
-                    resultEl.classList.remove('hidden');
-                }
-                showSaveVerifyToast(false, 'Conversion Error', error.message);
-            } finally {
-                if (icon) icon.className = 'fas fa-magic';
-            }
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════════
-        // CLEANUP TEST FLOWS - Remove test data
-        // ═══════════════════════════════════════════════════════════════════════════
-        async function cleanupTestFlows() {
-            const companyId = window.currentCompanyId || window.companyId;
-            if (!companyId) return;
-            
-            if (!confirm('Delete all test flows (emergency_service_test, DEBUG_*)?')) return;
-            
-            try {
-                const authToken = localStorage.getItem('adminToken');
-                const response = await fetch(`/api/company/${companyId}/raw/cleanup-test-flows`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showSaveVerifyToast(true, 'Cleanup Complete', `Deleted ${result.deletedCount} test flows`);
-                    await loadTruthReport();
-                } else {
-                    showSaveVerifyToast(false, 'Cleanup Failed', result.error);
-                }
-                
-            } catch (error) {
-                showSaveVerifyToast(false, 'Cleanup Error', error.message);
-            }
-        }
+        // ☢️ NUKED Feb 2026: cleanupTestFlows() removed - V110 architecture replaces Dynamic Flows
         
         // Export for use by other scripts
         window.verifySaveWithSnapshot = verifySaveWithSnapshot;
@@ -4335,14 +3922,8 @@
         window.switchTruthTab = switchTruthTab;
         window.loadDbEcho = loadDbEcho;
         window.writeTestGreeting = writeTestGreeting;
-        window.writeTestDynamicFlow = writeTestDynamicFlow;
-        window.cleanupTestFlows = cleanupTestFlows;
-        window.convertFlowToV2 = convertFlowToV2;
-        window.populateLegacyFlowSelector = populateLegacyFlowSelector;
+        // ☢️ NUKED Feb 2026: writeTestDynamicFlow, convertFlowToV2, populateLegacyFlowSelector, cleanupTestFlows, saveManualFlowJson, validateFlowJson, loadEmergencyFlowTemplate exports removed - V110 architecture replaces Dynamic Flows
         window.saveManualGreeting = saveManualGreeting;
-        window.saveManualFlowJson = saveManualFlowJson;
-        window.validateFlowJson = validateFlowJson;
-        window.loadEmergencyFlowTemplate = loadEmergencyFlowTemplate;
     </script>
     
     <!-- Load Company Profile Modern JavaScript -->

@@ -337,7 +337,7 @@ const ACTION_TYPE_REQUIREMENTS = {
     START_FLOW: {
         required: ['flowId'],
         forbidden: [],
-        description: 'Must have flowId pointing to valid DynamicFlow'
+        description: 'Must have flowId pointing to valid flow'
     },
     REQUIRE_BOOKING: {
         required: [],
@@ -672,7 +672,7 @@ const SCENARIO_SETTINGS_REGISTRY = {
     },
     flowId: { 
         ownership: 'admin', purpose: 'runtime_manual', description: 'Dynamic Flow to execute (admin configures)',
-        audit: { adminConfigKey: 'dynamicFlows', severity: 'info' }
+        audit: { adminConfigKey: 'flows', severity: 'info' }
     },
     requiredSlots: { 
         ownership: 'admin', purpose: 'runtime_manual', description: 'Slots to collect for booking (admin configures)',

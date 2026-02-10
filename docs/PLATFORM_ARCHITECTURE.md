@@ -35,20 +35,20 @@ This document maps how configuration flows from **UI → Database → Runtime �
 │  (public/control-plane-v2.html, public/js/ai-agent-settings/*.js)               │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐ │
-│  │ Personality  │  │ Discovery &  │  │   Booking    │  │    Dynamic Flows     │ │
-│  │  Tab         │  │  Consent     │  │   Prompts    │  │                      │ │
-│  │              │  │  Tab         │  │   Tab        │  │   (DynamicFlow       │ │
-│  │ • AI Name    │  │              │  │              │  │    collection)       │ │
-│  │ • Greetings  │  │ • Kill       │  │ • Slot       │  │                      │ │
-│  │ • Tone       │  │   Switches   │  │   Config     │  │ • Emergency Detection│ │
-│  └──────┬───────┘  │ • Consent    │  │ • Questions  │  │ • Booking Intent     │ │
-│         │          │   Words      │  │ • Validation │  │ • After Hours        │ │
-│         │          └──────┬───────┘  └──────┬───────┘  └──────────┬───────────┘ │
-│         │                 │                 │                     │             │
-└─────────┼─────────────────┼─────────────────┼─────────────────────┼─────────────┘
-          │                 │                 │                     │
-          ▼                 ▼                 ▼                     ▼
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                          │
+│  │ Personality  │  │ Discovery &  │  │   Booking    │                          │
+│  │  Tab         │  │  Consent     │  │   Prompts    │                          │
+│  │              │  │  Tab         │  │   Tab        │                          │
+│  │ • AI Name    │  │              │  │              │                          │
+│  │ • Greetings  │  │ • Kill       │  │ • Slot       │                          │
+│  │ • Tone       │  │   Switches   │  │   Config     │                          │
+│  └──────┬───────┘  │ • Consent    │  │ • Questions  │                          │
+│         │          │   Words      │  │ • Validation │                          │
+│         │          └──────┬───────┘  └──────┬───────┘                          │
+│         │                 │                 │                                   │
+└─────────┼─────────────────┼─────────────────┼───────────────────────────────────┘
+          │                 │                 │
+          ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              MONGODB                                             │
 ├─────────────────────────────────────────────────────────────────────────────────┤
@@ -94,16 +94,8 @@ This document maps how configuration flows from **UI → Database → Runtime �
 │  └─────────────────────────────────────────────────────────────────────────────┘│
 │                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────────┐│
-│  │                    DynamicFlow collection                                    ││
-│  │                                                                             ││
-│  │  Templates (isTemplate: true, companyId: null):                             ││
-│  │    • emergency_detection                                                    ││
-│  │    • booking_intent                                                         ││
-│  │    • after_hours_routing                                                    ││
-│  │    • technician_request                                                     ││
-│  │                                                                             ││
-│  │  Company Flows (isTemplate: false, companyId: <id>):                        ││
-│  │    • Copied from templates via "Copy Templates to Company"                  ││
+│  │  ☢️ NUKED Feb 2026: DynamicFlow collection removed                          ││
+│  │     V110 architecture replaces this feature                                 ││
 │  └─────────────────────────────────────────────────────────────────────────────┘│
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
@@ -269,15 +261,7 @@ This document maps how configuration flows from **UI → Database → Runtime �
 
 ---
 
-### 🔄 Dynamic Flows Tab
-| Feature | Database Collection | Runtime Usage |
-|---------|-------------------|---------------|
-| Flow Templates | `DynamicFlow` (isTemplate: true) | Blueprints - not executed directly |
-| Company Flows | `DynamicFlow` (isTemplate: false, companyId: X) | Actually executed at runtime |
-| Emergency Detection | `DynamicFlow.flowKey: 'emergency_detection'` | CHECKPOINT 3 - Dynamic Flow Engine |
-| Booking Intent | `DynamicFlow.flowKey: 'booking_intent'` | Detects scheduling requests |
-
-**STATUS**: `triggersEvaluated: 0` suggests no company flows exist (only templates)
+### ~~🔄 Dynamic Flows Tab~~ — ☢️ NUKED Feb 2026: Dynamic Flows removed - V110 architecture replaces this feature
 
 ---
 
@@ -371,7 +355,7 @@ Every turn is logged to `V22BlackBox` collection:
 | Greeting Intercept | ❌ | **BUG: V34 skipping** |
 | Scenario Retrieval | ⚠️ | **Redis cache returning 0** |
 | Booking Slots | ⚠️ | **Missing question field** |
-| Dynamic Flows | ⚠️ | **Templates exist but not copied to company** |
+| ~~Dynamic Flows~~ | ☢️ | **NUKED Feb 2026 — V110 architecture replaces** |
 | Kill Switches | ✅ | Working |
 | LLM Call | ✅ | Working (but no scenarios) |
 | Black Box Logging | ✅ | Working |
@@ -383,6 +367,6 @@ Every turn is logged to `V22BlackBox` collection:
 1. **IMMEDIATE**: Fix V34 greeting intercept bug
 2. **IMMEDIATE**: Clear Redis cache
 3. **TODAY**: Fix booking slots schema (question field)
-4. **TODAY**: Copy dynamic flow templates to Penguin Air
+4. ~~**TODAY**: Copy dynamic flow templates to Penguin Air~~ — ☢️ NUKED Feb 2026
 5. **THIS WEEK**: Add cache invalidation on config save
 

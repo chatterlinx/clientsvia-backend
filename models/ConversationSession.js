@@ -446,32 +446,7 @@ const conversationSessionSchema = new Schema({
         acknowledgedClaims: [{ type: String }]                     // ["returning customer", "AC not cooling"]
     },
     
-    // ════════════════════════════════════════════════════════════════════════════
-    // 🆕 PHASE 3: DYNAMIC FLOWS V1 (memory + trace + mode transitions)
-    // ════════════════════════════════════════════════════════════════════════════
-    dynamicFlows: {
-        active: [{
-            flowKey: { type: String, required: true },
-            activatedAtTurn: { type: Number },
-            activatedAt: { type: Date, default: Date.now },
-            completedAtTurn: { type: Number },
-            completedAt: { type: Date },
-            status: { type: String, enum: ['active', 'completed', 'cancelled'], default: 'active' }
-        }],
-        trace: [{
-            turn: { type: Number },
-            timestamp: { type: Date },
-            inputSnippet: { type: String },
-            evaluatedCount: { type: Number },
-            fired: [{ key: { type: String }, confidence: { type: Number } }],
-            actions: [{ type: { type: String }, payload: { type: Schema.Types.Mixed } }],
-            ledgerAppends: [{ type: { type: String }, key: { type: String }, note: { type: String } }],
-            modeChange: {
-                from: { type: String },
-                to: { type: String }
-            }
-        }]
-    },
+    // ☢️ NUKED Feb 2026: dynamicFlows schema field removed - V110 architecture replaces Dynamic Flows
     
     // Call ledger (lightweight memory for flows + scenarios)
     callLedger: {

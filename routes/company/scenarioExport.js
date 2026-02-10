@@ -511,7 +511,7 @@ function generateScenarioReport(scenario, context) {
     };
 }
 
-const DynamicFlow = require('../../models/DynamicFlow');
+// ☢️ NUKED Feb 2026: DynamicFlow import removed - V110 architecture replaces Dynamic Flows
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
 
 // Security middleware
@@ -538,10 +538,10 @@ router.get('/', async (req, res) => {
         logger.info(`📦 [SCENARIO EXPORT] Starting export for company ${companyId}`);
         
         // Load company and context data in parallel
-        const [company, placeholdersDoc, dynamicFlows] = await Promise.all([
+        // ☢️ NUKED Feb 2026: DynamicFlow.find() removed - V110 architecture replaces Dynamic Flows
+        const [company, placeholdersDoc] = await Promise.all([
             v2Company.findById(companyId).select('companyName tradeKey industryType').lean(),
-            CompanyPlaceholders.findOne({ companyId }).lean(),
-            DynamicFlow.find({ companyId }).lean()
+            CompanyPlaceholders.findOne({ companyId }).lean()
         ]);
         
         if (!company) {
@@ -554,7 +554,7 @@ router.get('/', async (req, res) => {
         // Build validation context
         const validationContext = {
             companyId,
-            flowIds: dynamicFlows.map(f => f._id.toString()),
+            flowIds: [], // ☢️ NUKED Feb 2026: DynamicFlow flowIds removed - V110 architecture replaces Dynamic Flows
             placeholderKeys: (placeholdersDoc?.placeholders || []).map(p => p.key)
         };
         

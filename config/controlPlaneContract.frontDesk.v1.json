@@ -395,13 +395,6 @@
       }
     },
     
-    "dynamicFlows": {
-      "description": "Dynamic conversation flows",
-      "keys": {
-        "dynamicFlow.companyFlows": { "type": "array", "required": false, "uiSection": "dynamic-flows" }
-      }
-    },
-    
     "data": {
       "description": "Data configuration - templates, scenarios, cheat sheets",
       "keys": {

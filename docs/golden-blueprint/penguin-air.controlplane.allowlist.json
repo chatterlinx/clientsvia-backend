@@ -2,14 +2,12 @@
   "version": "penguin-air-v1",
   "lastUpdated": "2024-12-22",
   "description": "Golden Blueprint allowlist for Control Plane effective config. Variables are DEPRECATED. Placeholders are CANONICAL. Anything not listed is legacy/ignored.",
-  
   "rules": {
     "STRICT_MODE": true,
     "DROP_UNKNOWN_KEYS": true,
     "LOG_LEGACY_ONCE": true,
     "BLOCK_VARIABLES_NAMESPACE": true
   },
-  
   "deprecatedNamespaces": [
     "variables",
     "callFlowEngine.bookingFields",
@@ -18,18 +16,17 @@
     "aiAgentLogic.greeting",
     "frontDeskBehavior.bookingEnabled",
     "frontDeskBehavior.loops",
-    "booking.enabled"
+    "booking.enabled",
+    "dynamicFlows"
   ],
-  
   "allowlist": {
     "meta": [
       "meta.companyId",
-      "meta.companyName", 
+      "meta.companyName",
       "meta.environment",
       "meta.tradeCategory",
       "meta.tradeCategoryId"
     ],
-    
     "placeholders": [
       "placeholders.companyName",
       "placeholders.companyType",
@@ -45,7 +42,6 @@
       "placeholders.address",
       "placeholders.license"
     ],
-    
     "connectionMessages": [
       "connectionMessages.voice.mode",
       "connectionMessages.voice.text",
@@ -53,7 +49,6 @@
       "connectionMessages.voice.realtime.text",
       "connectionMessages.voice.realtime.enabled"
     ],
-    
     "callExperience": [
       "callExperience.speechTimeout",
       "callExperience.initialTimeout",
@@ -66,7 +61,6 @@
       "callExperience.maxSilenceBeforePrompt",
       "callExperience.responseLength"
     ],
-    
     "frontDeskBehavior": [
       "frontDeskBehavior.greeting.text",
       "frontDeskBehavior.greeting.enabled",
@@ -76,17 +70,14 @@
       "frontDeskBehavior.personality.empathyLevel",
       "frontDeskBehavior.personality.urgencyDetection",
       "frontDeskBehavior.personality.conversationStyle",
-      
       "frontDeskBehavior.booking.enabled",
       "frontDeskBehavior.bookingSlots",
       "frontDeskBehavior.bookingPrompts",
       "frontDeskBehavior.bookingTemplates",
-      
       "frontDeskBehavior.loopPrevention.enabled",
       "frontDeskBehavior.loopPrevention.maxSameQuestion",
       "frontDeskBehavior.loopPrevention.onLoop",
       "frontDeskBehavior.loopPrevention.rephraseIntro",
-      
       "frontDeskBehavior.discoveryConsent.enabled",
       "frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses",
       "frontDeskBehavior.discoveryConsent.forceLLMDiscovery",
@@ -99,7 +90,6 @@
       "frontDeskBehavior.commonFirstNames",
       "frontDeskBehavior.blockPricing",
       "frontDeskBehavior.pricingDeflection",
-      
       "frontDeskBehavior.vocabulary.forbiddenPhrases",
       "frontDeskBehavior.vocabulary.preferredTerms",
       "frontDeskBehavior.policies.blockPricing",
@@ -112,47 +102,36 @@
       "frontDeskBehavior.modes.startMode",
       "frontDeskBehavior.modes.autoTransitionToBooking"
     ],
-    
     "defaultReplies": [
       "defaultReplies.notOfferedReply.quickReply",
       "defaultReplies.notOfferedReply.fullReply",
-      "defaultReplies.unknownIntentReply.quickReply", 
+      "defaultReplies.unknownIntentReply.quickReply",
       "defaultReplies.unknownIntentReply.fullReply",
       "defaultReplies.afterHoursReply.quickReply",
       "defaultReplies.afterHoursReply.fullReply",
       "defaultReplies.strictDisabledBehavior"
     ],
-    
     "callProtection": [
       "callProtection.enabled",
       "callProtection.rules"
     ],
-    
-    "dynamicFlows": [
-      "dynamicFlows.enabled",
-      "dynamicFlows.flows"
-    ],
-    
     "transfers": [
       "transfers.enabled",
       "transfers.targets"
     ],
-    
     "quickAnswers": [
       "quickAnswers.enabled",
       "quickAnswers.items"
     ]
   },
-  
   "goldenDefaults": {
-    "greeting": "Thanks for calling {{companyName}} — how can I help?",
+    "greeting": "Thanks for calling {{companyName}} \u2014 how can I help?",
     "greetingMaxWords": 10,
     "greetingMaxTTSSeconds": 3.0,
     "conversationStyle": "balanced",
     "professionalismLevel": 4,
     "empathyLevel": 4
   },
-  
   "nukeTargets": {
     "description": "Keys that should be deleted if found (not in allowlist, not bound)",
     "safeToDelete": [
@@ -175,4 +154,3 @@
     }
   }
 }
-

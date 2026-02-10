@@ -33,7 +33,7 @@ const CompanyScenarioOverride = require('../../models/CompanyScenarioOverride');
 const CompanyCategoryOverride = require('../../models/CompanyCategoryOverride');
 const CompanyResponseDefaults = require('../../models/CompanyResponseDefaults');
 const CompanyPlaceholders = require('../../models/CompanyPlaceholders');
-const DynamicFlow = require('../../models/DynamicFlow');
+// ☢️ NUKED Feb 2026: DynamicFlow import removed - V110 architecture replaces Dynamic Flows
 const { validateScenarioPlaceholders } = require('../../services/placeholders/PlaceholderRegistry');
 
 // ============================================================================
@@ -386,15 +386,14 @@ router.get('/company/:companyId', async (req, res) => {
         });
         
         // Fetch all data in parallel
+        // ☢️ NUKED Feb 2026: DynamicFlow.find() removed - V110 architecture replaces Dynamic Flows
         const [
-            dynamicFlows,
             scenarioOverrides,
             categoryOverrides,
             responseDefaults,
             placeholders,
             activeTemplates
         ] = await Promise.all([
-            DynamicFlow.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
             CompanyScenarioOverride.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
             CompanyCategoryOverride.find({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
             CompanyResponseDefaults.findOne({ companyId: new mongoose.Types.ObjectId(companyId) }).lean(),
@@ -452,7 +451,7 @@ router.get('/company/:companyId', async (req, res) => {
                 categoriesCount: categoriesExport.length,
                 scenariosCount: scenariosExport.length,
                 totalTriggers: totalTriggers,
-                dynamicFlowsCount: dynamicFlows.length
+                dynamicFlowsCount: 0 // ☢️ NUKED Feb 2026: V110 architecture replaces Dynamic Flows
             },
             
             activeTemplates: activeTemplates.map(t => ({
@@ -492,18 +491,12 @@ router.get('/company/:companyId', async (req, res) => {
                 value: p.value
             })),
             
-            dynamicFlows: dynamicFlows.map(f => ({
-                flowKey: f.flowKey,
-                name: f.name,
-                enabled: f.enabled,
-                priority: f.priority,
-                triggerCount: (f.triggers || []).length,
-                actionCount: (f.actions || []).length
-            })),
+            // ☢️ NUKED Feb 2026: dynamicFlows data removed - V110 architecture replaces Dynamic Flows
+            dynamicFlows: [],
             
             runtimeBindings: {
                 scenarioEngineWired: true,
-                dynamicFlowEngineWired: dynamicFlows.length > 0,
+                dynamicFlowEngineWired: false, // ☢️ NUKED Feb 2026: V110 architecture replaces Dynamic Flows
                 callProtectionWired: true,
                 transfersWired: true
             },
@@ -513,7 +506,7 @@ router.get('/company/:companyId', async (req, res) => {
                 hasCategories: categoriesExport.length > 0,
                 hasScenarios: scenariosExport.length > 0,
                 hasPlaceholders: (placeholders?.placeholders || []).length > 0,
-                hasDynamicFlows: dynamicFlows.length > 0
+                hasDynamicFlows: false // ☢️ NUKED Feb 2026: V110 architecture replaces Dynamic Flows
             }
         };
         
