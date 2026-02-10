@@ -4324,7 +4324,7 @@ class FrontDeskBehaviorManager {
             // Render
             const systemCount = allWords.filter(w => w.source === 'system').length;
             const companyCount = allWords.filter(w => w.source === 'company').length;
-            if (pwStats) pwStats.textContent = \`\${systemCount} system | \${companyCount} company | \${allWords.length} total\`;
+            if (pwStats) pwStats.textContent = `${systemCount} system | ${companyCount} company | ${allWords.length} total`;
             
             if (filtered.length === 0) {
                 pwBody.innerHTML = '<div style="text-align:center; padding:40px; color:#8b949e;"><span style="font-size:2rem;">🔍</span><p>No words match your filter.</p></div>';
@@ -4334,33 +4334,33 @@ class FrontDeskBehaviorManager {
             let html = '';
             for (const [category, items] of Object.entries(groups)) {
                 const meta = CATEGORY_META[category] || CATEGORY_META.other;
-                html += \`
+                html += `
                     <div style="margin-bottom:20px;">
                         <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid #21262d;">
-                            <span style="font-size:1.1rem;">\${meta.emoji}</span>
-                            <span style="color:\${meta.color}; font-weight:600; font-size:0.9rem;">\${meta.label}</span>
-                            <span style="background:#30363d; color:#8b949e; padding:2px 8px; border-radius:10px; font-size:0.7rem;">\${items.length}</span>
+                            <span style="font-size:1.1rem;">${meta.emoji}</span>
+                            <span style="color:${meta.color}; font-weight:600; font-size:0.9rem;">${meta.label}</span>
+                            <span style="background:#30363d; color:#8b949e; padding:2px 8px; border-radius:10px; font-size:0.7rem;">${items.length}</span>
                         </div>
                         <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                \`;
+                `;
                 for (const item of items) {
                     const isSystem = item.source === 'system';
-                    html += \`
-                        <div class="pw-word-chip" data-word="\${item.word}" data-source="\${item.source}" style="
+                    html += `
+                        <div class="pw-word-chip" data-word="${item.word}" data-source="${item.source}" style="
                             display:inline-flex; align-items:center; gap:6px;
-                            background:\${isSystem ? '#161b22' : '#0d419d20'}; 
-                            border:1px solid \${isSystem ? '#30363d' : '#1f6feb60'};
+                            background:${isSystem ? '#161b22' : '#0d419d20'}; 
+                            border:1px solid ${isSystem ? '#30363d' : '#1f6feb60'};
                             padding:6px 12px; border-radius:20px; font-size:0.85rem;
-                            color:\${isSystem ? '#8b949e' : '#58a6ff'};
+                            color:${isSystem ? '#8b949e' : '#58a6ff'};
                             transition:all 0.15s;
                         ">
-                            <span>\${item.word}</span>
-                            \${isSystem 
+                            <span>${item.word}</span>
+                            ${isSystem 
                                 ? '<span style="font-size:0.7rem; opacity:0.5;" title="System default — cannot be removed">🔒</span>'
-                                : \`<button class="pw-delete-word" data-word="\${item.word}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:0.9rem; padding:0 2px; line-height:1;" title="Remove this word">&times;</button>\`
+                                : `<button class="pw-delete-word" data-word="${item.word}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:0.9rem; padding:0 2px; line-height:1;" title="Remove this word">&times;</button>`
                             }
                         </div>
-                    \`;
+                    `;
                 }
                 html += '</div></div>';
             }
@@ -4412,7 +4412,7 @@ class FrontDeskBehaviorManager {
                 const allSystemWords = Object.values(SYSTEM_PROTECTED_WORDS).flat();
                 const allCompanyWords = companyProtectedWords.map(w => typeof w === 'string' ? w : w.word);
                 if (allSystemWords.includes(word) || allCompanyWords.includes(word)) {
-                    alert(\`"\${word}" is already protected.\`);
+                    alert(`"${word}" is already protected.`);
                     return;
                 }
                 
@@ -4453,9 +4453,9 @@ class FrontDeskBehaviorManager {
                     pwSaveBtn.disabled = true;
                     
                     const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-                    const res = await fetch(\`/api/admin/front-desk-behavior/\${this.companyId}\`, {
+                    const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`, {
                         method: 'PATCH',
-                        headers: { 'Authorization': \`Bearer \${token}\`, 'Content-Type': 'application/json' },
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({ sttProtectedWords: companyProtectedWords })
                     });
                     
