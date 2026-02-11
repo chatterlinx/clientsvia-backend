@@ -2981,10 +2981,12 @@ class FrontDeskBehaviorManager {
                 const lastDecisionEl = contentElement.querySelector('#fdb-triage-last-decision');
                 if (lastDecisionEl) lastDecisionEl.textContent = 'Checking...';
                 try {
-                    // Try to get latest triage decision from raw events
-                    const resp = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`);
+                    const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+                    const resp = await fetch('/api/admin/front-desk-behavior/' + this.companyId, {
+                        headers: { 'Authorization': 'Bearer ' + token }
+                    });
                     const data = await resp.json();
-                    const tc = data?.config?.triage || {};
+                    const tc = (data && data.config && data.config.triage) ? data.config.triage : {};
                     if (lastDecisionEl) {
                         lastDecisionEl.textContent = tc.enabled ? 'Active (V110)' : 'Disabled';
                         lastDecisionEl.style.color = tc.enabled ? '#3fb950' : '#da3636';
