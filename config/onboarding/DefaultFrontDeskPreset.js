@@ -393,18 +393,17 @@ const DEFAULT_BOOKING_SLOTS = [
         slotId: 'phone',
         label: 'Phone Number',
         type: 'phone',
-        question: "What's the best number to reach you?",
+        question: "What's the best phone number to reach you?",
         required: true,
         order: 1,
         enabled: true,
         confirmBack: true,
-        confirmPrompt: "And can we use this number for callbacks?",
+        confirmPrompt: "Just to confirm, that's {value}, correct?",
         // ─────────────────────────────────────────────────────────────
-        // V59/V116: ALL phone-related questions - NO FALLBACKS IN RUNTIME
-        // V116: Human-like — don't recite full number back, just ask casually
+        // V59: ALL phone-related questions - NO FALLBACKS IN RUNTIME
         // ─────────────────────────────────────────────────────────────
         offerCallerId: true,
-        callerIdPrompt: "And is this number you're calling from a good one for text confirmations, or would you prefer a different one?",
+        callerIdPrompt: "I see you're calling from {callerId} — is that a good number for text confirmations, or would you prefer a different one?",
         callerIdAcceptPhrases: ['yes', 'yeah', 'that works', 'sure', 'correct', "that's fine", 'yep'],
         callerIdDeclinePhrases: ['no', 'different', 'another', 'not that one', 'use a different'],
         // Breakdown prompts for unclear input
