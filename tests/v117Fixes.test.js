@@ -157,53 +157,111 @@ describe('V117 Fix 3: Time prompt unification', () => {
 // Since safeSetSlot is a module-level function (not exported), we test via
 // the static method path.
 
-describe('V117 Fix 4: lastName cleanup via BookingFlowRunner.extractValue', () => {
+describe('V118: Policy-driven name extraction via BookingFlowRunner.extractValue', () => {
     const BookingFlowRunnerForNames = require('../services/engine/booking/BookingFlowRunner');
     
-    const lastNameStep = { id: 'lastName', type: 'lastName', label: 'Last Name' };
+    // V118: Step with nameExtractionPolicy from V110 slot registry
+    const lastNameStep = { 
+        id: 'lastName', 
+        type: 'lastName', 
+        label: 'Last Name',
+        options: {
+            nameExtractionPolicy: {
+                singleTokenOnly: true,
+                candidateStrategy: 'rightmost_token',
+                stripPhrases: ["that's", "thats", "its", "it's", "my", "last", "name", "is",
+                    "yeah", "yes", "yep", "sure", "ok", "okay", "um", "uh", "well", "so", "actually", "the"],
+                stripLeadingPunctuation: true,
+                stripTrailingPunctuation: true,
+                minLength: 2,
+                maxLength: 25,
+                mustBeAlpha: true,
+                rejectIfStopWord: true
+            }
+        }
+    };
+    const firstNameStep = {
+        id: 'firstName',
+        type: 'firstName',
+        label: 'First Name',
+        options: {
+            nameExtractionPolicy: {
+                singleTokenOnly: true,
+                candidateStrategy: 'rightmost_token',
+                stripPhrases: ["that's", "thats", "its", "it's", "my", "first", "name", "is",
+                    "yeah", "yes", "yep", "sure", "ok", "okay", "um", "uh", "well", "so", "actually", "the"],
+                stripLeadingPunctuation: true,
+                stripTrailingPunctuation: true,
+                minLength: 2,
+                maxLength: 25,
+                mustBeAlpha: true,
+                rejectIfStopWord: true
+            }
+        }
+    };
     const mockState = {};
     const mockCompany = {};
 
-    test('extractValue cleans ", that\'s walter." → "Walter"', () => {
+    test('", that\'s walter." → "Walter" (strip punctuation + framing)', () => {
         const result = BookingFlowRunnerForNames.extractValue(", that's walter.", lastNameStep, mockState, mockCompany);
-        if (result.isValid) {
-            expect(result.value.toLowerCase()).toBe('walter');
-        }
-        // If extractor fails, that's also acceptable — safeSetSlot will clean it
+        expect(result.isValid).toBe(true);
+        expect(result.value).toBe('Walter');
     });
 
-    test('extractValue cleans "my last name is miller" → "Miller"', () => {
+    test('"my last name is miller" → "Miller"', () => {
         const result = BookingFlowRunnerForNames.extractValue('my last name is miller', lastNameStep, mockState, mockCompany);
         expect(result.isValid).toBe(true);
-        expect(result.value.toLowerCase()).toBe('miller');
+        expect(result.value).toBe('Miller');
     });
 
-    test('extractValue cleans "it\'s johnson" → "Johnson"', () => {
+    test('"it\'s johnson" → "Johnson"', () => {
         const result = BookingFlowRunnerForNames.extractValue("it's johnson", lastNameStep, mockState, mockCompany);
         expect(result.isValid).toBe(true);
-        expect(result.value.toLowerCase()).toBe('johnson');
+        expect(result.value).toBe('Johnson');
     });
 
-    test('extractValue cleans "yeah it\'s baker" → "Baker"', () => {
+    test('"yeah it\'s baker" → "Baker"', () => {
         const result = BookingFlowRunnerForNames.extractValue("yeah it's baker", lastNameStep, mockState, mockCompany);
         expect(result.isValid).toBe(true);
-        expect(result.value.toLowerCase()).toBe('baker');
+        expect(result.value).toBe('Baker');
     });
 
-    test('extractValue rejects pure stop words "yes"', () => {
+    test('"yes" → rejected (stop word)', () => {
         const result = BookingFlowRunnerForNames.extractValue('yes', lastNameStep, mockState, mockCompany);
         expect(result.isValid).toBe(false);
     });
 
-    test('extractValue extracts "well" from "um, uh, well" (safeSetSlot will filter)', () => {
-        // "well" passes the name extractor (could be a surname), but safeSetSlot's
-        // V117 normalizer will strip it as a stop word during write-time.
-        // Here we just verify the extractor doesn't crash on garbage input.
+    test('"um, uh, well" → rejected (all stop words after V118)', () => {
         const result = BookingFlowRunnerForNames.extractValue('um, uh, well', lastNameStep, mockState, mockCompany);
-        // Either rejected or extracted "Well" — both are acceptable at this layer
-        if (result.isValid) {
-            expect(typeof result.value).toBe('string');
-        }
+        expect(result.isValid).toBe(false);
+    });
+
+    test('"Garcia" → "Garcia" (clean single token passes through)', () => {
+        const result = BookingFlowRunnerForNames.extractValue('Garcia', lastNameStep, mockState, mockCompany);
+        expect(result.isValid).toBe(true);
+        expect(result.value).toBe('Garcia');
+    });
+
+    test('"my first name is mark" → "Mark" (firstName extraction)', () => {
+        const result = BookingFlowRunnerForNames.extractValue('my first name is mark', firstNameStep, mockState, mockCompany);
+        expect(result.isValid).toBe(true);
+        expect(result.value).toBe('Mark');
+    });
+
+    test('single word "walter" → "Walter" (title-cased)', () => {
+        const result = BookingFlowRunnerForNames.extractValue('walter', lastNameStep, mockState, mockCompany);
+        expect(result.isValid).toBe(true);
+        expect(result.value).toBe('Walter');
+    });
+
+    test('"O\'Neill" → accepted (apostrophe is valid in names)', () => {
+        const result = BookingFlowRunnerForNames.extractValue("O'Neill", lastNameStep, mockState, mockCompany);
+        expect(result.isValid).toBe(true);
+    });
+
+    test('empty string → rejected', () => {
+        const result = BookingFlowRunnerForNames.extractValue('', lastNameStep, mockState, mockCompany);
+        expect(result.isValid).toBe(false);
     });
 });
 

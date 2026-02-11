@@ -41,6 +41,28 @@ const DEFAULT_SLOT_REGISTRY = {
                 source: ['utterance'], 
                 useFirstNameList: true,
                 confidenceMin: 0.72
+            },
+            // ═══════════════════════════════════════════════════════════════
+            // V118: NAME EXTRACTION POLICY — UI-truth for how names are parsed
+            // ═══════════════════════════════════════════════════════════════
+            // This is NOT a confidence booster. This defines the EXTRACTION
+            // CONTRACT: what the extractor MUST do before it even looks at
+            // the name lists. The lists score AFTER extraction.
+            // ═══════════════════════════════════════════════════════════════
+            nameExtractionPolicy: {
+                singleTokenOnly: true,              // Only accept ONE word as the name
+                candidateStrategy: 'rightmost_token', // Take rightmost viable word
+                stripPhrases: [
+                    "that's", "thats", "its", "it's", "my", "first", "name", "is",
+                    "yeah", "yes", "yep", "sure", "ok", "okay", "um", "uh", "well",
+                    "so", "actually", "i'm", "call me", "the"
+                ],
+                stripLeadingPunctuation: true,      // Remove leading , . ; : etc.
+                stripTrailingPunctuation: true,      // Remove trailing . , ! ? etc.
+                minLength: 2,                        // Reject tokens shorter than 2 chars
+                maxLength: 25,                       // Reject tokens longer than 25 chars
+                mustBeAlpha: true,                   // Only letters, hyphens, apostrophes
+                rejectIfStopWord: true               // Hard-reject affirmations as names
             }
         },
         {
@@ -53,6 +75,22 @@ const DEFAULT_SLOT_REGISTRY = {
             extraction: { 
                 source: ['utterance'],
                 confidenceMin: 0.72
+            },
+            // V118: Same extraction policy as firstName (see above for docs)
+            nameExtractionPolicy: {
+                singleTokenOnly: true,
+                candidateStrategy: 'rightmost_token',
+                stripPhrases: [
+                    "that's", "thats", "its", "it's", "my", "last", "name", "is",
+                    "yeah", "yes", "yep", "sure", "ok", "okay", "um", "uh", "well",
+                    "so", "actually", "the"
+                ],
+                stripLeadingPunctuation: true,
+                stripTrailingPunctuation: true,
+                minLength: 2,
+                maxLength: 25,
+                mustBeAlpha: true,
+                rejectIfStopWord: true
             }
         },
         {

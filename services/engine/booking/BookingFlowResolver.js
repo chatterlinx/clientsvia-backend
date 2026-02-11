@@ -536,7 +536,9 @@ class BookingFlowResolver {
         // ═══════════════════════════════════════════════════════════════════
         // NAME OPTIONS - Full name handling, spelling confirmation, etc.
         // ═══════════════════════════════════════════════════════════════════
-        if (slot.type === 'name') {
+        const isNameSlot = slot.type === 'name' || slot.type === 'name_first' || slot.type === 'name_last' 
+            || slot.id === 'name' || slot.id === 'lastName' || slot.id === 'firstName';
+        if (isNameSlot) {
             options.askFullName = slot.askFullName;
             options.askMissingNamePart = slot.askMissingNamePart;
             options.useFirstNameOnly = slot.useFirstNameOnly;
@@ -546,6 +548,11 @@ class BookingFlowResolver {
             // V92: Spelling confirmation
             options.confirmSpelling = slot.confirmSpelling;
             options.helperNote = slot.helperNote;
+            // V118: Name extraction policy — defines HOW names are parsed
+            // This is the extraction contract: singleTokenOnly, candidateStrategy, etc.
+            if (slot.nameExtractionPolicy) {
+                options.nameExtractionPolicy = slot.nameExtractionPolicy;
+            }
         }
         
         // Phone options

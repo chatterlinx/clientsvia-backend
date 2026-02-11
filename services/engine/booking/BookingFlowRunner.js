@@ -247,74 +247,68 @@ function safeSetSlot(state, slotName, value, options = {}) {
         const isCurrentSlot = slotName === currentFieldKey || isNameRelated;
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V117: GUARD + NORMALIZER — lastName must be a clean, plausible name.
+        // V118: WRITE-TIME NAME GUARD — reject anything that isn't a clean token
         // ═══════════════════════════════════════════════════════════════════════
-        // Applies on ANY step writing to lastName (not just 'name' step).
-        // Strips framing phrases like "that's", "my last name is", trailing
-        // punctuation, and validates the result is a plausible name.
+        // The V118 extraction pipeline (extractSingleNameToken → scoreNameCandidate)
+        // should have already produced a single, clean, title-cased name.
+        // This guard is a LAST LINE OF DEFENSE — if something slipped through
+        // (e.g. via a code path that bypasses the extractor), reject it.
         //
-        // BUG FIX: V116 only checked currentFieldKey === 'name', so the guard
-        // was bypassed on the dedicated lastName step. Trace proved
-        // ", that's walter." was stored as-is.
+        // Rules:
+        //   - Must be 1-2 words (hyphenated names like "O'Brien" count as 1)
+        //   - Must be 2-25 chars
+        //   - Must not contain stop words
+        //   - Must be alpha only (letters, hyphens, apostrophes)
         // ═══════════════════════════════════════════════════════════════════════
         if (slotName === 'lastName' || slotName === 'firstName') {
-            let cleanedValue = (typeof value === 'string') ? value.trim() : '';
+            const trimmedValue = (typeof value === 'string') ? value.trim() : '';
             
-            // Step 1: Strip leading punctuation/garbage
-            cleanedValue = cleanedValue.replace(/^[,.\s\-;:!?"']+/, '').trim();
-            
-            // Step 2: Strip framing phrases
-            cleanedValue = cleanedValue
-                .replace(/^(?:my\s+(?:last|first)\s+name\s+is|it's|its|that's|that\s+is|i'm|i\s+am|call\s+me|yes|yeah|yep|um|uh|so|well|actually)\s+/i, '')
-                .trim();
-            
-            // Step 3: Strip trailing punctuation
-            cleanedValue = cleanedValue.replace(/[.,!?;:]+$/, '').trim();
-            
-            // Step 4: Extract just the name token (take the last word if multi-word)
-            const nameTokens = cleanedValue.split(/\s+/)
-                .filter(w => /^[A-Za-z][A-Za-z\-']*$/.test(w))
-                .filter(w => w.length >= 2)
-                .filter(w => !/^(my|first|last|name|is|the|a|an|yes|no|that|this|good|number|please|it|its|so|well|um|uh|and|or|but)$/i.test(w));
-            
-            if (nameTokens.length === 0) {
-                logger.warn('[SAFE SET SLOT] V117: lastName/firstName rejected — no viable name token', {
-                    rejectedSlot: slotName,
-                    currentStep: currentStepId,
-                    rawValue: value.substring(0, 40),
-                    cleanedValue: cleanedValue.substring(0, 40),
-                    reason: 'no_name_token'
-                });
-                return { accepted: false, reason: 'no_name_token' };
-            }
-            
-            // For lastName, take the LAST viable token ("that's walter" → "walter")
-            // For firstName, take the FIRST viable token
-            const selectedToken = slotName === 'lastName' 
-                ? nameTokens[nameTokens.length - 1] 
-                : nameTokens[0];
-            
-            // Title case
-            const titleCased = selectedToken.charAt(0).toUpperCase() + selectedToken.slice(1).toLowerCase();
-            
-            // Validate: must be 2-25 chars, 1-2 words
-            if (titleCased.length > 25) {
-                logger.warn('[SAFE SET SLOT] V117: lastName rejected — too long after cleanup', {
-                    rejectedSlot: slotName,
-                    attemptedValue: titleCased,
-                    reason: 'not_plausible_last_name'
-                });
-                return { accepted: false, reason: 'not_plausible_last_name' };
-            }
-            
-            // Replace value with cleaned version
-            if (titleCased !== value) {
-                logger.info('[SAFE SET SLOT] V117: Name normalized', {
+            // Reject multi-word values (more than 2 space-separated tokens)
+            const wordCount = trimmedValue.split(/\s+/).length;
+            if (wordCount > 2) {
+                logger.warn('[SAFE SET SLOT] V118: Name rejected — multi-word value (extraction bypass?)', {
                     slotName,
-                    rawValue: value.substring(0, 40),
-                    normalized: titleCased
+                    attemptedValue: trimmedValue.substring(0, 40),
+                    wordCount,
+                    reason: 'multi_word_name'
                 });
+                return { accepted: false, reason: 'multi_word_name' };
             }
+            
+            // Reject values with punctuation that shouldn't be in a name
+            if (/[,;:!?"()]/.test(trimmedValue)) {
+                logger.warn('[SAFE SET SLOT] V118: Name rejected — contains invalid punctuation', {
+                    slotName,
+                    attemptedValue: trimmedValue.substring(0, 40),
+                    reason: 'invalid_punctuation'
+                });
+                return { accepted: false, reason: 'invalid_punctuation' };
+            }
+            
+            // Reject too short or too long
+            if (trimmedValue.length < 2 || trimmedValue.length > 25) {
+                logger.warn('[SAFE SET SLOT] V118: Name rejected — length out of range', {
+                    slotName,
+                    length: trimmedValue.length,
+                    reason: 'name_length_invalid'
+                });
+                return { accepted: false, reason: 'name_length_invalid' };
+            }
+            
+            // Reject stop words
+            if (NAME_HARD_STOP_WORDS.has(trimmedValue.toLowerCase())) {
+                logger.warn('[SAFE SET SLOT] V118: Name rejected — stop word', {
+                    slotName,
+                    attemptedValue: trimmedValue,
+                    reason: 'stop_word'
+                });
+                return { accepted: false, reason: 'stop_word' };
+            }
+            
+            // Ensure title case
+            const titleCased = trimmedValue.split(/\s+/)
+                .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                .join(' ');
             value = titleCased;
         }
         
@@ -653,35 +647,46 @@ const SlotExtractors = {
     
     /**
      * =========================================================================
-     * V113: Extract firstName with multi-signal scoring
+     * V118: Extract firstName — policy-driven single-token extraction
      * =========================================================================
-     * 
-     * Uses rightmost-token extraction + confidence scoring.
-     * Returns { value, confidence, needsConfirmation } or just the value string.
+     *
+     * PIPELINE:
+     *   1. extractSingleNameToken() — reads nameExtractionPolicy from V110
+     *      slot registry, strips framing, returns ONE clean lowercase token
+     *   2. scoreNameCandidate() — scores the token using 900 first / 50K last
+     *      name lists, returns confidence + needsConfirmation flag
+     *
+     * The name lists are a CONFIDENCE BOOSTER, not a parser.
+     * The parser is extractSingleNameToken(). The lists come after.
+     * =========================================================================
      */
     firstName: (input, step, context = {}) => {
         if (!input) return null;
         
-        // Build name sets from context
+        // V118: Read extraction policy from V110 slot registry (via BookingFlowResolver)
+        const policy = step?.options?.nameExtractionPolicy || {};
+        
+        // STEP 1: Extract single name token using policy
+        const token = extractSingleNameToken(input, 'firstName', policy);
+        if (!token) {
+            logger.debug('[SLOT EXTRACTOR] firstName: V118 extractSingleNameToken returned null', {
+                input: input.substring(0, 30)
+            });
+            return null;
+        }
+        
+        // STEP 2: Score using name lists (confidence booster, NOT a parser)
         const firstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
         const lastNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || [];
         const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
         const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
         
-        // Extract candidate using rightmost-token strategy
-        const extraction = extractNameCandidate(input, 'firstName');
-        if (!extraction) {
-            logger.debug('[SLOT EXTRACTOR] firstName: No candidate extracted', { input: input.substring(0, 30) });
-            return null;
-        }
-        
-        // Score the candidate
-        const scoreResult = scoreNameCandidate(extraction.candidate, 'firstName', { firstNamesSet, lastNamesSet });
+        const scoreResult = scoreNameCandidate(token, 'firstName', { firstNamesSet, lastNamesSet });
         
         if (scoreResult.rejected) {
-            logger.warn('[SLOT EXTRACTOR] ❌ firstName rejected', {
+            logger.warn('[SLOT EXTRACTOR] ❌ firstName rejected by scorer', {
                 input: input.substring(0, 30),
-                candidate: extraction.candidate,
+                candidate: token,
                 reason: scoreResult.reason,
                 breakdown: scoreResult.breakdown
             });
@@ -692,7 +697,8 @@ const SlotExtractors = {
             input: input.substring(0, 30),
             extracted: scoreResult.candidate,
             score: scoreResult.score.toFixed(2),
-            needsConfirmation: scoreResult.needsConfirmation
+            needsConfirmation: scoreResult.needsConfirmation,
+            policySource: policy.singleTokenOnly !== undefined ? 'V110' : 'defaults'
         });
         
         // Store metadata for confirmation flow
@@ -711,36 +717,40 @@ const SlotExtractors = {
     
     /**
      * =========================================================================
-     * V113: Extract lastName with multi-signal scoring
+     * V118: Extract lastName — policy-driven single-token extraction
      * =========================================================================
-     * 
-     * Uses rightmost-token extraction + confidence scoring.
-     * Handles: "yeah it's miller" → extracts "Miller" (not "yeah")
-     * Handles: "my last name is miller" → extracts "Miller"
+     *
+     * Same pipeline as firstName. See docs above.
+     * Uses rightmost_token strategy by default (humans say name last).
+     * =========================================================================
      */
     lastName: (input, step, context = {}) => {
         if (!input) return null;
         
-        // Build name sets from context
+        // V118: Read extraction policy from V110 slot registry
+        const policy = step?.options?.nameExtractionPolicy || {};
+        
+        // STEP 1: Extract single name token using policy
+        const token = extractSingleNameToken(input, 'lastName', policy);
+        if (!token) {
+            logger.debug('[SLOT EXTRACTOR] lastName: V118 extractSingleNameToken returned null', {
+                input: input.substring(0, 30)
+            });
+            return null;
+        }
+        
+        // STEP 2: Score using name lists
         const firstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
         const lastNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || [];
         const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
         const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
         
-        // Extract candidate using rightmost-token strategy
-        const extraction = extractNameCandidate(input, 'lastName');
-        if (!extraction) {
-            logger.debug('[SLOT EXTRACTOR] lastName: No candidate extracted', { input: input.substring(0, 30) });
-            return null;
-        }
-        
-        // Score the candidate
-        const scoreResult = scoreNameCandidate(extraction.candidate, 'lastName', { firstNamesSet, lastNamesSet });
+        const scoreResult = scoreNameCandidate(token, 'lastName', { firstNamesSet, lastNamesSet });
         
         if (scoreResult.rejected) {
-            logger.warn('[SLOT EXTRACTOR] ❌ lastName rejected', {
+            logger.warn('[SLOT EXTRACTOR] ❌ lastName rejected by scorer', {
                 input: input.substring(0, 30),
-                candidate: extraction.candidate,
+                candidate: token,
                 reason: scoreResult.reason,
                 breakdown: scoreResult.breakdown
             });
@@ -751,7 +761,8 @@ const SlotExtractors = {
             input: input.substring(0, 30),
             extracted: scoreResult.candidate,
             score: scoreResult.score.toFixed(2),
-            needsConfirmation: scoreResult.needsConfirmation
+            needsConfirmation: scoreResult.needsConfirmation,
+            policySource: policy.singleTokenOnly !== undefined ? 'V110' : 'defaults'
         });
         
         // Store metadata for confirmation flow
@@ -1210,7 +1221,10 @@ function cleanName(name) {
 const NAME_HARD_STOP_WORDS = new Set([
     'yeah', 'yes', 'yep', 'yup', 'ok', 'okay', 'sure', 'right', 'correct',
     'no', 'nope', 'nah', 'uh', 'um', 'hmm', 'hm', 'ah', 'oh', 'like',
-    'hello', 'hi', 'hey', 'thanks', 'thank', 'please', 'bye', 'goodbye'
+    'hello', 'hi', 'hey', 'thanks', 'thank', 'please', 'bye', 'goodbye',
+    'well', 'so', 'actually', 'and', 'or', 'but', 'the', 'a', 'an',
+    'my', 'your', 'it', 'its', 'this', 'that', 'is', 'was', 'good',
+    'number', 'first', 'last', 'name'
 ]);
 
 // Affirmation patterns to strip from beginning of response
@@ -1223,6 +1237,138 @@ const NAME_ANSWER_PATTERNS = [
     /(?:i'm|i\s+am|call\s+me)\s+(\w+)/i,
     /(?:the\s+(?:last|first)?\s*name\s+is)\s+(\w+)/i
 ];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * V118: POLICY-DRIVEN NAME TOKEN EXTRACTOR
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Reads nameExtractionPolicy from the V110 slot registry (passed through
+ * step.options.nameExtractionPolicy by BookingFlowResolver).
+ *
+ * CONTRACT:
+ *   Input:  raw STT utterance (e.g. ", that's walter.")
+ *   Output: single clean name token (e.g. "walter") or null
+ *
+ * This function is a PARSER, not a scorer. It does not use name lists.
+ * Name lists are used AFTER this function by scoreNameCandidate().
+ *
+ * If no policy is provided, applies sensible defaults (singleTokenOnly=true,
+ * rightmost_token strategy, standard phrase stripping).
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+function extractSingleNameToken(rawInput, nameType, policy = {}) {
+    if (!rawInput || typeof rawInput !== 'string') return null;
+
+    // ─── Read policy (V110 truth) with hardcoded defaults ───
+    const singleTokenOnly = policy.singleTokenOnly !== false;  // Default: true
+    const strategy = policy.candidateStrategy || 'rightmost_token';
+    const customStripPhrases = Array.isArray(policy.stripPhrases) ? policy.stripPhrases : null;
+    const stripLeadingPunct = policy.stripLeadingPunctuation !== false;
+    const stripTrailingPunct = policy.stripTrailingPunctuation !== false;
+    const minLen = policy.minLength || 2;
+    const maxLen = policy.maxLength || 25;
+    const mustBeAlpha = policy.mustBeAlpha !== false;
+    const rejectStopWord = policy.rejectIfStopWord !== false;
+
+    let text = rawInput;
+
+    // ─── STEP 1: Strip leading/trailing punctuation ───
+    if (stripLeadingPunct) {
+        text = text.replace(/^[,.\s;:!?"'\-]+/, '');
+    }
+    if (stripTrailingPunct) {
+        text = text.replace(/[,.\s;:!?"'\-]+$/, '');
+    }
+    text = text.trim();
+    if (!text) return null;
+
+    // ─── STEP 2: Try explicit name-answer patterns first ───
+    // "my last name is garcia" → "garcia"
+    // "that's walter" → "walter"
+    for (const pattern of NAME_ANSWER_PATTERNS) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+            const candidate = match[1].trim().replace(/[.,!?;:]+$/, '');
+            if (candidate.length >= minLen && !NAME_HARD_STOP_WORDS.has(candidate.toLowerCase())) {
+                logger.debug('[V118 NAME TOKEN] Matched explicit pattern', {
+                    pattern: pattern.source.substring(0, 40),
+                    candidate,
+                    nameType
+                });
+                return candidate.toLowerCase();
+            }
+        }
+    }
+
+    // ─── STEP 3: Strip phrases (from policy or defaults) ───
+    if (customStripPhrases) {
+        // Build regex from policy phrases — sorted longest-first to avoid partial matches
+        const sorted = [...customStripPhrases].sort((a, b) => b.length - a.length);
+        const escaped = sorted.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const phraseRegex = new RegExp(`^(?:${escaped.join('|')})\\s*`, 'i');
+        // Apply repeatedly (handles "yeah that's" → strip "yeah" → strip "that's")
+        let prevText;
+        do {
+            prevText = text;
+            text = text.replace(phraseRegex, '').trim();
+        } while (text !== prevText && text.length > 0);
+    } else {
+        // Default: use AFFIRMATION_PATTERNS
+        text = text.replace(AFFIRMATION_PATTERNS, '').trim();
+    }
+
+    // Strip any remaining leading/trailing punctuation after phrase stripping
+    text = text.replace(/^[,.\s;:!?"'\-]+/, '').replace(/[,.\s;:!?"'\-]+$/, '').trim();
+    if (!text) return null;
+
+    // ─── STEP 4: Split into tokens, filter viable name candidates ───
+    const tokens = text.split(/\s+/).filter(w => {
+        // Must be alpha (with hyphens/apostrophes allowed)
+        if (mustBeAlpha && !/^[A-Za-z][A-Za-z\-']*$/.test(w)) return false;
+        // Must meet length requirements
+        if (w.length < minLen || w.length > maxLen) return false;
+        // Must not be a stop word
+        if (rejectStopWord && NAME_HARD_STOP_WORDS.has(w.toLowerCase())) return false;
+        return true;
+    });
+
+    if (tokens.length === 0) {
+        logger.debug('[V118 NAME TOKEN] No viable tokens after filtering', {
+            rawInput: rawInput.substring(0, 40),
+            nameType
+        });
+        return null;
+    }
+
+    // ─── STEP 5: Pick candidate based on strategy ───
+    let candidate;
+    if (strategy === 'rightmost_token') {
+        candidate = tokens[tokens.length - 1];
+    } else if (strategy === 'leftmost_token') {
+        candidate = tokens[0];
+    } else {
+        // Default to rightmost
+        candidate = tokens[tokens.length - 1];
+    }
+
+    // ─── STEP 6: Enforce singleTokenOnly ───
+    // Even if multiple tokens survived filtering, we only return ONE
+    if (singleTokenOnly) {
+        candidate = candidate.split(/\s+/)[0]; // Paranoia guard
+    }
+
+    logger.info('[V118 NAME TOKEN] ✅ Extracted', {
+        rawInput: rawInput.substring(0, 40),
+        candidate,
+        nameType,
+        strategy,
+        tokenCount: tokens.length,
+        policySource: policy.singleTokenOnly !== undefined ? 'V110_SLOT_REGISTRY' : 'defaults'
+    });
+
+    return candidate.toLowerCase();
+}
 
 /**
  * V113: Score a name candidate using multiple signals
