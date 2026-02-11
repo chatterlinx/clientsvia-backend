@@ -1046,7 +1046,7 @@ OUTPUT FORMAT (JSON only, no markdown):
         "Alright, {callerName}. We'll get a technician out. Morning or afternoon?",
         "I understand, {callerName}. Let's get you on the schedule. What day works best?",
         "Okay, {callerName}. We can have someone out today or tomorrow. Which works better?",
-        "Sounds good, {callerName}. When would you like us to come by?"
+        "Sorry to hear that, {callerName}. Let's get someone out to help. When would you like us to come by?"
     ],
     
     "fullReplies_noName": [
@@ -1054,7 +1054,7 @@ OUTPUT FORMAT (JSON only, no markdown):
         "Alright. We'll get a technician out. Morning or afternoon?",
         "I understand. Let's get you on the schedule. What day works best?",
         "Okay. We can have someone out today or tomorrow. Which works better?",
-        "Sounds good. When would you like us to come by?"
+        "Sorry to hear that. Let's get someone out to help. When would you like us to come by?"
     ],
     
     "bookingIntent": false,

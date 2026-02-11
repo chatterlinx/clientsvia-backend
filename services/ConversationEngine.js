@@ -5943,28 +5943,54 @@ async function processTurn({
                 const hasDetailedIssue = /not (cool|heat|work)|broken|problem|issue|temperature|thermostat|leak|noise|smell/i.test(userText);
                 const useFullReply = fullReplies.length > 0 && (wordCount > 30 || (wordCount > 15 && hasDetailedIssue));
                 
+                // ═══════════════════════════════════════════════════════════════
+                // V114 FIX: Filter inappropriate responses for problem descriptions
+                // ═══════════════════════════════════════════════════════════════
+                // PROBLEM: "Sounds good" is appropriate for confirmations, NOT for
+                // when a caller describes a problem. Saying "Sounds good" when
+                // someone says "My AC is broken" is tone-deaf and insulting.
+                //
+                // SOLUTION: When caller describes a problem (hasDetailedIssue),
+                // filter out replies starting with positive affirmation phrases
+                // that imply the problem is "good".
+                // ═══════════════════════════════════════════════════════════════
+                const inappropriateForProblems = /^(sounds? good|great!?|perfect!?|wonderful!?|awesome!?)/i;
+                
+                const filterInappropriate = (replies, isForProblem) => {
+                    if (!isForProblem || !replies || replies.length <= 1) return replies;
+                    const filtered = replies.filter(r => {
+                        const text = typeof r === 'string' ? r : r?.text;
+                        return !inappropriateForProblems.test((text || '').trim());
+                    });
+                    // If ALL replies are inappropriate, return original (better than nothing)
+                    return filtered.length > 0 ? filtered : replies;
+                };
+                
+                const filteredQuickReplies = filterInappropriate(quickReplies, hasDetailedIssue);
+                const filteredFullReplies = filterInappropriate(fullReplies, hasDetailedIssue);
+                
                 let selectedReply = null;
                 
                 if (useFullReply) {
                     // Caller provided detailed description - use thorough fullReply
-                    const idx = Math.floor(Math.random() * fullReplies.length);
-                    selectedReply = typeof fullReplies[idx] === 'string' 
-                        ? fullReplies[idx] 
-                        : fullReplies[idx]?.text;
-                    log('📋 V82: Using FULL reply for detailed input', { wordCount, hasDetailedIssue });
-                } else if (quickReplies.length > 0) {
+                    const idx = Math.floor(Math.random() * filteredFullReplies.length);
+                    selectedReply = typeof filteredFullReplies[idx] === 'string' 
+                        ? filteredFullReplies[idx] 
+                        : filteredFullReplies[idx]?.text;
+                    log('📋 V82: Using FULL reply for detailed input', { wordCount, hasDetailedIssue, filteredOut: fullReplies.length - filteredFullReplies.length });
+                } else if (filteredQuickReplies.length > 0) {
                     // Simple/short input - use quickReply
-                    const idx = Math.floor(Math.random() * quickReplies.length);
-                    selectedReply = typeof quickReplies[idx] === 'string' 
-                        ? quickReplies[idx] 
-                        : quickReplies[idx]?.text;
-                    log('⚡ V82: Using QUICK reply for simple input', { wordCount, hasDetailedIssue });
-                } else if (fullReplies.length > 0) {
+                    const idx = Math.floor(Math.random() * filteredQuickReplies.length);
+                    selectedReply = typeof filteredQuickReplies[idx] === 'string' 
+                        ? filteredQuickReplies[idx] 
+                        : filteredQuickReplies[idx]?.text;
+                    log('⚡ V82: Using QUICK reply for simple input', { wordCount, hasDetailedIssue, filteredOut: quickReplies.length - filteredQuickReplies.length });
+                } else if (filteredFullReplies.length > 0) {
                     // No quickReplies available, use fullReply as fallback
-                    const idx = Math.floor(Math.random() * fullReplies.length);
-                    selectedReply = typeof fullReplies[idx] === 'string' 
-                        ? fullReplies[idx] 
-                        : fullReplies[idx]?.text;
+                    const idx = Math.floor(Math.random() * filteredFullReplies.length);
+                    selectedReply = typeof filteredFullReplies[idx] === 'string' 
+                        ? filteredFullReplies[idx] 
+                        : filteredFullReplies[idx]?.text;
                 }
                 
                 if (selectedReply && selectedReply.trim()) {

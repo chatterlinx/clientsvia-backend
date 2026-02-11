@@ -90,7 +90,7 @@ const GOLD_STANDARD_ADDITIONS = {
             "Wonderful — let's get you on the schedule! I'll need a few pieces of information: your name, address, phone number, and what day and time work best for you. We offer morning and afternoon windows, and we'll call before the technician arrives so you're not waiting around. What day were you thinking?",
             "I'm glad you're ready to schedule! To get you booked, I'll need your name, service address, contact number, and your preferred day and time. Do you have a preference for morning or afternoon? We'll give you a time window and call ahead before arriving.",
             "Let's do it! I'll grab your information and find a time that works. I need your name, the address where service is needed, a good phone number to reach you, and when you'd like us to come out. Any day this week work for you? Morning or afternoon?",
-            "Sounds good — let's get this scheduled right now. I'll need your full name, the service address, your phone number, and what day works best. We can usually accommodate same-day or next-day for urgent issues. What's your availability looking like?"
+            "Absolutely — let's get this scheduled right now. I'll need your full name, the service address, your phone number, and what day works best. We can usually accommodate same-day or next-day for urgent issues. What's your availability looking like?"
         ]
     },
 
