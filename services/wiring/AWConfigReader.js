@@ -332,6 +332,8 @@ const AW_PATH_MAPPINGS = {
     'frontDesk.bookingOutcome': 'aiAgentSettings.frontDeskBehavior.bookingOutcome',
     'frontDesk.bookingAbortPhrases': 'aiAgentSettings.frontDeskBehavior.bookingAbortPhrases',
     'frontDesk.commonFirstNames': 'aiAgentSettings.frontDeskBehavior.commonFirstNames',
+    // V111: Common Last Names — US Census top 50K surnames
+    'frontDesk.commonLastNames': 'aiAgentSettings.frontDeskBehavior.commonLastNames',
     // V111: Name Rejection Words — company-specific words rejected as names
     'frontDesk.nameStopWords': 'aiAgentSettings.frontDeskBehavior.nameStopWords',
     

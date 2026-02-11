@@ -2808,6 +2808,21 @@ const companySchema = new mongoose.Schema({
             },
             
             // ═══════════════════════════════════════════════════════════════
+            // V111: COMMON LAST NAMES - US Census top 50,000 surnames
+            // ═══════════════════════════════════════════════════════════════
+            // Source: US Census Bureau 2010 Decennial Census (Public Domain)
+            // Coverage: ~83% of the US population
+            //
+            // Used for last name recognition and STT fuzzy-match validation.
+            // Default seed loaded from data/seeds/censusLastNames.js.
+            // Companies can add/remove names specific to their clientele.
+            //
+            // UI: Front Desk → Booking Prompts → Common Last Names
+            // Runtime: BookingFlowRunner name extraction & validation
+            // ═══════════════════════════════════════════════════════════════
+            commonLastNames: { type: [String], default: [] },
+            
+            // ═══════════════════════════════════════════════════════════════
             // 🆕 V30: NAME SPELLING VARIANTS - "Mark with K or C?"
             // ═══════════════════════════════════════════════════════════════
             // V111: NAME STOP WORDS - Words that should NEVER be accepted

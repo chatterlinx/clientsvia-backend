@@ -184,6 +184,9 @@ const UI_DEFAULTS = {
     // 👤 Common First Names - UI-configurable name recognition
     // Empty by default - companies add their own common names
     commonFirstNames: [],
+    // 👤 V111: Common Last Names - US Census top 50K surnames for name recognition
+    // Seed data loaded from data/seeds/censusLastNames.js on first access
+    commonLastNames: [],
     // 🚫 V111: Name Stop Words - Company-specific words rejected as names
     // System defaults live in IdentitySlotFirewall.js — these ADD to them
     nameStopWords: [],
@@ -427,6 +430,28 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         
         const config = deepMerge(UI_DEFAULTS, saved);
         
+        // ════════════════════════════════════════════════════════════════════════════
+        // V111: AUTO-SEED Common Last Names from Census data on first access
+        // ════════════════════════════════════════════════════════════════════════════
+        // If the company has no last names yet (empty array), load the Census
+        // seed data. This only happens once — after the first save, the company's
+        // own list (even if modified) is used. The seed is NOT stored to DB here;
+        // it's returned to the UI which saves it on first edit.
+        // ════════════════════════════════════════════════════════════════════════════
+        if (!config.commonLastNames || config.commonLastNames.length === 0) {
+            try {
+                const censusLastNames = require('../../data/seeds/censusLastNames');
+                config.commonLastNames = censusLastNames;
+                logger.info('[FRONT DESK BEHAVIOR] 👤 Seeded commonLastNames from Census data', {
+                    companyId,
+                    count: censusLastNames.length
+                });
+            } catch (e) {
+                logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Census last names seed not found', { error: e.message });
+                config.commonLastNames = [];
+            }
+        }
+        
         // 🔍 DEBUG: Log what we're returning AFTER merge
         logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: AFTER MERGE commonFirstNames:', {
             companyId,
@@ -531,6 +556,8 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 fastPathBooking: config.fastPathBooking || null,
                 // 👤 Common First Names - UI-configurable name recognition
                 commonFirstNames: config.commonFirstNames || [],
+                // 👤 V111: Common Last Names - US Census top 50K surnames
+                commonLastNames: config.commonLastNames || [],
                 // 🚫 V111: Name Stop Words - Words rejected as names during booking
                 nameStopWords: config.nameStopWords || [],
                 // ✏️ V30: Name Spelling Variants - "Mark with K or C?"
@@ -1077,6 +1104,21 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
                 count: (updates.commonFirstNames || []).length,
                 sample: (updates.commonFirstNames || []).slice(0, 10),
                 fullList: updates.commonFirstNames
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 👤 V111: COMMON LAST NAMES - US Census top 50K surnames
+        // ════════════════════════════════════════════════════════════════════════════
+        // Used for last name recognition and STT fuzzy-match validation.
+        // Seed: data/seeds/censusLastNames.js (50,000 names, ~83% US coverage)
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.commonLastNames !== undefined) {
+            updateObj['aiAgentSettings.frontDeskBehavior.commonLastNames'] = updates.commonLastNames || [];
+            logger.info('[FRONT DESK BEHAVIOR] 👤 Saving commonLastNames', {
+                companyId,
+                count: (updates.commonLastNames || []).length,
+                sample: (updates.commonLastNames || []).slice(0, 10)
             });
         }
         

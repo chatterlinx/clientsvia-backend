@@ -431,6 +431,18 @@ const wiringRegistryV2 = {
                             notes: 'Used by name extraction to recognize common first names vs noise (e.g., trade terms)'
                         },
                         {
+                            id: 'frontDesk.commonLastNames',
+                            label: 'Common Last Names',
+                            ui: { inputId: 'commonLastNames', path: 'Front Desk → Booking Prompts → Common Last Names' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.commonLastNames' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.commonLastNames'],
+                            scope: 'company',
+                            required: false,
+                            validators: [],
+                            defaultValue: [],
+                            notes: 'V111: US Census top 50K surnames for last name recognition and STT validation'
+                        },
+                        {
                             id: 'frontDesk.nameStopWords',
                             label: 'Name Rejection Words',
                             ui: { inputId: 'nameStopWords', path: 'Front Desk → Booking Prompts → Name Rejection Words' },

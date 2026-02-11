@@ -5791,6 +5791,56 @@ Sean → Shawn, Shaun"
             </div>
             
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- V111: COMMON LAST NAMES — US Census top 50,000 surnames               -->
+            <!-- Search-only display — too many names to render all chips at once.      -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div>
+                        <h3 style="margin: 0; color: #a371f7;">📋 Common Last Names</h3>
+                        <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
+                            US Census top surnames for last name recognition and STT validation.
+                            When a caller gives a last name, the AI checks this list to boost confidence.
+                            <br><span style="color: #6e7681;">Source: US Census Bureau 2010 (Public Domain) · Search to browse · Add your own custom names below.</span>
+                        </p>
+                    </div>
+                    <button onclick="window.frontDeskManager.addCommonLastName()" style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; white-space: nowrap;">
+                        + Add Name
+                    </button>
+                </div>
+                
+                <!-- Search Box -->
+                <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+                    <div style="position: relative; flex: 1;">
+                        <input type="text" id="fdb-search-last-name" 
+                            placeholder="🔍 Search last names (e.g., Gonzalez, Smith, Patel...)" 
+                            style="width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;"
+                            oninput="window.frontDeskManager.searchLastNames(this.value)">
+                    </div>
+                    <span id="fdb-last-name-search-result" style="color: #8b949e; font-size: 0.75rem; min-width: 120px;"></span>
+                </div>
+                
+                <!-- Results container: shows matching chips on search, summary when idle -->
+                <div id="common-last-names-container" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px; overflow-y: auto; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #30363d;">
+                    <p style="color: #8b949e; margin: 0; font-style: italic;">
+                        ${(this.config.commonLastNames || []).length.toLocaleString()} last names loaded. Type above to search.
+                    </p>
+                </div>
+                
+                <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
+                    <input type="text" id="fdb-new-last-name" placeholder="Enter names (comma-separated for bulk: Garcia, Nguyen, Patel)" 
+                        style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;"
+                        onkeypress="if(event.key === 'Enter') window.frontDeskManager.addCommonLastName()">
+                    <button onclick="window.frontDeskManager.copyAllLastNames()" 
+                        style="padding: 8px 12px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.75rem; white-space: nowrap;"
+                        title="Copy all names to clipboard (comma-separated)">
+                        📋 Copy All
+                    </button>
+                    <span id="fdb-last-name-count" style="color: #8b949e; font-size: 0.75rem;">${(this.config.commonLastNames || []).length.toLocaleString()} names</span>
+                </div>
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <!-- V111: NAME REJECTION WORDS (Stop Words)                                -->
             <!-- Words that should NEVER be accepted as a person's name during booking. -->
             <!-- System defaults are always enforced; company words EXTEND the list.    -->
@@ -7207,6 +7257,234 @@ Sean → Shawn, Shaun`;
         // Clear search box and results when list is updated
         const searchInput = document.getElementById('fdb-search-first-name');
         const resultEl = document.getElementById('fdb-search-result');
+        if (searchInput) searchInput.value = '';
+        if (resultEl) resultEl.textContent = '';
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V111: COMMON LAST NAMES — US Census top 50,000 surnames
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Search-only display pattern: with 50K names, we NEVER render all chips.
+    // Instead, we show a summary message and render chips only for search results.
+    // This keeps the browser responsive even with very large datasets.
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    /**
+     * Add one or more last names (comma-separated bulk input supported)
+     */
+    addCommonLastName() {
+        const input = document.getElementById('fdb-new-last-name');
+        const rawInput = input?.value?.trim();
+        if (!rawInput) return;
+        
+        if (!this.config.commonLastNames) {
+            this.config.commonLastNames = [];
+        }
+        
+        // Support bulk insertion: split by comma, semicolon, or newline
+        const namesToAdd = rawInput
+            .split(/[,;\n]+/)
+            .map(n => n.trim().toLowerCase())
+            .filter(n => n.length > 0);
+        
+        if (namesToAdd.length === 0) return;
+        
+        // Build a Set for O(1) duplicate checking on large lists
+        const existingSet = new Set(this.config.commonLastNames.map(n => n.toLowerCase()));
+        const added = [];
+        const skipped = [];
+        
+        for (const name of namesToAdd) {
+            if (existingSet.has(name)) {
+                skipped.push(name);
+            } else {
+                this.config.commonLastNames.push(name);
+                existingSet.add(name);
+                added.push(name);
+            }
+        }
+        
+        // Sort alphabetically
+        this.config.commonLastNames.sort((a, b) => a.localeCompare(b));
+        
+        // Clear input and update display
+        input.value = '';
+        this.updateCommonLastNamesDisplay();
+        this.isDirty = true;
+        
+        console.log('[FRONT DESK] 📋 Last names processed', {
+            added: added.length,
+            skipped: skipped.length,
+            totalNow: this.config.commonLastNames.length
+        });
+        
+        // Visual feedback
+        const container = document.getElementById('common-last-names-container');
+        if (container) {
+            container.style.borderColor = '#a371f7';
+            setTimeout(() => { container.style.borderColor = '#30363d'; }, 1000);
+        }
+        
+        if (added.length > 0) {
+            // Show added names in the search results as visual confirmation
+            this.searchLastNames(added[0]);
+            const searchInput = document.getElementById('fdb-search-last-name');
+            if (searchInput) searchInput.value = added[0];
+        }
+    }
+    
+    /**
+     * Remove a last name by its value (not index — used from search result chips)
+     */
+    removeCommonLastName(name) {
+        if (!this.config.commonLastNames) return;
+        const lowerName = name.toLowerCase();
+        const idx = this.config.commonLastNames.findIndex(n => n.toLowerCase() === lowerName);
+        if (idx !== -1) {
+            this.config.commonLastNames.splice(idx, 1);
+            console.log('[FRONT DESK] 📋 Removed last name:', name);
+            // Re-run the current search to update the displayed chips
+            const searchInput = document.getElementById('fdb-search-last-name');
+            if (searchInput?.value) {
+                this.searchLastNames(searchInput.value);
+            } else {
+                this.updateCommonLastNamesDisplay();
+            }
+            this.isDirty = true;
+        }
+    }
+    
+    /**
+     * Search/filter last names and display matching chips.
+     * This is the core of the search-only display pattern for large datasets.
+     * Only matching names are rendered as chips — never the full 50K list.
+     */
+    searchLastNames(query) {
+        const container = document.getElementById('common-last-names-container');
+        const resultEl = document.getElementById('fdb-last-name-search-result');
+        const names = this.config.commonLastNames || [];
+        
+        if (!query || query.trim() === '') {
+            // No search: show summary, not chips
+            if (container) {
+                container.innerHTML = `<p style="color: #8b949e; margin: 0; font-style: italic;">${names.length.toLocaleString()} last names loaded. Type above to search.</p>`;
+            }
+            if (resultEl) resultEl.textContent = '';
+            return;
+        }
+        
+        const searchLower = query.toLowerCase().trim();
+        
+        // Find matches (cap at 100 to keep rendering fast)
+        const MAX_DISPLAY = 100;
+        const matches = [];
+        let totalMatches = 0;
+        let hasExact = false;
+        
+        for (const name of names) {
+            const lower = name.toLowerCase();
+            if (lower.includes(searchLower)) {
+                totalMatches++;
+                if (lower === searchLower) hasExact = true;
+                if (matches.length < MAX_DISPLAY) {
+                    matches.push({ name, isExact: lower === searchLower });
+                }
+            }
+        }
+        
+        // Render matching chips
+        if (container) {
+            if (matches.length === 0) {
+                container.innerHTML = '<p style="color: #f85149; margin: 0; font-style: italic;">No matching last names found. You can add it below.</p>';
+            } else {
+                // Sort: exact match first, then alphabetical
+                matches.sort((a, b) => {
+                    if (a.isExact && !b.isExact) return -1;
+                    if (!a.isExact && b.isExact) return 1;
+                    return a.name.localeCompare(b.name);
+                });
+                
+                const chips = matches.map(m => {
+                    const escapedName = m.name.replace(/'/g, "\\'");
+                    const bgColor = m.isExact ? '#238636' : '#21262d';
+                    const borderColor = m.isExact ? '#3fb950' : '#30363d';
+                    const textColor = m.isExact ? '#ffffff' : '#c9d1d9';
+                    return `<span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 16px; font-size: 0.8rem; color: ${textColor};">
+                        ${m.name}
+                        <button onclick="window.frontDeskManager.removeCommonLastName('${escapedName}')" 
+                            style="background: none; border: none; color: #f85149; cursor: pointer; padding: 0; font-size: 14px; line-height: 1;"
+                            title="Remove ${m.name}">×</button>
+                    </span>`;
+                }).join('');
+                
+                const overflow = totalMatches > MAX_DISPLAY
+                    ? `<p style="color: #8b949e; margin: 4px 0 0 0; font-size: 0.75rem; width: 100%;">Showing ${MAX_DISPLAY} of ${totalMatches.toLocaleString()} matches. Narrow your search.</p>`
+                    : '';
+                
+                container.innerHTML = chips + overflow;
+            }
+        }
+        
+        // Update result label
+        if (resultEl) {
+            if (totalMatches === 0) {
+                resultEl.innerHTML = '<span style="color: #f85149;">❌ Not found</span>';
+            } else if (hasExact) {
+                resultEl.innerHTML = `<span style="color: #3fb950;">✅ Found "${query}" + ${totalMatches - 1} similar</span>`;
+            } else {
+                resultEl.innerHTML = `<span style="color: #f0883e;">🔶 ${totalMatches.toLocaleString()} partial match${totalMatches > 1 ? 'es' : ''}</span>`;
+            }
+        }
+    }
+    
+    /**
+     * Copy all last names to clipboard
+     */
+    copyAllLastNames() {
+        const names = this.config.commonLastNames || [];
+        if (names.length === 0) {
+            alert('No names to copy.');
+            return;
+        }
+        
+        const text = names.join(', ');
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('[FRONT DESK] 📋 Copied all last names:', names.length);
+            const btn = document.querySelector('button[onclick*="copyAllLastNames"]');
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✅ Copied!';
+                btn.style.background = '#238636';
+                btn.style.color = 'white';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.style.background = '#21262d';
+                    btn.style.color = '#8b949e';
+                }, 2000);
+            }
+        }).catch(err => {
+            console.error('[FRONT DESK] Copy failed:', err);
+            prompt('Copy these names:', text.substring(0, 5000) + '...');
+        });
+    }
+    
+    /**
+     * Re-render the last names container and update the count label.
+     * Does NOT render all chips — just refreshes the summary or current search.
+     */
+    updateCommonLastNamesDisplay() {
+        const container = document.getElementById('common-last-names-container');
+        const names = this.config.commonLastNames || [];
+        if (container) {
+            container.innerHTML = `<p style="color: #8b949e; margin: 0; font-style: italic;">${names.length.toLocaleString()} last names loaded. Type above to search.</p>`;
+        }
+        const countEl = document.getElementById('fdb-last-name-count');
+        if (countEl) {
+            countEl.textContent = `${names.length.toLocaleString()} names`;
+        }
+        // Clear search
+        const searchInput = document.getElementById('fdb-search-last-name');
+        const resultEl = document.getElementById('fdb-last-name-search-result');
         if (searchInput) searchInput.value = '';
         if (resultEl) resultEl.textContent = '';
     }

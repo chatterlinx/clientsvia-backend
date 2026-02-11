@@ -401,6 +401,32 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
+    // V111: COMMON LAST NAMES (US Census top 50K surnames)
+    // =========================================================================
+    // Source: US Census Bureau 2010 Decennial Census (Public Domain)
+    // Coverage: ~83% of the US population
+    // Seed: data/seeds/censusLastNames.js
+    //
+    // UI: Front Desk → Booking Prompts → Common Last Names
+    // DB: aiAgentSettings.frontDeskBehavior.commonLastNames (array of strings)
+    // Runtime: BookingFlowRunner name extraction & STT validation
+    // =========================================================================
+    'frontDesk.commonLastNames': {
+        readers: [
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'SlotExtractors.name',
+                line: 541,
+                description: 'Last name recognition and STT fuzzy-match validation',
+                required: false
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.commonLastNames',
+        scope: 'company',
+        defaultValue: []
+    },
+
+    // =========================================================================
     // V111: NAME STOP WORDS (Name Rejection Words)
     // =========================================================================
     // Company-specific words that should NEVER be accepted as a person's name.
