@@ -1752,54 +1752,64 @@ class FrontDeskBehaviorManager {
 
         return `
             <div data-section-id="discovery-flow" style="color:#c9d1d9;">
-                <!-- V111 HEALTH CHECK PANEL -->
-                <div id="v111-health-panel" style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #30363d; border-radius:12px; padding:16px 20px; margin-bottom:20px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <span style="font-size:1.25rem;">🩺</span>
-                            <h3 style="margin:0; color:#58a6ff; font-size:1rem;">V111 System Health</h3>
-                        </div>
-                        <button id="v111-refresh-health" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; gap:6px;">
-                            🔄 Refresh
-                        </button>
-                    </div>
-                    <div id="v111-health-status" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px;">
-                        <div style="text-align:center; padding:12px; color:#8b949e;">
-                            <span style="font-size:1.5rem;">⏳</span>
-                            <p style="margin:8px 0 0 0; font-size:0.8rem;">Loading health status...</p>
-                        </div>
-                    </div>
-                    <div id="v111-health-summary" style="margin-top:12px; padding-top:12px; border-top:1px solid #30363d; display:none;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span id="v111-health-result" style="font-size:0.85rem; font-weight:600;"></span>
-                            <span id="v111-health-time" style="font-size:0.7rem; color:#6e7681;"></span>
-                        </div>
-                    </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- PAGE HEADER                                                     -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <div style="margin-bottom:24px;">
+                    <h2 style="margin:0; color:#c9d1d9; font-size:1.5rem;">Call Flow Engine</h2>
+                    <p style="margin:8px 0 0 0; color:#8b949e; font-size:0.9rem; line-height:1.6;">
+                        Configure how the AI handles calls from start to finish. This page has two layers that work together:
+                        <strong style="color:#3fb950;">Slot Registry & Call Flow</strong> defines <em>what</em> information to collect,
+                        and <strong style="color:#f0883e;">Conversation Memory</strong> defines <em>how</em> the runtime tracks, routes, and governs the conversation.
+                    </p>
                 </div>
-                
-                <!-- Header with V110 badge -->
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <div>
-                        <h2 style="margin:0; color:#58a6ff;">🔄 Call Flow: Discovery → Booking</h2>
-                        <p style="margin:6px 0 0 0; color:#8b949e; font-size:0.875rem;">
-                            V110: Phase 1 captures passively, Phase 2 confirms after booking consent
-                        </p>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:12px;">
-                        <button id="fdb-wiring-modal-btn" style="background:#1f6feb; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem; display:flex; align-items:center; gap:6px;">
-                            📋 Architecture Notes
-                        </button>
-                        <button id="fdb-stt-modal-btn" style="background:#6e40c9; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem; display:flex; align-items:center; gap:6px;">
-                            🔇 STT Intelligence
-                        </button>
-                        <button id="fdb-protected-words-btn" style="background:#da3633; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem; display:flex; align-items:center; gap:6px;">
-                            🛡️ Protected Words
-                        </button>
-                        <span style="background:#3fb95020; color:#3fb950; padding:6px 12px; border-radius:16px; font-size:0.75rem; font-weight:600;">
-                            V110 CANONICAL
-                        </span>
-                    </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- SUB-TAB NAVIGATION                                              -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <div style="display:flex; gap:0; margin-bottom:24px; border-bottom:2px solid #30363d;">
+                    <button id="fdb-flow-tab-v110" class="fdb-flow-tab fdb-flow-tab-active" 
+                        style="padding:12px 24px; background:#161b22; color:#3fb950; border:2px solid #30363d; border-bottom:2px solid #3fb950; border-radius:8px 8px 0 0; cursor:pointer; font-size:0.9rem; font-weight:600; margin-right:4px; margin-bottom:-2px; display:flex; align-items:center; gap:8px;">
+                        <span>📋</span> Slot Registry & Call Flow
+                    </button>
+                    <button id="fdb-flow-tab-v111" class="fdb-flow-tab"
+                        style="padding:12px 24px; background:#0d1117; color:#8b949e; border:2px solid #30363d; border-bottom:2px solid transparent; border-radius:8px 8px 0 0; cursor:pointer; font-size:0.9rem; font-weight:600; margin-bottom:-2px; display:flex; align-items:center; gap:8px;">
+                        <span>🧠</span> Conversation Memory & Router
+                    </button>
                 </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- TAB 1: SLOT REGISTRY & CALL FLOW (V110)                         -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <div id="fdb-flow-panel-v110">
+                    <!-- Tab Title & Description -->
+                    <div style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #3fb95040; border-radius:12px; padding:20px; margin-bottom:20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div>
+                                <h3 style="margin:0; color:#3fb950; font-size:1.15rem; display:flex; align-items:center; gap:10px;">
+                                    📋 Slot Registry & Call Flow
+                                    <span style="background:#3fb95020; color:#3fb950; padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:600;">CANONICAL</span>
+                                </h3>
+                                <p style="margin:10px 0 0 0; color:#8b949e; font-size:0.85rem; line-height:1.6; max-width:700px;">
+                                    Defines <strong style="color:#c9d1d9;">what information</strong> the AI collects during a call and <strong style="color:#c9d1d9;">in what order</strong>.
+                                    Phase 1 (Discovery) captures slots passively as the caller speaks. Phase 2 (Booking) confirms captured values 
+                                    and collects anything missing after the caller gives consent.
+                                </p>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+                                <button id="fdb-wiring-modal-btn" style="background:#1f6feb; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                                    📋 Architecture Notes
+                                </button>
+                                <button id="fdb-stt-modal-btn" style="background:#6e40c9; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                                    🔇 STT Intelligence
+                                </button>
+                                <button id="fdb-protected-words-btn" style="background:#da3633; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                                    🛡️ Protected Words
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 
                 <!-- Architecture Notes Modal (Hidden by default) -->
                 <div id="fdb-wiring-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center;">
@@ -2156,6 +2166,49 @@ class FrontDeskBehaviorManager {
                     </button>
                 </div>
 
+                </div><!-- END fdb-flow-panel-v110 -->
+
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- TAB 2: CONVERSATION MEMORY & ROUTER (V111)                      -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <div id="fdb-flow-panel-v111" style="display:none;">
+                    <!-- Tab Title & Description -->
+                    <div style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #f0883e40; border-radius:12px; padding:20px; margin-bottom:20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div>
+                                <h3 style="margin:0; color:#f0883e; font-size:1.15rem; display:flex; align-items:center; gap:10px;">
+                                    🧠 Conversation Memory & Router
+                                    <span style="background:#f0883e20; color:#f0883e; padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:600;">RUNTIME</span>
+                                </h3>
+                                <p style="margin:10px 0 0 0; color:#8b949e; font-size:0.85rem; line-height:1.6; max-width:700px;">
+                                    Controls <strong style="color:#c9d1d9;">how</strong> the AI manages the conversation at runtime.
+                                    The Memory system is the single source of truth for every call — tracking facts, phases, and turn history.
+                                    The Router governs which handler responds (Scenario, Booking, LLM, Escalation) and injects capture prompts when progress stalls.
+                                </p>
+                            </div>
+                            <button id="v111-refresh-health" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.8rem; display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                                🔄 Refresh Health
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- V111 HEALTH CHECK PANEL -->
+                    <div id="v111-health-panel" style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:16px 20px; margin-bottom:20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h4 style="margin:0; color:#58a6ff; font-size:0.95rem;">🩺 System Health</h4>
+                            <span id="v111-health-time" style="font-size:0.7rem; color:#6e7681;"></span>
+                        </div>
+                        <div id="v111-health-status" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px;">
+                            <div style="text-align:center; padding:12px; color:#8b949e;">
+                                <span style="font-size:1.5rem;">⏳</span>
+                                <p style="margin:8px 0 0 0; font-size:0.8rem;">Loading health status...</p>
+                            </div>
+                        </div>
+                        <div id="v111-health-summary" style="margin-top:12px; padding-top:12px; border-top:1px solid #30363d; display:none;">
+                            <span id="v111-health-result" style="font-size:0.85rem; font-weight:600;"></span>
+                        </div>
+                    </div>
+
                 <!-- V111: Conversation Memory Config (Phase 2 - Configuration) -->
                 <div style="background:#161b22; border:1px solid #30363d; border-left:3px solid #f0883e; border-radius:8px; padding:20px; margin-bottom:20px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -2458,8 +2511,12 @@ class FrontDeskBehaviorManager {
                     </div>
                 </div>
 
-                <!-- Save / Export Actions -->
-                <div style="display:flex; gap:12px; align-items:center;">
+                </div><!-- END fdb-flow-panel-v111 -->
+
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- SAVE / EXPORT (shared across both tabs)                         -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <div style="display:flex; gap:12px; align-items:center; margin-top:24px; padding-top:20px; border-top:1px solid #30363d;">
                     <button id="fdb-save-flows" style="background:#238636; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500;">
                         💾 Save All Changes
                     </button>
@@ -2484,6 +2541,37 @@ class FrontDeskBehaviorManager {
                 || contentElement;
         };
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // SUB-TAB SWITCHING: V110 (Slot Registry & Call Flow) / V111 (Memory & Router)
+        // ═══════════════════════════════════════════════════════════════════════════
+        const tabV110Btn = contentElement.querySelector('#fdb-flow-tab-v110');
+        const tabV111Btn = contentElement.querySelector('#fdb-flow-tab-v111');
+        const panelV110 = contentElement.querySelector('#fdb-flow-panel-v110');
+        const panelV111 = contentElement.querySelector('#fdb-flow-panel-v111');
+
+        const switchFlowTab = (activeTab) => {
+            const isV110 = activeTab === 'v110';
+            // Show/hide panels
+            if (panelV110) panelV110.style.display = isV110 ? '' : 'none';
+            if (panelV111) panelV111.style.display = isV110 ? 'none' : '';
+            // Update tab button styles
+            if (tabV110Btn) {
+                tabV110Btn.style.background = isV110 ? '#161b22' : '#0d1117';
+                tabV110Btn.style.color = isV110 ? '#3fb950' : '#8b949e';
+                tabV110Btn.style.borderBottomColor = isV110 ? '#3fb950' : 'transparent';
+            }
+            if (tabV111Btn) {
+                tabV111Btn.style.background = isV110 ? '#0d1117' : '#161b22';
+                tabV111Btn.style.color = isV110 ? '#8b949e' : '#f0883e';
+                tabV111Btn.style.borderBottomColor = isV110 ? 'transparent' : '#f0883e';
+            }
+            // Load V111 health when switching to V111 tab
+            if (!isV110) loadV111Health();
+        };
+
+        if (tabV110Btn) tabV110Btn.addEventListener('click', () => switchFlowTab('v110'));
+        if (tabV111Btn) tabV111Btn.addEventListener('click', () => switchFlowTab('v111'));
+
         // ═══════════════════════════════════════════════════════════════════════════
         // V111 HEALTH CHECK - Load and display system health status
         // ═══════════════════════════════════════════════════════════════════════════
@@ -2584,16 +2672,8 @@ class FrontDeskBehaviorManager {
             }
         };
         
-        // Load health on tab init
-        loadV111Health();
-        
-        // Refresh button
-        const refreshBtn = contentElement.querySelector('#v111-refresh-health');
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => {
-                loadV111Health();
-            });
-        }
+        // V111 health loads on-demand when V111 tab is activated (not on page load)
+        // Refresh button is already wired in switchFlowTab() above
         
         const slotRegistry = this.config.slotRegistry || { version: 'v1', slots: [] };
         const discoveryFlow = this.config.discoveryFlow || { version: 'v1', enabled: true, steps: [] };
