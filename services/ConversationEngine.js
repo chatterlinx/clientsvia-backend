@@ -300,8 +300,10 @@ function __testHandleNameSlotTurn({
         nameSlotConfig?.nameOptions?.askFullName === true || nameSlotConfig?.nameOptions?.askFullName === 'true';
     const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
 
-    const customStopWords = company?.aiAgentSettings?.nameStopWords?.custom || [];
-    const stopWordsEnabled = company?.aiAgentSettings?.nameStopWords?.enabled !== false;
+    // V111: Name stop words consolidated into frontDeskBehavior.nameStopWords (flat array).
+    // Legacy path (aiAgentSettings.nameStopWords.custom) removed — single source of truth.
+    const customStopWords = company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || [];
+    const stopWordsEnabled = true; // V111: Always enabled — control via the word list itself
 
     const normalizedInput = String(userText || '').trim();
     const lowerInput = normalizedInput.toLowerCase();
@@ -4329,10 +4331,9 @@ async function processTurn({
                 session.booking?.activeSlot === 'name' ||
                 (nameSlotAsked && !currentSlots.name && !currentSlots.partialName)
             );
-            // 🔌 AW MIGRATION: Using AWConfigReader for traced config reads
+            // V111: Read company name stop words via AWConfigReader (canonical path)
             awReader.setReaderId('ConversationEngine.slotExtraction.name');
-            const stopWordsEnabled = awReader.get('slotExtraction.nameStopWords.enabled', true) !== false;
-            const customStopWords = stopWordsEnabled ? awReader.getArray('slotExtraction.nameStopWords.custom') : [];
+            const customStopWords = awReader.getArray('frontDesk.nameStopWords');
             let extractedName = SlotExtractors.extractName(userText, { 
                 expectingName, 
                 customStopWords

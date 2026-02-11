@@ -166,6 +166,8 @@ function safeSetSlot(state, slotName, value, options = {}) {
     const traceCompanyId = state?._traceContext?.companyId;
     const traceLevel = state?._traceContext?.traceLevel || 'normal';
     const traceTurn = state?._traceContext?.turn || 0;
+    // V111: Company-specific name stopwords (set by runStep from company config)
+    const companyStopWords = state?._traceContext?.companyStopWords || [];
     
     if (!value) {
         logger.debug('[SAFE SET SLOT] Skipped null/empty value', { slotName, source });
@@ -315,7 +317,10 @@ function safeSetSlot(state, slotName, value, options = {}) {
                 callId: traceCallSid,
                 companyId: traceCompanyId,
                 turn: traceTurn,
-                forceOverwrite: isCorrection
+                forceOverwrite: isCorrection,
+                // V111: Pass company-specific stopwords so the firewall merges
+                // them with system defaults for name validation.
+                companyStopWords
             }
         );
         
@@ -559,8 +564,10 @@ const SlotExtractors = {
         // Fallback: simple word extraction for direct name responses
         // (when user just says "Mark" in response to "What's your name?")
         const text = input.trim();
+        // V111: Pass company stopwords from config → single source of truth
+        const companyStopWords = context.company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || [];
         const words = text.split(/\s+/)
-            .filter(w => !isStopWord(w.toLowerCase()))
+            .filter(w => !isStopWord(w.toLowerCase(), companyStopWords))
             .filter(w => /^[A-Za-z][A-Za-z\-'\.]*$/.test(w));
         
         if (words.length === 0) return null;
@@ -721,25 +728,53 @@ function detectAddressParts(rawAddress) {
         hasUnit: UNIT_PATTERN.test(text)
     };
 }
-function isStopWord(word) {
-    // V96e: Comprehensive stop words - sync with SlotExtractor.NAME_STOP_WORDS
-    const stopWords = new Set([
-        'is', 'are', 'was', 'were', 'be', 'been', 'am',
-        'the', 'my', 'its', "it's", 'a', 'an', 'name', 'last', 'first',
-        'yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'no', 'nope',
-        'hi', 'hello', 'hey', 'please', 'thanks', 'thank', 'you',
-        'it', 'that', 'this', 'what', 'and', 'or', 'but', 'to', 'for', 'with',
-        'got', 'two', 'there', 'uh', 'um', 'yup', 'so', 'well', 'just',
-        // V96e: Adverbs and state words that caused "currently" as name bug
-        'currently', 'presently', 'actually', 'basically', 'usually', 'normally',
-        'typically', 'generally', 'still', 'already', 'always', 'never', 'ever',
-        'now', 'today', 'recently', 'sometimes', 'often', 'really', 'very',
-        'nothing', 'everything', 'anything', 'something',
-        // Service/trade words
-        'service', 'services', 'repair', 'repairs', 'maintenance', 'conditioning',
-        'air', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical'
-    ]);
-    return stopWords.has(word);
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * V111: STOP WORD CHECK — UNIFIED WITH IdentitySlotFirewall
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * Previously this was a standalone hardcoded Set, duplicating the list in
+ * IdentitySlotFirewall.js. Now both systems share the SAME source of truth:
+ *   1. System defaults → IdentitySlotFirewall.NAME_STOPWORDS
+ *   2. Company additions → company.aiAgentSettings.frontDeskBehavior.nameStopWords
+ *
+ * This function also keeps local-only words (grammar/filler) that are too
+ * generic for the firewall but useful in the booking extraction context.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+// Local-only booking extraction stopwords (grammar/filler not in the global list)
+const BOOKING_LOCAL_STOPWORDS = new Set([
+    'is', 'are', 'was', 'were', 'be', 'been', 'am',
+    'my', 'its', "it's", 'name', 'last', 'first',
+    'sure', 'and', 'or', 'but', 'to', 'for', 'with',
+    'got', 'two', 'there', 'uh', 'um', 'yup', 'so', 'well', 'just',
+    'currently', 'presently', 'actually', 'basically', 'usually', 'normally',
+    'typically', 'generally', 'still', 'already', 'always', 'never', 'ever',
+    'now', 'today', 'recently', 'sometimes', 'often', 'really', 'very',
+    'nothing', 'everything', 'anything', 'something'
+]);
+
+// Cache the effective stopwords per-company to avoid rebuilding on every call
+let _cachedEffectiveSet = null;
+let _cachedCompanyWordsKey = '';
+
+function isStopWord(word, companyStopWords = []) {
+    // Fast path: check local-only words first (no company config needed)
+    if (BOOKING_LOCAL_STOPWORDS.has(word)) return true;
+    
+    // Build effective set: system defaults + company additions (cached)
+    const companyKey = companyStopWords.length > 0 ? companyStopWords.join('|') : '';
+    if (!_cachedEffectiveSet || _cachedCompanyWordsKey !== companyKey) {
+        const systemDefaults = IdentitySlotFirewall?.NAME_STOPWORDS || [];
+        const merged = new Set(systemDefaults.map(w => w.toLowerCase()));
+        for (const w of companyStopWords) {
+            if (typeof w === 'string' && w.trim()) merged.add(w.trim().toLowerCase());
+        }
+        _cachedEffectiveSet = merged;
+        _cachedCompanyWordsKey = companyKey;
+    }
+    
+    return _cachedEffectiveSet.has(word);
 }
 
 /**
@@ -1151,7 +1186,10 @@ class BookingFlowRunner {
         state._traceContext = {
             callSid: callSid || state._traceContext?.callSid,
             companyId: company?._id?.toString() || state._traceContext?.companyId,
-            traceLevel
+            traceLevel,
+            // V111: Carry company-specific name stopwords so safeSetSlot can pass
+            // them to the IdentitySlotFirewall without needing the full company object.
+            companyStopWords: company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || []
         };
         
         logger.info('[BOOKING FLOW RUNNER] Running step', {

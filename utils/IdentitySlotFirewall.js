@@ -73,10 +73,38 @@ function maskValue(slot, value) {
 }
 
 /**
- * Validate a name value
- * Returns { valid: boolean, reason: string }
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * Build the effective stopwords list by merging system defaults with any
+ * company-specific additions from the UI (nameStopWords in frontDeskBehavior).
+ *
+ * System defaults (NAME_STOPWORDS above) are ALWAYS included — they cannot be
+ * removed via UI. Company words EXTEND the list.
+ *
+ * @param {string[]} companyStopWords - Additional words from company config
+ * @returns {string[]} Merged, deduplicated, lowercase stopwords
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
-function validateName(value) {
+function buildEffectiveStopWords(companyStopWords = []) {
+  if (!companyStopWords || companyStopWords.length === 0) {
+    return NAME_STOPWORDS;
+  }
+  const merged = new Set(NAME_STOPWORDS.map(w => w.toLowerCase()));
+  for (const w of companyStopWords) {
+    if (typeof w === 'string' && w.trim().length > 0) {
+      merged.add(w.trim().toLowerCase());
+    }
+  }
+  return [...merged];
+}
+
+/**
+ * Validate a name value against system + company stopwords.
+ *
+ * @param {string} value - The name to validate
+ * @param {string[]} [companyStopWords=[]] - Company-specific stopwords from UI
+ * @returns {{ valid: boolean, reason: string }}
+ */
+function validateName(value, companyStopWords = []) {
   if (!value || typeof value !== 'string') {
     return { valid: false, reason: 'empty_or_invalid_type' };
   }
@@ -84,13 +112,16 @@ function validateName(value) {
   const trimmed = value.trim();
   const lower = trimmed.toLowerCase();
   
+  // Merge system defaults with company-specific stopwords
+  const effectiveStopWords = buildEffectiveStopWords(companyStopWords);
+  
   // Check stopwords — use WORD BOUNDARY matching, not .includes().
   // The old .includes() check caused "gonzalez" to be rejected because it
   // contains the letter "a" (a stopword). This blocked nearly every real name.
   // Now: split the input into words and check if ANY word is entirely a stopword,
   // or for multi-word stopwords, check if the phrase appears as whole words.
   const words = lower.split(/[\s,.\-]+/).filter(w => w.length > 0);
-  for (const stopword of NAME_STOPWORDS) {
+  for (const stopword of effectiveStopWords) {
     if (lower === stopword) {
       // Exact full match — the entire input IS a stopword
       return { valid: false, reason: `stopword_${stopword.replace(/\s+/g, '_')}` };
@@ -176,7 +207,10 @@ function safeSetIdentitySlot(slots, slotId, value, meta = {}) {
     callId = null,
     companyId = null,
     turn = 0,
-    forceOverwrite = false
+    forceOverwrite = false,
+    // V111: Company-specific stopwords from UI (nameStopWords in frontDeskBehavior)
+    // Merged with system defaults at validation time — extends, never replaces.
+    companyStopWords = []
   } = meta;
   
   // Capture before state
@@ -261,7 +295,7 @@ function safeSetIdentitySlot(slots, slotId, value, meta = {}) {
     // GATE 3: Validate the value (for name slots)
     // ═══════════════════════════════════════════════════════════════════════════
     if (['name', 'firstName', 'lastName', 'partialName'].includes(slotId)) {
-      const validation = validateName(value);
+      const validation = validateName(value, companyStopWords);
       if (!validation.valid) {
         reason = validation.reason;
         
@@ -510,6 +544,11 @@ module.exports = {
   getIdentitySlots,
   addAuthorizedWriter,
   validateName,
+  buildEffectiveStopWords,
   IDENTITY_SLOTS,
-  AUTHORIZED_WRITERS
+  AUTHORIZED_WRITERS,
+  // V111: Exported for BookingFlowRunner to read system defaults when building
+  // its own effective stopword set. This is the SINGLE SOURCE OF TRUTH for
+  // system-level name stopwords.
+  NAME_STOPWORDS
 };

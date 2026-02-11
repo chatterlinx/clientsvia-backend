@@ -431,41 +431,21 @@ const wiringRegistryV2 = {
                             notes: 'Used by name extraction to recognize common first names vs noise (e.g., trade terms)'
                         },
                         {
-                            id: 'slotExtraction.nameStopWords',
-                            label: 'Name Stop Words',
-                            ui: { inputId: 'nameStopWords', path: 'Front Desk → Slot Extraction → Name Stop Words' },
-                            db: { path: 'aiAgentSettings.nameStopWords' },
-                            runtime: RUNTIME_READERS_MAP['slotExtraction.nameStopWords'],
-                            scope: 'company',
-                            required: false,
-                            validators: [],
-                            defaultValue: { enabled: true, custom: [] },
-                            notes: 'Parent object for name stop words configuration'
-                        },
-                        {
-                            id: 'slotExtraction.nameStopWords.enabled',
-                            label: 'Name Stop Words Enabled',
-                            ui: { inputId: 'nameStopWordsEnabled', path: 'Front Desk → Slot Extraction → Stop Words Enabled' },
-                            db: { path: 'aiAgentSettings.nameStopWords.enabled' },
-                            runtime: RUNTIME_READERS_MAP['slotExtraction.nameStopWords.enabled'],
-                            scope: 'company',
-                            required: false,
-                            validators: [],
-                            defaultValue: true,
-                            notes: 'Master switch for name stop words filtering (prevents "Degrees In" bug)'
-                        },
-                        {
-                            id: 'slotExtraction.nameStopWords.custom',
-                            label: 'Custom Stop Words',
-                            ui: { inputId: 'nameStopWordsCustom', path: 'Front Desk → Slot Extraction → Custom Stop Words' },
-                            db: { path: 'aiAgentSettings.nameStopWords.custom' },
-                            runtime: RUNTIME_READERS_MAP['slotExtraction.nameStopWords.custom'],
+                            id: 'frontDesk.nameStopWords',
+                            label: 'Name Rejection Words',
+                            ui: { inputId: 'nameStopWords', path: 'Front Desk → Booking Prompts → Name Rejection Words' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameStopWords' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.nameStopWords'],
                             scope: 'company',
                             required: false,
                             validators: [],
                             defaultValue: [],
-                            notes: 'Custom stop words to filter from name extraction (company-specific noise)'
+                            notes: 'V111: Company-specific words rejected as names. Extends system defaults in IdentitySlotFirewall.NAME_STOPWORDS.'
                         }
+                        // ⚠️ LEGACY REMOVED (V111): slotExtraction.nameStopWords.enabled and
+                        // slotExtraction.nameStopWords.custom were pointing to the deprecated
+                        // path aiAgentSettings.nameStopWords. Consolidated into a single
+                        // frontDesk.nameStopWords entry above (aiAgentSettings.frontDeskBehavior.nameStopWords).
                     ]
                 },
                 

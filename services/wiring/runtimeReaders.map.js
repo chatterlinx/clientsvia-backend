@@ -400,47 +400,34 @@ const RUNTIME_READERS_MAP = {
         defaultValue: []
     },
 
-    'slotExtraction.nameStopWords': {
+    // =========================================================================
+    // V111: NAME STOP WORDS (Name Rejection Words)
+    // =========================================================================
+    // Company-specific words that should NEVER be accepted as a person's name.
+    // These EXTEND the system defaults in IdentitySlotFirewall.NAME_STOPWORDS.
+    //
+    // UI: Front Desk → Booking Prompts → Name Rejection Words
+    // DB: aiAgentSettings.frontDeskBehavior.nameStopWords (array of strings)
+    // Runtime: IdentitySlotFirewall.validateName() + BookingFlowRunner.isStopWord()
+    // =========================================================================
+    'frontDesk.nameStopWords': {
         readers: [
             {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 1820,
-                description: 'Parent object for name stop words configuration',
+                file: 'utils/IdentitySlotFirewall.js',
+                function: 'validateName',
+                line: 79,
+                description: 'Company stopwords merged with system defaults for name validation',
+                required: false
+            },
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'isStopWord',
+                line: 756,
+                description: 'Company stopwords merged with system defaults for booking name extraction',
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.nameStopWords',
-        scope: 'company',
-        defaultValue: { enabled: true, custom: [] }
-    },
-
-    'slotExtraction.nameStopWords.enabled': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 1825,
-                description: 'Master switch for name stop words filtering (prevents "Degrees In" bug)',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.nameStopWords.enabled',
-        scope: 'company',
-        defaultValue: true
-    },
-
-    'slotExtraction.nameStopWords.custom': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 1830,
-                description: 'Custom stop words to filter from name extraction (company-specific noise)',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.nameStopWords.custom',
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameStopWords',
         scope: 'company',
         defaultValue: []
     },

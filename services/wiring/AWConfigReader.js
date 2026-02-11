@@ -332,6 +332,8 @@ const AW_PATH_MAPPINGS = {
     'frontDesk.bookingOutcome': 'aiAgentSettings.frontDeskBehavior.bookingOutcome',
     'frontDesk.bookingAbortPhrases': 'aiAgentSettings.frontDeskBehavior.bookingAbortPhrases',
     'frontDesk.commonFirstNames': 'aiAgentSettings.frontDeskBehavior.commonFirstNames',
+    // V111: Name Rejection Words — company-specific words rejected as names
+    'frontDesk.nameStopWords': 'aiAgentSettings.frontDeskBehavior.nameStopWords',
     
     // Name Spelling Variants (V94 - Mark with K or Marc with C?)
     'frontDesk.nameSpellingVariants': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants',
@@ -371,9 +373,12 @@ const AW_PATH_MAPPINGS = {
     // ─────────────────────────────────────────────────────────────────────────
     // SLOT EXTRACTION - Name stop words, merge rules, confidence thresholds
     // ─────────────────────────────────────────────────────────────────────────
-    'slotExtraction.nameStopWords': 'aiAgentSettings.nameStopWords',
-    'slotExtraction.nameStopWords.enabled': 'aiAgentSettings.nameStopWords.enabled',
-    'slotExtraction.nameStopWords.custom': 'aiAgentSettings.nameStopWords.custom',
+    // ⚠️ LEGACY (V111): These old paths pointed to aiAgentSettings.nameStopWords.
+    // Consolidated into frontDesk.nameStopWords → aiAgentSettings.frontDeskBehavior.nameStopWords.
+    // Kept for backward compat — any code reading these gets the new canonical path.
+    'slotExtraction.nameStopWords': 'aiAgentSettings.frontDeskBehavior.nameStopWords',
+    'slotExtraction.nameStopWords.enabled': 'aiAgentSettings.frontDeskBehavior.nameStopWords', // Deprecated sub-key
+    'slotExtraction.nameStopWords.custom': 'aiAgentSettings.frontDeskBehavior.nameStopWords',  // Deprecated sub-key
     
     // Merge rules (V92 name protection, conflict detection)
     'slotExtraction.mergeRules': 'aiAgentSettings.slotExtraction.mergeRules',

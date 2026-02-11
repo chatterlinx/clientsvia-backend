@@ -184,6 +184,9 @@ const UI_DEFAULTS = {
     // 👤 Common First Names - UI-configurable name recognition
     // Empty by default - companies add their own common names
     commonFirstNames: [],
+    // 🚫 V111: Name Stop Words - Company-specific words rejected as names
+    // System defaults live in IdentitySlotFirewall.js — these ADD to them
+    nameStopWords: [],
     // 🎯 Booking Outcome - What AI says when all slots collected
     // Default: "Confirmed on Call" - no callbacks unless explicitly enabled
     bookingOutcome: {
@@ -528,6 +531,8 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 fastPathBooking: config.fastPathBooking || null,
                 // 👤 Common First Names - UI-configurable name recognition
                 commonFirstNames: config.commonFirstNames || [],
+                // 🚫 V111: Name Stop Words - Words rejected as names during booking
+                nameStopWords: config.nameStopWords || [],
                 // ✏️ V30: Name Spelling Variants - "Mark with K or C?"
                 nameSpellingVariants: config.nameSpellingVariants || null,
                 // 🎯 Booking Outcome - What AI says when all slots collected
@@ -1072,6 +1077,28 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
                 count: (updates.commonFirstNames || []).length,
                 sample: (updates.commonFirstNames || []).slice(0, 10),
                 fullList: updates.commonFirstNames
+            });
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
+        // 🚫 V111: NAME STOP WORDS - Words rejected as names during booking
+        // ════════════════════════════════════════════════════════════════════════════
+        // Company-specific additions to the system default stopwords list.
+        // Merged with system defaults at runtime — these EXTEND, never replace.
+        // Runtime: IdentitySlotFirewall.validateName() + BookingFlowRunner.isStopWord()
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.nameStopWords !== undefined) {
+            // Normalize: lowercase, trim, deduplicate
+            const normalized = [...new Set(
+                (updates.nameStopWords || [])
+                    .map(w => String(w).trim().toLowerCase())
+                    .filter(w => w.length > 0)
+            )];
+            updateObj['aiAgentSettings.frontDeskBehavior.nameStopWords'] = normalized;
+            logger.info('[FRONT DESK BEHAVIOR] 🚫 Saving nameStopWords', {
+                companyId,
+                count: normalized.length,
+                sample: normalized.slice(0, 15)
             });
         }
         

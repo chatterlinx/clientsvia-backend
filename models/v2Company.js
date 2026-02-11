@@ -2810,6 +2810,21 @@ const companySchema = new mongoose.Schema({
             // ═══════════════════════════════════════════════════════════════
             // 🆕 V30: NAME SPELLING VARIANTS - "Mark with K or C?"
             // ═══════════════════════════════════════════════════════════════
+            // V111: NAME STOP WORDS - Words that should NEVER be accepted
+            // as a person's name during booking. If a caller says one of
+            // these when asked for their name, the AI re-asks the question.
+            //
+            // System defaults are hardcoded in IdentitySlotFirewall.js.
+            // Company-specific words here are MERGED with system defaults
+            // at runtime — they add to the list, never replace it.
+            //
+            // UI: Front Desk → Booking Prompts → Name Rejection Words
+            // Runtime: IdentitySlotFirewall.validateName()
+            //          BookingFlowRunner.isStopWord()
+            // ═══════════════════════════════════════════════════════════════
+            nameStopWords: { type: [String], default: [] },
+            
+            // ═══════════════════════════════════════════════════════════════
             // Optional feature for dental/medical/membership contexts where
             // exact spelling matters for record lookup.
             // 
