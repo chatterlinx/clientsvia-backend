@@ -575,25 +575,40 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     }
     
     // 3. Check for booking consent (yes-equivalent after consent question)
+    // V116: Token-based matching — handles "yes please", "yeah sure", "ok thanks"
+    // Old regex demanded entire input = single phrase. Natural responses always failed.
     if (callState?.bookingConsentPending === true) {
-        const consentPhrases = getConfig('frontDesk.discoveryConsent.consentPhrases',
-            ['yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'please']);
+        // Consent words: any word that signals agreement or is harmless filler
+        const CONSENT_WORDS = new Set([
+            'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
+            'please', 'thanks', 'thank', 'you', 'absolutely',
+            'definitely', 'right', 'correct', 'go', 'ahead',
+            'sounds', 'good', 'great', 'that', 'works', 'fine',
+            'do', 'it', 'lets', "let's", 'can', 'we', 'alright'
+        ]);
         
-        // V110: Strip STT artifact punctuation before consent matching.
-        // When STT preprocessing removes fillers (e.g., "Uh", "please"), it leaves
-        // orphaned punctuation: "Uh, yes, please." → ", yes, ."
-        // The ^-anchored regex needs a clean start-of-string to match.
+        // Clean: lowercase, strip punctuation, collapse spaces
         const cleanedForConsent = userTurnLower.trim()
-            .replace(/^[\s,.:;!?]+/, '')   // strip leading punctuation from filler removal
-            .replace(/[\s,.:;!?]+$/, '');   // strip trailing punctuation
+            .replace(/[^a-z'\s]/g, '')      // keep only letters, apostrophes, spaces
+            .replace(/\s+/g, ' ')            // collapse whitespace
+            .trim();
         
-        const isConsent = cleanedForConsent.length > 0 && consentPhrases.some(phrase => {
-            const regex = new RegExp(`^${phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s.,!]*$`, 'i');
-            return regex.test(cleanedForConsent);
-        });
+        const tokens = cleanedForConsent.split(' ').filter(t => t.length > 0);
+        
+        // Consent rule: ≤4 tokens AND every token is a consent/filler word
+        // This catches: "yes", "yes please", "yeah sure", "ok thanks",
+        //   "sounds good", "go ahead", "that works", "lets do it"
+        // Rejects: "yes my AC is broken" (non-consent words + too many tokens)
+        const isConsent = tokens.length > 0 
+            && tokens.length <= 4 
+            && tokens.every(t => CONSENT_WORDS.has(t));
         
         if (isConsent) {
-            trace.addDecisionReason('LANE_BOOKING', { reason: 'consent_given_after_offer' });
+            trace.addDecisionReason('LANE_BOOKING', { 
+                reason: 'consent_given_after_offer',
+                consentInput: cleanedForConsent,
+                tokenCount: tokens.length
+            });
             return LANES.BOOKING;
         }
     }
