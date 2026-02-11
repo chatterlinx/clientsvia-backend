@@ -2982,7 +2982,7 @@ class FrontDeskBehaviorManager {
                 if (lastDecisionEl) lastDecisionEl.textContent = 'Checking...';
                 try {
                     // Try to get latest triage decision from raw events
-                    const resp = await fetch(\`/api/admin/front-desk-behavior/\${this.companyId}\`);
+                    const resp = await fetch(`/api/admin/front-desk-behavior/${this.companyId}`);
                     const data = await resp.json();
                     const tc = data?.config?.triage || {};
                     if (lastDecisionEl) {
