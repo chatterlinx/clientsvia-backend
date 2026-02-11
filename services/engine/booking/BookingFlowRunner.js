@@ -159,7 +159,7 @@ function syncBookingCollectedToSlots(state, source = 'legacy_sync') {
  */
 
 function safeSetSlot(state, slotName, value, options = {}) {
-    const { source = 'unknown', confidence = 0.8, isCorrection = false, bypassStepGate = false } = options;
+    const { source = 'unknown', confidence = 0.8, isCorrection = false, bypassStepGate = false, needsConfirmation = false } = options;
     
     // V96h: Get trace context from state for SLOT_WRITE_FIREWALL events
     const traceCallSid = state?._traceContext?.callSid;
@@ -468,6 +468,7 @@ function safeSetSlot(state, slotName, value, options = {}) {
         value,
         source,
         confidence,
+        needsConfirmation,  // V113: Track if medium-confidence name needs confirmation
         updatedAt: new Date().toISOString(),
         previousValue: previousValue !== value ? previousValue : undefined,
         writer: 'BookingFlowRunner.safeSetSlot'
@@ -481,7 +482,8 @@ function safeSetSlot(state, slotName, value, options = {}) {
     state.slotMetadata = state.slotMetadata || {};
     state.slotMetadata[slotName] = {
         ...(state.slotMetadata[slotName] || {}),
-        ...state.slots[slotName]
+        ...state.slots[slotName],
+        needsConfirmation  // V113: Ensure confirmation flag is in metadata
     };
     
     logger.info('[SAFE SET SLOT] ✅ ACCEPTED slot write', {
@@ -489,6 +491,7 @@ function safeSetSlot(state, slotName, value, options = {}) {
         value: typeof value === 'string' ? value.substring(0, 30) : value,
         source,
         confidence,
+        needsConfirmation,  // V113: Log confirmation requirement
         wasOverwrite: !!previousValue && previousValue !== value,
         canonicalStore: 'slots'
     });
@@ -577,6 +580,123 @@ const SlotExtractors = {
     },
     
     /**
+     * =========================================================================
+     * V113: Extract firstName with multi-signal scoring
+     * =========================================================================
+     * 
+     * Uses rightmost-token extraction + confidence scoring.
+     * Returns { value, confidence, needsConfirmation } or just the value string.
+     */
+    firstName: (input, step, context = {}) => {
+        if (!input) return null;
+        
+        // Build name sets from context
+        const firstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        const lastNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || [];
+        const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
+        const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
+        
+        // Extract candidate using rightmost-token strategy
+        const extraction = extractNameCandidate(input, 'firstName');
+        if (!extraction) {
+            logger.debug('[SLOT EXTRACTOR] firstName: No candidate extracted', { input: input.substring(0, 30) });
+            return null;
+        }
+        
+        // Score the candidate
+        const scoreResult = scoreNameCandidate(extraction.candidate, 'firstName', { firstNamesSet, lastNamesSet });
+        
+        if (scoreResult.rejected) {
+            logger.warn('[SLOT EXTRACTOR] ❌ firstName rejected', {
+                input: input.substring(0, 30),
+                candidate: extraction.candidate,
+                reason: scoreResult.reason,
+                breakdown: scoreResult.breakdown
+            });
+            return null;
+        }
+        
+        logger.info('[SLOT EXTRACTOR] ✅ firstName accepted', {
+            input: input.substring(0, 30),
+            extracted: scoreResult.candidate,
+            score: scoreResult.score.toFixed(2),
+            needsConfirmation: scoreResult.needsConfirmation
+        });
+        
+        // Store metadata for confirmation flow
+        if (context.state) {
+            context.state._lastNameScore = {
+                type: 'firstName',
+                candidate: scoreResult.candidate,
+                score: scoreResult.score,
+                needsConfirmation: scoreResult.needsConfirmation,
+                breakdown: scoreResult.breakdown
+            };
+        }
+        
+        return scoreResult.candidate;
+    },
+    
+    /**
+     * =========================================================================
+     * V113: Extract lastName with multi-signal scoring
+     * =========================================================================
+     * 
+     * Uses rightmost-token extraction + confidence scoring.
+     * Handles: "yeah it's miller" → extracts "Miller" (not "yeah")
+     * Handles: "my last name is miller" → extracts "Miller"
+     */
+    lastName: (input, step, context = {}) => {
+        if (!input) return null;
+        
+        // Build name sets from context
+        const firstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        const lastNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || [];
+        const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
+        const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
+        
+        // Extract candidate using rightmost-token strategy
+        const extraction = extractNameCandidate(input, 'lastName');
+        if (!extraction) {
+            logger.debug('[SLOT EXTRACTOR] lastName: No candidate extracted', { input: input.substring(0, 30) });
+            return null;
+        }
+        
+        // Score the candidate
+        const scoreResult = scoreNameCandidate(extraction.candidate, 'lastName', { firstNamesSet, lastNamesSet });
+        
+        if (scoreResult.rejected) {
+            logger.warn('[SLOT EXTRACTOR] ❌ lastName rejected', {
+                input: input.substring(0, 30),
+                candidate: extraction.candidate,
+                reason: scoreResult.reason,
+                breakdown: scoreResult.breakdown
+            });
+            return null;
+        }
+        
+        logger.info('[SLOT EXTRACTOR] ✅ lastName accepted', {
+            input: input.substring(0, 30),
+            extracted: scoreResult.candidate,
+            score: scoreResult.score.toFixed(2),
+            needsConfirmation: scoreResult.needsConfirmation
+        });
+        
+        // Store metadata for confirmation flow
+        if (context.state) {
+            context.state._lastNameScore = {
+                type: 'lastName',
+                candidate: scoreResult.candidate,
+                score: scoreResult.score,
+                needsConfirmation: scoreResult.needsConfirmation,
+                breakdown: scoreResult.breakdown
+            };
+        }
+        
+        return scoreResult.candidate;
+    },
+    
+    /**
      * Extract phone number from user input
      */
     phone: (input, step, context = {}) => {
@@ -596,29 +716,70 @@ const SlotExtractors = {
     },
     
     /**
-     * Extract address from user input
-     * Note: For complex address validation, use Google Maps API (separate service)
+     * =========================================================================
+     * V113: Extract address with improved prefix stripping and validation
+     * =========================================================================
+     * 
+     * Fixes:
+     * - Strips "that's", "um", "uh" and other conversational prefixes
+     * - Removes leading punctuation/garbage (", 12155" → "12155")
+     * - Validates structure: must have street number + street name
+     * - Normalizes formatting (removes periods after numbers, title cases)
      */
     address: (input, step, context = {}) => {
         if (!input) return null;
         
-        const text = input.trim();
+        let text = input.trim();
         
-        // Basic validation - should contain some address-like content
-        // (number + street name pattern)
-        const hasAddressPattern = /\d+\s+[A-Za-z]/.test(text);
-        
-        if (!hasAddressPattern && text.length < 5) {
-            return null;
-        }
-        
-        // Clean up common speech artifacts
-        let address = text
-            .replace(/^(?:my address is|the address is|it's|its|at)\s+/i, '')
+        // ═══════════════════════════════════════════════════════════════════════════
+        // STEP 1: Strip ALL conversational prefixes (expanded list)
+        // ═══════════════════════════════════════════════════════════════════════════
+        text = text
+            .replace(/^(?:my\s+address\s+is|the\s+address\s+is|it's|its|that's|that\s+is|at|um|uh|well|so|yeah|yes)\s*/i, '')
+            .replace(/^[,.\s\-]+/, '')  // Remove leading punctuation/whitespace garbage
             .replace(/\s+/g, ' ')
             .trim();
         
-        return address;
+        // ═══════════════════════════════════════════════════════════════════════════
+        // STEP 2: Validate structure - MUST have number + street name
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Pattern: starts with digits followed by space and letters
+        const hasValidStructure = /^\d+\s+[A-Za-z]+/.test(text);
+        
+        if (!hasValidStructure) {
+            logger.warn('[ADDRESS EXTRACTOR] ❌ V113: Rejected - no valid street structure', {
+                original: input.substring(0, 50),
+                cleaned: text.substring(0, 50)
+            });
+            return null;  // REJECT - don't accept garbage
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // STEP 3: Normalize formatting
+        // ═══════════════════════════════════════════════════════════════════════════
+        // Fix "12155. metro" → "12155 Metro"
+        text = text
+            .replace(/(\d+)\.\s+/g, '$1 ')  // Remove period after street number
+            .replace(/\s+/g, ' ')
+            .trim();
+        
+        // Title case street names (skip the number)
+        const parts = text.split(' ');
+        const normalized = parts.map((part, i) => {
+            // Keep numbers as-is
+            if (/^\d+$/.test(part)) return part;
+            // Keep unit designators uppercase
+            if (/^(?:apt|unit|ste|#)\d*$/i.test(part)) return part.toUpperCase();
+            // Title case everything else
+            return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+        }).join(' ');
+        
+        logger.debug('[ADDRESS EXTRACTOR] V113: Address cleaned', {
+            original: input.substring(0, 50),
+            normalized: normalized.substring(0, 50)
+        });
+        
+        return normalized;
     },
     
     /**
@@ -719,12 +880,45 @@ function looksLikeAddress(text) {
     return hasNumber && STREET_SUFFIX_PATTERN.test(text);
 }
 
+/**
+ * V113: Detect address components with improved city detection
+ * 
+ * FIXES: Previously treated ANY comma as having a city, causing false positives
+ * for garbage like "that's , 12155. metro parkway."
+ * 
+ * Now requires:
+ * - Explicit state pattern (Alabama, FL, etc.) OR
+ * - "City, State" pattern (word(s) + comma + state) OR
+ * - Common city name patterns
+ */
 function detectAddressParts(rawAddress) {
-    const text = (rawAddress || '').toString().toLowerCase();
+    const text = (rawAddress || '').toString().toLowerCase().trim();
+    
+    // Check for explicit state
+    const hasState = STATE_PATTERN.test(text);
+    
+    // Check for city: must have "word(s), state" pattern or known city indicators
+    // NOT just any comma (that was the bug)
+    let hasCity = false;
+    if (hasState) {
+        // If we have a state, check if there's content before it that looks like a city
+        // Pattern: "city name, state" or "city name state"
+        const cityStatePattern = /\b([a-z]+(?:\s+[a-z]+)?)\s*,?\s*(?:alabama|alaska|arizona|arkansas|california|colorado|connecticut|delaware|florida|georgia|hawaii|idaho|illinois|indiana|iowa|kansas|kentucky|louisiana|maine|maryland|massachusetts|michigan|minnesota|mississippi|missouri|montana|nebraska|nevada|new hampshire|new jersey|new mexico|new york|north carolina|north dakota|ohio|oklahoma|oregon|pennsylvania|rhode island|south carolina|south dakota|tennessee|texas|utah|vermont|virginia|washington|west virginia|wisconsin|wyoming|al|ak|az|ar|ca|co|ct|de|fl|ga|hi|id|il|in|ia|ks|ky|la|me|md|ma|mi|mn|ms|mo|mt|ne|nv|nh|nj|nm|ny|nc|nd|oh|ok|or|pa|ri|sc|sd|tn|tx|ut|vt|va|wa|wv|wi|wy)\b/i;
+        hasCity = cityStatePattern.test(text);
+    }
+    
+    // Also check for zip code - if present, likely has city
+    const hasZip = ZIP_PATTERN.test(text);
+    if (hasZip && !hasCity) {
+        // Zip codes often come with city, check for word before zip
+        const cityZipPattern = /\b([a-z]+)\s+\d{5}\b/i;
+        hasCity = cityZipPattern.test(text);
+    }
+    
     return {
-        hasCity: STATE_PATTERN.test(text) || (rawAddress || '').includes(','),
-        hasState: STATE_PATTERN.test(text),
-        hasZip: ZIP_PATTERN.test(text),
+        hasCity,
+        hasState,
+        hasZip,
         hasUnit: UNIT_PATTERN.test(text)
     };
 }
@@ -816,6 +1010,205 @@ function cleanName(name) {
     }
     
     return cleaned;
+}
+
+/**
+ * ============================================================================
+ * V113: NAME CONFIDENCE SCORER - Multi-Signal Name Acceptance
+ * ============================================================================
+ * 
+ * Computes a confidence score for name candidates using multiple signals.
+ * This replaces the binary "blocklist" approach with nuanced scoring.
+ * 
+ * SCORING SIGNALS:
+ * - In 50K lastNames list → +0.7 (strong positive)
+ * - In 900 firstNames list → +0.5 for first, -0.1 for last (context-dependent)
+ * - In stop words (yeah/yes/ok/um) → -1.0 (hard reject)
+ * - Valid structure (letters only, 2-15 chars) → +0.2
+ * - Context phrase match ("my last name is X") → +0.3
+ * - Rightmost token after affirmation → +0.1
+ * 
+ * ACCEPTANCE LADDER:
+ * - score >= 0.8 → HIGH confidence → accept silently
+ * - score 0.5-0.8 → MEDIUM confidence → accept + confirm
+ * - score < 0.5 → LOW confidence → reject + reprompt
+ * 
+ * ============================================================================
+ */
+
+// Hard stop words - NEVER accept as names (affirmations, fillers)
+const NAME_HARD_STOP_WORDS = new Set([
+    'yeah', 'yes', 'yep', 'yup', 'ok', 'okay', 'sure', 'right', 'correct',
+    'no', 'nope', 'nah', 'uh', 'um', 'hmm', 'hm', 'ah', 'oh', 'like',
+    'hello', 'hi', 'hey', 'thanks', 'thank', 'please', 'bye', 'goodbye'
+]);
+
+// Affirmation patterns to strip from beginning of response
+const AFFIRMATION_PATTERNS = /^(?:yeah|yes|yep|yup|ok|okay|sure|right|correct|uh|um|well|so|actually|its?|it's|that's|that\s+is)\s+/i;
+
+// Name answer patterns - extract the actual name after these phrases
+const NAME_ANSWER_PATTERNS = [
+    /(?:my\s+(?:last|first)?\s*name\s+is)\s+(\w+)/i,
+    /(?:it's|its|that's|that\s+is)\s+(\w+)/i,
+    /(?:i'm|i\s+am|call\s+me)\s+(\w+)/i,
+    /(?:the\s+(?:last|first)?\s*name\s+is)\s+(\w+)/i
+];
+
+/**
+ * V113: Score a name candidate using multiple signals
+ * Returns { score, breakdown, candidate, needsConfirmation }
+ */
+function scoreNameCandidate(candidate, type = 'lastName', context = {}) {
+    if (!candidate || typeof candidate !== 'string') {
+        return { score: 0, breakdown: { reason: 'empty_candidate' }, candidate: null, needsConfirmation: false };
+    }
+    
+    const word = candidate.trim().toLowerCase();
+    const breakdown = {};
+    let score = 0;
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SIGNAL 1: Hard stop words → immediate reject (-1.0)
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (NAME_HARD_STOP_WORDS.has(word)) {
+        breakdown.stopWord = -1.0;
+        logger.debug('[NAME SCORER] ❌ Hard stop word rejected', { candidate, word });
+        return { score: -1, breakdown, candidate: null, needsConfirmation: false, rejected: true, reason: 'hard_stop_word' };
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SIGNAL 2: Valid structure check
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Must be 2-15 chars, only letters (+ apostrophe/hyphen for O'Brien, Jean-Pierre)
+    const isValidStructure = /^[A-Za-z][A-Za-z\-']{1,14}$/.test(candidate.trim());
+    if (!isValidStructure) {
+        breakdown.invalidStructure = -0.5;
+        score -= 0.5;
+    } else {
+        breakdown.validStructure = 0.2;
+        score += 0.2;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SIGNAL 3: In 50K lastNames list → strong positive
+    // ═══════════════════════════════════════════════════════════════════════════
+    const lastNamesSet = context.lastNamesSet || new Set();
+    const inLastNameList = lastNamesSet.has(word);
+    if (inLastNameList) {
+        breakdown.inLastNameList = 0.7;
+        score += 0.7;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SIGNAL 4: In 900 firstNames list
+    // ═══════════════════════════════════════════════════════════════════════════
+    const firstNamesSet = context.firstNamesSet || new Set();
+    const inFirstNameList = firstNamesSet.has(word);
+    if (inFirstNameList) {
+        if (type === 'firstName') {
+            breakdown.inFirstNameList = 0.5;
+            score += 0.5;
+        } else {
+            // First name given as last name - slight negative but not rejection
+            // (could be a last name that's also a first name: James, Thomas, etc.)
+            breakdown.firstNameAsLast = -0.1;
+            score -= 0.1;
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SIGNAL 5: Not in any list but passes structure → neutral/accept
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Foreign names like "Paulo", "Dmitri", "Nakamura" won't be in lists
+    // but should still be accepted if structure is valid
+    if (!inLastNameList && !inFirstNameList && isValidStructure) {
+        breakdown.unknownButValid = 0.3;
+        score += 0.3;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DECISION: Acceptance ladder
+    // ═══════════════════════════════════════════════════════════════════════════
+    const finalScore = Math.max(0, Math.min(1, score)); // Clamp 0-1
+    const needsConfirmation = finalScore >= 0.4 && finalScore < 0.8;
+    const accepted = finalScore >= 0.4;
+    
+    logger.debug('[NAME SCORER] Score computed', {
+        candidate,
+        type,
+        finalScore: finalScore.toFixed(2),
+        breakdown,
+        accepted,
+        needsConfirmation
+    });
+    
+    return {
+        score: finalScore,
+        breakdown,
+        candidate: accepted ? titleCase(candidate.trim()) : null,
+        needsConfirmation,
+        accepted,
+        rejected: !accepted,
+        reason: accepted ? null : 'low_score'
+    };
+}
+
+/**
+ * V113: Extract name candidate from input using rightmost-token strategy
+ * 
+ * For "yeah it's walter", extracts "walter" not "yeah"
+ * For "my last name is miller", extracts "miller"
+ */
+function extractNameCandidate(input, type = 'lastName') {
+    if (!input) return null;
+    
+    let text = input.trim();
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 1: Try explicit name patterns first (highest priority)
+    // ═══════════════════════════════════════════════════════════════════════════
+    for (const pattern of NAME_ANSWER_PATTERNS) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+            const candidate = match[1].trim();
+            if (candidate.length >= 2 && !NAME_HARD_STOP_WORDS.has(candidate.toLowerCase())) {
+                logger.debug('[NAME EXTRACTOR] Matched explicit pattern', { 
+                    pattern: pattern.source.substring(0, 30), 
+                    candidate 
+                });
+                return { candidate, source: 'explicit_pattern', patternMatched: true };
+            }
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STEP 2: Strip affirmations and take rightmost viable token
+    // ═══════════════════════════════════════════════════════════════════════════
+    text = text.replace(AFFIRMATION_PATTERNS, '').trim();
+    
+    // Split into words, filter valid name-like tokens
+    const words = text.split(/\s+/)
+        .filter(w => /^[A-Za-z][A-Za-z\-']*$/.test(w))
+        .filter(w => w.length >= 2)
+        .filter(w => !NAME_HARD_STOP_WORDS.has(w.toLowerCase()));
+    
+    if (words.length === 0) {
+        logger.debug('[NAME EXTRACTOR] No viable tokens found', { input: input.substring(0, 30) });
+        return null;
+    }
+    
+    // Take RIGHTMOST token (most likely to be the actual name)
+    // "yeah it's walter" → words = ["walter"] after filtering → take "walter"
+    // "my name is john smith" → words = ["john", "smith"] → take "smith" for lastName
+    const candidate = words[words.length - 1];
+    
+    logger.debug('[NAME EXTRACTOR] Extracted rightmost token', { 
+        input: input.substring(0, 30), 
+        candidate,
+        allTokens: words 
+    });
+    
+    return { candidate, source: 'rightmost_token', patternMatched: false };
 }
 
 /**
@@ -4051,11 +4444,40 @@ class BookingFlowRunner {
         }
         
         // V96f: Use safeSetSlot for identity fields, direct write for others
+        // V113: Pass needsConfirmation from name scoring if available
         if (IDENTITY_SLOTS.has(fieldKey)) {
+            // V113: Check if name scoring set needsConfirmation
+            const nameScore = state._lastNameScore;
+            const isNameField = ['firstName', 'lastName', 'name'].includes(fieldKey);
+            const needsConfirmation = isNameField && nameScore?.needsConfirmation === true;
+            const scoreConfidence = nameScore?.score || 0.9;
+            
             const setResult = safeSetSlot(state, fieldKey, valueToStore, {
                 source: 'direct_collection',
-                confidence: 0.9
+                confidence: isNameField ? scoreConfidence : 0.9,
+                needsConfirmation  // V113: Pass through for confirmation flow
             });
+            
+            // V113: Store scoring metadata for confirmation flow
+            if (setResult.accepted && nameScore) {
+                state.slotMetadata = state.slotMetadata || {};
+                state.slotMetadata[fieldKey] = state.slotMetadata[fieldKey] || {};
+                state.slotMetadata[fieldKey].needsConfirmation = needsConfirmation;
+                state.slotMetadata[fieldKey].nameScore = nameScore.score;
+                state.slotMetadata[fieldKey].scoreBreakdown = nameScore.breakdown;
+                
+                // Clear the temporary score after using it
+                delete state._lastNameScore;
+                
+                logger.info('[BOOKING FLOW RUNNER] V113: Name slot set with scoring metadata', {
+                    fieldKey,
+                    value: valueToStore,
+                    score: nameScore.score?.toFixed(2),
+                    needsConfirmation,
+                    breakdown: nameScore.breakdown
+                });
+            }
+            
             if (setResult.accepted) {
                 markSlotConfirmed(state, fieldKey);
             } else {
