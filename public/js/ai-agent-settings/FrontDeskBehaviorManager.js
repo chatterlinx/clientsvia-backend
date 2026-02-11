@@ -101,19 +101,26 @@ class FrontDeskBehaviorManager {
                 this.config.customFillers = [];
             }
             
-            // 🚫 V36: Load custom stop words from nameStopWords.custom (if exists)
-            if (this.config.nameStopWords?.custom) {
-                this.config.customStopWords = this.config.nameStopWords.custom;
-                this.config.nameStopWordsEnabled = this.config.nameStopWords.enabled !== false;
-                console.log('[FRONT DESK BEHAVIOR] 🚫 Custom stop words loaded from DB:', {
-                    enabled: this.config.nameStopWordsEnabled,
-                    count: this.config.customStopWords.length,
-                    words: this.config.customStopWords
+            // 🚫 V111: Normalize nameStopWords — may arrive as:
+            //   - Array (new V111 format) → use as-is
+            //   - Object { enabled, custom: [] } (legacy V36 format) → extract .custom
+            //   - undefined/null → default to []
+            if (Array.isArray(this.config.nameStopWords)) {
+                // V111 format: flat array of strings — correct
+            } else if (this.config.nameStopWords && typeof this.config.nameStopWords === 'object') {
+                // Legacy V36 format: { enabled: bool, custom: [...] }
+                const legacyCustom = this.config.nameStopWords.custom || [];
+                this.config.nameStopWords = Array.isArray(legacyCustom) ? legacyCustom : [];
+                console.log('[FRONT DESK BEHAVIOR] 🚫 Migrated legacy nameStopWords format:', {
+                    migratedCount: this.config.nameStopWords.length
                 });
             } else {
-                this.config.customStopWords = [];
-                this.config.nameStopWordsEnabled = true;
+                this.config.nameStopWords = [];
             }
+            console.log('[FRONT DESK BEHAVIOR] 🚫 Custom stop words loaded from DB:', {
+                count: this.config.nameStopWords.length,
+                words: this.config.nameStopWords
+            });
             
             // 🔤 V36: Load inherited synonyms from active AiCore template
             await this.loadInheritedSynonyms(token);
@@ -5827,7 +5834,7 @@ Sean → Shawn, Shaun"
                         title="Copy all words to clipboard (comma-separated)">
                         📋 Copy All
                     </button>
-                    <span id="fdb-stop-word-count" style="color: #8b949e; font-size: 0.75rem;">${(this.config.nameStopWords || []).length} custom + system defaults</span>
+                    <span id="fdb-stop-word-count" style="color: #8b949e; font-size: 0.75rem;">${(Array.isArray(this.config.nameStopWords) ? this.config.nameStopWords : []).length} custom + system defaults</span>
                 </div>
             </div>
             
@@ -7233,7 +7240,9 @@ Sean → Shawn, Shaun`;
      */
     renderNameStopWordTags() {
         const systemWords = this.constructor.SYSTEM_NAME_STOPWORDS;
-        const customWords = this.config.nameStopWords || [];
+        // Defensive: ensure customWords is always an array (handles legacy object format)
+        const raw = this.config.nameStopWords;
+        const customWords = Array.isArray(raw) ? raw : (raw?.custom || []);
         
         if (systemWords.length === 0 && customWords.length === 0) {
             return '<p style="color: #8b949e; margin: 0; font-style: italic;">No rejection words configured.</p>';
@@ -7267,8 +7276,10 @@ Sean → Shawn, Shaun`;
         const rawInput = input?.value?.trim();
         if (!rawInput) return;
         
-        if (!this.config.nameStopWords) {
-            this.config.nameStopWords = [];
+        if (!Array.isArray(this.config.nameStopWords)) {
+            // Normalize legacy format or initialize
+            const legacy = this.config.nameStopWords;
+            this.config.nameStopWords = Array.isArray(legacy?.custom) ? legacy.custom : [];
         }
         
         // Support bulk insertion: split by comma, semicolon, or newline
@@ -7337,7 +7348,7 @@ Sean → Shawn, Shaun`;
      */
     copyAllStopWords() {
         const system = this.constructor.SYSTEM_NAME_STOPWORDS;
-        const custom = this.config.nameStopWords || [];
+        const custom = Array.isArray(this.config.nameStopWords) ? this.config.nameStopWords : [];
         const all = [...system, ...custom];
         
         if (all.length === 0) {
@@ -7426,7 +7437,7 @@ Sean → Shawn, Shaun`;
         }
         const countEl = document.getElementById('fdb-stop-word-count');
         if (countEl) {
-            countEl.textContent = `${(this.config.nameStopWords || []).length} custom + system defaults`;
+            countEl.textContent = `${(Array.isArray(this.config.nameStopWords) ? this.config.nameStopWords : []).length} custom + system defaults`;
         }
         // Clear search
         const searchInput = document.getElementById('fdb-search-stop-word');
@@ -11153,70 +11164,18 @@ Sean → Shawn, Shaun`;
             </div>
             
             <!-- ═══════════════════════════════════════════════════════════════════ -->
-            <!-- V36: NAME STOP WORDS - Words that should NEVER be extracted as names -->
+            <!-- V111: Legacy V36 Name Stop Words section REPLACED                  -->
+            <!-- Name Rejection Words are now managed in Booking Prompts tab.       -->
             <!-- ═══════════════════════════════════════════════════════════════════ -->
-            <div style="background: #161b22; border: 1px solid #f85149; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-                    <div>
-                        <h3 style="margin: 0 0 8px 0; color: #f85149;">🚫 Name Extraction Stop Words</h3>
-                        <p style="color: #8b949e; font-size: 0.875rem; margin: 0;">
-                            <strong>Prevent false name extraction:</strong> Words like "to", "see", "if" should NEVER be extracted as names.
-                            <br><span style="color: #6e7681;">Example: "I am trying <strong>to see</strong> if..." should NOT extract "to see" as a name.</span>
-                        </p>
-                    </div>
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
-                        <input type="checkbox" id="fdb-stopwords-enabled" ${this.config.nameStopWordsEnabled !== false ? 'checked' : ''} 
-                            onchange="window.frontDeskManager.toggleStopWordsFields(this.checked)"
-                            style="accent-color: #f85149; width: 16px; height: 16px;">
-                        <span style="color: #c9d1d9; font-size: 0.85rem; font-weight: 500;">Enabled</span>
-                    </label>
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <h3 style="margin: 0; color: #8b949e; font-size: 0.95rem;">🚫 Name Rejection Words</h3>
+                    <span style="background: #30363d; color: #8b949e; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">MOVED</span>
                 </div>
-
-                <div id="fdb-stopwords-fields" style="display: ${this.config.nameStopWordsEnabled !== false ? 'block' : 'none'};">
-                    <!-- PLATFORM DEFAULT STOP WORDS (Read-Only) -->
-                    <div style="background: #0d1117; border: 1px solid #238636; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="background: #238636; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">PLATFORM</span>
-                                <h4 style="margin: 0; color: #3fb950; font-size: 0.95rem;">📚 Default Stop Words (Built-in)</h4>
-                            </div>
-                            <span style="color: #6e7681; font-size: 0.75rem;">Read-only • Platform defaults</span>
-                        </div>
-                        <div id="fdb-platform-stopwords" style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; max-height: 150px; overflow-y: auto;">
-                            ${this.renderPlatformStopWords()}
-                        </div>
-                        <p style="color: #6e7681; font-size: 0.7rem; margin: 8px 0 0 0;">
-                            💡 These are platform defaults that prevent common false positives. Add custom words below if needed.
-                        </p>
-                    </div>
-
-                    <!-- CUSTOM COMPANY STOP WORDS (Editable) -->
-                    <div style="background: #0d1117; border: 1px solid #f85149; border-radius: 8px; padding: 16px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span style="background: #f85149; color: white; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">CUSTOM</span>
-                                <h4 style="margin: 0; color: #f85149; font-size: 0.95rem;">🔧 Company Stop Words (Additional)</h4>
-                            </div>
-                            <button type="button" onclick="window.frontDeskManager.addStopWord()" 
-                                style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);">
-                                <span style="font-size: 1.1rem;">+</span> Add Stop Word
-                            </button>
-                        </div>
-                        <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 12px;">
-                            Add company-specific words that should never be extracted as names.
-                        </p>
-                        
-                        <div id="fdb-custom-stopwords" style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; max-height: 200px; overflow-y: auto;">
-                            ${this.renderCustomStopWords()}
-                        </div>
-                        <div style="padding: 8px 16px; background: #21262d; border-top: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; border-radius: 0 0 8px 8px; margin-top: -1px;">
-                            <span style="color: #6e7681; font-size: 0.75rem;">${(this.config.customStopWords || []).length} custom stop word${(this.config.customStopWords || []).length !== 1 ? 's' : ''}</span>
-                        </div>
-                        <p style="color: #6e7681; font-size: 0.7rem; margin: 12px 0 0 0;">
-                            <strong>Examples:</strong> Company-specific words that might be mistaken for names in your industry.
-                        </p>
-                    </div>
-                </div>
+                <p style="color: #6e7681; font-size: 0.8rem; margin: 8px 0 0 0;">
+                    Name rejection words are now managed in the <strong style="color: #58a6ff; cursor: pointer;" onclick="window.frontDeskManager.switchTab('booking')">Booking Prompts</strong> tab
+                    under "Name Rejection Words". System defaults are always enforced.
+                </p>
             </div>
             
             <!-- ═══════════════════════════════════════════════════════════════════ -->
@@ -12307,23 +12266,19 @@ Sean → Shawn, Shaun`;
         });
         
         // ════════════════════════════════════════════════════════════════════════════
-        // V36: Name Stop Words (Words that should NEVER be extracted as names)
+        // V111: Name Stop Words — flat array format (replaces legacy V36 object)
         // ════════════════════════════════════════════════════════════════════════════
-        const stopWordsEnabled = document.getElementById('fdb-stopwords-enabled')?.checked ?? true;
-        const customStopWords = this.config.customStopWords || [];
-        
-        // Save to nameStopWords in the schema
-        if (!this.config.nameStopWords) {
-            this.config.nameStopWords = {};
+        // nameStopWords is now a flat [String] in frontDeskBehavior.
+        // The V111 UI (Name Rejection Words section in Booking Prompts tab) manages
+        // this.config.nameStopWords directly. Just ensure it's an array for save.
+        if (!Array.isArray(this.config.nameStopWords)) {
+            const legacy = this.config.nameStopWords;
+            this.config.nameStopWords = Array.isArray(legacy?.custom) ? legacy.custom : [];
         }
-        this.config.nameStopWords.enabled = stopWordsEnabled;
-        this.config.nameStopWords.custom = customStopWords;
-        this.config.nameStopWordsEnabled = stopWordsEnabled;
         
-        console.log('[FRONT DESK BEHAVIOR] 🚫 V36 Name stop words saved:', {
-            enabled: stopWordsEnabled,
-            count: customStopWords.length,
-            words: customStopWords
+        console.log('[FRONT DESK BEHAVIOR] 🚫 V111 Name stop words saved:', {
+            count: this.config.nameStopWords.length,
+            words: this.config.nameStopWords
         });
         
         // ════════════════════════════════════════════════════════════════════════════
