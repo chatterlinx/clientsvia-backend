@@ -8183,25 +8183,6 @@ Example: ACK ALT-20251020-001
     }
 });
 
-// 🚨 CATCH-ALL ENDPOINT - Must be LAST to log any unmatched Twilio requests
-router.all('*', (req, res) => {
-  logger.info('❌ UNMATCHED TWILIO REQUEST:', {
-    timestamp: new Date().toISOString(),
-    method: req.method,
-    url: req.url,
-    fullUrl: req.originalUrl,
-    path: req.path,
-    params: req.params,
-    hasCallSid: Boolean(req.body?.CallSid)
-  });
-  
-  // CRITICAL: Always return TwiML for Twilio requests, NEVER JSON!
-  const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say('This endpoint is not configured. Please check your Twilio webhook settings.');
-  twiml.hangup();
-  res.type('text/xml').status(200).send(twiml.toString());
-});
-
 // ============================================================================
 // 📞 CALL STATUS CALLBACK - CALL CENTER V2 INTEGRATION
 // ============================================================================
@@ -8628,6 +8609,32 @@ router.post('/test-gather', (req, res) => {
   const twiml = new twilio.twiml.VoiceResponse();
   twiml.say(`We heard: ${req.body.SpeechResult || 'nothing'}. Goodbye.`);
   res.type('text/xml').send(twiml.toString());
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// 🚨 CATCH-ALL ENDPOINT - MUST be the ABSOLUTE LAST route registered!
+// ════════════════════════════════════════════════════════════════════════════════
+// Express routes match in registration order. If this appears before other routes,
+// it swallows ALL requests and makes everything below it unreachable dead code.
+// This was the root cause of the "check your Twilio webhook settings" error —
+// the catastrophic-dtmf, status-callback, and test-gather routes were shadowed.
+// ════════════════════════════════════════════════════════════════════════════════
+router.all('*', (req, res) => {
+  logger.info('❌ UNMATCHED TWILIO REQUEST:', {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+    url: req.url,
+    fullUrl: req.originalUrl,
+    path: req.path,
+    params: req.params,
+    hasCallSid: Boolean(req.body?.CallSid)
+  });
+  
+  // CRITICAL: Always return TwiML for Twilio requests, NEVER JSON!
+  const twiml = new twilio.twiml.VoiceResponse();
+  twiml.say('This endpoint is not configured. Please check your Twilio webhook settings.');
+  twiml.hangup();
+  res.type('text/xml').status(200).send(twiml.toString());
 });
 
 logger.info('🚀 [V2TWILIO] ========== EXPORTING ROUTER (FILE LOADED SUCCESSFULLY) ==========');
