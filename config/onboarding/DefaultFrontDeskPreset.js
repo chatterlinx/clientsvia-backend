@@ -304,11 +304,13 @@ const DEFAULT_BOOKING_FLOW = {
             order: 5,
             ask: "Do you prefer morning or afternoon? I can offer 8-10, 10-12, 12-2, or 2-4.", 
             confirmPrompt: "Perfect, {value} works. Is that right?",
-            reprompt: "Morning or afternoon?",
+            // V117: Reprompt MUST include windows too — otherwise the caller gives
+            // a window ("8 to 10") and gets "Morning or afternoon?" which feels dumb
+            reprompt: "We have 8-10, 10-12, 12-2, or 2-4. Which window works best?",
             repromptVariants: [
-                "Morning or afternoon?",
-                "What time works best?",
-                "When would be a good time?"
+                "We have 8-10, 10-12, 12-2, or 2-4. Which works best?",
+                "I can offer 8-10, 10-12, 12-2, or 2-4. What time works for you?",
+                "Morning or afternoon? Our windows are 8-10, 10-12, 12-2, and 2-4."
             ],
             confirmRetryPrompt: "Is {value} a good time?"
         }

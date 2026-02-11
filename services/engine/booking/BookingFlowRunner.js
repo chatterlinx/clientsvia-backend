@@ -247,24 +247,75 @@ function safeSetSlot(state, slotName, value, options = {}) {
         const isCurrentSlot = slotName === currentFieldKey || isNameRelated;
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V116: GUARD — If writing to lastName during 'name' step, value must be
-        // a plausible name (1-2 words, < 25 chars, no sentence fragments).
-        // Prevents "my first name is mark." from being stored as a last name.
+        // V117: GUARD + NORMALIZER — lastName must be a clean, plausible name.
         // ═══════════════════════════════════════════════════════════════════════
-        if (isNameRelated && slotName === 'lastName' && currentFieldKey === 'name') {
-            const trimmedValue = (typeof value === 'string') ? value.trim() : '';
-            const wordCount = trimmedValue.split(/\s+/).length;
-            const hasNonNameWords = /\b(my|first|name|is|the|a|an|yes|no|that|this|good|number|please)\b/i.test(trimmedValue);
-            if (wordCount > 2 || trimmedValue.length > 25 || hasNonNameWords) {
-                logger.warn('[SAFE SET SLOT] V116: lastName rejected — raw input is not a plausible name', {
+        // Applies on ANY step writing to lastName (not just 'name' step).
+        // Strips framing phrases like "that's", "my last name is", trailing
+        // punctuation, and validates the result is a plausible name.
+        //
+        // BUG FIX: V116 only checked currentFieldKey === 'name', so the guard
+        // was bypassed on the dedicated lastName step. Trace proved
+        // ", that's walter." was stored as-is.
+        // ═══════════════════════════════════════════════════════════════════════
+        if (slotName === 'lastName' || slotName === 'firstName') {
+            let cleanedValue = (typeof value === 'string') ? value.trim() : '';
+            
+            // Step 1: Strip leading punctuation/garbage
+            cleanedValue = cleanedValue.replace(/^[,.\s\-;:!?"']+/, '').trim();
+            
+            // Step 2: Strip framing phrases
+            cleanedValue = cleanedValue
+                .replace(/^(?:my\s+(?:last|first)\s+name\s+is|it's|its|that's|that\s+is|i'm|i\s+am|call\s+me|yes|yeah|yep|um|uh|so|well|actually)\s+/i, '')
+                .trim();
+            
+            // Step 3: Strip trailing punctuation
+            cleanedValue = cleanedValue.replace(/[.,!?;:]+$/, '').trim();
+            
+            // Step 4: Extract just the name token (take the last word if multi-word)
+            const nameTokens = cleanedValue.split(/\s+/)
+                .filter(w => /^[A-Za-z][A-Za-z\-']*$/.test(w))
+                .filter(w => w.length >= 2)
+                .filter(w => !/^(my|first|last|name|is|the|a|an|yes|no|that|this|good|number|please|it|its|so|well|um|uh|and|or|but)$/i.test(w));
+            
+            if (nameTokens.length === 0) {
+                logger.warn('[SAFE SET SLOT] V117: lastName/firstName rejected — no viable name token', {
                     rejectedSlot: slotName,
                     currentStep: currentStepId,
-                    attemptedValue: trimmedValue.substring(0, 40),
-                    wordCount,
+                    rawValue: value.substring(0, 40),
+                    cleanedValue: cleanedValue.substring(0, 40),
+                    reason: 'no_name_token'
+                });
+                return { accepted: false, reason: 'no_name_token' };
+            }
+            
+            // For lastName, take the LAST viable token ("that's walter" → "walter")
+            // For firstName, take the FIRST viable token
+            const selectedToken = slotName === 'lastName' 
+                ? nameTokens[nameTokens.length - 1] 
+                : nameTokens[0];
+            
+            // Title case
+            const titleCased = selectedToken.charAt(0).toUpperCase() + selectedToken.slice(1).toLowerCase();
+            
+            // Validate: must be 2-25 chars, 1-2 words
+            if (titleCased.length > 25) {
+                logger.warn('[SAFE SET SLOT] V117: lastName rejected — too long after cleanup', {
+                    rejectedSlot: slotName,
+                    attemptedValue: titleCased,
                     reason: 'not_plausible_last_name'
                 });
                 return { accepted: false, reason: 'not_plausible_last_name' };
             }
+            
+            // Replace value with cleaned version
+            if (titleCased !== value) {
+                logger.info('[SAFE SET SLOT] V117: Name normalized', {
+                    slotName,
+                    rawValue: value.substring(0, 40),
+                    normalized: titleCased
+                });
+            }
+            value = titleCased;
         }
         
         if (!isCurrentSlot) {
@@ -804,12 +855,22 @@ const SlotExtractors = {
     },
     
     /**
-     * Extract time/date preference from user input
+     * =========================================================================
+     * V117: Extract time/date preference from user input
+     * =========================================================================
+     * 
+     * Fixes:
+     * - "8 to 10", "8-10", "ten to twelve" now map to Morning/Afternoon
+     * - "first slot", "earliest" map to Morning
+     * - Numeric hour ranges (e.g. 8-10) are recognized as time windows
+     * - All paths return a structured value the booking runner understands
      */
     time: (input, step, context = {}) => {
         if (!input) return null;
         
-        const text = input.toLowerCase().trim();
+        const text = input.toLowerCase().trim()
+            .replace(/^[,.\s]+/, '')    // strip leading punctuation
+            .replace(/[,.\s]+$/, '');   // strip trailing punctuation
         
         // 🚫 Guard: never treat an address-like utterance as time
         if (looksLikeAddress(text)) {
@@ -820,6 +881,51 @@ const SlotExtractors = {
         // ASAP patterns
         if (/\b(asap|as soon as possible|soon|right away|immediately|now)\b/.test(text)) {
             return 'ASAP';
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V117: NUMERIC HOUR RANGE → Morning/Afternoon mapping
+        // ═══════════════════════════════════════════════════════════════════════
+        // Handles: "8 to 10", "8-10", "10 to 12", "12 to 2", "2 to 4"
+        // Also: "eight to ten", common spoken number words
+        // ═══════════════════════════════════════════════════════════════════════
+        const WORD_TO_NUM = {
+            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+            'eleven': 11, 'twelve': 12
+        };
+        
+        // Match "N to N", "N-N", "N through N"
+        const rangeMatch = text.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:to|-|through|thru)\s*(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i);
+        if (rangeMatch) {
+            const startHour = WORD_TO_NUM[rangeMatch[1]] || parseInt(rangeMatch[1], 10);
+            const endHour = WORD_TO_NUM[rangeMatch[2]] || parseInt(rangeMatch[2], 10);
+            
+            if (startHour >= 1 && startHour <= 12 && endHour >= 1 && endHour <= 12) {
+                // Map to morning/afternoon based on start hour
+                const isMorning = startHour >= 6 && startHour < 12;
+                const timeOfDay = isMorning ? 'Morning' : 'Afternoon';
+                const windowLabel = `${startHour}-${endHour}`;
+                
+                logger.info('[BOOKING FLOW RUNNER] V117: Numeric time range detected', {
+                    raw: text,
+                    startHour,
+                    endHour,
+                    timeOfDay,
+                    windowLabel
+                });
+                
+                return `${timeOfDay} (${windowLabel})`;
+            }
+        }
+        
+        // "first slot" / "earliest" / "first available" → Morning
+        if (/\b(first|earliest|first available|first slot|first one)\b/.test(text)) {
+            return 'Morning (earliest)';
+        }
+        // "last slot" / "latest" → Afternoon
+        if (/\b(last|latest|last slot|last one|last available)\b/.test(text)) {
+            return 'Afternoon (latest)';
         }
         
         // Explicit time of day preferences (non-greeting)
@@ -839,7 +945,7 @@ const SlotExtractors = {
             return titleCase(dayMatch[1]);
         }
         
-        // Specific time patterns
+        // Specific time patterns (10am, 3:30pm)
         if (/\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(text)) {
             return input.trim();
         }
@@ -950,8 +1056,29 @@ function detectAddressParts(rawAddress) {
         hasCity = cityStatePattern.test(text);
     }
     
-    // Also check for zip code - if present, likely has city
-    const hasZip = ZIP_PATTERN.test(text);
+    // ═══════════════════════════════════════════════════════════════════════
+    // V117 FIX: ZIP detection must NOT match a leading street number.
+    // "12155 Metro Parkway" — "12155" is a street number, NOT a zip code.
+    // Zip codes appear AFTER street names, not at position 0.
+    //
+    // Heuristic: a 5-digit number is a zip only if it has non-digit content
+    // before it (i.e., it's not the first token in the address).
+    // We check ALL matches, not just the first, because "12155 metro parkway 33966"
+    // has the street number first and the zip second.
+    // ═══════════════════════════════════════════════════════════════════════
+    let hasZip = false;
+    const zipRegex = /\b\d{5}(?:-\d{4})?\b/g;
+    let zipMatch;
+    while ((zipMatch = zipRegex.exec(text)) !== null) {
+        const textBeforeZip = text.substring(0, zipMatch.index).trim();
+        // A zip must have non-digit text before it (street name, city name)
+        // AND must not be the very first token (that's the street number)
+        if (textBeforeZip.length > 0 && /[a-z]/i.test(textBeforeZip)) {
+            hasZip = true;
+            break;
+        }
+    }
+    
     if (hasZip && !hasCity) {
         // Zip codes often come with city, check for word before zip
         const cityZipPattern = /\b([a-z]+)\s+\d{5}\b/i;
@@ -2495,6 +2622,29 @@ class BookingFlowRunner {
                     mode: 'CONFIRM',
                     existingValue,
                     metadata: { source: 'unknown', confidence: 0.7 }
+                };
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // V117: Check detailed prompts BEFORE skipping
+            // ═══════════════════════════════════════════════════════════════════════
+            // Even if metadata doesn't trigger confirm, address completeness or
+            // name spelling checks must still be honored.
+            // BUG FIX: Previously, address with no metadata fell through here
+            // and was auto-skipped, even when street-only (no city/state).
+            // ═══════════════════════════════════════════════════════════════════════
+            if (needsDetailedPrompts) {
+                logger.info('[BOOKING FLOW] V117: Returning step for detailed prompts (no metadata path)', {
+                    fieldKey,
+                    existingValue: existingValue?.substring?.(0, 30),
+                    reason: detailedPromptReason
+                });
+                return {
+                    step,
+                    mode: 'COLLECT_DETAILS',
+                    existingValue,
+                    metadata,
+                    detailReason: detailedPromptReason
                 };
             }
             
@@ -4080,19 +4230,69 @@ class BookingFlowRunner {
                 // Check if user is selecting from offered windows
                 if (state.awaitingWindowSelection && timeWindows.length > 0) {
                     const normalizedInput = userPreference.toLowerCase();
-                    const matchedWindow = timeWindows.find(w => 
-                        normalizedInput.includes(w.label.toLowerCase()) ||
-                        normalizedInput.includes(w.start) ||
-                        normalizedInput.includes(w.end)
-                    );
+                    
+                    // V117: Also extract embedded window from "(8-10)" style values
+                    const parenWindowMatch = normalizedInput.match(/\((\d{1,2}-\d{1,2})\)/);
+                    const embeddedWindow = parenWindowMatch ? parenWindowMatch[1] : null;
+                    
+                    const matchedWindow = timeWindows.find(w => {
+                        const wLabelLower = (w.label || '').toLowerCase().replace(/[ap]m/g, '');
+                        const startH = parseInt(w.start?.split(':')[0], 10);
+                        const endH = parseInt(w.end?.split(':')[0], 10);
+                        const windowNums = `${startH}-${endH > 12 ? endH - 12 : endH}`;
+                        
+                        return normalizedInput.includes(w.label.toLowerCase()) ||
+                            normalizedInput.includes(w.start) ||
+                            normalizedInput.includes(w.end) ||
+                            (embeddedWindow && (wLabelLower.includes(embeddedWindow) || windowNums === embeddedWindow));
+                    });
                     
                     if (matchedWindow) {
                         valueToStore = matchedWindow.label;
                         state.awaitingWindowSelection = false;
                         logger.info('[BOOKING FLOW RUNNER] Phase 1: Time window selected', {
                             selected: matchedWindow.label,
-                            userInput: userPreference
+                            userInput: userPreference,
+                            matchedVia: embeddedWindow ? 'V117_numeric_range' : 'label_match'
                         });
+                    }
+                }
+                
+                // ═══════════════════════════════════════════════════════════════════════
+                // V117: CHECK IF USER ALREADY SPECIFIED A WINDOW
+                // ═══════════════════════════════════════════════════════════════════════
+                // If extractResult.value is "Morning (8-10)" or similar, check if the
+                // parenthesized window matches a configured time window. If so, accept
+                // it directly — don't re-prompt for window selection.
+                // ═══════════════════════════════════════════════════════════════════════
+                if (timeWindows.length > 0 && !valueToStore) {
+                    const windowParenMatch = userPreference.match(/\((\d{1,2}-\d{1,2})\)/);
+                    if (windowParenMatch) {
+                        const userWindow = windowParenMatch[1]; // e.g. "8-10"
+                        const matchedWindow = timeWindows.find(w => {
+                            // Match "8-10" against window label "8-10am" or start/end hours
+                            const wLabel = (w.label || '').toLowerCase().replace(/[ap]m/g, '');
+                            const startH = parseInt(w.start?.split(':')[0], 10);
+                            const endH = parseInt(w.end?.split(':')[0], 10);
+                            const windowNums = `${startH}-${endH > 12 ? endH - 12 : endH}`;
+                            return wLabel.includes(userWindow) || windowNums === userWindow || userWindow === `${startH}-${endH}`;
+                        });
+                        
+                        if (matchedWindow) {
+                            valueToStore = matchedWindow.label;
+                            logger.info('[BOOKING FLOW RUNNER] V117: Direct window match from numeric range', {
+                                userPreference,
+                                matchedWindow: matchedWindow.label,
+                                userWindow
+                            });
+                        } else {
+                            // Window doesn't match config exactly — store the extracted value as-is
+                            valueToStore = userPreference;
+                            logger.info('[BOOKING FLOW RUNNER] V117: Numeric range accepted (no exact window config match)', {
+                                userPreference,
+                                configuredWindows: timeWindows.map(w => w.label)
+                            });
+                        }
                     }
                 }
                 
@@ -5637,7 +5837,40 @@ class BookingFlowRunner {
             const fieldKey = step.fieldKey || step.id;
             
             // Skip if already collected
-            if (collected[fieldKey]) continue;
+            if (collected[fieldKey]) {
+                // ═══════════════════════════════════════════════════════════
+                // V117: ADDRESS COMPLETENESS GATE
+                // ═══════════════════════════════════════════════════════════
+                // Even if address has a value, check if it's COMPLETE.
+                // Street-only (no city/state/zip) must NOT advance.
+                // This catches addresses pre-filled by slot extraction
+                // that bypass the geo validation path in runStep().
+                // ═══════════════════════════════════════════════════════════
+                if ((fieldKey === 'address' || step.type === 'address') && !state.addressCompletionVerified) {
+                    const addressValue = collected[fieldKey];
+                    const parts = detectAddressParts(addressValue);
+                    
+                    if (!parts.hasCity && !parts.hasState && !parts.hasZip) {
+                        // Address is street-only — NOT complete
+                        logger.warn('[BOOKING FLOW RUNNER] V117: Address incomplete (street-only) — not advancing', {
+                            address: addressValue,
+                            parts,
+                            stepId: step.id
+                        });
+                        
+                        // Set state so runStep knows to ask for city
+                        state.addressIncomplete = true;
+                        state.addressMissing = ['city'];
+                        
+                        return step; // Return address step, don't skip it
+                    }
+                    
+                    // Mark as verified so we don't re-check every turn
+                    state.addressCompletionVerified = true;
+                }
+                
+                continue;
+            }
             
             return step;
         }

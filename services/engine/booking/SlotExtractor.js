@@ -1745,6 +1745,53 @@ class SlotExtractor {
             };
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V117: NUMERIC HOUR RANGE → Morning/Afternoon mapping
+        // ═══════════════════════════════════════════════════════════════════════
+        // Handles: "8 to 10", "8-10", "10 to 12", "12 to 2", "2 to 4"
+        // Also: "eight to ten", spoken number words
+        // ═══════════════════════════════════════════════════════════════════════
+        const WORD_TO_NUM = {
+            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+            'eleven': 11, 'twelve': 12
+        };
+        
+        const rangeMatch = lowerText.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(?:to|-|through|thru)\s*(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i);
+        if (rangeMatch) {
+            const startHour = WORD_TO_NUM[rangeMatch[1]] || parseInt(rangeMatch[1], 10);
+            const endHour = WORD_TO_NUM[rangeMatch[2]] || parseInt(rangeMatch[2], 10);
+            
+            if (startHour >= 1 && startHour <= 12 && endHour >= 1 && endHour <= 12) {
+                const isMorning = startHour >= 6 && startHour < 12;
+                const timeOfDay = isMorning ? 'Morning' : 'Afternoon';
+                const windowLabel = `${startHour}-${endHour}`;
+                
+                return {
+                    value: `${timeOfDay} (${windowLabel})`,
+                    confidence: CONFIDENCE.UTTERANCE_HIGH,
+                    source: SOURCE.UTTERANCE
+                };
+            }
+        }
+        
+        // "first slot" / "earliest" → Morning
+        if (/\b(first\s+(?:slot|one|available)|earliest)\b/i.test(lowerText)) {
+            return {
+                value: 'Morning (earliest)',
+                confidence: CONFIDENCE.UTTERANCE_HIGH,
+                source: SOURCE.UTTERANCE
+            };
+        }
+        // "last slot" / "latest" → Afternoon
+        if (/\b(last\s+(?:slot|one|available)|latest)\b/i.test(lowerText)) {
+            return {
+                value: 'Afternoon (latest)',
+                confidence: CONFIDENCE.UTTERANCE_HIGH,
+                source: SOURCE.UTTERANCE
+            };
+        }
+        
         // Morning/afternoon/evening (but ONLY if it's a time preference, not a greeting)
         // FEB 2026 V92 FIX: Require explicit scheduling context, NOT just long text!
         // Bug: "I am a longtime customer" was matching "am" as a time indicator
