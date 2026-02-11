@@ -84,10 +84,29 @@ function validateName(value) {
   const trimmed = value.trim();
   const lower = trimmed.toLowerCase();
   
-  // Check stopwords
+  // Check stopwords — use WORD BOUNDARY matching, not .includes().
+  // The old .includes() check caused "gonzalez" to be rejected because it
+  // contains the letter "a" (a stopword). This blocked nearly every real name.
+  // Now: split the input into words and check if ANY word is entirely a stopword,
+  // or for multi-word stopwords, check if the phrase appears as whole words.
+  const words = lower.split(/[\s,.\-]+/).filter(w => w.length > 0);
   for (const stopword of NAME_STOPWORDS) {
-    if (lower === stopword || lower.includes(stopword)) {
+    if (lower === stopword) {
+      // Exact full match — the entire input IS a stopword
       return { valid: false, reason: `stopword_${stopword.replace(/\s+/g, '_')}` };
+    }
+    if (stopword.includes(' ')) {
+      // Multi-word stopword: check with word boundaries
+      const escapedSw = stopword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(`\\b${escapedSw}\\b`);
+      if (regex.test(lower)) {
+        return { valid: false, reason: `stopword_${stopword.replace(/\s+/g, '_')}` };
+      }
+    } else {
+      // Single-word stopword: check if any individual word matches exactly
+      if (words.includes(stopword)) {
+        return { valid: false, reason: `stopword_${stopword.replace(/\s+/g, '_')}` };
+      }
     }
   }
   
