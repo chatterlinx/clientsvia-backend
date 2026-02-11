@@ -4261,6 +4261,36 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 Object.assign(callState, runtimeResult.state);
               }
               
+              // ════════════════════════════════════════════════════════════════════════
+              // V119: SCENARIO_MATCH_RESOLVED — Update the "checking..." placeholder
+              // with real data now that ConversationEngine has returned. This replaces
+              // the never-updated SCENARIO_MATCH_ATTEMPT placeholder.
+              // ════════════════════════════════════════════════════════════════════════
+              if (BlackBoxLogger && runtimeResult.debug) {
+                BlackBoxLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'SCENARIO_MATCH_RESOLVED',
+                  turn: turnCount,
+                  data: {
+                    tier: runtimeResult.tier || 'unknown',
+                    matchSource: runtimeResult.matchSource || 'unknown',
+                    scenarioId: runtimeResult.debug?.scenarioId || null,
+                    scenarioName: runtimeResult.debug?.scenarioName || null,
+                    confidence: runtimeResult.debug?.confidence || null,
+                    tokensUsed: runtimeResult.tokensUsed || 0,
+                    source: runtimeResult.debug?.source || null,
+                    note: 'V119: Real data from ConversationEngine (replaces "checking..." placeholder)'
+                  }
+                }).catch(() => {});
+              }
+              
+              // ════════════════════════════════════════════════════════════════════════
+              // V119: TRACE TRUTH PIPELINE — Every result branch must propagate
+              // tier/debug/tokensUsed from FrontDeskRuntime so BlackBox events
+              // reflect real ConversationEngine metadata instead of fabricated defaults.
+              // ════════════════════════════════════════════════════════════════════════
+              
               // V111: Handle Connection Quality Gate DTMF escape
               if (runtimeResult.action === 'DTMF_ESCAPE' && runtimeResult.signals?.dtmfEscape) {
                 const transferDest = runtimeResult.signals?.transferDestination || 
@@ -4270,6 +4300,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   text: runtimeResult.response,
                   conversationMode: 'catastrophic_fallback',
                   matchSource: 'CONNECTION_QUALITY_GATE',
+                  tier: 'tier1',  // V119: Gate is deterministic
+                  tokensUsed: 0,
+                  debug: { source: 'CONNECTION_QUALITY_GATE' },
                   catastrophicFallback: {
                     enabled: true,
                     forwardNumber: transferDest || company?.phoneNumber || '',
@@ -4293,6 +4326,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   requiresTransfer: true,
                   conversationMode: 'transfer',
                   matchSource: runtimeResult.matchSource || 'FRONT_DESK_RUNTIME',
+                  // V119: Propagate real metadata
+                  tier: runtimeResult.tier || null,
+                  tokensUsed: runtimeResult.tokensUsed || 0,
+                  debug: runtimeResult.debug || null,
                   // V111 Phase 4: Include governance decision
                   v111: runtimeResult.v111 || null
                 };
@@ -4302,6 +4339,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   text: runtimeResult.response,
                   conversationMode: runtimeResult.lane === 'BOOKING' ? 'booking' : 'discovery',
                   matchSource: runtimeResult.matchSource || 'FRONT_DESK_RUNTIME',
+                  // V119: Propagate real metadata from ConversationEngine
+                  tier: runtimeResult.tier || null,
+                  tokensUsed: runtimeResult.tokensUsed || 0,
+                  debug: runtimeResult.debug || null,
                   bookingFlowState: {
                     bookingModeLocked: callState.bookingModeLocked,
                     bookingConsentPending: callState.bookingConsentPending
@@ -4313,6 +4354,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               }
               
               // Log successful routing
+              // V119: Include tier/tokensUsed/debug for trace truth
               if (BlackBoxLogger) {
                 BlackBoxLogger.logEvent({
                   callId: callSid,
@@ -4323,6 +4365,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                     lane: runtimeResult.lane,
                     responsePreview: runtimeResult.response?.substring(0, 100),
                     matchSource: runtimeResult.matchSource,
+                    // V119: Real metadata from ConversationEngine
+                    tier: runtimeResult.tier || null,
+                    tokensUsed: runtimeResult.tokensUsed || 0,
+                    scenarioId: runtimeResult.debug?.scenarioId || null,
+                    scenarioName: runtimeResult.debug?.scenarioName || null,
+                    scenarioConfidence: runtimeResult.debug?.confidence || null,
                     bookingModeLocked: !!callState.bookingModeLocked,
                     escalate: !!runtimeResult.signals?.escalate
                   }
@@ -5444,13 +5492,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       rawMatchSource = 'DEFAULT_DISCOVERY';  // Honest label
     }
     
+    // V119: llmUsed is now derived from REAL data — tokensUsed > 0 is the
+    // definitive proof that LLM was called, not a tier guess from defaults.
+    const realTokensUsed = result?.tokensUsed || result?.debug?.tokensUsed || 0;
     const checkpointE = branchTaken === 'NORMAL_ROUTING' ? {
       tier: result?.tier || 'unknown',
       scenarioSelected,
       scenarioConfidence: result?.debug?.confidence || null,
-      llmUsed: result?.tier === 'tier3' || result?.matchSource === 'LLM_FALLBACK',
+      llmUsed: realTokensUsed > 0 || result?.tier === 'tier3' || result?.matchSource === 'LLM_FALLBACK',
       matchSource: rawMatchSource,
-      tokensUsed: result?.tokensUsed || result?.debug?.tokensUsed || 0
+      tokensUsed: realTokensUsed
     } : null;
     
     // Checkpoint F: State to be saved (will be verified after save)
@@ -6047,12 +6098,23 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       logger.warn('[TRACE ERROR] SPEAKER_OWNER_TRACE_V1 failed (call continues)', { error: traceErr.message });
     }
     
+    // ════════════════════════════════════════════════════════════════════════
     // 📼 BLACK BOX V2: Log agent response with full source tracking
+    // V119: TRACE TRUTH PIPELINE — Use REAL tier/tokensUsed from result.
+    // Previously result.tier defaulted to 'tier3' when absent, causing
+    // EVERY strict-mode turn to be mislabeled as LLM fallback with
+    // fabricated SCENARIO_NO_MATCH events (bestCandidate=null, conf=0).
+    // NOW: tier defaults to 'unknown' and SCENARIO_NO_MATCH is only logged
+    // when we have genuine debug data proving no match occurred.
+    // ════════════════════════════════════════════════════════════════════════
     if (BlackBoxLogger) {
       const responseText = result.response || result.text || '';
       const matchSource = result.matchSource || 'UNKNOWN';
-      const tier = result.tier || 'tier3';
+      // V119: Default to 'unknown' instead of 'tier3' — honest labeling
+      const tier = result.tier || 'unknown';
       const tokensUsed = result.tokensUsed || result.debug?.tokensUsed || 0;
+      // V119: Track whether we have real debug data vs fabricated defaults
+      const hasRealDebug = !!(result.debug && (result.debug.scenarioId || result.debug.source || result.debug.bestCandidate !== undefined));
       
       BlackBoxLogger.QuickLog.responseBuilt(
         callSid,
@@ -6060,7 +6122,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         turnCount,
         responseText,
         matchSource,  // V2: Separate source field
-        tier,         // V2: Tier field (tier1, tier2, tier3)
+        tier,         // V2: Tier field (tier1, tier2, tier3, unknown)
         tokensUsed    // V2: Token count for cost tracking
       ).catch(() => {});
       
@@ -6076,24 +6138,59 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }).catch(() => {});
       
       // V2: Log tier-specific events with detailed tracking
+      // V119: ONLY log SCENARIO_NO_MATCH when we have real evidence of a failed match.
+      // When tier is 'unknown' (metadata was dropped), log a diagnostic event instead.
       if (tier === 'tier3' || matchSource === 'LLM_FALLBACK') {
-        // Log that no scenario matched FIRST (helps debug what was tried)
-        BlackBoxLogger.QuickLog.scenarioNoMatch(
-          callSid, companyID, turnCount,
-          speechResult || '[unknown input]',  // speechResult is already cleaned
-          result.debug?.bestCandidate || null,
-          result.debug?.bestConfidence || 0,
-          result.debug?.matchThreshold || 0.7,
-          result.debug?.fallbackReason || 'no_scenario_match'
-        ).catch(() => {});
+        if (hasRealDebug) {
+          // Real tier3/LLM fallback — log genuine SCENARIO_NO_MATCH with real data
+          BlackBoxLogger.QuickLog.scenarioNoMatch(
+            callSid, companyID, turnCount,
+            speechResult || '[unknown input]',
+            result.debug?.bestCandidate || null,
+            result.debug?.bestConfidence || 0,
+            result.debug?.matchThreshold || 0.7,
+            result.debug?.fallbackReason || 'no_scenario_match'
+          ).catch(() => {});
+        } else {
+          // V119: No real debug data — log diagnostic instead of fabricated event
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'SCENARIO_MATCH_DATA_MISSING',
+            turn: turnCount,
+            data: {
+              tier,
+              matchSource,
+              tokensUsed,
+              reason: 'tier3 labeled but no debug data — possible metadata propagation gap',
+              note: 'V119: This replaces fabricated SCENARIO_NO_MATCH events'
+            }
+          }).catch(() => {});
+        }
         
-        // Then log the LLM fallback
-        BlackBoxLogger.QuickLog.tier3Fallback(
-          callSid, companyID, turnCount,
-          result.debug?.fallbackReason || 'no_scenario_match',
-          result.debug?.latencyMs || result.latencyMs || 0,
-          tokensUsed
-        ).catch(() => {});
+        // Log the LLM fallback (only if LLM was genuinely used)
+        if (tokensUsed > 0 || matchSource === 'LLM_FALLBACK') {
+          BlackBoxLogger.QuickLog.tier3Fallback(
+            callSid, companyID, turnCount,
+            result.debug?.fallbackReason || 'no_scenario_match',
+            result.debug?.latencyMs || result.latencyMs || 0,
+            tokensUsed
+          ).catch(() => {});
+        }
+      } else if (tier === 'unknown' && matchSource !== 'UNKNOWN') {
+        // V119: Metadata was partially available — log diagnostic for visibility
+        BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'TRACE_TIER_UNKNOWN',
+          turn: turnCount,
+          data: {
+            matchSource,
+            tokensUsed,
+            hasDebug: !!result.debug,
+            note: 'V119: Tier not propagated from ConversationEngine — check pipeline'
+          }
+        }).catch(() => {});
       } else if (matchSource === 'SCENARIO_MATCH' || matchSource === 'STATE_MACHINE' || matchSource === 'SCENARIO_MATCHED') {
         BlackBoxLogger.QuickLog.scenarioMatched(
           callSid, companyID, turnCount,

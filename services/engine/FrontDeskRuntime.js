@@ -557,6 +557,12 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
         }).catch(() => {});
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V119: TRACE TRUTH PIPELINE — propagate tier/debug/tokensUsed from the
+    // lane handler so v2twilio receives real ConversationEngine metadata.
+    // Previously these were silently dropped, causing every strict-mode trace
+    // to contain fabricated tier3 / SCENARIO_NO_MATCH events.
+    // ═══════════════════════════════════════════════════════════════════════════
     return {
         response: result.response,
         text: result.response, // Alias for compatibility
@@ -565,6 +571,9 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
         signals: result.signals || {},
         action: result.action,
         matchSource: result.matchSource || 'FRONT_DESK_RUNTIME',
+        tier: result.tier || null,
+        tokensUsed: result.tokensUsed || 0,
+        debug: result.debug || null,
         metadata: result.metadata || {}
     };
 }
@@ -1652,10 +1661,19 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
             }
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V119: TRACE TRUTH PIPELINE — propagate tier/debug/tokensUsed from
+        // ConversationEngine so v2twilio can log honest trace events.
+        // Without this, every strict-mode discovery turn was labeled "tier3"
+        // with fabricated SCENARIO_NO_MATCH data (bestCandidate=null, conf=0).
+        // ═══════════════════════════════════════════════════════════════════════
         return {
             response: finalResponse,
             signals: captureInjectionApplied ? { softCaptureInjection: true } : {},
             matchSource: engineResult.matchSource || 'CONVERSATION_ENGINE',
+            tier: engineResult.tier || null,
+            tokensUsed: engineResult.tokensUsed || 0,
+            debug: engineResult.debug || null,
             metadata: engineResult.metadata,
             v111: v111Decision
         };
@@ -1669,7 +1687,10 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         return {
             response: "I'm here to help! What can I assist you with?",
             signals: {},
-            matchSource: 'FRONT_DESK_RUNTIME_ERROR_RECOVERY'
+            matchSource: 'FRONT_DESK_RUNTIME_ERROR_RECOVERY',
+            tier: null,
+            tokensUsed: 0,
+            debug: null
         };
     }
 }

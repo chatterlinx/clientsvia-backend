@@ -26,6 +26,9 @@
 const logger = require('../utils/logger');
 const ScenarioPoolService = require('./ScenarioPoolService');
 const HybridScenarioSelector = require('./HybridScenarioSelector');
+// V119: BlackBoxLogger for SCENARIO_POOL_LOADED trace event
+let BlackBoxLogger = null;
+try { BlackBoxLogger = require('./BlackBoxLogger'); } catch (e) { /* optional */ }
 
 // Version banner
 const ENGINE_VERSION = 'V22-LLM-LED-DISCOVERY';
@@ -58,7 +61,7 @@ class LLMDiscoveryEngine {
      * @param {Object} params.template - Active template with NLP config
      * @returns {Promise<Object>} { scenarios: Array<ScenarioSummary>, retrievalTimeMs }
      */
-    static async retrieveRelevantScenarios({ companyId, trade, utterance, template }) {
+    static async retrieveRelevantScenarios({ companyId, trade, utterance, template, callSid = null }) {
         const startTime = Date.now();
         let poolResult = null;
         
@@ -130,6 +133,42 @@ class LLMDiscoveryEngine {
                 companyId,
                 // Intentionally do not pass heavy conversation state; keep fast.
             });
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // V119: SCENARIO_POOL_LOADED — Required debug event for trace truth.
+            // Logs: scenarioSource, scenarioCountLoaded, top5Candidates + scores.
+            // Without this, traces showed "checking..." → "no match" with zero
+            // visibility into whether scenarios were actually loaded and evaluated.
+            // ═══════════════════════════════════════════════════════════════════════
+            if (BlackBoxLogger) {
+                const top5 = (matchResult?.trace?.topCandidates || []).slice(0, 5).map(c => ({
+                    scenarioId: c?.scenarioId || null,
+                    name: c?.name || c?.title || null,
+                    confidence: typeof c?.confidence === 'number' ? c.confidence : (Number(c?.confidence) || 0),
+                    matchType: c?.matchType || null
+                }));
+                
+                BlackBoxLogger.logEvent({
+                    callId: callSid || companyId,
+                    companyId,
+                    type: 'SCENARIO_POOL_LOADED',
+                    data: {
+                        scenarioSource: 'controlPlane',
+                        poolTotal: allScenarios.length,
+                        enabledCount: enabledScenarios.length,
+                        disabledCount: allScenarios.length - enabledScenarios.length,
+                        matcherUsed: useFastLookup ? 'compiled_fast_lookup' : 'linear_scan',
+                        compiledPoolWired: !!(poolResult?.compiled && useFastLookup),
+                        bestCandidate: matchResult?.scenario?.name || matchResult?.scenario?.scenarioId || null,
+                        bestConfidence: matchResult?.confidence ?? 0,
+                        selectionReason: matchResult?.trace?.selectionReason || null,
+                        threshold: matchResult?.trace?.thresholdUsed || minToolConfidence,
+                        top5Candidates: top5,
+                        utterancePreview: utterance?.substring(0, 80),
+                        retrievalTimeMs: Date.now() - startTime
+                    }
+                }).catch(() => {});
+            }
             
             // Step 5: Build scenario summaries (compressed for LLM)
             const scenarioSummaries = [];

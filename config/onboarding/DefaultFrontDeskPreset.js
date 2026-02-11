@@ -151,8 +151,12 @@ const DEFAULT_SLOT_REGISTRY = {
             required: false,
             discoveryFillAllowed: true,
             bookingConfirmRequired: false,  // Don't re-ask — just acknowledge
+            // V119: Write policy — write-once on Turn 1, append on later turns.
+            // Confirming long free-text is annoying and creates loops.
+            // DiscoveryTruthWriter enforces this; confirmMode: 'never' in discoveryFlow.
+            writePolicy: 'write_once_append',
             extraction: {
-                source: ['triage'],  // Filled by TriageEngineRouter, not utterance parsing
+                source: ['triage', 'discovery_truth'],  // Filled by TriageEngineRouter + DiscoveryTruthWriter
                 confidenceMin: 0.40  // Lower threshold — any symptom is useful
             }
         }

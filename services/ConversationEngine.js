@@ -5742,7 +5742,9 @@ async function processTurn({
                 companyId,
                 trade: company.trade || 'HVAC',
                 utterance: userText,
-                template: activeTemplate
+                template: activeTemplate,
+                // V119: Pass callSid for SCENARIO_POOL_LOADED trace event
+                callSid: callSid || session?._id?.toString() || null
             });
             
             log('CHECKPOINT 9c: 📚 Scenarios retrieved as tools', {

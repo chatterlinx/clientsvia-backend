@@ -2416,6 +2416,26 @@ class BookingFlowRunner {
         }
         
         // ═══════════════════════════════════════════════════════════════════
+        // V119: BOOKING INTERRUPTION HANDLER — Detect off-topic slot references
+        // ═══════════════════════════════════════════════════════════════════
+        // If the caller mentions a different slot while we're on the current step,
+        // route back to complete that slot first. Example: caller says "my address
+        // is incomplete" while on the time step → route to address step.
+        //
+        // Also handles: "do you have my address" / "what's my address" → if address
+        // is street-only (incomplete), prompt for city/zip instead of repeating
+        // the current step's question.
+        // ═══════════════════════════════════════════════════════════════════
+        if (userInput && nextAction.step) {
+            const interruptResult = this._detectSlotInterruption(
+                userInput, nextAction.step, flow, state, startTime
+            );
+            if (interruptResult) {
+                return interruptResult;
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
         // HANDLE CONFIRMATION MODE (slot exists, needs confirmation)
         // ═══════════════════════════════════════════════════════════════════
         if (nextAction.mode === 'CONFIRM') {
@@ -6624,6 +6644,170 @@ class BookingFlowRunner {
      * @param {Object} collected - Collected slot values
      * @returns {boolean} True if condition is met, step should run
      */
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V119: BOOKING INTERRUPTION HANDLER
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Detects when caller references an incomplete slot while the engine is
+    // processing a different step. Routes back to complete the referenced slot
+    // instead of forcing the caller through the current step.
+    //
+    // Triggers:
+    //   - "what about my address" / "my address" / "the address" while on time step
+    //   - "do you have my address" / "what's my address" while on time step
+    //   - Caller provides city/zip info while on a non-address step
+    //
+    // Only fires when the referenced slot is actually INCOMPLETE.
+    // ═══════════════════════════════════════════════════════════════════════════
+    static _detectSlotInterruption(userInput, currentStep, flow, state, startTime) {
+        if (!userInput || !currentStep) return null;
+        
+        const input = userInput.toLowerCase().trim();
+        const currentFieldKey = currentStep.fieldKey || currentStep.id;
+        const collected = state.bookingCollected || {};
+        
+        // ── ADDRESS INTERRUPTION ─────────────────────────────────────────────
+        // Caller mentions address while on a non-address step
+        if (currentFieldKey !== 'address') {
+            const addressKeywords = /\b(address|street|city|zip\s*code|zip|my address|the address|what.*address)\b/i;
+            const hasAddressRef = addressKeywords.test(input);
+            
+            // Also check if they're providing city/zip info unprompted
+            const providingCity = STATE_PATTERN.test(input) && !looksLikeAddress(input);
+            const providingZip = /\b\d{5}\b/.test(input) && input.length < 20;
+            
+            if (hasAddressRef || providingCity || providingZip) {
+                const existingAddress = collected.address || '';
+                const parts = existingAddress ? detectAddressParts(existingAddress) : null;
+                const isIncomplete = existingAddress && parts && !parts.hasCity && !parts.hasZip;
+                
+                if (isIncomplete) {
+                    // Address exists but is incomplete — route back to address step
+                    const addressStep = flow.steps.find(s => 
+                        (s.fieldKey || s.id) === 'address'
+                    );
+                    
+                    if (addressStep) {
+                        state.currentStepId = addressStep.id || 'address';
+                        state.addressIncomplete = true;
+                        
+                        // If they provided city/zip info, try to append it
+                        if (providingCity || providingZip) {
+                            const appended = `${existingAddress}, ${userInput.trim()}`;
+                            const setResult = safeSetSlot(state, 'address', appended, {
+                                source: 'interruption_completion',
+                                confidence: 0.85,
+                                isCorrection: true
+                            });
+                            
+                            if (setResult.accepted) {
+                                // Re-check completeness after appending
+                                const newParts = detectAddressParts(appended);
+                                if (newParts.hasCity || newParts.hasZip) {
+                                    // Address is now complete — confirm and continue
+                                    state.addressIncomplete = false;
+                                    markSlotConfirmed(state, 'address');
+                                    
+                                    logger.info('[BOOKING INTERRUPTION] V119: Address completed via interruption', {
+                                        original: existingAddress,
+                                        appended,
+                                        newParts
+                                    });
+                                    
+                                    return {
+                                        reply: `Got it — ${appended}. ` + (addressStep.confirmPrompt || 'Let me continue.'),
+                                        state,
+                                        isComplete: false,
+                                        action: 'CONTINUE',
+                                        matchSource: 'BOOKING_FLOW_RUNNER',
+                                        tier: 'tier1',
+                                        tokensUsed: 0,
+                                        latencyMs: Date.now() - startTime,
+                                        debug: {
+                                            promptSource: 'V119.interruption.address.completed',
+                                            stepId: 'address',
+                                            source: 'BOOKING_FLOW_RUNNER'
+                                        }
+                                    };
+                                }
+                            }
+                        }
+                        
+                        // Address still incomplete — ask for what's missing
+                        const followUp = parts && parts.hasStreet 
+                            ? `I have ${existingAddress} — what city is that in?`
+                            : (addressStep.askPrompt || addressStep.prompt || "What's the address?");
+                        
+                        logger.info('[BOOKING INTERRUPTION] V119: Routing back to incomplete address', {
+                            currentStep: currentFieldKey,
+                            existingAddress,
+                            addressParts: parts,
+                            trigger: hasAddressRef ? 'keyword' : 'city_zip_provided'
+                        });
+                        
+                        return {
+                            reply: followUp,
+                            state,
+                            isComplete: false,
+                            action: 'CONTINUE',
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                promptSource: 'V119.interruption.address.incomplete',
+                                stepId: 'address',
+                                interruptedStep: currentFieldKey,
+                                source: 'BOOKING_FLOW_RUNNER'
+                            }
+                        };
+                    }
+                }
+            }
+        }
+        
+        // ── NAME INTERRUPTION ────────────────────────────────────────────────
+        // Caller mentions name while on a non-name step and name is missing
+        if (currentFieldKey !== 'name' && currentFieldKey !== 'firstName' && currentFieldKey !== 'lastName') {
+            const nameKeywords = /\b(my name|name is|first name|last name)\b/i;
+            if (nameKeywords.test(input)) {
+                const hasName = collected.name || collected.firstName;
+                if (!hasName) {
+                    const nameStep = flow.steps.find(s => 
+                        ['name', 'firstName', 'name_first'].includes(s.fieldKey || s.id)
+                    );
+                    if (nameStep) {
+                        state.currentStepId = nameStep.id || 'name';
+                        
+                        logger.info('[BOOKING INTERRUPTION] V119: Routing to missing name step', {
+                            currentStep: currentFieldKey,
+                            trigger: 'name_keyword'
+                        });
+                        
+                        return {
+                            reply: nameStep.askPrompt || nameStep.prompt || "What's your name?",
+                            state,
+                            isComplete: false,
+                            action: 'CONTINUE',
+                            matchSource: 'BOOKING_FLOW_RUNNER',
+                            tier: 'tier1',
+                            tokensUsed: 0,
+                            latencyMs: Date.now() - startTime,
+                            debug: {
+                                promptSource: 'V119.interruption.name.missing',
+                                stepId: nameStep.id,
+                                interruptedStep: currentFieldKey,
+                                source: 'BOOKING_FLOW_RUNNER'
+                            }
+                        };
+                    }
+                }
+            }
+        }
+        
+        return null; // No interruption detected
+    }
+    
     static evaluateCondition(condition, state, collected) {
         if (!condition) return true; // No condition = always run
         
