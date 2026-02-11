@@ -854,7 +854,8 @@ router.get('/', async (req, res) => {
                     ? frontDeskBehavior.modeSwitching.bookingConfidenceThreshold
                     : null,
                 autoRescueOnFrustration: frontDeskBehavior.modeSwitching?.autoRescueOnFrustration !== false,
-                autoTriageOnProblem: frontDeskBehavior.modeSwitching?.autoTriageOnProblem !== false
+                // V116: autoTriageOnProblem reads from V110 canonical path (triage.autoOnProblem)
+                autoTriageOnProblem: frontDeskBehavior.triage?.autoOnProblem !== false
             },
             
             // Tab: Hours & Availability (V109: Canonical location is frontDeskBehavior.businessHours)

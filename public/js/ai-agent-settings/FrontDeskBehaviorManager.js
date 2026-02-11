@@ -595,9 +595,8 @@ class FrontDeskBehaviorManager {
                 // Confidence threshold to lock booking
                 bookingConfidenceThreshold: 0.75,
                 // Auto-switch to rescue mode on frustration
-                autoRescueOnFrustration: true,
-                // Auto-switch to triage when describing problem
-                autoTriageOnProblem: true
+                autoRescueOnFrustration: true
+                // V116: autoTriageOnProblem removed — lives at triage.autoOnProblem (V110)
             },
             
             // ════════════════════════════════════════════════════════════════════
@@ -10997,16 +10996,11 @@ Sean → Shawn, Shaun`;
                         </div>
                     </label>
                     
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
-                        <input type="checkbox" id="fdb-ms-autoTriage" ${ms.autoTriageOnProblem !== false ? 'checked' : ''} 
-                            style="accent-color: #58a6ff; width: 18px; height: 18px;">
-                        <div>
-                            <span style="color: #c9d1d9; font-weight: 500;">🔧 Auto-switch to Triage on Problem Description</span>
-                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
-                                When caller describes their issue, switch to diagnostic mode
-                            </p>
-                        </div>
-                    </label>
+                    <div style="padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; opacity: 0.7;">
+                        <span style="color: #8b949e; font-size: 0.8rem;">
+                            🔧 Auto-triage on problem &rarr; <strong style="color:#f0883e;">Moved to V110 Triage section</strong> (triage.autoOnProblem)
+                        </span>
+                    </div>
                 </div>
             </div>
         `;
@@ -11895,16 +11889,11 @@ Sean → Shawn, Shaun`;
                         </div>
                     </label>
                     
-                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
-                        <input type="checkbox" id="fdb-ms-autoTriage" ${ms.autoTriageOnProblem !== false ? 'checked' : ''} 
-                            style="accent-color: #58a6ff; width: 18px; height: 18px;">
-                        <div>
-                            <span style="color: #c9d1d9; font-weight: 500;">🔧 Auto-switch to Triage on Problem Description</span>
-                            <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
-                                When caller describes their issue, switch to diagnostic mode
-                            </p>
-                        </div>
-                    </label>
+                    <div style="padding: 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; opacity: 0.7;">
+                        <span style="color: #8b949e; font-size: 0.8rem;">
+                            🔧 Auto-triage on problem &rarr; <strong style="color:#f0883e;">Moved to V110 Triage section</strong> (triage.autoOnProblem)
+                        </span>
+                    </div>
                 </div>
             </div>
         `;
@@ -12701,8 +12690,8 @@ Sean → Shawn, Shaun`;
             this.config.modeSwitching = {
                 minTurnsBeforeBooking: parseInt(document.getElementById('fdb-ms-minTurns')?.value) || 2,
                 bookingConfidenceThreshold: (parseInt(document.getElementById('fdb-ms-confidence')?.value) || 75) / 100,
-                autoRescueOnFrustration: getChecked('fdb-ms-autoRescue'),
-                autoTriageOnProblem: getChecked('fdb-ms-autoTriage')
+                autoRescueOnFrustration: getChecked('fdb-ms-autoRescue')
+                // V116: autoTriageOnProblem removed — now lives at triage.autoOnProblem (V110 Triage section)
             };
         }
         

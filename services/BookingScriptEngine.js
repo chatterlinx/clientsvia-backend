@@ -2,69 +2,41 @@
  * BookingScriptEngine.js
  * 
  * ═══════════════════════════════════════════════════════════════════════════════
- * SINGLE SOURCE OF TRUTH FOR BOOKING SLOTS
+ * V116: V110 SLOT REGISTRY IS THE ONLY SOURCE OF TRUTH
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
- * This service is the ONLY place that loads and normalizes booking configuration.
- * All other services (HybridReceptionistLLM, ConversationEngine, etc.) must use this.
+ * This service loads and normalizes booking configuration FROM V110 ONLY:
+ *   - frontDesk.slotRegistry.slots
+ *   - frontDesk.bookingFlow.steps
  * 
- * Why this exists:
- * - UI saves to: company.aiAgentSettings.frontDeskBehavior.bookingSlots
- * - Legacy may have: company.aiAgentSettings.callFlowEngine.bookingFields
- * - Runtime needs ONE consistent place to read from
+ * Legacy paths (bookingSlots, callFlowEngine.bookingFields, bookingPrompts)
+ * are TRAPPED — they log LEGACY_BOOKING_PATH_CALLED and return empty.
+ * If the trap fires, it reveals a company that hasn't been migrated to V110.
  * 
- * NO HARDCODED INDUSTRY CONTENT. All slots are generic and per-company.
+ * RULE: If it's not in V110/V111 UI, it doesn't exist at runtime.
+ * DEFAULT_BOOKING_SLOTS is NOT imported. Defaults are seed-only (onboarding).
+ * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 const logger = require('../utils/logger');
-// ☢️ NUKED: BookingContractCompiler - Booking Contract V2 removed Jan 2026
 
-// V59: Import centralized preset - NO duplicate hardcoded defaults
-const { DEFAULT_BOOKING_SLOTS } = require('../config/onboarding/DefaultFrontDeskPreset');
-
-/**
- * Build a map of default slots by slotId for backfilling missing optional fields.
- * This keeps behavior UI-visible (defaults live in the onboarding preset) and avoids
- * "hidden" runtime fallbacks sprinkled across the codebase.
- */
-function buildDefaultSlotMap() {
-    const map = {};
-    for (const s of (DEFAULT_BOOKING_SLOTS || [])) {
-        const id = getSlotId(s);
-        if (!id) continue;
-        map[id] = s;
-    }
-    return map;
-}
-
-const DEFAULT_SLOT_MAP = buildDefaultSlotMap();
-
-/**
- * Merge default slot fields into a raw slot object (slot overrides defaults).
- * NOTE: We only fill missing fields (undefined) via the spread order.
- * If a company explicitly set a field to empty string, we keep it.
- */
-function mergeSlotDefaults(rawSlot) {
-    const slotId = getSlotId(rawSlot);
-    const def = slotId ? DEFAULT_SLOT_MAP[slotId] : null;
-    if (!def) return rawSlot;
-    return { ...def, ...rawSlot };
-}
+// ═══════════════════════════════════════════════════════════════════════════════
+// V116: NO DEFAULT_BOOKING_SLOTS IMPORT — defaults are seed-only, not runtime
+// ═══════════════════════════════════════════════════════════════════════════════
 
 /**
  * Normalize slot ID - handles 'slotId', 'id', and 'key' field names
- * Priority: slotId > id > key (key is the new UI schema)
  */
 function getSlotId(slot) {
     return slot.slotId || slot.id || slot.key || null;
 }
 
 /**
- * Normalize a single booking slot to standard format
+ * Normalize a single booking slot to standard format.
+ * V116: No mergeSlotDefaults — if a field is missing, it's a config issue.
  */
 function normalizeSlot(slot, index) {
-    const mergedSlot = mergeSlotDefaults(slot);
-    const slotId = getSlotId(mergedSlot);
+    const slotId = getSlotId(slot);
     
     const asTrimmedString = (val) => (typeof val === 'string' ? val.trim() : null);
     const normalizeMidCallRules = (rules) => {
@@ -86,107 +58,94 @@ function normalizeSlot(slot, index) {
             .filter(r => r && r.id && r.trigger && r.responseTemplate);
     };
     
-    // 🔍 DIAGNOSTIC: Log why slots are being rejected
-    if (!slotId || !mergedSlot.question) {
+    if (!slotId || !slot.question) {
         logger.warn('[BOOKING ENGINE] ⚠️ SLOT REJECTED - missing required field', {
             index,
             hasSlotId: !!slotId,
             slotIdValue: slotId,
-            hasQuestion: !!mergedSlot.question,
-            questionValue: mergedSlot.question?.substring?.(0, 50),
-            rawSlotKeys: mergedSlot ? Object.keys(mergedSlot) : [],
-            rawSlot: JSON.stringify(mergedSlot).substring(0, 200)
+            hasQuestion: !!slot.question,
+            questionValue: slot.question?.substring?.(0, 50),
+            rawSlotKeys: slot ? Object.keys(slot) : []
         });
-        return null; // Invalid slot
+        return null;
     }
     
     return {
         slotId: slotId,
-        id: slotId, // Also include 'id' for backward compatibility with HybridReceptionistLLM
-        label: mergedSlot.label || slotId,
-        question: (mergedSlot.question || '').trim(),
-        type: mergedSlot.type || 'text',
-        required: mergedSlot.required !== false,
-        order: typeof mergedSlot.order === 'number' ? mergedSlot.order : index,
+        id: slotId,
+        label: slot.label || slotId,
+        question: (slot.question || '').trim(),
+        type: slot.type || 'text',
+        required: slot.required !== false,
+        order: typeof slot.order === 'number' ? slot.order : index,
         // Confirmation options
-        confirmBack: mergedSlot.confirmBack || false,
-        confirmPrompt: mergedSlot.confirmPrompt || "Just to confirm, that's {value}, correct?",
+        confirmBack: slot.confirmBack || false,
+        confirmPrompt: slot.confirmPrompt || null,
         
-        // ═══════════════════════════════════════════════════════════════════════════
-        // V63: Name-specific fields (ALL must be copied from DB!)
-        // ═══════════════════════════════════════════════════════════════════════════
-        askFullName: mergedSlot.askFullName !== false,
-        useFirstNameOnly: mergedSlot.useFirstNameOnly !== false,
-        askMissingNamePart: mergedSlot.askMissingNamePart === true, // Must be explicitly true
-        // V59: These were MISSING - causing hardcoded fallbacks!
-        // IMPORTANT: Preserve admin-authored text exactly (including debug suffixes like "... 3?")
-        // We only trim whitespace; we do NOT inject defaults here.
-        lastNameQuestion: asTrimmedString(mergedSlot.lastNameQuestion),
-        firstNameQuestion: asTrimmedString(mergedSlot.firstNameQuestion),
-        // V85: Duplicate/unclear last name recovery prompt
-        duplicateNamePartPrompt: asTrimmedString(mergedSlot.duplicateNamePartPrompt),
-        // V61: Spelling variants
-        confirmSpelling: mergedSlot.confirmSpelling || false,
-        spellingVariantPrompt: asTrimmedString(mergedSlot.spellingVariantPrompt),
+        // Name-specific fields
+        askFullName: slot.askFullName !== false,
+        useFirstNameOnly: slot.useFirstNameOnly !== false,
+        askMissingNamePart: slot.askMissingNamePart === true,
+        lastNameQuestion: asTrimmedString(slot.lastNameQuestion),
+        firstNameQuestion: asTrimmedString(slot.firstNameQuestion),
+        duplicateNamePartPrompt: asTrimmedString(slot.duplicateNamePartPrompt),
+        confirmSpelling: slot.confirmSpelling || false,
+        spellingVariantPrompt: asTrimmedString(slot.spellingVariantPrompt),
         
-        // ═══════════════════════════════════════════════════════════════════════════
-        // V63: Phone-specific fields
-        // ═══════════════════════════════════════════════════════════════════════════
-        offerCallerId: mergedSlot.offerCallerId || false,
-        callerIdPrompt: asTrimmedString(mergedSlot.callerIdPrompt),
-        acceptTextMe: mergedSlot.acceptTextMe !== false,
-        breakDownIfUnclear: mergedSlot.breakDownIfUnclear || false, // Works for phone AND address
-        // V59: Phone breakdown prompts
-        areaCodePrompt: asTrimmedString(mergedSlot.areaCodePrompt),
-        restOfNumberPrompt: asTrimmedString(mergedSlot.restOfNumberPrompt),
+        // Phone-specific fields
+        offerCallerId: slot.offerCallerId || false,
+        callerIdPrompt: asTrimmedString(slot.callerIdPrompt),
+        callerIdPromptVariants: slot.callerIdPromptVariants || [],
+        confirmPromptVariants: slot.confirmPromptVariants || [],
+        acceptTextMe: slot.acceptTextMe !== false,
+        breakDownIfUnclear: slot.breakDownIfUnclear || false,
+        areaCodePrompt: asTrimmedString(slot.areaCodePrompt),
+        restOfNumberPrompt: asTrimmedString(slot.restOfNumberPrompt),
         
-        // ═══════════════════════════════════════════════════════════════════════════
-        // V63: Address-specific fields
-        // ═══════════════════════════════════════════════════════════════════════════
-        addressConfirmLevel: mergedSlot.addressConfirmLevel || 'street_city',
-        acceptPartialAddress: mergedSlot.acceptPartialAddress || false,
-        // V59: Address breakdown prompts
-        partialAddressPrompt: asTrimmedString(mergedSlot.partialAddressPrompt),
-        streetBreakdownPrompt: asTrimmedString(mergedSlot.streetBreakdownPrompt),
-        cityPrompt: asTrimmedString(mergedSlot.cityPrompt),
-        zipPrompt: asTrimmedString(mergedSlot.zipPrompt),
-        // Unit number handling
-        unitNumberMode: mergedSlot.unitNumberMode || 'smart',
-        unitNumberPrompt: asTrimmedString(mergedSlot.unitNumberPrompt),
-        unitTriggerWords: mergedSlot.unitTriggerWords || [],
-        unitAlwaysAskZips: mergedSlot.unitAlwaysAskZips || [],
-        unitNeverAskZips: mergedSlot.unitNeverAskZips || [],
-        unitPromptVariants: mergedSlot.unitPromptVariants || [],
-        // Google Maps integration
-        useGoogleMapsValidation: mergedSlot.useGoogleMapsValidation || false,
-        googleMapsValidationMode: mergedSlot.googleMapsValidationMode || 'confirm_low_confidence',
+        // Address-specific fields
+        addressConfirmLevel: slot.addressConfirmLevel || 'street_city',
+        acceptPartialAddress: slot.acceptPartialAddress || false,
+        partialAddressPrompt: asTrimmedString(slot.partialAddressPrompt),
+        streetBreakdownPrompt: asTrimmedString(slot.streetBreakdownPrompt),
+        cityPrompt: asTrimmedString(slot.cityPrompt),
+        zipPrompt: asTrimmedString(slot.zipPrompt),
+        unitNumberMode: slot.unitNumberMode || 'smart',
+        unitNumberPrompt: asTrimmedString(slot.unitNumberPrompt),
+        unitTriggerWords: slot.unitTriggerWords || [],
+        unitAlwaysAskZips: slot.unitAlwaysAskZips || [],
+        unitNeverAskZips: slot.unitNeverAskZips || [],
+        unitPromptVariants: slot.unitPromptVariants || [],
+        useGoogleMapsValidation: slot.useGoogleMapsValidation || false,
+        googleMapsValidationMode: slot.googleMapsValidationMode || 'confirm_low_confidence',
         
-        // ═══════════════════════════════════════════════════════════════════════════
         // Other slot types
-        // ═══════════════════════════════════════════════════════════════════════════
-        // Email-specific
-        spellOutEmail: mergedSlot.spellOutEmail !== false,
-        offerToSendText: mergedSlot.offerToSendText || false,
-        // DateTime-specific
-        offerAsap: mergedSlot.offerAsap !== false,
-        offerMorningAfternoon: mergedSlot.offerMorningAfternoon || false,
-        asapPhrase: mergedSlot.asapPhrase || 'first available',
-        // Select-specific
-        selectOptions: mergedSlot.selectOptions || [],
-        allowOther: mergedSlot.allowOther || false,
-        // YesNo-specific
-        yesAction: mergedSlot.yesAction || null,
-        noAction: mergedSlot.noAction || null,
-        // Number-specific
-        minValue: mergedSlot.minValue || null,
-        maxValue: mergedSlot.maxValue || null,
-        unit: mergedSlot.unit || null,
-        // Advanced
-        skipIfKnown: mergedSlot.skipIfKnown || false,
-        helperNote: asTrimmedString(mergedSlot.helperNote),
-
-        // V93: Slot-level mid-call helpers (UI-controlled)
-        midCallRules: normalizeMidCallRules(mergedSlot.midCallRules)
+        spellOutEmail: slot.spellOutEmail !== false,
+        offerToSendText: slot.offerToSendText || false,
+        offerAsap: slot.offerAsap !== false,
+        offerMorningAfternoon: slot.offerMorningAfternoon || false,
+        asapPhrase: slot.asapPhrase || 'first available',
+        selectOptions: slot.selectOptions || [],
+        allowOther: slot.allowOther || false,
+        yesAction: slot.yesAction || null,
+        noAction: slot.noAction || null,
+        minValue: slot.minValue || null,
+        maxValue: slot.maxValue || null,
+        unit: slot.unit || null,
+        skipIfKnown: slot.skipIfKnown || false,
+        helperNote: asTrimmedString(slot.helperNote),
+        
+        // Reprompt variants (V116)
+        reprompt: asTrimmedString(slot.reprompt),
+        repromptVariants: slot.repromptVariants || [],
+        confirmRetryPrompt: asTrimmedString(slot.confirmRetryPrompt),
+        correctionPrompt: asTrimmedString(slot.correctionPrompt),
+        
+        // V93: Slot-level mid-call helpers
+        midCallRules: normalizeMidCallRules(slot.midCallRules),
+        
+        // V110 metadata (set by mergeV110SlotsWithSteps)
+        _v110: slot._v110 || false,
+        _stepId: slot._stepId || null
     };
 }
 
@@ -198,11 +157,9 @@ function normalizeBookingSlots(rawSlots = []) {
         return [];
     }
     
-    // 🔍 DIAGNOSTIC: Log raw slots before normalization
     logger.info('[BOOKING ENGINE] 📋 NORMALIZING SLOTS', {
         rawCount: rawSlots.length,
-        firstSlotKeys: rawSlots[0] ? Object.keys(rawSlots[0]) : [],
-        firstSlotSample: rawSlots[0] ? JSON.stringify(rawSlots[0]).substring(0, 300) : null
+        firstSlotKeys: rawSlots[0] ? Object.keys(rawSlots[0]) : []
     });
     
     const normalized = rawSlots
@@ -210,64 +167,36 @@ function normalizeBookingSlots(rawSlots = []) {
         .filter(slot => slot !== null)
         .sort((a, b) => a.order - b.order);
     
-    // 🔍 DIAGNOSTIC: Log result
     logger.info('[BOOKING ENGINE] 📋 NORMALIZATION RESULT', {
         inputCount: rawSlots.length,
         outputCount: normalized.length,
         rejectedCount: rawSlots.length - normalized.length
     });
     
-    // 🔍 V63 DIAGNOSTIC: Log name slot specifically to verify question fields are preserved
-    const nameSlot = normalized.find(s => s.type === 'name' || s.slotId === 'name');
-    if (nameSlot) {
-        logger.info('[BOOKING ENGINE] 📋 V63 NAME SLOT NORMALIZED', {
-            hasLastNameQuestion: !!nameSlot.lastNameQuestion,
-            lastNameQuestion: nameSlot.lastNameQuestion,
-            hasFirstNameQuestion: !!nameSlot.firstNameQuestion,
-            firstNameQuestion: nameSlot.firstNameQuestion,
-            confirmSpelling: nameSlot.confirmSpelling,
-            askMissingNamePart: nameSlot.askMissingNamePart
-        });
-    }
-    
     return normalized;
 }
 
 /**
- * Get booking slots from company object
- * Checks multiple possible paths for backward compatibility
+ * Get booking slots from company object.
+ * 
+ * V116: ONLY reads from V110 slotRegistry + bookingFlow.
+ * Legacy paths are TRAPPED — they log and return empty.
  * 
  * @param {Object} company - Company document from MongoDB
  * @param {Object} [options]
- * @param {Object} [options.contextFlags] - Typically session.flags (Dynamic Flow set_flag)
  * @returns {Object} { slots: [], isConfigured: boolean, source: string }
  */
 function getBookingSlotsFromCompany(company, options = {}) {
     if (!company) {
         logger.warn('[BOOKING ENGINE] No company provided');
-        return {
-            slots: [],
-            isConfigured: false,
-            source: 'NO_COMPANY'
-        };
+        return { slots: [], isConfigured: false, source: 'NO_COMPANY' };
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
-    // V110: SLOT REGISTRY + BOOKING FLOW = CANONICAL SOURCE OF TRUTH
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Priority:
-    // 1. V110: slotRegistry.slots + bookingFlow.steps (CANONICAL)
-    // 2. Legacy: bookingSlots (DEPRECATED - migration fallback only)
-    // 3. Legacy: callFlowEngine.bookingFields (DEPRECATED)
-    // 4. Legacy: bookingPrompts converted (DEPRECATED)
-    // ═══════════════════════════════════════════════════════════════════════════
-    
+    const companyId = company._id?.toString() || 'unknown';
     const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
-    let rawSlots = null;
-    let source = 'NOT_CONFIGURED';
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PRIORITY 1: V110 Slot Registry + Booking Flow (CANONICAL)
+    // V110 SLOT REGISTRY + BOOKING FLOW = THE ONLY SOURCE OF TRUTH
     // ═══════════════════════════════════════════════════════════════════════════
     const slotRegistry = frontDesk.slotRegistry || {};
     const bookingFlow = frontDesk.bookingFlow || {};
@@ -275,87 +204,80 @@ function getBookingSlotsFromCompany(company, options = {}) {
     const v110Steps = bookingFlow.steps || [];
     
     if (v110Slots.length > 0 && v110Steps.length > 0) {
-        // V110 is configured - merge slots with step prompts
-        rawSlots = mergeV110SlotsWithSteps(v110Slots, v110Steps);
-        source = 'V110_SLOT_REGISTRY';
+        const rawSlots = mergeV110SlotsWithSteps(v110Slots, v110Steps);
+        const slots = normalizeBookingSlots(rawSlots);
         
         logger.info('[BOOKING ENGINE] ✅ V110: Using slotRegistry + bookingFlow', {
-            companyId: company._id,
+            companyId,
             slotCount: v110Slots.length,
             stepCount: v110Steps.length,
             slotIds: rawSlots.map(s => s.slotId || s.id)
         });
+        
+        return { slots, isConfigured: slots.length > 0, source: 'V110_SLOT_REGISTRY' };
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // PRIORITY 2: Legacy bookingSlots (DEPRECATED - fallback only)
+    // V116 TRAP: Legacy paths — log and return empty
+    // If this fires, the company needs V110 migration.
     // ═══════════════════════════════════════════════════════════════════════════
-    if (!rawSlots || rawSlots.length === 0) {
-        rawSlots = frontDesk.bookingSlots;
-        if (rawSlots && rawSlots.length > 0) {
-            source = 'LEGACY_bookingSlots';
-            logger.warn('[BOOKING ENGINE] ⚠️ LEGACY: Using deprecated bookingSlots - migrate to V110 slotRegistry', {
-                companyId: company._id,
-                slotCount: rawSlots.length
-            });
-        }
+    const legacyBookingSlots = frontDesk.bookingSlots;
+    const legacyBookingFields = company?.aiAgentSettings?.callFlowEngine?.bookingFields;
+    const legacyBookingPrompts = frontDesk.bookingPrompts;
+    
+    const hasLegacy = (legacyBookingSlots && legacyBookingSlots.length > 0)
+        || (legacyBookingFields && legacyBookingFields.length > 0)
+        || (legacyBookingPrompts && (legacyBookingPrompts.askName || legacyBookingPrompts.askPhone));
+    
+    if (hasLegacy) {
+        const legacySource = legacyBookingSlots?.length ? 'bookingSlots' 
+            : legacyBookingFields?.length ? 'callFlowEngine.bookingFields' 
+            : 'bookingPrompts';
+        
+        logger.error('[BOOKING ENGINE] 🚨 LEGACY_BOOKING_PATH_CALLED — company has NO V110 config', {
+            companyId,
+            legacySource,
+            legacySlotCount: legacyBookingSlots?.length || legacyBookingFields?.length || 0,
+            action: 'RETURNING_EMPTY — company must be migrated to V110 slotRegistry + bookingFlow'
+        });
+        
+        // Log to BlackBox if available
+        try {
+            const BlackBoxLogger = require('./BlackBoxLogger');
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    companyId,
+                    type: 'LEGACY_BOOKING_PATH_CALLED',
+                    data: {
+                        legacySource,
+                        legacySlotCount: legacyBookingSlots?.length || legacyBookingFields?.length || 0,
+                        hasV110SlotRegistry: v110Slots.length > 0,
+                        hasV110BookingFlow: v110Steps.length > 0,
+                        action: 'RETURNED_EMPTY',
+                        stack: new Error().stack?.split('\n').slice(1, 5).map(s => s.trim())
+                    }
+                }).catch(() => {});
+            }
+        } catch (e) { /* BlackBox optional */ }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
-    // PRIORITY 3: Legacy callFlowEngine.bookingFields (DEPRECATED)
-    // ═══════════════════════════════════════════════════════════════════════════
-    if (!rawSlots || rawSlots.length === 0) {
-        rawSlots = company?.aiAgentSettings?.callFlowEngine?.bookingFields;
-        if (rawSlots && rawSlots.length > 0) {
-            source = 'LEGACY_callFlowEngine.bookingFields';
-            logger.warn('[BOOKING ENGINE] ⚠️ LEGACY: Using deprecated callFlowEngine.bookingFields', {
-                companyId: company._id
-            });
-        }
-    }
-    
-    // ═══════════════════════════════════════════════════════════════════════════
-    // PRIORITY 4: Legacy bookingPrompts converted (DEPRECATED)
-    // ═══════════════════════════════════════════════════════════════════════════
-    if (!rawSlots || rawSlots.length === 0) {
-        const bp = frontDesk.bookingPrompts;
-        if (bp && (bp.askName || bp.askPhone || bp.askAddress || bp.askTime)) {
-            rawSlots = convertLegacyBookingPrompts(bp);
-            source = 'LEGACY_bookingPrompts_converted';
-            logger.warn('[BOOKING ENGINE] ⚠️ LEGACY: Using deprecated bookingPrompts (converted)', {
-                companyId: company._id
-            });
-        }
-    }
-    
-    const slots = normalizeBookingSlots(rawSlots);
-    const isConfigured = slots.length > 0;
-    
-    logger.debug('[BOOKING ENGINE] Loaded booking config', {
-        companyId: company._id,
-        source,
-        slotCount: slots.length,
-        isConfigured,
-        slotIds: slots.map(s => s.slotId)
+    // V116: No V110 config and no legacy = truly not configured
+    logger.info('[BOOKING ENGINE] Company has no V110 booking config', {
+        companyId,
+        hasSlotRegistry: v110Slots.length > 0,
+        hasBookingFlow: v110Steps.length > 0,
+        hasLegacy
     });
     
-    return {
-        slots,
-        isConfigured,
-        source: isConfigured ? source : 'NOT_CONFIGURED'
-    };
+    return { slots: [], isConfigured: false, source: 'NOT_CONFIGURED' };
 }
 
 /**
  * V110: Merge slot registry definitions with booking flow step prompts
- * @param {Array} slots - Slot definitions from slotRegistry.slots
- * @param {Array} steps - Step prompts from bookingFlow.steps
- * @returns {Array} - Merged slots with prompts attached
  */
 function mergeV110SlotsWithSteps(slots, steps) {
     if (!slots || !steps) return [];
     
-    // Create map of steps by slotId
     const stepMap = new Map();
     for (const step of steps) {
         if (step.slotId) {
@@ -363,13 +285,11 @@ function mergeV110SlotsWithSteps(slots, steps) {
         }
     }
     
-    // Merge each slot with its corresponding step
     return slots.map((slot, index) => {
         const slotId = slot.id || slot.slotId;
         const step = stepMap.get(slotId);
         
         return {
-            // Core slot identity
             slotId: slotId,
             id: slotId,
             
@@ -382,20 +302,28 @@ function mergeV110SlotsWithSteps(slots, steps) {
             bookingConfirmRequired: slot.bookingConfirmRequired !== false,
             extraction: slot.extraction || {},
             
-            // From BookingFlow step
+            // From BookingFlow step (V110 canonical prompts)
             question: step?.ask || `What is your ${slotId}?`,
             prompt: step?.ask || `What is your ${slotId}?`,
             confirmPrompt: step?.confirmPrompt || null,
+            confirmPromptVariants: step?.confirmPromptVariants || [],
             reprompt: step?.reprompt || `Could you repeat your ${slotId}?`,
             repromptVariants: step?.repromptVariants || [],
             confirmRetryPrompt: step?.confirmRetryPrompt || null,
             correctionPrompt: step?.correctionPrompt || null,
+            
+            // V116: callerIdPrompt variants for phone
+            callerIdPrompt: step?.callerIdPrompt || null,
+            callerIdPromptVariants: step?.callerIdPromptVariants || [],
             
             // Name-specific (if applicable)
             ...(slotId === 'name' || slot.type === 'name_first' ? {
                 firstNameQuestion: step?.ask,
                 lastNameQuestion: step?.lastNameQuestion || "And what's your last name?"
             } : {}),
+            
+            // Address policy (from slot registry)
+            ...(slot.addressPolicy ? { addressPolicy: slot.addressPolicy } : {}),
             
             // V110 metadata
             _v110: true,
@@ -405,84 +333,19 @@ function mergeV110SlotsWithSteps(slots, steps) {
 }
 
 /**
- * Convert legacy bookingPrompts to bookingSlots format
- */
-function convertLegacyBookingPrompts(bp) {
-    const slots = [];
-    
-    if (bp.askName) {
-        slots.push({
-            slotId: 'name',
-            label: 'Full Name',
-            question: bp.askName,
-            required: true,
-            order: 0,
-            type: 'text'
-        });
-    }
-    
-    if (bp.askPhone) {
-        slots.push({
-            slotId: 'phone',
-            label: 'Phone Number',
-            question: bp.askPhone,
-            required: true,
-            order: 1,
-            type: 'phone'
-        });
-    }
-    
-    if (bp.askAddress) {
-        slots.push({
-            slotId: 'address',
-            label: 'Service Address',
-            question: bp.askAddress,
-            required: true,
-            order: 2,
-            type: 'address'
-        });
-    }
-    
-    if (bp.askTime) {
-        slots.push({
-            slotId: 'time',
-            label: 'Preferred Time',
-            question: bp.askTime,
-            required: false,
-            order: 3,
-            type: 'time'
-        });
-    }
-    
-    return slots;
-}
-
-/**
  * Get the next required slot that hasn't been collected
- * 
- * @param {Array} slots - Normalized booking slots
- * @param {Object} collectedSlots - Already collected slot values { name: 'John', phone: null }
- * @returns {Object|null} Next slot to collect, or null if all required slots filled
  */
 function getNextRequiredSlot(slots, collectedSlots = {}) {
-    if (!slots || slots.length === 0) {
-        return null;
-    }
-    
+    if (!slots || slots.length === 0) return null;
     return slots.find(slot => {
         const slotId = slot.slotId;
         const value = collectedSlots[slotId];
-        // Required and not yet collected (null, undefined, or empty string)
         return slot.required && (value == null || value === '');
     }) || null;
 }
 
 /**
  * Get a specific slot by ID
- * 
- * @param {Array} slots - Normalized booking slots
- * @param {string} slotId - Slot ID to find
- * @returns {Object|null} The slot, or null if not found
  */
 function getSlotById(slots, slotId) {
     if (!slots || !slotId) return null;
@@ -491,16 +354,9 @@ function getSlotById(slots, slotId) {
 
 /**
  * Check if all required slots have been collected
- * 
- * @param {Array} slots - Normalized booking slots
- * @param {Object} collectedSlots - Already collected slot values
- * @returns {boolean} True if booking is complete
  */
 function isBookingComplete(slots, collectedSlots = {}) {
-    if (!slots || slots.length === 0) {
-        return false; // Can't complete if no slots configured
-    }
-    
+    if (!slots || slots.length === 0) return false;
     return slots
         .filter(s => s.required)
         .every(s => {
@@ -511,10 +367,6 @@ function isBookingComplete(slots, collectedSlots = {}) {
 
 /**
  * Get the question for a specific slot
- * 
- * @param {Array} slots - Normalized booking slots
- * @param {string} slotId - Slot ID
- * @returns {string|null} The question to ask, or null if slot not found
  */
 function getSlotQuestion(slots, slotId) {
     const slot = getSlotById(slots, slotId);
@@ -523,10 +375,6 @@ function getSlotQuestion(slots, slotId) {
 
 /**
  * Build booking instructions for LLM prompt
- * This generates the section that tells LLM what questions to ask
- * 
- * @param {Object} bookingConfig - Result from getBookingSlotsFromCompany
- * @returns {string} Prompt section for LLM
  */
 function buildBookingPromptSection(bookingConfig) {
     if (!bookingConfig.isConfigured) {
@@ -572,8 +420,20 @@ CRITICAL RULES:
 `;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// V116 TRAP: convertLegacyBookingPrompts — logs if called, returns empty
+// ═══════════════════════════════════════════════════════════════════════════════
+function convertLegacyBookingPrompts(bp) {
+    logger.error('[BOOKING ENGINE] 🚨 LEGACY_CONVERT_CALLED — convertLegacyBookingPrompts should not be called at runtime', {
+        hasAskName: !!bp?.askName,
+        hasAskPhone: !!bp?.askPhone,
+        stack: new Error().stack?.split('\n').slice(1, 4).map(s => s.trim())
+    });
+    return [];
+}
+
 module.exports = {
-    // Core functions
+    // Core functions (V110 only)
     getBookingSlotsFromCompany,
     getNextRequiredSlot,
     getSlotById,
@@ -585,9 +445,11 @@ module.exports = {
     
     // Utilities
     normalizeBookingSlots,
-    convertLegacyBookingPrompts,
     
-    // Defaults (for schema seeding only)
-    DEFAULT_BOOKING_SLOTS
-};
+    // V116 TRAPPED — logs and returns empty
+    convertLegacyBookingPrompts
 
+    // V116: DEFAULT_BOOKING_SLOTS removed from exports.
+    // Defaults are seed-only (config/onboarding/DefaultFrontDeskPreset.js).
+    // If you need defaults, use getPresetForTrade() during onboarding.
+};

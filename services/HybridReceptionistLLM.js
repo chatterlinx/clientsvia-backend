@@ -1417,32 +1417,20 @@ ACKNOWLEDGE this context naturally:
     
     /**
      * Get all configured booking slots sorted by order
-     * 🚨 Uses BookingScriptEngine as single source of truth
+     * V116: Uses BookingScriptEngine (V110 only) — no legacy fallbacks
      * 
-     * @param {Object} behaviorConfig - From loadFrontDeskConfig()
-     * @param {Object} company - Full company object (optional, for legacy path fallback)
+     * @param {Object} behaviorConfig - From loadFrontDeskConfig() (unused, kept for signature compat)
+     * @param {Object} company - Full company object (required for V110 path)
      */
     static getBookingSlots(behaviorConfig = {}, company = null) {
-        // If company object provided, use BookingScriptEngine for full path checking
+        // V116: company is required for V110 path
         if (company) {
-            const result = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
+            const result = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: {} });
             return result.slots;
         }
         
-        // Fallback: use behaviorConfig directly (already loaded)
-        if (behaviorConfig.bookingSlots?.length > 0) {
-            return BookingScriptEngine.normalizeBookingSlots(behaviorConfig.bookingSlots);
-        }
-        
-        // Check legacy bookingPrompts
-        if (behaviorConfig.bookingPrompts) {
-            const converted = BookingScriptEngine.convertLegacyBookingPrompts(behaviorConfig.bookingPrompts);
-            if (converted.length > 0) {
-                return converted;
-            }
-        }
-        
-        logger.warn('[HYBRID LLM] ⚠️ NO BOOKING SLOTS - Company needs to save Front Desk Behavior');
+        // V116: No company = no slots. Legacy behaviorConfig.bookingSlots path is dead.
+        logger.warn('[HYBRID LLM] ⚠️ getBookingSlots called without company object — V110 requires company');
         return [];
     }
     

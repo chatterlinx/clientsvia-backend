@@ -271,8 +271,8 @@ const DEFAULT_FRONT_DESK_CONFIG = {
     modeSwitching: {
         minTurnsBeforeBooking: 2,
         bookingConfidenceThreshold: 0.75,
-        autoRescueOnFrustration: true,
-        autoTriageOnProblem: true
+        autoRescueOnFrustration: true
+        // V116: autoTriageOnProblem removed — lives at triage.autoOnProblem (V110)
     },
 
     // ════════════════════════════════════════════════════════════════════════
