@@ -2812,15 +2812,24 @@ class FrontDeskBehaviorManager {
             });
         }
 
-        // Add Discovery Step button
+        // Add Discovery Step button — with duplicate slot prevention
         const addDiscStepBtn = contentElement.querySelector('#fdb-add-disc-step');
         if (addDiscStepBtn) {
             addDiscStepBtn.addEventListener('click', () => {
                 const steps = this.config.discoveryFlow?.steps || [];
-                const firstSlot = this.config.slotRegistry?.slots?.[0]?.id || 'name.first';
+                const usedSlotIds = new Set(steps.map(s => s.slotId));
+                const allSlots = this.config.slotRegistry?.slots || [];
+                
+                // Find the first unused slot to default to
+                const unusedSlot = allSlots.find(s => !usedSlotIds.has(s.id));
+                if (!unusedSlot) {
+                    this.showNotification('All slots are already in the Discovery Flow. Add a new slot in the Slot Registry first.', 'warning');
+                    return;
+                }
+                
                 const newStep = {
-                    stepId: `d${steps.length + 1}`,
-                    slotId: firstSlot,
+                    stepId: 'd' + (steps.length + 1),
+                    slotId: unusedSlot.id,
                     order: steps.length + 1,
                     ask: 'Is that correct?',
                     reprompt: 'Could you confirm?',
@@ -2839,10 +2848,18 @@ class FrontDeskBehaviorManager {
         if (addBookStepBtn) {
             addBookStepBtn.addEventListener('click', () => {
                 const steps = this.config.bookingFlow?.steps || [];
-                const firstSlot = this.config.slotRegistry?.slots?.[0]?.id || 'name.first';
+                const usedSlotIds = new Set(steps.map(s => s.slotId));
+                const allSlots = this.config.slotRegistry?.slots || [];
+                
+                const unusedSlot = allSlots.find(s => !usedSlotIds.has(s.id));
+                if (!unusedSlot) {
+                    this.showNotification('All slots are already in the Booking Flow. Add a new slot in the Slot Registry first.', 'warning');
+                    return;
+                }
+                
                 const newStep = {
-                    stepId: `b${steps.length + 1}`,
-                    slotId: firstSlot,
+                    stepId: 'b' + (steps.length + 1),
+                    slotId: unusedSlot.id,
                     order: steps.length + 1,
                     ask: 'What is your value?',
                     confirmPrompt: 'I have {value}. Is that correct?',
@@ -2894,14 +2911,57 @@ class FrontDeskBehaviorManager {
             input.addEventListener('change', (e) => this._collectSlotRegistryChanges(contentElement));
         });
 
-        // Collect changes on input (discovery steps)
+        // Collect changes on input (discovery steps) — with duplicate slot detection
         contentElement.querySelectorAll('.fdb-disc-slot-select, .fdb-disc-ask, .fdb-disc-reprompt, .fdb-disc-confirm-mode').forEach(input => {
-            input.addEventListener('change', (e) => this._collectDiscoveryFlowChanges(contentElement));
+            input.addEventListener('change', (e) => {
+                // V115: Duplicate slot prevention on dropdown change
+                if (e.target.classList.contains('fdb-disc-slot-select')) {
+                    const selectedSlotId = e.target.value;
+                    const currentIdx = parseInt(e.target.dataset.idx, 10);
+                    const allSelects = contentElement.querySelectorAll('.fdb-disc-slot-select');
+                    let duplicate = false;
+                    allSelects.forEach(sel => {
+                        const otherIdx = parseInt(sel.dataset.idx, 10);
+                        if (otherIdx !== currentIdx && sel.value === selectedSlotId) {
+                            duplicate = true;
+                        }
+                    });
+                    if (duplicate) {
+                        const slotLabel = e.target.options[e.target.selectedIndex].text;
+                        this.showNotification('Warning: "' + slotLabel + '" is already used in another Discovery step. Duplicates create contradictory confirmations.', 'warning');
+                        e.target.style.borderColor = '#da3636';
+                    } else {
+                        e.target.style.borderColor = '#30363d';
+                    }
+                }
+                this._collectDiscoveryFlowChanges(contentElement);
+            });
         });
 
-        // Collect changes on input (booking steps)
+        // Collect changes on input (booking steps) — with duplicate slot detection
         contentElement.querySelectorAll('.fdb-book-slot-select, .fdb-book-ask, .fdb-book-confirm, .fdb-book-reprompt').forEach(input => {
-            input.addEventListener('change', (e) => this._collectBookingFlowChanges(contentElement));
+            input.addEventListener('change', (e) => {
+                if (e.target.classList.contains('fdb-book-slot-select')) {
+                    const selectedSlotId = e.target.value;
+                    const currentIdx = parseInt(e.target.dataset.idx, 10);
+                    const allSelects = contentElement.querySelectorAll('.fdb-book-slot-select');
+                    let duplicate = false;
+                    allSelects.forEach(sel => {
+                        const otherIdx = parseInt(sel.dataset.idx, 10);
+                        if (otherIdx !== currentIdx && sel.value === selectedSlotId) {
+                            duplicate = true;
+                        }
+                    });
+                    if (duplicate) {
+                        const slotLabel = e.target.options[e.target.selectedIndex].text;
+                        this.showNotification('Warning: "' + slotLabel + '" is already used in another Booking step.', 'warning');
+                        e.target.style.borderColor = '#da3636';
+                    } else {
+                        e.target.style.borderColor = '#30363d';
+                    }
+                }
+                this._collectBookingFlowChanges(contentElement);
+            });
         });
 
         // Collect policy changes

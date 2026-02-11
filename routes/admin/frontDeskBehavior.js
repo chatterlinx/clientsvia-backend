@@ -37,6 +37,35 @@ const {
 } = require('../../config/onboarding/DefaultFrontDeskPreset');
 
 // ============================================================================
+// V115: Auto-seed call_reason_detail into existing company slot registries
+// ============================================================================
+// Existing companies won't have this slot. We add it on read (not write) so
+// the UI dropdown shows it immediately. It gets persisted on next save.
+// ============================================================================
+function ensureCallReasonSlot(registry) {
+    if (!registry || !registry.slots) return registry;
+    const hasCallReason = registry.slots.some(s => s.id === 'call_reason_detail');
+    if (hasCallReason) return registry;
+    
+    // Add call_reason_detail to the end of the slot list
+    registry.slots.push({
+        id: 'call_reason_detail',
+        type: 'text',
+        label: 'Reason for Call',
+        required: false,
+        discoveryFillAllowed: true,
+        bookingConfirmRequired: false,
+        extraction: {
+            source: ['triage'],
+            confidenceMin: 0.40
+        }
+    });
+    
+    logger.info('[FRONT DESK BEHAVIOR] V115: Auto-seeded call_reason_detail into slot registry');
+    return registry;
+}
+
+// ============================================================================
 // DEFAULT VALUES (Shown in UI, can be customized per company)
 // ============================================================================
 
@@ -514,7 +543,8 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // ═══════════════════════════════════════════════════════════════
                 // These are the NEW canonical structures - UI reads/writes these.
                 // Runtime reads from these first, falls back to bookingSlots only if empty.
-                slotRegistry: config.slotRegistry || null,
+                // V115: Auto-seed call_reason_detail into existing registries if missing
+                slotRegistry: ensureCallReasonSlot(config.slotRegistry),
                 discoveryFlow: config.discoveryFlow || null,
                 bookingFlow: config.bookingFlow || null,
                 policies: config.policies || null,
