@@ -1035,7 +1035,7 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
                     ${this.renderTab('hours', '🕒 Hours & Availability')}
                     ${this.renderTab('vocabulary', '📝 Vocabulary')}
-                    ${this.renderTab('discovery-flow', '🔄 Discovery Flow')}
+                    ${this.renderTab('discovery-flow', '🔄 Discovery Flow', false, true)}
                     ${this.renderTab('booking', '📅 Booking Prompts')}
                     <!-- ☢️ NUKED: 'flows' (Dynamic Flows) tab removed Feb 2026 - V110 architecture replaces it -->
                     ${this.renderTab('emotions', '💭 Emotions')}
@@ -1055,16 +1055,27 @@ class FrontDeskBehaviorManager {
         this.attachEventListeners(container);
     }
 
-    renderTab(id, label, active = false) {
+    renderTab(id, label, active = false, highlight = false) {
+        // V115: highlight=true gives the tab a warm amber/orange accent to stand out
+        const highlightBg = active ? '#3d2800' : 'rgba(245, 158, 11, 0.08)';
+        const highlightColor = '#f59e0b';
+        const highlightBorder = active ? '1px solid #f59e0b' : '1px solid rgba(245, 158, 11, 0.3)';
+        
+        const bg = highlight ? highlightBg : (active ? '#21262d' : 'transparent');
+        const color = highlight ? highlightColor : (active ? '#58a6ff' : '#8b949e');
+        const border = highlight ? highlightBorder : (active ? '1px solid #30363d' : '1px solid transparent');
+        const fontWeight = highlight ? '600' : 'normal';
+        
         return `
             <button class="fdb-tab" data-tab="${id}" style="
                 padding: 10px 16px;
-                background: ${active ? '#21262d' : 'transparent'};
-                color: ${active ? '#58a6ff' : '#8b949e'};
-                border: ${active ? '1px solid #30363d' : '1px solid transparent'};
+                background: ${bg};
+                color: ${color};
+                border: ${border};
                 border-radius: 6px;
                 cursor: pointer;
                 font-size: 0.875rem;
+                font-weight: ${fontWeight};
             ">${label}</button>
         `;
     }
@@ -12065,9 +12076,19 @@ Sean → Shawn, Shaun`;
         const tabUpdateStart = performance.now();
         container.querySelectorAll('.fdb-tab').forEach(tab => {
             const isActive = tab.dataset.tab === tabId;
-            tab.style.background = isActive ? '#21262d' : 'transparent';
-            tab.style.color = isActive ? '#58a6ff' : '#8b949e';
-            tab.style.border = isActive ? '1px solid #30363d' : '1px solid transparent';
+            // V115: Discovery Flow tab keeps its amber accent when active/inactive
+            const isDiscoveryFlow = tab.dataset.tab === 'discovery-flow';
+            if (isDiscoveryFlow) {
+                tab.style.background = isActive ? '#3d2800' : 'rgba(245, 158, 11, 0.08)';
+                tab.style.color = '#f59e0b';
+                tab.style.border = isActive ? '1px solid #f59e0b' : '1px solid rgba(245, 158, 11, 0.3)';
+                tab.style.fontWeight = '600';
+            } else {
+                tab.style.background = isActive ? '#21262d' : 'transparent';
+                tab.style.color = isActive ? '#58a6ff' : '#8b949e';
+                tab.style.border = isActive ? '1px solid #30363d' : '1px solid transparent';
+                tab.style.fontWeight = 'normal';
+            }
         });
         console.log(`[FRONT DESK] ⏱️ CHECKPOINT 1: Tab styles updated in ${(performance.now() - tabUpdateStart).toFixed(1)}ms`);
 
