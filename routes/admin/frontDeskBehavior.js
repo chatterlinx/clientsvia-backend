@@ -66,6 +66,41 @@ function ensureCallReasonSlot(registry) {
 }
 
 // ============================================================================
+// V115: Auto-seed call_reason_detail discovery step with proper prompts
+// ============================================================================
+// If a company has the slot in their registry but the discovery step has
+// generic placeholders (or doesn't exist), seed the correct prompts.
+// ============================================================================
+function ensureCallReasonDiscoveryStep(discoveryFlow) {
+    if (!discoveryFlow || !discoveryFlow.steps) return discoveryFlow;
+    
+    const existingStep = discoveryFlow.steps.find(s => s.slotId === 'call_reason_detail');
+    
+    if (!existingStep) {
+        // No step exists — add it as the last step (user can reorder in UI)
+        discoveryFlow.steps.push({
+            stepId: 'd0',
+            slotId: 'call_reason_detail',
+            order: discoveryFlow.steps.length,
+            ask: "Got it — you're calling about {value}, right?",
+            reprompt: "Tell me what's going on with the system.",
+            confirmMode: 'smart_if_captured'
+        });
+        logger.info('[FRONT DESK BEHAVIOR] V115: Auto-seeded call_reason_detail discovery step');
+    } else if (existingStep.ask === 'Is that correct?' || existingStep.reprompt === 'Could you confirm?') {
+        // Step exists but has generic placeholder prompts — upgrade them
+        existingStep.ask = "Got it — you're calling about {value}, right?";
+        existingStep.reprompt = "Tell me what's going on with the system.";
+        if (existingStep.confirmMode === 'always') {
+            existingStep.confirmMode = 'smart_if_captured';
+        }
+        logger.info('[FRONT DESK BEHAVIOR] V115: Upgraded call_reason_detail discovery step prompts from generic placeholders');
+    }
+    
+    return discoveryFlow;
+}
+
+// ============================================================================
 // DEFAULT VALUES (Shown in UI, can be customized per company)
 // ============================================================================
 
@@ -543,9 +578,9 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // ═══════════════════════════════════════════════════════════════
                 // These are the NEW canonical structures - UI reads/writes these.
                 // Runtime reads from these first, falls back to bookingSlots only if empty.
-                // V115: Auto-seed call_reason_detail into existing registries if missing
+                // V115: Auto-seed call_reason_detail into existing registries + discovery flow
                 slotRegistry: ensureCallReasonSlot(config.slotRegistry),
-                discoveryFlow: config.discoveryFlow || null,
+                discoveryFlow: ensureCallReasonDiscoveryStep(config.discoveryFlow || null),
                 bookingFlow: config.bookingFlow || null,
                 policies: config.policies || null,
                 
