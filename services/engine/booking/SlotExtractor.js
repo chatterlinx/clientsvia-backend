@@ -1070,10 +1070,13 @@ class SlotExtractor {
      * ========================================================================
      * V92: Uses commonFirstNames list (900+ names) from company config to 
      * determine if a single-word name is likely a first name or last name.
+     * V111: Uses commonLastNames list (50K Census surnames) for last name
+     * recognition and confidence boosting.
      * 
      * - If name is in commonFirstNames → isLikelyFirstName: true
-     * - If name is NOT in list → isLikelyFirstName: false (assume last name)
-     * - If list is empty → isLikelyFirstName: true (safe default)
+     * - If name is in commonLastNames → isKnownLastName: true (confidence boost)
+     * - If name is NOT in either list → isLikelyFirstName: false (assume last name)
+     * - If lists are empty → isLikelyFirstName: true (safe default)
      */
     static extractName(text, context = {}) {
         if (!text) return null;
@@ -1105,12 +1108,85 @@ class SlotExtractor {
         const commonFirstNamesSet = new Set(commonFirstNames.map(n => String(n).toLowerCase()));
         const hasNameList = commonFirstNames.length > 0;
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V111: Load commonLastNames — US Census top 50K surnames
+        // Used for: last name recognition, confidence boosting, disambiguation
+        // When a single word is given and it's in this list → confirmed last name
+        // ═══════════════════════════════════════════════════════════════════════════
+        let commonLastNames = [];
+        if (context.awReader && typeof context.awReader.getArray === 'function') {
+            commonLastNames = context.awReader.getArray('frontDesk.commonLastNames');
+        } else {
+            commonLastNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || [];
+        }
+        const commonLastNamesSet = new Set(commonLastNames.map(n => String(n).toLowerCase()));
+        const hasLastNameList = commonLastNames.length > 0;
+        
         /**
          * Check if a single name is likely a first name based on commonFirstNames list
          */
         const isLikelyFirstName = (name) => {
             if (!hasNameList) return true; // No list = assume first name (safe default)
             return commonFirstNamesSet.has(String(name).toLowerCase());
+        };
+        
+        /**
+         * V111: Check if a name is a known last name from the Census list.
+         * Returns true if found in commonLastNames. Used for:
+         * - Confidence boost when last name is recognized
+         * - Disambiguation: if word is in BOTH lists, first name wins
+         * - If word is in last name list but NOT first name list → definite last name
+         */
+        const isKnownLastName = (name) => {
+            if (!hasLastNameList) return false;
+            return commonLastNamesSet.has(String(name).toLowerCase());
+        };
+        
+        /**
+         * V111: Enrich a name extraction result with last name recognition metadata.
+         * Called on every result before returning. Adds:
+         *   - isKnownLastName: boolean (last name found in Census list)
+         *   - lastNameConfidenceBoost: boolean (last name recognized → higher trust)
+         *
+         * This is a POST-PROCESSING step so we don't repeat logic in every pattern.
+         */
+        const enrichWithLastNameData = (res) => {
+            if (!res) return res;
+            
+            // Check the lastName field if present
+            const ln = res.lastName || (res.isLikelyFirstName === false ? res.value : null);
+            if (ln) {
+                // For multi-word last names like "De La Cruz", check the full string
+                const knownLast = isKnownLastName(ln);
+                res.isKnownLastName = knownLast;
+                if (knownLast) {
+                    res.lastNameConfidenceBoost = true;
+                    // V111: Boost confidence when last name is in Census list
+                    if (res.confidence && res.confidence < 0.95) {
+                        res.confidence = Math.min(res.confidence + 0.1, 0.99);
+                    }
+                }
+            }
+            
+            // For single-word names not in first name list:
+            // If it IS in the last name list → stronger signal it's a last name
+            if (res.value && !res.firstName && !res.lastName) {
+                const singleWord = res.value.split(/\s+/);
+                if (singleWord.length === 1) {
+                    const knownLast = isKnownLastName(res.value);
+                    const knownFirst = isLikelyFirstName(res.value);
+                    res.isKnownLastName = knownLast;
+                    if (knownLast && !knownFirst) {
+                        // Definitely a last name — in Census list but not first name list
+                        res.lastName = res.value;
+                        res.isLikelyFirstName = false;
+                        res.needsFirstName = true;
+                        res.lastNameConfidenceBoost = true;
+                    }
+                }
+            }
+            
+            return res;
         };
         
         // ═══════════════════════════════════════════════════════════════════════════
@@ -1193,7 +1269,7 @@ class SlotExtractor {
                             result.lastName = nameParts.slice(1).join(' ');
                         }
                         
-                        return result;
+                        return enrichWithLastNameData(result);
                     }
                 }
             }
@@ -1280,7 +1356,7 @@ class SlotExtractor {
                         result.lastName = nameParts.slice(1).join(' ');
                     }
                     
-                    return result;
+                    return enrichWithLastNameData(result);
                 }
             }
         }
@@ -1348,7 +1424,7 @@ class SlotExtractor {
                         result.lastName = nameParts.slice(1).join(' ');
                     }
                     
-                    return result;
+                    return enrichWithLastNameData(result);
                 }
             }
         }
@@ -1371,7 +1447,7 @@ class SlotExtractor {
                     result.lastName = name;
                     result.needsFirstName = true;
                 }
-                return result;
+                return enrichWithLastNameData(result);
             }
         }
         
@@ -1425,14 +1501,14 @@ class SlotExtractor {
                         patternSource: 'fallback_two_word'
                     });
                     
-                    return {
+                    return enrichWithLastNameData({
                         value: `${first} ${last}`,
                         confidence: CONFIDENCE.UTTERANCE_HIGH,
                         source: SOURCE.UTTERANCE,
                         firstName: first,
                         lastName: last,
                         patternSource: 'fallback_two_word'  // V94: Track source
-                    };
+                    });
                 }
             }
         }
@@ -1469,7 +1545,7 @@ class SlotExtractor {
                     result.lastName = words.slice(1).join(' ');
                 }
                 
-                return result;
+                return enrichWithLastNameData(result);
             }
         }
         
