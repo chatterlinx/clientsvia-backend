@@ -224,7 +224,12 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
             .replace(/[.,!?;:]+/g, '').trim();
         
         // Check: is this a trouble phrase?
-        const isTroublePhrase = troublePhrases.some(phrase => {
+        // V112 FIX: Only flag as trouble phrase if input is SHORT (< 30 chars).
+        // A substantive utterance like "hi my name is mark having air conditioning problems..."
+        // should NOT be treated as a connection trouble phrase just because it starts with "hi ".
+        // Trouble phrases are meant to catch fragmentary inputs like "hello?", "are you there?", etc.
+        const MAX_TROUBLE_PHRASE_LENGTH = 30;
+        const isTroublePhrase = normalizedInput.length < MAX_TROUBLE_PHRASE_LENGTH && troublePhrases.some(phrase => {
             const p = phrase.toLowerCase().trim();
             return normalizedInput === p || normalizedInput.startsWith(p + ' ') || normalizedInput.endsWith(' ' + p);
         });
