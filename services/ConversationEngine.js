@@ -73,16 +73,24 @@ const BlackBoxLogger = require('./BlackBoxLogger');
 const AWConfigReader = require('./wiring/AWConfigReader');
 
 // ═══════════════════════════════════════════════════════════════════════════
-// V1 RETURN LANE - Post-Response Behavior System (2026-02)
+// V115 TRIAGE: Single entrypoint — TriageEngineRouter
 // ═══════════════════════════════════════════════════════════════════════════
-const TriageService = require('./TriageService');
+// RULE: No other triage import is allowed. If you see one, it's a bug.
+// Gate: frontDesk.triage.enabled (per company)
+// Old gate (returnLane.enabled) is NO LONGER consulted for triage.
+// ═══════════════════════════════════════════════════════════════════════════
+const TriageEngineRouter = require('../triage/TriageEngineRouter');
+
+// V1 RETURN LANE - Post-Response Behavior System (separate from triage)
 const ReturnLaneService = require('./ReturnLaneService');
+// Legacy TriageService kept ONLY for ReturnLaneService card lookups (read-only)
+const TriageService = require('./TriageService');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // VERSION BANNER - Proves this code is deployed
 // CHECK THIS IN DEBUG TO VERIFY DEPLOYMENT
 // ═══════════════════════════════════════════════════════════════════════════
-const ENGINE_VERSION = 'V94-RETURN-LANE-V1';  // <-- CHANGE THIS EACH DEPLOY
+const ENGINE_VERSION = 'V115-TRIAGE-NUKE';  // <-- CHANGE THIS EACH DEPLOY
 
 // ═══════════════════════════════════════════════════════════════════════════
 // V92: NAME STOP WORDS - Words that are NEVER valid names (for acknowledgment check)
@@ -3040,10 +3048,11 @@ async function processTurn({
         let confirmBackTraceContext = null;
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // RETURN LANE: Function-level variables (must be accessible throughout)
+    // V115 TRIAGE + RETURN LANE: Function-level variables
     // ═══════════════════════════════════════════════════════════════════════════
-    let triageCardMatch = null;
-    let matchedTriageCard = null;
+    let triageResult = null;       // V115: Result from TriageEngineRouter
+    let triageCardMatch = null;    // Legacy: kept for ReturnLaneService compatibility
+    let matchedTriageCard = null;  // Legacy: kept for ReturnLaneService compatibility
     let companyReturnLaneEnabled = false;
 
     // Backward-compatible alias: many callers pass debug:true.
@@ -5855,44 +5864,67 @@ async function processTurn({
             }
             
             // ═══════════════════════════════════════════════════════════════════
-            // 🆕 RETURN LANE: TRIAGE CARD MATCHING (V1 - 2026-02)
+            // V115: TRIAGE ENGINE ROUTER — Single triage entrypoint
             // ═══════════════════════════════════════════════════════════════════
-            // Match user input against triage cards for Return Lane context.
-            // This determines which "lane" the conversation is in and what
-            // post-response behavior should be applied.
-            //
-            // IMPORTANT: This only MATCHES cards. The actual Return Lane policy
-            // is applied AFTER the 3-tier response is generated (see RETURN_LANE_POLICY below).
+            // Gate: frontDesk.triage.enabled (NOT returnLane.enabled)
+            // Output: { intentGuess, confidence, callReasonDetail, matchedCardId, signals }
+            // Triage does NOT speak to the caller — it produces signals only.
             // ═══════════════════════════════════════════════════════════════════
-            // Variables declared at function level for proper scoping
-            companyReturnLaneEnabled = company?.aiAgentSettings?.returnLane?.enabled === true;
-            
-            if (companyReturnLaneEnabled) {
-                try {
-                    triageCardMatch = await TriageService.applyQuickTriageRules(
-                        userText,
-                        companyId,
-                        company?.defaultTrade || null
-                    );
-                    
-                    if (triageCardMatch?.matched) {
-                        // Load full card for returnConfig
-                        matchedTriageCard = await TriageService.getTriageCardById(triageCardMatch.triageCardId);
-                        
-                        log('🎯 RETURN_LANE: Triage card matched', {
-                            cardId: triageCardMatch.triageCardId,
-                            triageLabel: triageCardMatch.triageLabel,
-                            action: triageCardMatch.action,
-                            hasReturnConfig: !!matchedTriageCard?.returnConfig,
-                            returnConfigEnabled: matchedTriageCard?.returnConfig?.enabled === true
+            try {
+                triageResult = await TriageEngineRouter.runTriage(userText, {
+                    company,
+                    companyId,
+                    callSid: session._id?.toString() || 'unknown',
+                    turnNumber: session.metrics?.totalTurns || 0,
+                    session
+                });
+
+                // Store triage result in session discovery for downstream use
+                if (triageResult?._triageRan && triageResult.callReasonDetail) {
+                    session.discovery = session.discovery || {};
+                    if (!session.discovery.issue) {
+                        session.discovery.issue = triageResult.callReasonDetail;
+                        session.discovery.issueCapturedAtTurn = (session.metrics?.totalTurns || 0) + 1;
+                        session.discovery.issueConfidence = triageResult.confidence;
+                        session.markModified('discovery');
+                        log('📋 V115: Triage captured issue into discovery', {
+                            issue: triageResult.callReasonDetail,
+                            intentGuess: triageResult.intentGuess,
+                            confidence: triageResult.confidence
                         });
-                    } else {
-                        log('📋 RETURN_LANE: No triage card matched');
                     }
-                } catch (triageErr) {
-                    log('⚠️ RETURN_LANE: Triage matching failed (non-fatal)', { error: triageErr.message });
+                    if (!session.discovery.callType || session.discovery.callType === 'unknown') {
+                        const intentToCallType = {
+                            service_request: 'service_issue',
+                            pricing: 'question',
+                            status: 'followup',
+                            complaint: 'complaint'
+                        };
+                        session.discovery.callType = intentToCallType[triageResult.intentGuess] || 'unknown';
+                        session.markModified('discovery');
+                    }
                 }
+
+                // Bridge to ReturnLane (backward compat): if triage matched a card, load it
+                if (triageResult?.matchedCardId) {
+                    try {
+                        matchedTriageCard = await TriageService.getTriageCardById(triageResult.matchedCardId);
+                        triageCardMatch = {
+                            matched: true,
+                            triageCardId: triageResult.matchedCardId,
+                            triageLabel: matchedTriageCard?.triageLabel || null,
+                            action: matchedTriageCard?.quickRuleConfig?.action || null
+                        };
+                    } catch (cardErr) {
+                        log('⚠️ V115: Card lookup failed (non-fatal)', { error: cardErr.message });
+                    }
+                }
+            } catch (triageErr) {
+                log('⚠️ V115: TriageEngineRouter error (non-fatal)', { error: triageErr.message });
             }
+            
+            // ReturnLane still checks its own gate (separate subsystem)
+            companyReturnLaneEnabled = company?.aiAgentSettings?.returnLane?.enabled === true;
             
             // ═══════════════════════════════════════════════════════════════════
             // 🎯 V2: TIER-1 SCENARIO SHORT-CIRCUIT (ZERO TOKENS!)
@@ -5995,6 +6027,35 @@ async function processTurn({
                 
                 if (selectedReply && selectedReply.trim()) {
                     aiLatencyMs = Date.now() - aiStartTime;
+                    
+                    // ═══════════════════════════════════════════════════════════════
+                    // V115: ACKNOWLEDGE SYMPTOMS BEFORE SCHEDULING
+                    // ═══════════════════════════════════════════════════════════════
+                    // RULE: If triage captured callReasonDetail, the response MUST
+                    // acknowledge the problem before jumping to scheduling questions.
+                    // This is router-level, not scenario-level.
+                    // ═══════════════════════════════════════════════════════════════
+                    if (triageResult?._triageRan && triageResult.callReasonDetail && hasDetailedIssue) {
+                        const symptoms = triageResult.callReasonDetail;
+                        const alreadyAcknowledges = /sorry|understand|hear that|that sounds|sounds like|dealing with/i.test(selectedReply);
+                        
+                        if (!alreadyAcknowledges) {
+                            // Prepend empathetic acknowledgment of the specific symptoms
+                            const urgency = triageResult.signals?.urgency || 'normal';
+                            let ack;
+                            if (urgency === 'emergency') {
+                                ack = `I understand this is urgent — ${symptoms}.`;
+                            } else if (urgency === 'urgent') {
+                                ack = `I'm sorry to hear about that — ${symptoms}. Let's get this taken care of.`;
+                            } else {
+                                ack = `I understand — ${symptoms}.`;
+                            }
+                            selectedReply = ack + ' ' + selectedReply;
+                            log('📋 V115: Prepended symptom acknowledgment to Tier-1 response', {
+                                symptoms, urgency, originalReplyStart: selectedReply.substring(0, 60)
+                            });
+                        }
+                    }
                     
                     // ═══════════════════════════════════════════════════════════════
                     // V92: USE EXISTING PLACEHOLDER SYSTEM - NO HARDCODING!

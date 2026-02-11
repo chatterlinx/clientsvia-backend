@@ -1608,6 +1608,7 @@ class FrontDeskBehaviorManager {
         const discoveryFlow = this.config.discoveryFlow || { version: 'v1', enabled: true, steps: [] };
         const bookingFlow = this.config.bookingFlow || { version: 'v1', enabled: true, steps: [] };
         const policies = this.config.policies || {};
+        const triageConfig = this.config.triage || { enabled: false, minConfidence: 0.62, autoOnProblem: true, perService: {}, engine: 'v110' };
         
         // Build slot options dropdown HTML
         const slotOptions = (slotRegistry.slots || []).map(s => 
@@ -2029,6 +2030,109 @@ class FrontDeskBehaviorManager {
                     <button id="fdb-add-disc-step" style="background:#238636; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.875rem;">
                         + Add Discovery Step
                     </button>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- V115: TRIAGE — Classifies WHY the caller is calling            -->
+                <!-- Position: After Discovery (passive capture), Before Booking    -->
+                <!-- This mirrors the real call flow sequence.                       -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <div style="background:#161b22; border:1px solid #21262d; border-left:3px solid #da3636; border-radius:8px; padding:20px; margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+                        <div>
+                            <h3 style="margin:0; color:#da3636; font-size:1.1rem; display:flex; align-items:center; gap:10px;">
+                                🎯 V110 Triage (Intent Classification)
+                                <span style="background:${triageConfig.enabled ? '#23863620' : '#da363620'}; color:${triageConfig.enabled ? '#3fb950' : '#da3636'}; padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:600;">
+                                    ${triageConfig.enabled ? 'ENABLED' : 'DISABLED'}
+                                </span>
+                            </h3>
+                            <p style="margin:8px 0 0 0; color:#8b949e; font-size:0.85rem; line-height:1.6; max-width:700px;">
+                                <strong style="color:#c9d1d9;">The ONLY triage system.</strong> Runs during discovery to classify caller intent and extract problem details.
+                                Triage does NOT speak to the caller — it produces signals (intent, symptoms, urgency) that the router uses to choose responses.
+                                <br/><em style="color:#f0883e;">Kill switch: disable this toggle and all triage stops immediately.</em>
+                            </p>
+                        </div>
+                        <button id="fdb-triage-refresh" style="background:#21262d; color:#8b949e; border:1px solid #30363d; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:0.8rem;">
+                            🔄 Check Runtime
+                        </button>
+                    </div>
+
+                    <!-- TRIAGE RUNTIME STATUS BANNER -->
+                    <div id="fdb-triage-runtime-status" style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px; margin-bottom:16px;">
+                        <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center;">
+                            <div>
+                                <span style="color:#8b949e; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">Runtime Enabled</span>
+                                <div id="fdb-triage-status-enabled" style="color:${triageConfig.enabled ? '#3fb950' : '#da3636'}; font-weight:700; font-size:1rem; margin-top:4px;">
+                                    ${triageConfig.enabled ? '✅ YES' : '❌ NO'}
+                                </div>
+                            </div>
+                            <div>
+                                <span style="color:#8b949e; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">Engine</span>
+                                <div style="color:#58a6ff; font-weight:600; font-size:1rem; margin-top:4px;">V110</div>
+                            </div>
+                            <div>
+                                <span style="color:#8b949e; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">Min Confidence</span>
+                                <div id="fdb-triage-confidence-value" style="color:#c9d1d9; font-weight:600; font-size:1rem; margin-top:4px;">${Math.round((triageConfig.minConfidence || 0.62) * 100)}%</div>
+                            </div>
+                            <div>
+                                <span style="color:#8b949e; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">Gate Source</span>
+                                <div style="color:#f0883e; font-weight:600; font-size:0.85rem; margin-top:4px;">frontDesk.triage.enabled</div>
+                            </div>
+                            <div>
+                                <span style="color:#8b949e; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px;">Last Decision</span>
+                                <div id="fdb-triage-last-decision" style="color:#8b949e; font-weight:600; font-size:0.85rem; margin-top:4px;">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TRIAGE CONTROLS -->
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                        <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; margin-bottom:12px;">
+                                <input type="checkbox" id="fdb-triage-enabled" ${triageConfig.enabled ? 'checked' : ''} 
+                                    style="width:18px; height:18px; accent-color:#da3636;">
+                                <span style="color:#c9d1d9; font-weight:600;">Enable Triage</span>
+                            </label>
+                            <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                                <input type="checkbox" id="fdb-triage-auto-on-problem" ${triageConfig.autoOnProblem !== false ? 'checked' : ''} 
+                                    style="width:18px; height:18px; accent-color:#f0883e;">
+                                <span style="color:#8b949e; font-size:0.875rem;">Auto-triage when caller describes a problem</span>
+                            </label>
+                        </div>
+                        <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:16px;">
+                            <label style="display:block; margin-bottom:8px; color:#8b949e; font-size:0.85rem;">
+                                Min Confidence Threshold
+                            </label>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <input type="range" id="fdb-triage-min-confidence" min="0" max="100" value="${Math.round((triageConfig.minConfidence || 0.62) * 100)}"
+                                    style="flex:1; accent-color:#58a6ff;">
+                                <span id="fdb-triage-confidence-display" style="color:#c9d1d9; font-weight:600; min-width:40px; text-align:right;">
+                                    ${Math.round((triageConfig.minConfidence || 0.62) * 100)}%
+                                </span>
+                            </div>
+                            <p style="margin:8px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                Triage results below this confidence are treated as "other" intent.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- OUTPUT CONTRACT REFERENCE -->
+                    <div style="margin-top:16px; background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:12px 16px;">
+                        <details>
+                            <summary style="color:#8b949e; font-size:0.8rem; cursor:pointer;">
+                                📝 Output Contract (what triage produces per turn)
+                            </summary>
+                            <pre style="margin:8px 0 0 0; color:#c9d1d9; font-size:0.75rem; line-height:1.5; overflow-x:auto; white-space:pre-wrap;">{
+  intentGuess: "service_request|pricing|status|complaint|other",
+  confidence: 0.0-1.0,
+  callReasonDetail: "AC not cooling; leaking",
+  matchedCardId: null | "card_id",
+  signals: { urgency: "normal|urgent|emergency" }
+}
+// Triage does NOT speak to the caller.
+// It produces signals; the router decides the response.</pre>
+                        </details>
+                    </div>
                 </div>
 
                 <!-- PHASE 2: Booking Flow Section (after consent) -->
@@ -2830,6 +2934,70 @@ class FrontDeskBehaviorManager {
             });
         }
 
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V115: TRIAGE CONTROLS — The ONLY triage gate
+        // ═══════════════════════════════════════════════════════════════════════════
+        const triageEnabledCheckbox = contentElement.querySelector('#fdb-triage-enabled');
+        const triageAutoOnProblem = contentElement.querySelector('#fdb-triage-auto-on-problem');
+        const triageConfidenceSlider = contentElement.querySelector('#fdb-triage-min-confidence');
+        const triageConfidenceDisplay = contentElement.querySelector('#fdb-triage-confidence-display');
+        const triageRefreshBtn = contentElement.querySelector('#fdb-triage-refresh');
+        
+        if (triageEnabledCheckbox) {
+            triageEnabledCheckbox.addEventListener('change', (e) => {
+                if (!this.config.triage) this.config.triage = { enabled: false, minConfidence: 0.62, autoOnProblem: true, perService: {}, engine: 'v110' };
+                this.config.triage.enabled = e.target.checked;
+                
+                // Update status banner
+                const statusEl = contentElement.querySelector('#fdb-triage-status-enabled');
+                if (statusEl) {
+                    statusEl.textContent = e.target.checked ? '✅ YES' : '❌ NO';
+                    statusEl.style.color = e.target.checked ? '#3fb950' : '#da3636';
+                }
+            });
+        }
+        
+        if (triageAutoOnProblem) {
+            triageAutoOnProblem.addEventListener('change', (e) => {
+                if (!this.config.triage) this.config.triage = { enabled: false, minConfidence: 0.62, autoOnProblem: true, perService: {}, engine: 'v110' };
+                this.config.triage.autoOnProblem = e.target.checked;
+            });
+        }
+        
+        if (triageConfidenceSlider) {
+            triageConfidenceSlider.addEventListener('input', (e) => {
+                const pct = parseInt(e.target.value, 10);
+                if (triageConfidenceDisplay) triageConfidenceDisplay.textContent = pct + '%';
+                // Also sync the runtime status banner value
+                const bannerConfidence = contentElement.querySelector('#fdb-triage-confidence-value');
+                if (bannerConfidence) bannerConfidence.textContent = pct + '%';
+                if (!this.config.triage) this.config.triage = { enabled: false, minConfidence: 0.62, autoOnProblem: true, perService: {}, engine: 'v110' };
+                this.config.triage.minConfidence = pct / 100;
+            });
+        }
+        
+        if (triageRefreshBtn) {
+            triageRefreshBtn.addEventListener('click', async () => {
+                const lastDecisionEl = contentElement.querySelector('#fdb-triage-last-decision');
+                if (lastDecisionEl) lastDecisionEl.textContent = 'Checking...';
+                try {
+                    // Try to get latest triage decision from raw events
+                    const resp = await fetch(\`/api/admin/front-desk-behavior/\${this.companyId}\`);
+                    const data = await resp.json();
+                    const tc = data?.config?.triage || {};
+                    if (lastDecisionEl) {
+                        lastDecisionEl.textContent = tc.enabled ? 'Active (V110)' : 'Disabled';
+                        lastDecisionEl.style.color = tc.enabled ? '#3fb950' : '#da3636';
+                    }
+                } catch (err) {
+                    if (lastDecisionEl) {
+                        lastDecisionEl.textContent = 'Error checking';
+                        lastDecisionEl.style.color = '#da3636';
+                    }
+                }
+            });
+        }
+
         // Save button
         const saveBtn = contentElement.querySelector('#fdb-save-flows');
         if (saveBtn) {
@@ -2864,7 +3032,8 @@ class FrontDeskBehaviorManager {
                     slotRegistry: this.config.slotRegistry,
                     discoveryFlow: this.config.discoveryFlow,
                     bookingFlow: this.config.bookingFlow,
-                    policies: this.config.policies
+                    policies: this.config.policies,
+                    triage: this.config.triage
                 };
                 const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);

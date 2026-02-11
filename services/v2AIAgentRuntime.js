@@ -51,6 +51,9 @@ const brain1ProcessTurn = null; // REMOVED - stub to prevent crashes
 const CheatSheetRuntimeService = require('./cheatsheet/CheatSheetRuntimeService');
 const intelligentFallbackHandler = require('./intelligentFallbackHandler');
 const MemoryEngine = require('./MemoryEngine');
+// V115: Triage is now routed through TriageEngineRouter ONLY
+const TriageEngineRouter = require('../triage/TriageEngineRouter');
+// Legacy TriageService kept ONLY for admin routes (card management, not runtime)
 const TriageService = require('./TriageService');
 const PostCallLearningService = require('./PostCallLearningService');
 const AIBrain3tierllm = require('./AIBrain3tierllm');
@@ -500,39 +503,55 @@ class V2AIAgentRuntime {
             });
             
             // ═════════════════════════════════════════════════════════════════
-            // 🎯 V22 TRIAGE: QUICK RULES (Brain-1 Tier-0 pre-check)
-            // Uses TriageCard quickRuleConfig as fast-path before 3-Tier Router
+            // ═════════════════════════════════════════════════════════════════
+            // V115 TRIAGE: Via TriageEngineRouter (single entrypoint)
+            // Gate: frontDesk.triage.enabled (NOT returnLane.enabled)
             // ═════════════════════════════════════════════════════════════════
             
             try {
-                const quickTriageResult = await TriageService.applyQuickTriageRules(
+                const v110TriageResult = await TriageEngineRouter.runTriage(
                     userInput,
-                    companyID,
-                    company.trade || null
+                    {
+                        company,
+                        companyId: companyID,
+                        callSid: callId,
+                        turnNumber: turnCount || 0,
+                        session: null
+                    }
                 );
 
-                if (quickTriageResult.matched) {
-                    logger.info('[V2 AGENT] 🎯 Quick triage matched', {
+                if (v110TriageResult?._triageRan) {
+                    logger.info('[V2 AGENT] 🎯 V115 Triage ran', {
                         callId,
-                        triageCardId: quickTriageResult.triageCardId,
-                        triageLabel: quickTriageResult.triageLabel,
-                        action: quickTriageResult.action,
-                        intent: quickTriageResult.intent,
-                        serviceType: quickTriageResult.serviceType
+                        intentGuess: v110TriageResult.intentGuess,
+                        confidence: v110TriageResult.confidence,
+                        callReasonDetail: v110TriageResult.callReasonDetail?.substring(0, 80),
+                        matchedCardId: v110TriageResult.matchedCardId,
+                        urgency: v110TriageResult.signals?.urgency
                     });
 
-                    // Attach to executionContext so Frontline-Intel / CallFlowExecutor can use it
-                    executionContext.quickTriageResult = quickTriageResult;
+                    // Attach to executionContext for downstream use
+                    executionContext.triageResult = v110TriageResult;
                     
-                    // If we have a linkedScenarioId, set it for Brain-5 optimization
-                    if (quickTriageResult.linkedScenarioId) {
-                        executionContext.forcedScenarioId = quickTriageResult.linkedScenarioId;
+                    // If a card matched, bridge to legacy format for Frontline-Intel compat
+                    if (v110TriageResult.matchedCardId) {
+                        executionContext.quickTriageResult = {
+                            matched: true,
+                            triageCardId: v110TriageResult.matchedCardId,
+                            triageLabel: null,
+                            action: null,
+                            intent: v110TriageResult.intentGuess,
+                            serviceType: null
+                        };
                     }
                 } else {
-                    logger.debug('[V2 AGENT] 🎯 No quick triage match', { callId });
+                    logger.debug('[V2 AGENT] 🎯 V115 Triage skipped', {
+                        callId,
+                        skipReason: v110TriageResult?._skipReason
+                    });
                 }
             } catch (triageErr) {
-                logger.error('[V2 AGENT] ❌ Quick triage failed (non-fatal)', {
+                logger.error('[V2 AGENT] ❌ V115 Triage failed (non-fatal)', {
                     callId,
                     error: triageErr.message
                 });

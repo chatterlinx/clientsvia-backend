@@ -2640,6 +2640,31 @@ const companySchema = new mongoose.Schema({
                 default: { version: 'v1', enabled: true, confirmCapturedFirst: true, steps: [] }
             },
             
+            // ═══════════════════════════════════════════════════════════════
+            // V115: TRIAGE CONFIG — The ONLY triage gate
+            // ═══════════════════════════════════════════════════════════════
+            // Single source of truth for whether triage runs at runtime.
+            // Replaces: returnLane.enabled, autoTriageOnProblem, per-service toggles
+            // Gate: frontDesk.triage.enabled
+            // UI: Control Plane → Front Desk → V110 → Triage section
+            // ═══════════════════════════════════════════════════════════════
+            triage: {
+                // Master toggle — the ONLY gate for runtime triage
+                enabled: { type: Boolean, default: false },
+                
+                // Minimum confidence threshold for triage results
+                minConfidence: { type: Number, default: 0.62, min: 0, max: 1 },
+                
+                // Auto-run triage when caller describes a problem
+                autoOnProblem: { type: Boolean, default: true },
+                
+                // Per-service triage toggles (from switchboard)
+                perService: { type: mongoose.Schema.Types.Mixed, default: {} },
+                
+                // Engine version (always v110, reserved for future)
+                engine: { type: String, default: 'v110', enum: ['v110'] }
+            },
+            
             // Flow Policies: Name parsing, booking behavior, address handling
             policies: {
                 type: mongoose.Schema.Types.Mixed,

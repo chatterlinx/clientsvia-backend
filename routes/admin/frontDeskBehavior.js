@@ -519,6 +519,15 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 bookingFlow: config.bookingFlow || null,
                 policies: config.policies || null,
                 
+                // V115: Triage config — single source of truth
+                triage: config.triage || {
+                    enabled: false,
+                    minConfidence: 0.62,
+                    autoOnProblem: true,
+                    perService: {},
+                    engine: 'v110'
+                },
+                
                 // 🚨 Dynamic booking slots (LEGACY - kept for fallback only)
                 bookingSlots: config.bookingSlots || null,
                 // ☢️ NUKED: bookingContractV2Enabled, slotLibrary, slotGroups - Jan 2026
@@ -938,6 +947,52 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
                 stepCount: updates.bookingFlow.steps?.length || 0,
                 stepSlotIds: (updates.bookingFlow.steps || []).map(s => s.slotId)
             });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V115: TRIAGE CONFIG — The ONLY triage gate
+        // ═══════════════════════════════════════════════════════════════════════
+        // Saves to frontDeskBehavior.triage (single source of truth)
+        // UI: Control Plane → Front Desk → V110 → Triage section
+        // ═══════════════════════════════════════════════════════════════════════
+        if (updates.triage && typeof updates.triage === 'object') {
+            const t = updates.triage;
+            if (t.enabled !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.triage.enabled'] = t.enabled === true;
+            }
+            if (t.minConfidence !== undefined) {
+                const conf = Math.max(0, Math.min(1, Number(t.minConfidence) || 0.62));
+                updateObj['aiAgentSettings.frontDeskBehavior.triage.minConfidence'] = conf;
+            }
+            if (t.autoOnProblem !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.triage.autoOnProblem'] = t.autoOnProblem === true;
+            }
+            if (t.perService !== undefined && typeof t.perService === 'object') {
+                updateObj['aiAgentSettings.frontDeskBehavior.triage.perService'] = t.perService;
+            }
+            if (t.engine !== undefined) {
+                updateObj['aiAgentSettings.frontDeskBehavior.triage.engine'] = 'v110'; // Only v110 allowed
+            }
+            
+            logger.info('[FRONT DESK BEHAVIOR] V115: Saving triage config', {
+                companyId,
+                enabled: t.enabled,
+                minConfidence: t.minConfidence,
+                autoOnProblem: t.autoOnProblem,
+                engine: 'v110'
+            });
+            
+            // Log triage config change to BlackBox for audit
+            BlackBoxLogger.logEvent({
+                callId: 'CONFIG_CHANGE',
+                companyId,
+                type: 'TRIAGE_CONFIG_UPDATED',
+                data: {
+                    changes: Object.keys(t),
+                    newValues: t,
+                    updatedBy: req.user?.email || 'admin'
+                }
+            }).catch(() => {});
         }
         
         if (updates.policies && typeof updates.policies === 'object') {
