@@ -133,20 +133,22 @@ const DEFAULT_DISCOVERY_FLOW = {
     steps: [
         // ═══════════════════════════════════════════════════════════════════════════
         // V115: Reason for Call — captured FIRST (caller states problem on Turn 1)
-        // Filled by TriageEngineRouter automatically. Smart confirm only.
+        // Filled by TriageEngineRouter automatically. NEVER confirm — just acknowledge.
+        // Confirming a sentence like "AC not cooling and leaking" is awkward,
+        // slows calls, and creates reprompt loops. Agent acknowledges in response instead.
         // ═══════════════════════════════════════════════════════════════════════════
         {
             stepId: 'd0',
             slotId: 'call_reason_detail',
             order: 0,
-            ask: "Got it — you're calling about {value}, right?",
-            reprompt: "Tell me what's going on with the system.",
+            ask: "Got it — {value}.",
+            reprompt: "What can I help you with today?",
             repromptVariants: [
-                "Tell me what's going on with the system.",
+                "What can I help you with today?",
                 "What seems to be the issue?",
-                "What can we help with today?"
+                "What problem are you having today?"
             ],
-            confirmMode: 'smart_if_captured'
+            confirmMode: 'never'
         },
         { 
             stepId: 'd1', 
@@ -166,12 +168,19 @@ const DEFAULT_DISCOVERY_FLOW = {
             stepId: 'd2', 
             slotId: 'phone',  // CANONICAL: matches SlotExtractor
             order: 2,
-            ask: "Is {value} the best number for text updates?", 
-            reprompt: "What's a good number for updates?",
+            // V116: Human-like discovery phone prompt — don't read back the full number.
+            // A real receptionist would just ask casually about the calling number.
+            ask: "And is the number you're calling from a good one to reach you if we get disconnected?",
+            askVariants: [
+                "And is the number you're calling from a good one to reach you if we get disconnected?",
+                "Can we use this number you're calling from for callbacks and updates?",
+                "Is this a good number to reach you at?"
+            ],
+            reprompt: "What's the best number to reach you?",
             repromptVariants: [
-                "What's a good number for updates?",
-                "Best number to text you?",
-                "What number should we use?"
+                "What's the best number to reach you?",
+                "What number should we use for callbacks?",
+                "What's a good number for text updates?"
             ],
             confirmMode: 'confirm_if_from_caller_id'
         },
@@ -235,15 +244,34 @@ const DEFAULT_BOOKING_FLOW = {
             stepId: 'b2', 
             slotId: 'phone',  // CANONICAL: matches SlotExtractor
             order: 3,
-            ask: "What's the best cell number to reach you for confirmations and technician updates?", 
-            confirmPrompt: "I've got {value}. Is that the best number?",
-            reprompt: "What's a good callback number?",
-            repromptVariants: [
-                "What's a good callback number?",
-                "What number should we use?",
-                "Best number to reach you?"
+            // V116: Human-like phone prompt — don't read back the full number from caller ID.
+            // A real receptionist doesn't recite the number back — they just ask casually.
+            ask: "And is this number you're calling from a good one for the technician to reach you?", 
+            askVariants: [
+                "And is this number you're calling from a good one for the technician to reach you?",
+                "Can we use this number for text confirmations and updates?",
+                "Is this the best number to reach you at?"
             ],
-            confirmRetryPrompt: "Is {value} the best number?"
+            confirmPrompt: "And can we use this number for callbacks and updates?",
+            confirmPromptVariants: [
+                "And can we use this number for callbacks and updates?",
+                "Is this a good number to reach you at?",
+                "Can the technician reach you at this number?"
+            ],
+            reprompt: "What's a good number to reach you?",
+            repromptVariants: [
+                "What's a good number to reach you?",
+                "What number should we use for updates?",
+                "Best number to reach you at?"
+            ],
+            confirmRetryPrompt: "Just making sure — is this the right number?",
+            // V116: When phone is from caller_id, use casual language (don't read back number)
+            callerIdPrompt: "And is the number you're calling from a good one for callbacks and text updates?",
+            callerIdPromptVariants: [
+                "And is the number you're calling from a good one for callbacks and text updates?",
+                "Can we use this number you're calling from for the technician to reach you?",
+                "Is this number good for confirmations and updates?"
+            ]
         },
         { 
             stepId: 'b3', 
@@ -365,17 +393,18 @@ const DEFAULT_BOOKING_SLOTS = [
         slotId: 'phone',
         label: 'Phone Number',
         type: 'phone',
-        question: "What's the best phone number to reach you?",
+        question: "What's the best number to reach you?",
         required: true,
         order: 1,
         enabled: true,
         confirmBack: true,
-        confirmPrompt: "Just to confirm, that's {value}, correct?",
+        confirmPrompt: "And can we use this number for callbacks?",
         // ─────────────────────────────────────────────────────────────
-        // V59: ALL phone-related questions - NO FALLBACKS IN RUNTIME
+        // V59/V116: ALL phone-related questions - NO FALLBACKS IN RUNTIME
+        // V116: Human-like — don't recite full number back, just ask casually
         // ─────────────────────────────────────────────────────────────
         offerCallerId: true,
-        callerIdPrompt: "I see you're calling from {callerId} — is that a good number for text confirmations, or would you prefer a different one?",
+        callerIdPrompt: "And is this number you're calling from a good one for text confirmations, or would you prefer a different one?",
         callerIdAcceptPhrases: ['yes', 'yeah', 'that works', 'sure', 'correct', "that's fine", 'yep'],
         callerIdDeclinePhrases: ['no', 'different', 'another', 'not that one', 'use a different'],
         // Breakdown prompts for unclear input

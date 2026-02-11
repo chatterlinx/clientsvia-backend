@@ -2769,7 +2769,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     });
     
     // 📼 BLACK BOX: Log caller speech
-    const turnCount = (req.session?.callState?.turnCount || 0) + 1;
+    // V116: Use 'let' — will be re-synced to Redis callState.turnCount after state load
+    // On stateless servers (Render), req.session is empty so this starts at 1.
+    // After Redis load, callState.turnCount is the truth — we re-assign below.
+    let turnCount = (req.session?.callState?.turnCount || 0) + 1;
     if (BlackBoxLogger) {
       BlackBoxLogger.QuickLog.gatherFinal(
         callSid,
@@ -2869,6 +2872,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     // Increment turn count
     callState.turnCount = (callState.turnCount || 0) + 1;
+    
+    // V116 FIX: Re-sync local turnCount to Redis truth.
+    // Before this line, turnCount was computed from req.session (stale on Render).
+    // After Redis load + increment, callState.turnCount is the single source of truth.
+    // This eliminates the divergence where traces show "turn 1" while callState is "turn 5".
+    turnCount = callState.turnCount;
     
     // 📼 BLACK BOX: Log state load for diagnostics (visible in JSON!)
     if (BlackBoxLogger) {
@@ -3352,7 +3361,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             slotMetadata: callState.slotMetadata || {},
             confirmedSlots: callState.confirmedSlots || {},
             askCount: callState.bookingAskCount || {},
-            pendingConfirmation: callState.pendingConfirmation || null
+            pendingConfirmation: callState.pendingConfirmation || null,
+            // V116: Persist preconfirm state so caller's "yes" on next turn is handled
+            pendingPreconfirm: callState.pendingPreconfirm || null
           };
           
           // Create AWConfigReader for traced config reads
@@ -3508,6 +3519,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               confirmedSlots: bookingResult.state?.confirmedSlots || callState.confirmedSlots || {},
               lockedSlots: bookingResult.state?.lockedSlots || callState.lockedSlots || {},  // V110
               repromptCount: bookingResult.state?.repromptCount || {},  // V110
+              // V116: Persist preconfirm state so caller's "yes" on next turn confirms the slot
+              pendingPreconfirm: bookingResult.state?.pendingPreconfirm || null,
               bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE',
               bookingFlowState: {
                 bookingModeLocked: bookingResult.state?.bookingModeLocked !== false,
@@ -3853,7 +3866,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               slotMetadata: callState.slotMetadata || {},
               confirmedSlots: callState.confirmedSlots || {},
               askCount: callState.bookingAskCount || {},
-              pendingConfirmation: callState.pendingConfirmation || null
+              pendingConfirmation: callState.pendingConfirmation || null,
+              // V116: Restore preconfirm state so caller's "yes" confirms the slot
+              pendingPreconfirm: callState.pendingPreconfirm || null
             };
             
             // ═══════════════════════════════════════════════════════════════════
@@ -4007,6 +4022,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 confirmedSlots: bookingResult.state?.confirmedSlots || {},
                 lockedSlots: bookingResult.state?.lockedSlots || {},  // V110
                 pendingConfirmation: bookingResult.state?.pendingConfirmation || null,
+                // V116: Persist preconfirm state so caller's "yes" on next turn confirms the slot
+                pendingPreconfirm: bookingResult.state?.pendingPreconfirm || null,
                 bookingAskCount: bookingResult.state?.askCount || {},
                 repromptCount: bookingResult.state?.repromptCount || {},  // V110
                 awaitingConfirmation: bookingResult.state?.awaitingConfirmation || false,
@@ -4718,7 +4735,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   slotMetadata: callState.slotMetadata || {},
                   confirmedSlots: callState.confirmedSlots || {},
                   askCount: callState.bookingAskCount || {},
-                  pendingConfirmation: callState.pendingConfirmation || null
+                  pendingConfirmation: callState.pendingConfirmation || null,
+                  pendingPreconfirm: callState.pendingPreconfirm || null
                 };
                 
                 // Run booking flow
@@ -4821,7 +4839,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                   slotMetadata: callState.slotMetadata || {},
                   confirmedSlots: callState.confirmedSlots || {},
                   askCount: callState.bookingAskCount || {},
-                  pendingConfirmation: callState.pendingConfirmation || null
+                  pendingConfirmation: callState.pendingConfirmation || null,
+                  pendingPreconfirm: callState.pendingPreconfirm || null
                 };
                 
                 // Run booking flow

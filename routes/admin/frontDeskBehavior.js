@@ -82,19 +82,29 @@ function ensureCallReasonDiscoveryStep(discoveryFlow) {
             stepId: 'd0',
             slotId: 'call_reason_detail',
             order: discoveryFlow.steps.length,
-            ask: "Got it — you're calling about {value}, right?",
-            reprompt: "Tell me what's going on with the system.",
-            confirmMode: 'smart_if_captured'
+            ask: "Got it — {value}.",
+            reprompt: "What can I help you with today?",
+            confirmMode: 'never'
         });
-        logger.info('[FRONT DESK BEHAVIOR] V115: Auto-seeded call_reason_detail discovery step');
-    } else if (existingStep.ask === 'Is that correct?' || existingStep.reprompt === 'Could you confirm?') {
-        // Step exists but has generic placeholder prompts — upgrade them
-        existingStep.ask = "Got it — you're calling about {value}, right?";
-        existingStep.reprompt = "Tell me what's going on with the system.";
-        if (existingStep.confirmMode === 'always') {
-            existingStep.confirmMode = 'smart_if_captured';
+        logger.info('[FRONT DESK BEHAVIOR] V115: Auto-seeded call_reason_detail discovery step (confirmMode: never)');
+    } else {
+        // Upgrade any non-'never' confirmMode and stale prompts
+        let upgraded = false;
+        if (existingStep.confirmMode !== 'never') {
+            existingStep.confirmMode = 'never';
+            upgraded = true;
         }
-        logger.info('[FRONT DESK BEHAVIOR] V115: Upgraded call_reason_detail discovery step prompts from generic placeholders');
+        if (existingStep.ask === 'Is that correct?' || existingStep.ask === "Got it — you're calling about {value}, right?") {
+            existingStep.ask = "Got it — {value}.";
+            upgraded = true;
+        }
+        if (existingStep.reprompt === 'Could you confirm?' || existingStep.reprompt === "Tell me what's going on with the system.") {
+            existingStep.reprompt = "What can I help you with today?";
+            upgraded = true;
+        }
+        if (upgraded) {
+            logger.info('[FRONT DESK BEHAVIOR] V115: Upgraded call_reason_detail step → confirmMode: never, cleaner prompts');
+        }
     }
     
     return discoveryFlow;

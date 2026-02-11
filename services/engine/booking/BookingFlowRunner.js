@@ -246,6 +246,27 @@ function safeSetSlot(state, slotName, value, options = {}) {
         const isNameRelated = nameAliases.includes(slotName) && nameAliases.includes(currentFieldKey);
         const isCurrentSlot = slotName === currentFieldKey || isNameRelated;
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V116: GUARD — If writing to lastName during 'name' step, value must be
+        // a plausible name (1-2 words, < 25 chars, no sentence fragments).
+        // Prevents "my first name is mark." from being stored as a last name.
+        // ═══════════════════════════════════════════════════════════════════════
+        if (isNameRelated && slotName === 'lastName' && currentFieldKey === 'name') {
+            const trimmedValue = (typeof value === 'string') ? value.trim() : '';
+            const wordCount = trimmedValue.split(/\s+/).length;
+            const hasNonNameWords = /\b(my|first|name|is|the|a|an|yes|no|that|this|good|number|please)\b/i.test(trimmedValue);
+            if (wordCount > 2 || trimmedValue.length > 25 || hasNonNameWords) {
+                logger.warn('[SAFE SET SLOT] V116: lastName rejected — raw input is not a plausible name', {
+                    rejectedSlot: slotName,
+                    currentStep: currentStepId,
+                    attemptedValue: trimmedValue.substring(0, 40),
+                    wordCount,
+                    reason: 'not_plausible_last_name'
+                });
+                return { accepted: false, reason: 'not_plausible_last_name' };
+            }
+        }
+        
         if (!isCurrentSlot) {
             // V96j: STEP_GATE_VIOLATION - Rejected write to non-current slot
             logger.warn('[SAFE SET SLOT] ⛔ STEP_GATE_VIOLATION: Rejected write to non-current slot', {
@@ -2502,17 +2523,25 @@ class BookingFlowRunner {
             // V96n: Use callerIdPrompt for phone from caller ID
             // ═══════════════════════════════════════════════════════════════
             if (fieldKey === 'phone' && metadata?.source === 'caller_id' && slotOptions.offerCallerId !== false) {
-                // Use configured callerIdPrompt if available
-                const callerIdPrompt = slotOptions.callerIdPrompt;
+                // V116: Use callerIdPromptVariants for natural variation, fallback to callerIdPrompt
+                const variants = slotOptions.callerIdPromptVariants || step.callerIdPromptVariants;
+                const callerIdPrompt = (Array.isArray(variants) && variants.length > 0)
+                    ? variants[Math.floor(Math.random() * variants.length)]
+                    : (slotOptions.callerIdPrompt || step.callerIdPrompt);
                 if (callerIdPrompt) {
-                    confirmPrompt = callerIdPrompt.replace(/\{callerId\}/gi, existingValue || '');
-                    logger.info('[BOOKING FLOW RUNNER] V96n: Using configured callerIdPrompt', {
-                        template: callerIdPrompt,
-                        phone: existingValue
+                    confirmPrompt = callerIdPrompt.replace(/\{callerId\}/gi, existingValue || '').replace(/\{value\}/gi, existingValue || '');
+                    logger.info('[BOOKING FLOW RUNNER] V116: Using callerIdPrompt for phone', {
+                        hasVariants: Array.isArray(variants) && variants.length > 0,
+                        phone: existingValue ? '***' : null
                     });
                 } else {
-                    // Default caller ID prompt
-                    confirmPrompt = `Is ${existingValue} a good number to reach you?`;
+                    // V116: Default caller ID prompt — don't read back number
+                    const defaultVariants = [
+                        'And is this number you\'re calling from a good one for callbacks?',
+                        'Can we use this number for text confirmations and updates?',
+                        'Is this the best number to reach you at?'
+                    ];
+                    confirmPrompt = defaultVariants[Math.floor(Math.random() * defaultVariants.length)];
                 }
             } else {
                 confirmPrompt = this.buildConfirmPrompt(step, existingValue);
@@ -4843,9 +4872,16 @@ class BookingFlowRunner {
         }
         
         // Fallback to defaults if no custom prompt configured
+        // V116: Phone fallback — don't recite number, just ask casually
         switch (type) {
-            case 'phone':
-                return `I can send confirmations to ${existingValue}. Is this the best number to reach you?`;
+            case 'phone': {
+                const phoneConfirmVariants = [
+                    'Can we use this number for confirmations and updates?',
+                    'Is this the best number to reach you at?',
+                    'And is this a good number for the technician to call?'
+                ];
+                return phoneConfirmVariants[Math.floor(Math.random() * phoneConfirmVariants.length)];
+            }
             case 'name':
                 return `I have your name as ${existingValue}. Is that correct?`;
             case 'address':
@@ -5096,8 +5132,8 @@ class BookingFlowRunner {
                 askedAt: new Date().toISOString()
             };
             
-            // Build preconfirm prompt
-            const prompt = this.buildPreconfirmPrompt(slotId, value, flow, company);
+            // Build preconfirm prompt (V116: pass source for caller_id-aware prompts)
+            const prompt = this.buildPreconfirmPrompt(slotId, value, flow, company, source);
             
             return {
                 reply: prompt,
@@ -5144,22 +5180,49 @@ class BookingFlowRunner {
      * - phone: "I have your number as {value}. Is that the best number?" (from config)
      * ========================================================================
      */
-    static buildPreconfirmPrompt(slotId, value, flow, company) {
+    static buildPreconfirmPrompt(slotId, value, flow, company, source) {
         const frontDesk = company?.aiAgentSettings?.frontDeskBehavior || {};
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V110 PRIORITY 1: bookingFlow.steps[slotId].confirmPrompt
+        // V116 HELPER: Pick random variant from array (avoids robotic repetition)
+        // ═══════════════════════════════════════════════════════════════════════
+        const pickVariant = (variants, fallback) => {
+            if (Array.isArray(variants) && variants.length > 0) {
+                return variants[Math.floor(Math.random() * variants.length)];
+            }
+            return fallback;
+        };
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V110 PRIORITY 1: bookingFlow.steps[slotId].confirmPrompt (+ variants)
         // ═══════════════════════════════════════════════════════════════════════
         const bookingFlow = frontDesk.bookingFlow || {};
         const bookingFlowSteps = bookingFlow.steps || [];
         const v110Step = bookingFlowSteps.find(s => s.slotId === slotId);
         
-        if (v110Step?.confirmPrompt) {
-            logger.debug('[BOOKING FLOW RUNNER] V110: Using confirmPrompt from bookingFlow.steps', {
-                slotId,
-                source: 'V110_BOOKING_FLOW'
-            });
-            return v110Step.confirmPrompt.replace(/\{value\}/gi, value);
+        if (v110Step) {
+            // V116: For phone from caller_id, prefer callerIdPrompt (no number readback)
+            if (slotId === 'phone' && source === 'caller_id') {
+                const callerIdPrompt = pickVariant(
+                    v110Step.callerIdPromptVariants,
+                    v110Step.callerIdPrompt || v110Step.confirmPrompt
+                );
+                if (callerIdPrompt) {
+                    logger.debug('[BOOKING FLOW RUNNER] V116: Using callerIdPrompt for phone preconfirm', {
+                        slotId, source: 'V110_CALLER_ID_PROMPT'
+                    });
+                    return callerIdPrompt.replace(/\{value\}/gi, value).replace(/\{callerId\}/gi, value);
+                }
+            }
+            
+            // V116: Use confirmPromptVariants if available, otherwise confirmPrompt
+            const prompt = pickVariant(v110Step.confirmPromptVariants, v110Step.confirmPrompt);
+            if (prompt) {
+                logger.debug('[BOOKING FLOW RUNNER] V110: Using confirmPrompt from bookingFlow.steps', {
+                    slotId, source: 'V110_BOOKING_FLOW', hasVariants: !!v110Step.confirmPromptVariants
+                });
+                return prompt.replace(/\{value\}/gi, value);
+            }
         }
         
         // ═══════════════════════════════════════════════════════════════════════
@@ -5216,7 +5279,16 @@ class BookingFlowRunner {
             case 'name':
                 return `Ok — I assume ${value} is your first name, is that correct?`;
             case 'phone':
-                return `I have your number as ${value}. Is that the best number to reach you?`;
+                // V116: Don't read back full number — sounds robotic. Just ask casually.
+                if (source === 'caller_id') {
+                    const phoneVariants = [
+                        'And is this number you\'re calling from a good one for callbacks?',
+                        'Can we use this number for text confirmations and updates?',
+                        'Is this the best number to reach you at?'
+                    ];
+                    return phoneVariants[Math.floor(Math.random() * phoneVariants.length)];
+                }
+                return `Is ${value} the best number to reach you?`;
             case 'address':
                 return `I have your address as ${value}. Is that correct?`;
             case 'time':

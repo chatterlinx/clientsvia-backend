@@ -193,19 +193,24 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // GATE 1.5: CONNECTION QUALITY GATE (V111)
+    // GATE 1.5: CONNECTION QUALITY GATE (V116 — de-fanged)
     // ═══════════════════════════════════════════════════════════════════════════
-    // On early turns (1-3), if STT confidence is garbage or caller says
-    // "hello? are you there?", intercept BEFORE the LLM gets garbage input.
-    // If trouble was already detected, continues checking on any turn.
-    // After maxRetries, offer DTMF escape (press 1 / press 2).
+    // PURPOSE: Catch genuinely broken connections (static, dead air, garbage STT).
+    // NOT for catching normal greetings. "Hello" on turn 1 is EXPECTED, not trouble.
+    //
+    // V116 RULES (stops hijacking scenario routing):
+    //   1. NEVER fire on turn 1 for trouble phrases — greetings are normal
+    //   2. Only fire for STT confidence on turn 1 if it's truly garbage (< 0.30)
+    //   3. If input has real content (> 3 words after stripping greeting prefix),
+    //      it's a real utterance — let it through regardless
+    //   4. On turns 2-3, fire only for EXACT trouble phrase match (no prefix/suffix)
+    //   5. After maxRetries, offer DTMF escape
     // ═══════════════════════════════════════════════════════════════════════════
     const cqGate = effectiveConfig?.frontDeskBehavior?.connectionQualityGate;
     const cqEnabled = cqGate?.enabled !== false;
     
     // V111 FIX: Use actual turn count from callState (Redis), not context.turnCount
-    // which is always 1 on stateless servers (Render). Gate fires on early turns (1-3)
-    // or on ANY turn if connection trouble was already detected in this call.
+    // which is always 1 on stateless servers (Render).
     const actualTurnCount = callState?.turnCount || turnCount;
     const hasPriorTrouble = (callState?._connectionTroubleCount || 0) > 0;
     
@@ -223,19 +228,35 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
         const normalizedInput = (userTurn || '').toLowerCase().trim()
             .replace(/[.,!?;:]+/g, '').trim();
         
-        // Check: is this a trouble phrase?
-        // V112 FIX: Only flag as trouble phrase if input is SHORT (< 30 chars).
-        // A substantive utterance like "hi my name is mark having air conditioning problems..."
-        // should NOT be treated as a connection trouble phrase just because it starts with "hi ".
-        // Trouble phrases are meant to catch fragmentary inputs like "hello?", "are you there?", etc.
-        const MAX_TROUBLE_PHRASE_LENGTH = 30;
-        const isTroublePhrase = normalizedInput.length < MAX_TROUBLE_PHRASE_LENGTH && troublePhrases.some(phrase => {
-            const p = phrase.toLowerCase().trim();
-            return normalizedInput === p || normalizedInput.startsWith(p + ' ') || normalizedInput.endsWith(' ' + p);
-        });
+        // V116: Count real words (alphanumeric tokens) to detect substantive content
+        const realWords = normalizedInput.split(/\s+/).filter(w => w.replace(/[^a-z0-9]/g, '').length > 0);
+        const hasSubstantiveContent = realWords.length > 3;
         
-        // Check: is STT confidence below threshold?
-        const isLowConfidence = sttConfidence > 0 && sttConfidence < threshold;
+        // V116: NEVER fire gate if caller said something real
+        // "Hello my AC isn't cooling and it's leaking" → 8+ words → real utterance → let it through
+        let isTroublePhrase = false;
+        let isLowConfidence = false;
+        
+        if (!hasSubstantiveContent) {
+            // V116: Turn 1 — SKIP trouble phrase check entirely. 
+            // "Hello" on turn 1 is how every call starts. Only check STT confidence
+            // for genuinely unintelligible input (< 0.30 = garbled/static).
+            if (actualTurnCount === 1) {
+                // Turn 1: Only fire for truly garbage STT (not trouble phrases)
+                isLowConfidence = sttConfidence > 0 && sttConfidence < 0.30;
+            } else {
+                // Turns 2-3 (or prior trouble): Check trouble phrases with EXACT match only
+                // V116: Removed prefix/suffix matching — only exact match now
+                // "Hi my name is..." should NEVER match. Only bare "hello?", "are you there?" etc.
+                const MAX_TROUBLE_PHRASE_LENGTH = 25;
+                isTroublePhrase = normalizedInput.length < MAX_TROUBLE_PHRASE_LENGTH && troublePhrases.some(phrase => {
+                    return normalizedInput === phrase.toLowerCase().trim();
+                });
+                
+                // STT confidence check on turns 2+ uses normal threshold
+                isLowConfidence = sttConfidence > 0 && sttConfidence < threshold;
+            }
+        }
         
         if (isTroublePhrase || isLowConfidence) {
             // Increment connection trouble counter in call state
