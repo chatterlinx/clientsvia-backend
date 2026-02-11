@@ -3040,7 +3040,11 @@ async function processTurn({
     // V97 FIX: Consent pending flag from Redis (not MongoDB session)
     // BUG: When consent question was asked on Turn 2, the pending flag was only
     // in MongoDB. Turn 3 loaded from Redis which had no record of the pending consent.
-    bookingConsentPending: paramBookingConsentPending = false
+    bookingConsentPending: paramBookingConsentPending = false,
+    // V116: Discovery truth from DiscoveryTruthWriter — contains first_utterance,
+    // call_reason_detail, call_intent_guess. Used to inject caller context into
+    // scenario matching and LLM prompt so the agent never has "amnesia".
+    discoveryTruth = null
 }) {
     const startTime = Date.now();
         const debugLog = [];
@@ -6912,13 +6916,21 @@ async function processTurn({
             // ═══════════════════════════════════════════════════════════════════
             // V31: STATE SUMMARY - Prevents goldfish memory / repetition
             // ═══════════════════════════════════════════════════════════════════
+            // V116: Use discovery truth to fill problem if session.discovery.issue is empty
+            const truthProblem = discoveryTruth?.call_reason_detail || null;
+            const sessionProblem = session.discovery?.issue || null;
+            
             const stateSummary = {
-                problem: session.discovery?.issue || 'Not yet captured',
+                problem: sessionProblem || truthProblem || 'Not yet captured',
                 collectedSlots: Object.keys(currentSlots).filter(k => currentSlots[k]).map(k => `${k}=${currentSlots[k]}`),
                 missingSlots: ['name', 'phone', 'address', 'time'].filter(s => !currentSlots[s]),
                 discoveryTurnCount: session.discovery?.turnCount || 0,
                 offeredScheduling: session.discovery?.offeredScheduling || false,
-                lastAgentIntent: session.lastAgentIntent || null
+                lastAgentIntent: session.lastAgentIntent || null,
+                // V116: Discovery truth data
+                firstUtterance: discoveryTruth?.first_utterance || null,
+                callReasonDetail: truthProblem,
+                callIntentGuess: discoveryTruth?.call_intent_guess || null
             };
             
             log('CHECKPOINT 9d.2: 📊 V31 State Summary for LLM', stateSummary);
@@ -6978,6 +6990,15 @@ async function processTurn({
                 
                 // Collected slots (for context, NOT for asking)
                 collectedSlots: currentSlots,
+                
+                // ═══════════════════════════════════════════════════════════
+                // V116: DISCOVERY TRUTH — Immutable caller context
+                // ═══════════════════════════════════════════════════════════
+                // Contains first_utterance, call_reason_detail, call_intent_guess
+                // from DiscoveryTruthWriter. Prevents LLM "amnesia" when gates
+                // blank the input — the LLM always knows why the caller called.
+                // ═══════════════════════════════════════════════════════════
+                discoveryTruth: discoveryTruth || null,
                 
                 // V22 Kill Switches (passed to LLM for prompt enforcement)
                 killSwitches

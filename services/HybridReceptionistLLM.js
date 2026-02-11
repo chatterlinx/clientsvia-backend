@@ -942,6 +942,28 @@ ACKNOWLEDGE this context naturally:
                     systemPrompt += `\n\nRELEVANT KNOWLEDGE (use naturally, do not read verbatim):\n${scenarioSection}`;
                 }
                 
+                // ════════════════════════════════════════════════════════════
+                // V116: INJECT DISCOVERY TRUTH — prevents LLM amnesia
+                // ════════════════════════════════════════════════════════════
+                // If DiscoveryTruthWriter captured the caller's first words,
+                // reason, and intent, inject them so the LLM never asks
+                // "what can I help with?" after the caller already said it.
+                // ════════════════════════════════════════════════════════════
+                const truth = enterpriseContext.discoveryTruth || null;
+                if (truth && (truth.first_utterance || truth.call_reason_detail)) {
+                    systemPrompt += '\n\nCALLER CONTEXT (captured on first turn — DO NOT ask the caller to repeat this):';
+                    if (truth.first_utterance) {
+                        systemPrompt += `\n- Caller's first words: "${truth.first_utterance}"`;
+                    }
+                    if (truth.call_reason_detail) {
+                        systemPrompt += `\n- Detected issue: ${truth.call_reason_detail}`;
+                    }
+                    if (truth.call_intent_guess && truth.call_intent_guess !== 'other') {
+                        systemPrompt += `\n- Call intent: ${truth.call_intent_guess}`;
+                    }
+                    systemPrompt += '\n- RULE: You already know why they called. Acknowledge it. Do NOT say "I didn\'t catch that" or "Could you describe the issue?"';
+                }
+                
                 // Add V22 discovery rules
                 systemPrompt += `\n\nV22 DISCOVERY RULES:
 1. You are in DISCOVERY mode - understand the caller's situation first
@@ -950,7 +972,8 @@ ACKNOWLEDGE this context naturally:
 4. If caller describes a problem, acknowledge it and offer relevant guidance
 5. Only ask "Would you like me to schedule an appointment?" after understanding their issue - do NOT claim you're already scheduling
 6. V96j RULE: NEVER say "Let me get you scheduled" or "I'll schedule you" - instead ASK: "Would you like me to schedule...?"
-7. Output JSON: {"slot":"none","ack":"your natural response using scenario knowledge"}`;
+7. Output JSON: {"slot":"none","ack":"your natural response using scenario knowledge"}
+8. V116 RULE: If CALLER CONTEXT is provided above, you ALREADY KNOW the problem. Reference it naturally. NEVER ask "what can I help you with?" after the caller already told you.`;
 
             } else {
                 // ════════════════════════════════════════════════════════════════
@@ -978,6 +1001,22 @@ ACKNOWLEDGE this context naturally:
                     callerId: callContext.callerId || callContext.callerPhone || null,  // For caller ID confirmation
                     partialName: callContext.partialName || knownSlots.partialName || null  // For asking for missing name part
                 });
+                
+                // V116: Inject discovery truth into standard mode too
+                const stdTruth = enterpriseContext?.discoveryTruth || null;
+                if (stdTruth && (stdTruth.first_utterance || stdTruth.call_reason_detail)) {
+                    systemPrompt += '\n\nCALLER CONTEXT (captured earlier — DO NOT ask the caller to repeat this):';
+                    if (stdTruth.first_utterance) {
+                        systemPrompt += `\n- Caller\'s first words: "${stdTruth.first_utterance}"`;
+                    }
+                    if (stdTruth.call_reason_detail) {
+                        systemPrompt += `\n- Detected issue: ${stdTruth.call_reason_detail}`;
+                    }
+                    if (stdTruth.call_intent_guess && stdTruth.call_intent_guess !== 'other') {
+                        systemPrompt += `\n- Call intent: ${stdTruth.call_intent_guess}`;
+                    }
+                    systemPrompt += '\n- RULE: You already know why they called. Acknowledge it. Do NOT say "I didn\'t catch that" or "Could you describe the issue?"';
+                }
             }
             
             // ════════════════════════════════════════════════════════════════

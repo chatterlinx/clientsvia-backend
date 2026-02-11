@@ -221,6 +221,43 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // V116: DISCOVERY TRUTH WRITER — Captures "why they called" BEFORE gates
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Must run BEFORE ConnectionQualityGate and SilenceHandler so that even if
+    // a gate blanks the input, the caller's real words are already persisted.
+    // Writes to callState.discovery.truth (first_utterance, call_reason_detail,
+    // call_intent_guess). Only writes slots that exist in V110 discoveryFlow.
+    // ═══════════════════════════════════════════════════════════════════════════
+    try {
+        const DiscoveryTruthWriter = require('./discovery/DiscoveryTruthWriter');
+        const discoveryFlowConfig = effectiveConfig?.frontDeskBehavior?.discoveryFlow 
+            || effectiveConfig?.frontDesk?.discoveryFlow 
+            || null;
+        
+        const truthResult = DiscoveryTruthWriter.apply({
+            callState,
+            cleanedText: userTurn,
+            turn: callState?.turnCount || turnCount,
+            discoveryFlow: discoveryFlowConfig,
+            callSid,
+            companyId
+        });
+        
+        trace.addDecisionReason('DISCOVERY_TRUTH', {
+            intent: truthResult.call_intent_guess,
+            confidence: truthResult.call_intent_confidence,
+            hasFirstUtterance: !!truthResult.first_utterance,
+            hasReason: !!truthResult.call_reason_detail
+        });
+    } catch (truthErr) {
+        // TruthWriter must NEVER crash a call
+        logger.warn('[FRONT_DESK_RUNTIME] DiscoveryTruthWriter error (non-fatal)', {
+            callSid,
+            error: truthErr.message
+        });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
     // GATE 1.5: CONNECTION QUALITY GATE (V116 — de-fanged)
     // ═══════════════════════════════════════════════════════════════════════════
     // PURPOSE: Catch genuinely broken connections (static, dead air, garbage STT).
@@ -1410,6 +1447,22 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
     }
     
     try {
+        // ═══════════════════════════════════════════════════════════════════════
+        // V116: Inject discovery truth into ConversationEngine context
+        // ═══════════════════════════════════════════════════════════════════════
+        // Without this, if a gate blanked the input on a prior turn the LLM
+        // has amnesia about why the caller called. By attaching truth,
+        // the scenario matcher and LLM always know the caller's first words
+        // and intent — even if the current turn's userTurn is "[unknown input]".
+        // ═══════════════════════════════════════════════════════════════════════
+        const discoveryTruth = callState?.discovery?.truth || null;
+        
+        // Merge truth-derived slots into preExtractedSlots
+        const enrichedSlots = { ...(callState?.bookingCollected || {}) };
+        if (discoveryTruth?.call_reason_detail && !enrichedSlots.call_reason_detail) {
+            enrichedSlots.call_reason_detail = discoveryTruth.call_reason_detail;
+        }
+        
         // Call ConversationEngine for discovery handling
         // V101 fix: ConversationEngine.processTurn expects a SINGLE object, not positional args
         const engineResult = await ConversationEngine.processTurn({
@@ -1419,8 +1472,10 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
             sessionId: callState?.sessionId || null,
             callerPhone: context.callerPhone || null,
             callSid,
-            preExtractedSlots: callState?.bookingCollected || {},
-            bookingConsentPending: callState?.bookingConsentPending || false
+            preExtractedSlots: enrichedSlots,
+            bookingConsentPending: callState?.bookingConsentPending || false,
+            // V116: Discovery truth for scenario/LLM context
+            discoveryTruth: discoveryTruth
         });
         
         // Extract signals from engine result
