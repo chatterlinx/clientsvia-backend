@@ -193,6 +193,34 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
+    // V116: V110 RUNTIME GUARD — Audit config on Turn 1
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Runs once per call (Turn 1). Logs V110_CONFIG_AUDIT and V110_RUNTIME_VIOLATION
+    // to BlackBox so you can see in call review if this call used non-V110 config.
+    // The guard never blocks — it only logs.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const actualTurnForGuard = callState?.turnCount || turnCount;
+    if (actualTurnForGuard <= 1) {
+        try {
+            const V110RuntimeGuard = require('../V110RuntimeGuard');
+            V110RuntimeGuard.auditCallStart({
+                company,
+                callSid,
+                companyId,
+                effectiveConfig: effectiveConfig?.frontDeskBehavior 
+                    ? effectiveConfig 
+                    : { frontDeskBehavior: effectiveConfig }
+            });
+        } catch (guardErr) {
+            // Guard must NEVER crash a call
+            logger.warn('[FRONT_DESK_RUNTIME] V110RuntimeGuard error (non-fatal)', {
+                callSid,
+                error: guardErr.message
+            });
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
     // GATE 1.5: CONNECTION QUALITY GATE (V116 — de-fanged)
     // ═══════════════════════════════════════════════════════════════════════════
     // PURPOSE: Catch genuinely broken connections (static, dead air, garbage STT).
@@ -834,20 +862,35 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
                     stepCount: v110Steps.length
                 });
             } else {
-                // V110 not configured - fall back to legacy
-                bookingSlots = cfgGet(effectiveConfig, 'frontDesk.bookingSlots', {
+                // ═══════════════════════════════════════════════════════════════
+                // V116 TRAP: Legacy bookingSlots path is DEAD
+                // If we reach here, the company has no V110 config.
+                // Log violation, return null (will fail closed below).
+                // ═══════════════════════════════════════════════════════════════
+                configSource = 'LEGACY_TRAPPED';
+                bookingSlots = null;
+                
+                // Check if legacy data exists (for diagnostic logging)
+                const legacyBookingSlots = cfgGet(effectiveConfig, 'frontDesk.bookingSlots', {
                     callId: callSid,
                     turn: callState?.turnCount || 0,
                     strict: false,
-                    readerId: 'handleBookingLane.legacy.bookingSlots'
+                    readerId: 'handleBookingLane.legacy.TRAP_CHECK'
                 });
                 
-                if (bookingSlots && bookingSlots.length > 0) {
-                    configSource = 'LEGACY_BOOKING_SLOTS';
-                    logger.warn('[FRONT_DESK_RUNTIME] ⚠️ LEGACY: Using deprecated bookingSlots - migrate to V110', {
+                if (legacyBookingSlots && legacyBookingSlots.length > 0) {
+                    logger.error('[FRONT_DESK_RUNTIME] 🚨 LEGACY_BOOKING_TRAPPED — company has legacy bookingSlots but NO V110 config', {
                         callSid,
-                        slotCount: bookingSlots.length
+                        companyId,
+                        legacySlotCount: legacyBookingSlots.length,
+                        action: 'RETURNING_NULL — company must be migrated to V110 slotRegistry + bookingFlow'
                     });
+                    
+                    // V110RuntimeGuard: log violation to BlackBox
+                    try {
+                        const V110RuntimeGuard = require('../V110RuntimeGuard');
+                        V110RuntimeGuard.verifyBookingSource('LEGACY_BOOKING_SLOTS', callSid, companyId, 'handleBookingLane');
+                    } catch (e) { /* guard is non-fatal */ }
                 }
             }
         } catch (e) {
