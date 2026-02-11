@@ -3050,21 +3050,28 @@ class FrontDeskBehaviorManager {
         if (triageRefreshBtn) {
             triageRefreshBtn.addEventListener('click', async () => {
                 const lastDecisionEl = contentElement.querySelector('#fdb-triage-last-decision');
+                const statusEl = contentElement.querySelector('#fdb-triage-status-enabled');
                 if (lastDecisionEl) lastDecisionEl.textContent = 'Checking...';
                 try {
                     const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
                     const resp = await fetch('/api/admin/front-desk-behavior/' + this.companyId, {
                         headers: { 'Authorization': 'Bearer ' + token }
                     });
-                    const data = await resp.json();
-                    const tc = (data && data.config && data.config.triage) ? data.config.triage : {};
+                    const result = await resp.json();
+                    // API returns { success, data: { triage: { enabled, ... } } }
+                    var tc = (result && result.data && result.data.triage) ? result.data.triage : {};
                     if (lastDecisionEl) {
-                        lastDecisionEl.textContent = tc.enabled ? 'Active (V110)' : 'Disabled';
+                        lastDecisionEl.textContent = tc.enabled ? 'Active (V110)' : 'Disabled (save & enable to activate)';
                         lastDecisionEl.style.color = tc.enabled ? '#3fb950' : '#da3636';
+                    }
+                    // Also sync the banner status
+                    if (statusEl) {
+                        statusEl.textContent = tc.enabled ? '✅ YES' : '❌ NO';
+                        statusEl.style.color = tc.enabled ? '#3fb950' : '#da3636';
                     }
                 } catch (err) {
                     if (lastDecisionEl) {
-                        lastDecisionEl.textContent = 'Error checking';
+                        lastDecisionEl.textContent = 'Error: ' + (err.message || 'check failed');
                         lastDecisionEl.style.color = '#da3636';
                     }
                 }
