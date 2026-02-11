@@ -1611,6 +1611,77 @@ class FrontDeskBehaviorManager {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    // V116: Legacy Config Detection Banner
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Shows a warning when a company has legacy booking config (bookingSlots,
+    // callFlowEngine.bookingFields, bookingPrompts) but no V110 slotRegistry.
+    // This means booking is disabled at runtime until they migrate.
+    // ═══════════════════════════════════════════════════════════════════════════
+    _renderLegacyDetectionBanner() {
+        const slotRegistry = this.config.slotRegistry || {};
+        const bookingFlow = this.config.bookingFlow || {};
+        const hasV110 = (slotRegistry.slots || []).length > 0 && (bookingFlow.steps || []).length > 0;
+        
+        // Check for legacy config presence
+        const legacyBookingSlots = this.config.bookingSlots || [];
+        const legacyBookingPrompts = this.config.bookingPrompts || {};
+        const hasLegacySlots = legacyBookingSlots.length > 0;
+        const hasLegacyPrompts = !!(legacyBookingPrompts.askName || legacyBookingPrompts.askPhone);
+        const hasAnyLegacy = hasLegacySlots || hasLegacyPrompts;
+        
+        if (hasV110 && !hasAnyLegacy) {
+            // Clean V110 — no banner needed
+            return '';
+        }
+        
+        if (hasV110 && hasAnyLegacy) {
+            // V110 exists but stale legacy data also present — info banner
+            var legacySource = hasLegacySlots ? 'bookingSlots (' + legacyBookingSlots.length + ' slots)' : 'bookingPrompts';
+            return '<div style="background:#f0883e15; border:1px solid #f0883e60; border-radius:8px; padding:16px; margin-bottom:20px;">'
+                + '<div style="display:flex; align-items:flex-start; gap:12px;">'
+                + '<span style="font-size:1.5rem;">⚠️</span>'
+                + '<div>'
+                + '<strong style="color:#f0883e; font-size:0.95rem;">Stale Legacy Config Detected</strong>'
+                + '<p style="color:#8b949e; margin:6px 0 0 0; font-size:0.85rem; line-height:1.5;">'
+                + 'This company has V110 configured <strong style="color:#3fb950;">(active)</strong>, but also has stale legacy data: '
+                + '<code style="background:#30363d; padding:2px 6px; border-radius:3px; color:#f0883e;">' + legacySource + '</code>. '
+                + 'Legacy data is <strong>ignored at runtime</strong> — V110 is the only source of truth. '
+                + 'The stale data can be safely cleaned up.'
+                + '</p>'
+                + '</div>'
+                + '</div>'
+                + '</div>';
+        }
+        
+        if (!hasV110 && hasAnyLegacy) {
+            // Legacy exists but NO V110 — critical warning
+            var legacySrc = hasLegacySlots ? 'bookingSlots (' + legacyBookingSlots.length + ' slots)' : 'bookingPrompts';
+            return '<div style="background:#f8514920; border:2px solid #f85149; border-radius:8px; padding:16px; margin-bottom:20px;">'
+                + '<div style="display:flex; align-items:flex-start; gap:12px;">'
+                + '<span style="font-size:1.5rem;">🚨</span>'
+                + '<div>'
+                + '<strong style="color:#f85149; font-size:0.95rem;">Booking Disabled — Legacy Config Only</strong>'
+                + '<p style="color:#da3636; margin:6px 0 0 0; font-size:0.85rem; line-height:1.5;">'
+                + 'This company has legacy booking config '
+                + '<code style="background:#30363d; padding:2px 6px; border-radius:3px; color:#f85149;">' + legacySrc + '</code> '
+                + 'but <strong>no V110 Slot Registry or Booking Flow</strong>. '
+                + 'Booking is <strong style="color:#f85149;">DISABLED at runtime</strong> until migrated. '
+                + 'Configure the Slot Registry and Booking Flow below to activate booking.'
+                + '</p>'
+                + '<p style="color:#8b949e; margin:8px 0 0 0; font-size:0.8rem;">'
+                + 'Runtime events: <code style="background:#30363d; padding:2px 6px; border-radius:3px;">LEGACY_BOOKING_PATH_CALLED</code> '
+                + 'will appear in BlackBox for every call until this is fixed.'
+                + '</p>'
+                + '</div>'
+                + '</div>'
+                + '</div>';
+        }
+        
+        // No V110 and no legacy — just not configured yet
+        return '';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     // V110: DISCOVERY FLOW TAB - Enterprise slot/step architecture
     // ═══════════════════════════════════════════════════════════════════════════
     renderDiscoveryFlowTab() {
@@ -1775,6 +1846,11 @@ class FrontDeskBehaviorManager {
                         and <strong style="color:#f0883e;">Conversation Memory</strong> defines <em>how</em> the runtime tracks, routes, and governs the conversation.
                     </p>
                 </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                <!-- V116: LEGACY CONFIG DETECTION BANNER                            -->
+                <!-- ═══════════════════════════════════════════════════════════════ -->
+                ${this._renderLegacyDetectionBanner()}
 
                 <!-- ═══════════════════════════════════════════════════════════════ -->
                 <!-- SUB-TAB NAVIGATION                                              -->
