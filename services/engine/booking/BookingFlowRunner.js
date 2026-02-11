@@ -860,6 +860,28 @@ const SlotExtractors = {
     /**
      * Default extractor - just return the trimmed input
      */
+    /**
+     * V115: Call Reason Detail — filled by TriageEngineRouter, not utterance parsing
+     * This is a passthrough: the value is already extracted by triage.
+     * If triage didn't capture it, fall back to the raw utterance (truncated).
+     */
+    call_reason_detail: (input, step, context = {}) => {
+        // Check if triage already captured the reason (via session.discovery.issue)
+        const triageReason = context?.state?.discovery?.issue;
+        if (triageReason && triageReason.length > 2) {
+            return triageReason;
+        }
+        // Fallback: return raw input if it looks like a problem description
+        if (!input) return null;
+        const text = input.trim();
+        const hasProblemSignal = /not (cool|heat|work)|broken|leak|noise|smell|issue|problem|trouble/i.test(text);
+        if (hasProblemSignal && text.length > 10) {
+            // Truncate to first 100 chars as a summary
+            return text.length > 100 ? text.substring(0, 100) + '...' : text;
+        }
+        return null;
+    },
+
     default: (input, step, context = {}) => {
         if (!input) return null;
         return input.trim();

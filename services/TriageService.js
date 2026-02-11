@@ -476,11 +476,55 @@ async function getActiveCardsForCompany(companyId, trade) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V115: LEGACY TRIAGE TRAP WRAPPER
+// ═══════════════════════════════════════════════════════════════════════════
+// applyQuickTriageRules is still called by V110TriageEngine (legitimate).
+// But any call from services/, routes/, or other runtime code is LEGACY
+// and must be caught. This wrapper detects the caller via stack trace.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const _originalApplyQuickTriageRules = applyQuickTriageRules;
+
+async function guardedApplyQuickTriageRules(...args) {
+  const stack = new Error().stack || '';
+  const calledFromTriageRouter = stack.includes('V110TriageEngine') || stack.includes('TriageEngineRouter');
+
+  if (!calledFromTriageRouter) {
+    // LEGACY CALL PATH DETECTED — log loudly but still execute (don't break calls)
+    logger.error('[LEGACY_TRIAGE_TRAP_FIRED] 🚨 applyQuickTriageRules called outside TriageEngineRouter!', {
+      callerStack: stack.substring(0, 500),
+      firstArg: typeof args[0] === 'string' ? args[0]?.substring(0, 80) : typeof args[0],
+      timestamp: new Date().toISOString()
+    });
+
+    // Try to log to BlackBox for permanent record
+    try {
+      const BlackBoxLogger = require('./BlackBoxLogger');
+      BlackBoxLogger.logEvent({
+        callId: 'LEGACY_TRIAGE_TRAP',
+        companyId: args[1] || 'UNKNOWN',
+        type: 'LEGACY_TRIAGE_TRAP_FIRED',
+        data: {
+          function: 'applyQuickTriageRules',
+          callerStack: stack.substring(0, 500),
+          timestamp: new Date().toISOString()
+        }
+      }).catch(() => {});
+    } catch {
+      // BlackBox not available
+    }
+  }
+
+  // Always execute (don't crash calls) — the trap is for detection
+  return _originalApplyQuickTriageRules(...args);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ═══════════════════════════════════════════════════════════════════════════
 
 module.exports = {
-  applyQuickTriageRules,
+  applyQuickTriageRules: guardedApplyQuickTriageRules,
   normalizeText,
   getCompanyTriageConfig,
   getTriageCardById,

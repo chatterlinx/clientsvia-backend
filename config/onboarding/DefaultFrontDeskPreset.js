@@ -98,6 +98,25 @@ const DEFAULT_SLOT_REGISTRY = {
                 confidenceMin: 0.70
             },
             options: ['morning', 'afternoon']
+        },
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V115: CALL REASON DETAIL — Captured by triage, visible in discovery
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This slot is populated by TriageEngineRouter (not manually extracted).
+        // It's the structured "why are you calling?" fact that drives routing
+        // and response quality. Without this, triage is a hidden classifier.
+        // ═══════════════════════════════════════════════════════════════════════════
+        {
+            id: 'call_reason_detail',
+            type: 'text',
+            label: 'Reason for Call',
+            required: false,
+            discoveryFillAllowed: true,
+            bookingConfirmRequired: false,  // Don't re-ask — just acknowledge
+            extraction: {
+                source: ['triage'],  // Filled by TriageEngineRouter, not utterance parsing
+                confidenceMin: 0.40  // Lower threshold — any symptom is useful
+            }
         }
     ]
 };
@@ -112,6 +131,23 @@ const DEFAULT_DISCOVERY_FLOW = {
     version: 'v1',
     enabled: true,
     steps: [
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V115: Reason for Call — captured FIRST (caller states problem on Turn 1)
+        // Filled by TriageEngineRouter automatically. Smart confirm only.
+        // ═══════════════════════════════════════════════════════════════════════════
+        {
+            stepId: 'd0',
+            slotId: 'call_reason_detail',
+            order: 0,
+            ask: "Got it — you're calling about {value}, right?",
+            reprompt: "Tell me what's going on with the system.",
+            repromptVariants: [
+                "Tell me what's going on with the system.",
+                "What seems to be the issue?",
+                "What can we help with today?"
+            ],
+            confirmMode: 'smart_if_captured'
+        },
         { 
             stepId: 'd1', 
             slotId: 'name',  // CANONICAL: matches SlotExtractor

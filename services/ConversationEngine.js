@@ -5903,6 +5903,24 @@ async function processTurn({
                         session.discovery.callType = intentToCallType[triageResult.intentGuess] || 'unknown';
                         session.markModified('discovery');
                     }
+
+                    // V115: Write triage result into slot system (call_reason_detail)
+                    // This makes it a visible fact in the discovery flow, not a hidden classifier.
+                    if (session.slots && !session.slots.call_reason_detail?.value) {
+                        session.slots.call_reason_detail = {
+                            value: triageResult.callReasonDetail,
+                            confidence: triageResult.confidence,
+                            source: 'triage_v110',
+                            capturedAt: new Date().toISOString(),
+                            needsConfirmation: false,
+                            immutable: false
+                        };
+                        session.markModified('slots');
+                        log('📋 V115: Wrote call_reason_detail to slot system', {
+                            value: triageResult.callReasonDetail,
+                            confidence: triageResult.confidence
+                        });
+                    }
                 }
 
                 // Bridge to ReturnLane (backward compat): if triage matched a card, load it
@@ -7743,6 +7761,47 @@ async function processTurn({
         if (!aiResponse) {
             log('⚠️ Empty AI response, using fallback');
             aiResponse = "I'm sorry, could you repeat that?";
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // V115: FINAL SAFETY NET — If triage captured symptoms and the 
+        // response doesn't acknowledge them, prepend acknowledgment.
+        // This catches ALL tiers (scenario, LLM, fallback) and is the
+        // router-level enforcement of "acknowledge before scheduling."
+        // Only runs on Turn 1 (first substantive caller input).
+        // ═══════════════════════════════════════════════════════════════════
+        const turnNumber = (session.metrics?.totalTurns || 0) + 1;
+        if (turnNumber <= 2 && triageResult?._triageRan && triageResult.callReasonDetail) {
+            const alreadyAcknowledges = /sorry|understand|hear that|sounds like|dealing with|i see|got it.*about|calling about/i.test(aiResponse);
+            const inappropriateStart = /^(sounds? good|great!?|perfect!?|wonderful!?|awesome!?)/i.test(aiResponse.trim());
+            
+            if (inappropriateStart || !alreadyAcknowledges) {
+                const symptoms = triageResult.callReasonDetail;
+                const urgency = triageResult.signals?.urgency || 'normal';
+                let ack;
+                if (urgency === 'emergency') {
+                    ack = `I understand this is urgent — ${symptoms}.`;
+                } else if (urgency === 'urgent') {
+                    ack = `I'm sorry to hear about that — ${symptoms}. Let's get this taken care of.`;
+                } else {
+                    ack = `I understand — ${symptoms}.`;
+                }
+                
+                // If response starts inappropriately, strip the bad opening
+                let cleanResponse = aiResponse;
+                if (inappropriateStart) {
+                    cleanResponse = aiResponse.replace(/^(sounds? good|great!?|perfect!?|wonderful!?|awesome!?)[,.\s!]*/i, '').trim();
+                    // Capitalize first letter of remaining text
+                    if (cleanResponse.length > 0) {
+                        cleanResponse = cleanResponse.charAt(0).toUpperCase() + cleanResponse.slice(1);
+                    }
+                }
+                
+                aiResponse = ack + ' ' + cleanResponse;
+                log('📋 V115: Final safety net — prepended symptom acknowledgment', {
+                    symptoms, urgency, inappropriateStart, tier: aiResult?.tier || 'unknown'
+                });
+            }
         }
         
         // ═══════════════════════════════════════════════════════════════════

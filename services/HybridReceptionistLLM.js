@@ -190,7 +190,9 @@ function loadFrontDeskConfig(company) {
             minTurnsBeforeBooking: config.modeSwitching?.minTurnsBeforeBooking ?? 2,
             bookingConfidenceThreshold: config.modeSwitching?.bookingConfidenceThreshold ?? 0.75,
             autoRescueOnFrustration: config.modeSwitching?.autoRescueOnFrustration !== false,
-            autoTriageOnProblem: config.modeSwitching?.autoTriageOnProblem !== false
+            // V115: autoTriageOnProblem moved to frontDesk.triage.autoOnProblem (single gate)
+            // Kept as read-only derived value for backward compat, but NOT a gate
+            autoTriageOnProblem: config.triage?.autoOnProblem ?? config.modeSwitching?.autoTriageOnProblem ?? true
         },
         
         // Raw config for anything else
