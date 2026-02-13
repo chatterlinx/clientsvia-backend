@@ -613,10 +613,12 @@ class HybridScenarioSelector {
                     // CHECK 2: CONTAINS MATCH → 95% confidence
                     // ═══════════════════════════════════════════════════════════════
                     // Handle cases like "yes, my thermostat is blank" containing trigger
-                    // "my thermostat is blank". The trigger must be at least 3 words to
-                    // avoid false positives from short triggers like "ac" or "help".
+                    // "my thermostat is blank". The trigger must be at least 2 words to
+                    // avoid false positives from single-word triggers like "ac" or "help".
+                    // V130 FIX: Lowered from 3→2 words. Two-word triggers like "not cooling"
+                    // are specific enough to avoid false positives while enabling fast-path.
                     const triggerWordCount = normalizedTrigger.split(' ').filter(w => w.length > 0).length;
-                    if (triggerWordCount >= 3 && normalizedPhrase.includes(normalizedTrigger)) {
+                    if (triggerWordCount >= 2 && normalizedPhrase.includes(normalizedTrigger)) {
                         // Track this as a candidate but keep looking for exact match
                         const priority = scenario.priority || 0;
                         if (!containsMatchCandidate || priority > (containsMatchCandidate.priority || 0)) {
@@ -1174,13 +1176,34 @@ class HybridScenarioSelector {
         }
         
         // ============================================
-        // COMBINE SCORES
+        // COMBINE SCORES — ADAPTIVE WEIGHT REDISTRIBUTION
         // ============================================
+        // V130 FIX: When channels have no data (empty keywords, no regex), their weight
+        // is dead — dragging the max achievable score below any useful threshold.
+        // Example: BM25=0.786 but weight=0.40 → total=0.314 (below 0.45 threshold).
+        // Fix: redistribute unused channel weights to active channels proportionally.
+        // ============================================
+        const hasBM25 = safeTriggers.length > 0;
+        const hasKeywords = safeKeywords.length > 0;
+        const hasRegex = safeRegexTriggers.length > 0;
+        const hasContext = !!(context.conversationState || context.lastIntent || context.callerProfile);
+        
+        const activeWeights = {};
+        let totalActiveWeight = 0;
+        
+        if (hasBM25)    { activeWeights.bm25 = this.config.weights.bm25;     totalActiveWeight += this.config.weights.bm25; }
+        if (hasKeywords) { activeWeights.semantic = this.config.weights.semantic; totalActiveWeight += this.config.weights.semantic; }
+        if (hasRegex)   { activeWeights.regex = this.config.weights.regex;    totalActiveWeight += this.config.weights.regex; }
+        if (hasContext)  { activeWeights.context = this.config.weights.context;  totalActiveWeight += this.config.weights.context; }
+        
+        // Redistribute: scale active weights so they sum to 1.0
+        const scaleFactor = totalActiveWeight > 0 ? (1.0 / totalActiveWeight) : 0;
+        
         const totalScore = 
-            (breakdown.bm25 * this.config.weights.bm25) +
-            (breakdown.semantic * this.config.weights.semantic) +
-            (breakdown.regex * this.config.weights.regex) +
-            (breakdown.context * this.config.weights.context);
+            (breakdown.bm25     * (activeWeights.bm25    || 0) * scaleFactor) +
+            (breakdown.semantic  * (activeWeights.semantic || 0) * scaleFactor) +
+            (breakdown.regex     * (activeWeights.regex   || 0) * scaleFactor) +
+            (breakdown.context   * (activeWeights.context  || 0) * scaleFactor);
         
         // 🛡️ SAFETY: NEVER allow NaN or Infinity
         let safeScore = Number.isFinite(totalScore) ? totalScore : 0;
@@ -1241,12 +1264,15 @@ class HybridScenarioSelector {
         // 6. CONTEXT WEIGHT MULTIPLIER (V92 - was schema-only, now wired!)
         // ============================================
         // scenario.contextWeight is a multiplier on final match score
-        // emergency scenarios = 0.95, chitchat = 0.5, neutral = 0.7
-        const contextWeight = typeof scenario.contextWeight === 'number' 
+        // V130 FIX: Default changed from 0.7→1.0 (neutral). The old 0.7 default
+        // penalized ALL scores by 30% for no reason. Floor clamped to 0.5 to
+        // prevent blueprint values like 0.25 from making scenarios unmatchable.
+        const rawContextWeight = typeof scenario.contextWeight === 'number' 
             ? scenario.contextWeight 
-            : 0.7; // Default neutral weight
+            : 1.0; // Default: neutral (no penalty)
+        const contextWeight = Math.max(0.5, Math.min(rawContextWeight, 1.5)); // Floor 0.5, cap 1.5
         
-        if (contextWeight !== 0.7 && contextWeight !== 1.0) {
+        if (contextWeight !== 1.0) {
             const beforeWeight = safeScore;
             safeScore = safeScore * contextWeight;
             breakdown.contextWeightMultiplier = contextWeight;

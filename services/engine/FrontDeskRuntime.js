@@ -279,7 +279,10 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     const actualTurnCount = callState?.turnCount || turnCount;
     const hasPriorTrouble = (callState?._connectionTroubleCount || 0) > 0;
     
-    if (cqEnabled && (actualTurnCount <= 3 || hasPriorTrouble) && !callState?.bookingModeLocked) {
+    // V130 FIX: Also skip gate when bookingConsentPending — the caller is responding
+    // to a booking offer ("Would you like to schedule?"). Short affirmatives like "Yes"
+    // with low STT confidence must reach determineLane() where CONSENT_WORDS handles them.
+    if (cqEnabled && (actualTurnCount <= 3 || hasPriorTrouble) && !callState?.bookingModeLocked && !callState?.bookingConsentPending) {
         const sttConfidence = context.sttConfidence || 0;
         const threshold = cqGate?.confidenceThreshold || 0.72;
         const maxRetries = cqGate?.maxRetries || 3;
@@ -397,7 +400,9 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
                 };
             } else {
                 // RE-GREETING — try again
-                const reGreeting = cqGate?.reGreeting || 'Hi there! How can I help you today?';
+                // V130 FIX: Better default — acknowledge the trouble instead of pretending
+                // the call just started. "Hi there!" on turn 3 is confusing UX.
+                const reGreeting = cqGate?.reGreeting || "I'm sorry, I didn't quite catch that. Could you please repeat what you said?";
                 
                 return {
                     response: reGreeting,

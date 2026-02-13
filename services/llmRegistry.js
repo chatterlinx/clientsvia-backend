@@ -172,8 +172,12 @@ async function callLLM0(payload) {
             });
         }
         
+        // V130 FIX: Explicitly preserve `usage` — the OpenAI SDK v4+ returns class
+        // instances where spread may not copy non-enumerable or getter properties.
+        // Without this, response.usage is undefined downstream → tokensUsed: 0.
         return {
             ...response,
+            usage: response.usage || null,
             _brain: 'LLM0',  // Tag the response so callers know which brain
             _latencyMs: latencyMs
         };
@@ -319,8 +323,10 @@ async function callTier3Fallback(payload) {
             });
         }
         
+        // V130 FIX: Explicitly preserve `usage` (same fix as LLM0 — SDK spread issue)
         return {
             ...response,
+            usage: response.usage || null,
             _brain: 'TIER3',  // Tag the response so callers know which brain
             _latencyMs: latencyMs
         };
@@ -386,6 +392,7 @@ async function callAdminLLM(payload) {
     
     return {
         ...response,
+        usage: response.usage || null,  // V130 FIX: Explicit preserve
         _brain: 'ADMIN',
         _purpose: purpose
     };

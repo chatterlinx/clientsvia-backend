@@ -3514,6 +3514,14 @@ async function processTurn({
                 greetingResponse = greetingResponse.replace(/{time}/gi, timeOfDay);
             }
             
+            // V130 FIX: Run greeting through full placeholder replacement.
+            // Previously only {time} was replaced — {companyName}, {serviceAreas}, etc.
+            // were left as raw braces (e.g. caller heard "{Penguin Air}" instead of "Penguin Air").
+            if (greetingResponse) {
+                const { replacePlaceholders } = require('../utils/placeholderReplacer');
+                greetingResponse = replacePlaceholders(greetingResponse, company);
+            }
+            
             log('CHECKPOINT 2.7: ✅ GREETING INTERCEPT - 0 tokens!', {
                 userText,
                 textWithoutFillers: textWithoutFillers !== userTextLower ? textWithoutFillers : undefined,
