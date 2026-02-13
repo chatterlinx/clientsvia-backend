@@ -36,6 +36,90 @@ const crypto = require('crypto');
 const logger = require('../../utils/logger');
 
 // ============================================================================
+// V84: GLOBAL NAME LISTS CACHE — AdminSettings is the single source of truth
+// ============================================================================
+// Name lists (commonFirstNames, commonLastNames, nameStopWords) are GLOBAL.
+// They live in AdminSettings, not per-company. The AWConfigReader intercepts
+// reads for these paths and returns global data instead of per-company data.
+// Cache refreshes every 5 minutes to pick up UI changes without restart.
+// ============================================================================
+const GLOBAL_NAME_PATHS = new Set([
+    'frontDesk.commonFirstNames',
+    'frontDesk.commonLastNames',
+    'frontDesk.nameStopWords',
+    'slotExtraction.nameStopWords',
+    'slotExtraction.nameStopWords.enabled',
+    'slotExtraction.nameStopWords.custom'
+]);
+
+let _globalNameCache = null;
+let _globalNameCacheExpiry = 0;
+const GLOBAL_NAME_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function _loadGlobalNameLists() {
+    const now = Date.now();
+    if (_globalNameCache && now < _globalNameCacheExpiry) {
+        return _globalNameCache;
+    }
+    
+    try {
+        const AdminSettings = require('../../models/AdminSettings');
+        const settings = await AdminSettings.findOne().lean();
+        
+        _globalNameCache = {
+            commonFirstNames: settings?.commonFirstNames || [],
+            commonLastNames: settings?.commonLastNames || [],
+            nameStopWords: settings?.nameStopWords || []
+        };
+        _globalNameCacheExpiry = now + GLOBAL_NAME_CACHE_TTL_MS;
+        
+        logger.debug('[AW CONFIG READER] 🌐 Global name lists cached', {
+            firstNames: _globalNameCache.commonFirstNames.length,
+            lastNames: _globalNameCache.commonLastNames.length,
+            stopWords: _globalNameCache.nameStopWords.length,
+            nextRefresh: new Date(_globalNameCacheExpiry).toISOString()
+        });
+        
+        return _globalNameCache;
+    } catch (err) {
+        logger.error('[AW CONFIG READER] ❌ Failed to load global name lists', { error: err.message });
+        // Return cached data if available, otherwise empty
+        return _globalNameCache || { commonFirstNames: [], commonLastNames: [], nameStopWords: [] };
+    }
+}
+
+/**
+ * Synchronous getter for global name data.
+ * Returns cached data (may be stale by up to 5 min).
+ * Triggers async refresh if cache is expired.
+ */
+function _getGlobalNameValue(awPath) {
+    // Trigger async refresh if expired (non-blocking)
+    if (!_globalNameCache || Date.now() >= _globalNameCacheExpiry) {
+        _loadGlobalNameLists().catch(() => {}); // Fire-and-forget
+    }
+    
+    if (!_globalNameCache) return undefined;
+    
+    switch (awPath) {
+        case 'frontDesk.commonFirstNames':
+            return _globalNameCache.commonFirstNames;
+        case 'frontDesk.commonLastNames':
+            return _globalNameCache.commonLastNames;
+        case 'frontDesk.nameStopWords':
+        case 'slotExtraction.nameStopWords':
+        case 'slotExtraction.nameStopWords.enabled':
+        case 'slotExtraction.nameStopWords.custom':
+            return _globalNameCache.nameStopWords;
+        default:
+            return undefined;
+    }
+}
+
+// Pre-warm cache on module load (non-blocking)
+_loadGlobalNameLists().catch(() => {});
+
+// ============================================================================
 // REGISTRY INTEGRATION
 // ============================================================================
 
@@ -904,6 +988,18 @@ class AWConfigReader {
      * @private
      */
     _resolveValue(awPath) {
+        // ─────────────────────────────────────────────────────────────────────
+        // STEP 0 (V84): GLOBAL NAME LISTS — AdminSettings override
+        // Name lists are GLOBAL, not per-company. Check the global cache first.
+        // ─────────────────────────────────────────────────────────────────────
+        if (GLOBAL_NAME_PATHS.has(awPath)) {
+            const globalValue = _getGlobalNameValue(awPath);
+            if (globalValue !== undefined && (Array.isArray(globalValue) ? globalValue.length > 0 : globalValue)) {
+                return globalValue;
+            }
+            // If global cache is empty, fall through to per-company (legacy migration support)
+        }
+        
         // ─────────────────────────────────────────────────────────────────────
         // STEP 1: Try the canonical AW path mapping first
         // ─────────────────────────────────────────────────────────────────────

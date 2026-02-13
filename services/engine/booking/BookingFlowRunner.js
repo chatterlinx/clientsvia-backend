@@ -633,8 +633,11 @@ const SlotExtractors = {
         // Fallback: simple word extraction for direct name responses
         // (when user just says "Mark" in response to "What's your name?")
         const text = input.trim();
-        // V111: Pass company stopwords from config → single source of truth
-        const companyStopWords = context.company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || [];
+        // V84: Use awReader for stop words (reads from global AdminSettings via AWConfigReader)
+        // Fallback to per-company only if awReader unavailable
+        const companyStopWords = (context.awReader && typeof context.awReader.getArray === 'function')
+            ? context.awReader.getArray('frontDesk.nameStopWords')
+            : (context.company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || []);
         const words = text.split(/\s+/)
             .filter(w => !isStopWord(w.toLowerCase(), companyStopWords))
             .filter(w => /^[A-Za-z][A-Za-z\-'\.]*$/.test(w));
@@ -675,9 +678,13 @@ const SlotExtractors = {
             return null;
         }
         
-        // STEP 2: Score using name lists (confidence booster, NOT a parser)
-        const firstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
-        const lastNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || [];
+        // STEP 2: Score using name lists (V84: global via AWConfigReader)
+        const firstNames = (context.awReader && typeof context.awReader.getArray === 'function')
+            ? context.awReader.getArray('frontDesk.commonFirstNames')
+            : (context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || []);
+        const lastNames = (context.awReader && typeof context.awReader.getArray === 'function')
+            ? context.awReader.getArray('frontDesk.commonLastNames')
+            : (context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || []);
         const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
         const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
         
@@ -739,9 +746,13 @@ const SlotExtractors = {
             return null;
         }
         
-        // STEP 2: Score using name lists
-        const firstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
-        const lastNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || [];
+        // STEP 2: Score using name lists (V84: global via AWConfigReader)
+        const firstNames = (context.awReader && typeof context.awReader.getArray === 'function')
+            ? context.awReader.getArray('frontDesk.commonFirstNames')
+            : (context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || []);
+        const lastNames = (context.awReader && typeof context.awReader.getArray === 'function')
+            ? context.awReader.getArray('frontDesk.commonLastNames')
+            : (context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || []);
         const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
         const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
         
@@ -1896,9 +1907,11 @@ class BookingFlowRunner {
             callSid: callSid || state._traceContext?.callSid,
             companyId: company?._id?.toString() || state._traceContext?.companyId,
             traceLevel,
-            // V111: Carry company-specific name stopwords so safeSetSlot can pass
-            // them to the IdentitySlotFirewall without needing the full company object.
-            companyStopWords: company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || []
+            // V84: Carry global name stopwords so safeSetSlot can pass them to
+            // IdentitySlotFirewall. Uses AWConfigReader (global) with per-company fallback.
+            companyStopWords: (awReader && typeof awReader.getArray === 'function')
+                ? awReader.getArray('frontDesk.nameStopWords')
+                : (company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || [])
         };
         
         logger.info('[BOOKING FLOW RUNNER] Running step', {
