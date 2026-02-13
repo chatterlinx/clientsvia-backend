@@ -4,13 +4,14 @@
  * ============================================================================
  * Provides: Transfer targets, after-hours routing configuration
  * 
- * DATA SOURCE: CheatSheetVersion (transferRules) OR frontDeskBehavior.transfers
+ * DATA SOURCE: frontDeskBehavior.transfers OR aiAgentSettings.transferTargets
+ * 
+ * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
  * 
  * Note: Transfers are OPTIONAL. If not configured, provider returns 
  * enabled=false with NOT_CONFIGURED status (not an error).
  */
 
-const CheatSheetVersion = require('../../../models/cheatsheet/CheatSheetVersion');
 const Company = require('../../../models/v2Company');
 const logger = require('../../../utils/logger');
 
@@ -18,19 +19,8 @@ module.exports.getSnapshot = async function(companyId) {
     const startTime = Date.now();
     
     try {
-        // Try CheatSheetVersion first (primary source)
         let transferRules = [];
         let dataSource = 'none';
-        
-        const cheatSheet = await CheatSheetVersion.findOne({ 
-            companyId, 
-            status: 'live' 
-        }).lean();
-        
-        if (cheatSheet?.config?.transferRules?.length > 0) {
-            transferRules = cheatSheet.config.transferRules;
-            dataSource = 'CheatSheetVersion.transferRules';
-        }
         
         // Check company for multiple possible locations
         const company = await Company.findById(companyId)

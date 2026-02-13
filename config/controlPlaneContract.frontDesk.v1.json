@@ -396,11 +396,10 @@
     },
     
     "data": {
-      "description": "Data configuration - templates, scenarios, cheat sheets",
+      "description": "Data configuration - templates, scenarios, placeholders",
       "keys": {
         "dataConfig.templateReferences": { "type": "array", "required": false, "uiSection": "data" },
         "dataConfig.scenarios": { "type": "array", "required": false, "uiSection": "data" },
-        "dataConfig.cheatSheets": { "type": "array", "required": false, "uiSection": "data" },
         "dataConfig.placeholders": { "type": "object", "required": false, "uiSection": "data" }
       }
     },

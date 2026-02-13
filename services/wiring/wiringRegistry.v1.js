@@ -77,8 +77,7 @@ const wiringRegistryV1 = {
     
     // Call Protection & Spam
     "SmartCallFilter": "services/SmartCallFilter.js",
-    "CheatSheetEngine": "services/CheatSheetEngine.js",
-    "CheatSheetRuntimeService": "services/cheatsheet/CheatSheetRuntimeService.js",
+    // CheatSheetEngine + CheatSheetRuntimeService REMOVED Feb 2026
     
     // Logging & Debug
     "BlackBoxLogger": "services/BlackBoxLogger.js",
@@ -534,91 +533,9 @@ const wiringRegistryV1 = {
     // =========================================================================
     // TAB: CALL PROTECTION (Edge Cases)
     // =========================================================================
-    {
-      id: "tab.callProtection",
-      type: "TAB",
-      label: "Call Protection",
-      description: "Pre-answer filters: spam, telemarketer, IVR detection",
-      expectedDbPaths: ["CheatSheetVersion.config.edgeCases"],
-      expectedConsumers: ["SmartCallFilter", "CheatSheetEngine"],
-      expectedTraceKeys: ["trace.callProtection.evaluated"],
-      children: [
-        "callProtection.edgeCases",
-        "callProtection.spamDetection"
-      ]
-    },
-
-    {
-      id: "callProtection.edgeCases",
-      type: "SECTION",
-      label: "Edge Cases",
-      parentId: "tab.callProtection",
-      description: "Telemarketer filter, polite hangup, auto-blacklist rules",
-      expectedDbPaths: ["CheatSheetVersion.config.edgeCases"],
-      expectedConsumers: ["CheatSheetEngine"],
-      runtimeMethod: "applyEdgeCases()",
-      expectedTraceKeys: ["trace.edgeCase.matched"],
-      requiredFields: []
-    },
-
-    {
-      id: "callProtection.spamDetection",
-      type: "SECTION",
-      label: "Spam Detection",
-      parentId: "tab.callProtection",
-      description: "AI-powered spam scoring and blocking",
-      expectedDbPaths: [],
-      expectedConsumers: ["SmartCallFilter"],
-      runtimeMethod: "analyzeCall()",
-      expectedTraceKeys: ["trace.spam.blocked"],
-      requiredFields: []
-    },
-
-    // =========================================================================
-    // TAB: TRANSFER CALLS (Directory + Rules)
-    // =========================================================================
-    {
-      id: "tab.transfers",
-      type: "TAB",
-      label: "Transfer Calls",
-      description: "Contact directory + transfer routing rules (merged Jan 2026)",
-      expectedDbPaths: [
-        "CheatSheetVersion.config.companyContacts",
-        "CheatSheetVersion.config.transferRules"
-      ],
-      expectedConsumers: ["ConversationEngine", "CheatSheetEngine"],
-      expectedTraceKeys: ["trace.transfer.initiated"],
-      children: [
-        "transfers.directory",
-        "transfers.rules"
-      ]
-    },
-
-    {
-      id: "transfers.directory",
-      type: "SECTION",
-      label: "Contact Directory",
-      parentId: "tab.transfers",
-      description: "Available transfer targets (Customer Service, Sales, etc.)",
-      expectedDbPaths: ["CheatSheetVersion.config.companyContacts"],
-      expectedConsumers: ["ConversationEngine"],
-      runtimeMethod: "resolveTransferTarget()",
-      expectedTraceKeys: ["trace.transfer.targetResolved"],
-      requiredFields: ["name", "phone", "role"]
-    },
-
-    {
-      id: "transfers.rules",
-      type: "SECTION",
-      label: "Transfer Rules",
-      parentId: "tab.transfers",
-      description: "Intent-based transfer routing",
-      expectedDbPaths: ["CheatSheetVersion.config.transferRules"],
-      expectedConsumers: ["CheatSheetEngine"],
-      runtimeMethod: "evaluateTransferRules()",
-      expectedTraceKeys: ["trace.transfer.ruleMatched"],
-      requiredFields: []
-    },
+    // Call Protection, Transfer Calls, and Links tabs REMOVED Feb 2026 — cheat sheet nuke
+    // tab.callProtection, callProtection.edgeCases, callProtection.spamDetection,
+    // tab.transfers, transfers.directory, transfers.rules, tab.links all removed
 
     // =========================================================================
     // TAB: CALL CENTER (CRM)
@@ -636,20 +553,6 @@ const wiringRegistryV1 = {
       expectedConsumers: ["CallSummaryService", "CustomerService", "CustomerLookup"],
       expectedTraceKeys: [],
       externalPage: "/call-center.html",
-      children: []
-    },
-
-    // =========================================================================
-    // TAB: LINKS (Outbound URLs)
-    // =========================================================================
-    {
-      id: "tab.links",
-      type: "TAB",
-      label: "Links",
-      description: "URLs the AI can share with callers (payment, forms, etc.)",
-      expectedDbPaths: ["CheatSheetVersion.config.links"],
-      expectedConsumers: ["ConversationEngine"],
-      expectedTraceKeys: ["trace.link.shared"],
       children: []
     },
 
@@ -1128,9 +1031,9 @@ const wiringRegistryV1 = {
     "tab.companyContacts": "Merged into tab.transfers (Jan 2026)",
     "tab.testAgent": "Part of Front Desk tab now, not separate",
     "tab.blackBox": "Accessed via Call Center, not separate tab",
-    "dataConfig.cheatSheets": "Tab removed, CheatSheet system still works via Call Protection",
+    "dataConfig.cheatSheets": "REMOVED Feb 2026 — full cheat sheet nuke, Tier 2 reserved for future rebuild",
     "GoldenAutofillEngine": "Not a service - logic is in routes/admin/goldenAutofill.js",
-    "CallProtectionEngine": "Phantom - actual service is SmartCallFilter + CheatSheetEngine",
+    "CallProtectionEngine": "Phantom - actual service is SmartCallFilter (CheatSheetEngine removed Feb 2026)",
     "TransferRouter": "Phantom - logic is in ConversationEngine.handleTransfer()",
     "CallCenterEngine": "Phantom - actual services are CallSummaryService + CustomerService",
     "OutputGuardrails": "Phantom - logic is in HybridReceptionistLLM.postProcessResponse()",

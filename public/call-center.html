@@ -1299,9 +1299,9 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
-                <!-- Back to Cheat Sheet Button -->
-                <a href="#" onclick="goBackToCheatSheet()" class="back-link" style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); text-decoration: none; margin-bottom: 12px; padding: 6px 10px; background: var(--bg-hover); border-radius: 6px; transition: all 0.2s;">
-                    <span style="font-size: 14px;">←</span> Back to Cheat Sheet
+                <!-- Back to Control Plane -->
+                <a href="#" onclick="goBackToControlPlane()" class="back-link" style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); text-decoration: none; margin-bottom: 12px; padding: 6px 10px; background: var(--bg-hover); border-radius: 6px; transition: all 0.2s;">
+                    <span style="font-size: 14px;">←</span> Back to Control Plane
                 </a>
                 
                 <div class="sidebar-logo">
@@ -2246,12 +2246,10 @@
         // NAVIGATION
         // ═══════════════════════════════════════════════════════════════════════════
         
-        function goBackToCheatSheet() {
+        function goBackToControlPlane() {
             const urlParams = new URLSearchParams(window.location.search);
             const companyId = urlParams.get('companyId');
-            
-            // Navigate back to Control Plane, land on Booking Rules tab
-            const controlPlaneUrl = `/control-plane-v2.html?companyId=${companyId}&tab=cheatsheet&subtab=booking`;
+            const controlPlaneUrl = `/control-plane-v2.html?companyId=${companyId}`;
             window.location.href = controlPlaneUrl;
         }
         

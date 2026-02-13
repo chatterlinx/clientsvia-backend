@@ -1549,7 +1549,6 @@ router.post('/:companyId/fix-spelling-variants', async (req, res) => {
         }
         
         // V61 FIX: Use targeted $set update to bypass full document validation
-        // This avoids triggering validation errors on unrelated fields (like cheatSheet.transferRules)
         const updateOps = {};
         
         if (nameSlot && !hasConfirmSpelling && nameSlotIndex >= 0) {

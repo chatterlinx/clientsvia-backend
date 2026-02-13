@@ -15,7 +15,7 @@
 
 const logger = require('../utils/logger');
 const FrontlineIntel = require('./FrontlineIntel');
-const CheatSheetEngine = require('./CheatSheetEngine');
+// CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
 const BehaviorEngine = require('./BehaviorEngine');
 const EdgeCaseHandler = require('./EdgeCaseHandler');
 // Use centralized Redis factory - NO db.redisClient
@@ -402,80 +402,10 @@ class CallFlowExecutor {
                 timestamp: new Date().toISOString()
             });
             
-            // ═════════════════════════════════════════════════════════════════
-            // Apply CheatSheetEngine (Edge Cases, Transfer, Guardrails, Behavior)
-            // ═════════════════════════════════════════════════════════════════
+            // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
             let finalResponse = baseResponse.text;
             let finalAction = baseResponse.action || 'continue';
             let cheatSheetMeta = null;
-            
-            if (context.company.aiAgentSettings?.cheatSheet?.checksum) {
-                try {
-                    logger.info(`[CALL FLOW EXECUTOR] 🧠 Applying CheatSheetEngine...`);
-                    
-                    // Load compiled policy from Redis (getRedisClient is now async)
-                    const redisClient = await CallFlowExecutor.getRedisClient();
-                    if (!redisClient) {
-                        logger.warn(`[CALL FLOW EXECUTOR] Redis not available for policy lookup`);
-                    }
-                    
-                    const redisKey = `policy:${context.companyID}:active`;
-                    const activePolicyKey = redisClient ? await redisClient.get(redisKey) : null;
-                    
-                    if (activePolicyKey) {
-                        const policyCached = await redisClient.get(activePolicyKey);
-                        
-                        if (policyCached) {
-                            const policy = JSON.parse(policyCached);
-                            
-                            // Apply cheat sheet to base response
-                            const cheatSheetResult = await CheatSheetEngine.apply(
-                                baseResponse.text,
-                                context.userInput,
-                                {
-                                    companyId: context.companyID,
-                                    callId: context.callId,
-                                    turnNumber: (context.callState.turnCount || 0) + 1,
-                                    isFirstTurn: (context.callState.turnCount || 0) === 0,
-                                    company: context.company,
-                                    collectedEntities: context.callState.collectedEntities || {}
-                                },
-                                policy
-                            );
-                            
-                            finalResponse = cheatSheetResult.response;
-                            finalAction = cheatSheetResult.action === 'TRANSFER' ? 'transfer' : finalAction;
-                            cheatSheetMeta = {
-                                appliedBlocks: cheatSheetResult.appliedBlocks,
-                                timeMs: cheatSheetResult.timeMs,
-                                shortCircuit: cheatSheetResult.shortCircuit,
-                                transferTarget: cheatSheetResult.transferTarget
-                            };
-                            
-                            logger.info(`[CALL FLOW EXECUTOR] ✅ CheatSheetEngine applied`, {
-                                appliedBlocks: cheatSheetResult.appliedBlocks.map(b => b.type),
-                                shortCircuit: cheatSheetResult.shortCircuit
-                            });
-                            
-                            // 📊 STRUCTURED LOG 4: CheatSheet Application Result
-                            logger.info('[CHEATSHEET]', {
-                                companyId: context.company._id.toString(),
-                                callSid: context.callState.callSid || context.callId,
-                                appliedBlocks: cheatSheetResult.appliedBlocks.map(b => ({
-                                    type: b.type,
-                                    id: b.id || null
-                                })),
-                                finalAction: cheatSheetResult.action === 'TRANSFER' ? 'transfer' : finalAction,
-                                shortCircuit: cheatSheetResult.shortCircuit,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }
-                } catch (cheatSheetErr) {
-                    logger.error(`[CALL FLOW EXECUTOR] ❌ CheatSheetEngine failed:`, cheatSheetErr.message);
-                    // Continue with base response (graceful degradation)
-                }
-            }
             
             // ═════════════════════════════════════════════════════════════════
             // 🎭 BEHAVIOR ENGINE: Apply HYBRID tone styling (V23)

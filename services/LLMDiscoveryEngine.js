@@ -651,10 +651,9 @@ class LLMDiscoveryEngine {
      * @param {Array} params.scenarios - Retrieved scenario summaries
      * @param {Object} params.emotion - Detected emotion
      * @param {Object} params.session - Session state
-     * @param {Object} params.cheatSheetKnowledge - Cheat sheet fallback (optional)
      * @returns {string} System prompt for LLM
      */
-    static buildDiscoveryPrompt({ company, scenarios, emotion, session, cheatSheetKnowledge }) {
+    static buildDiscoveryPrompt({ company, scenarios, emotion, session }) {
         const companyVars = this.getCompanyVariables(company);
         const trade = companyVars.trade || 'HVAC';
         const tradeLabel = trade === 'HVAC' ? 'HVAC company' :
@@ -671,20 +670,7 @@ ${scenarios.map((s, i) => `${i + 1}. ${s.title}: ${s.knowledge}`).join('\n')}
 `;
         }
         
-        // ═══════════════════════════════════════════════════════════════════
-        // V23: CHEAT SHEET FALLBACK KNOWLEDGE
-        // ═══════════════════════════════════════════════════════════════════
-        // Only used if no strong scenario match was found
-        // Cheat sheets provide policy/FAQ knowledge as fallback
-        // ═══════════════════════════════════════════════════════════════════
-        let cheatSheetSection = '';
-        if (cheatSheetKnowledge && !scenarios?.length) {
-            cheatSheetSection = `
-ADDITIONAL KNOWLEDGE FROM COMPANY POLICY (use naturally):
-Topic: ${cheatSheetKnowledge.question || cheatSheetKnowledge.title}
-Answer: ${cheatSheetKnowledge.answer}
-`;
-        }
+        // Cheat sheet fallback REMOVED Feb 2026 — Tier 2 reserved for future rebuild
         
         // Build emotion context (UI-controlled toggles)
         let emotionContext = '';
@@ -829,7 +815,7 @@ Your job is to BOOK APPOINTMENTS, not provide technical support. You are a RECEP
 4. You may ask ONE clarifying question if truly needed, then move to scheduling.
 5. Never mention internal systems, scenarios, templates, or AI.
 6. Keep responses SHORT - 1-2 sentences max. You are on a phone call.
-${knowledgeSection}${cheatSheetSection}${emotionContext}${discoveryContext}${callerNameContext}
+${knowledgeSection}${emotionContext}${discoveryContext}${callerNameContext}
 
 RESPONSE EXAMPLES:
 - Caller: "My AC isn't working" → "I'm sorry to hear that. Let me get a technician out to take a look. What's your name?"

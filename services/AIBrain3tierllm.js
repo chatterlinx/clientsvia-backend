@@ -361,7 +361,7 @@ class AIBrain3tierllm {
             if (useGlobalIntelligence) {
                 const adminSettings = await AdminSettings.findOne({});
                 const globalIntelligence = adminSettings?.globalProductionIntelligence || {};
-                intelligenceEnabled = globalIntelligence.enabled === true;
+                intelligenceEnabled = globalIntelligence.enabled !== false;
                 intelligenceConfig = globalIntelligence;
                 
                 logger.info(`🌐 [AI BRAIN] Using GLOBAL intelligence settings`, {
@@ -373,7 +373,7 @@ class AIBrain3tierllm {
                 });
             } else {
                 const productionIntelligence = company?.aiAgentSettings?.productionIntelligence || {};
-                intelligenceEnabled = productionIntelligence.enabled === true;
+                intelligenceEnabled = productionIntelligence.enabled !== false;
                 intelligenceConfig = productionIntelligence;
                 
                 logger.info(`🎯 [AI BRAIN] Using CUSTOM intelligence settings`, {

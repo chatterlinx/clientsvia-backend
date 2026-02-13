@@ -492,16 +492,19 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         const config = deepMerge(UI_DEFAULTS, saved);
         
         // ════════════════════════════════════════════════════════════════════════════
-        // V84: GLOBAL NAME LISTS — Single source of truth in AdminSettings
         // ════════════════════════════════════════════════════════════════════════════
-        // commonFirstNames, commonLastNames, nameStopWords are GLOBAL.
+        // GLOBAL SETTINGS — Single source of truth in AdminSettings
+        // ════════════════════════════════════════════════════════════════════════════
+        // V84: commonFirstNames, commonLastNames, nameStopWords are GLOBAL.
+        // V84.3: globalProductionIntelligence thresholds are GLOBAL.
         // They live ONLY in AdminSettings. Per-company copies do NOT exist.
         // Every companyId reads from the same global list — no duplication.
         // New companies never get seeded with names; they just use global.
         // ════════════════════════════════════════════════════════════════════════════
+        let adminSettings = null; // Shared reference for name lists + intelligence
         try {
             const AdminSettings = require('../../models/AdminSettings');
-            const adminSettings = await AdminSettings.findOne().lean();
+            adminSettings = await AdminSettings.findOne().lean();
             
             // AdminSettings is the ONLY source — no fallback to per-company
             config.commonFirstNames = adminSettings?.commonFirstNames || [];
@@ -729,7 +732,19 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 connectionQualityGate: config.connectionQualityGate || null,
                 // 🛡️ V111: STT Protected Words - Company-specific words never stripped by STT
                 sttProtectedWords: config.sttProtectedWords || [],
-                lastUpdated: saved.lastUpdated || null
+                lastUpdated: saved.lastUpdated || null,
+                
+                // ═══════════════════════════════════════════════════════════════
+                // V84.3: 3-TIER INTELLIGENCE SETTINGS
+                // ═══════════════════════════════════════════════════════════════
+                // useGlobalIntelligence (per-company flag) + threshold configs:
+                //   - globalProductionIntelligence: from AdminSettings (shared)
+                //   - productionIntelligence: from company (per-company override)
+                // Frontend reads the correct one based on the toggle.
+                // ═══════════════════════════════════════════════════════════════
+                useGlobalIntelligence: company.aiAgentSettings?.useGlobalIntelligence !== false,
+                productionIntelligence: company.aiAgentSettings?.productionIntelligence || {},
+                globalProductionIntelligence: adminSettings?.globalProductionIntelligence || {}
             }
         });
         
@@ -1321,62 +1336,116 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         }
         
         // ════════════════════════════════════════════════════════════════════════════
-        // ⚡ 3-TIER INTELLIGENCE SETTINGS - Thresholds and LLM Fallback Control
+        // ⚡ V84.3: 3-TIER INTELLIGENCE SETTINGS - Thresholds and LLM Fallback Control
         // ════════════════════════════════════════════════════════════════════════════
         // Controls how aggressively AI matches scenarios:
         // - tier1Threshold: Min confidence for Tier 1 (rule-based, fast, free)
         // - tier2Threshold: Min confidence for Tier 2 (semantic, free)
         // - enableTier3: Whether to use GPT-4o-mini fallback (costs $)
         // - useGlobalIntelligence: Inherit platform defaults or use company-specific
+        //
+        // SAVE ROUTING:
+        //   Global mode (default): saves to AdminSettings.globalProductionIntelligence
+        //   Company mode: saves to company.aiAgentSettings.productionIntelligence
+        //
+        // RUNTIME READS:
+        //   AIBrain3tierllm → IntelligentRouter context.intelligenceConfig
+        //   AdminSettings.globalProductionIntelligence  (global mode)
+        //   company.aiAgentSettings.productionIntelligence  (company mode)
         // ════════════════════════════════════════════════════════════════════════════
-        if (updates.aiAgentSettings) {
-            // Handle useGlobalIntelligence toggle
-            if (updates.aiAgentSettings.useGlobalIntelligence !== undefined) {
-                updateObj['aiAgentSettings.useGlobalIntelligence'] = updates.aiAgentSettings.useGlobalIntelligence;
+        if (updates.useGlobalIntelligence !== undefined || updates.productionIntelligence || updates.globalProductionIntelligence) {
+            // Handle useGlobalIntelligence toggle (per-company flag)
+            if (updates.useGlobalIntelligence !== undefined) {
+                updateObj['aiAgentSettings.useGlobalIntelligence'] = updates.useGlobalIntelligence;
                 logger.info('[FRONT DESK BEHAVIOR] ⚡ Saving useGlobalIntelligence', {
                     companyId,
-                    value: updates.aiAgentSettings.useGlobalIntelligence
+                    value: updates.useGlobalIntelligence
                 });
             }
             
-            // Handle company-specific intelligence thresholds
-            if (updates.aiAgentSettings.productionIntelligence) {
-                const intel = updates.aiAgentSettings.productionIntelligence;
+            // Determine if saving globally or per-company
+            const isGlobalMode = updates.useGlobalIntelligence !== undefined
+                ? updates.useGlobalIntelligence
+                : (await v2Company.findById(companyId).select('aiAgentSettings.useGlobalIntelligence').lean())
+                    ?.aiAgentSettings?.useGlobalIntelligence !== false;
+            
+            // Handle intelligence thresholds
+            const intel = updates.globalProductionIntelligence || updates.productionIntelligence;
+            if (intel?.thresholds) {
+                const thresholdUpdates = {};
                 
-                if (intel.thresholds) {
-                    if (intel.thresholds.tier1 !== undefined) {
-                        const tier1 = Math.max(0.50, Math.min(0.95, Number(intel.thresholds.tier1) || 0.80));
-                        updateObj['aiAgentSettings.productionIntelligence.thresholds.tier1'] = tier1;
-                        logger.info('[FRONT DESK BEHAVIOR] ⚡ Saving tier1Threshold', {
+                if (intel.thresholds.tier1 !== undefined) {
+                    thresholdUpdates.tier1 = Math.max(0.50, Math.min(0.95, Number(intel.thresholds.tier1) || 0.80));
+                }
+                if (intel.thresholds.tier2 !== undefined) {
+                    thresholdUpdates.tier2 = Math.max(0.40, Math.min(0.80, Number(intel.thresholds.tier2) || 0.60));
+                }
+                if (intel.thresholds.enableTier3 !== undefined) {
+                    thresholdUpdates.enableTier3 = intel.thresholds.enableTier3 === true;
+                }
+                
+                if (Object.keys(thresholdUpdates).length > 0) {
+                    if (isGlobalMode) {
+                        // ──── GLOBAL: Save to AdminSettings.globalProductionIntelligence ────
+                        try {
+                            const AdminSettings = require('../../models/AdminSettings');
+                            const globalUpdateObj = {};
+                            for (const [key, val] of Object.entries(thresholdUpdates)) {
+                                globalUpdateObj[`globalProductionIntelligence.thresholds.${key}`] = val;
+                            }
+                            globalUpdateObj['globalProductionIntelligence.lastUpdated'] = new Date();
+                            globalUpdateObj['globalProductionIntelligence.updatedBy'] = req.user?.email || 'admin';
+                            
+                            await AdminSettings.findOneAndUpdate(
+                                {},
+                                { $set: globalUpdateObj },
+                                { upsert: true }
+                            );
+                            logger.info('[FRONT DESK BEHAVIOR] ⚡ V84.3: Saved GLOBAL intelligence thresholds to AdminSettings', {
+                                companyId,
+                                thresholds: thresholdUpdates
+                            });
+                        } catch (err) {
+                            logger.error('[FRONT DESK BEHAVIOR] ❌ Failed to save global intelligence thresholds', {
+                                companyId,
+                                error: err.message
+                            });
+                        }
+                    } else {
+                        // ──── COMPANY: Save to company.aiAgentSettings.productionIntelligence ────
+                        for (const [key, val] of Object.entries(thresholdUpdates)) {
+                            updateObj[`aiAgentSettings.productionIntelligence.thresholds.${key}`] = val;
+                        }
+                        updateObj['aiAgentSettings.productionIntelligence.lastUpdated'] = new Date();
+                        updateObj['aiAgentSettings.productionIntelligence.updatedBy'] = req.user?.email || 'admin';
+                        logger.info('[FRONT DESK BEHAVIOR] ⚡ V84.3: Saved COMPANY intelligence thresholds', {
                             companyId,
-                            tier1,
-                            originalValue: intel.thresholds.tier1
-                        });
-                    }
-                    
-                    if (intel.thresholds.tier2 !== undefined) {
-                        const tier2 = Math.max(0.40, Math.min(0.80, Number(intel.thresholds.tier2) || 0.60));
-                        updateObj['aiAgentSettings.productionIntelligence.thresholds.tier2'] = tier2;
-                        logger.info('[FRONT DESK BEHAVIOR] ⚡ Saving tier2Threshold', {
-                            companyId,
-                            tier2,
-                            originalValue: intel.thresholds.tier2
-                        });
-                    }
-                    
-                    if (intel.thresholds.enableTier3 !== undefined) {
-                        updateObj['aiAgentSettings.productionIntelligence.thresholds.enableTier3'] = intel.thresholds.enableTier3 === true;
-                        logger.info('[FRONT DESK BEHAVIOR] ⚡ Saving enableTier3', {
-                            companyId,
-                            enableTier3: intel.thresholds.enableTier3 === true
+                            thresholds: thresholdUpdates
                         });
                     }
                 }
-                
-                // Save lastUpdated timestamp
-                updateObj['aiAgentSettings.productionIntelligence.lastUpdated'] = new Date();
-                updateObj['aiAgentSettings.productionIntelligence.updatedBy'] = req.user?.email || 'admin';
             }
+        }
+        
+        // Legacy path: also handle nested aiAgentSettings.productionIntelligence for backward compatibility
+        if (updates.aiAgentSettings?.productionIntelligence && !updates.productionIntelligence && !updates.globalProductionIntelligence) {
+            const intel = updates.aiAgentSettings.productionIntelligence;
+            if (intel.thresholds) {
+                if (intel.thresholds.tier1 !== undefined) {
+                    updateObj['aiAgentSettings.productionIntelligence.thresholds.tier1'] = Math.max(0.50, Math.min(0.95, Number(intel.thresholds.tier1) || 0.80));
+                }
+                if (intel.thresholds.tier2 !== undefined) {
+                    updateObj['aiAgentSettings.productionIntelligence.thresholds.tier2'] = Math.max(0.40, Math.min(0.80, Number(intel.thresholds.tier2) || 0.60));
+                }
+                if (intel.thresholds.enableTier3 !== undefined) {
+                    updateObj['aiAgentSettings.productionIntelligence.thresholds.enableTier3'] = intel.thresholds.enableTier3 === true;
+                }
+            }
+            updateObj['aiAgentSettings.productionIntelligence.lastUpdated'] = new Date();
+            updateObj['aiAgentSettings.productionIntelligence.updatedBy'] = req.user?.email || 'admin';
+        }
+        if (updates.aiAgentSettings?.useGlobalIntelligence !== undefined && updates.useGlobalIntelligence === undefined) {
+            updateObj['aiAgentSettings.useGlobalIntelligence'] = updates.aiAgentSettings.useGlobalIntelligence;
         }
         
         // ════════════════════════════════════════════════════════════════════════════

@@ -27,13 +27,7 @@ const Company = require('../models/v2Company');
 const LLM0ControlsLoader = require('./LLM0ControlsLoader');
 const { DEFAULT_FRONT_DESK_CONFIG } = require('../config/frontDeskPrompt');
 
-// Optional services (don't crash if not available)
-let CheatSheetRuntimeService;
-try {
-    CheatSheetRuntimeService = require('./cheatsheet/CheatSheetRuntimeService');
-} catch (e) {
-    logger.warn('[RUNTIME CONFIG] CheatSheetRuntimeService not available');
-}
+// CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
 
 let STTProfileService;
 try {
@@ -140,12 +134,13 @@ class RuntimeConfigLoader {
             
             // Load all configs in parallel
             const [
-                llm0Controls,
-                cheatSheet
+                llm0Controls
             ] = await Promise.all([
-                LLM0ControlsLoader.load(companyId, company),
-                this.loadCheatSheet(companyId)
+                LLM0ControlsLoader.load(companyId, company)
             ]);
+            
+            // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+            const cheatSheet = null;
             
             // Extract configs from company document
             const aiAgentSettings = company.aiAgentSettings || {};
@@ -245,20 +240,10 @@ class RuntimeConfigLoader {
     
     /**
      * Load cheat sheet live config
+     * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
      */
     static async loadCheatSheet(companyId) {
-        if (!CheatSheetRuntimeService) return null;
-        
-        try {
-            const service = new CheatSheetRuntimeService();
-            return await service.getLiveConfig(companyId);
-        } catch (error) {
-            logger.debug('[RUNTIME CONFIG] CheatSheet not available', {
-                companyId,
-                error: error.message
-            });
-            return null;
-        }
+        return null;
     }
     
     /**

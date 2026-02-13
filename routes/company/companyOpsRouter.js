@@ -31,12 +31,6 @@ const notificationSettingsRouter = require('./companyOpsNotificationSettings');
 const settingsRouter = require('./companyOpsSettings');
 const responseTracesRouter = require('./companyOpsResponseTraces');
 
-// Import sub-routers - Cheat Sheet Config
-const bookingRulesRouter = require('./cheatSheetBookingRules');
-const roleContactsRouter = require('./cheatSheetRoleContacts');
-const linksRouter = require('./cheatSheetLinks');
-const calculatorRouter = require('./cheatSheetCalculator');
-
 // Mount CompanyOps Console sub-routers
 router.use('/contacts', contactsRouter);
 router.use('/locations', locationsRouter);
@@ -46,12 +40,6 @@ router.use('/usage', usageRouter);
 router.use('/notification-settings', notificationSettingsRouter);
 router.use('/settings', settingsRouter);
 router.use('/response-traces', responseTracesRouter);
-
-// Mount Cheat Sheet Config sub-routers
-router.use('/booking-rules', bookingRulesRouter);
-router.use('/role-contacts', roleContactsRouter);
-router.use('/links', linksRouter);
-router.use('/calculator-stats', calculatorRouter);
 
 module.exports = router;
 

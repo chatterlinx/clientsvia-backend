@@ -665,7 +665,7 @@ class ConfigurationReadinessService {
     
     /**
      * Check CheatSheet configuration (10% of total)
-     * CRITICAL: CheatSheet contains the AI's core instructions and behavior rules
+     * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
      */
     static async checkCheatSheet(company, report) {
         const component = {
@@ -677,150 +677,16 @@ class ConfigurationReadinessService {
             hasInstructions: false,
             liveVersionId: null,
             sectionsPopulated: 0,
-            weight: 10
+            weight: 10,
+            note: 'CheatSheet system removed Feb 2026 — Tier 2 reserved for future rebuild'
         };
         
-        try {
-            // Check if using versioning system or legacy
-            const liveVersionId = company.aiAgentSettings?.cheatSheetMeta?.liveVersionId;
-            
-            if (liveVersionId) {
-                // NEW VERSIONING SYSTEM
-                logger.info(`[READINESS] 📖 CheatSheet: Using versioning system - Live version ID: ${liveVersionId}`);
-                
-                // Load live version from CheatSheetVersion collection
-                const CheatSheetVersion = require('../models/cheatsheet/CheatSheetVersion');
-                const liveVersion = await CheatSheetVersion.findOne({
-                    versionId: liveVersionId,
-                    status: 'live'
-                }).lean();
-                
-                if (!liveVersion) {
-                    // Live version pointer exists but version not found!
-                    component.score = 0;
-                    component.hasLiveVersion = false;
-                    report.blockers.push({
-                        code: 'CHEATSHEET_LIVE_NOT_FOUND',
-                        message: 'Live CheatSheet version not found - AI has no instructions',
-                        severity: 'critical',
-                        target: 'cheat-sheet',
-                        component: 'cheatsheet',
-                        details: `Company points to live version ${liveVersionId} but it doesn't exist in database. Create a new CheatSheet configuration.`
-                    });
-                    
-                    logger.warn(`[READINESS] ❌ CHEATSHEET: Live version ${liveVersionId} not found`);
-                } else {
-                    component.hasLiveVersion = true;
-                    component.liveVersionId = liveVersionId;
-                    
-                    // Check Frontline-Intel instructions (CRITICAL)
-                    const frontlineIntel = liveVersion.config?.frontlineIntel?.instructions || '';
-                    const hasRealInstructions = frontlineIntel.trim().length > 50 && 
-                                               !frontlineIntel.toLowerCase().includes('coming soon') &&
-                                               !frontlineIntel.toLowerCase().includes('placeholder');
-                    
-                    component.hasFrontlineIntel = !!frontlineIntel;
-                    component.hasInstructions = hasRealInstructions;
-                    
-                    // Count populated sections
-                    const config = liveVersion.config || {};
-                    let populated = 0;
-                    if (config.triage && Object.keys(config.triage).length > 0) populated++;
-                    if (config.frontlineIntel && frontlineIntel.trim().length > 0) populated++;
-                    if (config.transferRules && Object.keys(config.transferRules).length > 0) populated++;
-                    if (config.edgeCases && Object.keys(config.edgeCases).length > 0) populated++;
-                    if (config.behavior && Object.keys(config.behavior).length > 0) populated++;
-                    if (config.guardrails && Object.keys(config.guardrails).length > 0) populated++;
-                    
-                    component.sectionsPopulated = populated;
-                    
-                    // Scoring logic
-                    if (!hasRealInstructions) {
-                        component.score = 0;
-                        report.blockers.push({
-                            code: 'NO_FRONTLINE_INTEL',
-                            message: 'Frontline-Intel instructions missing - AI has no core guidance',
-                            severity: 'critical',
-                            target: 'cheat-sheet',
-                            component: 'cheatsheet',
-                            details: 'The Frontline-Intel section contains the AI\'s core instructions, personality, and protocols. Fill this out in CheatSheet → Frontline-Intel.'
-                        });
-                        
-                        logger.warn(`[READINESS] ❌ NO FRONTLINE-INTEL: CheatSheet has no instructions`);
-                    } else if (populated < 2) {
-                        component.score = 50;
-                        component.configured = true;
-                        report.warnings.push({
-                            code: 'FEW_CHEATSHEET_SECTIONS',
-                            message: `Only ${populated} CheatSheet section(s) configured - Add more guidance`,
-                            severity: 'major',
-                            target: 'cheat-sheet',
-                            component: 'cheatsheet',
-                            details: 'Configure Triage, Transfer Rules, Edge Cases, Behavior, and Guardrails for better AI performance.'
-                        });
-                        
-                        logger.info(`[READINESS] ⚠️ CHEATSHEET: Only ${populated} sections configured`);
-                    } else {
-                        component.score = 100;
-                        component.configured = true;
-                        logger.info(`[READINESS] ✅ CHEATSHEET OK: ${populated} sections configured`);
-                    }
-                }
-            } else {
-                // LEGACY SYSTEM (or no CheatSheet at all)
-                const legacyCheatSheet = company.aiAgentSettings?.cheatSheet;
-                
-                if (!legacyCheatSheet || Object.keys(legacyCheatSheet).length === 0) {
-                    // No CheatSheet at all!
-                    component.score = 0;
-                    report.blockers.push({
-                        code: 'NO_CHEATSHEET',
-                        message: 'No CheatSheet configured - AI has no instructions',
-                        severity: 'critical',
-                        target: 'cheat-sheet',
-                        component: 'cheatsheet',
-                        details: 'Configure the CheatSheet to give your AI core instructions, triage rules, transfer rules, and behavior guidelines.'
-                    });
-                    
-                    logger.warn(`[READINESS] ❌ NO CHEATSHEET: Company has no CheatSheet configuration`);
-                } else {
-                    // Legacy CheatSheet exists - check content
-                    const frontlineIntel = legacyCheatSheet.frontlineIntel?.instructions || '';
-                    const hasRealInstructions = frontlineIntel.trim().length > 50;
-                    
-                    component.hasFrontlineIntel = !!frontlineIntel;
-                    component.hasInstructions = hasRealInstructions;
-                    
-                    if (!hasRealInstructions) {
-                        component.score = 0;
-                        report.blockers.push({
-                            code: 'NO_FRONTLINE_INTEL',
-                            message: 'Frontline-Intel instructions missing - AI has no core guidance',
-                            severity: 'critical',
-                            target: 'cheat-sheet',
-                            component: 'cheatsheet',
-                            details: 'Fill out Frontline-Intel in the CheatSheet to give your AI its core instructions.'
-                        });
-                        
-                        logger.warn(`[READINESS] ❌ NO FRONTLINE-INTEL: Legacy CheatSheet has no instructions`);
-                    } else {
-                        component.score = 75; // Legacy system gets lower score (recommend migrating to versioning)
-                        component.configured = true;
-                        logger.info(`[READINESS] ⚠️ CHEATSHEET: Using legacy system (recommend migrating to versioning)`);
-                    }
-                }
-            }
-            
-        } catch (error) {
-            logger.error(`[READINESS] ❌ CheatSheet check error:`, error);
-            component.score = 0;
-            report.blockers.push({
-                code: 'CHEATSHEET_ERROR',
-                message: `Error checking CheatSheet: ${error.message}`,
-                severity: 'critical',
-                component: 'cheatsheet'
-            });
-        }
+        // CheatSheet system has been fully removed.
+        // Return a neutral score so it doesn't block Go Live readiness.
+        component.score = 100;
+        component.configured = true;
+        
+        logger.info(`[READINESS] 📖 CheatSheet: System removed — skipping check (score = 100 neutral)`);
         
         report.components.cheatsheet = component;
     }

@@ -1679,28 +1679,7 @@ const wiringRegistryV2 = {
                     ]
                 },
                 
-                // CHEAT SHEETS
-                // NOTE: CheatSheets has its own editor at frontline-intel-editor.html
-                // Nav targets templates section as fallback - cheatSheets UI not in Data & Config yet
-                {
-                    id: 'dataConfig.cheatSheets',
-                    label: 'Cheat Sheets',
-                    description: 'FAQ knowledge base (edit via Frontline Intel Editor)',
-                    ui: { sectionId: 'templateReferences', path: 'Data & Config → Templates' },
-                    fields: [
-                        {
-                            id: 'dataConfig.cheatSheets',
-                            label: 'Cheat Sheet Config',
-                            ui: { inputId: 'templateReferences', path: 'Data & Config → Templates (Cheat Sheet Editor separate)' },
-                            db: { collection: 'cheatsheetversions', path: '(companyId filter)' },
-                            runtime: RUNTIME_READERS_MAP['dataConfig.cheatSheets'],
-                            scope: 'company',
-                            required: false,
-                            validators: [],
-                            defaultValue: null
-                        }
-                    ]
-                },
+                // CHEAT SHEETS - REMOVED Feb 2026 (Tier 2 reserved for future rebuild)
                 
                 // PLACEHOLDERS
                 {
@@ -1726,52 +1705,7 @@ const wiringRegistryV2 = {
         },
         
         // ☢️ NUKED Feb 2026: tab.dynamicFlow removed - V110 architecture replaces it
-        
-        // ---------------------------------------------------------------------
-        // TRANSFER CALLS TAB
-        // ---------------------------------------------------------------------
-        {
-            id: 'tab.transfers',
-            label: 'Transfer Calls',
-            description: 'Transfer targets and rules',
-            ui: { tabId: 'transfer-calls', navSelector: '[data-tab="transfer-calls"]' },
-            db: { collection: 'companies', basePath: 'aiAgentSettings' },
-            scope: 'company',
-            sections: [
-                {
-                    id: 'transfers.directory',
-                    label: 'Transfer Directory',
-                    description: 'Available transfer targets',
-                    ui: { sectionId: 'transferDirectory', path: 'Transfer Calls → Directory' },
-                    fields: [
-                        {
-                            id: 'transfers.transferTargets',
-                            label: 'Transfer Targets',
-                            ui: { inputId: 'transferTargets', path: 'Transfer Calls → Directory → Targets' },
-                            db: { path: 'aiAgentSettings.transferTargets' },
-                            runtime: RUNTIME_READERS_MAP['transfers.transferTargets'],
-                            scope: 'company',
-                            required: false,
-                            validators: [],
-                            defaultValue: []
-                        }
-                    ]
-                }
-            ]
-        },
-        
-        // ---------------------------------------------------------------------
-        // CALL PROTECTION TAB
-        // ---------------------------------------------------------------------
-        {
-            id: 'tab.callProtection',
-            label: 'Call Protection',
-            description: 'Pre-answer filters',
-            ui: { tabId: 'call-protection', navSelector: '[data-tab="call-protection"]' },
-            db: { collection: 'cheatsheetversions', basePath: 'config.edgeCases' },
-            scope: 'company',
-            sections: []
-        },
+        // ☢️ NUKED Feb 2026: tab.transfers, tab.callProtection removed - cheat sheet nuke
         
         // ---------------------------------------------------------------------
         // FLOW TREE TAB

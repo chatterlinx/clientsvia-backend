@@ -527,19 +527,34 @@ class ScenarioEngine {
         isPublished: true
       }).lean();
 
+      // V84.3: Load intelligence config (global or company) for threshold overrides
+      let intelligenceThresholds = {};
+      try {
+        const useGlobal = company?.aiAgentSettings?.useGlobalIntelligence !== false;
+        if (useGlobal) {
+          const AdminSettings = require('../models/AdminSettings');
+          const adminSettings = await AdminSettings.findOne().lean();
+          intelligenceThresholds = adminSettings?.globalProductionIntelligence?.thresholds || {};
+        } else {
+          intelligenceThresholds = company?.aiAgentSettings?.productionIntelligence?.thresholds || {};
+        }
+      } catch (err) {
+        // Fallback to defaults on error
+      }
+
       return {
         tier1: {
           enabled: true,
-          threshold: template?.learningSettings?.tier1Threshold || this.config.defaultTier1Threshold,
+          threshold: intelligenceThresholds.tier1 || template?.learningSettings?.tier1Threshold || this.config.defaultTier1Threshold,
           matchMethod: 'TRIGGERS_PHRASE_FUZZY'
         },
         tier2: {
           enabled: true,
-          threshold: template?.learningSettings?.tier2Threshold || this.config.defaultTier2Threshold,
+          threshold: intelligenceThresholds.tier2 || template?.learningSettings?.tier2Threshold || this.config.defaultTier2Threshold,
           matchMethod: 'SEMANTIC_BM25_BOOST'
         },
         tier3: {
-          enabled: template?.aiGatewaySettings?.enableTier3 !== false,
+          enabled: intelligenceThresholds.enableTier3 !== undefined ? intelligenceThresholds.enableTier3 : (template?.aiGatewaySettings?.enableTier3 !== false),
           model: 'gpt-4o-mini',
           maxCostPerCall: template?.learningSettings?.llmCostPerCall || 0.50
         }

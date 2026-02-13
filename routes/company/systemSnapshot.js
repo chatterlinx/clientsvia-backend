@@ -227,7 +227,7 @@ router.get('/', async (req, res) => {
     // 4. BUILD SNAPSHOT
     // ═══════════════════════════════════════════════════════════════════
     
-    const cheatSheet = company.cheatSheet || {};
+    // cheatSheet references REMOVED Feb 2026 — full cheat sheet nuke
     const aiAgentSettings = company.aiAgentSettings || {};
     const frontDeskBehavior = aiAgentSettings.frontDeskBehavior || {};
     
@@ -295,66 +295,12 @@ router.get('/', async (req, res) => {
         }
       },
       
-      // ─────────────────────────────────────────────────────────────────
-      // CALL PROTECTION (Pre-Answer Filters)
-      // ─────────────────────────────────────────────────────────────────
-      callProtection: {
-        enabled: true,
-        rules: (cheatSheet.edgeCases || []).map(ec => ({
-          id: ec._id || ec.id || null,
-          name: ec.name,
-          type: ec.type || 'custom',
-          priority: ec.priority || 10,
-          enabled: ec.enabled !== false,
-          patterns: ec.triggerPatterns || [],
-          responseText: ec.responseText || null,
-          action: ec.action || 'respond'
-        }))
-      },
-      
-      // ☢️ NUKED Feb 2026: DynamicFlow data removed - V110 architecture replaces Dynamic Flows
+      // ☢️ NUKED Feb 2026: callProtection, transferTargets, companyContacts, links removed — cheat sheet nuke
+      callProtection: { enabled: false, rules: [], status: 'REMOVED_FEB_2026' },
       dynamicFlows: [],
-      
-      // ─────────────────────────────────────────────────────────────────
-      // TRANSFER TARGETS
-      // ─────────────────────────────────────────────────────────────────
-      transferTargets: (cheatSheet.transferRules || []).map(rule => ({
-        id: rule._id || rule.id || null,
-        label: rule.contactNameOrQueue || rule.label || 'Unnamed',
-        intentTag: rule.intentTag,
-        phone: rule.phoneNumber || null,
-        priority: rule.priority || 10,
-        enabled: rule.enabled !== false,
-        afterHoursOnly: rule.afterHoursOnly || false,
-        preTransferScript: rule.preTransferScript || null,
-        availability: rule.availability || 'business_hours'
-      })),
-      
-      // ─────────────────────────────────────────────────────────────────
-      // COMPANY CONTACTS
-      // ─────────────────────────────────────────────────────────────────
-      companyContacts: (cheatSheet.companyContacts || []).map(contact => ({
-        id: contact._id || contact.id || null,
-        name: contact.name,
-        role: contact.role || 'Other',
-        phone: contact.phone || contact.phoneNumber || null,
-        email: contact.email || null,
-        availability: contact.availability || '24/7',
-        primary: contact.isPrimary || false,
-        notes: contact.notes || null
-      })),
-      
-      // ─────────────────────────────────────────────────────────────────
-      // LINKS
-      // ─────────────────────────────────────────────────────────────────
-      links: (cheatSheet.links || []).map(link => ({
-        id: link._id || link.id || null,
-        label: link.label,
-        category: link.category || 'other',
-        url: link.url,
-        shortDescription: link.shortDescription || null,
-        usageNotes: link.usageNotes || link.shortDescription || null
-      })),
+      transferTargets: [],
+      companyContacts: [],
+      links: [],
       
       // ─────────────────────────────────────────────────────────────────
       // CALL CONTEXT (Live Only)
@@ -387,16 +333,8 @@ router.get('/', async (req, res) => {
         actionsTaken: [] // ☢️ NUKED Feb 2026: DynamicFlow trace removed - V110 architecture replaces Dynamic Flows
       } : null,
       
-      // ─────────────────────────────────────────────────────────────────
-      // VERSIONING
-      // ─────────────────────────────────────────────────────────────────
-      versioning: {
-        activeVersionId: cheatSheet.activeVersionId || null,
-        draftVersionId: cheatSheet.draftVersionId || null,
-        isLive: cheatSheet.isLive ?? true,
-        lastPublishedAt: cheatSheet.lastPublishedAt || null,
-        totalVersions: cheatSheet.versions?.length || 0
-      },
+      // ☢️ NUKED Feb 2026: cheatSheet versioning removed — full cheat sheet nuke
+      versioning: { status: 'REMOVED_FEB_2026' },
       
       // ─────────────────────────────────────────────────────────────────
       // TRADE CATEGORY (if assigned)

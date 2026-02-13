@@ -28,7 +28,8 @@
 
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
-const CheatSheetVersion = require('../models/cheatsheet/CheatSheetVersion');
+// CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+// const CheatSheetVersion = require('../models/cheatsheet/CheatSheetVersion');
 const { getRedisClient } = require('../config/redis');
 
 // ============================================================================
@@ -160,143 +161,10 @@ function convertEdgeCasesToArray(legacyEdgeCases) {
 // ============================================================================
 
 async function runMigration(options = {}) {
-  const { dryRun = false, companyId = null } = options;
-  
-  logger.info('[EDGE CASES MIGRATION] Starting...', { dryRun, companyId });
-  
-  try {
-    // Connect to DB if not already connected
-    if (mongoose.connection.readyState !== 1) {
-      await require('../db');
-      logger.info('[EDGE CASES MIGRATION] Connected to MongoDB');
-    }
-    
-    // Build query
-    const query = {};
-    if (companyId) {
-      query.companyId = companyId;
-    }
-    
-    // Find all CheatSheetVersions
-    const versions = await CheatSheetVersion.find(query).lean();
-    logger.info('[EDGE CASES MIGRATION] Found versions', { 
-      total: versions.length,
-      companyId: companyId || 'ALL'
-    });
-    
-    // Stats
-    let migrated = 0;
-    let skipped = 0;
-    let errors = 0;
-    
-    // Process each version
-    for (const version of versions) {
-      try {
-        // Check if needs migration
-        if (!needsMigration(version.config)) {
-          skipped++;
-          logger.debug('[EDGE CASES MIGRATION] Skipping (already array or empty)', {
-            versionId: version._id,
-            companyId: version.companyId,
-            status: version.status
-          });
-          continue;
-        }
-        
-        // Convert to array
-        const newEdgeCases = convertEdgeCasesToArray(version.config.edgeCases);
-        
-        logger.info('[EDGE CASES MIGRATION] Converting', {
-          versionId: version._id,
-          companyId: version.companyId,
-          status: version.status,
-          oldFormat: typeof version.config.edgeCases,
-          oldKeys: Object.keys(version.config.edgeCases || {}),
-          newCount: newEdgeCases.length,
-          dryRun
-        });
-        
-        if (dryRun) {
-          logger.info('[EDGE CASES MIGRATION] [DRY RUN] Would update:', {
-            versionId: version._id,
-            edgeCases: newEdgeCases.map(ec => ({
-              id: ec.id,
-              name: ec.name,
-              actionType: ec.action.type
-            }))
-          });
-          migrated++;
-          continue;
-        }
-        
-        // Update in database
-        await CheatSheetVersion.updateOne(
-          { _id: version._id },
-          { 
-            $set: { 
-              'config.edgeCases': newEdgeCases,
-              'metadata.migratedAt': new Date(),
-              'metadata.migratedBy': 'Migration Script'
-            }
-          }
-        );
-        
-        // Invalidate Redis cache if this is the live version
-        if (version.status === 'live') {
-          try {
-            const redis = getRedisClient();
-            if (redis && redis.isOpen) {
-              const cacheKey = `cheatsheet:live:${version.companyId}`;
-              await redis.del(cacheKey);
-              logger.info('[EDGE CASES MIGRATION] Invalidated Redis cache', {
-                companyId: version.companyId,
-                cacheKey
-              });
-            }
-          } catch (redisError) {
-            logger.warn('[EDGE CASES MIGRATION] Redis cache invalidation failed (non-critical)', {
-              error: redisError.message,
-              companyId: version.companyId
-            });
-          }
-        }
-        
-        migrated++;
-        logger.info('[EDGE CASES MIGRATION] ✅ Migrated', {
-          versionId: version._id,
-          companyId: version.companyId,
-          edgeCaseCount: newEdgeCases.length
-        });
-        
-      } catch (versionError) {
-        errors++;
-        logger.error('[EDGE CASES MIGRATION] ❌ Version migration failed', {
-          versionId: version._id,
-          companyId: version.companyId,
-          error: versionError.message,
-          stack: versionError.stack
-        });
-      }
-    }
-    
-    // Final stats
-    logger.info('[EDGE CASES MIGRATION] ✅ Complete', {
-      total: versions.length,
-      migrated,
-      skipped,
-      errors,
-      dryRun
-    });
-    
-    return { success: true, migrated, skipped, errors };
-    
-  } catch (error) {
-    logger.error('[EDGE CASES MIGRATION] ❌ Fatal error', {
-      error: error.message,
-      stack: error.stack
-    });
-    return { success: false, error: error.message };
-  }
+  // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+  // This migration script is no longer functional since CheatSheetVersion model was removed.
+  logger.info('[EDGE CASES MIGRATION] ⚠️ SKIPPED — CheatSheet system has been removed. This migration is no longer needed.');
+  return { success: true, migrated: 0, skipped: 0, errors: 0, note: 'CheatSheet system removed Feb 2026' };
 }
 
 // ============================================================================

@@ -580,23 +580,7 @@ const TIER_MAX = {
                 "i need a manager"
             ]
         },
-        {
-            fieldId: 'dataConfig.cheatSheets',
-            purpose: 'Quick FAQ knowledge for common questions',
-            failureMode: 'Simple FAQ goes to full LLM call',
-            impact: 'speed',
-            priority: 3,
-            payoff: 'Faster FAQ responses, lower LLM costs',
-            validator: (val) => val && (val.enabled === true || (Array.isArray(val.items) && val.items.length > 0)),
-            fixInstructions: 'Add FAQ content via Cheat Sheet Editor → frontline-intel-editor.html',
-            // NOTE: Cheat Sheets stored in separate CheatSheetVersion collection
-            // Cannot auto-apply via Company doc - must use dedicated editor
-            nav: { tab: 'data-config', section: 'template-references', field: 'templateReferences' },
-            dbPath: 'CheatSheetVersion collection (companyId filter)',
-            // Cannot auto-apply - uses separate collection, requires Frontline Intel Editor
-            requiresUserInput: true,
-            canAutoApply: false
-        },
+        // dataConfig.cheatSheets REMOVED Feb 2026 — Tier 2 reserved for future rebuild
         {
             fieldId: 'dataConfig.placeholders',
             purpose: 'Dynamic values in responses ({companyName}, {phone})',

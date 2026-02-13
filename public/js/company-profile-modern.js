@@ -4117,11 +4117,7 @@ class CompanyProfileManager {
             this.spamFilterManagerInitialized = true;
         }
         
-        if (tabName === 'cheat-sheet' && !this.cheatSheetManagerInitialized) {
-            logger.info('🧠 Initializing Cheat Sheet Manager...');
-            this.initializeCheatSheetManager();
-            this.cheatSheetManagerInitialized = true;
-        }
+        // cheat-sheet tab REMOVED Feb 2026 — full cheat sheet nuke
         
         if (tabName === 'ai-agent-settings' && !this.aiAgentSettingsInitialized) {
             logger.info('🤖 Initializing AI Agent Settings...');
@@ -4183,31 +4179,7 @@ class CompanyProfileManager {
         }
     }
 
-    /**
-     * Initialize Cheat Sheet Manager
-     */
-    initializeCheatSheetManager() {
-        logger.info('🧠 [CHEAT SHEET] Initializing manager for company:', this.companyId);
-        
-        try {
-            // Check if CheatSheetManager class exists
-            if (typeof cheatSheetManager === 'undefined') {
-                logger.error('❌ [CHEAT SHEET] CheatSheetManager not found!');
-                return;
-            }
-            
-            // Load cheat sheet data
-            cheatSheetManager.load(this.companyId);
-            
-            logger.info('✅ [CHEAT SHEET] Manager initialized successfully');
-            
-            // Store reference for later use
-            this.cheatSheetManager = cheatSheetManager;
-            
-        } catch (error) {
-            logger.error('❌ [CHEAT SHEET] Failed to initialize manager:', error);
-        }
-    }
+    // initializeCheatSheetManager REMOVED Feb 2026 — full cheat sheet nuke
 
     /**
      * Initialize AI Agent Settings (Twilio, Diagnostics, etc.)

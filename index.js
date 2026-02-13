@@ -197,11 +197,7 @@ async function loadAllRoutes() {
         routes.globalAIBehaviorsRoutes = await loadRouteWithTimeout('./routes/admin/globalAIBehaviors', 'globalAIBehaviorsRoutes');
         routes.llmScenarioAssistantRoutes = await loadRouteWithTimeout('./routes/admin/llmScenarioAssistant', 'llmScenarioAssistantRoutes');
         routes.llmSettingsRoutes = await loadRouteWithTimeout('./routes/admin/llmSettings', 'llmSettingsRoutes');
-        routes.cheatSheetRoutes = await loadRouteWithTimeout('./routes/admin/cheatSheet', 'cheatSheetRoutes'); // 🧠 Cheat Sheet Management (Phase 1)
-        routes.cheatSheetVersioningRoutes = await loadRouteWithTimeout('./routes/cheatsheet', 'cheatSheetVersioningRoutes'); // 📚 CheatSheet Version System (Draft/Live/History)
-        // activeInstructionsRoutes REMOVED Dec 2025 - broken X-RAY, caused confusion
-        routes.globalConfigRoutes = await loadRouteWithTimeout('./routes/global-config', 'globalConfigRoutes'); // 🌍 Global Config Sharing (Local/Global)
-        routes.cheatSheetCategoryRoutes = await loadRouteWithTimeout('./routes/cheatsheet/category', 'cheatSheetCategoryRoutes'); // 🔒 CheatSheet Category Locking
+        // cheatSheet + global-config routes REMOVED Feb 2026 - full nuke, Tier 2 reserved for future rebuild
         routes.triageBuilderRoutes = await loadRouteWithTimeout('./routes/admin/triageBuilder', 'triageBuilderRoutes'); // 🤖 LLM Triage Builder (admin content generator)
         routes.triageEvaluatorRoutes = await loadRouteWithTimeout('./routes/admin/triageEvaluator', 'triageEvaluatorRoutes'); // 🎯 Triage Command Center (A+ Evaluation)
         routes.triagePresetsRoutes = await loadRouteWithTimeout('./routes/admin/triagePresets', 'triagePresetsRoutes'); // 🎯 Dynamic Triage Presets per Trade
@@ -644,11 +640,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/global-behaviors', routes.globalAIBehaviorsRoutes); // Global AI Behavior Templates
     app.use('/api/admin/scenario-assistant', routes.llmScenarioAssistantRoutes); // 🤖 LLM Scenario Assistant (admin drafting tool)
     app.use('/api/admin/llm-settings', routes.llmSettingsRoutes); // 🎛️ LLM Enterprise Settings (profiles, compliance, advanced tuning)
-    app.use('/api/admin/cheat-sheet', routes.cheatSheetRoutes); // 🧠 Cheat Sheet Management (Phase 1)
-    app.use('/api/cheatsheet', routes.cheatSheetVersioningRoutes); // 📚 CheatSheet Version System (Draft/Live/History/Runtime)
-    // activeInstructionsRoutes REMOVED Dec 2025 - nuked
-    app.use('/api/global-config', routes.globalConfigRoutes); // 🌍 Global Config Sharing (Local/Global)
-    app.use('/api/cheatsheet/category', routes.cheatSheetCategoryRoutes); // 🔒 CheatSheet Category Locking
+    // cheatSheet + global-config routes REMOVED Feb 2026 - full nuke
     app.use('/api/admin/triage-builder', routes.triageBuilderRoutes); // 🤖 LLM Triage Builder (admin content generator)
     app.use('/api/admin/triage-evaluator', routes.triageEvaluatorRoutes); // 🎯 Triage Command Center (A+ Evaluation)
     app.use('/api/admin/triage-presets', routes.triagePresetsRoutes); // 🎯 Dynamic Triage Presets per Trade

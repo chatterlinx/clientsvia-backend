@@ -1116,16 +1116,7 @@
     
     <div class="nav-divider"></div>
     
-    <button class="nav-tab" data-tab="call-protection">
-      <i class="fas fa-shield-alt"></i>
-      <span>Call Protection</span>
-      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('call-protection')"></i>
-    </button>
-    <button class="nav-tab" data-tab="transfer-calls">
-      <i class="fas fa-phone-alt"></i>
-      <span>Transfer Calls</span>
-      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('transfer-calls')"></i>
-    </button>
+    <!-- Call Protection + Transfer Calls tabs REMOVED Feb 2026 — cheat sheet nuke -->
     
     <div class="nav-divider"></div>
     
@@ -1134,12 +1125,7 @@
       <span>Call Center</span>
       <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('call-center')"></i>
     </button>
-    <!-- REMOVED: Company Contacts tab (Jan 2026) - Merged into Transfer Calls -->
-    <button class="nav-tab" data-tab="links">
-      <i class="fas fa-link"></i>
-      <span>Links</span>
-      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('links')"></i>
-    </button>
+    <!-- Links tab REMOVED Feb 2026 — cheat sheet nuke -->
     
     <div class="nav-divider"></div>
     
@@ -2310,86 +2296,8 @@
         </div>
       </div>
 
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         CALL PROTECTION (formerly Edge Cases)
-         Pre-DFLOW filters: Spam, IVR, Machine, Silence, Abuse
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="call-protection">
-        <div class="card">
-        <h2>🛡️ Call Protection</h2>
-        <p class="muted">Pre-answer filters that execute before routing. Cannot route — only short-circuit or pass forward.</p>
-        <div id="call-protection-container">
-          <!-- CheatSheetManager will render Edge Cases here -->
-          <div id="cheatsheet-subtab-edge-cases">
-            <div id="edge-cases-section" class="bg-white rounded-lg p-6">
-              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
-                <div>
-                  <h4 style="font-size: 16px; font-weight: 600; color: #111827; margin:0;">
-                    <i class="fas fa-exclamation-triangle" style="margin-right:6px; color:#f59e0b;"></i>Edge Cases
-                  </h4>
-                  <p style="font-size: 12px; color:#6b7280; margin-top:4px;">
-                    Edge cases short-circuit everything else. Use for spam, IVR detection, wrong number, etc.
-                  </p>
-          </div>
-                <button type="button" data-cheatsheet-action="add-edge-case" style="padding:8px 14px; border-radius:8px; border:none; background:#f59e0b; color:#fff; font-size:13px; font-weight:600; display:flex; align-items:center; gap:6px;">
-                  <i class="fas fa-plus"></i>Add Edge Case
-                </button>
-              </div>
-              <div id="edge-cases-list" style="display:flex; flex-direction:column; gap:12px;">
-                <div class="loading-container">
-                  <i class="fas fa-shield-alt fa-spin"></i>
-                  <p>Loading Call Protection Settings...</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        </div>
-      </div>
-
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         TRANSFER CALLS - Unified Contact Directory & Transfer Rules (Jan 2026)
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="transfer-calls">
-        <div class="card">
-        <h2>📞 Transfer Directory</h2>
-        <p class="muted">Manage contacts and transfer routing rules. AI can transfer calls to these contacts based on intent triggers.</p>
-        <div id="transfer-calls-container">
-          <!-- TransferDirectoryManager renders unified Contacts + Rules here -->
-          <div id="transfer-rules-list" style="min-height: 200px;">
-            <div class="loading-container">
-              <i class="fas fa-phone-alt fa-spin"></i>
-              <p>Loading Transfer Directory...</p>
-            </div>
-          </div>
-        </div>
-        </div>
-      </div>
-
-    <!-- REMOVED: Company Contacts panel (Jan 2026) - Merged into Transfer Calls tab -->
-
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         LINKS - Outbound customer delivery
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="links">
-        <div class="card">
-        <h2>🔗 Links</h2>
-        <p class="muted">Outbound customer delivery: payments, forms, financing. DFLOW actions may reference linkId.</p>
-        <div id="links-container">
-          <!-- CheatSheetManager will render Links here -->
-          <div id="cheatsheet-v2-links-content" data-section="links" style="background: #fff; border-radius: 12px; min-height: 200px;">
-            <div class="loading-container">
-              <i class="fas fa-link fa-spin"></i>
-              <p>Loading Links...</p>
-          </div>
-          </div>
-          </div>
-        </div>
-      </div>
-
-    <!-- REMOVED: Version History panel (Jan 2026)
-         Individual feature tabs now save directly to live.
-         CheatSheet versioning still works in backend for rollback API if needed. -->
+    <!-- ☢️ NUKED Feb 2026: Call Protection, Transfer Calls, Links panels removed — full cheat sheet nuke
+         Tier 2 reserved for future rebuild -->
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          AGENT WIRING (AW) - Enterprise Single Source of Truth
@@ -2879,8 +2787,8 @@
           </ul>
           <p><strong>3-Tier System:</strong> Tier 1 (rule-based, FREE) → Tier 2 (semantic, FREE) → Tier 3 (LLM, costs $)</p>`
       },
-      'call-protection': {
-        title: '🛡️ Call Protection (Edge Cases)',
+      'call-protection-REMOVED': {
+        title: '🛡️ Call Protection (REMOVED Feb 2026)',
         content: `<p><strong>Purpose:</strong> Enterprise-level call filtering that runs BEFORE the AI answers.</p>
           <p><strong>Examples:</strong></p>
           <ul style="margin: 8px 0; padding-left: 20px;">
@@ -2891,8 +2799,8 @@
           </ul>
           <p><strong>Runtime:</strong> Evaluated first via CheatSheetEngine before any AI processing.</p>`
       },
-      'transfer-calls': {
-        title: '📞 Transfer Calls (Directory)',
+      'transfer-calls-REMOVED': {
+        title: '📞 Transfer Calls (REMOVED Feb 2026)',
         content: `<p><strong>Purpose:</strong> Manage contacts and transfer routing rules for the AI.</p>
           <p><strong>Two Sections:</strong></p>
           <ul style="margin: 8px 0; padding-left: 20px;">
@@ -3193,16 +3101,7 @@
             await initFlowTree();
             break;
           // ☢️ NUKED: 'dynamic-flow' case removed Feb 2026
-          case 'call-protection':
-            await initCallProtection();
-            break;
-          case 'transfer-calls':
-            await initTransferCalls();
-            break;
-          // REMOVED: company-contacts case (Jan 2026) - Merged into transfer-calls
-          case 'links':
-            await initLinks();
-            break;
+          // ☢️ NUKED Feb 2026: call-protection, transfer-calls, links cases removed — cheat sheet nuke
           // REMOVED: version-history case (Jan 2026) - tab deleted
           case 'wiring':
             await initWiring();
@@ -3270,71 +3169,8 @@
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // CALL PROTECTION INITIALIZATION (Enterprise Edge Cases UI)
-    // ═══════════════════════════════════════════════════════════════════════════
-    async function initCallProtection() {
-      console.log('🛡️ [INIT] Initializing Call Protection...');
-      
-      // Load the new CallProtectionManager
-      await loadScript('/js/ai-agent-settings/CallProtectionManager.js');
-      
-      // Initialize Call Protection Manager
-      if (window.CallProtectionManager) {
-        window.callProtectionManager = new window.CallProtectionManager(currentCompanyId);
-        await window.callProtectionManager.init();
-        console.log('✅ [INIT] Call Protection initialized with enterprise features');
-      } else {
-        console.error('❌ [INIT] CallProtectionManager not loaded');
-      }
-    }
-    
-    // ═══════════════════════════════════════════════════════════════════════════
-    // TRANSFER CALLS INITIALIZATION (Unified Contacts + Transfer Rules)
-    // ═══════════════════════════════════════════════════════════════════════════
-    async function initTransferCalls() {
-      console.log('📞 [INIT] Initializing Transfer Directory...');
-      
-      // Load the new TransferDirectoryManager (unified contacts + rules)
-      await loadScript('/js/ai-agent-settings/TransferDirectoryManager.js');
-      
-      if (window.TransferDirectoryManager) {
-        window.transferDirectoryManager = new window.TransferDirectoryManager(currentCompanyId);
-        await window.transferDirectoryManager.init();
-        console.log('✅ [INIT] Transfer Directory initialized (Contacts + Rules unified)');
-      } else {
-        console.error('❌ [INIT] TransferDirectoryManager not loaded');
-      }
-    }
-    
-    // REMOVED: initCompanyContacts function (Jan 2026) - Merged into Transfer Calls
-    
-    // ═══════════════════════════════════════════════════════════════════════════
-    // LINKS INITIALIZATION
-    // ═══════════════════════════════════════════════════════════════════════════
-    async function initLinks() {
-      console.log('🔗 [INIT] Initializing Links...');
-      
-      await loadScript('/js/ai-agent-settings/CheatSheetVersioningAdapter.js');
-      await loadScript('/js/ai-agent-settings/CheatSheetManager.js');
-      
-      if (window.cheatSheetManager) {
-        if (window.cheatSheetManager.companyId !== currentCompanyId) {
-          await window.cheatSheetManager.load(currentCompanyId);
-        }
-        
-        // Links needs its own container - update cheatSheetManager to render there
-        const linksContainer = document.getElementById('cheatsheet-v2-links-content');
-        if (linksContainer) {
-          // Temporarily override the container lookup for links
-          window.cheatSheetManager.renderLinksToContainer(linksContainer);
-        }
-        console.log('✅ [INIT] Links initialized');
-      }
-    }
-    
-    // REMOVED: initVersionHistory function (Jan 2026)
-    // Individual feature tabs now save directly to live.
-    // CheatSheet versioning still works in backend for rollback API if needed.
+    // ☢️ NUKED Feb 2026: initCallProtection, initTransferCalls, initLinks functions removed
+    // Full cheat sheet nuke — Tier 2 reserved for future rebuild
     
     // ═══════════════════════════════════════════════════════════════════════════
     // DATA & CONFIG INITIALIZATION

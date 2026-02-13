@@ -4,13 +4,14 @@
  * ============================================================================
  * Provides: Pre-answer filters (spam, voicemail, abuse detection)
  * 
- * DATA SOURCE: CheatSheetVersion (edgeCases) OR frontDeskBehavior.callProtection
+ * DATA SOURCE: frontDeskBehavior.callProtection
+ * 
+ * // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
  * 
  * Note: Call protection is OPTIONAL. If not configured, provider returns 
  * enabled=false with NOT_CONFIGURED warning (not an error).
  */
 
-const CheatSheetVersion = require('../../../models/cheatsheet/CheatSheetVersion');
 const Company = require('../../../models/v2Company');
 const logger = require('../../../utils/logger');
 
@@ -18,37 +19,25 @@ module.exports.getSnapshot = async function(companyId) {
     const startTime = Date.now();
     
     try {
-        // Try CheatSheetVersion first (primary source)
         let edgeCases = [];
         let dataSource = 'none';
         
-        const cheatSheet = await CheatSheetVersion.findOne({ 
-            companyId, 
-            status: 'live' 
-        }).lean();
+        // Load from frontDeskBehavior.callProtection
+        const company = await Company.findById(companyId)
+            .select('frontDeskBehavior.callProtection')
+            .lean();
         
-        if (cheatSheet?.config?.edgeCases?.length > 0) {
-            edgeCases = cheatSheet.config.edgeCases;
-            dataSource = 'CheatSheetVersion.edgeCases';
-        } else {
-            // Fallback: Check frontDeskBehavior.callProtection
-            const company = await Company.findById(companyId)
-                .select('frontDeskBehavior.callProtection')
-                .lean();
-            
-            if (company?.frontDeskBehavior?.callProtection?.rules?.length > 0) {
-                // Convert to edge case format
-                edgeCases = company.frontDeskBehavior.callProtection.rules.map(rule => ({
-                    name: rule.name || 'Custom Rule',
-                    type: rule.type || 'custom',
-                    enabled: rule.enabled !== false,
-                    priority: rule.priority || 10,
-                    triggerPatterns: rule.patterns || [],
-                    responseText: rule.response || '',
-                    action: rule.action || 'respond'
-                }));
-                dataSource = 'frontDeskBehavior.callProtection';
-            }
+        if (company?.frontDeskBehavior?.callProtection?.rules?.length > 0) {
+            edgeCases = company.frontDeskBehavior.callProtection.rules.map(rule => ({
+                name: rule.name || 'Custom Rule',
+                type: rule.type || 'custom',
+                enabled: rule.enabled !== false,
+                priority: rule.priority || 10,
+                triggerPatterns: rule.patterns || [],
+                responseText: rule.response || '',
+                action: rule.action || 'respond'
+            }));
+            dataSource = 'frontDeskBehavior.callProtection';
         }
         
         // If still no data, return NOT_CONFIGURED (not an error)

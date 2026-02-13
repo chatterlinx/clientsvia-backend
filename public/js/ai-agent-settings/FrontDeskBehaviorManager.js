@@ -603,10 +603,10 @@ class FrontDeskBehaviorManager {
             // V22: Discovery & Consent Gate (LLM-led architecture)
             // ════════════════════════════════════════════════════════════════════
             discoveryConsent: {
-                // Kill switches (all ON by default for V22)
-                bookingRequiresExplicitConsent: true,  // Booking ONLY after consent
-                forceLLMDiscovery: true,               // LLM always speaks in discovery
-                disableScenarioAutoResponses: true,    // Scenarios are context only
+                // V84.3: Scenario-First Architecture
+                bookingRequiresExplicitConsent: true,  // Booking ONLY after consent (keep)
+                forceLLMDiscovery: false,              // V84.3: Scenarios respond directly, LLM is fallback
+                disableScenarioAutoResponses: false,   // V84.3: Scenarios CAN auto-respond
                 // Consent Split (trade-agnostic): allow safe scenario types to respond before consent
                 // Example: ['FAQ','TROUBLESHOOT'] lets callers get help without enabling booking actions.
                 autoReplyAllowedScenarioTypes: [],
@@ -8900,11 +8900,13 @@ Sean → Shawn, Shaun`;
      * ════════════════════════════════════════════════════════════════════
      */
     renderGlobalSettingsTab() {
-        // Load intelligence settings from config
-        const useGlobalIntelligence = this.config?.aiAgentSettings?.useGlobalIntelligence !== false;
+        // V84.3: Load intelligence settings from config (returned flat by GET handler)
+        // useGlobalIntelligence, globalProductionIntelligence, productionIntelligence
+        // are top-level fields in this.config (not nested under aiAgentSettings)
+        const useGlobalIntelligence = this.config?.useGlobalIntelligence !== false;
         const intelligenceConfig = useGlobalIntelligence 
             ? (this.config?.globalProductionIntelligence || {})
-            : (this.config?.aiAgentSettings?.productionIntelligence || {});
+            : (this.config?.productionIntelligence || {});
         
         const tier1Threshold = intelligenceConfig?.thresholds?.tier1 || 0.80;
         const tier2Threshold = intelligenceConfig?.thresholds?.tier2 || 0.60;
@@ -12837,11 +12839,13 @@ Sean → Shawn, Shaun`;
                 // Mark as dirty
                 this.isDirty = true;
                 
-                // Store in config
-                if (!this.config.aiAgentSettings) this.config.aiAgentSettings = {};
-                if (!this.config.aiAgentSettings.productionIntelligence) this.config.aiAgentSettings.productionIntelligence = {};
-                if (!this.config.aiAgentSettings.productionIntelligence.thresholds) this.config.aiAgentSettings.productionIntelligence.thresholds = {};
-                this.config.aiAgentSettings.productionIntelligence.thresholds.tier1 = value;
+                // V84.3: Store in correct config path based on global/company mode
+                // Uses flat paths that match GET response and PATCH handler
+                const isGlobal = this.config?.useGlobalIntelligence !== false;
+                const configKey = isGlobal ? 'globalProductionIntelligence' : 'productionIntelligence';
+                if (!this.config[configKey]) this.config[configKey] = {};
+                if (!this.config[configKey].thresholds) this.config[configKey].thresholds = {};
+                this.config[configKey].thresholds.tier1 = value;
             });
         }
         
@@ -12858,11 +12862,12 @@ Sean → Shawn, Shaun`;
                 // Mark as dirty
                 this.isDirty = true;
                 
-                // Store in config
-                if (!this.config.aiAgentSettings) this.config.aiAgentSettings = {};
-                if (!this.config.aiAgentSettings.productionIntelligence) this.config.aiAgentSettings.productionIntelligence = {};
-                if (!this.config.aiAgentSettings.productionIntelligence.thresholds) this.config.aiAgentSettings.productionIntelligence.thresholds = {};
-                this.config.aiAgentSettings.productionIntelligence.thresholds.tier2 = value;
+                // V84.3: Store in correct config path based on global/company mode
+                const isGlobal = this.config?.useGlobalIntelligence !== false;
+                const configKey = isGlobal ? 'globalProductionIntelligence' : 'productionIntelligence';
+                if (!this.config[configKey]) this.config[configKey] = {};
+                if (!this.config[configKey].thresholds) this.config[configKey].thresholds = {};
+                this.config[configKey].thresholds.tier2 = value;
             });
         }
         
@@ -12872,10 +12877,12 @@ Sean → Shawn, Shaun`;
             tier3Toggle.addEventListener('change', (e) => {
                 this.isDirty = true;
                 
-                if (!this.config.aiAgentSettings) this.config.aiAgentSettings = {};
-                if (!this.config.aiAgentSettings.productionIntelligence) this.config.aiAgentSettings.productionIntelligence = {};
-                if (!this.config.aiAgentSettings.productionIntelligence.thresholds) this.config.aiAgentSettings.productionIntelligence.thresholds = {};
-                this.config.aiAgentSettings.productionIntelligence.thresholds.enableTier3 = e.target.checked;
+                // V84.3: Store in correct config path
+                const isGlobal = this.config?.useGlobalIntelligence !== false;
+                const configKey = isGlobal ? 'globalProductionIntelligence' : 'productionIntelligence';
+                if (!this.config[configKey]) this.config[configKey] = {};
+                if (!this.config[configKey].thresholds) this.config[configKey].thresholds = {};
+                this.config[configKey].thresholds.enableTier3 = e.target.checked;
             });
         }
         
@@ -12885,8 +12892,8 @@ Sean → Shawn, Shaun`;
             useGlobalToggle.addEventListener('change', (e) => {
                 this.isDirty = true;
                 
-                if (!this.config.aiAgentSettings) this.config.aiAgentSettings = {};
-                this.config.aiAgentSettings.useGlobalIntelligence = e.target.checked;
+                // V84.3: Flat path (not nested under aiAgentSettings)
+                this.config.useGlobalIntelligence = e.target.checked;
                 
                 // Re-render the tab to show the toggle effect
                 const container = e.target.closest('.front-desk-behavior-panel');

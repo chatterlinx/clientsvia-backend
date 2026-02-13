@@ -201,9 +201,16 @@ class IntelligentRouter {
             hasAWReader: !!awReader
         });
         
-        // Get template-specific thresholds
-        const tier1Threshold = template.learningSettings?.tier1Threshold || this.config.defaultTier1Threshold;
-        const tier2Threshold = template.learningSettings?.tier2Threshold || this.config.defaultTier2Threshold;
+        // V84.3: Get thresholds — priority order:
+        // 1. context.intelligenceConfig (from Global Settings UI / AdminSettings / company config)
+        // 2. template.learningSettings (per-template override)
+        // 3. this.config.defaultTier1Threshold (hardcoded 0.80 fallback)
+        const tier1Threshold = context.intelligenceConfig?.thresholds?.tier1
+            || template.learningSettings?.tier1Threshold
+            || this.config.defaultTier1Threshold;
+        const tier2Threshold = context.intelligenceConfig?.thresholds?.tier2
+            || template.learningSettings?.tier2Threshold
+            || this.config.defaultTier2Threshold;
         
         const result = {
             routingId,
@@ -1673,7 +1680,7 @@ class IntelligentRouter {
      * └─────────────────────────────────────────────────────────────┘
      * 
      * @param {Object} template - Active template with scenarios
-     * @param {Object} company - Company document with cheatSheet
+     * @param {Object} company - Company document
      * @returns {string} Complete system prompt for LLM
      */
     buildSystemPrompt(template, company) {
@@ -1687,28 +1694,10 @@ class IntelligentRouter {
 You are handling ${templateName} inquiries.
 Your role is to understand caller needs, provide helpful information, and guide them to the appropriate next step.`;
         
-        // ═══════════════════════════════════════════════════════════
-        // LAYER 2: FRONTLINE-INTEL (THE "COMMAND LAYER")
-        // ═══════════════════════════════════════════════════════════
-        // The intelligent gatekeeper protocols that make the AI sound human
-        // This is the PERSONALITY and TONE layer
-        const frontlineIntel = company?.aiAgentSettings?.cheatSheet?.frontlineIntel;
-        
-        if (frontlineIntel && frontlineIntel.trim()) {
-            logger.info('🎯 [SYSTEM PROMPT] Adding Frontline-Intel protocols (command layer)');
-            systemPrompt += '\n\n' + '═'.repeat(60);
-            systemPrompt += '\n📋 FRONTLINE-INTEL PROTOCOLS & CONVERSATION GUIDELINES\n';
-            systemPrompt += '═'.repeat(60);
-            systemPrompt += '\n\n' + frontlineIntel.trim();
-        } else {
-            logger.info('ℹ️ [SYSTEM PROMPT] No Frontline-Intel protocols - using base prompt only');
-        }
-        
-        // ═══════════════════════════════════════════════════════════
-        // LAYER 3: BEHAVIOR RULES (STRUCTURAL POLISH)
-        // ═══════════════════════════════════════════════════════════
-        // These are the checkboxes from the Cheat Sheet UI
-        const behaviorRules = company?.aiAgentSettings?.cheatSheet?.behaviorRules || [];
+        // LAYER 2: Frontline-Intel (cheatSheet.frontlineIntel) REMOVED Feb 2026
+        // LAYER 3: Behavior Rules (cheatSheet.behaviorRules) REMOVED Feb 2026
+        // Cheat sheet system fully nuked — Tier 2 reserved for future rebuild
+        const behaviorRules = [];
         
         if (behaviorRules.length > 0) {
             logger.info(`🎨 [SYSTEM PROMPT] Adding ${behaviorRules.length} Behavior Rules (polish layer)`);
@@ -1768,9 +1757,14 @@ Your role is to understand caller needs, provide helpful information, and guide 
                     scenarios.push({
                         scenarioId: scenario.scenarioId,
                         name: scenario.name,
+                        scenarioName: scenario.name,
+                        scenarioType: scenario.scenarioType || null,
                         categoryName: category.name,
-                        triggerPhrases: scenario.triggerPhrases || [],
-                        intentKeywords: scenario.intentKeywords || []
+                        // V84.3 FIX: Use correct field names that match Tier3LLMFallback expectations
+                        triggers: scenario.triggers || scenario.triggerPhrases || [],
+                        keywords: scenario.keywords || scenario.intentKeywords || [],
+                        exampleUserPhrases: scenario.exampleUserPhrases || [],
+                        negativeTriggers: scenario.negativeTriggers || []
                     });
                 }
             }

@@ -885,7 +885,7 @@ const RUNTIME_READERS_MAP = {
                 file: 'services/ConversationEngine.js',
                 function: 'processTurn',
                 line: 3380,
-                description: 'Appends Resume Booking Protocol after off-rails answers during BOOKING (cheat sheet + LLM interruption)',
+                description: 'Appends Resume Booking Protocol after off-rails answers during BOOKING (LLM interruption)',
                 checkpoint: 'BOOKING_INTERRUPTION_*',
                 required: false
             },
@@ -1445,30 +1445,8 @@ const RUNTIME_READERS_MAP = {
     },
 
     // =========================================================================
-    // DATA CONFIG - CHEAT SHEETS
+    // DATA CONFIG - CHEAT SHEETS (REMOVED Feb 2026 - Tier 2 reserved for future rebuild)
     // =========================================================================
-    'dataConfig.cheatSheets': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 1920,
-                description: 'Loads cheat sheets for FAQ fallback',
-                checkpoint: 'CHECKPOINT 2.5',
-                required: false
-            },
-            {
-                file: 'services/CheatSheetRuntimeService.js',
-                function: 'getCheatSheetForCompany',
-                line: 30,
-                description: 'Runtime cheat sheet resolver',
-                required: false
-            }
-        ],
-        dbPath: 'CheatSheetVersion collection (companyId filter)',
-        scope: 'company',
-        defaultValue: null
-    },
 
     // =========================================================================
     // DATA CONFIG - PLACEHOLDERS

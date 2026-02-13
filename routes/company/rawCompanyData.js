@@ -19,7 +19,7 @@ const mongoose = require('mongoose');
 const { authenticateJWT, requireRole } = require('../../middleware/auth');
 const Company = require('../../models/v2Company');
 // ☢️ NUKED Feb 2026: DynamicFlow import removed - V110 architecture replaces Dynamic Flows
-const CheatSheetVersion = require('../../models/cheatsheet/CheatSheetVersion');
+// ☢️ NUKED Feb 2026: CheatSheetVersion import removed - full cheat sheet nuke
 const logger = require('../../utils/logger');
 
 // Auth middleware
@@ -59,11 +59,7 @@ router.get('/', async (req, res) => {
         
         // ☢️ NUKED Feb 2026: DynamicFlow.find() removed - V110 architecture replaces Dynamic Flows
         
-        // Fetch cheat sheet (call protection rules)
-        const cheatSheet = await CheatSheetVersion.findOne({
-            companyId: new mongoose.Types.ObjectId(companyId),
-            isActive: true
-        }).lean();
+        // CheatSheetVersion fetch REMOVED Feb 2026 — full cheat sheet nuke
         
         // Extract relevant settings (sanitized - no secrets)
         const settings = company.aiAgentSettings || {};
@@ -129,30 +125,10 @@ router.get('/', async (req, res) => {
                 flows: []
             },
             
-            // ═══════════════════════════════════════════════════════════════
-            // CALL PROTECTION (edge cases from cheat sheet)
-            // ═══════════════════════════════════════════════════════════════
+            // ☢️ NUKED Feb 2026: Call protection (cheat sheet edge cases) removed
             callProtection: {
-                hasCheatSheet: !!cheatSheet,
-                edgeCases: (cheatSheet?.config?.edgeCases || []).map(rule => ({
-                    name: rule.name,
-                    enabled: rule.enabled,
-                    priority: rule.priority,
-                    
-                    // Match config
-                    'match.keywordsAny': rule.match?.keywordsAny || [],
-                    'match.keywordsAny.length': rule.match?.keywordsAny?.length || 0,
-                    
-                    // Legacy patterns
-                    triggerPatterns: rule.triggerPatterns || [],
-                    'triggerPatterns.length': rule.triggerPatterns?.length || 0,
-                    
-                    // Action
-                    'action.type': rule.action?.type,
-                    'action.hangupMessage': rule.action?.hangupMessage,
-                    'action.transferTarget': rule.action?.transferTarget
-                })),
-                edgeCasesCount: cheatSheet?.config?.edgeCases?.length || 0
+                status: 'REMOVED_FEB_2026',
+                note: 'Cheat sheet system nuked — Tier 2 reserved for future rebuild'
             },
             
             // ═══════════════════════════════════════════════════════════════

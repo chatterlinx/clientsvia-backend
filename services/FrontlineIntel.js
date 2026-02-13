@@ -114,39 +114,11 @@ class FrontlineIntel {
             };
         }
         
-        // Check if there's a Frontline-Intel script to use
-        // V2 system loads CheatSheet separately - we need to get it from CheatSheetRuntimeService
+        // CheatSheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
+        // Load Frontline-Intel script from company document (legacy path)
         let scriptText = '';
         
-        try {
-            logger.info(`📜 [FRONTLINE-INTEL] Loading roadmap from CheatSheetRuntimeService...`);
-            const CheatSheetRuntimeService = require('./CheatSheetRuntimeService');
-            const liveConfig = await CheatSheetRuntimeService.getLiveConfig(company._id.toString());
-            
-            if (liveConfig?.config?.frontlineIntel) {
-                const frontlineScript = liveConfig.config.frontlineIntel;
-                if (typeof frontlineScript === 'string') {
-                    scriptText = frontlineScript;
-                } else if (frontlineScript?.instructions) {
-                    scriptText = frontlineScript.instructions;
-                }
-                logger.info(`✅ [FRONTLINE-INTEL] Roadmap FOUND in live CheatSheet!`, {
-                    scriptLength: scriptText.length,
-                    versionId: liveConfig.versionId,
-                    versionName: liveConfig.name
-                });
-            } else {
-                logger.warn(`⚠️ [FRONTLINE-INTEL] Live CheatSheet exists but NO frontlineIntel field!`, {
-                    hasLiveConfig: !!liveConfig,
-                    configKeys: liveConfig?.config ? Object.keys(liveConfig.config) : []
-                });
-            }
-        } catch (loadErr) {
-            logger.warn('⚠️ [FRONTLINE-INTEL] CheatSheetRuntimeService failed, trying fallback...', {
-                error: loadErr.message
-            });
-            
-            // Fallback to company document (legacy)
+        {
             const frontlineScript = company?.cheatSheets?.[0]?.config?.frontlineIntel || 
                                    company?.cheatSheets?.[0]?.frontlineIntel ||
                                    company?.frontlineIntel ||
@@ -158,11 +130,11 @@ class FrontlineIntel {
             }
             
             if (scriptText.length > 0) {
-                logger.info(`✅ [FRONTLINE-INTEL] Fallback succeeded, found script in company document`, {
+                logger.info(`✅ [FRONTLINE-INTEL] Found script in company document`, {
                     scriptLength: scriptText.length
                 });
             } else {
-                logger.warn(`❌ [FRONTLINE-INTEL] Fallback also failed - NO script anywhere!`);
+                logger.warn(`❌ [FRONTLINE-INTEL] No frontline script found in company document`);
             }
         }
         

@@ -590,27 +590,7 @@ router.delete('/company/:id', async (req, res) => {
 });
 
 router.patch('/company/:id', async (req, res) => {
-    console.log('🟦 BACKEND SAVE CHECKPOINT 1: PATCH /company/:id hit');
-    console.log('   - Company ID:', req.params.id);
-    console.log('   - Request body keys:', Object.keys(req.body));
-    console.log('   - Has aiAgentSettings.cheatSheet?:', 'aiAgentSettings.cheatSheet' in req.body);
-    
-    logger.debug(`[API PATCH /api/company/:id] (Overview) Received update for ID: ${req.params.id} with data:`, JSON.stringify(req.body, null, 2));
-    
-    // 🔍 CRITICAL DEBUG: Check for cheatSheet updates with V2 arrays
-    if (req.body['aiAgentSettings.cheatSheet']) {
-        console.log('🟦 BACKEND SAVE CHECKPOINT 2: aiAgentSettings.cheatSheet detected');
-        console.log('   - Has frontlineIntel?:', 'frontlineIntel' in req.body['aiAgentSettings.cheatSheet']);
-        console.log('   - frontlineIntel length:', req.body['aiAgentSettings.cheatSheet'].frontlineIntel?.length || 0);
-        console.log('   - frontlineIntel preview:', req.body['aiAgentSettings.cheatSheet'].frontlineIntel?.substring(0, 100));
-        
-        logger.info('📊 [CHEAT SHEET DEBUG] Dot-notation cheatSheet update detected!');
-        logger.info('📊 [CHEAT SHEET DEBUG] Has bookingRules?', Array.isArray(req.body['aiAgentSettings.cheatSheet'].bookingRules));
-        logger.info('📊 [CHEAT SHEET DEBUG] bookingRules count:', req.body['aiAgentSettings.cheatSheet'].bookingRules?.length || 0);
-        logger.info('📊 [CHEAT SHEET DEBUG] bookingRules data:', JSON.stringify(req.body['aiAgentSettings.cheatSheet'].bookingRules, null, 2));
-    } else {
-        console.log('🔴 BACKEND SAVE CHECKPOINT 2: NO aiAgentSettings.cheatSheet in request');
-    }
+    logger.debug(`[API PATCH /api/company/:id] (Overview) Received update for ID: ${req.params.id}`);
     
     // GOLD STANDARD: Debug notes data specifically
     if (req.body.notes) {
@@ -629,15 +609,9 @@ router.patch('/company/:id', async (req, res) => {
         const updates = req.body;
         delete updates._id;
 
-        // Dedicated handling for cheatSheet payload (contains nested arrays that dot-notation keeps dropping)
-        const cheatSheetPayload = updates['aiAgentSettings.cheatSheet'];
-        if (cheatSheetPayload) {
-            logger.info('📊 [CHEAT SHEET DEBUG] Dedicated payload detected - will apply via document.save()', {
-                hasBookingRules: Array.isArray(cheatSheetPayload.bookingRules),
-                bookingRulesCount: cheatSheetPayload.bookingRules?.length || 0
-            });
-            delete updates['aiAgentSettings.cheatSheet'];
-        }
+        // cheatSheet payload handling REMOVED Feb 2026 — full cheat sheet nuke
+        // Strip any stale cheatSheet data from incoming requests
+        delete updates['aiAgentSettings.cheatSheet'];
 
         const updateOperation = {};
         
@@ -705,156 +679,17 @@ router.patch('/company/:id', async (req, res) => {
             updateOperation.profileComplete = true;
         }
 
-        // 🔍 CRITICAL DEBUG: Log what's about to be saved
-        if (updateOperation['aiAgentSettings.cheatSheet']) {
-            logger.info('📊 [CHEAT SHEET DEBUG] About to save with $set:', {
-                hasBookingRules: Array.isArray(updateOperation['aiAgentSettings.cheatSheet'].bookingRules),
-                bookingRulesCount: updateOperation['aiAgentSettings.cheatSheet'].bookingRules?.length || 0,
-                fullPayload: JSON.stringify(updateOperation['aiAgentSettings.cheatSheet'], null, 2)
-            });
-        }
-        
         // 🔧 FIX: Use $set for dot-notation fields to work properly
         // ⚠️ CRITICAL: runValidators might fail on nested arrays with dot notation
         // Try WITHOUT runValidators first to see if that's the issue
         let updatedCompany = null;
 
         if (hasStandardUpdates) {
-            logger.info('📊 [CHEAT SHEET DEBUG] Calling findByIdAndUpdate with $set...');
             updatedCompany = await Company.findByIdAndUpdate(
                 companyId,
                 { $set: updateOperation },
-                { new: true, runValidators: false } // ← DISABLED validators to test
+                { new: true, runValidators: false }
             );
-            logger.info('📊 [CHEAT SHEET DEBUG] findByIdAndUpdate completed');
-        }
-
-        if (cheatSheetPayload) {
-            console.log('🟦 BACKEND SAVE CHECKPOINT 3: cheatSheetPayload exists - processing');
-            console.log('   - Payload keys:', Object.keys(cheatSheetPayload));
-            console.log('   - Has frontlineIntel?:', 'frontlineIntel' in cheatSheetPayload);
-            console.log('   - frontlineIntel length:', cheatSheetPayload.frontlineIntel?.length || 0);
-            console.log('   - frontlineIntel preview:', cheatSheetPayload.frontlineIntel?.substring(0, 100));
-            
-            logger.info('📊 [CHEAT SHEET DEBUG] Applying markModified fallback save for cheatSheet payload');
-            if (!updatedCompany) {
-                console.log('🟦 BACKEND SAVE CHECKPOINT 4: No updatedCompany yet, fetching from DB...');
-                updatedCompany = await Company.findById(companyId);
-            }
-
-            if (!updatedCompany) {
-                console.error('🔴 BACKEND SAVE CHECKPOINT 5: Company NOT FOUND in database');
-                return res.status(404).json({ message: 'Company not found.' });
-            }
-            
-            console.log('🟦 BACKEND SAVE CHECKPOINT 6: Company found:', updatedCompany.businessName || updatedCompany.companyName);
-
-            // 🔧 CRITICAL FIX: MERGE V2 arrays into existing cheatSheet, don't replace!
-            // Initialize aiAgentSettings and cheatSheet if they don't exist
-            if (!updatedCompany.aiAgentSettings) {
-                console.log('🟦 BACKEND SAVE CHECKPOINT 7: Initializing aiAgentSettings');
-                updatedCompany.aiAgentSettings = {};
-            }
-            if (!updatedCompany.aiAgentSettings.cheatSheet) {
-                console.log('🟦 BACKEND SAVE CHECKPOINT 8: Initializing cheatSheet');
-                updatedCompany.aiAgentSettings.cheatSheet = {};
-            }
-            
-            console.log('🟦 BACKEND SAVE CHECKPOINT 9: About to merge cheatSheet data');
-            
-            // 🔍 DEBUG: What's IN the payload before merge?
-            logger.info('📊 [CHEAT SHEET DEBUG] cheatSheetPayload BEFORE merge:', {
-                hasBookingRules: 'bookingRules' in cheatSheetPayload,
-                bookingRulesType: typeof cheatSheetPayload.bookingRules,
-                bookingRulesIsArray: Array.isArray(cheatSheetPayload.bookingRules),
-                bookingRulesLength: cheatSheetPayload.bookingRules?.length,
-                bookingRulesValue: cheatSheetPayload.bookingRules,
-                allKeys: Object.keys(cheatSheetPayload)
-            });
-            
-            // 🔍 TEST: Can we access the first booking rule directly?
-            logger.info('📊 [CHEAT SHEET DEBUG] Direct access test:', {
-                firstRule: cheatSheetPayload.bookingRules[0],
-                spreadTest: {...cheatSheetPayload.bookingRules},
-                arrayFrom: Array.from(cheatSheetPayload.bookingRules || [])
-            });
-            
-            // 🔧 ABSOLUTE FINAL FIX: NO SPREAD OPERATORS AT ALL
-            // Convert existing to plain object
-            const existingCheatSheet = updatedCompany.aiAgentSettings.cheatSheet.toObject ? 
-                updatedCompany.aiAgentSettings.cheatSheet.toObject() : 
-                {...updatedCompany.aiAgentSettings.cheatSheet};
-            
-            // Extract V2 arrays
-            const bookingRulesArray = Array.from(cheatSheetPayload.bookingRules || []);
-            const companyContactsArray = Array.from(cheatSheetPayload.companyContacts || []);
-            const linksArray = Array.from(cheatSheetPayload.links || []);
-            const calculatorsArray = Array.from(cheatSheetPayload.calculators || []);
-            
-            logger.info('📊 [CHEAT SHEET DEBUG] Extracted arrays:', {
-                bookingRules: bookingRulesArray.length,
-                companyContacts: companyContactsArray.length,
-                links: linksArray.length,
-                calculators: calculatorsArray.length
-            });
-            
-            // Manually copy metadata fields from payload (NOT arrays!)
-            existingCheatSheet.version = cheatSheetPayload.version ?? existingCheatSheet.version;
-            existingCheatSheet.status = cheatSheetPayload.status ?? existingCheatSheet.status;
-            existingCheatSheet.updatedBy = cheatSheetPayload.updatedBy ?? existingCheatSheet.updatedBy;
-            existingCheatSheet.updatedAt = cheatSheetPayload.updatedAt ?? existingCheatSheet.updatedAt;
-            
-            // Copy other fields from payload (like frontlineIntel)
-            for (const key in cheatSheetPayload) {
-                if (key !== 'bookingRules' && key !== 'companyContacts' && key !== 'links' && key !== 'calculators') {
-                    existingCheatSheet[key] = cheatSheetPayload[key];
-                }
-            }
-            
-            console.log('🟦 BACKEND SAVE CHECKPOINT 10: Merged scalar fields from payload');
-            console.log('   - frontlineIntel in merged?:', 'frontlineIntel' in existingCheatSheet);
-            console.log('   - frontlineIntel length:', existingCheatSheet.frontlineIntel?.length || 0);
-            
-            // NOW assign the arrays DIRECTLY
-            existingCheatSheet.bookingRules = bookingRulesArray;
-            existingCheatSheet.companyContacts = companyContactsArray;
-            existingCheatSheet.links = linksArray;
-            existingCheatSheet.calculators = calculatorsArray;
-            
-            // Set it back
-            updatedCompany.aiAgentSettings.cheatSheet = existingCheatSheet;
-            
-            console.log('🟦 BACKEND SAVE CHECKPOINT 11: Arrays assigned, cheatSheet set back on company');
-            
-            logger.info('📊 [CHEAT SHEET DEBUG] After NO-SPREAD merge:', {
-                bookingRules: updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length || 0,
-                companyContacts: updatedCompany.aiAgentSettings.cheatSheet.companyContacts?.length || 0,
-                links: updatedCompany.aiAgentSettings.cheatSheet.links?.length || 0,
-                calculators: updatedCompany.aiAgentSettings.cheatSheet.calculators?.length || 0
-            });
-            
-            console.log('🟦 BACKEND SAVE CHECKPOINT 12: Marking modified and preparing to save...');
-            updatedCompany.markModified('aiAgentSettings.cheatSheet');
-            updatedCompany.markModified('aiAgentSettings');
-            updatedCompany.updatedAt = new Date();
-            
-            logger.info('📊 [CHEAT SHEET DEBUG] BEFORE save() - bookingRules in memory:', updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0);
-            
-            console.log('🟦 BACKEND SAVE CHECKPOINT 13: Calling save()...');
-            await updatedCompany.save({ validateBeforeSave: false });
-            
-            console.log('🟢 BACKEND SAVE CHECKPOINT 14: save() completed successfully');
-            logger.info('📊 [CHEAT SHEET DEBUG] AFTER save() - bookingRules in memory:', updatedCompany.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0);
-            
-            // 🔍 CRITICAL: Verify what's ACTUALLY in MongoDB by re-fetching
-            const verifyDoc = await Company.findById(companyId).lean();
-            logger.info('📊 [CHEAT SHEET DEBUG] MONGODB VERIFICATION - Re-fetched from DB:', {
-                hasAiAgentSettings: Boolean(verifyDoc.aiAgentSettings),
-                hasCheatSheet: Boolean(verifyDoc.aiAgentSettings?.cheatSheet),
-                bookingRulesInDB: verifyDoc.aiAgentSettings?.cheatSheet?.bookingRules?.length || 0,
-                bookingRulesActualValue: verifyDoc.aiAgentSettings?.cheatSheet?.bookingRules,
-                cheatSheetKeys: Object.keys(verifyDoc.aiAgentSettings?.cheatSheet || {})
-            });
         }
 
         if (!updatedCompany) {
@@ -862,15 +697,6 @@ router.patch('/company/:id', async (req, res) => {
         }
 
         if (!updatedCompany) {return res.status(404).json({ message: 'Company not found.' });}
-
-        // 🔍 CRITICAL DEBUG: Verify what was saved
-        if (updatedCompany.aiAgentSettings?.cheatSheet) {
-            logger.info('📊 [CHEAT SHEET DEBUG] After save - cheatSheet exists:', Boolean(updatedCompany.aiAgentSettings.cheatSheet));
-            logger.info('📊 [CHEAT SHEET DEBUG] After save - bookingRules count:', updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length || 0);
-            if (updatedCompany.aiAgentSettings.cheatSheet.bookingRules?.length > 0) {
-                logger.info('📊 [CHEAT SHEET DEBUG] After save - First booking rule:', updatedCompany.aiAgentSettings.cheatSheet.bookingRules[0]);
-            }
-        }
 
         // GOLD STANDARD: Debug notes after save
         if (updatedCompany.notes) {
@@ -887,34 +713,6 @@ router.patch('/company/:id', async (req, res) => {
             logger.debug(`⚡ AI Agent Logic cache invalidated for company: ${companyId}`);
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // AUTO-SYNC VARIABLES: Extract {variables} from saved cheatSheet
-        // Non-blocking - runs in background after response sent
-        // ═══════════════════════════════════════════════════════════════════════
-        if (cheatSheetPayload) {
-            const VariableSyncService = require('../services/VariableSyncService');
-            VariableSyncService.syncFromCheatSheet(companyId, cheatSheetPayload)
-                .then(syncResult => {
-                    if (syncResult.added > 0) {
-                        logger.info(`🔄 [VARIABLE SYNC] Auto-synced ${syncResult.added} new variables on CheatSheet save`);
-                        logger.info(`🔄 [VARIABLE SYNC] Variables: ${syncResult.variables?.join(', ')}`);
-                    } else {
-                        logger.info(`🔄 [VARIABLE SYNC] No new variables detected (${syncResult.synced} total)`);
-                    }
-                })
-                .catch(syncErr => {
-                    logger.warn(`🔄 [VARIABLE SYNC] Background sync failed (non-critical): ${syncErr.message}`);
-                });
-        }
-
-        console.log('🟢 BACKEND SAVE CHECKPOINT FINAL: Returning success response');
-        console.log('   - Company ID:', companyId);
-        console.log('   - Updated company exists?:', !!updatedCompany);
-        console.log('   - Has aiAgentSettings?:', !!updatedCompany?.aiAgentSettings);
-        console.log('   - Has cheatSheet?:', !!updatedCompany?.aiAgentSettings?.cheatSheet);
-        console.log('   - Has frontlineIntel?:', !!updatedCompany?.aiAgentSettings?.cheatSheet?.frontlineIntel);
-        console.log('   - frontlineIntel length:', updatedCompany?.aiAgentSettings?.cheatSheet?.frontlineIntel?.length || 0);
-        
         res.json(updatedCompany);
     } catch (error) {
         console.error('🔴 BACKEND SAVE CHECKPOINT ERROR: Exception in save route');
@@ -2690,98 +2488,22 @@ logger.debug('[INIT] ✅ Intelligence Mode Switcher endpoint added');
 // ============================================================================
 // GET /api/company/:companyId/active-instructions
 // ============================================================================
-// Returns the EXACT configuration the live agent is using right now
-// This is the "X-ray screen" - shows what CheatSheetRuntimeService loads
-// READ-ONLY: No editing, just observability
+// ☢️ NUKED Feb 2026: CheatSheetRuntimeService removed — full cheat sheet nuke
+// Endpoint kept as stub for backward compatibility
 // ============================================================================
 
 router.get('/:companyId/active-instructions', authenticateJWT, async (req, res) => {
-    const { companyId } = req.params;
-    const startTime = Date.now();
-    
-    try {
-        logger.info('[ACTIVE INSTRUCTIONS] Fetching live config', { companyId });
-        
-        // Load CheatSheetRuntimeService (same source the agent uses)
-        const CheatSheetRuntimeService = require('../services/cheatsheet/CheatSheetRuntimeService');
-        
-        // Get live config (exact same call the agent makes)
-        const liveConfigResult = await CheatSheetRuntimeService.getLiveConfig(companyId);
-        
-        if (!liveConfigResult) {
-            return res.status(404).json({
-                success: false,
-                error: 'NO_LIVE_CONFIG',
-                message: 'No live CheatSheet configuration found for this company'
-            });
+    res.json({
+        success: true,
+        data: {
+            companyId: req.params.companyId,
+            status: 'REMOVED_FEB_2026',
+            note: 'Cheat sheet system nuked — Tier 2 reserved for future rebuild',
+            meta: { source: 'stub' }
         }
-        
-        // Get company for additional context
-        const company = await Company.findById(companyId)
-            .select('companyName aiAgentSettings.callFlowConfig aiAgentSettings.variables')
-            .lean();
-        
-        if (!company) {
-            return res.status(404).json({
-                success: false,
-                error: 'COMPANY_NOT_FOUND',
-                message: 'Company not found'
-            });
-        }
-        
-        // Build complete active instructions response
-        const activeInstructions = {
-            companyId,
-            companyName: company.companyName,
-            
-            // CheatSheet version info
-            cheatSheet: {
-                versionId: liveConfigResult.versionId,
-                versionName: liveConfigResult.name,
-                config: liveConfigResult.config
-            },
-            
-            // Call Flow configuration
-            callFlow: company.aiAgentSettings?.callFlowConfig || null,
-            
-            // Enterprise variables
-            variables: company.aiAgentSettings?.variables || null,
-            
-            // Metadata
-            meta: {
-                source: 'CheatSheetRuntimeService.getLiveConfig()',
-                note: 'This is the EXACT config the live agent loads from Redis/MongoDB',
-                triageNote: 'Triage rules use separate TriageCard collection (not in config.triage)',
-                responseTime: Date.now() - startTime
-            }
-        };
-        
-        logger.info('[ACTIVE INSTRUCTIONS] Live config retrieved successfully', {
-            companyId,
-            versionId: liveConfigResult.versionId,
-            responseTime: Date.now() - startTime
-        });
-        
-        res.json({
-            success: true,
-            data: activeInstructions
-        });
-        
-    } catch (error) {
-        logger.error('[ACTIVE INSTRUCTIONS] Error fetching live config', {
-            companyId,
-            error: error.message,
-            stack: error.stack
-        });
-        
-        res.status(500).json({
-            success: false,
-            error: 'FETCH_ERROR',
-            message: error.message
-        });
-    }
+    });
 });
 
-logger.debug('[INIT] ✅ Active Instructions Preview endpoint added');
+logger.debug('[INIT] ✅ Active Instructions Preview endpoint (stub - cheat sheets removed)');
 
 module.exports = router;

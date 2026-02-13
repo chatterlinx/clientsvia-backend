@@ -19,11 +19,8 @@ const { redisClient } = require('../clients');
 // ═══════════════════════════════════════════════════════════════════
 const TraceLogger = require('./TraceLogger');
 
-// ═══════════════════════════════════════════════════════════════════
-// CHEAT SHEET SYSTEM - Phase 1 Integration
-// ═══════════════════════════════════════════════════════════════════
+// Cheat Sheet system REMOVED Feb 2026 — Tier 2 reserved for future rebuild
 const PolicyCompiler = require('./PolicyCompiler');
-const CheatSheetEngine = require('./CheatSheetEngine');
 const SessionManager = require('./SessionManager');
 
 // ═══════════════════════════════════════════════════════════════════
@@ -48,7 +45,7 @@ const brain1ProcessTurn = null; // REMOVED - stub to prevent crashes
 // - Easier testing/mocking
 // - Consistent initialization
 // ═══════════════════════════════════════════════════════════════════
-const CheatSheetRuntimeService = require('./cheatsheet/CheatSheetRuntimeService');
+// CheatSheetRuntimeService REMOVED Feb 2026 — Tier 2 reserved for future rebuild
 const intelligentFallbackHandler = require('./intelligentFallbackHandler');
 const MemoryEngine = require('./MemoryEngine');
 // V115: Triage is now routed through TriageEngineRouter ONLY
@@ -133,47 +130,7 @@ class V2AIAgentRuntime {
             logger.debug(`🔍 V2 VOICE DEBUG: Voice ID: ${company.aiAgentSettings?.voiceSettings?.voiceId || 'NOT SET'}`);
             logger.debug(`🔍 V2 VOICE DEBUG: API Source: ${company.aiAgentSettings?.voiceSettings?.apiSource || 'NOT SET'}`);
 
-            // ─────────────────────────────────────────────────────────────
-            // 🧠 CHEAT SHEET V2: Load live config from CheatSheetVersion
-            // ─────────────────────────────────────────────────────────────
-            const liveCheatSheet = await CheatSheetRuntimeService.getLiveConfig(companyID);
-            
-            if (!liveCheatSheet) {
-                logger.error('[V2 AGENT] ❌ No live CheatSheet V2 config found', {
-                    companyId: companyID
-                });
-                // Graceful degradation - agent will run with minimal config
-                // Do NOT fallback to V1 - V1 is dead to runtime
-            } else {
-                logger.info('[V2 AGENT] ✅ Loaded live CheatSheet V2 config', {
-                    companyId: companyID,
-                    versionId: liveCheatSheet.versionId,
-                    versionName: liveCheatSheet.name
-                });
-                
-                // Policy compilation now uses V2 config
-                // Note: PolicyCompiler expects version/status, so we wrap the config
-                try {
-                    const configWithMeta = {
-                        ...liveCheatSheet.config,
-                        version: liveCheatSheet.config.schemaVersion || 1,
-                        status: 'active', // Live versions are always active
-                        versionId: liveCheatSheet.versionId
-                    };
-                    
-                    await PolicyCompiler.compile(companyID, configWithMeta);
-                    logger.info('[V2 AGENT] ✅ Cheat sheet V2 policy compiled successfully', {
-                        versionId: liveCheatSheet.versionId
-                    });
-                } catch (compileErr) {
-                    logger.error('[V2 AGENT] ❌ Cheat sheet V2 compilation failed', {
-                        companyId: companyID,
-                        versionId: liveCheatSheet.versionId,
-                        error: compileErr.message
-                    });
-                    // Continue without cheat sheet (graceful degradation)
-                }
-            }
+            // Cheat Sheet V2 loading REMOVED Feb 2026 — Tier 2 reserved for future rebuild
 
             // Generate V2 greeting from Agent Personality system (4-MODE SYSTEM)
             const greetingConfig = this.generateV2Greeting(company);
@@ -1015,17 +972,27 @@ class V2AIAgentRuntime {
         
         const aiLogic = company.aiAgentSettings;
         
-        // 🎯 Load company production intelligence settings
+        // V84.3: Load intelligence settings — Global (AdminSettings) or Company
+        // AIBrain3tierllm also loads its own intelligenceConfig, so this is primarily for
+        // logging/diagnostic visibility in v2AIAgentRuntime. AIBrain3tierllm is the
+        // authoritative source that IntelligentRouter receives.
         let effectiveIntelligence = {};
         try {
-            const prodInt = aiLogic.productionIntelligence || {};
+            const useGlobal = aiLogic.useGlobalIntelligence !== false;
+            if (useGlobal) {
+                const AdminSettings = require('../models/AdminSettings');
+                const adminSettings = await AdminSettings.findOne().lean();
+                effectiveIntelligence = adminSettings?.globalProductionIntelligence || {};
+            } else {
+                effectiveIntelligence = aiLogic.productionIntelligence || {};
+            }
             
-            effectiveIntelligence = prodInt;
-            logger.info(`✅ [INTELLIGENCE CONFIG] Using company production settings:`, {
+            logger.info(`✅ [INTELLIGENCE CONFIG] Using ${useGlobal ? 'GLOBAL' : 'COMPANY'} settings:`, {
                 tier1: effectiveIntelligence.thresholds?.tier1 || 0.80,
                 tier2: effectiveIntelligence.thresholds?.tier2 || 0.60,
                 enableTier3: effectiveIntelligence.thresholds?.enableTier3 !== false,
-                model: effectiveIntelligence.llmConfig?.model || 'gpt-4o-mini'
+                model: effectiveIntelligence.llmConfig?.model || 'gpt-4o-mini',
+                source: useGlobal ? 'AdminSettings.globalProductionIntelligence' : 'company.aiAgentSettings.productionIntelligence'
             });
         } catch (intError) {
             logger.warn(`⚠️ [INTELLIGENCE CONFIG] Failed to load intelligence settings:`, intError.message);

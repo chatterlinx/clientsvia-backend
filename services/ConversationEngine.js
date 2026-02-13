@@ -105,9 +105,9 @@ const NAME_STOP_WORDS_ENGINE = new Set([
 ]);
 logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
     features: [
-        '✅ V22: LLM-LED DISCOVERY ARCHITECTURE',
-        '✅ LLM is PRIMARY BRAIN (not fallback)',
-        '✅ Scenarios are TOOLS (not scripts)',
+        '✅ V84.3: SCENARIO-FIRST ARCHITECTURE',
+        '✅ Scenarios are PRIMARY BRAIN (LLM is fallback)',
+        '✅ Tier 1: Direct scenario response (~50ms, $0)',
         '✅ Booking is DETERMINISTIC (consent-gated)',
         '✅ No triage gates, no pre-routing',
         '✅ V35: Google Maps address validation (toggle per company)',
@@ -115,8 +115,7 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
         '✅ session.mode = DISCOVERY | SUPPORT | BOOKING | COMPLETE',
         '✅ Consent detection via UI-configured phrases',
         '✅ Latency target: < 1.2s per turn',
-        '✅ V23: CHEAT SHEETS integrated as fallback knowledge',
-        '✅ V23: Booking interrupts use cheat sheets then resume slot',
+        '✅ V23: Cheat sheets REMOVED Feb 2026 - Tier 2 slot reserved for future rebuild',
         '✅ V24: COMPLETE mode lock - no re-asking slots after booking',
         '✅ V24: askFullName defaults FALSE (prompt as law)',
         '✅ V24: displayName uses first name, never lastName alone',
@@ -1248,60 +1247,12 @@ State Summary (DO NOT ASK COMPLETED SLOTS):
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 🆕 CHEAT SHEET SEARCH - Find relevant content from cheat sheets
+// TIER 2 PLACEHOLDER - Reserved for future rebuild
 // ═══════════════════════════════════════════════════════════════════════════
-// Used for:
-// - DISCOVERY: Fallback after 3-tier scenarios
-// - BOOKING: Interrupt question answers ONLY
+// Cheat sheets (V23) REMOVED Feb 2026 - entire system nuked.
+// Tier 2 slot in the cascade is reserved for a future knowledge layer.
+// When rebuilt, it should sit between Scenario matching (Tier 1) and LLM (Tier 3).
 // ═══════════════════════════════════════════════════════════════════════════
-function searchCheatSheets(cheatSheetConfig, query) {
-    if (!cheatSheetConfig || !query) return null;
-    
-    const queryLower = query.toLowerCase().trim();
-    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
-    
-    let bestMatch = null;
-    let bestScore = 0;
-    
-    // Search through all categories in cheat sheet config
-    // Expected structure: { category: { items: [{ question, answer }] } }
-    // or: { categories: [{ name, items: [...] }] }
-    const categories = cheatSheetConfig.categories || 
-                       Object.entries(cheatSheetConfig).map(([name, data]) => ({ name, ...data }));
-    
-    for (const category of categories) {
-        const items = category.items || category.scenarios || category.entries || [];
-        
-        for (const item of items) {
-            // Match against question/trigger text
-            const searchText = (item.question || item.trigger || item.title || '').toLowerCase();
-            const answerText = item.answer || item.response || item.content || '';
-            
-            // Simple keyword matching score
-            let score = 0;
-            for (const word of queryWords) {
-                if (searchText.includes(word)) score += 2;
-                if (answerText.toLowerCase().includes(word)) score += 1;
-            }
-            
-            // Boost for exact phrase match
-            if (searchText.includes(queryLower)) score += 5;
-            
-            if (score > bestScore && score >= 3) {  // Minimum threshold
-                bestScore = score;
-                bestMatch = {
-                    category: category.name || category.category,
-                    question: item.question || item.trigger || item.title,
-                    answer: answerText,
-                    score: score,
-                    title: item.title || item.question
-                };
-            }
-        }
-    }
-    
-    return bestMatch;
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🆕 V26: CALLER VOCABULARY TRANSLATION
@@ -3319,33 +3270,7 @@ async function processTurn({
             readViaAW: true
         });
         
-        // ═══════════════════════════════════════════════════════════════════
-        // STEP 1.5: Load Cheat Sheets (PHASE 1 - Runtime Integration)
-        // ═══════════════════════════════════════════════════════════════════
-        // Cheat sheets are loaded alongside company config for:
-        // - DISCOVERY: Fallback knowledge after 3-tier scenarios
-        // - BOOKING: Interrupt question answers ONLY (then resume slot)
-        // ═══════════════════════════════════════════════════════════════════
-        let cheatSheetConfig = null;
-        try {
-            const { CheatSheetRuntimeService } = require('./cheatsheet');
-            const cheatSheetResult = await CheatSheetRuntimeService.getLiveConfig(companyId);
-            if (cheatSheetResult && cheatSheetResult.config) {
-                cheatSheetConfig = cheatSheetResult.config;
-                log('CHECKPOINT 2.5: ✅ Cheat sheets loaded', { 
-                    versionId: cheatSheetResult.versionId,
-                    hasConfig: !!cheatSheetConfig,
-                    categories: Object.keys(cheatSheetConfig || {}).length
-                });
-            } else {
-                log('CHECKPOINT 2.5: ⚠️ No cheat sheets available (non-fatal)', { companyId });
-            }
-        } catch (cheatSheetErr) {
-            // Non-fatal - system works without cheat sheets
-            log('CHECKPOINT 2.5: ⚠️ Cheat sheet load failed (non-fatal)', { 
-                error: cheatSheetErr.message 
-            });
-        }
+        // STEP 1.5: Cheat Sheets REMOVED Feb 2026 — Tier 2 reserved for future rebuild
         
         // ═══════════════════════════════════════════════════════════════════
         // STEP 1.6: V26 - Load Template + Translate Caller Vocabulary
@@ -5447,25 +5372,32 @@ async function processTurn({
         });
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V22 KILL SWITCHES - Read from company config (UI-controlled)
-        // 🔌 AW MIGRATION: Using AWConfigReader for traced config reads
+        // V84.3: SCENARIO-FIRST ARCHITECTURE (replaces V22 LLM-Led)
+        // ═══════════════════════════════════════════════════════════════════════
+        // PHILOSOPHY: Scenarios are the PRIMARY response mechanism.
+        // When a high-confidence scenario match exists, use it directly (fast, free).
+        // LLM is the FALLBACK for edge cases, not the default brain.
+        //
+        // bookingRequiresConsent: Still true — booking is consent-gated
+        // forceLLMDiscovery: Now FALSE — scenarios respond directly when matched
+        // disableScenarioAutoResponses: Now FALSE — scenarios CAN auto-respond
         // ═══════════════════════════════════════════════════════════════════════
         awReader.setReaderId('ConversationEngine.killSwitches');
         const bookingRequiresConsentAW = awReader.get('frontDesk.discoveryConsent.bookingRequiresExplicitConsent', true);
-        const forceLLMDiscoveryAW = awReader.get('frontDesk.discoveryConsent.forceLLMDiscovery', true);
-        const disableScenarioAutoResponsesAW = awReader.get('frontDesk.discoveryConsent.disableScenarioAutoResponses', true);
+        const forceLLMDiscoveryAW = awReader.get('frontDesk.discoveryConsent.forceLLMDiscovery', false);
+        const disableScenarioAutoResponsesAW = awReader.get('frontDesk.discoveryConsent.disableScenarioAutoResponses', false);
         const autoReplyAllowedTypesRaw = awReader.getArray('frontDesk.discoveryConsent.autoReplyAllowedScenarioTypes');
         const autoReplyAllowedScenarioTypes = autoReplyAllowedTypesRaw
             .map(t => (t || '').toString().trim().toUpperCase())
             .filter(Boolean);
         
         const killSwitches = {
-            // If true: Booking REQUIRES explicit consent (default: true)
+            // If true: Booking REQUIRES explicit consent (default: true — keep this)
             bookingRequiresConsent: bookingRequiresConsentAW !== false,
-            // If true: LLM ALWAYS speaks during discovery (default: true)
-            forceLLMDiscovery: forceLLMDiscoveryAW !== false,
-            // If true: Scenarios are context only by default (exceptions may be allowed via allowlist)
-            disableScenarioAutoResponses: disableScenarioAutoResponsesAW !== false,
+            // V84.3: Scenarios are the primary brain. LLM is fallback only.
+            forceLLMDiscovery: forceLLMDiscoveryAW === true,
+            // V84.3: Scenarios CAN auto-respond (false = enabled, true = context-only for LLM)
+            disableScenarioAutoResponses: disableScenarioAutoResponsesAW === true,
             // Consent Split: types allowed to be used verbatim before consent (trade-agnostic)
             autoReplyAllowedScenarioTypes
         };
@@ -5612,7 +5544,7 @@ async function processTurn({
                 session.booking = { consentGiven: false };
                 // Fall through to discovery mode
             } else {
-                // Answer post-completion questions using LLM + scenarios/cheat sheets
+                // Answer post-completion questions using LLM + scenarios
                 // But NEVER re-ask booking slots
                 const llmResult = await HybridReceptionistLLM.processConversation({
                     company,
@@ -5710,26 +5642,26 @@ async function processTurn({
         }
         else {
             // ═══════════════════════════════════════════════════════════════════
-            // V22: LLM-LED DISCOVERY MODE
+            // V84.3: SCENARIO-FIRST DISCOVERY MODE
             // ═══════════════════════════════════════════════════════════════════
             // 
-            // THE GOLDEN RULE: "Nothing should bypass the LLM during discovery."
+            // THE GOLDEN RULE: "Use scenario responses directly when confident."
             // 
-            // KILL SWITCH ENFORCEMENT:
-            // - forceLLMDiscovery = true → LLM ALWAYS speaks (no state machine)
-            // - disableScenarioAutoResponses = true → Scenarios are context only
+            // PRIORITY ORDER:
+            // 1. Tier 1: Scenario match ≥ threshold → respond directly (0 tokens, ~50ms)
+            // 2. Cheat Sheets: Knowledge fallback (0 tokens, ~100ms)
+            // 3. LLM: Last resort when no scenario matches (~$0.04, ~1200ms)
             // 
             // FLOW:
-            // 1. Retrieve relevant scenarios (TOOLS, not scripts)
-            // 2. Detect caller emotion (lightweight heuristic)
-            // 3. Build LLM prompt with scenario knowledge
-            // 4. LLM responds naturally using the knowledge
-            // 5. Check for consent (if detected, next turn = BOOKING)
+            // 1. Retrieve and score relevant scenarios via HybridScenarioSelector
+            // 2. If high-confidence match: use scenario's quickReply/fullReply directly
+            // 3. If no match: fall through to LLM as last resort
+            // 4. Booking is still consent-gated (bookingRequiresConsent stays true)
             // 
-            // The LLM is the PRIMARY BRAIN. Scenarios are just knowledge tools.
+            // Scenarios are the PRIMARY BRAIN. LLM is the safety net.
             // ═══════════════════════════════════════════════════════════════════
             
-            log('CHECKPOINT 9b: 🧠 V22 LLM-LED DISCOVERY MODE', {
+            log('CHECKPOINT 9b: 🎯 V84.3 SCENARIO-FIRST DISCOVERY MODE', {
                 forceLLMDiscovery: killSwitches.forceLLMDiscovery,
                 disableScenarioAutoResponses: killSwitches.disableScenarioAutoResponses
             });
@@ -5951,20 +5883,33 @@ async function processTurn({
             companyReturnLaneEnabled = company?.aiAgentSettings?.returnLane?.enabled === true;
             
             // ═══════════════════════════════════════════════════════════════════
-            // 🎯 V2: TIER-1 SCENARIO SHORT-CIRCUIT (ZERO TOKENS!)
+            // 🎯 V84.3: TIER-1 SCENARIO SHORT-CIRCUIT (ZERO TOKENS!)
             // ═══════════════════════════════════════════════════════════════════
-            // If HybridScenarioSelector found a HIGH-CONFIDENCE match, use it 
-            // directly WITHOUT going to LLM. This is the "free" tier that makes
-            // the AI deterministic and fast for well-defined scenarios.
+            // Scenario-First Architecture: When HybridScenarioSelector finds a
+            // HIGH-CONFIDENCE match, use the scenario response directly.
+            // No LLM call = 0 tokens, ~50ms response.
             //
-            // Threshold: 0.80 by default (UI-configurable)
-            // When match >= threshold:
-            //   - Use scenario's quickReply or fullReply directly
-            //   - No LLM call = 0 tokens, ~50ms response
-            //   - Log as SCENARIO_MATCHED tier1
+            // Threshold priority:
+            //   1. Global Settings UI → AdminSettings.globalProductionIntelligence.thresholds.tier1
+            //   2. Company override → aiAgentSettings.productionIntelligence.thresholds.tier1
+            //   3. Legacy path → aiAgentSettings.thresholds.tier1DirectMatch
+            //   4. Hardcoded default → 0.65
             // ═══════════════════════════════════════════════════════════════════
-            // V92: Company-configurable tier-1 threshold (default lowered to 0.65 for better scenario utilization)
-            const tier1Threshold = company.aiAgentSettings?.thresholds?.tier1DirectMatch ?? 0.65;
+            const useGlobalIntelligence = company.aiAgentSettings?.useGlobalIntelligence !== false;
+            let tier1Threshold;
+            if (useGlobalIntelligence) {
+                // Read from cached global intelligence (AWConfigReader already caches AdminSettings)
+                try {
+                    const AdminSettings = require('../models/AdminSettings');
+                    const adminSettings = await AdminSettings.findOne().select('globalProductionIntelligence.thresholds.tier1').lean();
+                    tier1Threshold = adminSettings?.globalProductionIntelligence?.thresholds?.tier1;
+                } catch (e) { /* fallback below */ }
+            }
+            if (!tier1Threshold) {
+                tier1Threshold = company.aiAgentSettings?.productionIntelligence?.thresholds?.tier1
+                    ?? company.aiAgentSettings?.thresholds?.tier1DirectMatch
+                    ?? 0.65;
+            }
             const tier1Match = scenarioRetrieval.topMatch;
             const tier1Confidence = scenarioRetrieval.topMatchConfidence ?? 0;
             const allowTier1AutoResponse = killSwitches.disableScenarioAutoResponses !== true;
@@ -6268,36 +6213,11 @@ async function processTurn({
                 }
             }
             
-            // ═══════════════════════════════════════════════════════════════════
-            // Step 1.5: CHEAT SHEET FALLBACK (PHASE 1)
-            // ═══════════════════════════════════════════════════════════════════
+            // Step 1.5: Tier 2 (cheat sheets) REMOVED Feb 2026 — reserved for future rebuild
             // Order of precedence for DISCOVERY knowledge:
-            // 1. 3-Tier Scenarios (primary)
-            // 2. Cheat Sheets (fallback)
-            // 3. Generic LLM (last resort)
-            // ═══════════════════════════════════════════════════════════════════
-            let cheatSheetKnowledge = null;
-            let cheatSheetUsed = false;
-            let cheatSheetReason = null;
-            
-            // Only use cheat sheets as fallback if no strong scenario match
-            const hasStrongScenarioMatch = scenarioRetrieval.scenarios?.length > 0 && 
-                                           scenarioRetrieval.scenarios[0]?.confidence > 0.6;
-            
-            if (!hasStrongScenarioMatch && cheatSheetConfig) {
-                // Search cheat sheets for relevant content
-                const cheatSheetMatch = searchCheatSheets(cheatSheetConfig, userText);
-                if (cheatSheetMatch) {
-                    cheatSheetKnowledge = cheatSheetMatch;
-                    cheatSheetUsed = true;
-                    cheatSheetReason = 'discovery_fallback';
-                    log('CHECKPOINT 9c.1: 📋 Cheat sheet fallback activated', {
-                        category: cheatSheetMatch.category,
-                        matchedItem: cheatSheetMatch.title || cheatSheetMatch.question,
-                        reason: cheatSheetReason
-                    });
-                }
-            }
+            // 1. Scenarios (Tier 1 — primary)
+            // 2. [RESERVED] Future Tier 2 knowledge layer
+            // 3. LLM (Tier 3 — last resort)
             
             // Step 2: Detect caller emotion (lightweight, no LLM)
             const emotion = LLMDiscoveryEngine.detectEmotion(userText);
@@ -6900,7 +6820,7 @@ async function processTurn({
             
             // Only proceed with LLM if fast-path didn't trigger
             if (!aiResult) {
-            // Step 3: Build discovery prompt with scenario knowledge + cheat sheet fallback
+            // Step 3: Build discovery prompt with scenario knowledge
             // V33: Pass collectedSlots so LLM can acknowledge caller's name
             const discoveryPrompt = LLMDiscoveryEngine.buildDiscoveryPrompt({
                 company,
@@ -6909,9 +6829,7 @@ async function processTurn({
                 session: {
                     ...session.toObject ? session.toObject() : session,
                     collectedSlots: currentSlots  // V33: Include current slots for name acknowledgment
-                },
-                // V23: Pass cheat sheet as fallback knowledge
-                cheatSheetKnowledge: cheatSheetKnowledge
+                }
             });
             
             // Step 4: Build context for LLM
@@ -6970,13 +6888,6 @@ async function processTurn({
                     defaultMode: killSwitches.disableScenarioAutoResponses ? 'context_only' : 'may_verbatim',
                     allowVerbatimScenarioTypes: Array.isArray(killSwitches.autoReplyAllowedScenarioTypes) ? killSwitches.autoReplyAllowedScenarioTypes : []
                 },
-                
-                // ═══════════════════════════════════════════════════════════════
-                // CHEAT SHEET KNOWLEDGE (PHASE 1 - Discovery Fallback)
-                // ═══════════════════════════════════════════════════════════════
-                cheatSheetKnowledge: cheatSheetKnowledge,
-                cheatSheetUsed: cheatSheetUsed,
-                cheatSheetReason: cheatSheetReason,
                 
                 // Caller emotion
                 callerEmotion: emotion.emotion,
@@ -7212,10 +7123,6 @@ async function processTurn({
                     // V22 Debug Info
                     scenariosRetrieved: scenarioRetrieval.scenarios?.map(s => s.title) || [],
                     scenarioCount: scenarioRetrieval.scenarios?.length || 0,
-                    // V23 Cheat Sheet Debug Info
-                    cheatSheetUsed: cheatSheetUsed || false,
-                    cheatSheetReason: cheatSheetReason || null,
-                    cheatSheetCategory: cheatSheetKnowledge?.category || null,
                     // V92: Placeholder replacement in LLM path
                     llmPlaceholdersReplaced,
                     llmHadCallerName: !!llmRuntimeVars.callerName,
@@ -7256,7 +7163,6 @@ async function processTurn({
             if (llmContext.callerName) executionTrace.push('callerName_provided');
             if (llmContext.callerEmotion && llmContext.callerEmotion !== 'neutral') executionTrace.push('emotionContext_provided');
             if (llmContext.discovery?.issue) executionTrace.push('discoveryIssue_provided');
-            if (cheatSheetUsed) executionTrace.push('cheatSheet_used');
             if (killSwitches?.bookingRequiresExplicitConsent) executionTrace.push('consentGate_enforced');
             
             // Track what came back from LLM
@@ -7546,13 +7452,6 @@ async function processTurn({
             scenarioCount: session.conversationMemory?.scenariosConsulted?.length || 0,
             
             // ═══════════════════════════════════════════════════════════════════
-            // V23 CHEAT SHEET TRACKING (PHASE 1)
-            // ═══════════════════════════════════════════════════════════════════
-            cheatSheetUsed: aiResult?.debug?.cheatSheetUsed || false,
-            cheatSheetReason: aiResult?.debug?.cheatSheetReason || null,  // 'discovery_fallback' | 'booking_interrupt'
-            cheatSheetCategory: aiResult?.debug?.cheatSheetCategory || null,
-            
-            // ═══════════════════════════════════════════════════════════════════
             // V23 BOOKING OUTCOME TRACKING
             // ═══════════════════════════════════════════════════════════════════
             bookingComplete: session.mode === 'COMPLETE',
@@ -7576,11 +7475,11 @@ async function processTurn({
             latencyMs: aiLatencyMs,
             totalTurnLatencyMs: Date.now() - startTime,
             
-            // Safety Flags (V22 Kill Switches)
+            // V84.3: Scenario-First Flags
             killSwitches: {
                 bookingRequiresConsent: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.bookingRequiresExplicitConsent !== false,
-                forceLLMDiscovery: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.forceLLMDiscovery !== false,
-                disableScenarioAutoResponses: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.disableScenarioAutoResponses !== false,
+                forceLLMDiscovery: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.forceLLMDiscovery === true,
+                disableScenarioAutoResponses: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.disableScenarioAutoResponses === true,
                 autoReplyAllowedScenarioTypes: Array.isArray(company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.autoReplyAllowedScenarioTypes)
                     ? company.aiAgentSettings.frontDeskBehavior.discoveryConsent.autoReplyAllowedScenarioTypes
                         .map(t => (t || '').toString().trim().toUpperCase())
