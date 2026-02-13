@@ -10161,7 +10161,7 @@ Sean → Shawn, Shaun`;
         const cqThreshold = cq.confidenceThreshold || 0.72;
         const cqMaxRetries = cq.maxRetries || 3;
         const cqTroublePhrases = (cq.troublePhrases || ['hello', 'hello?', 'hi', 'hi?', 'are you there', 'can you hear me', 'is anyone there', 'is somebody there', 'hey', 'hey?', 'anybody there']).join('\n');
-        const cqReGreeting = cq.reGreeting || 'Hi there! How can I help you today?';
+        const cqReGreeting = cq.reGreeting || "I'm sorry, I didn't quite catch that. Could you please repeat what you said?";
         const cqDtmfMessage = cq.dtmfEscapeMessage || "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.";
         const cqTransferDest = cq.transferDestination || '';
         const recommendedConsentPhrases = [
@@ -10277,7 +10277,7 @@ Sean → Shawn, Shaun`;
                             Re-Greeting Message <span style="color: #8b949e; font-weight: normal;">(spoken when gate triggers)</span>
                         </label>
                         <input type="text" id="fdb-cq-reGreeting" value="${cqReGreeting}"
-                            placeholder="Hi there! How can I help you today?"
+                            placeholder="I'm sorry, I didn't quite catch that. Could you please repeat what you said?"
                             style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
                     </div>
                     
@@ -12156,7 +12156,7 @@ Sean → Shawn, Shaun`;
                 confidenceThreshold: parseInt(document.getElementById('fdb-cq-threshold')?.value || '72', 10) / 100,
                 maxRetries: parseInt(get('fdb-cq-maxRetries') || '3', 10),
                 troublePhrases: cqTroublePhrases.length > 0 ? cqTroublePhrases : ['hello', 'hello?', 'are you there', 'can you hear me', 'is anyone there'],
-                reGreeting: get('fdb-cq-reGreeting') || 'Hi there! How can I help you today?',
+                reGreeting: get('fdb-cq-reGreeting') || "I'm sorry, I didn't quite catch that. Could you please repeat what you said?",
                 dtmfEscapeMessage: get('fdb-cq-dtmfMessage') || "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.",
                 transferDestination: get('fdb-cq-transferDest') || ''
             };

@@ -296,16 +296,48 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
         const normalizedInput = (userTurn || '').toLowerCase().trim()
             .replace(/[.,!?;:]+/g, '').trim();
         
-        // V116: Count real words (alphanumeric tokens) to detect substantive content
+        // Count real words (alphanumeric tokens) to detect substantive content
         const realWords = normalizedInput.split(/\s+/).filter(w => w.replace(/[^a-z0-9]/g, '').length > 0);
         const hasSubstantiveContent = realWords.length > 3;
         
-        // V116: NEVER fire gate if caller said something real
+        // ═══════════════════════════════════════════════════════════════════
+        // FILLER-ONLY BYPASS: If the input is empty after filler removal,
+        // the caller just said "um" or "uh" while thinking. This is NOT a
+        // connection quality issue — it's a natural speech pause. Let it pass
+        // through to the normal silence/timeout handler instead of firing
+        // the gate with a disruptive re-greeting.
+        // ═══════════════════════════════════════════════════════════════════
+        if (realWords.length === 0 && actualTurnCount >= 2) {
+            logger.info('[FRONT_DESK_RUNTIME] CONNECTION_QUALITY_GATE: Filler-only input on turn 2+ — bypassing gate', {
+                callSid,
+                rawInput: userTurn?.substring(0, 30),
+                turnCount: actualTurnCount,
+                sttConfidence: (sttConfidence * 100).toFixed(1) + '%'
+            });
+            
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'CONNECTION_QUALITY_GATE',
+                    turn: turnCount,
+                    data: {
+                        triggered: false,
+                        reason: 'filler_only_bypass',
+                        normalizedInput: normalizedInput?.substring(0, 50),
+                        turnCount: actualTurnCount
+                    }
+                }).catch(() => {});
+            }
+            // Fall through to normal processing — silence handler will deal with it
+        }
+        
+        // NEVER fire gate if caller said something real
         // "Hello my AC isn't cooling and it's leaking" → 8+ words → real utterance → let it through
         let isTroublePhrase = false;
         let isLowConfidence = false;
         
-        if (!hasSubstantiveContent) {
+        if (!hasSubstantiveContent && realWords.length > 0) {
             // V116: Turn 1 — SKIP trouble phrase check entirely. 
             // "Hello" on turn 1 is how every call starts. Only check STT confidence
             // for genuinely unintelligible input (< 0.30 = garbled/static).
