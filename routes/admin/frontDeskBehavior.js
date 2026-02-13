@@ -515,17 +515,61 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
             const adminSettings = await AdminSettings.findOne().lean();
             
             if (adminSettings) {
-                // Override with global lists
-                config.commonFirstNames = adminSettings.commonFirstNames || [];
-                config.commonLastNames = adminSettings.commonLastNames || [];
-                config.nameStopWords = adminSettings.nameStopWords || [];
+                const globalFirstNames = adminSettings.commonFirstNames || [];
+                const globalLastNames = adminSettings.commonLastNames || [];
+                const globalStopWords = adminSettings.nameStopWords || [];
+                
+                // ────────────────────────────────────────────────────
+                // AUTO-MIGRATE: If AdminSettings is empty but company has names,
+                // seed AdminSettings from the company's per-company lists.
+                // This runs ONCE — after that, AdminSettings is the source of truth.
+                // ────────────────────────────────────────────────────
+                const companyFirstNames = saved.commonFirstNames || [];
+                const companyStopWords = Array.isArray(saved.nameStopWords) ? saved.nameStopWords : [];
+                
+                let needsMigration = false;
+                const migrationData = {};
+                
+                if (globalFirstNames.length === 0 && companyFirstNames.length > 0) {
+                    migrationData.commonFirstNames = companyFirstNames;
+                    needsMigration = true;
+                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-MIGRATE: Seeding AdminSettings.commonFirstNames from company', {
+                        companyId, count: companyFirstNames.length
+                    });
+                }
+                
+                if (globalStopWords.length === 0 && companyStopWords.length > 0) {
+                    migrationData.nameStopWords = companyStopWords;
+                    needsMigration = true;
+                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-MIGRATE: Seeding AdminSettings.nameStopWords from company', {
+                        companyId, count: companyStopWords.length
+                    });
+                }
+                
+                if (needsMigration) {
+                    try {
+                        await AdminSettings.updateOne({}, { $set: migrationData });
+                        logger.info('[FRONT DESK BEHAVIOR] ✅ AUTO-MIGRATE: AdminSettings seeded from company data');
+                    } catch (migErr) {
+                        logger.error('[FRONT DESK BEHAVIOR] ❌ AUTO-MIGRATE failed:', { error: migErr.message });
+                    }
+                }
+                
+                // Use global lists (or freshly-migrated data)
+                config.commonFirstNames = needsMigration && migrationData.commonFirstNames 
+                    ? migrationData.commonFirstNames 
+                    : globalFirstNames;
+                config.commonLastNames = globalLastNames;
+                config.nameStopWords = needsMigration && migrationData.nameStopWords
+                    ? migrationData.nameStopWords
+                    : globalStopWords;
                 
                 logger.info('[FRONT DESK BEHAVIOR] 👤 V84: Loaded GLOBAL common names + stop words', {
                     companyId,
                     firstNamesCount: config.commonFirstNames.length,
                     lastNamesCount: config.commonLastNames.length,
                     stopWordsCount: config.nameStopWords.length,
-                    source: 'AdminSettings (global)'
+                    source: needsMigration ? 'AdminSettings (auto-migrated from company)' : 'AdminSettings (global)'
                 });
             } else {
                 // Fallback: try per-company lists (legacy)
