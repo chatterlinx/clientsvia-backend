@@ -3362,8 +3362,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             confirmedSlots: callState.confirmedSlots || {},
             askCount: callState.bookingAskCount || {},
             pendingConfirmation: callState.pendingConfirmation || null,
-            // V116: Persist preconfirm state so caller's "yes" on next turn is handled
+            // V116: Preconfirm queue removed — pendingPreconfirm kept for backward compat
             pendingPreconfirm: callState.pendingPreconfirm || null,
+            // V116: Confirm retry count — prevents infinite confirmRetryPrompt loops
+            confirmRetryCount: callState.confirmRetryCount || {},
             // Address sub-step fields — must persist between turns for city/state collection
             askedForCityState: callState.askedForCityState || false,
             streetAddressCollected: callState.streetAddressCollected || null,
@@ -3529,8 +3531,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               confirmedSlots: bookingResult.state?.confirmedSlots || callState.confirmedSlots || {},
               lockedSlots: bookingResult.state?.lockedSlots || callState.lockedSlots || {},  // V110
               repromptCount: bookingResult.state?.repromptCount || {},  // V110
-              // V116: Persist preconfirm state so caller's "yes" on next turn confirms the slot
+              // V116: Preconfirm queue removed — pendingPreconfirm kept for backward compat
               pendingPreconfirm: bookingResult.state?.pendingPreconfirm || null,
+              // V116: Confirm retry count — prevents infinite confirmRetryPrompt loops
+              confirmRetryCount: bookingResult.state?.confirmRetryCount || {},
               // Address sub-step fields — persist between turns for city/state collection + geo validation
               askedForCityState: bookingResult.state?.askedForCityState || false,
               streetAddressCollected: bookingResult.state?.streetAddressCollected || null,
@@ -4042,8 +4046,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 confirmedSlots: bookingResult.state?.confirmedSlots || {},
                 lockedSlots: bookingResult.state?.lockedSlots || {},  // V110
                 pendingConfirmation: bookingResult.state?.pendingConfirmation || null,
-                // V116: Persist preconfirm state so caller's "yes" on next turn confirms the slot
+                // V116: Preconfirm queue removed — pendingPreconfirm kept for backward compat
                 pendingPreconfirm: bookingResult.state?.pendingPreconfirm || null,
+                // V116: Confirm retry count — prevents infinite confirmRetryPrompt loops
+                confirmRetryCount: bookingResult.state?.confirmRetryCount || {},
                 bookingAskCount: bookingResult.state?.askCount || {},
                 repromptCount: bookingResult.state?.repromptCount || {},  // V110
                 awaitingConfirmation: bookingResult.state?.awaitingConfirmation || false,

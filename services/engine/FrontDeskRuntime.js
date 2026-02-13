@@ -826,7 +826,21 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         /\bneed\s+help\s+(with|here|now|today)/i,
         
         // V107: "something's wrong" + "need someone" in same utterance
-        /\b(something'?s?\s+wrong|not\s+working|broken|won'?t\s+work).{0,30}(need|send|get)\s+(someone|somebody|help)/i
+        /\b(something'?s?\s+wrong|not\s+working|broken|won'?t\s+work).{0,30}(need|send|get)\s+(someone|somebody|help)/i,
+        
+        // V116: "can you help me" / "please help" — extremely common service requests
+        // Caller said "can you please help me?" — this was NOT caught, forcing 4 turns
+        // of diagnostic discovery before LLM finally offered booking.
+        /\bcan\s+you\s+(please\s+)?(help|assist)\s+(me|us)\b/i,
+        /\bplease\s+(help|assist)\s+(me|us)\b/i,
+        
+        // V116: Problem description + "help" — caller describes issue and asks for help
+        // "I'm having AC problems, can you help me?" combines problem + help request
+        /\b(having|got|have)\s+(a\s+)?(problem|issue|trouble).{0,30}(help|fix|repair)/i,
+        
+        // V116: "having problems/issues" as standalone service request indicator
+        // When a caller describes a specific equipment problem, they want service
+        /\b(air\s+condition|ac|a\.?c\.?|heat|furnace|thermostat|plumbing|drain|water\s+heater).{0,20}(problem|issue|not\s+work|broken|won'?t|isn'?t|not\s+cool|not\s+heat|blank)/i
     ];
     
     for (const regex of smartPatterns) {
@@ -840,6 +854,53 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
             return LANES.BOOKING;
         }
     }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // V116: DISCOVERY ESCALATION — After N turns of diagnostics,
+    // proactively offer booking instead of continuing discovery.
+    // ═══════════════════════════════════════════════════════════════
+    // PROBLEM: Caller described AC problem on Turn 1. Scenario engine
+    // ran 4 turns of diagnostic questions (float switch? breakers?)
+    // before LLM finally offered booking on Turn 5. Caller frustrated.
+    //
+    // FIX: After 3 turns in discovery, if there's NO booking offer yet
+    // and the conversation has service-related context, signal that
+    // the next turn should offer booking. This prevents runaway
+    // diagnostics from the scenario engine.
+    // ═══════════════════════════════════════════════════════════════
+    const MAX_DISCOVERY_TURNS_BEFORE_OFFER = 3;
+    const discoveryTurnCount = callState?.discoveryTurnCount || 0;
+    const alreadyOfferedBooking = callState?.bookingConsentPending === true || 
+                                   callState?.bookingModeLocked === true;
+    
+    if (discoveryTurnCount >= MAX_DISCOVERY_TURNS_BEFORE_OFFER && !alreadyOfferedBooking) {
+        // Check if conversation has service-related context (problem described)
+        const hasServiceContext = callState?.discoveryTruth?.issue || 
+                                  callState?.slots?.call_reason_detail?.value ||
+                                  callState?.conversationHistory?.some?.(h => 
+                                      h.role === 'user' && /problem|issue|broken|not\s+work|not\s+cool|not\s+heat|thermostat|blank|leak|noise|90\s*degree/i.test(h.text || '')
+                                  );
+        
+        if (hasServiceContext) {
+            logger.info('[FRONT_DESK_RUNTIME] V116: Discovery escalation — offering booking after prolonged diagnostics', {
+                callSid,
+                discoveryTurnCount,
+                maxTurns: MAX_DISCOVERY_TURNS_BEFORE_OFFER,
+                reason: 'SERVICE_CONTEXT_DETECTED_NO_BOOKING_OFFERED'
+            });
+            
+            // Set consentPending so the system knows to offer booking
+            callState.discoveryEscalation = true;
+            trace.addDecisionReason('LANE_DISCOVERY', { 
+                reason: 'discovery_escalation_pending',
+                discoveryTurns: discoveryTurnCount,
+                willOfferBooking: true
+            });
+        }
+    }
+    
+    // Track discovery turns
+    callState.discoveryTurnCount = (callState.discoveryTurnCount || 0) + 1;
     
     // 5. Default to discovery
     trace.addDecisionReason('LANE_DISCOVERY', { reason: 'default', checkedPatterns: allBookingPatterns.length });

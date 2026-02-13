@@ -2047,25 +2047,55 @@ class BookingFlowRunner {
             state.bookingTurnStarted = true;
             state.confirmedSlots = state.confirmedSlots || {};
             
-            // V110+: DO NOT auto-confirm discovery slots - they need user confirmation!
-            // Only mark the turn as started so we track state properly
-            logger.info('[BOOKING FLOW RUNNER] V110+: First booking turn - discovery slots will be confirmed', {
+            // V116 FIX: On the first booking turn, userInput is the booking consent
+            // response ("Yes, please." / "Sure" / etc.), NOT an answer to a booking
+            // question. Clear it so step handlers show the initial prompt instead of
+            // trying to extract a slot value from the consent response.
+            // Without this, "Yes, please." gets passed to handleCollectMode for the
+            // name step, fails extraction, and triggers a reprompt instead of the
+            // initial prompt — confusing the caller.
+            if (userInput && userInput.trim()) {
+                logger.info('[BOOKING FLOW RUNNER] V116: First booking turn - clearing consent response', {
+                    consentInput: userInput.substring(0, 40),
+                    reason: 'CONSENT_RESPONSE_NOT_SLOT_INPUT'
+                });
+                userInput = '';
+            }
+            
+            logger.info('[BOOKING FLOW RUNNER] V116: First booking turn - following V110 step order', {
                 discoverySlots: Object.keys(state.bookingCollected || {}),
-                reason: 'PRECONFIRM_REQUIRED'
+                confirmedSlots: Object.keys(state.confirmedSlots || {}),
+                stepOrder: (flow.steps || []).filter(s => s.required).map(s => s.fieldKey || s.id).join(' → ')
             });
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // V110+: PRECONFIRM QUEUE - Check for discovery slots needing confirmation
+        // V116 CLEAN SWEEP: PRECONFIRM QUEUE REMOVED
         // ═══════════════════════════════════════════════════════════════════════════
-        // Before normal step selection, check if any discovery-sourced slot needs
-        // user confirmation. This runs BEFORE determineNextAction().
+        // The preconfirm queue (checkPreconfirmQueue) was a legacy optimization that
+        // jumped V110 step order to confirm discovery slots first. This caused:
+        //   1. Phone preconfirm BEFORE name (V110 says name→lastName→phone)
+        //   2. pendingPreconfirm state management bugs (lost confirmations)
+        //   3. User's phone confirmation misrouted to name slot extractor
+        //   4. Infinite confirmRetryPrompt loops when phone re-asked later
         //
-        // Priority order: firstName → lastName → phone → others
+        // FIX: Let determineNextAction() handle everything in V110 step order.
+        // - High-confidence discovery slots (≥0.85) are auto-confirmed inline
+        // - Low-confidence slots (caller_id phone at 0.7) get CONFIRM mode at their
+        //   natural position in the step flow
+        // - No jumping, no pendingPreconfirm, strict V110 order
         // ═══════════════════════════════════════════════════════════════════════════
-        const preconfirmResult = this.checkPreconfirmQueue(flow, state, userInput, company, callSid, startTime);
-        if (preconfirmResult) {
-            return preconfirmResult;
+        // LEGACY: checkPreconfirmQueue() still exists below but is no longer called.
+        // Safe to delete once this change is verified in production.
+        // ═══════════════════════════════════════════════════════════════════════════
+        
+        // V116: If there's a stale pendingPreconfirm from a previous version, clear it
+        if (state.pendingPreconfirm) {
+            logger.info('[BOOKING FLOW RUNNER] V116: Clearing stale pendingPreconfirm', {
+                slotId: state.pendingPreconfirm.slotId,
+                reason: 'PRECONFIRM_QUEUE_REMOVED'
+            });
+            delete state.pendingPreconfirm;
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
@@ -3087,7 +3117,70 @@ class BookingFlowRunner {
             };
         }
         
-        // V110: Unclear response - use UI-configured confirmRetryPrompt, NO hardcoded text
+        // ═══════════════════════════════════════════════════════════════
+        // V116 FIX: CONFIRM RETRY WITH ESCAPE HATCH
+        // ═══════════════════════════════════════════════════════════════
+        // PROBLEM: Unclear responses looped confirmRetryPrompt forever.
+        // Caller said "we already talked about that. yes." and "are you
+        // serious?" — neither parsed as yes/no, so the loop never ended.
+        //
+        // FIX: Track confirm retry count. After 2 retries:
+        //   - If the existing value is usable, auto-confirm and advance
+        //   - This prevents caller frustration from infinite loops
+        // ═══════════════════════════════════════════════════════════════
+        state.confirmRetryCount = state.confirmRetryCount || {};
+        state.confirmRetryCount[fieldKey] = (state.confirmRetryCount[fieldKey] || 0) + 1;
+        
+        const MAX_CONFIRM_RETRIES = step.maxConfirmRetries || step.options?.maxConfirmRetries || 2;
+        
+        if (state.confirmRetryCount[fieldKey] > MAX_CONFIRM_RETRIES && existingValue) {
+            // Escape hatch: auto-confirm the existing value and move on
+            logger.warn('[BOOKING FLOW RUNNER] V116: Max confirm retries reached — auto-confirming', {
+                fieldKey,
+                existingValue: fieldKey === 'phone' ? '***' : existingValue,
+                retries: state.confirmRetryCount[fieldKey],
+                maxRetries: MAX_CONFIRM_RETRIES,
+                reason: 'PREVENT_INFINITE_LOOP'
+            });
+            
+            state.confirmedSlots = state.confirmedSlots || {};
+            state.confirmedSlots[fieldKey] = true;
+            delete state.pendingConfirmation;
+            delete state.confirmRetryCount[fieldKey];
+            
+            // Advance to next step
+            const nextAction = this.determineNextAction(flow, state, {});
+            if (!nextAction) {
+                return this.buildConfirmation(flow, state);
+            }
+            
+            state.currentStepId = nextAction.step.id;
+            const nextPrompt = nextAction.mode === 'CONFIRM'
+                ? this.buildConfirmPrompt(nextAction.step, nextAction.existingValue)
+                : (nextAction.step.prompt || `What is your ${nextAction.step.label || nextAction.step.id}?`);
+            
+            return {
+                reply: `Got it. ${nextPrompt}`,
+                state,
+                isComplete: false,
+                action: 'CONTINUE',
+                currentStep: nextAction.step.id,
+                matchSource: 'BOOKING_FLOW_RUNNER',
+                tier: 'tier1',
+                tokensUsed: 0,
+                latencyMs: Date.now() - startTime,
+                debug: {
+                    source: 'BOOKING_FLOW_RUNNER',
+                    flowId: flow.flowId,
+                    mode: 'CONFIRM_AUTO_ACCEPTED_MAX_RETRIES',
+                    fieldKey,
+                    retries: state.confirmRetryCount?.[fieldKey],
+                    promptSource: 'V116:escape_hatch'
+                }
+            };
+        }
+        
+        // V110: Unclear response - use UI-configured confirmRetryPrompt
         const confirmRetryPrompt = step.confirmRetryPrompt || step.options?.confirmRetryPrompt || step.reprompt;
         const promptSource = confirmRetryPrompt 
             ? `bookingFlow.steps[${step.id}].confirmRetryPrompt`
@@ -3105,7 +3198,7 @@ class BookingFlowRunner {
             reply: confirmRetryPrompt || step.confirmPrompt || step.prompt || `Is ${step.label || fieldKey} correct?`,
             state,
             isComplete: false,
-            action: 'CONTINUE',  // V110: Changed from 'CONFIRM_RETRY' - standardized action
+            action: 'CONTINUE',
             matchSource: 'BOOKING_FLOW_RUNNER',
             tier: 'tier1',
             tokensUsed: 0,
@@ -3116,6 +3209,8 @@ class BookingFlowRunner {
                 mode: 'CONFIRM_RETRY',
                 fieldKey,
                 userInput,
+                retryCount: state.confirmRetryCount[fieldKey],
+                maxRetries: MAX_CONFIRM_RETRIES,
                 promptSource
             }
         };
