@@ -31,9 +31,11 @@ const logger = require('./logger');
 function buildSystemVariables(company) {
     if (!company) return {};
     
+    const actualCompanyName = company.companyName || company.businessName || company.name || '';
+    
     const systemVars = {
         // Core company info
-        companyName: company.companyName || company.businessName || company.name || '',
+        companyName: actualCompanyName,
         companyType: company.trade || company.companyType || company.industry || 'Service',
         trade: company.trade || 'Service',
         
@@ -54,7 +56,7 @@ function buildSystemVariables(company) {
         
         // Business info
         businessHours: company.businessHours || company.hours || 'Monday-Friday 8am-5pm',
-        greeting: company.greeting || company.aiAgentSettings?.greeting || `Thanks for calling ${company.companyName || 'us'}!`,
+        greeting: company.greeting || company.aiAgentSettings?.greeting || `Thanks for calling ${actualCompanyName || 'us'}!`,
         
         // URLs
         bookingUrl: company.bookingUrl || company.aiAgentSettings?.bookingUrl || '',
@@ -63,6 +65,13 @@ function buildSystemVariables(company) {
         // Additional from aiAgentSettings
         ...(company.aiAgentSettings?.systemVariables || {})
     };
+    
+    // V130 FIX: Also add the actual company name as a literal key.
+    // Users often type {Penguin Air} instead of {companyName} in greeting templates.
+    // This makes both forms work: {companyName} → "Penguin Air" AND {Penguin Air} → "Penguin Air"
+    if (actualCompanyName && actualCompanyName !== 'companyName') {
+        systemVars[actualCompanyName] = actualCompanyName;
+    }
     
     return systemVars;
 }
