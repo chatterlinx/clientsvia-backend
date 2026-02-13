@@ -54,7 +54,7 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
             includeDebug: true
         });
         
-        // Log to BlackBox for the failure report
+        // Log to BlackBox with full scenario-vs-LLM diagnostics
         if (BlackBoxLogger) {
             BlackBoxLogger.logEvent({
                 callId: result.sessionId,
@@ -66,7 +66,14 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
                     latencyMs: result.latencyMs,
                     mode: result.conversationMode,
                     engine: 'ConversationEngine',
-                    isTest: true
+                    isTest: true,
+                    // Scenario-First diagnostics
+                    responseSource: result.debug?.source || result.matchSource || 'unknown',
+                    tier: result.tier || (result.tokensUsed === 0 ? 'tier1' : 'tier3'),
+                    scenarioName: result.debug?.scenarioName || result.debug?.matchedScenario || null,
+                    confidence: result.debug?.matchConfidence || result.debug?.tier1Confidence || null,
+                    tokensUsed: result.tokensUsed || result.debug?.tokensUsed || 0,
+                    fromStateMachine: result.fromStateMachine || false
                 }
             }).catch(() => {});
         }
@@ -76,10 +83,15 @@ router.post('/:companyId/chat', authenticateJWT, async (req, res) => {
             reply: result.reply,
             metadata: {
                 latencyMs: result.latencyMs,
-                tokensUsed: result.debug?.tokensUsed || 0,
+                tokensUsed: result.tokensUsed || result.debug?.tokensUsed || 0,
                 needsInfo: result.debug?.needsInfo || 'none',
                 mode: result.conversationMode || 'discovery',
-                slots: result.slotsCollected
+                slots: result.slotsCollected,
+                // Scenario-First diagnostics (visible in test UI)
+                responseSource: result.debug?.source || result.matchSource || 'unknown',
+                tier: result.tier || (result.tokensUsed === 0 ? 'tier1' : 'tier3'),
+                scenarioName: result.debug?.scenarioName || result.debug?.matchedScenario || null,
+                confidence: result.debug?.matchConfidence || result.debug?.tier1Confidence || null
             },
             debug: result.debug
         });

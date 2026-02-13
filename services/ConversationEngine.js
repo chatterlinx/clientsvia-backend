@@ -5912,7 +5912,8 @@ async function processTurn({
             }
             const tier1Match = scenarioRetrieval.topMatch;
             const tier1Confidence = scenarioRetrieval.topMatchConfidence ?? 0;
-            const allowTier1AutoResponse = killSwitches.disableScenarioAutoResponses !== true;
+            const allowTier1AutoResponse = killSwitches.disableScenarioAutoResponses !== true
+                && killSwitches.forceLLMDiscovery !== true;
             
             log('CHECKPOINT 9c.0: 🎯 Tier-1 Short-Circuit Check', {
                 tier1Threshold,
@@ -5920,6 +5921,7 @@ async function processTurn({
                 hasMatch: !!tier1Match,
                 matchName: tier1Match?.name || null,
                 allowAutoResponse: allowTier1AutoResponse,
+                forceLLMDiscovery: killSwitches.forceLLMDiscovery,
                 triggersMatched: tier1Match?.triggers?.slice(0, 5) || []
             });
             
