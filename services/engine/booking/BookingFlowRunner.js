@@ -37,6 +37,9 @@ const { validateSlotValue } = require('./BookingSlotValidator');
 const { sanitizeBookingState } = require('./BookingSlotSanitizer');
 const { checkConfirmationInvariant } = require('./BookingInvariants');
 
+// Spelled name parser — handles letter-by-letter spelling over the phone
+const { isSpelledInput, parseSpelledName } = require('../../../utils/spelledNameParser');
+
 // 🔌 AWConfigReader for traced config reads (Phase 6d)
 let AWConfigReader;
 try {
@@ -3381,13 +3384,88 @@ class BookingFlowRunner {
         // LAST NAME COLLECTION HANDLING
         // ═══════════════════════════════════════════════════════════════════════
         if (detailReason === 'LAST_NAME_REQUIRED' && (fieldKey === 'name' || step.type === 'name')) {
-            // First entry - ask for last name
+            // ═══════════════════════════════════════════════════════════════
+            // PHASE 0: Handle spelled name response
+            // ═══════════════════════════════════════════════════════════════
+            // If we asked the caller to spell their name, parse the letters
+            // before anything else. This takes priority over normal extraction.
+            // ═══════════════════════════════════════════════════════════════
+            if (state.awaitingSpelledName && userInput && userInput.trim()) {
+                const spelledResult = parseSpelledName(userInput);
+                
+                if (spelledResult.parsed && spelledResult.name && spelledResult.confidence >= 0.5) {
+                    // Successfully parsed spelled name
+                    const spelledLastName = spelledResult.name;
+                    const fullName = `${state.firstNameCollected} ${spelledLastName}`;
+                    
+                    safeSetSlot(state, fieldKey, fullName, {
+                        source: 'spelled_letter_by_letter',
+                        confidence: 0.98  // High confidence — caller spelled it out
+                    });
+                    markSlotConfirmed(state, fieldKey);
+                    
+                    delete state.firstNameCollected;
+                    delete state.askedForLastName;
+                    delete state.awaitingSpelledName;
+                    
+                    logger.info('[BOOKING FLOW RUNNER] Spelled last name accepted', {
+                        fullName,
+                        spelledName: spelledLastName,
+                        letters: spelledResult.letters.join(''),
+                        confidence: spelledResult.confidence.toFixed(2)
+                    });
+                    
+                    // Continue to next step
+                    const nextAction = this.determineNextAction(flow, state, {});
+                    if (!nextAction) {
+                        return this.buildConfirmation(flow, state);
+                    }
+                    
+                    state.currentStepId = nextAction.step.id;
+                    const nextPrompt = nextAction.mode === 'CONFIRM'
+                        ? this.buildConfirmPrompt(nextAction.step, nextAction.existingValue)
+                        : (nextAction.step.prompt || `What is your ${nextAction.step.label || nextAction.step.id}?`);
+                    
+                    return {
+                        reply: `Got it, ${spelledLastName}. ${nextPrompt}`,
+                        state,
+                        isComplete: false,
+                        action: 'CONTINUE',
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            source: 'BOOKING_FLOW_RUNNER',
+                            promptSource: 'BOOKING_FLOW_RUNNER',
+                            flowId: flow.flowId,
+                            mode: 'SPELLED_LAST_NAME_ACCEPTED',
+                            fullName,
+                            spelledLetters: spelledResult.letters.join('')
+                        }
+                    };
+                }
+                
+                // Spelling parse failed — check if caller said a name normally instead
+                // (e.g. they said "Walters" instead of spelling)
+                logger.info('[BOOKING FLOW RUNNER] Spelled name parse failed — trying normal extraction', {
+                    raw: userInput.substring(0, 50),
+                    parseResult: spelledResult.parsed,
+                    letterCount: spelledResult.letters?.length || 0
+                });
+                
+                // Clear the flag and fall through to normal extraction below
+                delete state.awaitingSpelledName;
+            }
+            
+            // ═══════════════════════════════════════════════════════════════
+            // PHASE 1: First entry — ask for last name
+            // ═══════════════════════════════════════════════════════════════
             if (!userInput || userInput.trim() === '' || !state.askedForLastName) {
                 const firstName = existingValue?.split?.(/\s+/)?.[0] || existingValue;
-                // V99: Use UI-configured last name question
                 let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
                 if (!lastNameQuestion) {
-                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for lastNameQuestion', { stepId: step.id });
+                    logger.warn('[BOOKING FLOW RUNNER] No UI config for lastNameQuestion', { stepId: step.id });
                     lastNameQuestion = "And your last name?";
                 }
                 
@@ -3406,6 +3484,7 @@ class BookingFlowRunner {
                     latencyMs: Date.now() - startTime,
                     debug: {
                         source: 'BOOKING_FLOW_RUNNER',
+                        promptSource: 'BOOKING_FLOW_RUNNER',
                         flowId: flow.flowId,
                         mode: 'COLLECT_DETAILS_LAST_NAME',
                         firstName
@@ -3413,24 +3492,204 @@ class BookingFlowRunner {
                 };
             }
             
-            // User provided last name
-            const lastName = userInput.trim().replace(/^(it's|its|my last name is|last name)\s*/i, '').trim();
-            const fullName = `${state.firstNameCollected} ${lastName}`;
+            // ═══════════════════════════════════════════════════════════════
+            // PHASE 2: User responded — check if they're spelling first
+            // ═══════════════════════════════════════════════════════════════
+            // Some callers immediately spell without being asked: "G-O-N-Z-A-L-E-Z"
+            if (isSpelledInput(userInput)) {
+                const spelledResult = parseSpelledName(userInput);
+                if (spelledResult.parsed && spelledResult.name && spelledResult.confidence >= 0.5) {
+                    const spelledLastName = spelledResult.name;
+                    const fullName = `${state.firstNameCollected} ${spelledLastName}`;
+                    
+                    safeSetSlot(state, fieldKey, fullName, {
+                        source: 'spelled_letter_by_letter_unsolicited',
+                        confidence: 0.98
+                    });
+                    markSlotConfirmed(state, fieldKey);
+                    
+                    delete state.firstNameCollected;
+                    delete state.askedForLastName;
+                    
+                    logger.info('[BOOKING FLOW RUNNER] Caller spelled last name unsolicited', {
+                        fullName,
+                        spelledName: spelledLastName,
+                        letters: spelledResult.letters.join('')
+                    });
+                    
+                    const nextAction = this.determineNextAction(flow, state, {});
+                    if (!nextAction) {
+                        return this.buildConfirmation(flow, state);
+                    }
+                    
+                    state.currentStepId = nextAction.step.id;
+                    const nextPrompt = nextAction.mode === 'CONFIRM'
+                        ? this.buildConfirmPrompt(nextAction.step, nextAction.existingValue)
+                        : (nextAction.step.prompt || `What is your ${nextAction.step.label || nextAction.step.id}?`);
+                    
+                    return {
+                        reply: `Got it, ${spelledLastName}. ${nextPrompt}`,
+                        state,
+                        isComplete: false,
+                        action: 'CONTINUE',
+                        matchSource: 'BOOKING_FLOW_RUNNER',
+                        tier: 'tier1',
+                        tokensUsed: 0,
+                        latencyMs: Date.now() - startTime,
+                        debug: {
+                            source: 'BOOKING_FLOW_RUNNER',
+                            promptSource: 'BOOKING_FLOW_RUNNER',
+                            flowId: flow.flowId,
+                            mode: 'SPELLED_LAST_NAME_UNSOLICITED',
+                            fullName
+                        }
+                    };
+                }
+            }
+            
+            // ═══════════════════════════════════════════════════════════════
+            // PHASE 3: Normal extraction + scoring
+            // ═══════════════════════════════════════════════════════════════
+            // "yeah its walters" → extractSingleNameToken → "walters"
+            // Then scoreNameCandidate validates against 50K last name database
+            // HIGH → accept, MEDIUM → ask to spell, LOW → reprompt
+            // ═══════════════════════════════════════════════════════════════
+            const lastNamePolicy = step?.options?.nameExtractionPolicy || {};
+            const lastNameToken = extractSingleNameToken(userInput, 'lastName', lastNamePolicy);
+            
+            if (!lastNameToken) {
+                logger.warn('[BOOKING FLOW RUNNER] Last name extraction failed — reprompting', {
+                    userInput: userInput.substring(0, 50),
+                    stepId: step.id
+                });
+                
+                return {
+                    reply: "I didn't catch your last name. Could you say just your last name?",
+                    state,
+                    isComplete: false,
+                    action: 'COLLECT_LAST_NAME',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        promptSource: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'LAST_NAME_EXTRACTION_FAILED',
+                        rawInput: userInput.substring(0, 50)
+                    }
+                };
+            }
+            
+            // Score the extracted token against 50K last name database
+            const firstNames = AWConfigReader.getGlobalFirstNames();
+            const lastNames = AWConfigReader.getGlobalLastNames();
+            const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
+            const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
+            
+            const scoreResult = scoreNameCandidate(lastNameToken, 'lastName', { firstNamesSet, lastNamesSet });
+            
+            if (scoreResult.rejected) {
+                logger.warn('[BOOKING FLOW RUNNER] Last name rejected by scorer — reprompting', {
+                    candidate: lastNameToken,
+                    score: scoreResult.score,
+                    breakdown: scoreResult.breakdown,
+                    stepId: step.id
+                });
+                
+                return {
+                    reply: "I want to make sure I get this right. What is your last name?",
+                    state,
+                    isComplete: false,
+                    action: 'COLLECT_LAST_NAME',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        promptSource: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'LAST_NAME_SCORE_REJECTED',
+                        candidate: lastNameToken,
+                        score: scoreResult.score
+                    }
+                };
+            }
+            
+            // Accepted — build full name
+            const cleanedLastName = scoreResult.candidate;
+            const fullName = `${state.firstNameCollected} ${cleanedLastName}`;
             
             safeSetSlot(state, fieldKey, fullName, {
-                source: 'combined_first_last',
-                confidence: 0.95
+                source: 'combined_first_last_scored',
+                confidence: scoreResult.score
             });
             markSlotConfirmed(state, fieldKey);
             
+            state._lastNameScore = {
+                candidate: cleanedLastName,
+                score: scoreResult.score,
+                needsConfirmation: scoreResult.needsConfirmation,
+                breakdown: scoreResult.breakdown
+            };
+            
+            logger.info('[BOOKING FLOW RUNNER] Last name scored and accepted', {
+                fullName,
+                candidate: cleanedLastName,
+                score: scoreResult.score.toFixed(2),
+                needsConfirmation: scoreResult.needsConfirmation,
+                inLastNameList: !!scoreResult.breakdown?.inLastNameList
+            });
+            
+            // ═══════════════════════════════════════════════════════════════
+            // MEDIUM confidence → ask caller to spell instead of just confirming
+            // ═══════════════════════════════════════════════════════════════
+            // A simple "Is that correct?" gets "yes" and doesn't catch STT errors.
+            // "Could you spell that?" gets the exact letters — professional and accurate.
+            // ═══════════════════════════════════════════════════════════════
+            if (scoreResult.needsConfirmation) {
+                // Don't clear firstNameCollected yet — we'll need it if they spell
+                state.awaitingSpelledName = true;
+                // Re-store firstName in case it was cleared
+                if (!state.firstNameCollected) {
+                    state.firstNameCollected = fullName.split(/\s+/)[0];
+                }
+                
+                logger.info('[BOOKING FLOW RUNNER] MEDIUM confidence — asking caller to spell', {
+                    candidate: cleanedLastName,
+                    score: scoreResult.score.toFixed(2)
+                });
+                
+                return {
+                    reply: `Could you spell your last name for me?`,
+                    state,
+                    isComplete: false,
+                    action: 'SPELL_LAST_NAME',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        promptSource: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'LAST_NAME_ASK_SPELLING',
+                        candidate: cleanedLastName,
+                        score: scoreResult.score
+                    }
+                };
+            }
+            
+            // HIGH confidence — clean up and continue
             delete state.firstNameCollected;
             delete state.askedForLastName;
             
-            logger.info('[BOOKING FLOW RUNNER] V96r: Full name collected', {
-                fullName
-            });
-            
-            // Continue to next step
+            // HIGH confidence — continue to next step
             const nextAction = this.determineNextAction(flow, state, {});
             if (!nextAction) {
                 return this.buildConfirmation(flow, state);
@@ -3452,9 +3711,11 @@ class BookingFlowRunner {
                 latencyMs: Date.now() - startTime,
                 debug: {
                     source: 'BOOKING_FLOW_RUNNER',
+                    promptSource: 'BOOKING_FLOW_RUNNER',
                     flowId: flow.flowId,
                     mode: 'LAST_NAME_COLLECTED_CONTINUE',
-                    fullName
+                    fullName,
+                    score: scoreResult.score
                 }
             };
         }
@@ -3683,6 +3944,55 @@ class BookingFlowRunner {
             return this.handleSpellingConfirmationResponse(userInput, state, flow, step, startTime);
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // SPELLED NAME RESPONSE HANDLER
+        // ═══════════════════════════════════════════════════════════════════
+        // If we asked the caller to spell their name (MEDIUM confidence),
+        // parse the letters before normal extraction runs.
+        // ═══════════════════════════════════════════════════════════════════
+        if (state.awaitingSpelledName && userInput && userInput.trim()) {
+            const isNameStep = fieldKey === 'name' || step.type === 'name';
+            
+            if (isNameStep) {
+                const spelledResult = parseSpelledName(userInput);
+                
+                if (spelledResult.parsed && spelledResult.name && spelledResult.confidence >= 0.5) {
+                    // Successfully parsed — build full name
+                    const spelledName = spelledResult.name;
+                    const firstName = state.firstNameCollected || state.bookingCollected?.name?.split?.(/\s+/)?.[0];
+                    const fullName = firstName ? `${firstName} ${spelledName}` : spelledName;
+                    
+                    safeSetSlot(state, fieldKey, fullName, {
+                        source: 'spelled_letter_by_letter',
+                        confidence: 0.98
+                    });
+                    markSlotConfirmed(state, fieldKey);
+                    
+                    delete state.awaitingSpelledName;
+                    delete state.firstNameCollected;
+                    delete state.askedForLastName;
+                    
+                    logger.info('[BOOKING FLOW RUNNER] Spelled name accepted (handleCollectMode)', {
+                        fullName,
+                        spelledName,
+                        letters: spelledResult.letters.join('')
+                    });
+                    
+                    const nextAction = this.findNextRequiredStep(flow, state);
+                    if (!nextAction) {
+                        return this.buildConfirmation(flow, state);
+                    }
+                    return this.askStep(nextAction.step, state, flow);
+                }
+                
+                // Spelling parse failed — clear flag, try normal extraction
+                logger.info('[BOOKING FLOW RUNNER] Spelled name parse failed — trying normal extraction', {
+                    raw: userInput.substring(0, 50)
+                });
+                delete state.awaitingSpelledName;
+            }
+        }
+        
         // Handle spelling correction response
         if (state.spellingCorrectionPending && state.pendingSpellingConfirm) {
             const correctedName = userInput.trim();
@@ -3789,6 +4099,48 @@ class BookingFlowRunner {
                 }
                 
                 return this.repromptStep(step, state, flow, 'empty_input');
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════
+        // UNSOLICITED SPELLING DETECTION
+        // ═══════════════════════════════════════════════════════════════════
+        // If the caller spontaneously spells their name (e.g., "G-O-N-Z-A-L-E-Z")
+        // without being asked, detect it here and use the spelled result directly.
+        // ═══════════════════════════════════════════════════════════════════
+        const isNameStep = fieldKey === 'name' || step.type === 'name' ||
+                           fieldKey === 'firstName' || fieldKey === 'lastName';
+        
+        if (isNameStep && isSpelledInput(userInput)) {
+            const spelledResult = parseSpelledName(userInput);
+            if (spelledResult.parsed && spelledResult.name && spelledResult.confidence >= 0.5) {
+                logger.info('[BOOKING FLOW RUNNER] Unsolicited spelling detected in handleCollectMode', {
+                    raw: userInput.substring(0, 50),
+                    spelledName: spelledResult.name
+                });
+                
+                // Use the spelled name as the extracted value
+                const spelledName = spelledResult.name;
+                const setResult = safeSetSlot(state, fieldKey, spelledName, {
+                    source: 'spelled_letter_by_letter_unsolicited',
+                    confidence: 0.98
+                });
+                
+                if (setResult.accepted) {
+                    markSlotConfirmed(state, fieldKey);
+                    state.lastExtracted = { [fieldKey]: spelledName };
+                    
+                    if (state.askCount) {
+                        delete state.askCount[step.id];
+                    }
+                    
+                    // Check if we need to continue to more steps
+                    const nextAction = this.findNextRequiredStep(flow, state);
+                    if (!nextAction) {
+                        return this.buildConfirmation(flow, state);
+                    }
+                    return this.askStep(nextAction.step, state, flow);
+                }
             }
         }
         
@@ -4923,37 +5275,90 @@ class BookingFlowRunner {
             }
         }
         
-        // V96f: Use safeSetSlot for identity fields, direct write for others
-        // V113: Pass needsConfirmation from name scoring if available
+        // ═══════════════════════════════════════════════════════════════════
+        // IDENTITY SLOT WRITE — with MEDIUM confidence spelling intercept
+        // ═══════════════════════════════════════════════════════════════════
         if (IDENTITY_SLOTS.has(fieldKey)) {
-            // V113: Check if name scoring set needsConfirmation
             const nameScore = state._lastNameScore;
             const isNameField = ['firstName', 'lastName', 'name'].includes(fieldKey);
             const needsConfirmation = isNameField && nameScore?.needsConfirmation === true;
             const scoreConfidence = nameScore?.score || 0.9;
             
+            // ═══════════════════════════════════════════════════════════════
+            // MEDIUM CONFIDENCE INTERCEPT: Ask caller to spell instead of
+            // silently accepting a name the system isn't sure about.
+            // ═══════════════════════════════════════════════════════════════
+            if (needsConfirmation && isNameField) {
+                // Store the value tentatively but ask for spelling
+                safeSetSlot(state, fieldKey, valueToStore, {
+                    source: 'direct_collection_medium_confidence',
+                    confidence: scoreConfidence,
+                    needsConfirmation: true
+                });
+                
+                // Determine which name part needs spelling
+                const nameType = nameScore?.type || 'lastName';
+                const nameParts = (valueToStore || '').trim().split(/\s+/);
+                const nameToSpell = nameType === 'firstName' ? nameParts[0] : nameParts[nameParts.length - 1];
+                
+                state.awaitingSpelledName = true;
+                // Preserve first name for combination
+                if (nameParts.length >= 2 && !state.firstNameCollected) {
+                    state.firstNameCollected = nameParts[0];
+                }
+                
+                delete state._lastNameScore;
+                
+                logger.info('[BOOKING FLOW RUNNER] MEDIUM confidence — asking to spell', {
+                    fieldKey,
+                    candidate: nameToSpell,
+                    score: scoreConfidence.toFixed(2),
+                    breakdown: nameScore?.breakdown
+                });
+                
+                const spellingPrompt = nameType === 'firstName'
+                    ? 'Could you spell your first name for me?'
+                    : 'Could you spell your last name for me?';
+                
+                return {
+                    reply: spellingPrompt,
+                    state,
+                    isComplete: false,
+                    action: 'SPELL_NAME',
+                    currentStep: step.id,
+                    matchSource: 'BOOKING_FLOW_RUNNER',
+                    tier: 'tier1',
+                    tokensUsed: 0,
+                    latencyMs: Date.now() - startTime,
+                    debug: {
+                        source: 'BOOKING_FLOW_RUNNER',
+                        promptSource: 'BOOKING_FLOW_RUNNER',
+                        flowId: flow.flowId,
+                        mode: 'NAME_ASK_SPELLING_MEDIUM_CONFIDENCE',
+                        candidate: nameToSpell,
+                        score: scoreConfidence
+                    }
+                };
+            }
+            
             const setResult = safeSetSlot(state, fieldKey, valueToStore, {
                 source: 'direct_collection',
-                confidence: isNameField ? scoreConfidence : 0.9,
-                needsConfirmation  // V113: Pass through for confirmation flow
+                confidence: isNameField ? scoreConfidence : 0.9
             });
             
-            // V113: Store scoring metadata for confirmation flow
+            // Store scoring metadata for tracing
             if (setResult.accepted && nameScore) {
                 state.slotMetadata = state.slotMetadata || {};
                 state.slotMetadata[fieldKey] = state.slotMetadata[fieldKey] || {};
-                state.slotMetadata[fieldKey].needsConfirmation = needsConfirmation;
                 state.slotMetadata[fieldKey].nameScore = nameScore.score;
                 state.slotMetadata[fieldKey].scoreBreakdown = nameScore.breakdown;
                 
-                // Clear the temporary score after using it
                 delete state._lastNameScore;
                 
-                logger.info('[BOOKING FLOW RUNNER] V113: Name slot set with scoring metadata', {
+                logger.info('[BOOKING FLOW RUNNER] Name slot set with scoring metadata', {
                     fieldKey,
                     value: valueToStore,
                     score: nameScore.score?.toFixed(2),
-                    needsConfirmation,
                     breakdown: nameScore.breakdown
                 });
             }
@@ -4961,7 +5366,7 @@ class BookingFlowRunner {
             if (setResult.accepted) {
                 markSlotConfirmed(state, fieldKey);
             } else {
-                logger.warn('[BOOKING FLOW RUNNER] V96f: Identity slot rejected during collection', {
+                logger.warn('[BOOKING FLOW RUNNER] Identity slot rejected during collection', {
                     fieldKey,
                     reason: setResult.reason,
                     value: valueToStore

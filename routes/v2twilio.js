@@ -3371,7 +3371,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             addressCompletionVerified: callState.addressCompletionVerified || false,
             // Name sub-step fields — must persist between turns for last name collection
             askedForLastName: callState.askedForLastName || false,
-            firstNameCollected: callState.firstNameCollected || null
+            firstNameCollected: callState.firstNameCollected || null,
+            // Spelling sub-step — caller was asked to spell their name
+            awaitingSpelledName: callState.awaitingSpelledName || false
           };
           
           // Create AWConfigReader for traced config reads
@@ -3537,6 +3539,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               // Name sub-step fields — persist between turns for last name collection
               askedForLastName: bookingResult.state?.askedForLastName || false,
               firstNameCollected: bookingResult.state?.firstNameCollected || null,
+              // Spelling sub-step — caller was asked to spell their name
+              awaitingSpelledName: bookingResult.state?.awaitingSpelledName || false,
               bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE',
               bookingFlowState: {
                 bookingModeLocked: bookingResult.state?.bookingModeLocked !== false,
