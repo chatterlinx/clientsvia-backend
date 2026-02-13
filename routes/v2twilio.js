@@ -3367,15 +3367,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             // V116: Confirm retry count — prevents infinite confirmRetryPrompt loops
             confirmRetryCount: callState.confirmRetryCount || {},
             // Address sub-step fields — must persist between turns for city/state collection
-            askedForCityState: callState.askedForCityState || false,
+            askedForCityState: callState.askedForCityState,
             streetAddressCollected: callState.streetAddressCollected || null,
             addressValidation: callState.addressValidation || null,
-            addressCompletionVerified: callState.addressCompletionVerified || false,
+            addressCompletionVerified: callState.addressCompletionVerified,
             // Name sub-step fields — must persist between turns for last name collection
-            askedForLastName: callState.askedForLastName || false,
+            askedForLastName: callState.askedForLastName,
             firstNameCollected: callState.firstNameCollected || null,
             // Spelling sub-step — caller was asked to spell their name
-            awaitingSpelledName: callState.awaitingSpelledName || false
+            awaitingSpelledName: callState.awaitingSpelledName
           };
           
           // Create AWConfigReader for traced config reads
@@ -3536,15 +3536,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               // V116: Confirm retry count — prevents infinite confirmRetryPrompt loops
               confirmRetryCount: bookingResult.state?.confirmRetryCount || {},
               // Address sub-step fields — persist between turns for city/state collection + geo validation
-              askedForCityState: bookingResult.state?.askedForCityState || false,
+              askedForCityState: bookingResult.state?.askedForCityState,
               streetAddressCollected: bookingResult.state?.streetAddressCollected || null,
               addressValidation: bookingResult.state?.addressValidation || null,
-              addressCompletionVerified: bookingResult.state?.addressCompletionVerified || false,
+              addressCompletionVerified: bookingResult.state?.addressCompletionVerified,
               // Name sub-step fields — persist between turns for last name collection
-              askedForLastName: bookingResult.state?.askedForLastName || false,
+              askedForLastName: bookingResult.state?.askedForLastName,
               firstNameCollected: bookingResult.state?.firstNameCollected || null,
               // Spelling sub-step — caller was asked to spell their name
-              awaitingSpelledName: bookingResult.state?.awaitingSpelledName || false,
+              awaitingSpelledName: bookingResult.state?.awaitingSpelledName,
               bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE',
               bookingFlowState: {
                 bookingModeLocked: bookingResult.state?.bookingModeLocked !== false,
