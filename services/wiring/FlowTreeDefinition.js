@@ -133,15 +133,8 @@ const NODES = [
     // ─────────────────────────────────────────────────────────────────────────
     // CONSENT DETECTION
     // ─────────────────────────────────────────────────────────────────────────
-    {
-        id: 'node.directBookingIntentDetector',
-        label: 'Direct Booking Intent Detector',
-        type: NODE_TYPES.DETECTOR,
-        description: 'V92: Detect "get somebody out", "schedule", etc.',
-        checkpoint: 'CHECKPOINT_DIRECT_INTENT',
-        configPaths: ['booking.directIntentPatterns'],
-        codeLocation: 'DirectBookingIntentDetector.js'
-    },
+    // V116: DirectBookingIntentDetector REMOVED — dead code.
+    // FrontDeskRuntime.determineLane() is the sole booking intent detector.
     {
         id: 'node.consentGate',
         label: 'Consent Gate',
@@ -434,12 +427,7 @@ const RUNTIME_BINDINGS = [
     },
     
     // Intent detection
-    {
-        nodeId: 'node.directBookingIntentDetector',
-        checkpoints: ['CHECKPOINT_DIRECT_INTENT'],
-        matchSources: [],
-        codePatterns: ['DirectBookingIntentDetector', 'hasDirectIntent']
-    },
+    // V116: DirectBookingIntentDetector checkpoint mapping REMOVED (dead code)
     {
         nodeId: 'node.consentGate',
         checkpoints: ['CHECKPOINT_CONSENT_CHECK'],

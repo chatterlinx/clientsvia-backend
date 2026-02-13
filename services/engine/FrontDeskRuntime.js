@@ -715,6 +715,35 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
             });
             return LANES.BOOKING;
         }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // V116 FIX: Accept leading affirmative + additional info
+        // ═══════════════════════════════════════════════════════════════
+        // Caller says "Yep. It's 12155 Metro Parkway" in response to
+        // "Could you please provide your address so I can send a tech?"
+        //
+        // "Yep" = consent, "12155 Metro Parkway" = address info.
+        // The strict token-only check above fails because "metro" and
+        // "parkway" aren't consent words. But the leading affirmative
+        // clearly signals agreement when consentPending is true.
+        //
+        // SAFE because consentPending is ONLY set when we explicitly
+        // offered booking on the previous turn.
+        // ═══════════════════════════════════════════════════════════════
+        if (!isConsent && tokens.length > 0) {
+            const LEADING_CONSENT_TOKENS = new Set([
+                'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
+                'absolutely', 'definitely', 'please', 'alright'
+            ]);
+            if (LEADING_CONSENT_TOKENS.has(tokens[0])) {
+                trace.addDecisionReason('LANE_BOOKING', { 
+                    reason: 'leading_consent_with_info',
+                    leadingWord: tokens[0],
+                    fullInput: cleanedForConsent.substring(0, 60)
+                });
+                return LANES.BOOKING;
+            }
+        }
     }
     
     // 4. Check for direct booking intent

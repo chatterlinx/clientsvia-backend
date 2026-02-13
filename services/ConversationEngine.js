@@ -4865,13 +4865,40 @@ async function processTurn({
             // treat affirmative and urgency phrases as YES → start booking
             // ═══════════════════════════════════════════════════════════════════
             if (bookingConsentPending) {
-                const isAffirmative = consentRegex.test(cleanedForConsent) || urgencyRegex.test(lowerText);
+                let isAffirmative = consentRegex.test(cleanedForConsent) || urgencyRegex.test(lowerText);
+                
+                // ═══════════════════════════════════════════════════════════════
+                // V116 FIX: Accept leading affirmative + additional content
+                // ═══════════════════════════════════════════════════════════════
+                // PROBLEM: consentRegex uses ^..$ anchors requiring the ENTIRE
+                // input to be a consent phrase. When a caller says:
+                //   "Yep. It's 12155 Metro Parkway"
+                // The "Yep" is clearly consent, but "It's 12155..." makes the
+                // full-match regex fail. Caller consents AND provides info.
+                //
+                // FIX: When consentPending=true, also check if input STARTS WITH
+                // an affirmative word. This is safe because consentPending is only
+                // true when we explicitly offered booking on the previous turn.
+                // ═══════════════════════════════════════════════════════════════
+                if (!isAffirmative) {
+                    const LEADING_AFFIRMATIVE = /^(yes|yeah|yep|yup|sure|ok|okay|absolutely|definitely|please|of course|go ahead|sounds good|that works|that would be great|uh\s*huh|mm\s*hmm)\b/i;
+                    if (LEADING_AFFIRMATIVE.test(cleanedForConsent)) {
+                        isAffirmative = true;
+                        log('📅 V116: LEADING AFFIRMATIVE detected in consent-pending response', {
+                            userText: userText.substring(0, 60),
+                            leadingWord: cleanedForConsent.match(LEADING_AFFIRMATIVE)?.[0],
+                            reason: 'caller_consents_and_provides_info'
+                        });
+                    }
+                }
                 
                 if (isAffirmative) {
                     log('📅 V98: CONSENT DETECTED - Affirmative/urgency response to booking offer', {
                         userText: userText.substring(0, 60),
                         consentPending: true,
-                        matchType: consentRegex.test(cleanedForConsent) ? 'affirmative' : 'urgency',
+                        matchType: consentRegex.test(cleanedForConsent) ? 'affirmative' 
+                            : urgencyRegex.test(lowerText) ? 'urgency' 
+                            : 'leading_affirmative',
                         source: awReader ? 'control_plane' : 'defaults'
                     });
                     bookingIntentDetected = true;
@@ -6084,6 +6111,36 @@ async function processTurn({
                     }
                     
                     // ═══════════════════════════════════════════════════════════════
+                    // V116 FIX: Set consentPending when scenario implies scheduling
+                    // ═══════════════════════════════════════════════════════════════
+                    // CRITICAL BUG FIX: The scenario path detected scheduling language
+                    // (impliesScheduling=true) and set conversationMemory flags, but
+                    // NEVER set session.booking.consentPending. This meant:
+                    //   Turn N:   Scenario offers scheduling → consentPending stays FALSE
+                    //   Turn N+1: Scenario fails to match → falls to LLM_FALLBACK
+                    //             LLM has no signal that booking was offered → asks AGAIN
+                    //   Turn N+2: Caller frustrated: "I thought we just went through that"
+                    //
+                    // FIX: Set consentPending when scenario response implies scheduling,
+                    // REGARDLESS of whether the consent question text was actually appended.
+                    // This signals the booking state machine on the next turn.
+                    // ═══════════════════════════════════════════════════════════════
+                    if (impliesScheduling && !consentAlreadyGiven) {
+                        session.booking = session.booking || {};
+                        session.booking.consentPending = true;
+                        session.booking.consentPendingTurn = session.metrics?.totalTurns || 0;
+                        session.markModified('booking');
+                        
+                        log('✅ V116: SCENARIO implies scheduling — consentPending=true', {
+                            scenarioId: tier1Match.scenarioId,
+                            scenarioName: tier1Match.name,
+                            impliesScheduling,
+                            addedConsentQuestion,
+                            consentPendingTurn: session.booking.consentPendingTurn
+                        });
+                    }
+                    
+                    // ═══════════════════════════════════════════════════════════════
                     // V92: REPLACE PLACEHOLDERS USING EXISTING SYSTEM
                     // ═══════════════════════════════════════════════════════════════
                     // Scenarios use {callerName} placeholder - fill it with runtime data
@@ -6171,13 +6228,21 @@ async function processTurn({
                         hadCallerName: !!runtimeVars.callerName
                     });
                     
+                    // V116: Build signals for scenario response
+                    const scenarioSignals = {};
+                    if (impliesScheduling && !consentAlreadyGiven) {
+                        scenarioSignals.setConsentPending = true;
+                        // V98 compat: Also propagate via bookingConsentPending for Redis persistence
+                        scenarioSignals.bookingConsentPending = true;
+                    }
+                    
                     aiResult = {
                         reply: finalReply,
                         conversationMode: 'discovery',
                         intent: 'scenario_matched',
                         nextGoal: addedConsentQuestion ? 'AWAIT_CONSENT' : 'CONTINUE_DISCOVERY',
                         filledSlots: currentSlots,
-                        signals: {},
+                        signals: scenarioSignals,
                         latencyMs: aiLatencyMs,
                         tokensUsed: 0,  // 🎯 ZERO TOKENS! This is the whole point.
                         fromStateMachine: true,  // For backwards compat (tier1 = deterministic)

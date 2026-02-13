@@ -11,16 +11,18 @@
  * 
  * CONSUMERS:
  * - BookingFlowRunner (uses this for steps, prompts, templates)
- * - ConsentDetector (uses this for consent patterns)
- * - DirectBookingIntentDetector (uses this for intent patterns)
  * - ConversationEngine (uses this for booking state)
  * - SlotExtractor (uses this for slot config)
+ * 
+ * REMOVED (V116 Clean Sweep):
+ * - ConsentDetector — dead code, never called
+ * - DirectBookingIntentDetector — dead code, removed entirely
  * 
  * WHY THIS EXISTS:
  * Before this, booking config was read from multiple places:
  * - BookingFlowRunner read directly from company.aiAgentSettings
- * - ConsentDetector had its own fallback reads
- * - DirectBookingIntentDetector used hardcoded patterns
+ * - [REMOVED] ConsentDetector had its own fallback reads
+ * - [REMOVED] DirectBookingIntentDetector used hardcoded patterns
  * 
  * This created "split-brain" behavior where UI config was ignored
  * because runtime was reading from legacy paths.

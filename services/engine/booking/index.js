@@ -51,7 +51,8 @@
 const BookingFlowRunner = require('./BookingFlowRunner');
 const BookingFlowResolver = require('./BookingFlowResolver');
 const SlotExtractor = require('./SlotExtractor');
-const DirectBookingIntentDetector = require('./DirectBookingIntentDetector');
+// V116: DirectBookingIntentDetector REMOVED — dead code, never called at runtime.
+// FrontDeskRuntime.determineLane() is the sole booking intent detection system.
 const DiscoveryExtractor = require('./DiscoveryExtractor');
 const SensitiveMasker = require('./SensitiveMasker');
 
@@ -59,7 +60,6 @@ module.exports = {
     BookingFlowRunner,
     BookingFlowResolver,
     SlotExtractor,
-    DirectBookingIntentDetector,
     DiscoveryExtractor,
     SensitiveMasker,
     
@@ -69,8 +69,6 @@ module.exports = {
     SlotExtractors: BookingFlowRunner.SlotExtractors,
     CONFIDENCE: SlotExtractor.CONFIDENCE,
     SOURCE: SlotExtractor.SOURCE,
-    DIRECT_BOOKING_PATTERNS: DirectBookingIntentDetector.DIRECT_BOOKING_PATTERNS,
-    TRADE_PATTERNS: DirectBookingIntentDetector.TRADE_PATTERNS,
     HVAC_SYMPTOM_PATTERNS: DiscoveryExtractor.HVAC_SYMPTOM_PATTERNS,
     TECH_NAME_PATTERNS: DiscoveryExtractor.TECH_NAME_PATTERNS,
     TENURE_PATTERNS: DiscoveryExtractor.TENURE_PATTERNS,

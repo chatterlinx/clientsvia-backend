@@ -140,18 +140,9 @@ const WIRING_CHECKS = [
         severity: 'critical'
     },
     
-    // ═══════════════════════════════════════════════════════════════════
-    // V92: DIRECT BOOKING INTENT - Fast-path to booking mode
-    // ═══════════════════════════════════════════════════════════════════
-    {
-        id: 'direct-booking-intent',
-        description: 'Detect direct booking intent and skip consent question',
-        files: ['DirectBookingIntentDetector.js', 'ConversationEngine.js'],
-        codePattern: /DirectBookingIntentDetector|hasDirectIntent|directBookingIntent|get\s+somebody\s+out/g,
-        requiredDbPath: 'aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
-        requiredEdge: 'utterance → direct_intent_check → booking_mode (if matches)',
-        severity: 'high'
-    },
+    // V116: DirectBookingIntentDetector REMOVED — dead code.
+    // Booking intent detection is now solely handled by FrontDeskRuntime.determineLane()
+    // using frontDesk.detectionTriggers.wantsBooking + directIntentPatterns from config.
     
     // ═══════════════════════════════════════════════════════════════════
     // V92: ADDRESS VALIDATION - Prevents garbage address storage
