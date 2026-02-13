@@ -420,98 +420,67 @@ const wiringRegistryV2 = {
                     fields: [
                         {
                             id: 'frontDesk.commonFirstNames',
-                            label: 'Common First Names',
-                            ui: { inputId: 'commonFirstNames', path: 'Front Desk → Slot Extraction → Common First Names' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.commonFirstNames' },
+                            label: 'Common First Names (Global — SSA 10K)',
+                            ui: { inputId: 'commonFirstNames', path: 'Global Settings → Common First Names' },
+                            db: { path: 'AdminSettings.commonFirstNames' },
                             runtime: RUNTIME_READERS_MAP['frontDesk.commonFirstNames'],
-                            scope: 'company',
+                            scope: 'global',
                             required: false,
                             validators: [],
                             defaultValue: [],
-                            notes: 'Used by name extraction to recognize common first names vs noise (e.g., trade terms)'
+                            notes: 'SSA Baby Names (10K names, 96.7% US coverage). Global — shared by all companies via AdminSettings.'
                         },
                         {
                             id: 'frontDesk.commonLastNames',
-                            label: 'Common Last Names',
-                            ui: { inputId: 'commonLastNames', path: 'Front Desk → Booking Prompts → Common Last Names' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.commonLastNames' },
+                            label: 'Common Last Names (Global — Census 50K)',
+                            ui: { inputId: 'commonLastNames', path: 'Global Settings → Common Last Names' },
+                            db: { path: 'AdminSettings.commonLastNames' },
                             runtime: RUNTIME_READERS_MAP['frontDesk.commonLastNames'],
-                            scope: 'company',
+                            scope: 'global',
                             required: false,
                             validators: [],
                             defaultValue: [],
-                            notes: 'V111: US Census top 50K surnames for last name recognition and STT validation'
+                            notes: 'US Census 50K surnames (~83% US coverage). Global — shared by all companies via AdminSettings.'
                         },
                         {
                             id: 'frontDesk.nameStopWords',
-                            label: 'Name Rejection Words',
-                            ui: { inputId: 'nameStopWords', path: 'Front Desk → Booking Prompts → Name Rejection Words' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameStopWords' },
+                            label: 'Name Rejection Words (Global)',
+                            ui: { inputId: 'nameStopWords', path: 'Global Settings → Name Rejection Words' },
+                            db: { path: 'AdminSettings.nameStopWords' },
                             runtime: RUNTIME_READERS_MAP['frontDesk.nameStopWords'],
-                            scope: 'company',
+                            scope: 'global',
                             required: false,
                             validators: [],
                             defaultValue: [],
-                            notes: 'V111: Company-specific words rejected as names. Extends system defaults in IdentitySlotFirewall.NAME_STOPWORDS.'
+                            notes: 'Global stop words — words NEVER accepted as caller names. Shared by all companies via AdminSettings.'
                         }
-                        // ⚠️ LEGACY REMOVED (V111): slotExtraction.nameStopWords.enabled and
-                        // slotExtraction.nameStopWords.custom were pointing to the deprecated
-                        // path aiAgentSettings.nameStopWords. Consolidated into a single
-                        // frontDesk.nameStopWords entry above (aiAgentSettings.frontDeskBehavior.nameStopWords).
+                        // ⚠️ LEGACY REMOVED: slotExtraction.nameStopWords.enabled and
+                        // slotExtraction.nameStopWords.custom were per-company paths. All name
+                        // stop words now live in AdminSettings.nameStopWords (global).
                     ]
                 },
                 
-                // BOOKING PROMPTS
+                // BOOKING ENABLED (V110: slots come from slotRegistry + bookingFlow)
                 {
-                    id: 'frontDesk.bookingPrompts',
-                    label: 'Booking Prompts',
-                    description: 'Slot definitions for booking flow',
+                    id: 'frontDesk.bookingConfig',
+                    label: 'Booking Configuration',
+                    description: 'Booking feature flags (slots defined in V110 Slot Registry + Booking Flow)',
                     critical: true,
                     ui: {
-                        sectionId: 'bookingPrompts',
-                        path: 'Front Desk → Booking Prompts'
+                        sectionId: 'bookingConfig',
+                        path: 'Front Desk → Booking Configuration'
                     },
                     fields: [
                         {
                             id: 'frontDesk.bookingEnabled',
                             label: 'Booking Enabled',
-                            ui: { inputId: 'bookingEnabled', path: 'Front Desk → Booking Prompts → Enabled' },
+                            ui: { inputId: 'bookingEnabled', path: 'Front Desk → Booking Configuration → Enabled' },
                             db: { path: 'aiAgentSettings.frontDeskBehavior.bookingEnabled' },
                             runtime: RUNTIME_READERS_MAP['frontDesk.bookingEnabled'],
                             scope: 'company',
                             required: true,
                             validators: [],
                             defaultValue: true
-                        },
-                        {
-                            id: 'frontDesk.bookingSlots',
-                            label: 'Booking Slots',
-                            ui: { inputId: 'bookingSlots', path: 'Front Desk → Booking Prompts → Slots' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.bookingSlots' },
-                            runtime: RUNTIME_READERS_MAP['frontDesk.bookingSlots'],
-                            scope: 'company',
-                            required: true,
-                            validators: [
-                                { fn: VALIDATORS.isNonEmptyArray, message: 'At least one booking slot required' },
-                                { fn: VALIDATORS.allSlotsValid, message: 'All slots must have id, type, and question' }
-                            ],
-                            defaultValue: [],
-                            // V54: Per-slot configurable prompts - ALL prompts must come from here, NO HARDCODES
-                            subFieldsDoc: `
-                                Per-slot V54 configurable fields (stored in each slot object):
-                                - question: Main prompt for this slot (REQUIRED)
-                                - lastNameQuestion: "And what's your last name?" (name slots only)
-                                - firstNameQuestion: "And what's your first name?" (name slots only)
-                                - areaCodePrompt: "Let's go step by step - what's the area code?" (phone slots only)
-                                - restOfNumberPrompt: "Got it. And the rest of the number?" (phone slots only)
-                                - partialAddressPrompt: "I got part of that. Can you give me the full address including city?" (address slots only)
-                                - streetBreakdownPrompt: "Let's go step by step - what's the street address?" (address slots only)
-                                - cityPrompt: "And what city?" (address slots only)
-                                - zipPrompt: "And the zip code?" (address slots only)
-                                
-                                RULE: If ConversationEngine needs a prompt string, it MUST read from bookingSlots[].field
-                                      NEVER hardcode text in code. Use || fallback ONLY as schema default reference.
-                            `
                         }
                     ]
                 },
@@ -878,16 +847,16 @@ const wiringRegistryV2 = {
                             notes: 'Options: curated_list (manual groups), auto_scan (from commonFirstNames list)'
                         },
                         {
-                            id: 'frontDesk.bookingSlots.name.confirmSpelling',
+                            id: 'frontDesk.nameSpellingVariants.confirmSpelling',
                             label: 'Confirm Spelling (Name Slot)',
-                            ui: { inputId: 'slot-confirmSpelling', path: 'Front Desk → Booking Prompts → Name Slot → Confirm Spelling' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.bookingSlots[name].confirmSpelling' },
-                            runtime: RUNTIME_READERS_MAP['frontDesk.bookingSlots.name.confirmSpelling'],
+                            ui: { inputId: 'slot-confirmSpelling', path: 'Front Desk → Name Spelling Variants → Confirm Spelling' },
+                            db: { path: 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.confirmSpelling' },
+                            runtime: RUNTIME_READERS_MAP['frontDesk.nameSpellingVariants.source'],
                             scope: 'company',
                             required: false,
                             validators: [],
                             defaultValue: false,
-                            notes: 'SLOT-LEVEL toggle. Must be ON together with global nameSpellingVariants.enabled for spelling to fire.'
+                            notes: 'Must be enabled TOGETHER with global nameSpellingVariants.enabled for spelling to fire.'
                         }
                     ]
                 },

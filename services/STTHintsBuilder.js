@@ -76,10 +76,10 @@ class STTHintsBuilder {
             ];
             
             // ═══════════════════════════════════════════════════════════════════
-            // V87.3: USE EXISTING 908 COMMON FIRST NAMES (NO DUPLICATION!)
+            // GLOBAL FIRST NAMES FOR STT ACCURACY
             // ═══════════════════════════════════════════════════════════════════
-            // The company already has ~908 common first names at:
-            // company.aiAgentSettings.frontDeskBehavior.commonFirstNames
+            // Names are read from global AdminSettings via AWConfigReader cache.
+            // 10,000 SSA names (96.7% US population coverage).
             // 
             // Without these in STT hints, Twilio mishears:
             // - "Dustin" → "question"
@@ -88,14 +88,14 @@ class STTHintsBuilder {
             // Twilio limit is 1000 chars, so we take the first ~150 names
             // (average 6 chars + comma = ~7 chars per name = ~150 names max)
             // ═══════════════════════════════════════════════════════════════════
-            const commonFirstNames = company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+            const AWConfigReader = require('./wiring/AWConfigReader');
+            const commonFirstNames = AWConfigReader.getGlobalFirstNames();
             
             // Take first 150 names (Twilio has 1000 char limit for hints)
-            // Names are already sorted by popularity in the 908 list
             const commonNames = commonFirstNames.slice(0, 150);
             
-            logger.debug('[STT HINTS] Loaded common first names for STT accuracy', {
-                totalInCompany: commonFirstNames.length,
+            logger.debug('[STT HINTS] Loaded global first names for STT accuracy', {
+                totalGlobal: commonFirstNames.length,
                 usedForHints: commonNames.length,
                 sample: commonNames.slice(0, 10).join(', ')
             });

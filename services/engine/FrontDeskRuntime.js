@@ -664,36 +664,10 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         }
     }
     
-    // 4. Check for direct booking intent (V102: via cfgGet)
-    // V108: ALL detection triggers MUST come from frontDesk.detectionTriggers.*
-    // In strict mode: booking.directIntentPatterns is FORBIDDEN (legacy/compat only)
+    // 4. Check for direct booking intent
+    // V110: ALL detection triggers come from frontDesk.detectionTriggers.* (sole source)
     const bookingTriggers = getConfig('frontDesk.detectionTriggers.wantsBooking', []);
-    
-    // V108: Read from CANONICAL location first (frontDesk.detectionTriggers.directIntentPatterns)
-    const directIntentPatternsCanonical = getConfig('frontDesk.detectionTriggers.directIntentPatterns', []);
-    
-    // V108: Check enforcement level - strict mode bans legacy paths
-    const enforcementLevel = getConfig('frontDesk.enforcement.level', 'warn');
-    const isStrictMode = enforcementLevel === 'strict';
-    
-    let directIntentPatterns;
-    if (isStrictMode) {
-        // STRICT MODE: ONLY read from frontDesk.detectionTriggers.directIntentPatterns
-        directIntentPatterns = directIntentPatternsCanonical;
-        if (directIntentPatternsCanonical.length === 0) {
-            logger.warn('[FRONT_DESK_RUNTIME] V108: STRICT MODE - No directIntentPatterns at canonical path frontDesk.detectionTriggers.directIntentPatterns');
-        }
-    } else {
-        // WARN MODE: Fall back to legacy booking.directIntentPatterns for migration period
-        const directIntentPatternsLegacy = getConfig('booking.directIntentPatterns', []);
-        directIntentPatterns = directIntentPatternsCanonical.length > 0 
-            ? directIntentPatternsCanonical 
-            : directIntentPatternsLegacy;
-        
-        if (directIntentPatternsLegacy.length > 0 && directIntentPatternsCanonical.length === 0) {
-            logger.warn('[FRONT_DESK_RUNTIME] V108: Reading from legacy booking.directIntentPatterns - migrate to frontDesk.detectionTriggers.directIntentPatterns');
-        }
-    }
+    const directIntentPatterns = getConfig('frontDesk.detectionTriggers.directIntentPatterns', []);
     
     // V107: If both are empty, use hardcoded emergency fallback
     // This prevents "cold start" where new companies have no patterns at all
@@ -797,7 +771,7 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
  * 
  * V104 REWRITE: Now follows "UI is law" discipline:
  * 1. cfgGet('frontDesk.bookingEnabled') FIRST - if false, escalate
- * 2. cfgGet('frontDesk.bookingSlots') - if empty, escalate with UI message
+ * 2. V110 slotRegistry + bookingFlow - if empty, escalate with UI message
  * 3. Lock booking state BEFORE processing
  * 4. Use correct method names (resolve, runStep)
  * 5. Emit BOOKING_FLOW_ERROR with real stack on failure
@@ -890,16 +864,12 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // GATE 3: V110 SLOT REGISTRY CHECK (CANONICAL) → LEGACY FALLBACK
-        // ═══════════════════════════════════════════════════════════════════════
-        // Priority 1: V110 slotRegistry.slots + bookingFlow.steps
-        // Priority 2: Legacy bookingSlots (deprecated)
+        // GATE 3: V110 SLOT REGISTRY + BOOKING FLOW (SOLE SOURCE OF TRUTH)
         // ═══════════════════════════════════════════════════════════════════════
         let bookingSlots;
         let configSource = 'UNKNOWN';
         
         try {
-            // V110: Check slotRegistry + bookingFlow first
             const slotRegistry = cfgGet(effectiveConfig, 'frontDesk.slotRegistry', {
                 callId: callSid,
                 turn: callState?.turnCount || 0,
@@ -918,46 +888,25 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
             const v110Steps = bookingFlow.steps || [];
             
             if (v110Slots.length > 0 && v110Steps.length > 0) {
-                // V110 is configured - merge slots with steps
                 bookingSlots = _mergeV110SlotsWithSteps(v110Slots, v110Steps);
                 configSource = 'V110_SLOT_REGISTRY';
                 
-                logger.info('[FRONT_DESK_RUNTIME] ✅ V110: Using slotRegistry + bookingFlow', {
+                logger.info('[FRONT_DESK_RUNTIME] V110: Using slotRegistry + bookingFlow', {
                     callSid,
                     slotCount: v110Slots.length,
                     stepCount: v110Steps.length
                 });
             } else {
-                // ═══════════════════════════════════════════════════════════════
-                // V116 TRAP: Legacy bookingSlots path is DEAD
-                // If we reach here, the company has no V110 config.
-                // Log violation, return null (will fail closed below).
-                // ═══════════════════════════════════════════════════════════════
-                configSource = 'LEGACY_TRAPPED';
+                // V110 not configured — fail closed, no legacy fallback
+                configSource = 'NONE';
                 bookingSlots = null;
                 
-                // Check if legacy data exists (for diagnostic logging)
-                const legacyBookingSlots = cfgGet(effectiveConfig, 'frontDesk.bookingSlots', {
-                    callId: callSid,
-                    turn: callState?.turnCount || 0,
-                    strict: false,
-                    readerId: 'handleBookingLane.legacy.TRAP_CHECK'
+                logger.error('[FRONT_DESK_RUNTIME] V110 slotRegistry/bookingFlow NOT configured — no slots available', {
+                    callSid,
+                    companyId,
+                    hasSlots: v110Slots.length > 0,
+                    hasSteps: v110Steps.length > 0
                 });
-                
-                if (legacyBookingSlots && legacyBookingSlots.length > 0) {
-                    logger.error('[FRONT_DESK_RUNTIME] 🚨 LEGACY_BOOKING_TRAPPED — company has legacy bookingSlots but NO V110 config', {
-                        callSid,
-                        companyId,
-                        legacySlotCount: legacyBookingSlots.length,
-                        action: 'RETURNING_NULL — company must be migrated to V110 slotRegistry + bookingFlow'
-                    });
-                    
-                    // V110RuntimeGuard: log violation to BlackBox
-                    try {
-                        const V110RuntimeGuard = require('../V110RuntimeGuard');
-                        V110RuntimeGuard.verifyBookingSource('LEGACY_BOOKING_SLOTS', callSid, companyId, 'handleBookingLane');
-                    } catch (e) { /* guard is non-fatal */ }
-                }
             }
         } catch (e) {
             bookingSlots = null;
@@ -967,7 +916,6 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
         
         // ═══════════════════════════════════════════════════════════════════════
         // CRITICAL TRACE: BOOKING_SLOTS_LOADED or BOOKING_SLOTS_EMPTY
-        // This tells you EXACTLY where slots were looked for and what was found
         // ═══════════════════════════════════════════════════════════════════════
         const slotCount = Array.isArray(bookingSlots) ? bookingSlots.length : 0;
         const slotSummary = slotCount > 0 
@@ -984,33 +932,19 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
                     slotCount,
                     slotIds: slotSummary,
                     configSource,
-                    awPath: configSource === 'V110_SLOT_REGISTRY' 
-                        ? 'frontDesk.slotRegistry + frontDesk.bookingFlow' 
-                        : 'frontDesk.bookingSlots',
-                    resolvedFrom: slotCount > 0 ? configSource : 'NOT_FOUND',
-                    lookupDetails: {
-                        v110Checked: true,
-                        legacyChecked: configSource !== 'V110_SLOT_REGISTRY',
-                        effectiveConfigKeys: Object.keys(effectiveConfig || {}).slice(0, 10),
-                        hasFrontDeskBehavior: !!effectiveConfig?.frontDeskBehavior,
-                        hasSlotRegistry: !!effectiveConfig?.frontDeskBehavior?.slotRegistry,
-                        hasBookingFlow: !!effectiveConfig?.frontDeskBehavior?.bookingFlow,
-                        hasLegacyBookingSlots: !!effectiveConfig?.frontDeskBehavior?.bookingSlots
-                    }
+                    awPath: 'frontDesk.slotRegistry + frontDesk.bookingFlow',
+                    resolvedFrom: slotCount > 0 ? configSource : 'NOT_FOUND'
                 }
             }).catch(() => {});
         }
         
         if (!bookingSlots || !Array.isArray(bookingSlots) || bookingSlots.length === 0) {
-            logger.error('[FRONT_DESK_RUNTIME] No booking slots configured (V110 or legacy) - fail closed', { 
+            logger.error('[FRONT_DESK_RUNTIME] No booking slots configured — fail closed', { 
                 callSid,
                 configSource,
                 v110Path: 'frontDesk.slotRegistry + frontDesk.bookingFlow',
-                legacyPath: 'frontDesk.bookingSlots',
-                effectiveConfigHasFrontDeskBehavior: !!effectiveConfig?.frontDeskBehavior,
                 hasSlotRegistry: !!effectiveConfig?.frontDeskBehavior?.slotRegistry,
-                hasBookingFlow: !!effectiveConfig?.frontDeskBehavior?.bookingFlow,
-                hasLegacyBookingSlots: !!effectiveConfig?.frontDeskBehavior?.bookingSlots
+                hasBookingFlow: !!effectiveConfig?.frontDeskBehavior?.bookingFlow
             });
             
             if (BlackBoxLogger) {
@@ -1019,17 +953,10 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
                     companyId,
                     type: 'BOOKING_FLOW_ERROR',
                     data: {
-                        error: 'frontDesk.bookingSlots is empty or not configured',
+                        error: 'V110 slotRegistry/bookingFlow not configured',
                         gate: 'BOOKING_SLOTS_MISSING',
                         recovery: 'ESCALATE',
-                        slotCount: 0,
-                        debug: {
-                            awPath: 'frontDesk.bookingSlots',
-                            translatedPath: 'frontDeskBehavior.bookingSlots',
-                            effectiveConfigKeys: Object.keys(effectiveConfig || {}).slice(0, 10),
-                            hasFrontDeskBehavior: !!effectiveConfig?.frontDeskBehavior,
-                            frontDeskBehaviorBookingSlotsLength: effectiveConfig?.frontDeskBehavior?.bookingSlots?.length || 0
-                        }
+                        slotCount: 0
                     }
                 }).catch(() => {});
             }

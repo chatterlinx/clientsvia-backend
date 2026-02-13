@@ -81,7 +81,8 @@ const NODES = [
         description: 'Extract name/phone/address/time from utterance',
         checkpoint: 'CHECKPOINT_8',
         configPaths: [
-            'frontDesk.bookingSlots',
+            'frontDesk.slotRegistry.slots',
+            'frontDesk.bookingFlow.steps',
             'frontDesk.addressValidation.rejectQuestions'
         ],
         codeLocation: 'ConversationEngine.js:4030'
@@ -109,9 +110,9 @@ const NODES = [
         // BookingFlowRunner is the deterministic replacement.
         matchSource: 'BOOKING_FLOW_RUNNER',
         configPaths: [
-            'frontDesk.bookingSlots',
-            'frontDesk.askFullName',
-            'frontDesk.confirmSpelling'
+            'frontDesk.slotRegistry.slots',
+            'frontDesk.bookingFlow.steps',
+            'frontDesk.nameSpellingVariants'
         ],
         codeLocation: 'BookingFlowRunner.js'
     },

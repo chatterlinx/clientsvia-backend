@@ -676,7 +676,7 @@ const SCENARIO_SETTINGS_REGISTRY = {
     },
     requiredSlots: { 
         ownership: 'admin', purpose: 'runtime_manual', description: 'Slots to collect for booking (admin configures)',
-        audit: { adminConfigKey: 'frontDesk.bookingSlots', severity: 'warn' }
+        audit: { adminConfigKey: 'frontDesk.slotRegistry.slots', severity: 'warn' }
     },
     stopRouting: { 
         ownership: 'admin', purpose: 'runtime_manual', description: 'Stop routing flag (admin configures)',

@@ -529,17 +529,28 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         }
         
         // ════════════════════════════════════════════════════════════════════════════
-        // V111: AUTO-SEED Common Last Names from Census data on first access
+        // AUTO-SEED — One-time population of empty AdminSettings from seed files
         // ════════════════════════════════════════════════════════════════════════════
-        // V84: AUTO-SEED — One-time migration to populate empty AdminSettings
-        // ════════════════════════════════════════════════════════════════════════════
-        // If AdminSettings has empty name lists, seed from available sources:
-        //   - commonLastNames: Census data (data/seeds/censusLastNames.js)
-        //   - commonFirstNames: Per-company legacy data (if any company has them)
+        // Both name lists come from US Government public domain data:
+        //   - commonFirstNames: SSA Baby Names (data/seeds/ssaFirstNames.js) — 10,000 names
+        //   - commonLastNames:  US Census surnames (data/seeds/censusLastNames.js) — 50,000 names
         // This runs ONCE. After names exist in AdminSettings, this block is skipped.
+        // No per-company fallbacks — AdminSettings is the single source of truth.
         // ════════════════════════════════════════════════════════════════════════════
         {
             const seedData = {};
+            
+            // Auto-seed first names from SSA if empty
+            if (!config.commonFirstNames || config.commonFirstNames.length === 0) {
+                try {
+                    const ssaFirstNames = require('../../data/seeds/ssaFirstNames');
+                    seedData.commonFirstNames = ssaFirstNames;
+                    config.commonFirstNames = ssaFirstNames;
+                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-SEED: commonFirstNames from SSA (10K names)', { count: ssaFirstNames.length });
+                } catch (e) {
+                    logger.warn('[FRONT DESK BEHAVIOR] ⚠️ SSA first names seed not found', { error: e.message });
+                }
+            }
             
             // Auto-seed last names from Census if empty
             if (!config.commonLastNames || config.commonLastNames.length === 0) {
@@ -547,33 +558,9 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                     const censusLastNames = require('../../data/seeds/censusLastNames');
                     seedData.commonLastNames = censusLastNames;
                     config.commonLastNames = censusLastNames;
-                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-SEED: commonLastNames from Census', { count: censusLastNames.length });
+                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-SEED: commonLastNames from Census (50K names)', { count: censusLastNames.length });
                 } catch (e) {
                     logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Census last names seed not found', { error: e.message });
-                }
-            }
-            
-            // Auto-seed first names from per-company legacy data if empty
-            if (!config.commonFirstNames || config.commonFirstNames.length === 0) {
-                const legacyFirstNames = saved.commonFirstNames || [];
-                if (legacyFirstNames.length > 0) {
-                    seedData.commonFirstNames = legacyFirstNames;
-                    config.commonFirstNames = legacyFirstNames;
-                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-SEED: commonFirstNames from company legacy data', {
-                        companyId, count: legacyFirstNames.length
-                    });
-                }
-            }
-            
-            // Auto-seed stop words from per-company legacy data if empty
-            if (!config.nameStopWords || config.nameStopWords.length === 0) {
-                const legacyStopWords = Array.isArray(saved.nameStopWords) ? saved.nameStopWords : [];
-                if (legacyStopWords.length > 0) {
-                    seedData.nameStopWords = legacyStopWords;
-                    config.nameStopWords = legacyStopWords;
-                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-SEED: nameStopWords from company legacy data', {
-                        companyId, count: legacyStopWords.length
-                    });
                 }
             }
             
@@ -666,9 +653,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                     engine: 'v110'
                 },
                 
-                // 🚨 Dynamic booking slots (LEGACY - kept for fallback only)
-                bookingSlots: config.bookingSlots || null,
-                // ☢️ NUKED: bookingContractV2Enabled, slotLibrary, slotGroups - Jan 2026
+                // V110: Booking slots come from slotRegistry + bookingFlow (legacy bookingSlots removed)
                 // 🏷️ Vendor / Supplier Handling (Call Center directory)
                 vendorHandling: config.vendorHandling || null,
                 // 📦 Unit of Work (UoW)
@@ -676,9 +661,6 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // 🌙 After-hours message contract (deterministic)
                 afterHoursMessageContract: config.afterHoursMessageContract || null,
                 bookingTemplates: config.bookingTemplates || null,
-                // Legacy booking prompts (for backward compatibility)
-                bookingPrompts: config.bookingPrompts,
-                bookingPromptsMap: config.bookingPromptsMap,
                 serviceFlow: config.serviceFlow,
                 promptGuards: config.promptGuards,
                 // promptPacks REMOVED Jan 2026
@@ -815,11 +797,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             });
         }
         
-        if (updates.bookingPrompts) {
-            Object.entries(updates.bookingPrompts).forEach(([key, value]) => {
-                updateObj[`aiAgentSettings.frontDeskBehavior.bookingPrompts.${key}`] = value;
-            });
-        }
+        // V110: Legacy bookingPrompts write REMOVED — prompts come from bookingFlow.steps only.
 
         if (updates.bookingPromptsMap) {
             updateObj['aiAgentSettings.frontDeskBehavior.bookingPromptsMap'] = updates.bookingPromptsMap;
@@ -927,83 +905,13 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             });
         }
         
-        // 🚨 CRITICAL: Save dynamic booking slots
+        // V110: Legacy bookingSlots write REMOVED — runtime reads from slotRegistry + bookingFlow only.
+        // If the admin UI still sends bookingSlots, log a warning but do NOT write to DB.
         if (updates.bookingSlots) {
-            updateObj['aiAgentSettings.frontDeskBehavior.bookingSlots'] = updates.bookingSlots;
-            logger.info('[FRONT DESK BEHAVIOR] Saving bookingSlots', {
+            logger.warn('[FRONT DESK BEHAVIOR] Legacy bookingSlots save BLOCKED — use V110 slotRegistry + bookingFlow', {
                 companyId,
-                slotCount: updates.bookingSlots.length,
-                slots: updates.bookingSlots.map(s => ({ 
-                    id: s.id, 
-                    question: s.question?.substring(0, 30),
-                    askFullName: s.askFullName,
-                    useFirstNameOnly: s.useFirstNameOnly,
-                    askMissingNamePart: s.askMissingNamePart  // Log this specifically
-                }))
+                attemptedSlotCount: updates.bookingSlots?.length || 0
             });
-            
-            // ═══════════════════════════════════════════════════════════════════════
-            // V94: CANONICAL PATH WRITES (Phase B - End legacy bridge dependency)
-            // ═══════════════════════════════════════════════════════════════════════
-            // When UI saves address slot settings, ALSO write to canonical AW paths
-            // so runtime doesn't need legacy bridges and AW shows WIRED (not WIRED_LEGACY)
-            // ═══════════════════════════════════════════════════════════════════════
-            const addressSlot = updates.bookingSlots.find(s => 
-                s.type === 'address' || 
-                s.id === 'address' || 
-                s.slotId === 'address' ||
-                s.id === 'serviceAddress'
-            );
-            
-            if (addressSlot) {
-                // Address Verification canonical paths
-                if (addressSlot.useGoogleMapsValidation !== undefined) {
-                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.enabled'] = addressSlot.useGoogleMapsValidation === true;
-                    logger.info('[FRONT DESK BEHAVIOR] V94: Writing canonical booking.addressVerification.enabled', {
-                        companyId,
-                        value: addressSlot.useGoogleMapsValidation === true,
-                        source: 'addressSlot.useGoogleMapsValidation'
-                    });
-                }
-                
-                if (addressSlot.unitNumberMode !== undefined) {
-                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.unitQuestionMode'] = addressSlot.unitNumberMode;
-                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireUnitQuestion'] = addressSlot.unitNumberMode !== 'never';
-                    logger.info('[FRONT DESK BEHAVIOR] V94: Writing canonical addressVerification unit settings', {
-                        companyId,
-                        unitQuestionMode: addressSlot.unitNumberMode,
-                        requireUnitQuestion: addressSlot.unitNumberMode !== 'never'
-                    });
-                }
-                
-                if (addressSlot.unitNumberPrompt !== undefined) {
-                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.unitTypePrompt'] = addressSlot.unitNumberPrompt;
-                }
-                
-                if (addressSlot.googleMapsValidationMode !== undefined) {
-                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.provider'] = 'google_geocode';
-                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.validationMode'] = addressSlot.googleMapsValidationMode;
-                }
-                
-                // Set requireCity/requireState defaults (user can override later via Cockpit)
-                if (addressSlot.useGoogleMapsValidation === true) {
-                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireCity'] = true;
-                    updateObj['aiAgentSettings.frontDesk.booking.addressVerification.requireState'] = false;
-                }
-            }
-            
-            // Name slot canonical paths
-            const nameSlot = updates.bookingSlots.find(s => 
-                s.type === 'name' || 
-                s.id === 'name' || 
-                s.slotId === 'name'
-            );
-            
-            if (nameSlot) {
-                if (nameSlot.confirmSpelling !== undefined) {
-                    updateObj['aiAgentSettings.frontDesk.bookingSlots.name.confirmSpelling'] = nameSlot.confirmSpelling === true;
-                }
-            }
         }
 
         // 🏷️ Vendor / Supplier Handling (Call Center directory)
@@ -1783,7 +1691,8 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
                         p.startsWith('booking.addressVerification.') ||
                         p.startsWith('frontDesk.detectionTriggers.') ||
                         p.startsWith('frontDesk.nameSpellingVariants.') ||
-                        p.startsWith('frontDesk.bookingSlots.')
+                        p.startsWith('frontDesk.slotRegistry.') ||
+                        p.startsWith('frontDesk.bookingFlow.')
                     ),
                     changedBy: req.user?.email || 'admin',
                     effectiveConfigVersion: auditEntry?.effectiveConfigVersionAfter || null,
@@ -2003,8 +1912,7 @@ router.post('/:companyId/test-emotion', authenticateJWT, async (req, res) => {
                 break;
                 
             case 'booking':
-                const bookingPrompts = config.bookingPrompts || UI_DEFAULTS.bookingPrompts || {};
-                suggestedResponse = `I can definitely help with that! ${bookingPrompts.askName || "May I have your name?"}`;
+                suggestedResponse = `I can definitely help with that! May I have your name?`;
                 break;
                 
             case 'emergency':

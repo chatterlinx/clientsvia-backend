@@ -633,11 +633,10 @@ const SlotExtractors = {
         // Fallback: simple word extraction for direct name responses
         // (when user just says "Mark" in response to "What's your name?")
         const text = input.trim();
-        // V84: Use awReader for stop words (reads from global AdminSettings via AWConfigReader)
-        // Fallback to per-company only if awReader unavailable
+        // Global name stop words via AWConfigReader (single source — AdminSettings)
         const companyStopWords = (context.awReader && typeof context.awReader.getArray === 'function')
             ? context.awReader.getArray('frontDesk.nameStopWords')
-            : (context.company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || []);
+            : AWConfigReader.getGlobalStopWords();
         const words = text.split(/\s+/)
             .filter(w => !isStopWord(w.toLowerCase(), companyStopWords))
             .filter(w => /^[A-Za-z][A-Za-z\-'\.]*$/.test(w));
@@ -678,13 +677,13 @@ const SlotExtractors = {
             return null;
         }
         
-        // STEP 2: Score using name lists (V84: global via AWConfigReader)
+        // STEP 2: Score using name lists (global via AWConfigReader — single source)
         const firstNames = (context.awReader && typeof context.awReader.getArray === 'function')
             ? context.awReader.getArray('frontDesk.commonFirstNames')
-            : (context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || []);
+            : AWConfigReader.getGlobalFirstNames();
         const lastNames = (context.awReader && typeof context.awReader.getArray === 'function')
             ? context.awReader.getArray('frontDesk.commonLastNames')
-            : (context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || []);
+            : AWConfigReader.getGlobalLastNames();
         const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
         const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
         
@@ -746,13 +745,13 @@ const SlotExtractors = {
             return null;
         }
         
-        // STEP 2: Score using name lists (V84: global via AWConfigReader)
+        // STEP 2: Score using name lists (global via AWConfigReader — single source)
         const firstNames = (context.awReader && typeof context.awReader.getArray === 'function')
             ? context.awReader.getArray('frontDesk.commonFirstNames')
-            : (context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || []);
+            : AWConfigReader.getGlobalFirstNames();
         const lastNames = (context.awReader && typeof context.awReader.getArray === 'function')
             ? context.awReader.getArray('frontDesk.commonLastNames')
-            : (context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || []);
+            : AWConfigReader.getGlobalLastNames();
         const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
         const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
         
@@ -1122,7 +1121,7 @@ function detectAddressParts(rawAddress) {
  * Previously this was a standalone hardcoded Set, duplicating the list in
  * IdentitySlotFirewall.js. Now both systems share the SAME source of truth:
  *   1. System defaults → IdentitySlotFirewall.NAME_STOPWORDS
- *   2. Company additions → company.aiAgentSettings.frontDeskBehavior.nameStopWords
+ *   2. Global additions → AdminSettings.nameStopWords (via AWConfigReader)
  *
  * This function also keeps local-only words (grammar/filler) that are too
  * generic for the firewall but useful in the booking extraction context.
@@ -1182,22 +1181,33 @@ function titleCase(str) {
 function cleanName(name) {
     if (!name) return null;
     
-    // V96e: Reject phone-shaped strings early
+    // Reject phone-shaped strings early
     if (looksLikePhone(name)) {
-        logger.warn('[BOOKING FLOW RUNNER] ❌ V96e: Rejected phone-shaped string as name', { name });
+        logger.warn('[BOOKING FLOW RUNNER] Rejected phone-shaped string as name', { name });
         return null;
     }
     
-    const cleaned = name
+    const words = name
         .split(/\s+/)
         .filter(w => !isStopWord(w.toLowerCase()) && w.length > 1)
-        .map(w => titleCase(w.replace(/[^A-Za-z\-'\.]/g, '')))
-        .join(' ')
-        .trim() || null;
+        .map(w => titleCase(w.replace(/[^A-Za-z\-']/g, '')))  // Strip ALL punctuation including periods
+        .filter(w => w.length > 0);  // Remove empty strings after stripping
     
-    // V96e: Final validation - must have at least one letter
+    // Deduplicate consecutive identical words ("Gonzalez Gonzalez" → "Gonzalez")
+    const deduped = words.filter((w, i) => i === 0 || w.toLowerCase() !== words[i - 1].toLowerCase());
+    
+    if (deduped.length !== words.length) {
+        logger.info('[BOOKING FLOW RUNNER] Collapsed duplicate name words', {
+            original: words.join(' '),
+            deduped: deduped.join(' ')
+        });
+    }
+    
+    const cleaned = deduped.join(' ').trim() || null;
+    
+    // Final validation - must have at least one letter
     if (cleaned && !/[a-zA-Z]/.test(cleaned)) {
-        logger.warn('[BOOKING FLOW RUNNER] ❌ V96e: Rejected name with no letters', { cleaned });
+        logger.warn('[BOOKING FLOW RUNNER] Rejected name with no letters', { cleaned });
         return null;
     }
     
@@ -1907,11 +1917,10 @@ class BookingFlowRunner {
             callSid: callSid || state._traceContext?.callSid,
             companyId: company?._id?.toString() || state._traceContext?.companyId,
             traceLevel,
-            // V84: Carry global name stopwords so safeSetSlot can pass them to
-            // IdentitySlotFirewall. Uses AWConfigReader (global) with per-company fallback.
+            // Global name stop words so safeSetSlot can pass them to IdentitySlotFirewall.
             companyStopWords: (awReader && typeof awReader.getArray === 'function')
                 ? awReader.getArray('frontDesk.nameStopWords')
-                : (company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || [])
+                : AWConfigReader.getGlobalStopWords()
         };
         
         logger.info('[BOOKING FLOW RUNNER] Running step', {
@@ -2122,6 +2131,17 @@ class BookingFlowRunner {
         
         if (slots && Object.keys(slots).length > 0) {
             for (const [key, slotData] of Object.entries(slots)) {
+                // Guard: Do NOT overwrite the address slot when collecting city/state.
+                // The slot extractor may try to parse "fort meyers florida" as a new address,
+                // which would overwrite the street address we're trying to complete.
+                if (key === 'address' && state.askedForCityState && state.streetAddressCollected) {
+                    logger.info('[BOOKING FLOW RUNNER] Skipping address slot extraction - collecting city/state', {
+                        streetAddress: state.streetAddressCollected,
+                        extractedAddress: (slotData?.value || '').substring(0, 50)
+                    });
+                    continue;
+                }
+                
                 if (slotData?.value && !state.bookingCollected[key]) {
                     // V96f: Use safeSetSlot for identity slots, direct for others
                     // V96j: Pre-extracted slots bypass step gate (they're initial fills, not mid-booking)
@@ -3443,14 +3463,23 @@ class BookingFlowRunner {
         // ADDRESS COMPLETION HANDLING
         // ═══════════════════════════════════════════════════════════════════════
         if (detailReason === 'ADDRESS_INCOMPLETE_NEEDS_CITY_STATE' && (fieldKey === 'address' || step.type === 'address')) {
-            // First entry - ask for city/state
-            if (!userInput || userInput.trim() === '' || !state.askedForCityState) {
-                // V99: Use UI-configured prompt ONLY
+            // ═══════════════════════════════════════════════════════════════════
+            // CITY/STATE COLLECTION — Two-phase: (1) ask, (2) merge + validate
+            // ═══════════════════════════════════════════════════════════════════
+            // Phase 1: Ask for city/state (first entry OR no user input)
+            // Phase 2: User provided city/state → merge with street → geo validate
+            // state.askedForCityState and state.streetAddressCollected persist via Redis
+            // ═══════════════════════════════════════════════════════════════════
+            const hasUserInput = userInput && userInput.trim().length > 0;
+            const alreadyAsked = state.askedForCityState === true;
+            
+            if (!hasUserInput || !alreadyAsked) {
+                // Phase 1: Ask for city/state
                 let cityStatePrompt = slotOptions.missingCityStatePrompt || 
                     step.options?.missingCityStatePrompt ||
                     slotOptions.cityPrompt;
                 if (!cityStatePrompt) {
-                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for missingCityStatePrompt - using minimal fallback', {
+                    logger.warn('[BOOKING FLOW RUNNER] No UI config for missingCityStatePrompt - using minimal fallback', {
                         stepId: step.id
                     });
                     cityStatePrompt = "What city and state?";
@@ -3458,6 +3487,13 @@ class BookingFlowRunner {
                 
                 state.streetAddressCollected = existingValue;
                 state.askedForCityState = true;
+                
+                logger.info('[BOOKING FLOW RUNNER] Asking for city/state', {
+                    streetAddress: existingValue,
+                    hasUserInput,
+                    alreadyAsked,
+                    stepId: step.id
+                });
                 
                 return {
                     reply: cityStatePrompt,
@@ -3471,6 +3507,7 @@ class BookingFlowRunner {
                     latencyMs: Date.now() - startTime,
                     debug: {
                         source: 'BOOKING_FLOW_RUNNER',
+                        promptSource: 'BOOKING_FLOW_RUNNER',
                         flowId: flow.flowId,
                         mode: 'COLLECT_DETAILS_CITY_STATE',
                         streetAddress: existingValue
@@ -3478,19 +3515,32 @@ class BookingFlowRunner {
                 };
             }
             
-            // User provided city/state - now validate with Google Geo
-            const cityState = userInput.trim();
+            // Phase 2: User provided city/state — merge with street address
+            logger.info('[BOOKING FLOW RUNNER] Processing city/state response', {
+                userInput: userInput.substring(0, 50),
+                streetAddress: state.streetAddressCollected,
+                stepId: step.id
+            });
+            
+            // Clean the city/state input — strip filler words and punctuation
+            const cityState = userInput.trim()
+                .replace(/^(as|it's|its|that's|in)\s+/i, '')  // Strip leading fillers ("as fort meyers")
+                .replace(/[.!?]+$/, '')                         // Strip trailing punctuation
+                .trim();
             const fullAddress = `${state.streetAddressCollected}, ${cityState}`;
             
-            // V96r: Call Google Geo validation for building type detection
+            // Call Google Geocoding API for address validation + building type detection
             let geoEnabled = true;
-            if (company?.aiAgentSettings?.frontDeskBehavior?.booking?.addressVerification) {
+            if (awReader && typeof awReader.get === 'function') {
+                geoEnabled = awReader.get('booking.addressVerification.enabled', true);
+            } else if (company?.aiAgentSettings?.frontDeskBehavior?.booking?.addressVerification) {
                 geoEnabled = company.aiAgentSettings.frontDeskBehavior.booking.addressVerification.enabled !== false;
             }
             
+            const traceCallId = state?._traceContext?.callSid || null;
             const addressValidation = await AddressValidationService.validateAddress(
                 fullAddress,
-                { companyId: company?._id?.toString(), callId: null, enabled: geoEnabled }
+                { companyId: company?._id?.toString(), callId: traceCallId, enabled: geoEnabled }
             );
             
             // Use formatted address from Google if available
@@ -4069,7 +4119,7 @@ class BookingFlowRunner {
                 }
                 
                 logger.debug('[BOOKING FLOW] V96n: Address completeness policy loaded', {
-                    source: slotOptions.requireCity !== undefined ? 'bookingPromptTab' : 'awReader',
+                    source: slotOptions.requireCity !== undefined ? 'V110:bookingFlow.steps' : 'awReader',
                     requireCity,
                     requireState,
                     requireZip,
@@ -5620,32 +5670,7 @@ class BookingFlowRunner {
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // LEGACY FALLBACK 3: bookingPrompts.preconfirm[slotId]
-        // ═══════════════════════════════════════════════════════════════════════
-        const preconfirmPrompts = frontDesk?.bookingPrompts?.preconfirm || {};
-        if (preconfirmPrompts[slotId]) {
-            logger.debug('[BOOKING FLOW RUNNER] LEGACY: Using confirmPrompt from bookingPrompts.preconfirm', {
-                slotId,
-                source: 'LEGACY_BOOKING_PROMPTS'
-            });
-            return preconfirmPrompts[slotId].replace(/\{value\}/gi, value);
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // LEGACY FALLBACK 4: flow.steps[slotId].confirmPrompt
-        // ═══════════════════════════════════════════════════════════════════════
-        const step = flow?.steps?.find(s => (s.fieldKey || s.id) === slotId);
-        if (step?.confirmPrompt) {
-            logger.debug('[BOOKING FLOW RUNNER] LEGACY: Using confirmPrompt from flow.steps', {
-                slotId,
-                source: 'LEGACY_FLOW_STEPS'
-            });
-            return step.confirmPrompt.replace(/\{value\}/gi, value);
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // HARDCODED FALLBACK (DEPRECATED - log warning)
-        // This should NEVER be reached if V110 is properly configured
+        // HARDCODED FALLBACK — V110 confirmPrompt should always be configured
         // ═══════════════════════════════════════════════════════════════════════
         logger.warn('[BOOKING FLOW RUNNER] ⚠️ HARDCODED FALLBACK: No V110 confirmPrompt configured', {
             slotId,
@@ -6159,9 +6184,9 @@ class BookingFlowRunner {
         state.askCount = state.askCount || {};
         state.askCount[step.id] = (state.askCount[step.id] || 0) + 1;
         
-        // V99: Track exact prompt source from UI
+        // V110: Track exact prompt source from UI
         const promptSource = step.promptSource || 
-            (step.prompt ? 'bookingPromptTab:slot.question' : 'ERROR:no_ui_prompt');
+            (step.prompt ? 'V110:bookingFlow.steps' : 'ERROR:no_ui_prompt');
         
         // V110: Update state with current slot tracking
         state.currentStepId = step.id;

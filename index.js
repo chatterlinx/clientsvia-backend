@@ -1109,6 +1109,19 @@ async function startServer() {
         const PORT = process.env.PORT || 3000;
         console.log(`[Server] Target port: ${PORT}, bind address: 0.0.0.0`);
         
+        // Warm global name cache (AdminSettings: SSA first names + Census last names + stop words)
+        // Must complete before first call arrives so name scoring has reference data.
+        try {
+            const AWConfigReader = require('./services/wiring/AWConfigReader');
+            if (AWConfigReader.warmGlobalNameCache) {
+                const cacheStart = Date.now();
+                await AWConfigReader.warmGlobalNameCache();
+                console.log(`[Server] Global name cache warmed in ${Date.now() - cacheStart}ms`);
+            }
+        } catch (err) {
+            console.error('[Server] Failed to warm global name cache:', err.message);
+        }
+        
         console.log('[Server] Step 6/6: Starting HTTP server...');
         const serverStart = Date.now();
         

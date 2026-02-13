@@ -92,9 +92,9 @@ class BookingConfigResolver {
             requiresExplicitConsent: this._read('frontDesk.discoveryConsent.bookingRequiresExplicitConsent', true),
             
             // ─────────────────────────────────────────────────────────────────
-            // SLOT CONFIGURATION (what info to collect)
+            // SLOT CONFIGURATION (V110: slotRegistry + bookingFlow)
             // ─────────────────────────────────────────────────────────────────
-            slots: this._read('frontDesk.bookingSlots', []),
+            slots: this._readV110Slots(),
             
             // ─────────────────────────────────────────────────────────────────
             // PROMPT CONFIGURATION (what to say)
@@ -154,11 +154,34 @@ class BookingConfigResolver {
      */
     
     getSlots() {
-        return this._read('frontDesk.bookingSlots', []);
+        return this._readV110Slots();
     }
     
     getPrompts() {
         return this._readBookingPrompts();
+    }
+    
+    /**
+     * V110: Read slots from slotRegistry + bookingFlow (sole source)
+     */
+    _readV110Slots() {
+        const slotRegistry = this._read('frontDesk.slotRegistry', {});
+        const bookingFlow = this._read('frontDesk.bookingFlow', {});
+        const v110Slots = slotRegistry.slots || [];
+        const v110Steps = bookingFlow.steps || [];
+        
+        if (v110Slots.length === 0 || v110Steps.length === 0) {
+            return [];
+        }
+        
+        // Merge slots with step prompts
+        return v110Slots.map(slot => {
+            const step = v110Steps.find(s => s.slotId === (slot.id || slot.slotId));
+            if (step) {
+                return { ...slot, ...step, id: slot.id || slot.slotId };
+            }
+            return slot;
+        });
     }
     
     getTemplates() {
@@ -237,18 +260,14 @@ class BookingConfigResolver {
      * Read booking prompts from UI-configured paths
      */
     _readBookingPrompts() {
-        const prompts = this._read('frontDesk.bookingPrompts', {});
+        // V110: Prompts come from bookingFlow.steps and bookingOutcome only
         const outcome = this._read('frontDesk.bookingOutcome', {});
+        const bookingBehavior = this._read('frontDesk.bookingBehavior', {});
         
         return {
-            // Step prompts (slot questions)
-            namePrompt: prompts.namePrompt || outcome.namePrompt,
-            phonePrompt: prompts.phonePrompt || outcome.phonePrompt,
-            addressPrompt: prompts.addressPrompt || outcome.addressPrompt,
-            
-            // Confirmation/completion templates (what we say after collecting)
-            confirmTemplate: prompts.confirmTemplate || outcome.confirmationPrompt,
-            completeTemplate: prompts.completeTemplate || outcome.completionPrompt,
+            // Confirmation/completion templates
+            confirmTemplate: bookingBehavior.confirmationPrompt || outcome.confirmationPrompt,
+            completeTemplate: bookingBehavior.completionPrompt || outcome.completionPrompt,
             
             // Consent question
             consentQuestion: this._read('frontDesk.discoveryConsent.consentQuestion', 
@@ -256,7 +275,7 @@ class BookingConfigResolver {
             
             // Source tracking
             _source: {
-                prompts: prompts ? 'frontDesk.bookingPrompts' : null,
+                bookingBehavior: bookingBehavior ? 'frontDesk.bookingBehavior' : null,
                 outcome: outcome ? 'frontDesk.bookingOutcome' : null
             }
         };
@@ -266,22 +285,23 @@ class BookingConfigResolver {
      * Read booking templates (confirmation, completion messages)
      */
     _readBookingTemplates() {
-        const prompts = this._read('frontDesk.bookingPrompts', {});
+        // V110: Templates come from bookingBehavior and bookingOutcome only
+        const bookingBehavior = this._read('frontDesk.bookingBehavior', {});
         const outcome = this._read('frontDesk.bookingOutcome', {});
         
         return {
-            confirmation: prompts.confirmTemplate 
+            confirmation: bookingBehavior.confirmationPrompt
                 || outcome.confirmationPrompt 
                 || outcome.scripts?.final_confirmation
                 || null,
-            completion: prompts.completeTemplate 
+            completion: bookingBehavior.completionPrompt
                 || outcome.completionPrompt 
                 || outcome.scripts?.booking_complete
                 || null,
-            _confirmationSource: prompts.confirmTemplate ? 'bookingPrompts' :
+            _confirmationSource: bookingBehavior.confirmationPrompt ? 'bookingBehavior' :
                 outcome.confirmationPrompt ? 'bookingOutcome' :
                 outcome.scripts?.final_confirmation ? 'bookingOutcome.scripts' : 'hardcoded_default',
-            _completionSource: prompts.completeTemplate ? 'bookingPrompts' :
+            _completionSource: bookingBehavior.completionPrompt ? 'bookingBehavior' :
                 outcome.completionPrompt ? 'bookingOutcome' :
                 outcome.scripts?.booking_complete ? 'bookingOutcome.scripts' : 'hardcoded_default'
         };
@@ -292,9 +312,9 @@ class BookingConfigResolver {
      * V96j CRITICAL FIX: These patterns MUST be UI-configurable
      */
     _readIntentPatterns() {
-        // Primary: UI-configured patterns
+        // V110: Detection triggers from canonical paths only
         const wantsBookingPatterns = this._read('frontDesk.detectionTriggers.wantsBooking', []);
-        const directIntentPatterns = this._read('booking.directIntentPatterns', []);
+        const directIntentPatterns = this._read('frontDesk.detectionTriggers.directIntentPatterns', []);
         const bookingIntentDetection = this._read('frontDesk.bookingIntentDetection', {});
         
         // Merge all configured patterns
@@ -336,7 +356,7 @@ class BookingConfigResolver {
             useDefaults: configuredPatterns.length === 0,
             _source: configuredPatterns.length > 0 
                 ? (wantsBookingPatterns.length > 0 ? 'frontDesk.detectionTriggers.wantsBooking' :
-                   directIntentPatterns.length > 0 ? 'booking.directIntentPatterns' : 'frontDesk.bookingIntentDetection')
+                   directIntentPatterns.length > 0 ? 'frontDesk.detectionTriggers.directIntentPatterns' : 'frontDesk.bookingIntentDetection')
                 : 'hardcoded_defaults'
         };
     }
@@ -362,40 +382,18 @@ class BookingConfigResolver {
      * Read address verification configuration
      */
     _readAddressVerification() {
-        // Try the new canonical path first
-        const newPath = this._read('booking.addressVerification', {});
-        
-        // Fallback to legacy slot-level config if new path is empty
-        if (!newPath || Object.keys(newPath).length === 0) {
-            const slots = this._read('frontDesk.bookingSlots', []);
-            const addressSlot = slots.find(s => 
-                s.type === 'address' || 
-                s.id === 'address' || 
-                s.slotId === 'address' ||
-                s.id === 'serviceAddress'
-            );
-            
-            if (addressSlot) {
-                return {
-                    enabled: addressSlot.useGoogleMapsValidation || false,
-                    requireUnitQuestion: addressSlot.unitNumberMode !== 'never',
-                    unitQuestionMode: addressSlot.unitNumberMode,
-                    unitTypePrompt: addressSlot.unitNumberPrompt,
-                    _source: 'frontDesk.bookingSlots[address]_LEGACY'
-                };
-            }
-        }
+        const config = this._read('booking.addressVerification', {});
         
         return {
-            enabled: newPath.enabled || false,
-            provider: newPath.provider || 'google',
-            requireCity: newPath.requireCity !== false,
-            requireState: newPath.requireState !== false,
-            requireZip: newPath.requireZip || false,
-            requireUnitQuestion: newPath.requireUnitQuestion || false,
-            unitQuestionMode: newPath.unitQuestionMode,
-            missingCityStatePrompt: newPath.missingCityStatePrompt,
-            unitTypePrompt: newPath.unitTypePrompt,
+            enabled: config.enabled || false,
+            provider: config.provider || 'google',
+            requireCity: config.requireCity !== false,
+            requireState: config.requireState !== false,
+            requireZip: config.requireZip || false,
+            requireUnitQuestion: config.requireUnitQuestion || false,
+            unitQuestionMode: config.unitQuestionMode,
+            missingCityStatePrompt: config.missingCityStatePrompt,
+            unitTypePrompt: config.unitTypePrompt,
             _source: 'booking.addressVerification'
         };
     }

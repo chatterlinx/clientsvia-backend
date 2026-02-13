@@ -115,8 +115,10 @@ router.get('/', async (req, res) => {
                 conversationStyle: frontDesk.conversationStyle,
                 greeting: frontDesk.greeting,
                 personality: frontDesk.personality,
-                bookingSlots: frontDesk.bookingSlots,
-                bookingSlotsCount: frontDesk.bookingSlots?.length || 0
+                // V110: Slots come from slotRegistry + bookingFlow
+                slotRegistry: frontDesk.slotRegistry,
+                bookingFlow: frontDesk.bookingFlow,
+                slotCount: frontDesk.slotRegistry?.slots?.length || 0
             },
             
             // ☢️ NUKED Feb 2026: DynamicFlow data removed - V110 architecture replaces Dynamic Flows

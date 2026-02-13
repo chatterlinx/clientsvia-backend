@@ -1068,10 +1068,10 @@ class SlotExtractor {
      * ========================================================================
      * EXTRACT NAME
      * ========================================================================
-     * V92: Uses commonFirstNames list (900+ names) from company config to 
-     * determine if a single-word name is likely a first name or last name.
-     * V111: Uses commonLastNames list (50K Census surnames) for last name
-     * recognition and confidence boosting.
+     * Uses global name lists from AdminSettings (via AWConfigReader):
+     *   - commonFirstNames: SSA 10K names (96.7% US coverage)
+     *   - commonLastNames: Census 50K surnames (~83% US coverage)
+     * Used for disambiguation, confidence scoring, and STT validation.
      * 
      * - If name is in commonFirstNames → isLikelyFirstName: true
      * - If name is in commonLastNames → isKnownLastName: true (confidence boost)
@@ -1097,27 +1097,27 @@ class SlotExtractor {
         // If awReader is passed in context, use it for traced config reads.
         // Otherwise fall back to direct access (backward compat).
         // ═══════════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════════
+        // GLOBAL NAME LISTS — Single source via AWConfigReader
+        // First names: SSA Baby Names (10,000 names, 96.7% US coverage)
+        // Last names: US Census surnames (50,000 names, ~83% US coverage)
+        // No per-company fallback — AdminSettings is the single source of truth.
+        // ═══════════════════════════════════════════════════════════════════════════
         let commonFirstNames = [];
         if (context.awReader && typeof context.awReader.getArray === 'function') {
             context.awReader.setReaderId('SlotExtractor.extractName');
             commonFirstNames = context.awReader.getArray('frontDesk.commonFirstNames');
         } else {
-            // Fallback: direct access (no tracing)
-            commonFirstNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+            commonFirstNames = AWConfigReader.getGlobalFirstNames();
         }
         const commonFirstNamesSet = new Set(commonFirstNames.map(n => String(n).toLowerCase()));
         const hasNameList = commonFirstNames.length > 0;
         
-        // ═══════════════════════════════════════════════════════════════════════════
-        // V111: Load commonLastNames — US Census top 50K surnames
-        // Used for: last name recognition, confidence boosting, disambiguation
-        // When a single word is given and it's in this list → confirmed last name
-        // ═══════════════════════════════════════════════════════════════════════════
         let commonLastNames = [];
         if (context.awReader && typeof context.awReader.getArray === 'function') {
             commonLastNames = context.awReader.getArray('frontDesk.commonLastNames');
         } else {
-            commonLastNames = context.company?.aiAgentSettings?.frontDeskBehavior?.commonLastNames || [];
+            commonLastNames = AWConfigReader.getGlobalLastNames();
         }
         const commonLastNamesSet = new Set(commonLastNames.map(n => String(n).toLowerCase()));
         const hasLastNameList = commonLastNames.length > 0;
@@ -1912,22 +1912,33 @@ class SlotExtractor {
     static cleanName(name) {
         if (!name) return null;
         
-        // V96e: Early rejection if phone-shaped
+        // Early rejection if phone-shaped
         if (IdentityValidators.looksLikePhone(name)) {
-            logger.warn('[SLOT EXTRACTOR] ❌ V96e: cleanName rejected phone-shaped input', { name });
+            logger.warn('[SLOT EXTRACTOR] cleanName rejected phone-shaped input', { name });
             return null;
         }
         
-        const cleaned = name
+        const words = name
             .split(/\s+/)
             .filter(w => !NAME_STOP_WORDS.has(w.toLowerCase()) && w.length > 1)
-            .map(w => this.titleCase(w.replace(/[^A-Za-z\-'\.]/g, '')))
-            .join(' ')
-            .trim() || null;
+            .map(w => this.titleCase(w.replace(/[^A-Za-z\-']/g, '')))  // Strip ALL punctuation including periods
+            .filter(w => w.length > 0);  // Remove empty strings after stripping
         
-        // V96e: Final validation - ensure result is a valid name component
+        // Deduplicate consecutive identical words ("Gonzalez Gonzalez" → "Gonzalez")
+        const deduped = words.filter((w, i) => i === 0 || w.toLowerCase() !== words[i - 1].toLowerCase());
+        
+        if (deduped.length !== words.length) {
+            logger.info('[SLOT EXTRACTOR] Collapsed duplicate name words', {
+                original: words.join(' '),
+                deduped: deduped.join(' ')
+            });
+        }
+        
+        const cleaned = deduped.join(' ').trim() || null;
+        
+        // Final validation - ensure result is a valid name component
         if (cleaned && !IdentityValidators.isValidNameComponent(cleaned.split(/\s+/)[0])) {
-            logger.warn('[SLOT EXTRACTOR] ❌ V96e: cleanName rejected invalid result', { 
+            logger.warn('[SLOT EXTRACTOR] cleanName rejected invalid result', { 
                 original: name, 
                 cleaned 
             });

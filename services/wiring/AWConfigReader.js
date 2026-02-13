@@ -22,7 +22,7 @@
  *   const reader = AWConfigReader.forCall({ callId, companyId, turn: 0, runtimeConfig });
  *   
  *   // Read config with automatic CONFIG_READ emission + registry validation
- *   const bookingSlots = reader.get('frontDesk.bookingSlots');
+ *   const slotRegistry = reader.get('frontDesk.slotRegistry');
  *   const aiName = reader.get('frontDesk.aiName', 'AI Assistant'); // with default
  * 
  * EVENTS EMITTED:
@@ -331,7 +331,7 @@ function isPathRegistered(awPath) {
     // Direct match
     if (registryPaths.has(awPath)) return true;
     
-    // Check if it's a child of a registered path (e.g., frontDesk.bookingSlots.0.question)
+    // Check if it's a child of a registered path (e.g., frontDesk.slotRegistry.slots.0.id)
     // We allow access to sub-properties of registered objects
     const parts = awPath.split('.');
     for (let i = parts.length - 1; i > 0; i--) {
@@ -378,8 +378,7 @@ const AW_PATH_MAPPINGS = {
     // V108: All detection triggers MUST be under frontDesk.detectionTriggers.*
     'frontDesk.detectionTriggers.wantsBooking': 'aiAgentSettings.frontDeskBehavior.detectionTriggers.wantsBooking',
     'frontDesk.detectionTriggers.directIntentPatterns': 'aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns',
-    // LEGACY (warn-only mode): booking.directIntentPatterns → frontDeskBehavior.detectionTriggers.directIntentPatterns
-    'booking.directIntentPatterns': 'aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns',
+    // booking.directIntentPatterns was legacy — use frontDesk.detectionTriggers.directIntentPatterns directly
     'frontDesk.discoveryConsent.consentPhrases': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.consentPhrases',
     'frontDesk.discoveryConsent.autoReplyAllowedScenarioTypes': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.autoReplyAllowedScenarioTypes',
     'frontDesk.discoveryConsent.techNameExcludeWords': 'aiAgentSettings.frontDeskBehavior.discoveryConsent.techNameExcludeWords',
@@ -409,10 +408,9 @@ const AW_PATH_MAPPINGS = {
     'frontDesk.bookingFlow.confirmCapturedFirst': 'aiAgentSettings.frontDeskBehavior.bookingFlow.confirmCapturedFirst',
     
     // ─────────────────────────────────────────────────────────────────────────
-    // FRONT DESK - Booking (LEGACY - to be deprecated in favor of V110)
+    // FRONT DESK - Booking
     // ─────────────────────────────────────────────────────────────────────────
     'frontDesk.bookingEnabled': 'aiAgentSettings.frontDeskBehavior.bookingEnabled',
-    'frontDesk.bookingSlots': 'aiAgentSettings.frontDeskBehavior.bookingSlots', // LEGACY: Use frontDesk.slotRegistry + frontDesk.bookingFlow instead
     'frontDesk.bookingOutcome': 'aiAgentSettings.frontDeskBehavior.bookingOutcome',
     'frontDesk.bookingAbortPhrases': 'aiAgentSettings.frontDeskBehavior.bookingAbortPhrases',
     'frontDesk.commonFirstNames': 'aiAgentSettings.frontDeskBehavior.commonFirstNames',
@@ -430,9 +428,7 @@ const AW_PATH_MAPPINGS = {
     'frontDesk.nameSpellingVariants.source': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.source',
     'frontDesk.nameSpellingVariants.variantGroups': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.variantGroups',
     'frontDesk.nameSpellingVariants.precomputedVariantMap': 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.precomputedVariantMap',
-    'frontDesk.bookingSlots.name.confirmSpelling': 'aiAgentSettings.frontDeskBehavior.bookingSlots[name].confirmSpelling',
-    
-    'frontDesk.addressValidation': 'aiAgentSettings.frontDeskBehavior.bookingSlots.addressValidation',
+    'frontDesk.addressValidation': 'aiAgentSettings.frontDesk.booking.addressVerification',
     'booking.addressVerification': 'aiAgentSettings.frontDesk.booking.addressVerification',
     'booking.addressVerification': 'aiAgentSettings.frontDesk.booking.addressVerification',
     'booking.addressVerification.enabled': 'aiAgentSettings.frontDesk.booking.addressVerification.enabled',
@@ -629,52 +625,9 @@ function findAddressSlot(slots) {
     );
 }
 
-const LEGACY_BRIDGES = {
-    // ─────────────────────────────────────────────────────────────────────────
-    // Address Verification: New AW paths → Legacy slot-level configs
-    // UI writes to bookingSlots[address].* but we read from booking.addressVerification.*
-    // ─────────────────────────────────────────────────────────────────────────
-    'booking.addressVerification.enabled': {
-        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
-        legacyExtractor: (slots) => {
-            const addressSlot = findAddressSlot(slots);
-            return addressSlot?.useGoogleMapsValidation;
-        },
-        legacyDescription: 'bookingSlots[address].useGoogleMapsValidation',
-        migrationNote: 'Move to booking.addressVerification.enabled via AW Cockpit'
-    },
-    
-    'booking.addressVerification.requireUnitQuestion': {
-        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
-        legacyExtractor: (slots) => {
-            const addressSlot = findAddressSlot(slots);
-            if (!addressSlot?.unitNumberMode) return undefined;
-            return addressSlot.unitNumberMode !== 'never';
-        },
-        legacyDescription: 'bookingSlots[address].unitNumberMode !== "never"',
-        migrationNote: 'Move to booking.addressVerification.requireUnitQuestion'
-    },
-    
-    'booking.addressVerification.unitQuestionMode': {
-        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
-        legacyExtractor: (slots) => {
-            const addressSlot = findAddressSlot(slots);
-            return addressSlot?.unitNumberMode;
-        },
-        legacyDescription: 'bookingSlots[address].unitNumberMode',
-        migrationNote: 'Move to booking.addressVerification.unitQuestionMode'
-    },
-    
-    'booking.addressVerification.unitTypePrompt': {
-        legacyPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
-        legacyExtractor: (slots) => {
-            const addressSlot = findAddressSlot(slots);
-            return addressSlot?.unitNumberPrompt;
-        },
-        legacyDescription: 'bookingSlots[address].unitNumberPrompt',
-        migrationNote: 'Move to booking.addressVerification.unitTypePrompt'
-    }
-};
+// LEGACY_BRIDGES removed — V110 is sole source of truth.
+// Address verification reads directly from booking.addressVerification.* paths.
+const LEGACY_BRIDGES = {};
 
 // ============================================================================
 // AWCONFIGREADER CLASS
@@ -759,7 +712,7 @@ class AWConfigReader {
     
     /**
      * Read a config value by AW path
-     * @param {string} awPath - Canonical AW path (e.g., 'frontDesk.bookingSlots')
+     * @param {string} awPath - Canonical AW path (e.g., 'frontDesk.slotRegistry')
      * @param {*} [defaultValue] - Default if not found
      * @returns {*} The config value
      */
@@ -995,7 +948,8 @@ class AWConfigReader {
             if (globalValue !== undefined && (Array.isArray(globalValue) ? globalValue.length > 0 : globalValue)) {
                 return globalValue;
             }
-            // If global cache is empty, fall through to per-company (legacy migration support)
+            // If global cache is empty (pre-migration only), fall through.
+            // After SSA/Census seed: AdminSettings is always populated → this path is never reached.
         }
         
         // ─────────────────────────────────────────────────────────────────────
@@ -1143,9 +1097,9 @@ class AWConfigReader {
     getCriticalConfigReads() {
         const criticalPaths = [
             'booking.requiresExplicitConsent',
-            'booking.directIntentPatterns',
-            'frontDesk.bookingPrompts',
-            'frontDesk.bookingSlots',
+            'frontDesk.detectionTriggers.directIntentPatterns',
+            'frontDesk.slotRegistry',
+            'frontDesk.bookingFlow',
             'frontDesk.discoveryConsent.required',
             'frontDesk.discoveryConsent.patterns',
             'frontDesk.aiName',
@@ -1410,5 +1364,34 @@ AWConfigReader.getRegisteredPaths = function() {
  */
 AWConfigReader.setEnforcementMode = setGlobalEnforcementMode;
 AWConfigReader.getEnforcementMode = getEnforcementMode;
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * STATIC GLOBAL NAME LIST ACCESSORS
+ * ════════════════════════════════════════════════════════════════════════════
+ * For callers that don't have a full AWConfigReader instance but need the
+ * global name lists (e.g., STTHintsBuilder, test helpers).
+ * Returns cached data synchronously; triggers async refresh if stale.
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+AWConfigReader.getGlobalFirstNames = function() {
+    return _getGlobalNameValue('frontDesk.commonFirstNames') || [];
+};
+
+AWConfigReader.getGlobalLastNames = function() {
+    return _getGlobalNameValue('frontDesk.commonLastNames') || [];
+};
+
+AWConfigReader.getGlobalStopWords = function() {
+    return _getGlobalNameValue('frontDesk.nameStopWords') || [];
+};
+
+/**
+ * Async initializer — ensures global name cache is warm before first use.
+ * Call at app startup to avoid cold-cache misses on first call.
+ */
+AWConfigReader.warmGlobalNameCache = async function() {
+    return _loadGlobalNameLists();
+};
 
 module.exports = AWConfigReader;

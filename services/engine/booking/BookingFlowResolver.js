@@ -137,14 +137,13 @@ class BookingFlowResolver {
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V110: READ FROM SLOT REGISTRY + BOOKING FLOW (CANONICAL SOURCE OF TRUTH)
+        // V110 ONLY: READ FROM SLOT REGISTRY + BOOKING FLOW (SOLE SOURCE OF TRUTH)
         // ═══════════════════════════════════════════════════════════════════════
-        // Priority:
-        // 1. V110: frontDesk.slotRegistry.slots + frontDesk.bookingFlow.steps
-        // 2. Legacy fallback: frontDesk.bookingSlots (deprecated)
+        // All legacy paths (bookingSlots, bookingFields, bookingPrompts) have been
+        // permanently removed. V110 slotRegistry + bookingFlow is the only path.
         // ═══════════════════════════════════════════════════════════════════════
         
-        let slotRegistry, bookingFlow, bookingSlots, bookingTemplates, bookingBehavior, bookingOutcome, bookingPrompts;
+        let slotRegistry, bookingFlow, bookingSlots, bookingTemplates, bookingBehavior, bookingOutcome;
         let aiSettings, frontDeskBehavior;
         let configSource = 'unknown';
 
@@ -163,45 +162,39 @@ class BookingFlowResolver {
             const v110Slots = slotRegistry.slots || [];
             const v110Steps = bookingFlow.steps || [];
             
-            // Check if V110 is configured
             if (v110Slots.length > 0 && v110Steps.length > 0) {
-                // V110 is active - use it
                 configSource = 'V110_SLOT_REGISTRY';
                 bookingSlots = this._mergeV110SlotsWithSteps(v110Slots, v110Steps);
                 
-                logger.info('[BOOKING FLOW RESOLVER] ✅ V110: Using slotRegistry + bookingFlow', {
+                logger.info('[BOOKING FLOW RESOLVER] V110: Using slotRegistry + bookingFlow', {
                     companyId: company._id?.toString(),
                     slotCount: v110Slots.length,
                     stepCount: v110Steps.length,
                     mergedSlotIds: bookingSlots.map(s => s.id || s.slotId)
                 });
             } else {
-                // V110 not configured - fall back to legacy
-                awReader.setReaderId('BookingFlowResolver.resolve.legacy');
-                bookingSlots = awReader.getArray('frontDesk.bookingSlots');
-                configSource = bookingSlots.length > 0 ? 'LEGACY_BOOKING_SLOTS' : 'NONE';
+                // V110 not configured — NO legacy fallback. Fail closed.
+                configSource = 'NONE';
+                bookingSlots = [];
                 
-                if (bookingSlots.length > 0) {
-                    logger.warn('[BOOKING FLOW RESOLVER] ⚠️ LEGACY: Using deprecated bookingSlots (migrate to V110 slotRegistry)', {
-                        companyId: company._id?.toString(),
-                        slotCount: bookingSlots.length,
-                        v110Status: { hasSlots: v110Slots.length > 0, hasSteps: v110Steps.length > 0 }
-                    });
-                }
+                logger.error('[BOOKING FLOW RESOLVER] V110 slotRegistry/bookingFlow NOT configured — no slots available', {
+                    companyId: company._id?.toString(),
+                    hasSlots: v110Slots.length > 0,
+                    hasSteps: v110Steps.length > 0
+                });
             }
             
             bookingTemplates = awReader.getObject('frontDesk.bookingTemplates') || {};
             bookingBehavior = awReader.getObject('frontDesk.bookingBehavior') || {};
             bookingOutcome = awReader.getObject('frontDesk.bookingOutcome') || {};
-            bookingPrompts = awReader.getObject('frontDesk.bookingPrompts') || {};
             
         } else {
             // Fallback: Direct access (no AWConfigReader)
-            logger.warn('[BOOKING FLOW RESOLVER] ⚠️ No AWConfigReader - using direct access (untraced)', {
+            logger.warn('[BOOKING FLOW RESOLVER] No AWConfigReader - using direct access (untraced)', {
                 companyId: company._id?.toString()
             });
             
-            // Try V110 first via direct access
+            // V110 only via direct access
             slotRegistry = frontDeskBehavior.slotRegistry || {};
             bookingFlow = frontDeskBehavior.bookingFlow || {};
             
@@ -212,21 +205,19 @@ class BookingFlowResolver {
                 configSource = 'V110_SLOT_REGISTRY_DIRECT';
                 bookingSlots = this._mergeV110SlotsWithSteps(v110Slots, v110Steps);
             } else {
-                configSource = 'LEGACY_BOOKING_SLOTS_DIRECT';
-                bookingSlots = frontDeskBehavior.bookingSlots || aiSettings.bookingSlots || [];
+                configSource = 'NONE';
+                bookingSlots = [];
             }
             
-            bookingTemplates = frontDeskBehavior.bookingTemplates || aiSettings.bookingTemplates || {};
+            bookingTemplates = frontDeskBehavior.bookingTemplates || {};
             bookingBehavior = frontDeskBehavior.bookingBehavior || {};
             bookingOutcome = frontDeskBehavior.bookingOutcome || {};
-            bookingPrompts = frontDeskBehavior.bookingPrompts || {};
         }
         
         const bookingPromptsMap = company.aiAgentSettings?.bookingPromptsMap || new Map();
         const checkedPaths = [
             'frontDesk.slotRegistry.slots (V110 CANONICAL)',
-            'frontDesk.bookingFlow.steps (V110 CANONICAL)',
-            'frontDesk.bookingSlots (LEGACY FALLBACK)'
+            'frontDesk.bookingFlow.steps (V110 CANONICAL)'
         ];
         
         logger.debug('[BOOKING FLOW RESOLVER] Resolving flow', {
@@ -251,10 +242,7 @@ class BookingFlowResolver {
                 status: 'DEFAULT_FALLBACK',
                 configSource,
                 checkedPaths,
-                slotCount: 0,
-                hasFrontDeskSlots: false,
-                hasLegacySlots: false,
-                hasV110Slots: false
+                slotCount: 0
             };
             return defaultFlow;
         }
@@ -266,33 +254,27 @@ class BookingFlowResolver {
         const flowId = this.generateFlowId(company, trade, serviceType);
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V96j: Read confirmation/completion templates from MULTIPLE sources
-        // Priority: bookingBehavior > bookingOutcome > bookingPrompts (legacy) > bookingTemplates > hardcoded
+        // Template resolution: bookingBehavior > bookingOutcome > bookingTemplates > hardcoded
         // ═══════════════════════════════════════════════════════════════════════
-        // Note: bookingPrompts already read above via AWConfigReader (if available)
         
         const confirmationTemplate = 
             bookingBehavior.confirmationPrompt ||
             bookingOutcome.confirmationPrompt ||
             bookingOutcome.scripts?.final_confirmation ||
-            bookingPrompts.confirmTemplate ||  // V96j FIX: UI saves here
             bookingTemplates.confirmTemplate;
         
         const completionTemplate = 
             bookingBehavior.completionPrompt ||
             bookingOutcome.completionPrompt ||
             bookingOutcome.scripts?.booking_complete ||
-            bookingPrompts.completeTemplate ||  // V96j FIX: UI saves here
             bookingTemplates.completeTemplate;
         
-        // V96j: Log template resolution for debugging
         logger.debug('[BOOKING FLOW RESOLVER] Template sources', {
             companyId: company._id?.toString(),
             confirmationSource: confirmationTemplate 
                 ? (bookingBehavior.confirmationPrompt ? 'bookingBehavior' :
                    bookingOutcome.confirmationPrompt ? 'bookingOutcome' :
                    bookingOutcome.scripts?.final_confirmation ? 'bookingOutcome.scripts' :
-                   bookingPrompts.confirmTemplate ? 'bookingPrompts' :
                    bookingTemplates.confirmTemplate ? 'bookingTemplates' : 'unknown')
                 : 'hardcoded',
             confirmationTemplatePreview: confirmationTemplate?.substring(0, 60) || 'NONE'
@@ -308,7 +290,6 @@ class BookingFlowResolver {
             confirmationTemplateSource: confirmationTemplate 
                 ? (bookingBehavior.confirmationPrompt ? 'bookingBehavior' : 
                    bookingOutcome.confirmationPrompt || bookingOutcome.scripts?.final_confirmation ? 'bookingOutcome' :
-                   bookingPrompts.confirmTemplate ? 'bookingPrompts' :
                    bookingTemplates.confirmTemplate ? 'bookingTemplates' : 'config_unknown')
                 : 'hardcoded_default',
             completionTemplate: completionTemplate ||
@@ -327,10 +308,9 @@ class BookingFlowResolver {
             resolution: {
                 source: 'company_config',
                 status: 'OK',
+                configSource,
                 checkedPaths,
-                slotCount: bookingSlots.length,
-                hasFrontDeskSlots: !!frontDeskBehavior.bookingSlots?.length,
-                hasLegacySlots: !!aiSettings.bookingSlots?.length
+                slotCount: bookingSlots.length
             }
         };
         
@@ -398,15 +378,15 @@ class BookingFlowResolver {
     
     /**
      * Get the primary prompt for a slot WITH SOURCE TRACKING
-     * Returns { prompt, source } for V94 BOOKING_PROMPT_RESOLVED event
+     * V110: All prompts come from bookingFlow.steps (merged into slot.question) or bookingPromptsMap
      */
     static getSlotPromptWithSource(slot, slotId, slotType, bookingPromptsMap, company) {
-        // 1. Direct slot question (Booking Prompt tab writes here)
+        // 1. V110: slot.question (from bookingFlow.steps merged into slot via _mergeV110SlotsWithSteps)
         if (slot.question && slot.question !== '/* USE UI CONFIG */') {
             return { 
                 prompt: slot.question, 
-                source: 'bookingPromptTab:slot.question',
-                path: `frontDeskBehavior.bookingSlots[${slotId}].question`
+                source: 'V110:bookingFlow.steps',
+                path: `frontDeskBehavior.bookingFlow.steps[${slotId}].ask`
             };
         }
         
@@ -431,18 +411,7 @@ class BookingFlowResolver {
             }
         }
         
-        // 3. Legacy bookingPrompts object (GHOST LEGACY - deprecated)
-        const legacyPrompts = company.aiAgentSettings?.bookingPrompts || {};
-        const legacyKey = `ask${slotType.charAt(0).toUpperCase() + slotType.slice(1)}`;
-        if (legacyPrompts[legacyKey]) {
-            return { 
-                prompt: legacyPrompts[legacyKey], 
-                source: 'legacy_bookingPrompts',
-                path: `aiAgentSettings.bookingPrompts.${legacyKey}`
-            };
-        }
-        
-        // 4. Default fallback (hardcoded defaults - no UI config)
+        // 3. Default fallback (hardcoded defaults - no UI config)
         return { 
             prompt: DEFAULT_STEP_PROMPTS[slotType]?.prompt || `What is your ${slotType}?`,
             source: 'defaults',

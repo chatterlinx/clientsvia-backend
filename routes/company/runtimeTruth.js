@@ -430,10 +430,12 @@ router.get('/', async (req, res) => {
         const fillerWordsEnabled = frontDeskBehavior.fillerWordsEnabled !== false;
         const customFillers = company.aiAgentSettings?.fillerWords?.custom || [];
         const nameStopWordsEnabled = frontDeskBehavior.nameStopWordsEnabled !== false;
-        const customNameStopWords = company.aiAgentSettings?.nameStopWords?.custom || [];
+        // Global name stop words via AWConfigReader (NOT per-company)
+        const AWConfigReader = require('../../services/wiring/AWConfigReader');
+        const customNameStopWords = AWConfigReader.getGlobalStopWords();
 
         const vocabulary = {
-            source: 'aiAgentSettings.frontDeskBehavior.(callerVocabulary|vocabularyGuardrails) + aiAgentSettings.(fillerWords|nameStopWords)',
+            source: 'aiAgentSettings.frontDeskBehavior.(callerVocabulary|vocabularyGuardrails) + AdminSettings.(nameStopWords)',
 
             // INPUT: translate caller slang before matching/LLM
             callerVocabulary: {

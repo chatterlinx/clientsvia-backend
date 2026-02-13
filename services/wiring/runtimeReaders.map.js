@@ -286,79 +286,13 @@ const RUNTIME_READERS_MAP = {
         defaultValue: ['fix', 'repair', 'service', 'appointment', 'schedule', 'technician', 'someone', 'come out', 'send', 'broken', 'not working', 'not cooling', 'not heating']
     },
 
-    'booking.directIntentPatterns': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'detectDirectBookingIntent',
-                line: 2500,
-                description: 'Phrases that skip consent and go directly to booking (e.g., "get somebody out")',
-                required: true,
-                critical: true,
-                checkpoint: 'DIRECT_BOOKING_INTENT'
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
-        scope: 'company',
-        defaultValue: [
-            // Explicit service requests
-            'get somebody out', 'get someone out', 'get a tech out', 'get a technician out',
-            'send someone', 'send somebody out', 'send a tech', 'need someone out',
-            // Timing/urgency requests
-            'when can you come', 'can you come out', 'how soon can you',
-            'come out today', 'come out tomorrow',
-            // Urgency indicators
-            'asap', 'soonest', 'earliest', 'first available'
-        ]
-    },
+    // Legacy 'booking.directIntentPatterns' removed — use 'frontDesk.detectionTriggers.directIntentPatterns'
 
     // =========================================================================
-    // FRONT DESK - BOOKING SLOTS
+    // FRONT DESK - BOOKING SLOTS (V110: Reads from slotRegistry + bookingFlow)
     // =========================================================================
-    'frontDesk.bookingSlots': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 2800,
-                description: 'Normalizes and validates booking slots',
-                checkpoint: 'CHECKPOINT 8',
-                required: true
-            },
-            {
-                file: 'services/booking/BookingEngine.js',
-                function: 'normalizeSlots',
-                line: 50,
-                description: 'Validates slot structure (id, type, question required)',
-                required: true
-            },
-            {
-                file: 'services/booking/SlotStateMachine.js',
-                function: 'getNextSlot',
-                line: 100,
-                description: 'Determines which slot to ask next',
-                required: true
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.bookingSlots',
-        scope: 'company',
-        defaultValue: [],
-        validators: ['hasId', 'hasType', 'hasQuestion'],
-        // V54: Per-slot configurable prompts (NO HARDCODES)
-        subFields: {
-            // Name slot prompts
-            'lastNameQuestion': { default: "And what's your last name?", description: 'Prompt when asking for last name after first name' },
-            'firstNameQuestion': { default: "And what's your first name?", description: 'Prompt when asking for first name after last name' },
-            // Phone slot prompts
-            'areaCodePrompt': { default: "Let's go step by step - what's the area code?", description: 'Prompt when breaking down phone number' },
-            'restOfNumberPrompt': { default: "Got it. And the rest of the number?", description: 'Prompt after area code collected' },
-            // Address slot prompts
-            'partialAddressPrompt': { default: "I got part of that. Can you give me the full address including city?", description: 'Prompt when only partial address captured' },
-            'streetBreakdownPrompt': { default: "Let's go step by step - what's the street address?", description: 'Prompt when breaking down address' },
-            'cityPrompt': { default: "And what city?", description: 'Prompt when asking for city after street' },
-            'zipPrompt': { default: "And the zip code?", description: 'Prompt when asking for zip after city' }
-        }
-    },
+    // Legacy 'frontDesk.bookingSlots' path removed. All slot config comes from
+    // 'frontDesk.slotRegistry.slots' + 'frontDesk.bookingFlow.steps'
 
     'frontDesk.bookingEnabled': {
         readers: [
@@ -378,51 +312,77 @@ const RUNTIME_READERS_MAP = {
     // =========================================================================
     // FRONT DESK - SLOT EXTRACTION (Name parsing, stop words, merge rules)
     // =========================================================================
+    // =========================================================================
+    // COMMON FIRST NAMES — GLOBAL (AdminSettings, SSA 10K names)
+    // =========================================================================
+    // Source: US Social Security Administration Baby Names (1880–present)
+    // Coverage: 96.7% of the US population (10,000 names, all genders/ethnicities)
+    // Seed: data/seeds/ssaFirstNames.js
+    //
+    // GLOBAL: Stored in AdminSettings.commonFirstNames (shared by all companies).
+    // AWConfigReader intercepts reads → returns global cache (5-min TTL).
+    // Static access: AWConfigReader.getGlobalFirstNames()
+    // =========================================================================
     'frontDesk.commonFirstNames': {
         readers: [
             {
                 file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 1850,
-                description: 'Used by name extraction to recognize common first names vs noise',
+                function: '__testHandleNameSlotTurn',
+                description: 'Single-token name disambiguation (first vs. last)',
                 required: false
             },
             {
                 file: 'services/engine/booking/SlotExtractor.js',
                 function: 'extractName',
-                line: 280,
                 description: 'Validates extracted names against common first names list',
+                required: false
+            },
+            {
+                file: 'services/engine/booking/BookingFlowRunner.js',
+                function: 'extractSingleNameToken (firstName)',
+                description: 'Scores first name candidates against global list',
+                required: false
+            },
+            {
+                file: 'services/STTHintsBuilder.js',
+                function: 'buildHints',
+                description: 'Feeds top 150 names to Twilio STT for speech accuracy',
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.commonFirstNames',
-        scope: 'company',
+        dbPath: 'AdminSettings.commonFirstNames',
+        scope: 'global',
         defaultValue: []
     },
 
     // =========================================================================
-    // V111: COMMON LAST NAMES (US Census top 50K surnames)
+    // COMMON LAST NAMES — GLOBAL (AdminSettings, US Census 50K surnames)
     // =========================================================================
     // Source: US Census Bureau 2010 Decennial Census (Public Domain)
-    // Coverage: ~83% of the US population
+    // Coverage: ~83% of the US population (50,000 surnames)
     // Seed: data/seeds/censusLastNames.js
     //
-    // UI: Front Desk → Booking Prompts → Common Last Names
-    // DB: aiAgentSettings.frontDeskBehavior.commonLastNames (array of strings)
-    // Runtime: BookingFlowRunner name extraction & STT validation
+    // GLOBAL: Stored in AdminSettings.commonLastNames (shared by all companies).
+    // AWConfigReader intercepts reads → returns global cache (5-min TTL).
+    // Static access: AWConfigReader.getGlobalLastNames()
     // =========================================================================
     'frontDesk.commonLastNames': {
         readers: [
             {
                 file: 'services/engine/booking/BookingFlowRunner.js',
-                function: 'SlotExtractors.name',
-                line: 541,
-                description: 'Last name recognition and STT fuzzy-match validation',
+                function: 'extractSingleNameToken (lastName)',
+                description: 'Last name recognition and confidence scoring',
+                required: false
+            },
+            {
+                file: 'services/engine/booking/SlotExtractor.js',
+                function: 'extractName',
+                description: 'Last name disambiguation and STT fuzzy-match validation',
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.commonLastNames',
-        scope: 'company',
+        dbPath: 'AdminSettings.commonLastNames',
+        scope: 'global',
         defaultValue: []
     },
 
@@ -432,8 +392,10 @@ const RUNTIME_READERS_MAP = {
     // Company-specific words that should NEVER be accepted as a person's name.
     // These EXTEND the system defaults in IdentitySlotFirewall.NAME_STOPWORDS.
     //
-    // UI: Front Desk → Booking Prompts → Name Rejection Words
-    // DB: aiAgentSettings.frontDeskBehavior.nameStopWords (array of strings)
+    // UI: Global Settings → Name Rejection Words
+    // GLOBAL: Stored in AdminSettings.nameStopWords (shared by all companies).
+    // AWConfigReader intercepts reads → returns global cache (5-min TTL).
+    // Static access: AWConfigReader.getGlobalStopWords()
     // Runtime: IdentitySlotFirewall.validateName() + BookingFlowRunner.isStopWord()
     // =========================================================================
     'frontDesk.nameStopWords': {
@@ -441,20 +403,30 @@ const RUNTIME_READERS_MAP = {
             {
                 file: 'utils/IdentitySlotFirewall.js',
                 function: 'validateName',
-                line: 79,
-                description: 'Company stopwords merged with system defaults for name validation',
+                description: 'Global stopwords merged with system defaults for name validation',
                 required: false
             },
             {
                 file: 'services/engine/booking/BookingFlowRunner.js',
                 function: 'isStopWord',
-                line: 756,
-                description: 'Company stopwords merged with system defaults for booking name extraction',
+                description: 'Global stopwords merged with system defaults for booking name extraction',
+                required: false
+            },
+            {
+                file: 'services/ConversationEngine.js',
+                function: '__testHandleNameSlotTurn',
+                description: 'Stop words for name slot extraction in test helper',
+                required: false
+            },
+            {
+                file: 'routes/company/runtimeTruth.js',
+                function: 'vocabulary.nameStopWords',
+                description: 'Exposes stop word config in runtime truth diagnostic',
                 required: false
             }
         ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.nameStopWords',
-        scope: 'company',
+        dbPath: 'AdminSettings.nameStopWords',
+        scope: 'global',
         defaultValue: []
     },
 
@@ -574,31 +546,7 @@ const RUNTIME_READERS_MAP = {
         notes: 'Options: curated_list (manual), auto_scan (from commonFirstNames)'
     },
     
-    // Slot-level spelling confirmation (on name slot)
-    'frontDesk.bookingSlots.name.confirmSpelling': {
-        readers: [
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 7135,
-                description: 'Slot-level toggle for spelling confirmation on name slot',
-                checkpoint: 'BOOKING_NAME_SPELLING',
-                required: false
-            },
-            {
-                file: 'services/ConversationEngine.js',
-                function: 'findSpellingVariant',
-                line: 1641,
-                description: 'Both global AND slot-level must be true for spelling to fire',
-                checkpoint: 'SPELLING_VARIANT_CHECK',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.bookingSlots[name].confirmSpelling',
-        scope: 'company',
-        defaultValue: false,
-        notes: 'Must be enabled TOGETHER with global nameSpellingVariants.enabled'
-    },
+    // Spelling confirmation now controlled by nameSpellingVariants.enabled (V110)
 
     // =========================================================================
     // FRONT DESK - NAME PARSING (Last-name-first support)
@@ -1728,7 +1676,7 @@ const RUNTIME_READERS_MAP = {
 
 /**
  * Get runtime readers for a specific config path
- * @param {string} configPath - e.g., 'frontDesk.bookingSlots'
+ * @param {string} configPath - e.g., 'frontDesk.slotRegistry.slots'
  * @returns {Object|null} Reader info or null if not mapped
  */
 function getReaders(configPath) {

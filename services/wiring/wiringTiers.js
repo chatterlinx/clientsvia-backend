@@ -258,20 +258,20 @@ const TIER_MVA = {
             recommendedValue: true
         },
         {
-            fieldId: 'frontDesk.bookingSlots',
-            purpose: 'Defines what info to collect for appointments',
-            failureMode: 'Booking enabled but no slots to ask',
+            fieldId: 'frontDesk.slotRegistry.slots',
+            purpose: 'Defines what info to collect for appointments (V110)',
+            failureMode: 'Booking enabled but no slots configured in V110 slotRegistry',
             impact: 'conversion',
             priority: 2,
-            validator: (val) => Array.isArray(val) && val.length > 0 && val.every(s => s.question),
-            fixInstructions: 'Add slots with questions',
-            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingSlots' },
-            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
+            validator: (val) => Array.isArray(val) && val.length > 0,
+            fixInstructions: 'Configure slots in V110 Slot Registry + Booking Flow',
+            nav: { tab: 'front-desk', section: 'slot-registry', field: 'slots' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.slotRegistry.slots',
             recommendedValue: [
-                { id: 'firstName', type: 'text', label: 'First Name', question: "What's your first name?", required: true },
-                { id: 'lastName', type: 'text', label: 'Last Name', question: 'And your last name?', required: true },
-                { id: 'phone', type: 'phone', label: 'Phone', question: "What's the best phone number for the technician to reach you?", required: true },
-                { id: 'address', type: 'address', label: 'Service Address', question: "What's the service address?", required: true },
+                { id: 'firstName', type: 'text', label: 'First Name', required: true },
+                { id: 'lastName', type: 'text', label: 'Last Name', required: true },
+                { id: 'phone', type: 'phone', label: 'Phone', required: true },
+                { id: 'address', type: 'address', label: 'Service Address', required: true },
                 { id: 'serviceType', type: 'select', label: 'Service Type', question: 'Is this for repair, maintenance, or a new installation?', required: true },
                 { id: 'problemDescription', type: 'text', label: 'Problem Description', question: 'Can you briefly describe what the system is doing?', required: true },
                 { id: 'timeWindow', type: 'select', label: 'Preferred Time Window', question: 'Do you prefer morning (8-12) or afternoon (12-5)?', required: true }
@@ -634,38 +634,36 @@ const TIER_MAX = {
         // V92: BOOKING SLOT ENHANCEMENTS - Improved name collection
         // ═══════════════════════════════════════════════════════════════════
         {
-            fieldId: 'frontDesk.bookingSlots.confirmSpelling',
+            fieldId: 'frontDesk.nameSpellingVariants.enabled',
             purpose: 'Spells back names letter-by-letter for similar-sounding names (Mark/Marc)',
             failureMode: 'Booking under wrong name for ambiguous pronunciations',
             impact: 'reliability',
             priority: 5,
             payoff: 'Eliminates name misspelling errors',
-            validator: (val) => {
-                if (!Array.isArray(val)) return false;
-                const nameSlot = val.find(s => s.type === 'name' || s.id === 'name' || s.id === 'firstName');
-                return nameSlot && nameSlot.confirmSpelling === true;
-            },
-            fixInstructions: 'Enable "Confirm Spelling" on name slot in Booking Prompts',
-            nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingSlots' },
-            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
-            recommendedValue: { confirmSpelling: true, spellingConfirmPrompt: "Let me confirm the spelling: {spelled}. Is that correct?" }
+            validator: (val) => val === true,
+            fixInstructions: 'Enable "Confirm Spelling" in Name Spelling Variants settings',
+            nav: { tab: 'front-desk', section: 'name-spelling-variants', field: 'enabled' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.nameSpellingVariants.enabled',
+            recommendedValue: true
         },
         {
-            fieldId: 'frontDesk.bookingSlots.askFullName',
-            purpose: 'Asks for last name if caller only gives first name',
+            fieldId: 'frontDesk.bookingFlow.steps',
+            purpose: 'V110 booking flow step order — ensures last name is always asked',
             failureMode: 'Booking under first name only, cannot identify customer',
             impact: 'reliability',
             priority: 5,
             payoff: 'Complete customer records, better follow-up',
             validator: (val) => {
                 if (!Array.isArray(val)) return false;
-                const nameSlot = val.find(s => s.type === 'name' || s.id === 'name');
-                return nameSlot && nameSlot.askFullName === true;
+                return val.some(s => s.slotId === 'lastName');
             },
             fixInstructions: 'Enable "Ask Full Name" on name slot in Booking Prompts',
             nav: { tab: 'front-desk', section: 'booking-prompts', field: 'bookingSlots' },
             dbPath: 'aiAgentSettings.frontDeskBehavior.bookingSlots',
-            recommendedValue: { askFullName: true, askMissingNamePart: true, lastNameQuestion: "And what's your last name?" }
+            fixInstructions: 'Add lastName step to booking flow in V110 Booking Flow config',
+            nav: { tab: 'front-desk', section: 'booking-flow', field: 'steps' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingFlow.steps',
+            recommendedValue: [{ slotId: 'lastName', ask: "And what's your last name?", order: 2 }]
         }
     ]
 };

@@ -10,7 +10,7 @@
  *
  * PUBLIC DOMAIN: US Government data — no license restrictions.
  *
- * Used as the default seed for company.aiAgentSettings.frontDeskBehavior.commonLastNames
+ * Used as the default seed for AdminSettings.commonLastNames (global, shared by all companies).
  * Runtime: BookingFlowRunner uses this for last name recognition and STT validation.
  * ═══════════════════════════════════════════════════════════════════════════════
  */

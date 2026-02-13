@@ -60,7 +60,6 @@ try {
 const AW_TO_DB_PATH_MAP = {
     // Core booking
     'frontDesk.bookingEnabled': 'frontDeskBehavior.bookingEnabled',
-    'frontDesk.bookingSlots': 'frontDeskBehavior.bookingSlots',
     'frontDesk.bookingOutcome': 'frontDeskBehavior.bookingOutcome',
     'frontDesk.bookingBehavior': 'frontDeskBehavior.bookingBehavior',
     'frontDesk.bookingBehavior.errorMessage': 'frontDeskBehavior.bookingBehavior.errorMessage',
@@ -103,8 +102,8 @@ const AW_TO_DB_PATH_MAP = {
 
 /**
  * Translate AW path to DB path for effectiveConfig lookup
- * @param {string} awPath - AW convention path (e.g., 'frontDesk.bookingSlots')
- * @returns {string} DB path for getNestedValue (e.g., 'frontDeskBehavior.bookingSlots')
+ * @param {string} awPath - AW convention path (e.g., 'frontDesk.bookingEnabled')
+ * @returns {string} DB path for getNestedValue (e.g., 'frontDeskBehavior.bookingEnabled')
  */
 function translateAwPathToDbPath(awPath) {
     // Check exact match first
@@ -113,7 +112,7 @@ function translateAwPathToDbPath(awPath) {
     }
     
     // Check if this is a child of a mapped path
-    // e.g., 'frontDesk.bookingSlots.0.question' → 'frontDeskBehavior.bookingSlots.0.question'
+    // e.g., 'frontDesk.slotRegistry.slots.0.id' → 'frontDeskBehavior.slotRegistry.slots.0.id'
     for (const [awPrefix, dbPrefix] of Object.entries(AW_TO_DB_PATH_MAP)) {
         if (awPath.startsWith(awPrefix + '.')) {
             const suffix = awPath.slice(awPrefix.length);
@@ -210,7 +209,7 @@ function finalizeTrace(callId, turn = 0) {
  * ═══════════════════════════════════════════════════════════════════════════════
  * 
  * @param {Object} effectiveConfig - The loaded Control Plane config
- * @param {string} key - The config key path (e.g., 'frontDesk.bookingSlots')
+ * @param {string} key - The config key path (e.g., 'frontDesk.slotRegistry')
  * @param {Object} options - Options
  * @param {string} options.callId - Call ID for tracing
  * @param {number} options.turn - Turn number for tracing

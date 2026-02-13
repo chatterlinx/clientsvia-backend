@@ -44,22 +44,14 @@ function auditCallStart({ company, callSid, companyId, effectiveConfig }) {
     // ═══════════════════════════════════════════════════════════════════════════
     const hasV110SlotRegistry = (frontDesk.slotRegistry?.slots?.length || 0) > 0;
     const hasV110BookingFlow = (frontDesk.bookingFlow?.steps?.length || 0) > 0;
-    const hasLegacyBookingSlots = (frontDesk.bookingSlots?.length || 0) > 0;
-    const hasLegacyBookingFields = (effectiveConfig?.callFlowEngine?.bookingFields?.length || 0) > 0;
-    const hasLegacyBookingPrompts = !!(frontDesk.bookingPrompts?.askName || frontDesk.bookingPrompts?.askPhone);
+    const bookingSource = hasV110SlotRegistry && hasV110BookingFlow ? 'V110' : 'NONE';
     
-    const bookingSource = hasV110SlotRegistry && hasV110BookingFlow ? 'V110'
-        : hasLegacyBookingSlots ? 'LEGACY_bookingSlots'
-        : hasLegacyBookingFields ? 'LEGACY_bookingFields'
-        : hasLegacyBookingPrompts ? 'LEGACY_bookingPrompts'
-        : 'NONE';
-    
-    if (bookingSource !== 'V110' && bookingSource !== 'NONE') {
+    if (bookingSource === 'NONE' && (hasV110SlotRegistry || hasV110BookingFlow)) {
         violations.push({
-            area: 'BOOKING',
-            expected: 'frontDesk.slotRegistry + frontDesk.bookingFlow',
-            actual: bookingSource,
-            detail: 'Company has legacy booking config but no V110 slotRegistry/bookingFlow'
+            area: 'BOOKING_PARTIAL',
+            expected: 'frontDesk.slotRegistry + frontDesk.bookingFlow (both required)',
+            actual: hasV110SlotRegistry ? 'slotRegistry only' : 'bookingFlow only',
+            detail: 'V110 booking requires both slotRegistry AND bookingFlow to be configured'
         });
     }
     
@@ -109,9 +101,6 @@ function auditCallStart({ company, callSid, companyId, effectiveConfig }) {
         hasV110DiscoveryFlow,
         hasV110Triage,
         triageEnabled: !!triageConfig.enabled,
-        hasLegacyBookingSlots,
-        hasLegacyBookingFields,
-        hasLegacyBookingPrompts,
         violationCount: violations.filter(v => v.severity !== 'warn').length,
         warnCount: violations.filter(v => v.severity === 'warn').length,
         violations: violations.length > 0 ? violations : undefined
@@ -148,7 +137,7 @@ function auditCallStart({ company, callSid, companyId, effectiveConfig }) {
  * Verify that a specific booking slot load came from V110.
  * Call this wherever booking slots are loaded at runtime.
  * 
- * @param {string} configSource - The source string (e.g., 'V110_SLOT_REGISTRY', 'LEGACY_BOOKING_SLOTS')
+ * @param {string} configSource - The source string (must be 'V110_SLOT_REGISTRY')
  * @param {string} callSid - Call SID
  * @param {string} companyId - Company ID
  * @param {string} caller - Which function loaded the slots (for stack tracing)

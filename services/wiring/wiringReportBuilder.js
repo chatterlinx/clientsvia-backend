@@ -1088,25 +1088,21 @@ function checkCalendarSchedulingRules(companyDoc) {
 
 function checkBookingContract(companyDoc) {
     const frontDesk = companyDoc?.aiAgentSettings?.frontDeskBehavior || {};
-    const bookingSlots = frontDesk.bookingSlots || [];
+    // V110: Read from slotRegistry + bookingFlow
+    const slotRegistry = frontDesk.slotRegistry || {};
+    const bookingFlow = frontDesk.bookingFlow || {};
+    const v110Slots = slotRegistry.slots || [];
+    const v110Steps = bookingFlow.steps || [];
     const bookingEnabled = companyDoc?.aiAgentSettings?.bookingEnabled;
     
-    // Check if slots have required 'question' field
-    const slotsWithQuestion = bookingSlots.filter(s => s.question || s.prompt);
-    const missingQuestion = bookingSlots.filter(s => !s.question && !s.prompt);
-    
-    // ☢️ NUKED: bookingContractV2 check removed Jan 2026 - never wired to runtime
-    // Booking slots are wired directly without the V2 compilation layer
-    
     const status = {
-        definedSlotCount: bookingSlots.length,
-        slotsWithQuestion: slotsWithQuestion.length,
-        slotsMissingQuestion: missingQuestion.length,
+        definedSlotCount: v110Slots.length,
+        bookingStepCount: v110Steps.length,
         bookingEnabled,
-        runtimeConfigured: slotsWithQuestion.length > 0
+        runtimeConfigured: v110Slots.length > 0 && v110Steps.length > 0
     };
     
-    if (!bookingEnabled && bookingSlots.length === 0) {
+    if (!bookingEnabled && v110Slots.length === 0) {
         return {
             ...status,
             status: 'DISABLED',
@@ -1267,7 +1263,15 @@ function checkGreetingIntercept(companyDoc) {
 
 function checkBookingSlotNormalization(companyDoc) {
     const frontDesk = companyDoc?.aiAgentSettings?.frontDeskBehavior || {};
-    const bookingSlots = frontDesk.bookingSlots || [];
+    // V110: Read from slotRegistry + bookingFlow merged
+    const slotRegistry = frontDesk.slotRegistry || {};
+    const bookingFlow = frontDesk.bookingFlow || {};
+    const v110Slots = slotRegistry.slots || [];
+    const v110Steps = bookingFlow.steps || [];
+    const bookingSlots = v110Slots.map(slot => {
+        const step = v110Steps.find(s => s.slotId === (slot.id || slot.slotId));
+        return step ? { ...slot, ...step, question: step.ask || slot.question } : slot;
+    });
     
     const analysis = {
         total: bookingSlots.length,

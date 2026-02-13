@@ -306,11 +306,9 @@
     },
     
     "bookingPrompts": {
-      "description": "Booking slot configuration and prompts - LEGACY (use bookingFlow.steps instead)",
+      "description": "Booking configuration and prompts (V110: slots in slotRegistry + bookingFlow)",
       "keys": {
         "frontDesk.bookingEnabled": { "type": "boolean", "required": false, "default": true, "uiSection": "booking-prompts" },
-        "frontDesk.bookingSlots": { "type": "array", "required": false, "default": [], "uiSection": "booking-prompts", "description": "LEGACY - use frontDesk.slotRegistry.slots instead" },
-        "frontDesk.bookingSlots.name.confirmSpelling": { "type": "boolean", "required": false, "uiSection": "booking-prompts" },
         "booking.nameParsing": { "type": "object", "required": false, "uiSection": "booking-prompts" },
         "booking.nameParsing.acceptLastNameOnly": { "type": "boolean", "required": false, "uiSection": "booking-prompts" },
         "booking.nameParsing.lastNameOnlyPrompt": { "type": "string", "required": false, "uiSection": "booking-prompts" },
@@ -335,7 +333,6 @@
         "frontDesk.bookingBehavior.errorMessage": { "type": "string", "required": false, "uiSection": "booking-prompts", "default": "I apologize, I encountered an issue with booking. Let me connect you with someone who can help." },
         "frontDesk.bookingBehavior.notConfiguredMessage": { "type": "string", "required": false, "uiSection": "booking-prompts", "default": "I apologize, the booking system isn't fully configured yet. Let me connect you with someone who can help." },
         "frontDesk.bookingTemplates": { "type": "object", "required": false, "uiSection": "booking-prompts", "description": "Booking message templates" },
-        "frontDesk.bookingPrompts": { "type": "object", "required": false, "uiSection": "booking-prompts", "description": "Booking prompts configuration" },
         "frontDesk.bookingOutcome": { "type": "object", "required": false, "uiSection": "booking-prompts", "description": "Booking outcome configuration" }
       }
     },

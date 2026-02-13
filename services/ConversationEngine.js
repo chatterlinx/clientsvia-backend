@@ -167,9 +167,9 @@ logger.info(`[CONVERSATION ENGINE] 🧠 LOADED VERSION: ${ENGINE_VERSION}`, {
 // V36 NUKE: REMOVED ALL HARDCODED BOOKING PROMPTS
 // ═══════════════════════════════════════════════════════════════════════════
 // PROMPT AS LAW: All booking prompts MUST come from UI config:
-//   company.aiAgentSettings.frontDeskBehavior.bookingSlots[].question
-//   company.aiAgentSettings.frontDeskBehavior.bookingSlots[].confirmPrompt
-//   company.aiAgentSettings.frontDeskBehavior.bookingSlots[].repromptVariants
+//   V110: company.aiAgentSettings.frontDeskBehavior.bookingFlow.steps[].ask
+//   V110: company.aiAgentSettings.frontDeskBehavior.bookingFlow.steps[].confirmPrompt
+//   V110: company.aiAgentSettings.frontDeskBehavior.bookingFlow.steps[].repromptVariants
 //
 // These are ONLY used for discovery mode (before booking starts)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -307,10 +307,10 @@ function __testHandleNameSlotTurn({
         nameSlotConfig?.nameOptions?.askFullName === true || nameSlotConfig?.nameOptions?.askFullName === 'true';
     const askMissingNamePart = nameSlotConfig?.askMissingNamePart === true;
 
-    // V111: Name stop words consolidated into frontDeskBehavior.nameStopWords (flat array).
-    // Legacy path (aiAgentSettings.nameStopWords.custom) removed — single source of truth.
-    const customStopWords = company?.aiAgentSettings?.frontDeskBehavior?.nameStopWords || [];
-    const stopWordsEnabled = true; // V111: Always enabled — control via the word list itself
+    // Name stop words are GLOBAL — read from AdminSettings via AWConfigReader.
+    // No per-company fallback. Single source of truth.
+    const customStopWords = AWConfigReader.getGlobalStopWords();
+    const stopWordsEnabled = true; // Always enabled — control via the word list itself
 
     const normalizedInput = String(userText || '').trim();
     const lowerInput = normalizedInput.toLowerCase();
@@ -488,7 +488,8 @@ function __testHandleNameSlotTurn({
         nameMeta.last = parts.slice(1).join(' ');
     } else if (currentSlots.partialName && !nameMeta.first && !nameMeta.last) {
         const partialName = currentSlots.partialName;
-        const commonFirstNames = company.aiAgentSettings?.frontDeskBehavior?.commonFirstNames || [];
+        // V84+: Read from global AdminSettings cache (NOT per-company)
+        const commonFirstNames = AWConfigReader.getGlobalFirstNames();
         const commonFirstNamesSet = new Set(commonFirstNames.map(n => n.toLowerCase()));
         const listIsEmpty = commonFirstNames.length === 0;
         const isCommonFirstName = listIsEmpty || commonFirstNamesSet.has(partialName.toLowerCase());
@@ -4138,30 +4139,22 @@ async function processTurn({
         // Get booking config for askMissingNamePart setting
         const bookingConfig = BookingScriptEngine.getBookingSlotsFromCompany(company, { contextFlags: session?.flags || {} });
         
-        // 🔍 DIAGNOSTIC: Log booking config to debug NOT_CONFIGURED issue
-        // V110: Check both V110 and legacy sources for diagnostic clarity
+        // DIAGNOSTIC: Log V110 booking config
         const frontDeskBehavior = company?.aiAgentSettings?.frontDeskBehavior || {};
         const v110SlotRegistry = frontDeskBehavior.slotRegistry || {};
         const v110BookingFlow = frontDeskBehavior.bookingFlow || {};
-        const legacyBookingSlots = frontDeskBehavior.bookingSlots || [];
         
-        log('📋 BOOKING CONFIG DIAGNOSTIC (V110 AWARE)', {
+        log('BOOKING CONFIG DIAGNOSTIC (V110)', {
             source: bookingConfig.source,
             isConfigured: bookingConfig.isConfigured,
             slotCount: bookingConfig.slots?.length || 0,
             slotIds: bookingConfig.slots?.map(s => s.slotId) || [],
-            // V110 status
             v110: {
                 hasSlotRegistry: !!v110SlotRegistry.slots?.length,
                 slotRegistryCount: v110SlotRegistry.slots?.length || 0,
                 hasBookingFlow: !!v110BookingFlow.steps?.length,
                 bookingFlowStepCount: v110BookingFlow.steps?.length || 0,
                 isV110Active: bookingConfig.source === 'V110_SLOT_REGISTRY'
-            },
-            // Legacy status
-            legacy: {
-                hasBookingSlots: legacyBookingSlots.length > 0,
-                legacySlotCount: legacyBookingSlots.length
             },
             companyHasFrontDesk: !!company?.aiAgentSettings?.frontDeskBehavior,
             // 🔍 V42: Show what fields each raw slot has to debug normalization rejection
@@ -4419,7 +4412,7 @@ async function processTurn({
                 // WIRED: frontDesk.addressValidation.rejectQuestions
                 // Bug: "what was before? i'm not sure what you said." was stored as address
                 // ═══════════════════════════════════════════════════════════════════
-                const addressValidation = company.aiAgentSettings?.frontDeskBehavior?.bookingSlots?.addressValidation || {};
+                const addressValidation = company.aiAgentSettings?.frontDesk?.booking?.addressVerification || {};
                 const rejectQuestions = addressValidation.rejectQuestions !== false; // Default true
                 
                 const isQuestion = userText.trim().endsWith('?');
@@ -4766,7 +4759,7 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         // SINGLE SOURCE OF TRUTH: Simple keyword detection + defer to BookingFlowRunner
         // No complex intent detectors, no meta intents, no competing systems.
-        // Agent reads ONLY from frontDesk.bookingSlots configuration.
+        // Agent reads ONLY from V110 slotRegistry + bookingFlow configuration.
         //
         // V98 FIX: Also detect consent when consentPending=true
         // V98c: Read patterns from Control Plane Wiring (not hardcoded)
@@ -4837,15 +4830,8 @@ async function processTurn({
                 );
                 if (urgencyPhrases.length === 0) urgencyPhrases = defaultUrgencyPhrases;
                 
-                // V108: Booking keywords from frontDesk.detectionTriggers.* (canonical paths)
-                let directIntentPatterns = awReader.get('frontDesk.detectionTriggers.directIntentPatterns', []);
-                if (directIntentPatterns.length === 0) {
-                    // WARN MODE ONLY: Fall back to legacy path
-                    directIntentPatterns = awReader.get('booking.directIntentPatterns', []);
-                    if (directIntentPatterns.length > 0) {
-                        log('⚠️ V108: Using legacy booking.directIntentPatterns - migrate to frontDesk.detectionTriggers.directIntentPatterns');
-                    }
-                }
+                // V110: Booking keywords from frontDesk.detectionTriggers.* (sole source)
+                const directIntentPatterns = awReader.get('frontDesk.detectionTriggers.directIntentPatterns', []);
                 
                 bookingKeywords = [...new Set([...directIntentPatterns, ...wantsBooking])];
                 if (bookingKeywords.length === 0) bookingKeywords = defaultBookingKeywords;

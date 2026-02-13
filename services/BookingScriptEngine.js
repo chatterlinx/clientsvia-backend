@@ -9,9 +9,8 @@
  *   - frontDesk.slotRegistry.slots
  *   - frontDesk.bookingFlow.steps
  * 
- * Legacy paths (bookingSlots, callFlowEngine.bookingFields, bookingPrompts)
- * are TRAPPED — they log LEGACY_BOOKING_PATH_CALLED and return empty.
- * If the trap fires, it reveals a company that hasn't been migrated to V110.
+ * All legacy paths (bookingSlots, callFlowEngine.bookingFields, bookingPrompts)
+ * have been permanently removed. V110 is the sole runtime truth.
  * 
  * RULE: If it's not in V110/V111 UI, it doesn't exist at runtime.
  * DEFAULT_BOOKING_SLOTS is NOT imported. Defaults are seed-only (onboarding).
@@ -217,56 +216,11 @@ function getBookingSlotsFromCompany(company, options = {}) {
         return { slots, isConfigured: slots.length > 0, source: 'V110_SLOT_REGISTRY' };
     }
     
-    // ═══════════════════════════════════════════════════════════════════════════
-    // V116 TRAP: Legacy paths — log and return empty
-    // If this fires, the company needs V110 migration.
-    // ═══════════════════════════════════════════════════════════════════════════
-    const legacyBookingSlots = frontDesk.bookingSlots;
-    const legacyBookingFields = company?.aiAgentSettings?.callFlowEngine?.bookingFields;
-    const legacyBookingPrompts = frontDesk.bookingPrompts;
-    
-    const hasLegacy = (legacyBookingSlots && legacyBookingSlots.length > 0)
-        || (legacyBookingFields && legacyBookingFields.length > 0)
-        || (legacyBookingPrompts && (legacyBookingPrompts.askName || legacyBookingPrompts.askPhone));
-    
-    if (hasLegacy) {
-        const legacySource = legacyBookingSlots?.length ? 'bookingSlots' 
-            : legacyBookingFields?.length ? 'callFlowEngine.bookingFields' 
-            : 'bookingPrompts';
-        
-        logger.error('[BOOKING ENGINE] 🚨 LEGACY_BOOKING_PATH_CALLED — company has NO V110 config', {
-            companyId,
-            legacySource,
-            legacySlotCount: legacyBookingSlots?.length || legacyBookingFields?.length || 0,
-            action: 'RETURNING_EMPTY — company must be migrated to V110 slotRegistry + bookingFlow'
-        });
-        
-        // Log to BlackBox if available
-        try {
-            const BlackBoxLogger = require('./BlackBoxLogger');
-            if (BlackBoxLogger) {
-                BlackBoxLogger.logEvent({
-                    companyId,
-                    type: 'LEGACY_BOOKING_PATH_CALLED',
-                    data: {
-                        legacySource,
-                        legacySlotCount: legacyBookingSlots?.length || legacyBookingFields?.length || 0,
-                        hasV110SlotRegistry: v110Slots.length > 0,
-                        hasV110BookingFlow: v110Steps.length > 0,
-                        action: 'RETURNED_EMPTY',
-                        stack: new Error().stack?.split('\n').slice(1, 5).map(s => s.trim())
-                    }
-                }).catch(() => {});
-            }
-        } catch (e) { /* BlackBox optional */ }
-    }
-    
-    // V116: No V110 config and no legacy = truly not configured
+    // V110 not configured — company has no booking config
     logger.info('[BOOKING ENGINE] Company has no V110 booking config', {
         companyId,
         hasSlotRegistry: v110Slots.length > 0,
-        hasBookingFlow: v110Steps.length > 0,
-        hasLegacy
+        hasBookingFlow: v110Steps.length > 0
     });
     
     return { slots: [], isConfigured: false, source: 'NOT_CONFIGURED' };
@@ -420,18 +374,6 @@ CRITICAL RULES:
 `;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// V116 TRAP: convertLegacyBookingPrompts — logs if called, returns empty
-// ═══════════════════════════════════════════════════════════════════════════════
-function convertLegacyBookingPrompts(bp) {
-    logger.error('[BOOKING ENGINE] 🚨 LEGACY_CONVERT_CALLED — convertLegacyBookingPrompts should not be called at runtime', {
-        hasAskName: !!bp?.askName,
-        hasAskPhone: !!bp?.askPhone,
-        stack: new Error().stack?.split('\n').slice(1, 4).map(s => s.trim())
-    });
-    return [];
-}
-
 module.exports = {
     // Core functions (V110 only)
     getBookingSlotsFromCompany,
@@ -444,12 +386,5 @@ module.exports = {
     buildBookingPromptSection,
     
     // Utilities
-    normalizeBookingSlots,
-    
-    // V116 TRAPPED — logs and returns empty
-    convertLegacyBookingPrompts
-
-    // V116: DEFAULT_BOOKING_SLOTS removed from exports.
-    // Defaults are seed-only (config/onboarding/DefaultFrontDeskPreset.js).
-    // If you need defaults, use getPresetForTrade() during onboarding.
+    normalizeBookingSlots
 };

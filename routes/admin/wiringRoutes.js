@@ -1502,21 +1502,12 @@ router.post('/:companyId/fix-spelling-variants', async (req, res) => {
         }
         
         const frontDesk = company.aiAgentSettings.frontDeskBehavior;
-        const bookingSlots = frontDesk.bookingSlots || [];
         const currentSpellingConfig = frontDesk.nameSpellingVariants || {};
         
-        // Check current state
-        const nameSlotIndex = bookingSlots.findIndex(s => 
-            s.type === 'name' || s.id === 'name' || s.slotId === 'name'
-        );
-        const nameSlot = nameSlotIndex >= 0 ? bookingSlots[nameSlotIndex] : null;
-        
-        const hasConfirmSpelling = nameSlot?.confirmSpelling === true;
         const hasGlobalEnabled = currentSpellingConfig.enabled === true;
+        const hasConfirmSpelling = currentSpellingConfig.confirmSpelling === true;
         
         logger.info('[WIRING API] Current spelling config:', {
-            nameSlotFound: !!nameSlot,
-            nameSlotIndex,
             hasConfirmSpelling,
             hasGlobalEnabled
         });
@@ -1526,16 +1517,15 @@ router.post('/:companyId/fix-spelling-variants', async (req, res) => {
             return res.json({
                 status: 'ALREADY_CONFIGURED',
                 message: 'Spelling variants already correctly configured',
-                slotLevel: hasConfirmSpelling,
+                confirmSpelling: hasConfirmSpelling,
                 globalLevel: hasGlobalEnabled
             });
         }
         
         const changes = [];
         
-        // Track what needs to change
-        if (nameSlot && !hasConfirmSpelling) {
-            changes.push('Set confirmSpelling: true on name slot');
+        if (!hasConfirmSpelling) {
+            changes.push('Set nameSpellingVariants.confirmSpelling: true');
         }
         if (!hasGlobalEnabled) {
             changes.push('Set nameSpellingVariants.enabled: true with variant groups');
@@ -1548,11 +1538,10 @@ router.post('/:companyId/fix-spelling-variants', async (req, res) => {
             });
         }
         
-        // V61 FIX: Use targeted $set update to bypass full document validation
         const updateOps = {};
         
-        if (nameSlot && !hasConfirmSpelling && nameSlotIndex >= 0) {
-            updateOps[`aiAgentSettings.frontDeskBehavior.bookingSlots.${nameSlotIndex}.confirmSpelling`] = true;
+        if (!hasConfirmSpelling) {
+            updateOps['aiAgentSettings.frontDeskBehavior.nameSpellingVariants.confirmSpelling'] = true;
         }
         
         if (!hasGlobalEnabled) {

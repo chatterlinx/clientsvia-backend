@@ -3363,7 +3363,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             askCount: callState.bookingAskCount || {},
             pendingConfirmation: callState.pendingConfirmation || null,
             // V116: Persist preconfirm state so caller's "yes" on next turn is handled
-            pendingPreconfirm: callState.pendingPreconfirm || null
+            pendingPreconfirm: callState.pendingPreconfirm || null,
+            // Address sub-step fields — must persist between turns for city/state collection
+            askedForCityState: callState.askedForCityState || false,
+            streetAddressCollected: callState.streetAddressCollected || null,
+            addressValidation: callState.addressValidation || null,
+            addressCompletionVerified: callState.addressCompletionVerified || false,
+            // Name sub-step fields — must persist between turns for last name collection
+            askedForLastName: callState.askedForLastName || false,
+            firstNameCollected: callState.firstNameCollected || null
           };
           
           // Create AWConfigReader for traced config reads
@@ -3521,6 +3529,14 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               repromptCount: bookingResult.state?.repromptCount || {},  // V110
               // V116: Persist preconfirm state so caller's "yes" on next turn confirms the slot
               pendingPreconfirm: bookingResult.state?.pendingPreconfirm || null,
+              // Address sub-step fields — persist between turns for city/state collection + geo validation
+              askedForCityState: bookingResult.state?.askedForCityState || false,
+              streetAddressCollected: bookingResult.state?.streetAddressCollected || null,
+              addressValidation: bookingResult.state?.addressValidation || null,
+              addressCompletionVerified: bookingResult.state?.addressCompletionVerified || false,
+              // Name sub-step fields — persist between turns for last name collection
+              askedForLastName: bookingResult.state?.askedForLastName || false,
+              firstNameCollected: bookingResult.state?.firstNameCollected || null,
               bookingState: bookingResult.isComplete ? 'COMPLETE' : 'ACTIVE',
               bookingFlowState: {
                 bookingModeLocked: bookingResult.state?.bookingModeLocked !== false,

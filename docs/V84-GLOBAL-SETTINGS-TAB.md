@@ -74,13 +74,13 @@ This tab provides a single location for admins to configure:
 - Comma-separated list
 - Used for booking validation and name detection
 - When caller says "Mark", system knows it's a first name
-- Persisted to `aiAgentSettings.frontDeskBehavior.commonFirstNames`
+- Persisted to `AdminSettings.commonFirstNames` (global, shared by all companies)
 
 #### **Common Last Names**
 - Comma-separated list
 - Auto-seeded with US Census top 50K surnames on first load
 - Used for STT fuzzy-match validation
-- Persisted to `aiAgentSettings.frontDeskBehavior.commonLastNames`
+- Persisted to `AdminSettings.commonLastNames` (global, shared by all companies)
 
 ---
 

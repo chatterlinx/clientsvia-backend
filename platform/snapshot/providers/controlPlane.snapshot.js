@@ -98,7 +98,9 @@ module.exports.getSnapshot = async function(companyId) {
         }
         
         const bookingEnabled = settings.bookingEnabled !== false;
-        const bookingSlots = frontDesk.bookingSlots || [];
+        // V110: Read slots from slotRegistry + bookingFlow
+        const v110Slots = frontDesk.slotRegistry?.slots || [];
+        const v110Steps = frontDesk.bookingFlow?.steps || [];
         
         const escalationRules = frontDesk.escalationTriggers || [];
 
@@ -142,8 +144,8 @@ module.exports.getSnapshot = async function(companyId) {
             health = 'YELLOW';
         }
         
-        if (bookingEnabled && bookingSlots.length === 0) {
-            warnings.push('Booking enabled but no slots configured');
+        if (bookingEnabled && (v110Slots.length === 0 || v110Steps.length === 0)) {
+            warnings.push('Booking enabled but V110 slotRegistry/bookingFlow not configured');
             health = 'YELLOW';
         }
         
@@ -164,8 +166,9 @@ module.exports.getSnapshot = async function(companyId) {
                     greetingPreview: greetingText ? (greetingText.length > 50 ? greetingText.substring(0, 50) + '...' : greetingText) : null,
                     toneProfile: frontDesk.conversationStyle || 'balanced',
                     bookingEnabled,
-                    bookingSlotsCount: bookingSlots.length,
-                    bookingSlotNames: bookingSlots.map(s => s.id || s.name),
+                    v110SlotCount: v110Slots.length,
+                    v110StepCount: v110Steps.length,
+                    v110SlotNames: v110Slots.map(s => s.id || s.slotId),
                     escalationRulesCount: escalationRules.length,
                     discoveryConsent: discoveryConsentSnapshot
                 },
