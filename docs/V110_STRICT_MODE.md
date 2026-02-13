@@ -1,206 +1,147 @@
-# V110 Owner Priority — Deterministic Lane Architecture
+# V110 Call Flow — Scenario-First Architecture
 
 **Date:** 2026-02-13  
 **Status:** ACTIVE  
-**Trigger:** Discovery Flow configured in UI  
-**Replaces:** Kill switches, consent gates, phrase detection
+**Trigger:** Discovery Flow configured in UI
+
+---
+
+## The Customer Experience
+
+```
+Turn 1: Caller complains
+  → Scenario: "Got it — [acknowledge problem]. Would you like me to schedule a service call?"
+
+Turn 2: Caller says yes
+  → schedulingAccepted = true
+  → "Perfect. What's your first and last name?"
+
+Turn 3-4: Info collection
+  → "Best number for text updates?"
+  → "What's the full service address?"
+
+Turn 5+: Booking flow
+  → BookingFlowRunner handles remaining slots (last name, time, etc.)
+```
 
 ---
 
 ## Architecture
 
-When a V110 Discovery Flow is configured, lane transition is **pure state**:
+### Lane Transition (FrontDeskRuntime.determineLane)
 
 ```
-if missingDiscoverySlots > 0  → DISCOVERY
-if missingDiscoverySlots === 0 → BOOKING
+if hasDiscoveryFlow:
+    if schedulingAccepted AND discoveryComplete → BOOKING
+    else → DISCOVERY
 ```
 
-No phrase detection. No kill switches. No consent gates.
+Within DISCOVERY, there are two sub-phases:
+
+| Phase | Trigger | Who Speaks |
+|-------|---------|-----------|
+| **Scenario Q&A** | `schedulingAccepted = false` | Scenarios are PRIMARY brain (acknowledge + funnel) |
+| **Info Collection** | `schedulingAccepted = true` | LLM collects V110 steps (name, phone, address) |
+
+### Booking Signal Handling (handleDiscoveryLane)
+
+When ConversationEngine signals booking intent in V110:
+
+1. **DON'T** set `bookingModeLocked = true`
+2. **DO** set `callState.schedulingAccepted = true`
+3. Return the scenario response (includes the funnel)
+4. Next turn: `determineLane` sees `schedulingAccepted + !complete` → still DISCOVERY
+5. LLM knows `schedulingAccepted = true` + `missingSlots` → starts collecting info
+6. When info captured: `determineLane` → BOOKING
 
 ---
 
-## Owner Priority (Permanent, Not Toggleable)
+## Scenario Response Contract
 
-| Owner | Mic | What It Does |
-|-------|-----|-------------|
-| **Discovery** | Owns until slots captured | Collects: reason → name → phone → address |
-| **Triage/Scenarios** | Enrichment only | Sets tags, call_reason_detail, routing hints. Cannot output booking prompts. |
-| **Booking** | Owns after discovery completes | Collects remaining slots: lastName, time, etc. |
+Every scenario response in Discovery must follow this structure:
 
-### Discovery Completion IS Consent
+### A. Reassure / Answer
+> "Got it — a blank thermostat usually means power isn't getting to the system."
 
-In V110, the caller voluntarily provides their name, phone, and address through Discovery.
-That IS consent. No separate consent gate is needed. `bookingRequiresExplicitConsent` is not
-consulted when V110 Discovery Flow is active.
+### B. Optional Safety Clarifier
+> "Is it completely out right now?"
 
----
+### C. Funnel Question
+> "Would you like me to schedule a service call?"
 
-## What This Replaces
+### Hard Rule — Scenarios in Discovery CANNOT ask:
+- Morning or afternoon
+- Time windows
+- Appointment dates
+- Pricing deep dives
 
-### Kill Switches (Removed from V110 Control Flow)
-
-| Old Toggle | Old Purpose | V110 Replacement |
-|-----------|------------|-----------------|
-| `bookingRequiresExplicitConsent` | Block booking without "yes" | Discovery completion IS consent |
-| `disableScenarioAutoResponses` | Muzzle scenarios in discovery | Owner priority: scenarios enrich, don't speak booking |
-| `forceLLMDiscovery` | Force LLM over scenarios | Scenarios are smart, not muzzled. Output constrained by owner. |
-
-These toggles still exist for **non-V110 companies** (backward compatibility).
-For V110 companies, they are **not consulted** for lane decisions.
-
-### Phrase Detection (Removed from V110 Lane Logic)
-
-| Old Mechanism | Old Purpose | V110 Replacement |
-|--------------|------------|-----------------|
-| `directIntentPatterns` | Detect "book" / "schedule" to trigger booking | State-based: discoveryComplete → BOOKING |
-| `wantsBooking` triggers | Same | Same |
-| Smart patterns | Regex matching | Removed entirely (legacy only) |
-| Fallback patterns | Default when no config | Removed entirely (legacy only) |
+These belong in **Booking flow only** (after name/phone/address captured).
 
 ---
 
-## How It Works
+## The 2 Decision Detectors
 
-### FrontDeskRuntime.determineLane()
+### 1. Scheduling Acceptance
+Caller says: yes / schedule / book it / send someone / ok / please do / come out  
+→ `schedulingAccepted = true` → enter V110 info collection
 
-```javascript
-const discoverySteps = getConfig('frontDesk.discoveryFlow.steps', []);
-const hasDiscoveryFlow = discoverySteps.length > 0;
+### 2. Refusal / More Questions  
+Caller says: no / just asking / not yet / how much  
+→ Stay in scenario Q&A mode, keep answering, keep funneling
 
-if (hasDiscoveryFlow) {
-    // Required steps = all steps with slotId, minus call_reason_detail (passive)
-    const requiredSteps = discoverySteps.filter(step => 
-        step.slotId && step.slotId !== 'call_reason_detail'
-    );
-    
-    const missingSlots = requiredSteps.filter(step => {
-        const val = allCaptured[step.slotId];
-        return !val || (typeof val === 'string' && val.trim() === '');
-    });
-    
-    if (missingSlots.length > 0) return LANES.DISCOVERY;
-    else return LANES.BOOKING;
-}
-```
+---
 
-### ConversationEngine Owner Policy
+## What If Caller Asks Questions?
 
-```javascript
-const killSwitches = hasV110DiscoveryFlow
-    ? {
-        bookingRequiresConsent: false,       // Discovery completion IS consent
-        forceLLMDiscovery: false,             // Scenarios can inform, LLM speaks
-        disableScenarioAutoResponses: false,  // Scenarios run, constrained by owner
-        v110OwnerPriority: true               // ← This drives all downstream logic
-    }
-    : { /* legacy kill switches */ };
-```
+Scenarios handle it naturally with answer + funnel:
 
-### Scenario Behavior in Discovery (V110)
+| Caller | Agent (Scenario) |
+|--------|-----------------|
+| "How much is it?" | "Exact price depends on diagnosis. Would you like me to schedule a tech?" |
+| "Can you come today?" | "We'll try for soonest available. Want me to schedule it now?" |
+| "Is this an emergency?" | "If you have no cooling and it's affecting safety, we treat it as urgent. Want me to schedule?" |
 
-- Scenarios **run** and **match** (triage fills call_reason_detail, tags, priority hints)
-- Scenarios **can auto-respond** (tier-1 short-circuit still works)
-- BUT: scheduling language is **stripped** from scenario output
-- No consent questions injected during Discovery
-- LLM receives scenarios as `enrichment_only` context, not `may_verbatim`
+---
+
+## Priority Order
+
+1. **Scenario response** (first — acknowledge + answer)
+2. **Scheduling offer** (always included unless caller explicitly refuses)
+3. If accepted → **V110 Discovery steps** (name → phone → address)
+4. Then → **Booking flow** (remaining slots)
 
 ---
 
 ## What's Allowed vs Not Allowed
 
-### Allowed (Permanent Standards)
-
-- Permanent protocol enforcement ("Discovery owns the mic")
+### Allowed
+- Scenarios as PRIMARY brain in Discovery
+- Scheduling offers in scenario responses (that's the funnel)
+- Consent detection as scheduling acceptance detector
+- State-based lane transition (accepted + complete → BOOKING)
 - Company-scoped config (per companyID)
-- Template seeding that writes correct defaults on onboarding
-- Schema fixes so fields persist correctly
-- Deterministic lane/state machine logic
 
 ### Not Allowed
-
-- Emergency toggles that shut off major subsystems
-- "Disable X" as a permanent strategy
-- Temp files/presets that don't become canonical wiring truth
-- Phrase detection for lane transitions (state-based only)
-
----
-
-## Expected Call Flow
-
-```
-Turn 1: "Hi, my name is Mark. I'm having air conditioning problems."
-  → Discovery: captures call_reason_detail (triage), name="Mark"
-  → Missing: phone, address
-  → Agent asks for phone (next Discovery step)
-
-Turn 2: "Yeah, this number works."
-  → Discovery: captures phone from caller ID
-  → Missing: address
-  → Agent asks for address
-
-Turn 3: "123 Main Street, Fort Myers."
-  → Discovery: captures address
-  → Missing: none → discoveryComplete = true
-  → Lane: BOOKING (automatic, no phrase detection needed)
-  → BookingFlowRunner starts: "And what's your last name, Mark?"
-
-Turn 4+: Booking flow finishes remaining slots
-```
-
----
-
-## Raw Event Markers
-
-### V110 Owner Priority Active
-```json
-{
-  "type": "DECISION_TRACE",
-  "data": {
-    "reason": "v110_discovery_owns_mic",
-    "missingSlots": ["phone", "address"],
-    "capturedSlots": ["name"]
-  }
-}
-```
-
-### Discovery Complete → Booking
-```json
-{
-  "type": "DECISION_TRACE",
-  "data": {
-    "reason": "v110_discovery_complete",
-    "capturedSlots": ["name", "phone", "address"]
-  }
-}
-```
-
-### Legacy Mode (No Discovery Flow)
-```json
-{
-  "type": "LOG",
-  "message": "LEGACY MODE: No V110 Discovery Flow - using hardcoded patterns"
-}
-```
+- Kill switches that muzzle scenarios
+- Stripping scheduling language from scenario output
+- Skipping scenarios to force info collection on Turn 1
+- Phrase detection for lane transitions
+- Booking-time prompts in Discovery (morning/afternoon)
 
 ---
 
 ## Files Changed
 
-| File | Change | Lines |
-|------|--------|-------|
-| `services/engine/FrontDeskRuntime.js` | Pure state-based lane transition | ~80 lines (replaced ~130) |
-| `services/ConversationEngine.js` | Owner priority replaces kill switches | ~60 lines changed |
-| `models/v2Company.js` | Added directIntentPatterns to schema | 14 lines |
+| File | Change |
+|------|--------|
+| `FrontDeskRuntime.js` | `determineLane()`: schedulingAccepted + discoveryComplete → BOOKING |
+| `FrontDeskRuntime.js` | `handleDiscoveryLane()`: V110 sets schedulingAccepted, not bookingModeLocked |
+| `ConversationEngine.js` | Scenarios are PRIMARY brain (not enrichment-only) |
+| `ConversationEngine.js` | Scheduling language stays (not stripped). Only booking-time prompts stripped. |
+| `ConversationEngine.js` | Consent detection works as scheduling acceptance detector |
 
 ---
 
 ## Non-V110 Backward Compatibility
 
-Companies WITHOUT a Discovery Flow configured continue to use:
-- Legacy kill switches (bookingRequiresExplicitConsent, etc.)
-- Phrase detection for booking intent
-- Smart patterns and fallback patterns
-- Consent gate for booking entry
-
-**Zero changes for non-V110 companies.**
+Companies WITHOUT a Discovery Flow: zero changes. Legacy kill switches, phrase detection, and consent gates all preserved.

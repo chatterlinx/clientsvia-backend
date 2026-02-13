@@ -748,28 +748,30 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     
     // ═══════════════════════════════════════════════════════════════
     // ═══════════════════════════════════════════════════════════════
-    // V110 OWNER PRIORITY — Deterministic lane selection by state
+    // V110 LANE LOGIC — Scenario-first, then info, then booking
     // ═══════════════════════════════════════════════════════════════
-    // When a Discovery Flow is configured, lane transition is PURE STATE:
     //
-    //   if missingDiscoverySlots > 0 → DISCOVERY
-    //   if missingDiscoverySlots === 0 → BOOKING
+    // The customer experience flow:
+    //   1. Scenario speaks first (acknowledge problem + offer scheduling)
+    //   2. Caller accepts → V110 info collection (name/phone/address)
+    //   3. After info captured → Booking flow (remaining slots)
     //
-    // No phrase detection. No kill switches. No consent gates.
-    // Discovery IS the consent — the caller voluntarily provided info.
+    // Lane transition rule:
+    //   BOOKING only when schedulingAccepted AND discoveryComplete
+    //   Everything else → DISCOVERY (scenarios + info collection)
     //
-    // Owner priority (permanent, not toggleable):
-    //   1. Discovery owns the mic until required slots are captured
-    //   2. Triage/scenarios enrich Discovery (tags, call_reason_detail)
-    //      but cannot output booking prompts or scheduling questions
-    //   3. After discovery completes, Booking owns the mic
+    // Within DISCOVERY, ConversationEngine manages two sub-phases:
+    //   - Pre-acceptance: scenarios are PRIMARY brain (acknowledge + funnel)
+    //   - Post-acceptance: V110 steps drive info collection
     //
-    // This is a generic platform rule. Not HVAC-specific. Not a kill switch.
     // ═══════════════════════════════════════════════════════════════
     const discoverySteps = getConfig('frontDesk.discoveryFlow.steps', []);
     const hasDiscoveryFlow = discoverySteps.length > 0;
     
     if (hasDiscoveryFlow) {
+        const schedulingAccepted = callState?.schedulingAccepted === true ||
+                                    callState?.booking?.consentGiven === true;
+        
         const bookingCollected = callState?.bookingCollected || callState?.slots || {};
         const collectedSlots = callState?.collectedSlots || {};
         const allCaptured = { ...collectedSlots, ...bookingCollected };
@@ -788,47 +790,47 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         const discoveryComplete = missingSlots.length === 0;
         
         // ───────────────────────────────────────────────────────────
-        // DISCOVERY owns the mic: slots still missing → stay here
+        // BOOKING: Only when caller accepted scheduling AND info captured
         // ───────────────────────────────────────────────────────────
-        if (!discoveryComplete) {
-            const discoveryTurnCount = callState?.discoveryTurnCount || 0;
-            
-            trace.addDecisionReason('LANE_DISCOVERY', {
-                reason: 'v110_discovery_owns_mic',
-                missingSlots: missingSlots.map(s => s.slotId),
+        if (schedulingAccepted && discoveryComplete) {
+            trace.addDecisionReason('LANE_BOOKING', {
+                reason: 'v110_accepted_and_complete',
                 capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
-                discoveryTurnCount
+                discoveryTurnCount: callState?.discoveryTurnCount || 0
             });
             
-            logger.info('[FRONT_DESK_RUNTIME] V110: Discovery owns the mic — slots still missing', {
+            logger.info('[FRONT_DESK_RUNTIME] V110: Scheduling accepted + info captured → BOOKING', {
                 callSid: context.callSid,
-                missingSlots: missingSlots.map(s => s.slotId),
-                capturedCount: Object.keys(allCaptured).filter(k => allCaptured[k]).length,
-                requiredCount: requiredSteps.length,
-                discoveryTurnCount
+                capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
+                discoveryTurnCount: callState?.discoveryTurnCount || 0
             });
             
-            return LANES.DISCOVERY;
+            return LANES.BOOKING;
         }
         
         // ───────────────────────────────────────────────────────────
-        // BOOKING owns the mic: all discovery slots captured → transition
+        // DISCOVERY: Everything else — scenarios speak, info collects
         // ───────────────────────────────────────────────────────────
-        // No phrase detection needed. No consent gate consulted.
-        // Discovery completion IS consent — caller provided info voluntarily.
-        trace.addDecisionReason('LANE_BOOKING', {
-            reason: 'v110_discovery_complete',
+        // Pre-acceptance: Scenarios are the PRIMARY brain.
+        //   They acknowledge the problem, answer questions, offer scheduling.
+        // Post-acceptance: V110 steps drive info collection.
+        //   LLM knows schedulingAccepted + missingSlots and asks for them.
+        trace.addDecisionReason('LANE_DISCOVERY', {
+            reason: schedulingAccepted ? 'v110_collecting_info' : 'v110_scenario_phase',
+            schedulingAccepted,
+            missingSlots: missingSlots.map(s => s.slotId),
             capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
             discoveryTurnCount: callState?.discoveryTurnCount || 0
         });
         
-        logger.info('[FRONT_DESK_RUNTIME] V110: Discovery complete → BOOKING', {
+        logger.info(`[FRONT_DESK_RUNTIME] V110: ${schedulingAccepted ? 'Info collection' : 'Scenario phase'} — DISCOVERY`, {
             callSid: context.callSid,
-            capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
+            schedulingAccepted,
+            missingSlots: missingSlots.map(s => s.slotId),
             discoveryTurnCount: callState?.discoveryTurnCount || 0
         });
         
-        return LANES.BOOKING;
+        return LANES.DISCOVERY;
     }
     
     // ═══════════════════════════════════════════════════════════════
@@ -1661,28 +1663,95 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         const engineResponse = engineResult.reply || engineResult.response || engineResult.text || '';
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V109: If deferToBookingRunner=true, we MUST run BookingFlowRunner NOW
-        // ═══════════════════════════════════════════════════════════════════════
-        // BUG FIX: Previously, when ConversationEngine signaled deferToBookingRunner
-        // with reply=null, we'd return an empty response that became "I'm sorry, 
-        // could you repeat that?" - THIS IS THE ROOT CAUSE OF SPLIT-BRAIN.
-        //
-        // FIX: Actually run BookingFlowRunner here to generate the booking prompt.
+        // BOOKING SIGNAL HANDLING — V110 vs Legacy behavior
         // ═══════════════════════════════════════════════════════════════════════
         if (signals.deferToBookingRunner || signals.bookingModeLocked) {
-            logger.info('[FRONT_DESK_RUNTIME] V109: deferToBookingRunner detected - running BookingFlowRunner NOW', {
+            
+            // ─────────────────────────────────────────────────────────────────
+            // V110: Caller accepted scheduling → set flag, DON'T lock booking
+            // ─────────────────────────────────────────────────────────────────
+            // In V110, booking consent means the caller said "yes" to the
+            // scheduling offer. But we still need to collect info (name, phone,
+            // address) before running BookingFlowRunner. So:
+            //   1. Set schedulingAccepted = true
+            //   2. Return the scenario response (which includes the funnel)
+            //   3. Next turn: determineLane sees schedulingAccepted + !complete → DISCOVERY
+            //   4. ConversationEngine starts collecting info
+            //   5. When complete: determineLane → BOOKING
+            // ─────────────────────────────────────────────────────────────────
+            const v110Steps = getConfig('frontDesk.discoveryFlow.steps', []);
+            const isV110 = v110Steps.length > 0;
+            
+            if (isV110) {
+                // Check if discovery info is already complete
+                const bookingCollected = callState?.bookingCollected || callState?.slots || {};
+                const collectedSlots = callState?.collectedSlots || {};
+                const allCaptured = { ...collectedSlots, ...bookingCollected };
+                
+                if (engineResult.bookingFlowState?.bookingCollected) {
+                    Object.assign(allCaptured, engineResult.bookingFlowState.bookingCollected);
+                    callState.bookingCollected = { ...callState.bookingCollected, ...engineResult.bookingFlowState.bookingCollected };
+                }
+                
+                const requiredSteps = v110Steps.filter(s => s.slotId && s.slotId !== 'call_reason_detail');
+                const missingSlots = requiredSteps.filter(s => {
+                    const v = allCaptured[s.slotId];
+                    return !v || (typeof v === 'string' && v.trim() === '');
+                });
+                
+                if (missingSlots.length > 0) {
+                    // Info still needed — don't lock booking, set scheduling flag
+                    callState.schedulingAccepted = true;
+                    callState.booking = callState.booking || {};
+                    callState.booking.consentGiven = true;
+                    
+                    logger.info('[FRONT_DESK_RUNTIME] V110: Scheduling accepted — collecting info before booking', {
+                        callSid: context.callSid,
+                        missingSlots: missingSlots.map(s => s.slotId),
+                        triggerReason: signals.bookingTriggerReason
+                    });
+                    
+                    if (BlackBoxLogger) {
+                        BlackBoxLogger.logEvent({
+                            callId: context.callSid,
+                            companyId: context.companyId,
+                            type: 'V110_SCHEDULING_ACCEPTED',
+                            data: {
+                                reason: signals.bookingTriggerReason || 'caller_accepted_scheduling',
+                                missingSlots: missingSlots.map(s => s.slotId),
+                                responsePreview: (engineResponse || '').substring(0, 100)
+                            }
+                        }).catch(() => {});
+                    }
+                    
+                    // Return scenario response — it already acknowledged + funneled
+                    // Next turn the LLM will know schedulingAccepted=true and start collecting info
+                    return {
+                        response: engineResponse || "Perfect — let me get a few details. What's your first and last name?",
+                        signals: { schedulingAccepted: true },
+                        matchSource: engineResult.matchSource || 'CONVERSATION_ENGINE'
+                    };
+                }
+                
+                // Discovery info already captured — fall through to lock booking
+                logger.info('[FRONT_DESK_RUNTIME] V110: Scheduling accepted + info already captured → locking booking', {
+                    callSid: context.callSid
+                });
+            }
+            
+            // ─────────────────────────────────────────────────────────────────
+            // Non-V110 (or V110 with info complete): Lock booking immediately
+            // ─────────────────────────────────────────────────────────────────
+            logger.info('[FRONT_DESK_RUNTIME] Booking signal detected — locking booking mode', {
                 callSid: context.callSid,
                 deferToBookingRunner: !!signals.deferToBookingRunner,
                 bookingModeLocked: !!signals.bookingModeLocked,
-                hasEngineResponse: !!engineResponse,
                 triggerReason: signals.bookingTriggerReason
             });
             
-            // Lock booking mode immediately (Absolute Booking Gate from now on)
             callState.bookingModeLocked = true;
             callState.sessionMode = 'BOOKING';
             
-            // Copy any collected slots from engine result
             if (engineResult.bookingFlowState?.bookingCollected) {
                 callState.bookingCollected = { 
                     ...callState.bookingCollected,
@@ -1690,14 +1759,13 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                 };
             }
             
-            // Actually run BookingFlowRunner to get the booking prompt
+            // Run BookingFlowRunner for the first booking step
             try {
                 if (!BookingFlowRunner || !BookingFlowResolver) {
                     loadPlugins();
                 }
                 
                 if (BookingFlowRunner && BookingFlowResolver) {
-                    // Resolve the booking flow
                     const deferredFlow = BookingFlowResolver.resolve({
                         companyId: context.companyId,
                         trade: callState.trade || null,
@@ -1705,7 +1773,6 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                         company: context.company
                     });
                     
-                    // Build initial state
                     const deferredState = {
                         bookingModeLocked: true,
                         bookingFlowId: deferredFlow.flowId,
@@ -1717,7 +1784,6 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                         pendingConfirmation: null
                     };
                     
-                    // Run booking flow
                     const bookingResult = await BookingFlowRunner.runStep({
                         flow: deferredFlow,
                         state: deferredState,
@@ -1727,49 +1793,25 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                         session: { mode: 'BOOKING', collectedSlots: callState.bookingCollected || {} }
                     });
                     
-                    // Update callState with booking state
                     Object.assign(callState, bookingResult.state || {});
-                    
-                    if (BlackBoxLogger) {
-                        BlackBoxLogger.logEvent({
-                            callId: context.callSid,
-                            companyId: context.companyId,
-                            type: 'DEFERRED_BOOKING_EXECUTED',
-                            data: {
-                                reason: signals.bookingTriggerReason || 'deferToBookingRunner',
-                                flowId: deferredFlow.flowId,
-                                currentStep: bookingResult.state?.currentStepId,
-                                responsePreview: bookingResult.reply?.substring(0, 100)
-                            }
-                        }).catch(() => {});
-                    }
                     
                     return {
                         response: bookingResult.reply || "Great! What's a good phone number to reach you?",
-                        signals: {
-                            enterBooking: true,
-                            enterBookingReason: signals.bookingTriggerReason || 'deferred_from_engine'
-                        },
+                        signals: { enterBooking: true },
                         matchSource: 'BOOKING_FLOW_RUNNER',
                         bookingState: bookingResult.state
                     };
                 }
             } catch (bookingErr) {
-                logger.error('[FRONT_DESK_RUNTIME] V109: BookingFlowRunner deferred execution failed', {
+                logger.error('[FRONT_DESK_RUNTIME] BookingFlowRunner deferred execution failed', {
                     callSid: context.callSid,
                     error: bookingErr.message
                 });
-                // Fall through to return enterBooking signal with whatever response we have
             }
             
-            // Fallback if BookingFlowRunner couldn't run
             return {
-                response: engineResponse || "Great! Let me help you schedule. What's a good phone number to reach you?",
-                signals: {
-                    enterBooking: true,
-                    enterBookingReason: signals.bookingTriggerReason || 'engine_detected',
-                    setConsentPending: signals.bookingConsentPending
-                },
+                response: engineResponse || "Great! Let me help you schedule. What's your first and last name?",
+                signals: { enterBooking: true },
                 matchSource: engineResult.matchSource || 'CONVERSATION_ENGINE_DEFERRED'
             };
         }
