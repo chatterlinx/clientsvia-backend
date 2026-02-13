@@ -505,12 +505,51 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         const config = deepMerge(UI_DEFAULTS, saved);
         
         // ════════════════════════════════════════════════════════════════════════════
+        // V84: LOAD GLOBAL COMMON NAMES - Shared across ALL companies
+        // ════════════════════════════════════════════════════════════════════════════
+        // Common first/last names are platform-wide, stored in AdminSettings.
+        // Companies no longer maintain their own separate lists.
+        // ════════════════════════════════════════════════════════════════════════════
+        try {
+            const AdminSettings = require('../../models/AdminSettings');
+            const adminSettings = await AdminSettings.findOne().lean();
+            
+            if (adminSettings) {
+                // Override with global lists
+                config.commonFirstNames = adminSettings.commonFirstNames || [];
+                config.commonLastNames = adminSettings.commonLastNames || [];
+                
+                logger.info('[FRONT DESK BEHAVIOR] 👤 V84: Loaded GLOBAL common names', {
+                    companyId,
+                    firstNamesCount: config.commonFirstNames.length,
+                    lastNamesCount: config.commonLastNames.length,
+                    source: 'AdminSettings (global)'
+                });
+            } else {
+                // Fallback: try per-company lists (legacy)
+                config.commonFirstNames = saved.commonFirstNames || [];
+                config.commonLastNames = saved.commonLastNames || [];
+                
+                logger.warn('[FRONT DESK BEHAVIOR] ⚠️ No AdminSettings found, using company-specific names', {
+                    companyId
+                });
+            }
+        } catch (err) {
+            logger.error('[FRONT DESK BEHAVIOR] ❌ Failed to load global common names', {
+                companyId,
+                error: err.message
+            });
+            // Fallback to company-specific
+            config.commonFirstNames = saved.commonFirstNames || [];
+            config.commonLastNames = saved.commonLastNames || [];
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
         // V111: AUTO-SEED Common Last Names from Census data on first access
         // ════════════════════════════════════════════════════════════════════════════
-        // If the company has no last names yet (empty array), load the Census
-        // seed data. This only happens once — after the first save, the company's
-        // own list (even if modified) is used. The seed is NOT stored to DB here;
-        // it's returned to the UI which saves it on first edit.
+        // If the GLOBAL list has no last names yet (empty array), load the Census
+        // seed data. This only happens once — after the first save, the admin's
+        // own list (even if modified) is used.
         // ════════════════════════════════════════════════════════════════════════════
         if (!config.commonLastNames || config.commonLastNames.length === 0) {
             try {
@@ -1220,36 +1259,55 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         }
         
         // ════════════════════════════════════════════════════════════════════════════
-        // 👤 Common First Names - UI-Configurable Name Recognition
+        // 👤 V84: GLOBAL COMMON NAMES - Platform-wide lists (MOVED from per-company)
         // ════════════════════════════════════════════════════════════════════════════
-        // Used to detect if a single name token is a first name or last name
-        // When caller says "Mark", system checks this list to know it's a first name
-        // Then asks "And what's your last name?" instead of "first name"
+        // Common first/last names are now stored in AdminSettings (global), not per-company.
+        // This ensures all companies share the same name lists without duplication.
         // ════════════════════════════════════════════════════════════════════════════
-        if (updates.commonFirstNames !== undefined) {
-            // Accept both arrays and empty arrays (allow clearing the list)
-            updateObj['aiAgentSettings.frontDeskBehavior.commonFirstNames'] = updates.commonFirstNames || [];
-            logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: Saving commonFirstNames', {
-                companyId,
-                count: (updates.commonFirstNames || []).length,
-                sample: (updates.commonFirstNames || []).slice(0, 10),
-                fullList: updates.commonFirstNames
-            });
-        }
-        
-        // ════════════════════════════════════════════════════════════════════════════
-        // 👤 V111: COMMON LAST NAMES - US Census top 50K surnames
-        // ════════════════════════════════════════════════════════════════════════════
-        // Used for last name recognition and STT fuzzy-match validation.
-        // Seed: data/seeds/censusLastNames.js (50,000 names, ~83% US coverage)
-        // ════════════════════════════════════════════════════════════════════════════
-        if (updates.commonLastNames !== undefined) {
-            updateObj['aiAgentSettings.frontDeskBehavior.commonLastNames'] = updates.commonLastNames || [];
-            logger.info('[FRONT DESK BEHAVIOR] 👤 Saving commonLastNames', {
-                companyId,
-                count: (updates.commonLastNames || []).length,
-                sample: (updates.commonLastNames || []).slice(0, 10)
-            });
+        if (updates.commonFirstNames !== undefined || updates.commonLastNames !== undefined) {
+            try {
+                const AdminSettings = require('../../models/AdminSettings');
+                const adminSettings = await AdminSettings.findOne();
+                
+                if (!adminSettings) {
+                    logger.warn('[FRONT DESK BEHAVIOR] ⚠️ No AdminSettings found, creating one...');
+                    const newSettings = new AdminSettings({
+                        commonFirstNames: updates.commonFirstNames || [],
+                        commonLastNames: updates.commonLastNames || []
+                    });
+                    await newSettings.save();
+                    logger.info('[FRONT DESK BEHAVIOR] ✅ Created AdminSettings with global common names');
+                } else {
+                    // Update existing AdminSettings
+                    if (updates.commonFirstNames !== undefined) {
+                        adminSettings.commonFirstNames = updates.commonFirstNames || [];
+                        logger.info('[FRONT DESK BEHAVIOR] 👤 Saving GLOBAL commonFirstNames', {
+                            count: (updates.commonFirstNames || []).length,
+                            sample: (updates.commonFirstNames || []).slice(0, 10)
+                        });
+                    }
+                    
+                    if (updates.commonLastNames !== undefined) {
+                        adminSettings.commonLastNames = updates.commonLastNames || [];
+                        logger.info('[FRONT DESK BEHAVIOR] 👤 Saving GLOBAL commonLastNames', {
+                            count: (updates.commonLastNames || []).length,
+                            sample: (updates.commonLastNames || []).slice(0, 10)
+                        });
+                    }
+                    
+                    adminSettings.lastUpdated = new Date();
+                    adminSettings.updatedBy = req.user?.email || 'admin';
+                    
+                    await adminSettings.save();
+                    logger.info('[FRONT DESK BEHAVIOR] ✅ Updated AdminSettings with global common names');
+                }
+            } catch (err) {
+                logger.error('[FRONT DESK BEHAVIOR] ❌ Failed to save global common names', {
+                    companyId,
+                    error: err.message
+                });
+                // Don't fail the entire save, just log the error
+            }
         }
         
         // ════════════════════════════════════════════════════════════════════════════

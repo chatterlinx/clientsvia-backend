@@ -865,6 +865,26 @@ const adminSettingsSchema = new mongoose.Schema({
         }
     },
     
+    // ============================================================================
+    // GLOBAL COMMON NAMES - Platform-wide name lists (V84 - Feb 2026)
+    // ============================================================================
+    // These lists are shared across ALL companies for booking validation.
+    // When a caller says "Mark", the AI checks this list to determine if it's
+    // a first name or last name. This prevents each company from maintaining
+    // their own separate lists.
+    // ============================================================================
+    commonFirstNames: {
+        type: [String],
+        default: [],
+        description: 'Global list of common first names for booking validation (shared across all companies)'
+    },
+    
+    commonLastNames: {
+        type: [String],
+        default: [],
+        description: 'Global list of common last names - US Census top 50K surnames (shared across all companies)'
+    },
+    
     // Metadata
     lastUpdated: {
         type: Date,

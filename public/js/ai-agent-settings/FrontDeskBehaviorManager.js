@@ -6152,7 +6152,41 @@ Sean → Shawn, Shaun"
                 `;
             })()}
             
-            <!-- Common First Names Section -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <!-- MOVED NOTICE: Common First/Last Names → Global Settings Tab -->
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
+            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 24px; margin-top: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);">
+                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
+                    <span style="font-size: 3rem;">🌐</span>
+                    <div>
+                        <h3 style="margin: 0 0 6px 0; color: white; font-size: 1.3rem;">👤 Common First & Last Names Moved</h3>
+                        <p style="margin: 0; color: rgba(255,255,255,0.9); font-size: 0.95rem; line-height: 1.5;">
+                            <strong>Common First Names</strong> and <strong>Common Last Names</strong> are now managed in the 
+                            <strong style="color: #fbbf24;">Global Settings</strong> tab.
+                            <br>These lists are <strong>shared across ALL companies</strong> — no need to configure per company.
+                        </p>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 12px; align-items: center; padding: 16px; background: rgba(255,255,255,0.1); border-radius: 8px; margin-top: 16px;">
+                    <span style="font-size: 1.5rem;">💡</span>
+                    <div style="flex: 1;">
+                        <p style="margin: 0; color: rgba(255,255,255,0.95); font-size: 0.9rem;">
+                            <strong>Why the move?</strong> Name lists should be platform-wide so you don't have to maintain separate lists for each company.
+                            When you add "Michael" to the global list, it works for all companies automatically.
+                        </p>
+                    </div>
+                </div>
+                
+                <button onclick="window.frontDeskManager.switchTab('global-settings', document.querySelector('.front-desk-behavior-panel'))" 
+                    style="margin-top: 16px; padding: 12px 24px; background: white; color: #1e3a8a; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.2s;"
+                    onmouseover="this.style.transform='scale(1.05)'" 
+                    onmouseout="this.style.transform='scale(1)'">
+                    🌐 Go to Global Settings →
+                </button>
+            </div>
+            
+            <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
                     <div>
@@ -6192,56 +6226,6 @@ Sean → Shawn, Shaun"
                         📋 Copy All
                     </button>
                     <span style="color: #8b949e; font-size: 0.75rem;">${(this.config.commonFirstNames || []).length} names</span>
-                </div>
-            </div>
-            
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <!-- V111: COMMON LAST NAMES — US Census top 50,000 surnames               -->
-            <!-- Search-only display — too many names to render all chips at once.      -->
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-                    <div>
-                        <h3 style="margin: 0; color: #a371f7;">📋 Common Last Names</h3>
-                        <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
-                            US Census top surnames for last name recognition and STT validation.
-                            When a caller gives a last name, the AI checks this list to boost confidence.
-                            <br><span style="color: #6e7681;">Source: US Census Bureau 2010 (Public Domain) · Search to browse · Add your own custom names below.</span>
-                        </p>
-                    </div>
-                    <button onclick="window.frontDeskManager.addCommonLastName()" style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; white-space: nowrap;">
-                        + Add Name
-                    </button>
-                </div>
-                
-                <!-- Search Box -->
-                <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
-                    <div style="position: relative; flex: 1;">
-                        <input type="text" id="fdb-search-last-name" 
-                            placeholder="🔍 Search last names (e.g., Gonzalez, Smith, Patel...)" 
-                            style="width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;"
-                            oninput="window.frontDeskManager.searchLastNames(this.value)">
-                    </div>
-                    <span id="fdb-last-name-search-result" style="color: #8b949e; font-size: 0.75rem; min-width: 120px;"></span>
-                </div>
-                
-                <!-- Results container: shows matching chips on search, summary when idle -->
-                <div id="common-last-names-container" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px; overflow-y: auto; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #30363d;">
-                    <p style="color: #8b949e; margin: 0; font-style: italic;">
-                        ${(this.config.commonLastNames || []).length.toLocaleString()} last names loaded. Type above to search.
-                    </p>
-                </div>
-                
-                <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
-                    <input type="text" id="fdb-new-last-name" placeholder="Enter names (comma-separated for bulk: Garcia, Nguyen, Patel)" 
-                        style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;"
-                        onkeypress="if(event.key === 'Enter') window.frontDeskManager.addCommonLastName()">
-                    <button onclick="window.frontDeskManager.copyAllLastNames()" 
-                        style="padding: 8px 12px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.75rem; white-space: nowrap;"
-                        title="Copy all names to clipboard (comma-separated)">
-                        📋 Copy All
-                    </button>
-                    <span id="fdb-last-name-count" style="color: #8b949e; font-size: 0.75rem;">${(this.config.commonLastNames || []).length.toLocaleString()} names</span>
                 </div>
             </div>
             
