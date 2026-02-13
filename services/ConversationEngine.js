@@ -2407,11 +2407,12 @@ const ConsentDetector = {
         }
         
         // ═══════════════════════════════════════════════════════════════
-        // V110 OVERRIDE: If Discovery Flow is configured, Discovery IS consent.
-        // FrontDeskRuntime controls the gate. By the time ConversationEngine runs,
-        // if the caller is in booking mode, FrontDeskRuntime already verified
-        // that required discovery slots are captured (name, phone, address).
-        // Don't re-gate on explicit consent — it blocks the natural V110 flow.
+        // V110 OWNER PRIORITY: Discovery completion IS consent.
+        // ═══════════════════════════════════════════════════════════════
+        // This is NOT a "bypass" or "override." It's correct protocol logic.
+        // In V110, the caller voluntarily provides name, phone, address
+        // through Discovery. That IS consent. No separate gate needed.
+        // FrontDeskRuntime already enforced Discovery → Booking by state.
         // ═══════════════════════════════════════════════════════════════
         const hasV110Flow = awReader
             ? (awReader.getArray('frontDesk.discoveryFlow.steps') || []).length > 0
@@ -5408,17 +5409,28 @@ async function processTurn({
         });
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V84.3: SCENARIO-FIRST ARCHITECTURE (replaces V22 LLM-Led)
+        // V110 OWNER PRIORITY — Replaces kill-switch architecture
         // ═══════════════════════════════════════════════════════════════════════
-        // PHILOSOPHY: Scenarios are the PRIMARY response mechanism.
-        // When a high-confidence scenario match exists, use it directly (fast, free).
-        // LLM is the FALLBACK for edge cases, not the default brain.
         //
-        // bookingRequiresConsent: Still true — booking is consent-gated
-        // forceLLMDiscovery: Now FALSE — scenarios respond directly when matched
-        // disableScenarioAutoResponses: Now FALSE — scenarios CAN auto-respond
+        // OLD MODEL (kill switches):
+        //   bookingRequiresExplicitConsent, forceLLMDiscovery,
+        //   disableScenarioAutoResponses — toggles that muzzle the agent
+        //
+        // NEW MODEL (owner priority):
+        //   1. Discovery owns the mic until required slots are captured
+        //   2. In Discovery: scenarios are ENRICHMENT (tags, call_reason_detail,
+        //      routing hints). They inform the LLM but do NOT output booking
+        //      prompts or scheduling questions.
+        //   3. After discovery completion, Booking owns the mic
+        //   4. Discovery completion IS consent — no separate consent gate
+        //
+        // Non-V110 companies still use legacy kill switches for backward compat.
         // ═══════════════════════════════════════════════════════════════════════
-        awReader.setReaderId('ConversationEngine.killSwitches');
+        awReader.setReaderId('ConversationEngine.ownerPolicy');
+        const v110DiscoverySteps = awReader.getArray('frontDesk.discoveryFlow.steps') || [];
+        const hasV110DiscoveryFlow = v110DiscoverySteps.length > 0;
+        
+        // Legacy kill switches — only consulted for non-V110 companies
         const bookingRequiresConsentAW = awReader.get('frontDesk.discoveryConsent.bookingRequiresExplicitConsent', true);
         const forceLLMDiscoveryAW = awReader.get('frontDesk.discoveryConsent.forceLLMDiscovery', false);
         const disableScenarioAutoResponsesAW = awReader.get('frontDesk.discoveryConsent.disableScenarioAutoResponses', false);
@@ -5427,37 +5439,45 @@ async function processTurn({
             .map(t => (t || '').toString().trim().toUpperCase())
             .filter(Boolean);
         
-        const killSwitches = {
-            // If true: Booking REQUIRES explicit consent (default: true — keep this)
-            bookingRequiresConsent: bookingRequiresConsentAW !== false,
-            // V84.3: Scenarios are the primary brain. LLM is fallback only.
-            forceLLMDiscovery: forceLLMDiscoveryAW === true,
-            // V84.3: Scenarios CAN auto-respond (false = enabled, true = context-only for LLM)
-            disableScenarioAutoResponses: disableScenarioAutoResponsesAW === true,
-            // Consent Split: types allowed to be used verbatim before consent (trade-agnostic)
-            autoReplyAllowedScenarioTypes
-        };
+        // V110: Owner priority replaces kill switches
+        // Non-V110: Legacy behavior preserved
+        const killSwitches = hasV110DiscoveryFlow
+            ? {
+                // V110: These are NOT consulted for lane decisions (FrontDeskRuntime handles that)
+                // Scenarios are enrichment-only in Discovery — not because of a toggle,
+                // but because Discovery owns the mic (architectural rule).
+                bookingRequiresConsent: false,       // Discovery completion IS consent
+                forceLLMDiscovery: false,             // Scenarios can inform, LLM speaks
+                disableScenarioAutoResponses: false,  // Scenarios run, but constrained by owner priority
+                autoReplyAllowedScenarioTypes: [],    // Not applicable in V110
+                // V110 flag — used downstream to constrain scenario output in Discovery
+                v110OwnerPriority: true
+            }
+            : {
+                bookingRequiresConsent: bookingRequiresConsentAW !== false,
+                forceLLMDiscovery: forceLLMDiscoveryAW === true,
+                disableScenarioAutoResponses: disableScenarioAutoResponsesAW === true,
+                autoReplyAllowedScenarioTypes,
+                v110OwnerPriority: false
+            };
         
-        log('CHECKPOINT 9a: 🔒 Kill switches loaded (via AW)', killSwitches);
+        log('CHECKPOINT 9a: 🔒 Owner policy loaded', {
+            v110: hasV110DiscoveryFlow,
+            ownerPriority: killSwitches.v110OwnerPriority,
+            bookingRequiresConsent: killSwitches.bookingRequiresConsent,
+            forceLLMDiscovery: killSwitches.forceLLMDiscovery,
+            disableScenarioAutoResponses: killSwitches.disableScenarioAutoResponses
+        });
         
         // ═══════════════════════════════════════════════════════════════════════
-        // BOOKING SNAP CHECK - If we already have a response from consent snap, skip AI
+        // BOOKING ENTRY — Determined by V110 state or legacy consent gate
         // ═══════════════════════════════════════════════════════════════════════
-        // KILL SWITCH ENFORCEMENT: If bookingRequiresConsent is ON, 
-        // booking mode is ONLY allowed if consent was explicitly given.
-        //
-        // V110 OVERRIDE: When FrontDeskRuntime is in V110 STRICT MODE, it already
-        // enforces Discovery → Booking transition (Discovery IS the consent mechanism).
-        // If FrontDeskRuntime routed us here with mode=BOOKING, honor it — don't
-        // re-gate on bookingRequiresExplicitConsent. The caller provided their info
-        // through Discovery voluntarily; that IS consent in V110 architecture.
+        // V110: FrontDeskRuntime already decided the lane. If mode=BOOKING,
+        //       it means discovery slots are complete. Honor that decision.
+        // Non-V110: Legacy consent gate still applies.
         // ═══════════════════════════════════════════════════════════════════════
-        const hasV110DiscoveryFlow = awReader 
-            ? (awReader.getArray('frontDesk.discoveryFlow.steps') || []).length > 0
-            : (company.aiAgentSettings?.frontDeskBehavior?.discoveryFlow?.steps || []).length > 0;
-        
         const canEnterBooking = hasV110DiscoveryFlow
-            ? true  // V110: FrontDeskRuntime already gated this — Discovery IS consent
+            ? true  // V110: Discovery completion IS consent
             : (!killSwitches.bookingRequiresConsent || session.booking?.consentGiven);
         
         // ═══════════════════════════════════════════════════════════════════════════
@@ -5961,8 +5981,12 @@ async function processTurn({
             }
             const tier1Match = scenarioRetrieval.topMatch;
             const tier1Confidence = scenarioRetrieval.topMatchConfidence ?? 0;
-            const allowTier1AutoResponse = killSwitches.disableScenarioAutoResponses !== true
-                && killSwitches.forceLLMDiscovery !== true;
+            // V110: Scenarios are ALWAYS allowed to respond — but owner priority
+            // constrains WHAT they say (no booking prompts in Discovery).
+            // Non-V110: Legacy kill switch behavior preserved.
+            const allowTier1AutoResponse = killSwitches.v110OwnerPriority
+                ? true  // V110: scenarios are smart, not muzzled. Output is constrained downstream.
+                : (killSwitches.disableScenarioAutoResponses !== true && killSwitches.forceLLMDiscovery !== true);
             
             log('CHECKPOINT 9c.0: 🎯 Tier-1 Short-Circuit Check', {
                 tier1Threshold,
@@ -5970,7 +5994,7 @@ async function processTurn({
                 hasMatch: !!tier1Match,
                 matchName: tier1Match?.name || null,
                 allowAutoResponse: allowTier1AutoResponse,
-                forceLLMDiscovery: killSwitches.forceLLMDiscovery,
+                v110OwnerPriority: killSwitches.v110OwnerPriority || false,
                 triggersMatched: tier1Match?.triggers?.slice(0, 5) || []
             });
             
@@ -6089,53 +6113,75 @@ async function processTurn({
                     // - Runtime vars (callerName) passed as additionalVars
                     // ═══════════════════════════════════════════════════════════════
                     
-                    // Load company-specific discovery behavior settings
+                    // ═══════════════════════════════════════════════════════════════
+                    // V110 OWNER PRIORITY: Scenario output constraints in Discovery
+                    // ═══════════════════════════════════════════════════════════════
+                    // When V110 Discovery Flow is active and we're in Discovery lane,
+                    // scenarios are ENRICHMENT: they can acknowledge the issue, provide
+                    // context, but must NOT inject consent questions or scheduling
+                    // prompts. Discovery owns the mic — only discovery prompts speak.
+                    //
+                    // Non-V110: Legacy consent injection behavior preserved.
+                    // ═══════════════════════════════════════════════════════════════
                     const discoveryBehavior = company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
-                    
-                    // Company-configurable: Should we auto-inject consent questions?
-                    // Default: true (recommended for less pushy behavior)
-                    const autoInjectConsent = discoveryBehavior.autoInjectConsentInScenarios !== false;
-                    
-                    // Company-configurable: Consent question text
-                    // Default from schema: "Would you like me to schedule an appointment for you?"
-                    const consentQuestionTemplate = discoveryBehavior.consentQuestionTemplate || 
-                        "Would you like me to schedule an appointment for you?";
-                    
-                    const consentAlreadyGiven = session.booking?.consentGiven === true;
                     const schedulingPatterns = /\b(we'?ll\s+(send|get|have|schedule)|send\s+a?\s*tech|get\s+a?\s*tech|schedule\s+a?\s*(tech|appointment|visit)|let\s+me\s+get)/i;
                     const impliesScheduling = schedulingPatterns.test(selectedReply);
                     
                     let finalReply = selectedReply;
                     let addedConsentQuestion = false;
                     
-                    // Only modify response if company has autoInjectConsent enabled (default: true)
-                    if (autoInjectConsent && impliesScheduling && !consentAlreadyGiven) {
-                        log('🔄 V92: Scenario implies scheduling but no consent - modifying response', {
-                            companyId: company._id,
-                            autoInjectConsent,
-                            consentQuestionTemplate: consentQuestionTemplate.substring(0, 50)
-                        });
-                        
-                        // Replace scheduling phrases with company's consent question
-                        finalReply = selectedReply.replace(
-                            /\.\s*(we'?ll\s+(send|get|have|schedule)|I'?ll\s+(send|get|have|schedule)|let\s+me\s+get)[^.]*\.?$/i,
-                            '. ' + consentQuestionTemplate
-                        );
-                        
-                        // If replacement didn't work (different pattern), append consent question
-                        if (finalReply === selectedReply) {
-                            // Check if response already ends with a question
-                            if (!finalReply.trim().endsWith('?')) {
-                                finalReply = finalReply.trim() + ' ' + consentQuestionTemplate;
-                            }
+                    if (killSwitches.v110OwnerPriority && session.mode !== 'BOOKING') {
+                        // ─────────────────────────────────────────────────────
+                        // V110: Strip scheduling language from scenario response
+                        // ─────────────────────────────────────────────────────
+                        // Scenario acknowledged the issue (good!), but it also
+                        // contains scheduling language that belongs in Booking.
+                        // Strip the scheduling part — Discovery will finish
+                        // collecting slots, then Booking takes over naturally.
+                        if (impliesScheduling) {
+                            finalReply = selectedReply.replace(
+                                /\.\s*(we'?ll\s+(send|get|have|schedule)|I'?ll\s+(send|get|have|schedule)|let\s+me\s+get)[^.]*\.?$/i,
+                                '.'
+                            ).trim();
+                            log('📋 V110: Stripped scheduling language from scenario in Discovery (enrichment only)', {
+                                originalEnd: selectedReply.substring(Math.max(0, selectedReply.length - 80)),
+                                strippedEnd: finalReply.substring(Math.max(0, finalReply.length - 80))
+                            });
                         }
+                        // No consent question injection in V110 — Discovery handles flow
+                    } else {
+                        // ─────────────────────────────────────────────────────
+                        // Non-V110 (legacy): Consent injection as before
+                        // ─────────────────────────────────────────────────────
+                        const autoInjectConsent = discoveryBehavior.autoInjectConsentInScenarios !== false;
+                        const consentQuestionTemplate = discoveryBehavior.consentQuestionTemplate || 
+                            "Would you like me to schedule an appointment for you?";
+                        const consentAlreadyGiven = session.booking?.consentGiven === true;
                         
-                        addedConsentQuestion = true;
-                        
-                        // Mark that we asked the consent question
-                        session.conversationMemory = session.conversationMemory || {};
-                        session.conversationMemory.askedConsentQuestion = true;
-                        session.markModified('conversationMemory');
+                        if (autoInjectConsent && impliesScheduling && !consentAlreadyGiven) {
+                            log('🔄 V92: Scenario implies scheduling but no consent - modifying response', {
+                                companyId: company._id,
+                                autoInjectConsent,
+                                consentQuestionTemplate: consentQuestionTemplate.substring(0, 50)
+                            });
+                            
+                            finalReply = selectedReply.replace(
+                                /\.\s*(we'?ll\s+(send|get|have|schedule)|I'?ll\s+(send|get|have|schedule)|let\s+me\s+get)[^.]*\.?$/i,
+                                '. ' + consentQuestionTemplate
+                            );
+                            
+                            if (finalReply === selectedReply) {
+                                if (!finalReply.trim().endsWith('?')) {
+                                    finalReply = finalReply.trim() + ' ' + consentQuestionTemplate;
+                                }
+                            }
+                            
+                            addedConsentQuestion = true;
+                            
+                            session.conversationMemory = session.conversationMemory || {};
+                            session.conversationMemory.askedConsentQuestion = true;
+                            session.markModified('conversationMemory');
+                        }
                     }
                     
                     // ═══════════════════════════════════════════════════════════════
@@ -6959,10 +7005,19 @@ async function processTurn({
                     const scenarios = Array.isArray(scenarioRetrieval.scenarios) ? scenarioRetrieval.scenarios : [];
                     const allowTypes = Array.isArray(killSwitches.autoReplyAllowedScenarioTypes) ? killSwitches.autoReplyAllowedScenarioTypes : [];
 
-                    // Legacy behavior:
-                    // - disableScenarioAutoResponses=false → all scenarios may be used verbatim
-                    // - disableScenarioAutoResponses=true  → context-only by default, but allowlist can override per scenario type
+                    // V110 owner priority:
+                    //   In Discovery: scenarios are enrichment — LLM uses them as context
+                    //   but must NOT output booking prompts or scheduling questions.
+                    //   Usage mode = 'enrichment_only' (new) tells LLM to use for context, not verbatim.
+                    //
+                    // Non-V110 (legacy):
+                    //   disableScenarioAutoResponses=false → may_verbatim
+                    //   disableScenarioAutoResponses=true  → context_only (with allowlist override)
                     const getUsageModeForScenario = (s) => {
+                        if (killSwitches.v110OwnerPriority && session.mode !== 'BOOKING') {
+                            // V110 Discovery: scenarios enrich, don't speak booking
+                            return 'enrichment_only';
+                        }
                         const type = (s?.scenarioType || 'UNKNOWN').toString().trim().toUpperCase();
                         if (killSwitches.disableScenarioAutoResponses !== true) return 'may_verbatim';
                         return allowTypes.includes(type) ? 'may_verbatim' : 'context_only';
@@ -6974,8 +7029,11 @@ async function processTurn({
                     }));
                 })(),
                 scenarioUsagePolicy: {
-                    defaultMode: killSwitches.disableScenarioAutoResponses ? 'context_only' : 'may_verbatim',
-                    allowVerbatimScenarioTypes: Array.isArray(killSwitches.autoReplyAllowedScenarioTypes) ? killSwitches.autoReplyAllowedScenarioTypes : []
+                    defaultMode: killSwitches.v110OwnerPriority && session.mode !== 'BOOKING'
+                        ? 'enrichment_only'
+                        : (killSwitches.disableScenarioAutoResponses ? 'context_only' : 'may_verbatim'),
+                    allowVerbatimScenarioTypes: Array.isArray(killSwitches.autoReplyAllowedScenarioTypes) ? killSwitches.autoReplyAllowedScenarioTypes : [],
+                    v110OwnerPriority: !!killSwitches.v110OwnerPriority
                 },
                 
                 // Caller emotion
@@ -7215,8 +7273,9 @@ async function processTurn({
                     // V92: Placeholder replacement in LLM path
                     llmPlaceholdersReplaced,
                     llmHadCallerName: !!llmRuntimeVars.callerName,
-                    killSwitches: {
-                        bookingRequiresExplicitConsent: killSwitches.bookingRequiresExplicitConsent,
+                    ownerPolicy: {
+                        v110OwnerPriority: killSwitches.v110OwnerPriority || false,
+                        bookingRequiresConsent: killSwitches.bookingRequiresConsent,
                         forceLLMDiscovery: killSwitches.forceLLMDiscovery,
                         disableScenarioAutoResponses: killSwitches.disableScenarioAutoResponses
                     }
@@ -7252,7 +7311,8 @@ async function processTurn({
             if (llmContext.callerName) executionTrace.push('callerName_provided');
             if (llmContext.callerEmotion && llmContext.callerEmotion !== 'neutral') executionTrace.push('emotionContext_provided');
             if (llmContext.discovery?.issue) executionTrace.push('discoveryIssue_provided');
-            if (killSwitches?.bookingRequiresExplicitConsent) executionTrace.push('consentGate_enforced');
+            if (killSwitches?.v110OwnerPriority) executionTrace.push('v110_owner_priority');
+            else if (killSwitches?.bookingRequiresConsent) executionTrace.push('consentGate_enforced');
             
             // Track what came back from LLM
             if (llmResult.reply) executionTrace.push('reply_generated');
@@ -7564,8 +7624,9 @@ async function processTurn({
             latencyMs: aiLatencyMs,
             totalTurnLatencyMs: Date.now() - startTime,
             
-            // V84.3: Scenario-First Flags
-            killSwitches: {
+            // V110: Owner policy (replaces kill switches for V110 companies)
+            ownerPolicy: {
+                v110OwnerPriority: (company.aiAgentSettings?.frontDeskBehavior?.discoveryFlow?.steps || []).length > 0,
                 bookingRequiresConsent: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.bookingRequiresExplicitConsent !== false,
                 forceLLMDiscovery: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.forceLLMDiscovery === true,
                 disableScenarioAutoResponses: company.aiAgentSettings?.frontDeskBehavior?.discoveryConsent?.disableScenarioAutoResponses === true,

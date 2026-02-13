@@ -1,307 +1,206 @@
-# V110 STRICT MODE - Nuclear Protocol Enforcement
+# V110 Owner Priority — Deterministic Lane Architecture
 
 **Date:** 2026-02-13  
-**Status:** ✅ **ACTIVE**  
-**Trigger:** Discovery Flow configured in UI
+**Status:** ACTIVE  
+**Trigger:** Discovery Flow configured in UI  
+**Replaces:** Kill switches, consent gates, phrase detection
 
 ---
 
-## What Changed
+## Architecture
 
-Implemented **V110 STRICT MODE** - a nuclear option that completely disables ALL hardcoded logic when Discovery Flow is configured in the UI.
+When a V110 Discovery Flow is configured, lane transition is **pure state**:
 
-### Detection Logic
-
-```javascript
-const hasDiscoveryFlow = getConfig('frontDesk.discoveryFlow.steps', []).length > 0;
-const v110StrictMode = hasDiscoveryFlow;
+```
+if missingDiscoverySlots > 0  → DISCOVERY
+if missingDiscoverySlots === 0 → BOOKING
 ```
 
-**If `v110StrictMode === true`:**
-- ✅ Discovery Flow configured → STRICT MODE ACTIVE
-- ❌ ALL hardcoded patterns DISABLED
-- ❌ ALL smart patterns DISABLED  
-- ❌ ALL fallback logic DISABLED
-- ✅ Agent follows ONLY UI configuration
-
-**If `v110StrictMode === false`:**
-- ❌ No Discovery Flow → LEGACY MODE
-- ✅ Hardcoded patterns enabled (backward compatibility)
-- ✅ Smart patterns enabled
-- ✅ Fallback logic enabled
+No phrase detection. No kill switches. No consent gates.
 
 ---
 
-## V110 STRICT MODE Rules
+## Owner Priority (Permanent, Not Toggleable)
 
-### Rule 1: Discovery Always Runs First
+| Owner | Mic | What It Does |
+|-------|-----|-------------|
+| **Discovery** | Owns until slots captured | Collects: reason → name → phone → address |
+| **Triage/Scenarios** | Enrichment only | Sets tags, call_reason_detail, routing hints. Cannot output booking prompts. |
+| **Booking** | Owns after discovery completes | Collects remaining slots: lastName, time, etc. |
+
+### Discovery Completion IS Consent
+
+In V110, the caller voluntarily provides their name, phone, and address through Discovery.
+That IS consent. No separate consent gate is needed. `bookingRequiresExplicitConsent` is not
+consulted when V110 Discovery Flow is active.
+
+---
+
+## What This Replaces
+
+### Kill Switches (Removed from V110 Control Flow)
+
+| Old Toggle | Old Purpose | V110 Replacement |
+|-----------|------------|-----------------|
+| `bookingRequiresExplicitConsent` | Block booking without "yes" | Discovery completion IS consent |
+| `disableScenarioAutoResponses` | Muzzle scenarios in discovery | Owner priority: scenarios enrich, don't speak booking |
+| `forceLLMDiscovery` | Force LLM over scenarios | Scenarios are smart, not muzzled. Output constrained by owner. |
+
+These toggles still exist for **non-V110 companies** (backward compatibility).
+For V110 companies, they are **not consulted** for lane decisions.
+
+### Phrase Detection (Removed from V110 Lane Logic)
+
+| Old Mechanism | Old Purpose | V110 Replacement |
+|--------------|------------|-----------------|
+| `directIntentPatterns` | Detect "book" / "schedule" to trigger booking | State-based: discoveryComplete → BOOKING |
+| `wantsBooking` triggers | Same | Same |
+| Smart patterns | Regex matching | Removed entirely (legacy only) |
+| Fallback patterns | Default when no config | Removed entirely (legacy only) |
+
+---
+
+## How It Works
+
+### FrontDeskRuntime.determineLane()
+
 ```javascript
-if (discoveryTurnCount === 0) {
-    return LANES.DISCOVERY;  // ALWAYS
+const discoverySteps = getConfig('frontDesk.discoveryFlow.steps', []);
+const hasDiscoveryFlow = discoverySteps.length > 0;
+
+if (hasDiscoveryFlow) {
+    // Required steps = all steps with slotId, minus call_reason_detail (passive)
+    const requiredSteps = discoverySteps.filter(step => 
+        step.slotId && step.slotId !== 'call_reason_detail'
+    );
+    
+    const missingSlots = requiredSteps.filter(step => {
+        const val = allCaptured[step.slotId];
+        return !val || (typeof val === 'string' && val.trim() === '');
+    });
+    
+    if (missingSlots.length > 0) return LANES.DISCOVERY;
+    else return LANES.BOOKING;
 }
 ```
 
-No exceptions. No bypasses. Discovery runs on Turn 1.
+### ConversationEngine Owner Policy
 
-### Rule 2: ONLY UI-Configured Triggers
-After Discovery runs, the ONLY way to trigger booking is through UI-configured detection triggers:
-- `frontDesk.detectionTriggers.wantsBooking`
-- `frontDesk.detectionTriggers.directIntentPatterns`
-
-If these are empty, booking is **NEVER** triggered automatically.
-
-### Rule 3: No Smart Patterns
-All hardcoded "smart patterns" are DISABLED:
-- ❌ "I'm having AC problems" → Does NOT trigger booking
-- ❌ "Can you send someone out?" → Does NOT trigger booking
-- ❌ "I need help" → Does NOT trigger booking
-
-Only patterns YOU configure in the UI will work.
-
-### Rule 4: ConversationEngine Takes Over
-If no UI-configured trigger matches, the agent stays in Discovery and lets ConversationEngine handle the conversation. The LLM can:
-- Ask clarifying questions
-- Collect more discovery info
-- Explicitly offer booking when appropriate
-
----
-
-## What Was Nuked
-
-### Nuked #1: Fallback Patterns
-**Before:**
 ```javascript
-const FALLBACK_PATTERNS = [
-    'schedule', 'book', 'appointment', 'come out', 'send someone',
-    'get someone', 'need someone', 'help me out', 'technician'
-];
+const killSwitches = hasV110DiscoveryFlow
+    ? {
+        bookingRequiresConsent: false,       // Discovery completion IS consent
+        forceLLMDiscovery: false,             // Scenarios can inform, LLM speaks
+        disableScenarioAutoResponses: false,  // Scenarios run, constrained by owner
+        v110OwnerPriority: true               // ← This drives all downstream logic
+    }
+    : { /* legacy kill switches */ };
 ```
-**After (V110 STRICT):** These never execute. Skipped entirely.
 
-### Nuked #2: Smart Patterns (All 15+)
-**Before:**
-```javascript
-const smartPatterns = [
-    /\b(air\s+condition|ac).{0,20}(problem|issue)/i,  // ← This one was the problem
-    /\b(get|send|dispatch).+(someone|tech).+(out|over)/i,
-    /\bcan\s+you\s+help\b/i,
-    // ... 12 more patterns
-];
-```
-**After (V110 STRICT):** None of these execute. Agent ignores them all.
+### Scenario Behavior in Discovery (V110)
 
-### Nuked #3: Discovery Protection Logic
-**Before:** Had complex protection logic to prevent smart patterns on Turn 1
-
-**After (V110 STRICT):** Don't need protection - smart patterns never run at all!
+- Scenarios **run** and **match** (triage fills call_reason_detail, tags, priority hints)
+- Scenarios **can auto-respond** (tier-1 short-circuit still works)
+- BUT: scheduling language is **stripped** from scenario output
+- No consent questions injected during Discovery
+- LLM receives scenarios as `enrichment_only` context, not `may_verbatim`
 
 ---
 
-## Behavior Comparison
+## What's Allowed vs Not Allowed
 
-### Before (Hybrid Mode)
-```
-Turn 1: "I'm having AC problems"
-  → Smart pattern: /\b(air\s+condition).{0,20}(problem)/i
-  → Matches! → LANE_SELECTED: BOOKING
-  → bookingModeLocked = true
-  → Discovery Flow SKIPPED
-  → Goes straight to lastName
-```
+### Allowed (Permanent Standards)
 
-### After (V110 STRICT MODE)
-```
-Turn 1: "I'm having AC problems"
-  → v110StrictMode = true
-  → discoveryTurnCount = 0
-  → LANE_SELECTED: DISCOVERY (forced)
-  → Discovery passive capture runs
-  → Extracts: name, call_reason_detail
-  → Response: "Got it, what's the best number to reach you?"
-  → discoveryTurnCount = 1
+- Permanent protocol enforcement ("Discovery owns the mic")
+- Company-scoped config (per companyID)
+- Template seeding that writes correct defaults on onboarding
+- Schema fixes so fields persist correctly
+- Deterministic lane/state machine logic
 
-Turn 2: User continues conversation
-  → v110StrictMode = true
-  → discoveryTurnCount = 1 (Discovery ran)
-  → Checks UI-configured triggers ONLY
-  → If match: BOOKING
-  → If no match: DISCOVERY (LLM handles)
+### Not Allowed
+
+- Emergency toggles that shut off major subsystems
+- "Disable X" as a permanent strategy
+- Temp files/presets that don't become canonical wiring truth
+- Phrase detection for lane transitions (state-based only)
+
+---
+
+## Expected Call Flow
+
+```
+Turn 1: "Hi, my name is Mark. I'm having air conditioning problems."
+  → Discovery: captures call_reason_detail (triage), name="Mark"
+  → Missing: phone, address
+  → Agent asks for phone (next Discovery step)
+
+Turn 2: "Yeah, this number works."
+  → Discovery: captures phone from caller ID
+  → Missing: address
+  → Agent asks for address
+
+Turn 3: "123 Main Street, Fort Myers."
+  → Discovery: captures address
+  → Missing: none → discoveryComplete = true
+  → Lane: BOOKING (automatic, no phrase detection needed)
+  → BookingFlowRunner starts: "And what's your last name, Mark?"
+
+Turn 4+: Booking flow finishes remaining slots
 ```
 
 ---
 
-## How to Configure V110 STRICT MODE
+## Raw Event Markers
 
-### Step 1: Configure Discovery Flow
-In the UI, add at least ONE Discovery Flow step:
-
+### V110 Owner Priority Active
 ```json
 {
-  "frontDesk": {
-    "discoveryFlow": {
-      "steps": [
-        { "slotId": "name", "prompt": "What's your name?" },
-        { "slotId": "phone", "prompt": "What's your phone number?" },
-        { "slotId": "call_reason_detail", "prompt": "What can I help you with?" }
-      ]
-    }
+  "type": "DECISION_TRACE",
+  "data": {
+    "reason": "v110_discovery_owns_mic",
+    "missingSlots": ["phone", "address"],
+    "capturedSlots": ["name"]
   }
 }
 ```
 
-**Result:** V110 STRICT MODE activates immediately.
-
-### Step 2: Configure Detection Triggers (Optional)
-If you want specific phrases to trigger booking after Discovery:
-
+### Discovery Complete → Booking
 ```json
 {
-  "frontDesk": {
-    "detectionTriggers": {
-      "wantsBooking": [
-        "schedule",
-        "book an appointment",
-        "come out today"
-      ]
-    }
+  "type": "DECISION_TRACE",
+  "data": {
+    "reason": "v110_discovery_complete",
+    "capturedSlots": ["name", "phone", "address"]
   }
-}
-```
-
-If you DON'T configure these, the agent will rely on ConversationEngine (LLM) to decide when to offer booking.
-
----
-
-## Logging & Debugging
-
-When V110 STRICT MODE is active, you'll see these log messages:
-
-### Turn 1 (Discovery Required)
-```
-[FRONT_DESK_RUNTIME] V110 STRICT MODE: Discovery Flow configured - disabling ALL hardcoded patterns
-{
-  discoveryTurnCount: 0,
-  message: 'Agent will ONLY follow UI configuration'
-}
-```
-
-### Turn 2+ (UI Trigger Check)
-```
-[FRONT_DESK_RUNTIME] V110 STRICT MODE: No UI triggers matched - staying in Discovery
-{
-  configuredTriggersCount: 0
 }
 ```
 
 ### Legacy Mode (No Discovery Flow)
-```
-[FRONT_DESK_RUNTIME] LEGACY MODE: No V110 Discovery Flow - using hardcoded patterns
-{
-  message: 'Configure Discovery Flow in UI to enable V110 STRICT MODE'
-}
-```
-
----
-
-## Raw Events Validation
-
-After deploying, verify V110 STRICT MODE is working:
-
-### ✅ MUST SEE in raw events:
 ```json
 {
-  "type": "DECISION_TRACE",
-  "data": {
-    "reason": "v110_strict_mode_discovery_required",
-    "strictMode": true,
-    "discoveryTurnCount": 0
-  }
-}
-
-{
-  "type": "LANE_SELECTED",
-  "lane": "DISCOVERY"  // ← Turn 1 ALWAYS Discovery
-}
-```
-
-### ❌ MUST NOT SEE:
-```json
-{
-  "type": "DECISION_TRACE",
-  "data": {
-    "reason": "smart_pattern_match",  // ← Should NEVER appear
-    "pattern": "\\b(air\\s+condition"
-  }
-}
-
-{
-  "type": "LANE_SELECTED",
-  "lane": "BOOKING",
-  "turn": 1  // ← Booking on Turn 1 is VIOLATION
+  "type": "LOG",
+  "message": "LEGACY MODE: No V110 Discovery Flow - using hardcoded patterns"
 }
 ```
 
 ---
 
-## Rollback Plan
+## Files Changed
 
-If V110 STRICT MODE causes issues:
-
-### Option 1: Disable Discovery Flow
-Remove all steps from `frontDesk.discoveryFlow.steps` → Reverts to LEGACY MODE
-
-### Option 2: Code Rollback
-```bash
-git revert HEAD
-git push
-```
+| File | Change | Lines |
+|------|--------|-------|
+| `services/engine/FrontDeskRuntime.js` | Pure state-based lane transition | ~80 lines (replaced ~130) |
+| `services/ConversationEngine.js` | Owner priority replaces kill switches | ~60 lines changed |
+| `models/v2Company.js` | Added directIntentPatterns to schema | 14 lines |
 
 ---
 
-## Impact on Existing Companies
+## Non-V110 Backward Compatibility
 
-### Companies WITH Discovery Flow Configured
-- ✅ V110 STRICT MODE activates automatically
-- ✅ Hardcoded patterns disabled
-- ✅ Agent follows ONLY UI configuration
+Companies WITHOUT a Discovery Flow configured continue to use:
+- Legacy kill switches (bookingRequiresExplicitConsent, etc.)
+- Phrase detection for booking intent
+- Smart patterns and fallback patterns
+- Consent gate for booking entry
 
-### Companies WITHOUT Discovery Flow
-- ✅ LEGACY MODE continues (backward compatible)
-- ✅ Hardcoded patterns still work
-- ✅ Smart patterns still work
-- ✅ No behavior change
-
-**Zero breaking changes for legacy companies.**
-
----
-
-## Success Metrics
-
-After deploying V110 STRICT MODE:
-
-1. **Discovery Turn 1 Rate:** Should be 100% for V110 companies
-2. **Smart Pattern Fire Rate:** Should be 0% for V110 companies
-3. **UI Trigger Accuracy:** All booking triggers should be from UI config
-4. **Protocol Violations:** Should be 0
-
----
-
-## Future Enhancements
-
-Once V110 STRICT MODE proves stable:
-
-1. **Add UI Toggle:** Allow companies to explicitly enable/disable STRICT MODE
-2. **Add Diagnostics:** Show which patterns were disabled in raw events
-3. **Add Migration Tool:** Auto-convert legacy companies to V110
-4. **Add Validation:** Warn if Discovery Flow is empty or misconfigured
-
----
-
-## Sign-Off
-
-**Feature:** V110 STRICT MODE (Nuclear Protocol Enforcement)  
-**Status:** ✅ DEPLOYED  
-**Risk:** LOW (backward compatible, opt-in via Discovery Flow config)  
-**Impact:** HIGH (fixes all protocol violations for V110 companies)  
-
-The nuclear option is live. If Discovery Flow is configured, V110 is now the ONLY truth. 🚀
+**Zero changes for non-V110 companies.**
