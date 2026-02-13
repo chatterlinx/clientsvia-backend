@@ -3244,7 +3244,19 @@ const companySchema = new mongoose.Schema({
                 // Example Dental: ["schedule an appointment", "book a cleaning", "see the dentist"]
                 // Example Legal: ["set up a consultation", "talk to an attorney"]
                 // ═══════════════════════════════════════════════════════════════
-                wantsBooking: [{ type: String, trim: true, lowercase: true }]
+                wantsBooking: [{ type: String, trim: true, lowercase: true }],
+                
+                // ═══════════════════════════════════════════════════════════════
+                // V110: DIRECT INTENT PATTERNS - Bypass consent when caller clearly wants booking
+                // ═══════════════════════════════════════════════════════════════
+                // These patterns are checked by FrontDeskRuntime.determineLane() in V110 STRICT MODE.
+                // Without this field in the schema, mongoose silently drops the array on save,
+                // causing the detector to always read [0 items] → agent stays stuck in Discovery.
+                //
+                // Example: ["book", "schedule", "appointment", "send a technician", "need service",
+                //           "repair", "come out today", "as soon as possible", "asap"]
+                // ═══════════════════════════════════════════════════════════════
+                directIntentPatterns: [{ type: String, trim: true, lowercase: true }]
             },
             
             // ═══════════════════════════════════════════════════════════════

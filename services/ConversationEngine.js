@@ -2406,6 +2406,21 @@ const ConsentDetector = {
             return { hasConsent: true, matchedPhrase: 'legacy_mode', reason: 'consent_not_required' };
         }
         
+        // ═══════════════════════════════════════════════════════════════
+        // V110 OVERRIDE: If Discovery Flow is configured, Discovery IS consent.
+        // FrontDeskRuntime controls the gate. By the time ConversationEngine runs,
+        // if the caller is in booking mode, FrontDeskRuntime already verified
+        // that required discovery slots are captured (name, phone, address).
+        // Don't re-gate on explicit consent — it blocks the natural V110 flow.
+        // ═══════════════════════════════════════════════════════════════
+        const hasV110Flow = awReader
+            ? (awReader.getArray('frontDesk.discoveryFlow.steps') || []).length > 0
+            : (company.aiAgentSettings?.frontDeskBehavior?.discoveryFlow?.steps || []).length > 0;
+        
+        if (hasV110Flow) {
+            return { hasConsent: true, matchedPhrase: 'v110_discovery_is_consent', reason: 'v110_discovery_flow_active' };
+        }
+        
         // ═══════════════════════════════════════════════════════════════════════
         // V92: DEFAULT CONSENT YES WORDS (ALWAYS included, can be extended by config)
         // ═══════════════════════════════════════════════════════════════════════
@@ -5429,8 +5444,21 @@ async function processTurn({
         // BOOKING SNAP CHECK - If we already have a response from consent snap, skip AI
         // ═══════════════════════════════════════════════════════════════════════
         // KILL SWITCH ENFORCEMENT: If bookingRequiresConsent is ON, 
-        // booking mode is ONLY allowed if consent was explicitly given
-        const canEnterBooking = !killSwitches.bookingRequiresConsent || session.booking?.consentGiven;
+        // booking mode is ONLY allowed if consent was explicitly given.
+        //
+        // V110 OVERRIDE: When FrontDeskRuntime is in V110 STRICT MODE, it already
+        // enforces Discovery → Booking transition (Discovery IS the consent mechanism).
+        // If FrontDeskRuntime routed us here with mode=BOOKING, honor it — don't
+        // re-gate on bookingRequiresExplicitConsent. The caller provided their info
+        // through Discovery voluntarily; that IS consent in V110 architecture.
+        // ═══════════════════════════════════════════════════════════════════════
+        const hasV110DiscoveryFlow = awReader 
+            ? (awReader.getArray('frontDesk.discoveryFlow.steps') || []).length > 0
+            : (company.aiAgentSettings?.frontDeskBehavior?.discoveryFlow?.steps || []).length > 0;
+        
+        const canEnterBooking = hasV110DiscoveryFlow
+            ? true  // V110: FrontDeskRuntime already gated this — Discovery IS consent
+            : (!killSwitches.bookingRequiresConsent || session.booking?.consentGiven);
         
         // ═══════════════════════════════════════════════════════════════════════════
         // V97: SKIP MODE ROUTING IF aiResult ALREADY SET WITH DEFER SIGNAL

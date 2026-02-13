@@ -762,28 +762,102 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     if (v110StrictMode) {
         const discoveryTurnCount = callState?.discoveryTurnCount || 0;
         
+        // ═══════════════════════════════════════════════════════════════
+        // V110 STRICT: Discovery owns the mic until required slots are complete
+        // ═══════════════════════════════════════════════════════════════
+        // Rule: If mode = DISCOVERY and required discovery slots aren't complete,
+        //       next prompt MUST be a Discovery prompt. No booking transition.
+        //
+        // This is a GENERIC platform rule (not HVAC-specific):
+        //   - requiredDiscoverySlots: driven by discoveryFlow.steps config
+        //   - discoveryPromptOrder: driven by step.order
+        //   - scenarioSpeakPermission: controlled by disableScenarioAutoResponses
+        // ═══════════════════════════════════════════════════════════════
+        const discoverySteps = getConfig('frontDesk.discoveryFlow.steps', []);
+        const bookingCollected = callState?.bookingCollected || callState?.slots || {};
+        const collectedSlots = callState?.collectedSlots || {};
+        const allCaptured = { ...collectedSlots, ...bookingCollected };
+        
+        // Count how many required discovery slots are satisfied
+        const requiredSteps = discoverySteps.filter(step => {
+            // All discovery steps are "required" unless explicitly marked otherwise
+            return step.slotId && step.slotId !== 'call_reason_detail'; // call_reason_detail is passive (triage fills it)
+        });
+        
+        const missingSlots = requiredSteps.filter(step => {
+            const slotValue = allCaptured[step.slotId];
+            return !slotValue || (typeof slotValue === 'string' && slotValue.trim() === '');
+        });
+        
+        const discoveryComplete = missingSlots.length === 0;
+        
         // V110 STRICT: If Discovery hasn't run yet, ALWAYS go to Discovery
         if (discoveryTurnCount === 0) {
             trace.addDecisionReason('LANE_DISCOVERY', {
                 reason: 'v110_strict_mode_discovery_required',
                 message: 'V110 STRICT MODE: Discovery Flow must run first - ALL hardcoded patterns disabled',
                 discoveryTurnCount,
-                strictMode: true
+                strictMode: true,
+                missingSlots: missingSlots.map(s => s.slotId)
             });
             
             logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: Discovery Flow configured - disabling ALL hardcoded patterns', {
                 callSid: context.callSid,
                 discoveryTurnCount,
+                missingSlots: missingSlots.map(s => s.slotId),
                 message: 'Agent will ONLY follow UI configuration'
             });
             
             return LANES.DISCOVERY;
         }
         
-        // V110 STRICT: After Discovery runs, ONLY use UI-configured detection triggers
-        // NO fallback patterns, NO smart patterns, NO hardcoded logic
+        // ═══════════════════════════════════════════════════════════════
+        // V110 STRICT: Check if Discovery slots are complete
+        // ═══════════════════════════════════════════════════════════════
+        // If required slots are still missing → STAY in Discovery (no booking allowed)
+        // Discovery owns the mic until all required info is captured.
+        // ═══════════════════════════════════════════════════════════════
+        if (!discoveryComplete) {
+            // Even if caller says "schedule" — if we don't have their name/phone/address yet,
+            // Discovery must finish first. Booking will happen as soon as slots are captured.
+            trace.addDecisionReason('LANE_DISCOVERY', {
+                reason: 'v110_discovery_slots_incomplete',
+                message: 'Discovery owns the mic — required slots still missing',
+                missingSlots: missingSlots.map(s => s.slotId),
+                capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
+                discoveryTurnCount,
+                strictMode: true
+            });
+            
+            logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: Discovery not complete - staying in DISCOVERY', {
+                callSid: context.callSid,
+                missingSlots: missingSlots.map(s => s.slotId),
+                capturedCount: Object.keys(allCaptured).filter(k => allCaptured[k]).length,
+                requiredCount: requiredSteps.length,
+                discoveryTurnCount
+            });
+            
+            return LANES.DISCOVERY;
+        }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // V110 STRICT: Discovery complete → Check for booking signal
+        // ═══════════════════════════════════════════════════════════════
+        // Discovery slots are satisfied. Now check UI-configured triggers
+        // to determine if caller wants to transition to booking.
+        // NO fallback patterns, NO smart patterns, NO hardcoded logic.
+        // ═══════════════════════════════════════════════════════════════
         const bookingTriggers = getConfig('frontDesk.detectionTriggers.wantsBooking', []);
         const directIntentPatterns = getConfig('frontDesk.detectionTriggers.directIntentPatterns', []);
+        
+        logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: Discovery complete - checking booking triggers', {
+            callSid: context.callSid,
+            discoveryComplete: true,
+            capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
+            wantsBookingCount: bookingTriggers.length,
+            directIntentCount: directIntentPatterns.length,
+            discoveryTurnCount
+        });
         
         // If UI has configured triggers, check them
         if (bookingTriggers.length > 0 || directIntentPatterns.length > 0) {
@@ -801,30 +875,44 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
                     trace.addDecisionReason('LANE_BOOKING', { 
                         reason: 'v110_ui_configured_trigger', 
                         pattern,
-                        strictMode: true
+                        strictMode: true,
+                        discoveryComplete: true
                     });
-                    logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: UI-configured trigger matched', {
+                    logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: UI-configured trigger matched + Discovery complete → BOOKING', {
                         callSid: context.callSid,
-                        pattern
+                        pattern,
+                        capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k])
                     });
                     return LANES.BOOKING;
                 }
             }
         }
         
-        // V110 STRICT: No match → Stay in Discovery (let ConversationEngine handle)
-        trace.addDecisionReason('LANE_DISCOVERY', {
-            reason: 'v110_strict_mode_no_ui_trigger_match',
-            message: 'No UI-configured triggers matched - continuing Discovery',
-            strictMode: true
+        // ═══════════════════════════════════════════════════════════════
+        // V110 STRICT: Discovery complete but no explicit booking signal
+        // ═══════════════════════════════════════════════════════════════
+        // Auto-transition to BOOKING when all discovery slots are captured.
+        // V110 architecture: Discovery → Booking is the natural flow.
+        // The consent gate (bookingRequiresExplicitConsent) is NOT consulted
+        // here — V110 Discovery IS the consent mechanism. By providing their
+        // name, phone, and address, the caller has implicitly consented.
+        // ═══════════════════════════════════════════════════════════════
+        trace.addDecisionReason('LANE_BOOKING', {
+            reason: 'v110_discovery_complete_auto_transition',
+            message: 'All required discovery slots captured — transitioning to Booking',
+            capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
+            strictMode: true,
+            discoveryTurnCount
         });
         
-        logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: No UI triggers matched - staying in Discovery', {
+        logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: Discovery complete → auto-transition to BOOKING', {
             callSid: context.callSid,
-            configuredTriggersCount: (bookingTriggers.length + directIntentPatterns.length)
+            capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
+            discoveryTurnCount,
+            message: 'V110 Discovery IS the consent — caller provided info voluntarily'
         });
         
-        return LANES.DISCOVERY;
+        return LANES.BOOKING;
     }
     
     // ═══════════════════════════════════════════════════════════════
