@@ -255,14 +255,10 @@ const UI_DEFAULTS = {
         generalService: "We'd be happy to help! Let me get you scheduled with one of our technicians.",
         pricingInfo: "I'd be happy to get you a quote. Our pricing depends on the specific work needed - let me get your information and have someone reach out with details."
     },
-    // 👤 Common First Names - UI-configurable name recognition
-    // Empty by default - companies add their own common names
+    // 👤 V84: Name lists are GLOBAL (AdminSettings) — these defaults are placeholders.
+    // The GET route overrides them from AdminSettings. Never saved per-company.
     commonFirstNames: [],
-    // 👤 V111: Common Last Names - US Census top 50K surnames for name recognition
-    // Seed data loaded from data/seeds/censusLastNames.js on first access
     commonLastNames: [],
-    // 🚫 V111: Name Stop Words - Company-specific words rejected as names
-    // System defaults live in IdentitySlotFirewall.js — these ADD to them
     nameStopWords: [],
     // 🎯 Booking Outcome - What AI says when all slots collected
     // Default: "Confirmed on Call" - no callbacks unless explicitly enabled
@@ -493,133 +489,110 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
         // LEGACY: aiAgentSettings.businessHours (will be migrated on next save)
         const businessHours = saved.businessHours || company.aiAgentSettings?.businessHours || null;
         
-        // 👤 DEBUG: Log RAW saved data before merge
-        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: RAW SAVED commonFirstNames:', {
-            companyId,
-            rawCount: (saved.commonFirstNames || []).length,
-            rawSample: (saved.commonFirstNames || []).slice(0, 10),
-            hasRawCommonFirstNames: !!saved.commonFirstNames,
-            savedKeys: Object.keys(saved)
-        });
-        
         const config = deepMerge(UI_DEFAULTS, saved);
         
         // ════════════════════════════════════════════════════════════════════════════
-        // V84: LOAD GLOBAL COMMON NAMES - Shared across ALL companies
+        // V84: GLOBAL NAME LISTS — Single source of truth in AdminSettings
         // ════════════════════════════════════════════════════════════════════════════
-        // Common first/last names are platform-wide, stored in AdminSettings.
-        // Companies no longer maintain their own separate lists.
+        // commonFirstNames, commonLastNames, nameStopWords are GLOBAL.
+        // They live ONLY in AdminSettings. Per-company copies do NOT exist.
+        // Every companyId reads from the same global list — no duplication.
+        // New companies never get seeded with names; they just use global.
         // ════════════════════════════════════════════════════════════════════════════
         try {
             const AdminSettings = require('../../models/AdminSettings');
             const adminSettings = await AdminSettings.findOne().lean();
             
-            if (adminSettings) {
-                const globalFirstNames = adminSettings.commonFirstNames || [];
-                const globalLastNames = adminSettings.commonLastNames || [];
-                const globalStopWords = adminSettings.nameStopWords || [];
-                
-                // ────────────────────────────────────────────────────
-                // AUTO-MIGRATE: If AdminSettings is empty but company has names,
-                // seed AdminSettings from the company's per-company lists.
-                // This runs ONCE — after that, AdminSettings is the source of truth.
-                // ────────────────────────────────────────────────────
-                const companyFirstNames = saved.commonFirstNames || [];
-                const companyStopWords = Array.isArray(saved.nameStopWords) ? saved.nameStopWords : [];
-                
-                let needsMigration = false;
-                const migrationData = {};
-                
-                if (globalFirstNames.length === 0 && companyFirstNames.length > 0) {
-                    migrationData.commonFirstNames = companyFirstNames;
-                    needsMigration = true;
-                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-MIGRATE: Seeding AdminSettings.commonFirstNames from company', {
-                        companyId, count: companyFirstNames.length
-                    });
-                }
-                
-                if (globalStopWords.length === 0 && companyStopWords.length > 0) {
-                    migrationData.nameStopWords = companyStopWords;
-                    needsMigration = true;
-                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-MIGRATE: Seeding AdminSettings.nameStopWords from company', {
-                        companyId, count: companyStopWords.length
-                    });
-                }
-                
-                if (needsMigration) {
-                    try {
-                        await AdminSettings.updateOne({}, { $set: migrationData });
-                        logger.info('[FRONT DESK BEHAVIOR] ✅ AUTO-MIGRATE: AdminSettings seeded from company data');
-                    } catch (migErr) {
-                        logger.error('[FRONT DESK BEHAVIOR] ❌ AUTO-MIGRATE failed:', { error: migErr.message });
-                    }
-                }
-                
-                // Use global lists (or freshly-migrated data)
-                config.commonFirstNames = needsMigration && migrationData.commonFirstNames 
-                    ? migrationData.commonFirstNames 
-                    : globalFirstNames;
-                config.commonLastNames = globalLastNames;
-                config.nameStopWords = needsMigration && migrationData.nameStopWords
-                    ? migrationData.nameStopWords
-                    : globalStopWords;
-                
-                logger.info('[FRONT DESK BEHAVIOR] 👤 V84: Loaded GLOBAL common names + stop words', {
-                    companyId,
-                    firstNamesCount: config.commonFirstNames.length,
-                    lastNamesCount: config.commonLastNames.length,
-                    stopWordsCount: config.nameStopWords.length,
-                    source: needsMigration ? 'AdminSettings (auto-migrated from company)' : 'AdminSettings (global)'
-                });
-            } else {
-                // Fallback: try per-company lists (legacy)
-                config.commonFirstNames = saved.commonFirstNames || [];
-                config.commonLastNames = saved.commonLastNames || [];
-                config.nameStopWords = saved.nameStopWords || [];
-                
-                logger.warn('[FRONT DESK BEHAVIOR] ⚠️ No AdminSettings found, using company-specific names', {
-                    companyId
-                });
-            }
+            // AdminSettings is the ONLY source — no fallback to per-company
+            config.commonFirstNames = adminSettings?.commonFirstNames || [];
+            config.commonLastNames = adminSettings?.commonLastNames || [];
+            config.nameStopWords = adminSettings?.nameStopWords || [];
+            
+            logger.info('[FRONT DESK BEHAVIOR] 👤 V84: Loaded GLOBAL name lists from AdminSettings', {
+                companyId,
+                firstNamesCount: config.commonFirstNames.length,
+                lastNamesCount: config.commonLastNames.length,
+                stopWordsCount: config.nameStopWords.length
+            });
         } catch (err) {
-            logger.error('[FRONT DESK BEHAVIOR] ❌ Failed to load global common names', {
+            logger.error('[FRONT DESK BEHAVIOR] ❌ Failed to load AdminSettings global name lists', {
                 companyId,
                 error: err.message
             });
-            // Fallback to company-specific
-            config.commonFirstNames = saved.commonFirstNames || [];
-            config.commonLastNames = saved.commonLastNames || [];
-            config.nameStopWords = saved.nameStopWords || [];
+            // On error: empty arrays — never fall back to per-company data
+            config.commonFirstNames = [];
+            config.commonLastNames = [];
+            config.nameStopWords = [];
         }
         
         // ════════════════════════════════════════════════════════════════════════════
         // V111: AUTO-SEED Common Last Names from Census data on first access
         // ════════════════════════════════════════════════════════════════════════════
-        // If the GLOBAL list has no last names yet (empty array), load the Census
-        // seed data. This only happens once — after the first save, the admin's
-        // own list (even if modified) is used.
+        // V84: AUTO-SEED — One-time migration to populate empty AdminSettings
         // ════════════════════════════════════════════════════════════════════════════
-        if (!config.commonLastNames || config.commonLastNames.length === 0) {
-            try {
-                const censusLastNames = require('../../data/seeds/censusLastNames');
-                config.commonLastNames = censusLastNames;
-                logger.info('[FRONT DESK BEHAVIOR] 👤 Seeded commonLastNames from Census data', {
-                    companyId,
-                    count: censusLastNames.length
-                });
-            } catch (e) {
-                logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Census last names seed not found', { error: e.message });
-                config.commonLastNames = [];
+        // If AdminSettings has empty name lists, seed from available sources:
+        //   - commonLastNames: Census data (data/seeds/censusLastNames.js)
+        //   - commonFirstNames: Per-company legacy data (if any company has them)
+        // This runs ONCE. After names exist in AdminSettings, this block is skipped.
+        // ════════════════════════════════════════════════════════════════════════════
+        {
+            const seedData = {};
+            
+            // Auto-seed last names from Census if empty
+            if (!config.commonLastNames || config.commonLastNames.length === 0) {
+                try {
+                    const censusLastNames = require('../../data/seeds/censusLastNames');
+                    seedData.commonLastNames = censusLastNames;
+                    config.commonLastNames = censusLastNames;
+                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-SEED: commonLastNames from Census', { count: censusLastNames.length });
+                } catch (e) {
+                    logger.warn('[FRONT DESK BEHAVIOR] ⚠️ Census last names seed not found', { error: e.message });
+                }
+            }
+            
+            // Auto-seed first names from per-company legacy data if empty
+            if (!config.commonFirstNames || config.commonFirstNames.length === 0) {
+                const legacyFirstNames = saved.commonFirstNames || [];
+                if (legacyFirstNames.length > 0) {
+                    seedData.commonFirstNames = legacyFirstNames;
+                    config.commonFirstNames = legacyFirstNames;
+                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-SEED: commonFirstNames from company legacy data', {
+                        companyId, count: legacyFirstNames.length
+                    });
+                }
+            }
+            
+            // Auto-seed stop words from per-company legacy data if empty
+            if (!config.nameStopWords || config.nameStopWords.length === 0) {
+                const legacyStopWords = Array.isArray(saved.nameStopWords) ? saved.nameStopWords : [];
+                if (legacyStopWords.length > 0) {
+                    seedData.nameStopWords = legacyStopWords;
+                    config.nameStopWords = legacyStopWords;
+                    logger.info('[FRONT DESK BEHAVIOR] 🔄 AUTO-SEED: nameStopWords from company legacy data', {
+                        companyId, count: legacyStopWords.length
+                    });
+                }
+            }
+            
+            // Persist seed data to AdminSettings (one-time write)
+            if (Object.keys(seedData).length > 0) {
+                try {
+                    const AdminSettingsForSeed = require('../../models/AdminSettings');
+                    await AdminSettingsForSeed.updateOne(
+                        {},
+                        { $set: { ...seedData, lastUpdated: new Date() } },
+                        { upsert: true }
+                    );
+                    logger.info('[FRONT DESK BEHAVIOR] ✅ AUTO-SEED: Persisted to AdminSettings', {
+                        fields: Object.keys(seedData),
+                        counts: Object.fromEntries(Object.entries(seedData).map(([k, v]) => [k, v.length]))
+                    });
+                } catch (seedErr) {
+                    logger.error('[FRONT DESK BEHAVIOR] ❌ AUTO-SEED: Failed to persist', { error: seedErr.message });
+                }
             }
         }
         
-        // 🔍 DEBUG: Log what we're returning AFTER merge
-        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: AFTER MERGE commonFirstNames:', {
-            companyId,
-            count: (config.commonFirstNames || []).length,
-            sample: (config.commonFirstNames || []).slice(0, 10),
-            hasCommonFirstNames: !!config.commonFirstNames
-        });
         
         // V110: Log slot registry and flows
         logger.info('[FRONT DESK BEHAVIOR] GET - V110 Status:', {
@@ -725,11 +698,9 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 callerVocabulary: config.callerVocabulary || null,
                 // 🚀 V25: Fast-Path Booking - Respect caller urgency
                 fastPathBooking: config.fastPathBooking || null,
-                // 👤 Common First Names - UI-configurable name recognition
+                // 👤 V84: Name lists — GLOBAL from AdminSettings (single source of truth)
                 commonFirstNames: config.commonFirstNames || [],
-                // 👤 V111: Common Last Names - US Census top 50K surnames
                 commonLastNames: config.commonLastNames || [],
-                // 🚫 V111: Name Stop Words - Words rejected as names during booking
                 nameStopWords: config.nameStopWords || [],
                 // ✏️ V30: Name Spelling Variants - "Mark with K or C?"
                 nameSpellingVariants: config.nameSpellingVariants || null,
@@ -746,8 +717,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // 🔇 V36: Filler Words (company-specific custom fillers)
                 fillerWords: company.aiAgentSettings?.fillerWords || { inherited: [], custom: [] },
                 fillerWordsEnabled: config.fillerWordsEnabled !== false, // Default to true
-                // 🚫 V84: Name Stop Words — now GLOBAL from AdminSettings (see GET global load above)
-                // Legacy V36 per-company format deprecated; flat array used now
+                // ☢️ V84: Legacy V36 per-company name stop words removed — now global only
                 // 🕒 Canonical business hours (used by after_hours trigger + AfterHours handler)
                 businessHours,
                 // 📋 Architecture Notes - System documentation (editable in V110 tab)
@@ -785,14 +755,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             fieldsUpdated: Object.keys(updates)
         });
         
-        // 👤 DEBUG: Log commonFirstNames received from frontend
-        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: commonFirstNames RECEIVED:', {
-            companyId,
-            hasCommonFirstNames: updates.commonFirstNames !== undefined,
-            count: (updates.commonFirstNames || []).length,
-            sample: (updates.commonFirstNames || []).slice(0, 5),
-            rawValue: updates.commonFirstNames
-        });
+
 
         // Guard against legacy/dotted prompt keys before Map casting
         if (updates.bookingPromptsMap) {
@@ -1453,8 +1416,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
                     companyId,
                     error: err.message
                 });
-                // Fallback: save per-company (legacy)
-                updateObj['aiAgentSettings.frontDeskBehavior.nameStopWords'] = normalized;
+                // No per-company fallback — nameStopWords is GLOBAL only
             }
         }
         
@@ -1684,14 +1646,8 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             });
         }
         
-        // 👤 DEBUG: Log commonFirstNames that was saved
-        const savedCommonFirstNames = result.aiAgentSettings?.frontDeskBehavior?.commonFirstNames;
-        logger.info('[FRONT DESK BEHAVIOR] 👤 CHECKPOINT: commonFirstNames SAVED TO MONGODB:', {
-            companyId,
-            count: (savedCommonFirstNames || []).length,
-            sample: (savedCommonFirstNames || []).slice(0, 10),
-            hasCommonFirstNames: !!savedCommonFirstNames
-        });
+        // commonFirstNames/commonLastNames/nameStopWords are saved to AdminSettings (global)
+        // not to per-company. See the PATCH handler's AdminSettings save block above.
         
         // Clear Redis cache so runtime picks up new config immediately
         try {
@@ -1832,9 +1788,12 @@ router.post('/:companyId/reset', authenticateJWT, async (req, res) => {
         const { companyId } = req.params;
         
         // V110++: Merge UI_DEFAULTS with V110 canonical slot/flow configs
+        // V84: Exclude global-only fields (commonFirstNames, commonLastNames, nameStopWords)
+        // These live in AdminSettings, never in per-company documents.
+        const { commonFirstNames, commonLastNames, nameStopWords, ...companyDefaults } = UI_DEFAULTS;
         const fullDefaults = {
             enabled: true,
-            ...UI_DEFAULTS,
+            ...companyDefaults,
             // V110 Canonical Configs - IDs match SlotExtractor output
             slotRegistry: DEFAULT_SLOT_REGISTRY,
             discoveryFlow: DEFAULT_DISCOVERY_FLOW,
