@@ -793,6 +793,40 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         }
     }
     
+    // ═══════════════════════════════════════════════════════════════
+    // V110 DISCOVERY PROTECTION: Smart patterns must NOT fire on Turn 1
+    // ═══════════════════════════════════════════════════════════════
+    // PROBLEM: "I'm having AC problems" triggered immediate booking,
+    // skipping all Discovery Flow passive capture slots.
+    //
+    // V110 RULE: Discovery Flow must run at least once before smart
+    // patterns can bypass to booking. This ensures passive capture
+    // happens before we lock into booking mode.
+    // ═══════════════════════════════════════════════════════════════
+    const turnCount = callState?.turnCount || 0;
+    const discoveryTurnCount = callState?.discoveryTurnCount || 0;
+    const hasDiscoveryFlow = getConfig('frontDesk.discoveryFlow.steps', []).length > 0;
+    
+    // If Discovery Flow is configured AND we haven't run it yet, skip smart patterns
+    const shouldProtectDiscovery = hasDiscoveryFlow && discoveryTurnCount === 0;
+    
+    if (shouldProtectDiscovery) {
+        trace.addDecisionReason('LANE_DISCOVERY', {
+            reason: 'v110_discovery_protection',
+            message: 'Smart patterns disabled on first turn to allow Discovery passive capture',
+            discoveryTurnCount,
+            hasDiscoveryFlow
+        });
+        
+        logger.info('[FRONT_DESK_RUNTIME] V110: Discovery protection active - allowing passive capture before smart patterns', {
+            callSid: context.callSid,
+            turnCount,
+            discoveryTurnCount
+        });
+        
+        return LANES.DISCOVERY;
+    }
+    
     // V107: Smart pattern matching for common service request variations
     // These catch phrases even if not explicitly configured in UI
     // CRITICAL: Must match how REAL HUMANS talk, not formal booking language
