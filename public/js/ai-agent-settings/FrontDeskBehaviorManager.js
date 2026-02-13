@@ -9216,38 +9216,10 @@ Sean → Shawn, Shaun`;
                     </p>
                 </div>
 
-                <!-- ═══════════════════════════════════════════════════════════════════ -->
-                <!-- PERFORMANCE METRICS (READ-ONLY) -->
-                <!-- ═══════════════════════════════════════════════════════════════════ -->
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
-                    <h3 style="margin: 0 0 8px 0; color: #8b949e; font-size: 1.25rem;">📊 Performance Metrics</h3>
-                    <p style="color: #6e7681; margin-bottom: 16px; font-size: 0.9rem;">
-                        Real-time tier usage stats (last 100 calls):
-                    </p>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center;">
-                            <div style="color: #3fb950; font-size: 2rem; font-weight: 700;">--</div>
-                            <div style="color: #8b949e; font-size: 0.85rem;">Tier 1 Hit Rate</div>
-                        </div>
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center;">
-                            <div style="color: #58a6ff; font-size: 2rem; font-weight: 700;">--</div>
-                            <div style="color: #8b949e; font-size: 0.85rem;">Tier 2 Hit Rate</div>
-                        </div>
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center;">
-                            <div style="color: #f0883e; font-size: 2rem; font-weight: 700;">--</div>
-                            <div style="color: #8b949e; font-size: 0.85rem;">Tier 3 Hit Rate</div>
-                        </div>
-                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center;">
-                            <div style="color: #c9d1d9; font-size: 2rem; font-weight: 700;">--ms</div>
-                            <div style="color: #8b949e; font-size: 0.85rem;">Avg Response Time</div>
-                        </div>
-                    </div>
-                    
-                    <p style="color: #6e7681; font-size: 0.75rem; margin: 12px 0 0 0; text-align: center;">
-                        💡 Run <code style="background: #0d1117; padding: 2px 6px; border-radius: 4px;">node scripts/penguin-air-tier-analysis.js</code> to populate metrics
-                    </p>
-                </div>
+                <!-- Performance Metrics REMOVED Feb 2026 — was dead static HTML mockup,
+                     never wired to any API. Script penguin-air-tier-analysis.js also deleted
+                     (used obsolete AIBrain3tierllm events). Real metrics come from BlackBox
+                     raw events via the admin dashboard. -->
             </div>
         `;
     }
