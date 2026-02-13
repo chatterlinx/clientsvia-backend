@@ -746,13 +746,105 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         }
     }
     
+    // ═══════════════════════════════════════════════════════════════
+    // V110 STRICT MODE: ONLY UI configuration matters
+    // ═══════════════════════════════════════════════════════════════
+    // If Discovery Flow is configured, we are in V110 STRICT MODE.
+    // ALL hardcoded patterns, fallbacks, and smart patterns are DISABLED.
+    // The agent follows ONLY what's in the UI:
+    //   - Discovery Flow steps (passive capture)
+    //   - Booking Flow steps (after consent)
+    //   - Detection triggers from frontDesk.detectionTriggers (UI-configured only)
+    // ═══════════════════════════════════════════════════════════════
+    const hasDiscoveryFlow = getConfig('frontDesk.discoveryFlow.steps', []).length > 0;
+    const v110StrictMode = hasDiscoveryFlow;
+    
+    if (v110StrictMode) {
+        const discoveryTurnCount = callState?.discoveryTurnCount || 0;
+        
+        // V110 STRICT: If Discovery hasn't run yet, ALWAYS go to Discovery
+        if (discoveryTurnCount === 0) {
+            trace.addDecisionReason('LANE_DISCOVERY', {
+                reason: 'v110_strict_mode_discovery_required',
+                message: 'V110 STRICT MODE: Discovery Flow must run first - ALL hardcoded patterns disabled',
+                discoveryTurnCount,
+                strictMode: true
+            });
+            
+            logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: Discovery Flow configured - disabling ALL hardcoded patterns', {
+                callSid: context.callSid,
+                discoveryTurnCount,
+                message: 'Agent will ONLY follow UI configuration'
+            });
+            
+            return LANES.DISCOVERY;
+        }
+        
+        // V110 STRICT: After Discovery runs, ONLY use UI-configured detection triggers
+        // NO fallback patterns, NO smart patterns, NO hardcoded logic
+        const bookingTriggers = getConfig('frontDesk.detectionTriggers.wantsBooking', []);
+        const directIntentPatterns = getConfig('frontDesk.detectionTriggers.directIntentPatterns', []);
+        
+        // If UI has configured triggers, check them
+        if (bookingTriggers.length > 0 || directIntentPatterns.length > 0) {
+            const allConfiguredPatterns = [...new Set([...bookingTriggers, ...directIntentPatterns])];
+            const normalizedInput = userTurnLower
+                .replace(/\bsomebody\b/g, 'someone')
+                .replace(/\banybody\b/g, 'anyone');
+            
+            for (const pattern of allConfiguredPatterns) {
+                const normalizedPattern = pattern.toLowerCase()
+                    .replace(/\bsomebody\b/g, 'someone')
+                    .replace(/\banybody\b/g, 'anyone');
+                    
+                if (normalizedInput.includes(normalizedPattern)) {
+                    trace.addDecisionReason('LANE_BOOKING', { 
+                        reason: 'v110_ui_configured_trigger', 
+                        pattern,
+                        strictMode: true
+                    });
+                    logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: UI-configured trigger matched', {
+                        callSid: context.callSid,
+                        pattern
+                    });
+                    return LANES.BOOKING;
+                }
+            }
+        }
+        
+        // V110 STRICT: No match → Stay in Discovery (let ConversationEngine handle)
+        trace.addDecisionReason('LANE_DISCOVERY', {
+            reason: 'v110_strict_mode_no_ui_trigger_match',
+            message: 'No UI-configured triggers matched - continuing Discovery',
+            strictMode: true
+        });
+        
+        logger.info('[FRONT_DESK_RUNTIME] V110 STRICT MODE: No UI triggers matched - staying in Discovery', {
+            callSid: context.callSid,
+            configuredTriggersCount: (bookingTriggers.length + directIntentPatterns.length)
+        });
+        
+        return LANES.DISCOVERY;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // LEGACY MODE (V110 not configured): Use hardcoded patterns
+    // ═══════════════════════════════════════════════════════════════
+    // If no Discovery Flow is configured, fall back to legacy behavior
+    // with hardcoded patterns and smart matching. This maintains backward
+    // compatibility for companies not using V110.
+    // ═══════════════════════════════════════════════════════════════
+    logger.info('[FRONT_DESK_RUNTIME] LEGACY MODE: No V110 Discovery Flow - using hardcoded patterns', {
+        callSid: context.callSid,
+        message: 'Configure Discovery Flow in UI to enable V110 STRICT MODE'
+    });
+    
     // 4. Check for direct booking intent
     // V110: ALL detection triggers come from frontDesk.detectionTriggers.* (sole source)
     const bookingTriggers = getConfig('frontDesk.detectionTriggers.wantsBooking', []);
     const directIntentPatterns = getConfig('frontDesk.detectionTriggers.directIntentPatterns', []);
     
-    // V107: If both are empty, use hardcoded emergency fallback
-    // This prevents "cold start" where new companies have no patterns at all
+    // Legacy fallback: If both are empty, use hardcoded emergency fallback
     const FALLBACK_PATTERNS = [
         'schedule', 'book', 'appointment', 'come out', 'send someone',
         'get someone', 'need someone', 'help me out', 'technician'
@@ -761,15 +853,12 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     let allBookingPatterns;
     if (bookingTriggers.length === 0 && directIntentPatterns.length === 0) {
         allBookingPatterns = FALLBACK_PATTERNS;
-        logger.warn('[FRONT_DESK_RUNTIME] V108: Using fallback patterns - company has no booking triggers configured');
+        logger.warn('[FRONT_DESK_RUNTIME] LEGACY MODE: Using fallback patterns - company has no booking triggers configured');
     } else {
         allBookingPatterns = [...new Set([...bookingTriggers, ...directIntentPatterns])];
     }
     
     // V105: Normalize text to catch variations
-    // - "somebody" → "someone"
-    // - "anybody" → "anyone"
-    // - "gonna" → "going to"
     const normalizedInput = userTurnLower
         .replace(/\bsomebody\b/g, 'someone')
         .replace(/\banybody\b/g, 'anyone')
@@ -777,7 +866,7 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         .replace(/\bwanna\b/g, 'want to')
         .replace(/\bgotta\b/g, 'got to');
     
-    // Check configured patterns first
+    // Check configured patterns
     for (const pattern of allBookingPatterns) {
         const normalizedPattern = pattern.toLowerCase()
             .replace(/\bsomebody\b/g, 'someone')
@@ -787,49 +876,13 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
             trace.addDecisionReason('LANE_BOOKING', { 
                 reason: 'direct_booking_intent', 
                 pattern,
-                matchedIn: 'configured_patterns'
+                matchedIn: 'legacy_configured_patterns'
             });
             return LANES.BOOKING;
         }
     }
     
-    // ═══════════════════════════════════════════════════════════════
-    // V110 DISCOVERY PROTECTION: Smart patterns must NOT fire on Turn 1
-    // ═══════════════════════════════════════════════════════════════
-    // PROBLEM: "I'm having AC problems" triggered immediate booking,
-    // skipping all Discovery Flow passive capture slots.
-    //
-    // V110 RULE: Discovery Flow must run at least once before smart
-    // patterns can bypass to booking. This ensures passive capture
-    // happens before we lock into booking mode.
-    // ═══════════════════════════════════════════════════════════════
-    const turnCount = callState?.turnCount || 0;
-    const discoveryTurnCount = callState?.discoveryTurnCount || 0;
-    const hasDiscoveryFlow = getConfig('frontDesk.discoveryFlow.steps', []).length > 0;
-    
-    // If Discovery Flow is configured AND we haven't run it yet, skip smart patterns
-    const shouldProtectDiscovery = hasDiscoveryFlow && discoveryTurnCount === 0;
-    
-    if (shouldProtectDiscovery) {
-        trace.addDecisionReason('LANE_DISCOVERY', {
-            reason: 'v110_discovery_protection',
-            message: 'Smart patterns disabled on first turn to allow Discovery passive capture',
-            discoveryTurnCount,
-            hasDiscoveryFlow
-        });
-        
-        logger.info('[FRONT_DESK_RUNTIME] V110: Discovery protection active - allowing passive capture before smart patterns', {
-            callSid: context.callSid,
-            turnCount,
-            discoveryTurnCount
-        });
-        
-        return LANES.DISCOVERY;
-    }
-    
-    // V107: Smart pattern matching for common service request variations
-    // These catch phrases even if not explicitly configured in UI
-    // CRITICAL: Must match how REAL HUMANS talk, not formal booking language
+    // Legacy smart pattern matching (only when V110 not configured)
     const smartPatterns = [
         // "get/send someone out" variations
         /\b(get|send|dispatch|have)\s+(a\s+)?(someone|somebody|anyone|a\s*tech|technician|guy|person)\s+(out|over|here|there|to)/i,
