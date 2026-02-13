@@ -2209,8 +2209,10 @@ const companySchema = new mongoose.Schema({
                     'can you hear me', 'is anyone there', 'is somebody there',
                     'hey', 'hey?', 'anybody there'
                 ]},
-                // The re-greeting when confidence is low or trouble detected
+                // Clarification prompt when STT confidence is low or connection trouble detected
+                // (Legacy field name: reGreeting — kept for DB backward compatibility)
                 reGreeting: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat what you said?" },
+                clarificationPrompt: { type: String },
                 // The DTMF escape message after maxRetries
                 dtmfEscapeMessage: { type: String, default: "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail." },
                 // Where Press 1 routes (phone number or SIP)

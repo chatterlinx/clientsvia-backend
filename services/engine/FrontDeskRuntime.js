@@ -431,13 +431,34 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
                     metadata: { connectionTroubleCount: troubleCount }
                 };
             } else {
-                // RE-GREETING — try again
-                // V130 FIX: Better default — acknowledge the trouble instead of pretending
-                // the call just started. "Hi there!" on turn 3 is confusing UX.
-                const reGreeting = cqGate?.reGreeting || "I'm sorry, I didn't quite catch that. Could you please repeat what you said?";
+                // CLARIFICATION PROMPT — ask caller to repeat
+                // Never re-greet mid-call. The caller already knows who they called.
+                const LEGACY_GREETING_PATTERNS = [
+                    /^hi\s+there/i,
+                    /^hello.*how can i help/i,
+                    /^hey.*what can i do/i,
+                    /^hi.*how can i help/i,
+                    /^good\s+(morning|afternoon|evening)/i
+                ];
+                
+                const DEFAULT_CLARIFICATION = "I'm sorry, I didn't quite catch that. Could you please repeat what you said?";
+                
+                // Read from config: prefer clarificationPrompt, fall back to legacy reGreeting
+                let clarificationPrompt = cqGate?.clarificationPrompt || cqGate?.reGreeting || DEFAULT_CLARIFICATION;
+                
+                // Override any legacy greeting patterns that slipped through from old configs
+                const isLegacyGreeting = LEGACY_GREETING_PATTERNS.some(p => p.test(clarificationPrompt));
+                if (isLegacyGreeting) {
+                    logger.warn('[FRONT_DESK_RUNTIME] Overriding legacy greeting in quality gate', {
+                        callSid,
+                        legacyValue: clarificationPrompt.substring(0, 50),
+                        override: DEFAULT_CLARIFICATION.substring(0, 50)
+                    });
+                    clarificationPrompt = DEFAULT_CLARIFICATION;
+                }
                 
                 return {
-                    response: reGreeting,
+                    response: clarificationPrompt,
                     state: callState,
                     lane: LANES.DISCOVERY,
                     signals: {},
