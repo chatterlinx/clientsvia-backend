@@ -518,17 +518,20 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // Override with global lists
                 config.commonFirstNames = adminSettings.commonFirstNames || [];
                 config.commonLastNames = adminSettings.commonLastNames || [];
+                config.nameStopWords = adminSettings.nameStopWords || [];
                 
-                logger.info('[FRONT DESK BEHAVIOR] 👤 V84: Loaded GLOBAL common names', {
+                logger.info('[FRONT DESK BEHAVIOR] 👤 V84: Loaded GLOBAL common names + stop words', {
                     companyId,
                     firstNamesCount: config.commonFirstNames.length,
                     lastNamesCount: config.commonLastNames.length,
+                    stopWordsCount: config.nameStopWords.length,
                     source: 'AdminSettings (global)'
                 });
             } else {
                 // Fallback: try per-company lists (legacy)
                 config.commonFirstNames = saved.commonFirstNames || [];
                 config.commonLastNames = saved.commonLastNames || [];
+                config.nameStopWords = saved.nameStopWords || [];
                 
                 logger.warn('[FRONT DESK BEHAVIOR] ⚠️ No AdminSettings found, using company-specific names', {
                     companyId
@@ -542,6 +545,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
             // Fallback to company-specific
             config.commonFirstNames = saved.commonFirstNames || [];
             config.commonLastNames = saved.commonLastNames || [];
+            config.nameStopWords = saved.nameStopWords || [];
         }
         
         // ════════════════════════════════════════════════════════════════════════════
@@ -698,9 +702,8 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // 🔇 V36: Filler Words (company-specific custom fillers)
                 fillerWords: company.aiAgentSettings?.fillerWords || { inherited: [], custom: [] },
                 fillerWordsEnabled: config.fillerWordsEnabled !== false, // Default to true
-                // 🚫 V36: Name Stop Words (words that should NEVER be extracted as names)
-                nameStopWords: company.aiAgentSettings?.nameStopWords || { enabled: true, custom: [] },
-                nameStopWordsEnabled: config.nameStopWordsEnabled !== false, // Default to true
+                // 🚫 V84: Name Stop Words — now GLOBAL from AdminSettings (see GET global load above)
+                // Legacy V36 per-company format deprecated; flat array used now
                 // 🕒 Canonical business hours (used by after_hours trigger + AfterHours handler)
                 businessHours,
                 // 📋 Architecture Notes - System documentation (editable in V110 tab)
@@ -1370,10 +1373,10 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         }
         
         // ════════════════════════════════════════════════════════════════════════════
-        // 🚫 V111: NAME STOP WORDS - Words rejected as names during booking
+        // 🚫 V84 Phase 2: NAME STOP WORDS - Now GLOBAL in AdminSettings
         // ════════════════════════════════════════════════════════════════════════════
-        // Company-specific additions to the system default stopwords list.
-        // Merged with system defaults at runtime — these EXTEND, never replace.
+        // Name rejection words are now platform-wide, stored in AdminSettings.
+        // All companies share the same stop word list — no per-company duplication.
         // Runtime: IdentitySlotFirewall.validateName() + BookingFlowRunner.isStopWord()
         // ════════════════════════════════════════════════════════════════════════════
         if (updates.nameStopWords !== undefined) {
@@ -1383,12 +1386,32 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
                     .map(w => String(w).trim().toLowerCase())
                     .filter(w => w.length > 0)
             )];
-            updateObj['aiAgentSettings.frontDeskBehavior.nameStopWords'] = normalized;
-            logger.info('[FRONT DESK BEHAVIOR] 🚫 Saving nameStopWords', {
-                companyId,
-                count: normalized.length,
-                sample: normalized.slice(0, 15)
-            });
+            
+            try {
+                const AdminSettings = require('../../models/AdminSettings');
+                let adminSettings = await AdminSettings.findOne();
+                
+                if (!adminSettings) {
+                    adminSettings = new AdminSettings({ nameStopWords: normalized });
+                    await adminSettings.save();
+                    logger.info('[FRONT DESK BEHAVIOR] ✅ Created AdminSettings with global nameStopWords');
+                } else {
+                    adminSettings.nameStopWords = normalized;
+                    adminSettings.lastUpdated = new Date();
+                    await adminSettings.save();
+                    logger.info('[FRONT DESK BEHAVIOR] 🚫 Saved GLOBAL nameStopWords to AdminSettings', {
+                        count: normalized.length,
+                        sample: normalized.slice(0, 15)
+                    });
+                }
+            } catch (err) {
+                logger.error('[FRONT DESK BEHAVIOR] ❌ Failed to save global nameStopWords', {
+                    companyId,
+                    error: err.message
+                });
+                // Fallback: save per-company (legacy)
+                updateObj['aiAgentSettings.frontDeskBehavior.nameStopWords'] = normalized;
+            }
         }
         
         // ════════════════════════════════════════════════════════════════════════════
@@ -1533,29 +1556,9 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             updateObj['aiAgentSettings.frontDeskBehavior.fillerWordsEnabled'] = updates.fillerWordsEnabled;
         }
         
-        // ════════════════════════════════════════════════════════════════════════════
-        // 🚫 V36: Name Stop Words (Words that should NEVER be extracted as names)
-        // These are saved to aiAgentSettings.nameStopWords (NOT frontDeskBehavior)
-        // ════════════════════════════════════════════════════════════════════════════
-        if (updates.nameStopWords) {
-            if (updates.nameStopWords.enabled !== undefined) {
-                updateObj['aiAgentSettings.nameStopWords.enabled'] = updates.nameStopWords.enabled;
-            }
-            if (updates.nameStopWords.custom !== undefined) {
-                updateObj['aiAgentSettings.nameStopWords.custom'] = updates.nameStopWords.custom;
-            }
-            logger.info('[FRONT DESK BEHAVIOR] 🚫 V36 Saving name stop words:', {
-                companyId,
-                enabled: updates.nameStopWords.enabled,
-                customCount: (updates.nameStopWords.custom || []).length,
-                customWords: updates.nameStopWords.custom || []
-            });
-        }
-        
-        // 🚫 V36: Name stop words enabled toggle
-        if (updates.nameStopWordsEnabled !== undefined) {
-            updateObj['aiAgentSettings.frontDeskBehavior.nameStopWordsEnabled'] = updates.nameStopWordsEnabled;
-        }
+        // ☢️ NUKED V84: Legacy V36 name stop words save block removed.
+        // Name stop words are now GLOBAL — saved to AdminSettings above.
+        // The old per-company aiAgentSettings.nameStopWords path is deprecated.
         
         // ════════════════════════════════════════════════════════════════════════════
         // 🏠 V93: Address Verification Policy (AW Onboarding Cockpit)

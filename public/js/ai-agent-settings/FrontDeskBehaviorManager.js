@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V84.0'; // V84: Global Settings tab for 3-Tier Intelligence + Common Names
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V84.2'; // V84.2: Name Rejection Words moved to Global Settings + full Booking Prompts cleanup
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -101,26 +101,8 @@ class FrontDeskBehaviorManager {
                 this.config.customFillers = [];
             }
             
-            // 🚫 V111: Normalize nameStopWords — may arrive as:
-            //   - Array (new V111 format) → use as-is
-            //   - Object { enabled, custom: [] } (legacy V36 format) → extract .custom
-            //   - undefined/null → default to []
-            if (Array.isArray(this.config.nameStopWords)) {
-                // V111 format: flat array of strings — correct
-            } else if (this.config.nameStopWords && typeof this.config.nameStopWords === 'object') {
-                // Legacy V36 format: { enabled: bool, custom: [...] }
-                const legacyCustom = this.config.nameStopWords.custom || [];
-                this.config.nameStopWords = Array.isArray(legacyCustom) ? legacyCustom : [];
-                console.log('[FRONT DESK BEHAVIOR] 🚫 Migrated legacy nameStopWords format:', {
-                    migratedCount: this.config.nameStopWords.length
-                });
-            } else {
-                this.config.nameStopWords = [];
-            }
-            console.log('[FRONT DESK BEHAVIOR] 🚫 Custom stop words loaded from DB:', {
-                count: this.config.nameStopWords.length,
-                words: this.config.nameStopWords
-            });
+            // 🚫 nameStopWords now loaded from global AdminSettings in Global Settings tab
+            // No per-company normalization needed here anymore
             
             // 🔤 V36: Load inherited synonyms from active AiCore template
             await this.loadInheritedSynonyms(token);
@@ -6152,91 +6134,8 @@ Sean → Shawn, Shaun"
                 `;
             })()}
             
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <!-- MOVED NOTICE: Common First/Last Names → Global Settings Tab -->
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); border: 2px solid #3b82f6; border-radius: 12px; padding: 24px; margin-top: 16px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);">
-                <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 12px;">
-                    <span style="font-size: 3rem;">🌐</span>
-                    <div>
-                        <h3 style="margin: 0 0 6px 0; color: white; font-size: 1.3rem;">👤 Common First & Last Names Moved</h3>
-                        <p style="margin: 0; color: rgba(255,255,255,0.9); font-size: 0.95rem; line-height: 1.5;">
-                            <strong>Common First Names</strong> and <strong>Common Last Names</strong> are now managed in the 
-                            <strong style="color: #fbbf24;">Global Settings</strong> tab.
-                            <br>These lists are <strong>shared across ALL companies</strong> — no need to configure per company.
-                        </p>
-                    </div>
-                </div>
-                
-                <div style="display: flex; gap: 12px; align-items: center; padding: 16px; background: rgba(255,255,255,0.1); border-radius: 8px; margin-top: 16px;">
-                    <span style="font-size: 1.5rem;">💡</span>
-                    <div style="flex: 1;">
-                        <p style="margin: 0; color: rgba(255,255,255,0.95); font-size: 0.9rem;">
-                            <strong>Why the move?</strong> Name lists should be platform-wide so you don't have to maintain separate lists for each company.
-                            When you add "Michael" to the global list, it works for all companies automatically.
-                        </p>
-                    </div>
-                </div>
-                
-                <button onclick="window.frontDeskManager.switchTab('global-settings', document.querySelector('.front-desk-behavior-panel'))" 
-                    style="margin-top: 16px; padding: 12px 24px; background: white; color: #1e3a8a; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.2s;"
-                    onmouseover="this.style.transform='scale(1.05)'" 
-                    onmouseout="this.style.transform='scale(1)'">
-                    🌐 Go to Global Settings →
-                </button>
-            </div>
-            
-            <!-- ☢️ NUKED V84: Common First Names + Common Last Names sections removed -->
-            <!-- These are now GLOBAL in the Global Settings tab (AdminSettings model) -->
-            <!-- See renderGlobalSettingsTab() for the authoritative UI -->
-            
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <!-- V111: NAME REJECTION WORDS (Stop Words)                                -->
-            <!-- Words that should NEVER be accepted as a person's name during booking. -->
-            <!-- System defaults are always enforced; company words EXTEND the list.    -->
-            <!-- ═══════════════════════════════════════════════════════════════════════ -->
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-                    <div>
-                        <h3 style="margin: 0; color: #f85149;">🚫 Name Rejection Words</h3>
-                        <p style="color: #8b949e; font-size: 0.8rem; margin: 4px 0 0 0;">
-                            Words that should <strong style="color: #f85149;">never</strong> be accepted as a caller's name during booking.
-                            If a caller says one of these when asked for their name, the AI will re-ask the question.
-                            <br><span style="color: #8b949e;">System defaults (gray chips) are always enforced. Add your own industry-specific words below.</span>
-                        </p>
-                    </div>
-                    <button onclick="window.frontDeskManager.addNameStopWord()" style="padding: 8px 16px; background: #da3633; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; white-space: nowrap;">
-                        + Add Word
-                    </button>
-                </div>
-                
-                <!-- Search Box -->
-                <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
-                    <div style="position: relative; flex: 1;">
-                        <input type="text" id="fdb-search-stop-word" 
-                            placeholder="🔍 Search rejection words..." 
-                            style="width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;"
-                            oninput="window.frontDeskManager.searchStopWords(this.value)">
-                    </div>
-                    <span id="fdb-stop-word-search-result" style="color: #8b949e; font-size: 0.75rem; min-width: 100px;"></span>
-                </div>
-                
-                <div id="name-stop-words-container" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 200px; overflow-y: auto; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #30363d;">
-                    ${this.renderNameStopWordTags()}
-                </div>
-                
-                <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
-                    <input type="text" id="fdb-new-stop-word" placeholder="Enter words (comma-separated for bulk: hvac, plumbing, repair)" 
-                        style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;"
-                        onkeypress="if(event.key === 'Enter') window.frontDeskManager.addNameStopWord()">
-                    <button onclick="window.frontDeskManager.copyAllStopWords()" 
-                        style="padding: 8px 12px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.75rem; white-space: nowrap;"
-                        title="Copy all words to clipboard (comma-separated)">
-                        📋 Copy All
-                    </button>
-                    <span id="fdb-stop-word-count" style="color: #8b949e; font-size: 0.75rem;">${(Array.isArray(this.config.nameStopWords) ? this.config.nameStopWords : []).length} custom + system defaults</span>
-                </div>
-            </div>
+            <!-- ☢️ NUKED V84: Common Names + Name Rejection Words removed from Booking Prompts -->
+            <!-- All name-related management is now in the Global Settings tab -->
             
             <!-- ═══════════════════════════════════════════════════════════════════════ -->
             <!-- BOOKING OUTCOME - What AI says when all slots are collected -->
@@ -7412,248 +7311,9 @@ Sean → Shawn, Shaun`;
         return this.renderAutoScanPreviewStatic();
     }
     
-    // ☢️ NUKED V84: All Common First/Last Name helper methods removed.
-    // Names are now GLOBAL — managed exclusively in the Global Settings tab.
-    // See: renderGlobalSettingsTab() and attachGlobalSettingsListeners()
-    // Old methods nuked: addCommonFirstName, removeCommonFirstName, copyAllFirstNames,
-    //   searchFirstNames, updateCommonFirstNamesDisplay, renderCommonFirstNameTags,
-    //   addCommonLastName, removeCommonLastName, copyAllLastNames,
-    //   searchLastNames, updateCommonLastNamesDisplay
-    
-    // ═══════════════════════════════════════════════════════════════════════════
-    // V111: NAME STOP WORDS — Words rejected as names during booking
-    // ═══════════════════════════════════════════════════════════════════════════
-    // System defaults are displayed as locked gray chips (cannot be removed).
-    // Company-specific words are displayed as red removable chips.
-    // ═══════════════════════════════════════════════════════════════════════════
-    
-    /**
-     * System-default name stopwords. These are always enforced and cannot be
-     * removed from the UI. They mirror IdentitySlotFirewall.NAME_STOPWORDS.
-     */
-    static get SYSTEM_NAME_STOPWORDS() {
-        return [
-            'air conditioning', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
-            'currently', 'somebody', 'someone', 'nobody', 'anyone', 'everybody',
-            'hello', 'hi', 'hey', 'yes', 'no', 'yeah', 'yep', 'nope', 'ok', 'okay',
-            'the', 'a', 'an', 'this', 'that', 'it', 'they', 'we', 'you', 'i',
-            'need', 'want', 'help', 'service', 'repair', 'fix', 'install', 'replace',
-            'appointment', 'booking', 'schedule', 'call', 'phone', 'address',
-            'thermostat', 'furnace', 'water heater', 'toilet', 'sink', 'faucet',
-            'air', 'conditioning', 'unit', 'system', 'equipment'
-        ];
-    }
-    
-    /**
-     * Render all stop word chips: system defaults (locked) + company custom (removable)
-     */
-    renderNameStopWordTags() {
-        const systemWords = this.constructor.SYSTEM_NAME_STOPWORDS;
-        // Defensive: ensure customWords is always an array (handles legacy object format)
-        const raw = this.config.nameStopWords;
-        const customWords = Array.isArray(raw) ? raw : (raw?.custom || []);
-        
-        if (systemWords.length === 0 && customWords.length === 0) {
-            return '<p style="color: #8b949e; margin: 0; font-style: italic;">No rejection words configured.</p>';
-        }
-        
-        // System defaults — gray, locked, no remove button
-        const systemChips = systemWords.map(word => `
-            <span class="stop-word-tag stop-word-system" data-word="${word}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: #21262d; border: 1px solid #30363d; border-radius: 16px; font-size: 0.75rem; color: #8b949e;">
-                🔒 ${word}
-            </span>
-        `).join('');
-        
-        // Company custom — red accent, removable
-        const customChips = customWords.map((word, idx) => `
-            <span class="stop-word-tag stop-word-custom" data-word="${word}" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: #3d1c1c; border: 1px solid #f85149; border-radius: 16px; font-size: 0.8rem; color: #f85149;">
-                ${word}
-                <button onclick="window.frontDeskManager.removeNameStopWord(${idx})" 
-                    style="background: none; border: none; color: #f85149; cursor: pointer; padding: 0; font-size: 14px; line-height: 1;"
-                    title="Remove ${word}">×</button>
-            </span>
-        `).join('');
-        
-        return systemChips + customChips;
-    }
-    
-    /**
-     * Add one or more name stop words (comma-separated bulk input supported)
-     */
-    addNameStopWord() {
-        const input = document.getElementById('fdb-new-stop-word');
-        const rawInput = input?.value?.trim();
-        if (!rawInput) return;
-        
-        if (!Array.isArray(this.config.nameStopWords)) {
-            // Normalize legacy format or initialize
-            const legacy = this.config.nameStopWords;
-            this.config.nameStopWords = Array.isArray(legacy?.custom) ? legacy.custom : [];
-        }
-        
-        // Support bulk insertion: split by comma, semicolon, or newline
-        const wordsToAdd = rawInput
-            .split(/[,;\n]+/)
-            .map(w => w.trim().toLowerCase())
-            .filter(w => w.length > 0);
-        
-        if (wordsToAdd.length === 0) return;
-        
-        // Check against both existing custom words and system defaults
-        const systemLower = new Set(this.constructor.SYSTEM_NAME_STOPWORDS.map(w => w.toLowerCase()));
-        const existingLower = new Set(this.config.nameStopWords.map(w => w.toLowerCase()));
-        const added = [];
-        const skippedDuplicate = [];
-        const skippedSystem = [];
-        
-        for (const word of wordsToAdd) {
-            if (systemLower.has(word)) {
-                skippedSystem.push(word);
-            } else if (existingLower.has(word)) {
-                skippedDuplicate.push(word);
-            } else {
-                this.config.nameStopWords.push(word);
-                existingLower.add(word);
-                added.push(word);
-            }
-        }
-        
-        // Sort alphabetically
-        this.config.nameStopWords.sort((a, b) => a.localeCompare(b));
-        
-        // Clear input and re-render
-        input.value = '';
-        this.updateNameStopWordsDisplay();
-        this.isDirty = true;
-        
-        console.log('[FRONT DESK] 🚫 Name stop words processed', { added, skippedDuplicate, skippedSystem, totalCustom: this.config.nameStopWords.length });
-        
-        // Visual feedback
-        const container = document.getElementById('name-stop-words-container');
-        if (container) {
-            container.style.borderColor = '#da3633';
-            setTimeout(() => { container.style.borderColor = '#30363d'; }, 1000);
-        }
-        
-        // Show feedback for skipped system words
-        if (skippedSystem.length > 0) {
-            alert(`"${skippedSystem.join(', ')}" already exist as system defaults (cannot be duplicated).`);
-        }
-    }
-    
-    /**
-     * Remove a company-specific stop word by index
-     */
-    removeNameStopWord(index) {
-        if (!this.config.nameStopWords) return;
-        const removed = this.config.nameStopWords.splice(index, 1);
-        console.log('[FRONT DESK] 🚫 Removed stop word:', removed);
-        this.updateNameStopWordsDisplay();
-        this.isDirty = true;
-    }
-    
-    /**
-     * Copy all stop words (system + custom) to clipboard
-     */
-    copyAllStopWords() {
-        const system = this.constructor.SYSTEM_NAME_STOPWORDS;
-        const custom = Array.isArray(this.config.nameStopWords) ? this.config.nameStopWords : [];
-        const all = [...system, ...custom];
-        
-        if (all.length === 0) {
-            alert('No words to copy.');
-            return;
-        }
-        
-        const text = all.join(', ');
-        navigator.clipboard.writeText(text).then(() => {
-            console.log('[FRONT DESK] 🚫 Copied all stop words:', all.length);
-            const btn = document.querySelector('button[onclick*="copyAllStopWords"]');
-            if (btn) {
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '✅ Copied!';
-                btn.style.background = '#238636';
-                btn.style.color = 'white';
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.style.background = '#21262d';
-                    btn.style.color = '#8b949e';
-                }, 2000);
-            }
-        }).catch(err => {
-            console.error('[FRONT DESK] Copy failed:', err);
-            prompt('Copy these words:', text);
-        });
-    }
-    
-    /**
-     * Search/filter stop word chips by query
-     */
-    searchStopWords(query) {
-        const container = document.getElementById('name-stop-words-container');
-        const resultEl = document.getElementById('fdb-stop-word-search-result');
-        const tags = container?.querySelectorAll('.stop-word-tag');
-        
-        if (!query || query.trim() === '') {
-            tags?.forEach(tag => {
-                tag.style.display = 'inline-flex';
-                // Reset to original styling
-                if (tag.classList.contains('stop-word-system')) {
-                    tag.style.background = '#21262d';
-                    tag.style.borderColor = '#30363d';
-                } else {
-                    tag.style.background = '#3d1c1c';
-                    tag.style.borderColor = '#f85149';
-                }
-            });
-            if (resultEl) resultEl.textContent = '';
-            return;
-        }
-        
-        const searchLower = query.toLowerCase().trim();
-        let matchCount = 0;
-        
-        tags?.forEach(tag => {
-            const word = tag.getAttribute('data-word') || '';
-            const isMatch = word.includes(searchLower);
-            
-            if (isMatch) {
-                matchCount++;
-                tag.style.display = 'inline-flex';
-                tag.style.background = '#634c1e';
-                tag.style.borderColor = '#f0883e';
-            } else {
-                tag.style.display = 'none';
-            }
-        });
-        
-        if (resultEl) {
-            if (matchCount === 0) {
-                resultEl.innerHTML = '<span style="color: #f85149;">❌ Not found</span>';
-            } else {
-                resultEl.innerHTML = `<span style="color: #f0883e;">🔶 ${matchCount} match${matchCount > 1 ? 'es' : ''}</span>`;
-            }
-        }
-    }
-    
-    /**
-     * Re-render the stop words container and update the count label
-     */
-    updateNameStopWordsDisplay() {
-        const container = document.getElementById('name-stop-words-container');
-        if (container) {
-            container.innerHTML = this.renderNameStopWordTags();
-        }
-        const countEl = document.getElementById('fdb-stop-word-count');
-        if (countEl) {
-            countEl.textContent = `${(Array.isArray(this.config.nameStopWords) ? this.config.nameStopWords : []).length} custom + system defaults`;
-        }
-        // Clear search
-        const searchInput = document.getElementById('fdb-search-stop-word');
-        const resultEl = document.getElementById('fdb-stop-word-search-result');
-        if (searchInput) searchInput.value = '';
-        if (resultEl) resultEl.textContent = '';
-    }
+    // ☢️ NUKED V84: All Common Names + Name Rejection Words methods removed.
+    // All name-related management is now GLOBAL — see Global Settings tab.
+    // See: renderGlobalSettingsTab() and globalStopWord*() methods.
     
     // ═══════════════════════════════════════════════════════════════════════════
     // BOOKING OUTCOME SECTION
@@ -9499,6 +9159,59 @@ Sean → Shawn, Shaun`;
                             </button>
                         </div>
                     </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- GLOBAL NAME REJECTION WORDS (Stop Words) - V84 Phase 2 -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                        <div>
+                            <h3 style="margin: 0 0 4px 0; color: #f85149; font-size: 1.25rem;">🚫 Name Rejection Words</h3>
+                            <p style="color: #8b949e; font-size: 0.85rem; margin: 0; line-height: 1.5;">
+                                Words that should <strong style="color: #f85149;">never</strong> be accepted as a caller's name during booking.
+                                <br>System defaults (gray) are always enforced. Custom words (red) extend the list <strong>globally for all companies</strong>.
+                            </p>
+                        </div>
+                        <button onclick="window.frontDeskManager.globalAddStopWord()" 
+                            style="padding: 8px 16px; background: #da3633; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">
+                            + Add Word
+                        </button>
+                    </div>
+                    
+                    <!-- Search Box -->
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+                        <input type="text" id="global-search-stop-word" 
+                            placeholder="🔍 Search rejection words..." 
+                            oninput="window.frontDeskManager.globalSearchStopWords(this.value)"
+                            style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.875rem;">
+                        <span id="global-stop-word-search-result" style="color: #8b949e; font-size: 0.75rem; min-width: 100px;"></span>
+                    </div>
+                    
+                    <!-- Chips container: system defaults + custom -->
+                    <div id="global-stop-words-chips" style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 250px; overflow-y: auto; padding: 12px; background: #0d1117; border-radius: 6px; border: 1px solid #21262d; margin-bottom: 12px;">
+                        ${this._globalRenderStopWordChips()}
+                    </div>
+                    
+                    <!-- Add input + copy + count -->
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <input type="text" id="global-add-stop-word" 
+                            placeholder="Enter words (comma-separated: hvac, plumbing, repair)" 
+                            onkeypress="if(event.key==='Enter') window.frontDeskManager.globalAddStopWord()"
+                            style="flex: 1; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
+                        <button onclick="window.frontDeskManager.globalCopyStopWords()" 
+                            style="padding: 8px 12px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer; font-size: 0.75rem; white-space: nowrap;"
+                            title="Copy all words to clipboard">
+                            📋 Copy All
+                        </button>
+                        <span id="global-stop-word-count" style="color: #8b949e; font-size: 0.75rem;">
+                            ${(this.config?.nameStopWords || []).length} custom + ${this.constructor.GLOBAL_SYSTEM_STOPWORDS.length} system
+                        </span>
+                    </div>
+                    
+                    <p style="color: #3fb950; margin: 12px 0 0 0; font-size: 0.8rem; font-weight: 600;">
+                        🌐 ONE list, ALL companies. System defaults cannot be removed. Custom words apply everywhere.
+                    </p>
                 </div>
 
                 <!-- ═══════════════════════════════════════════════════════════════════ -->
@@ -11365,147 +11078,9 @@ Sean → Shawn, Shaun`;
         this.isDirty = true;
     }
     
-    // ════════════════════════════════════════════════════════════════════════════
-    // V36: NAME STOP WORDS - Words that should NEVER be extracted as names
-    // ════════════════════════════════════════════════════════════════════════════
-    
-    toggleStopWordsFields(enabled) {
-        const fields = document.getElementById('fdb-stopwords-fields');
-        if (fields) {
-            fields.style.display = enabled ? 'block' : 'none';
-        }
-        this.config.nameStopWordsEnabled = enabled;
-        this.isDirty = true;
-    }
-    
-    // Platform default stop words (read-only, shown for reference)
-    getPlatformStopWords() {
-        return [
-            // Greetings & fillers
-            'hi', 'hello', 'hey', 'good', 'morning', 'afternoon', 'evening', 'night',
-            'uh', 'um', 'erm', 'hmm', 'ah', 'oh', 'well', 'so', 'like', 'just',
-            // Confirmations
-            'yeah', 'yes', 'sure', 'okay', 'ok', 'alright', 'right', 'yep', 'yup',
-            'go', 'ahead', 'absolutely', 'definitely', 'certainly', 'perfect', 'sounds',
-            // Common words & auxiliary verbs
-            'the', 'that', 'this', 'what', 'please', 'thanks', 'thank', 'you',
-            'is', 'are', 'was', 'were', 'be', 'been', 'being', 'am', 'has', 'have', 'had',
-            'do', 'does', 'did', 'will', 'would', 'could', 'should', 'can', 'may', 'might',
-            'it', 'its', 'my', 'your', 'our', 'their', 'his', 'her', 'a', 'an', 'and', 'or', 'but',
-            // Common sentence starters
-            'to', 'see', 'if', 'we', 'get', 'somebody', 'someone', 'here', 'there', 'today', 'now',
-            // Common verbs
-            'having', 'doing', 'calling', 'looking', 'trying', 'getting', 'going', 'coming',
-            'waiting', 'hoping', 'thinking', 'wondering', 'needing', 'wanting', 'asking',
-            'dealing', 'experiencing', 'seeing', 'feeling', 'hearing', 'running', 'working',
-            // Problem-related words
-            'failing', 'broken', 'leaking', 'stopped', 'making', 'noise', 'noisy', 'loud',
-            'not', 'wont', 'doesnt', 'isnt', 'cant', 'problem', 'problems', 'issue', 'issues',
-            'trouble', 'troubles', 'wrong', 'weird', 'strange', 'acting', 'up', 'down', 'out'
-        ];
-    }
-    
-    renderPlatformStopWords() {
-        const words = this.getPlatformStopWords();
-        const badges = words.map(w => `
-            <span style="display: inline-block; padding: 3px 8px; background: #238636; color: white; border-radius: 4px; font-size: 0.75rem; margin: 2px;">
-                ${this.escapeHtml(w)}
-            </span>
-        `).join('');
-        
-        return `
-            <div style="display: flex; flex-wrap: wrap; gap: 2px;">
-                ${badges}
-            </div>
-            <div style="padding: 8px 0 0 0; text-align: center;">
-                <span style="color: #6e7681; font-size: 0.75rem;">${words.length} platform stop words</span>
-            </div>
-        `;
-    }
-    
-    renderCustomStopWords() {
-        if (!this.config.customStopWords) {
-            this.config.customStopWords = [];
-        }
-        
-        const words = this.config.customStopWords || [];
-        
-        if (words.length === 0) {
-            return `
-                <div style="padding: 30px 20px; text-align: center;">
-                    <div style="font-size: 1.5rem; margin-bottom: 8px; opacity: 0.5;">🔧</div>
-                    <p style="color: #8b949e; margin: 0 0 4px 0; font-size: 0.85rem;">No company-specific stop words</p>
-                    <p style="color: #6e7681; margin: 0; font-size: 0.75rem;">Click "Add Stop Word" to add custom exclusions</p>
-                </div>
-            `;
-        }
-        
-        // Render as editable badges with delete
-        const badges = words.map((w, idx) => `
-            <span style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 12px; background: #f85149; color: white; border-radius: 4px; font-size: 0.8rem; margin: 3px;">
-                ${this.escapeHtml(w)}
-                <button type="button" 
-                    onclick="window.frontDeskManager.removeStopWord(${idx})"
-                    style="background: rgba(255,255,255,0.2); border: none; color: white; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; font-size: 0.7rem; display: flex; align-items: center; justify-content: center;"
-                    title="Remove">×</button>
-            </span>
-        `).join('');
-        
-        return `
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 12px;">
-                ${badges}
-            </div>
-        `;
-    }
-    
-    addStopWord() {
-        const word = prompt('Enter word that should NEVER be extracted as a name:');
-        if (!word || !word.trim()) return;
-        
-        const normalized = word.toLowerCase().trim();
-        
-        if (!this.config.customStopWords) {
-            this.config.customStopWords = [];
-        }
-        
-        // Check for duplicates
-        if (this.config.customStopWords.includes(normalized)) {
-            alert('This stop word already exists!');
-            return;
-        }
-        
-        // Check if it's already a platform default
-        if (this.getPlatformStopWords().includes(normalized)) {
-            alert('This word is already in the platform defaults!');
-            return;
-        }
-        
-        this.config.customStopWords.push(normalized);
-        
-        // Re-render
-        const container = document.getElementById('fdb-custom-stopwords');
-        if (container) {
-            container.innerHTML = this.renderCustomStopWords();
-        }
-        
-        this.isDirty = true;
-        console.log('[FRONT DESK] 🚫 Added stop word:', normalized);
-    }
-    
-    removeStopWord(idx) {
-        if (!this.config.customStopWords) return;
-        
-        const removed = this.config.customStopWords.splice(idx, 1);
-        console.log('[FRONT DESK] 🚫 Removed stop word:', removed[0]);
-        
-        // Re-render
-        const container = document.getElementById('fdb-custom-stopwords');
-        if (container) {
-            container.innerHTML = this.renderCustomStopWords();
-        }
-        
-        this.isDirty = true;
-    }
+    // ☢️ NUKED: V36 Name Stop Words methods removed — now global in Global Settings tab.
+    // Old methods: toggleStopWordsFields, getPlatformStopWords, renderPlatformStopWords,
+    //   renderCustomStopWords, addStopWord, removeStopWord
     
     // ════════════════════════════════════════════════════════════════════════════
     // V22 TAB: Vocabulary Guardrails
@@ -11672,21 +11247,6 @@ Sean → Shawn, Shaun`;
                         <strong>Examples:</strong> um, uh, like, you know, basically, actually, so, well
                     </p>
                 </div>
-            </div>
-            
-            <!-- ═══════════════════════════════════════════════════════════════════ -->
-            <!-- V111: Legacy V36 Name Stop Words section REPLACED                  -->
-            <!-- Name Rejection Words are now managed in Booking Prompts tab.       -->
-            <!-- ═══════════════════════════════════════════════════════════════════ -->
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <h3 style="margin: 0; color: #8b949e; font-size: 0.95rem;">🚫 Name Rejection Words</h3>
-                    <span style="background: #30363d; color: #8b949e; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">MOVED</span>
-                </div>
-                <p style="color: #6e7681; font-size: 0.8rem; margin: 8px 0 0 0;">
-                    Name rejection words are now managed in the <strong style="color: #58a6ff; cursor: pointer;" onclick="window.frontDeskManager.switchTab('booking')">Booking Prompts</strong> tab
-                    under "Name Rejection Words". System defaults are always enforced.
-                </p>
             </div>
             
             <!-- ═══════════════════════════════════════════════════════════════════ -->
@@ -12787,11 +12347,10 @@ Sean → Shawn, Shaun`;
         });
         
         // ════════════════════════════════════════════════════════════════════════════
-        // V111: Name Stop Words — flat array format (replaces legacy V36 object)
+        // V84 Phase 2: Name Stop Words — now GLOBAL in AdminSettings
         // ════════════════════════════════════════════════════════════════════════════
-        // nameStopWords is now a flat [String] in frontDeskBehavior.
-        // The V111 UI (Name Rejection Words section in Booking Prompts tab) manages
-        // this.config.nameStopWords directly. Just ensure it's an array for save.
+        // nameStopWords is a flat [String] managed in the Global Settings tab.
+        // The UI manages this.config.nameStopWords directly. Ensure it's an array for save.
         if (!Array.isArray(this.config.nameStopWords)) {
             const legacy = this.config.nameStopWords;
             this.config.nameStopWords = Array.isArray(legacy?.custom) ? legacy.custom : [];
@@ -13497,6 +13056,227 @@ Sean → Shawn, Shaun`;
         const searchInput = document.getElementById(searchId);
         if (searchInput) searchInput.value = '';
         this.globalSearchNames(type, '');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GLOBAL NAME REJECTION WORDS (Stop Words) — V84 Phase 2
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Self-contained methods for the Global Settings tab stop words section.
+    // System defaults are always enforced (locked gray chips).
+    // Custom additions extend the list globally for ALL companies.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * System-default name stopwords. Always enforced — mirrors IdentitySlotFirewall.NAME_STOPWORDS.
+     * Displayed as locked gray chips (cannot be removed from the UI).
+     */
+    static get GLOBAL_SYSTEM_STOPWORDS() {
+        return [
+            'air conditioning', 'ac', 'hvac', 'heating', 'cooling', 'plumbing', 'electrical',
+            'currently', 'somebody', 'someone', 'nobody', 'anyone', 'everybody',
+            'hello', 'hi', 'hey', 'yes', 'no', 'yeah', 'yep', 'nope', 'ok', 'okay',
+            'the', 'a', 'an', 'this', 'that', 'it', 'they', 'we', 'you', 'i',
+            'need', 'want', 'help', 'service', 'repair', 'fix', 'install', 'replace',
+            'appointment', 'booking', 'schedule', 'call', 'phone', 'address',
+            'thermostat', 'furnace', 'water heater', 'toilet', 'sink', 'faucet',
+            'air', 'conditioning', 'unit', 'system', 'equipment'
+        ];
+    }
+
+    /**
+     * Render all stop word chips: system defaults (locked) + custom (removable)
+     */
+    _globalRenderStopWordChips(filterQuery = '') {
+        const systemWords = this.constructor.GLOBAL_SYSTEM_STOPWORDS;
+        const customWords = Array.isArray(this.config?.nameStopWords) ? this.config.nameStopWords : [];
+        const query = filterQuery.toLowerCase().trim();
+
+        if (systemWords.length === 0 && customWords.length === 0) {
+            return '<p style="color: #8b949e; margin: 0; font-style: italic;">No rejection words configured.</p>';
+        }
+
+        let matchCount = 0;
+
+        // System defaults — gray, locked, no remove button
+        const systemChips = systemWords
+            .filter(w => !query || w.includes(query))
+            .map(word => {
+                matchCount++;
+                const highlight = query ? 'background:#634c1e;border-color:#f0883e;' : 'background:#21262d;border-color:#30363d;';
+                return `<span class="gsw-chip gsw-system" data-word="${word}" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;${highlight}border:1px solid;border-radius:16px;font-size:0.75rem;color:#8b949e;">🔒 ${word}</span>`;
+            }).join('');
+
+        // Custom — red accent, removable
+        const customChips = customWords
+            .filter(w => !query || w.includes(query))
+            .map((word, idx) => {
+                matchCount++;
+                const highlight = query ? 'background:#634c1e;border-color:#f0883e;' : 'background:#3d1c1c;border-color:#f85149;';
+                const escaped = this.escapeHtml(word.replace(/'/g, "\\\\'"));
+                return `<span class="gsw-chip gsw-custom" data-word="${word}" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;${highlight}border:1px solid;border-radius:16px;font-size:0.8rem;color:#f85149;">${this.escapeHtml(word)}<button onclick="window.frontDeskManager.globalRemoveStopWord('${escaped}')" style="background:none;border:none;color:#f85149;cursor:pointer;padding:0;font-size:14px;line-height:1;" title="Remove ${this.escapeHtml(word)}">×</button></span>`;
+            }).join('');
+
+        // If searching and no matches
+        if (query && matchCount === 0) {
+            return '<p style="color: #f85149; margin: 0; font-style: italic;">No matches found.</p>';
+        }
+
+        return systemChips + customChips;
+    }
+
+    /**
+     * Add one or more stop words (comma-separated bulk input supported)
+     */
+    globalAddStopWord() {
+        const input = document.getElementById('global-add-stop-word');
+        const rawInput = input?.value?.trim();
+        if (!rawInput) return;
+
+        if (!Array.isArray(this.config.nameStopWords)) {
+            this.config.nameStopWords = [];
+        }
+
+        // Support bulk: split by comma, semicolon, or newline
+        const wordsToAdd = rawInput
+            .split(/[,;\n]+/)
+            .map(w => w.trim().toLowerCase())
+            .filter(w => w.length > 0);
+
+        if (wordsToAdd.length === 0) return;
+
+        const systemLower = new Set(this.constructor.GLOBAL_SYSTEM_STOPWORDS.map(w => w.toLowerCase()));
+        const existingLower = new Set(this.config.nameStopWords.map(w => w.toLowerCase()));
+        const added = [];
+        const skippedDuplicate = [];
+        const skippedSystem = [];
+
+        for (const word of wordsToAdd) {
+            if (systemLower.has(word)) {
+                skippedSystem.push(word);
+            } else if (existingLower.has(word)) {
+                skippedDuplicate.push(word);
+            } else {
+                this.config.nameStopWords.push(word);
+                existingLower.add(word);
+                added.push(word);
+            }
+        }
+
+        // Sort alphabetically
+        this.config.nameStopWords.sort((a, b) => a.localeCompare(b));
+
+        // Clear input and re-render
+        input.value = '';
+        this._globalRefreshStopWords();
+        this.isDirty = true;
+
+        console.log('[FRONT DESK] 🚫 Global stop words added', { added, skippedDuplicate, skippedSystem, total: this.config.nameStopWords.length });
+
+        // Visual feedback
+        const container = document.getElementById('global-stop-words-chips');
+        if (container) {
+            container.style.borderColor = '#da3633';
+            setTimeout(() => { container.style.borderColor = '#21262d'; }, 1000);
+        }
+
+        if (skippedSystem.length > 0) {
+            alert(`"${skippedSystem.join(', ')}" already exist as system defaults (cannot be duplicated).`);
+        }
+    }
+
+    /**
+     * Remove a custom stop word by value
+     */
+    globalRemoveStopWord(word) {
+        if (!Array.isArray(this.config.nameStopWords)) return;
+        const idx = this.config.nameStopWords.findIndex(w => w === word);
+        if (idx === -1) return;
+
+        const removed = this.config.nameStopWords.splice(idx, 1);
+        console.log('[FRONT DESK] 🚫 Removed global stop word:', removed[0]);
+        this._globalRefreshStopWords();
+        this.isDirty = true;
+    }
+
+    /**
+     * Search/filter stop word chips
+     */
+    globalSearchStopWords(query) {
+        const container = document.getElementById('global-stop-words-chips');
+        const resultEl = document.getElementById('global-stop-word-search-result');
+
+        if (!query || query.trim() === '') {
+            if (container) container.innerHTML = this._globalRenderStopWordChips();
+            if (resultEl) resultEl.textContent = '';
+            return;
+        }
+
+        const q = query.toLowerCase().trim();
+        if (container) container.innerHTML = this._globalRenderStopWordChips(q);
+
+        // Count matches
+        const systemMatches = this.constructor.GLOBAL_SYSTEM_STOPWORDS.filter(w => w.includes(q)).length;
+        const customMatches = (this.config?.nameStopWords || []).filter(w => w.includes(q)).length;
+        const total = systemMatches + customMatches;
+
+        if (resultEl) {
+            if (total === 0) {
+                resultEl.innerHTML = '<span style="color: #f85149;">Not found</span>';
+            } else {
+                resultEl.innerHTML = `<span style="color: #f0883e;">${total} match${total > 1 ? 'es' : ''}</span>`;
+            }
+        }
+    }
+
+    /**
+     * Copy all stop words (system + custom) to clipboard
+     */
+    globalCopyStopWords() {
+        const system = this.constructor.GLOBAL_SYSTEM_STOPWORDS;
+        const custom = Array.isArray(this.config?.nameStopWords) ? this.config.nameStopWords : [];
+        const all = [...system, ...custom];
+
+        if (all.length === 0) {
+            alert('No words to copy.');
+            return;
+        }
+
+        const text = all.join(', ');
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('[FRONT DESK] 🚫 Copied all global stop words:', all.length);
+            const btn = document.querySelector('button[onclick*="globalCopyStopWords"]');
+            if (btn) {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅ Copied!';
+                btn.style.background = '#238636';
+                btn.style.color = 'white';
+                setTimeout(() => { btn.innerHTML = orig; btn.style.background = '#21262d'; btn.style.color = '#8b949e'; }, 2000);
+            }
+        }).catch(err => {
+            console.error('[FRONT DESK] Copy failed:', err);
+            prompt('Copy these words:', text);
+        });
+    }
+
+    /**
+     * Refresh stop words UI: re-render chips + update count
+     */
+    _globalRefreshStopWords() {
+        const container = document.getElementById('global-stop-words-chips');
+        if (container) container.innerHTML = this._globalRenderStopWordChips();
+
+        const countEl = document.getElementById('global-stop-word-count');
+        if (countEl) {
+            const custom = (this.config?.nameStopWords || []).length;
+            const system = this.constructor.GLOBAL_SYSTEM_STOPWORDS.length;
+            countEl.textContent = `${custom} custom + ${system} system`;
+        }
+
+        // Clear search
+        const searchInput = document.getElementById('global-search-stop-word');
+        const resultEl = document.getElementById('global-stop-word-search-result');
+        if (searchInput) searchInput.value = '';
+        if (resultEl) resultEl.textContent = '';
     }
 
     showNotification(message, type = 'info') {

@@ -885,6 +885,20 @@ const adminSettingsSchema = new mongoose.Schema({
         description: 'Global list of common last names - US Census top 50K surnames (shared across all companies)'
     },
     
+    // ============================================================================
+    // GLOBAL NAME REJECTION WORDS (Stop Words) - V84 Phase 2, Feb 2026
+    // ============================================================================
+    // Words that should NEVER be accepted as a caller's name during booking.
+    // System defaults are always enforced in IdentitySlotFirewall.NAME_STOPWORDS.
+    // These are CUSTOM additions managed by admins in the Global Settings tab.
+    // Shared across ALL companies — one list, no per-company duplication.
+    // ============================================================================
+    nameStopWords: {
+        type: [String],
+        default: [],
+        description: 'Global list of custom name rejection words — words never accepted as caller names (shared across all companies)'
+    },
+    
     // Metadata
     lastUpdated: {
         type: Date,
