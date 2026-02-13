@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V83.0'; // V83: Table-based UI for Consent Phrases and Yes Words
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V84.0'; // V84: Global Settings tab for 3-Tier Intelligence + Common Names
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -1028,7 +1028,7 @@ class FrontDeskBehaviorManager {
                 </div>
 
                 <!-- Tab Navigation -->
-                <!-- V83: Consolidated from 12→11 tabs (nuked Dynamic Flows Feb 2026 - V110 replaces it) -->
+                <!-- V84: Added Global Settings tab for platform-wide controls (Feb 2026) -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
                     ${this.renderTab('personality', '🎭 Personality', true)}
                     ${this.renderTab('discovery', '🧠 Discovery & Consent')}
@@ -1036,6 +1036,7 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('vocabulary', '📝 Vocabulary')}
                     ${this.renderTab('discovery-flow', '🔄 Discovery Flow', false, true)}
                     ${this.renderTab('booking', '📅 Booking Prompts')}
+                    ${this.renderTab('global-settings', '🌐 Global Settings', false, true)}
                     <!-- ☢️ NUKED: 'flows' (Dynamic Flows) tab removed Feb 2026 - V110 architecture replaces it -->
                     ${this.renderTab('emotions', '💭 Emotions')}
                     ${this.renderTab('loops', '🔄 Loops')}
@@ -9702,6 +9703,252 @@ Sean → Shawn, Shaun`;
     
     // ☢️ NUKED Feb 2026: loadDynamicFlows() removed - V110 architecture replaces Dynamic Flows
     
+    /**
+     * ════════════════════════════════════════════════════════════════════
+     * GLOBAL SETTINGS TAB - Platform-wide controls (Feb 2026)
+     * ════════════════════════════════════════════════════════════════════
+     * Centralized location for:
+     * - 3-Tier Intelligence Thresholds (tier1, tier2, enableTier3)
+     * - Common First Names & Last Names (used in booking validation)
+     * - Other platform-wide settings
+     * ════════════════════════════════════════════════════════════════════
+     */
+    renderGlobalSettingsTab() {
+        // Load intelligence settings from config
+        const useGlobalIntelligence = this.config?.aiAgentSettings?.useGlobalIntelligence !== false;
+        const intelligenceConfig = useGlobalIntelligence 
+            ? (this.config?.globalProductionIntelligence || {})
+            : (this.config?.aiAgentSettings?.productionIntelligence || {});
+        
+        const tier1Threshold = intelligenceConfig?.thresholds?.tier1 || 0.80;
+        const tier2Threshold = intelligenceConfig?.thresholds?.tier2 || 0.60;
+        const enableTier3 = intelligenceConfig?.thresholds?.enableTier3 !== false;
+        
+        // Load common names from config
+        const commonFirstNames = this.config?.commonFirstNames || [];
+        const commonLastNames = this.config?.commonLastNames || [];
+        
+        return `
+            <div style="max-width: 1200px;">
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- HEADER -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <div style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); border: 1px solid #3b82f6; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                    <h2 style="margin: 0 0 8px 0; color: white; font-size: 1.5rem; display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 2rem;">🌐</span>
+                        Global Settings
+                    </h2>
+                    <p style="margin: 0; color: rgba(255,255,255,0.9); font-size: 0.95rem;">
+                        Platform-wide controls that affect <strong>all calls</strong> across your organization.
+                        <br>These settings control intelligence thresholds, name validation, and other shared behaviors.
+                    </p>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- 3-TIER INTELLIGENCE THRESHOLDS -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 8px 0; color: #f0883e; font-size: 1.25rem;">⚡ 3-Tier Intelligence System</h3>
+                    <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.9rem;">
+                        Control how aggressively the AI matches scenarios. Lower thresholds = more Tier 1/2 matches (faster, free). 
+                        Higher thresholds = more Tier 3 fallback (slower, costs $0.04/call).
+                    </p>
+                    
+                    <!-- Intelligence Source Toggle -->
+                    <div style="background: #0d1117; border: 1px solid ${useGlobalIntelligence ? '#3b82f6' : '#f59e0b'}; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="global-use-global-intelligence" ${useGlobalIntelligence ? 'checked' : ''} 
+                                    style="width: 18px; height: 18px; accent-color: #3b82f6;">
+                                <span style="color: #c9d1d9; font-weight: 600;">
+                                    Use Global Intelligence Settings
+                                </span>
+                            </label>
+                            <span style="padding: 4px 10px; background: ${useGlobalIntelligence ? '#1e3a8a' : '#451a03'}; color: ${useGlobalIntelligence ? '#60a5fa' : '#fb923c'}; border-radius: 12px; font-size: 0.75rem; font-weight: 700;">
+                                ${useGlobalIntelligence ? '🌐 GLOBAL' : '🎯 COMPANY'}
+                            </span>
+                        </div>
+                        <p style="color: #6e7681; font-size: 0.8rem; margin: 0;">
+                            ${useGlobalIntelligence 
+                                ? '✅ Using platform-wide defaults (affects all companies). Uncheck to customize for this company only.' 
+                                : '⚠️ Using company-specific settings. Check to inherit platform defaults.'}
+                        </p>
+                    </div>
+
+                    <!-- Tier 1 Threshold Slider -->
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div>
+                                <label style="color: #58a6ff; font-weight: 600; font-size: 1rem;">
+                                    🎯 Tier 1 Threshold (Rule-Based Matching)
+                                </label>
+                                <p style="color: #6e7681; font-size: 0.8rem; margin: 4px 0 0 0;">
+                                    Minimum confidence to use <strong>Tier 1</strong> (fast, free, <100ms)
+                                </p>
+                            </div>
+                            <div style="text-align: right;">
+                                <div id="global-tier1-value" style="font-size: 2rem; font-weight: 700; color: #3fb950;">
+                                    ${(tier1Threshold * 100).toFixed(0)}%
+                                </div>
+                                <div style="color: #6e7681; font-size: 0.75rem;">
+                                    0.${tier1Threshold.toString().split('.')[1] || '80'}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <input type="range" id="global-tier1-slider" 
+                            min="0.50" max="0.95" step="0.05" 
+                            value="${tier1Threshold}"
+                            style="width: 100%; height: 8px; border-radius: 4px; background: linear-gradient(to right, #3fb950 0%, #f0883e 50%, #da3633 100%); outline: none; cursor: pointer;">
+                        
+                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem;">
+                            <span style="color: #3fb950;">50% - More matches</span>
+                            <span style="color: #8b949e;">70% - Balanced</span>
+                            <span style="color: #da3633;">95% - Strict</span>
+                        </div>
+                        
+                        <!-- Real-time Impact Preview -->
+                        <div id="global-tier1-impact" style="margin-top: 16px; padding: 12px; background: #161b22; border-left: 3px solid #3fb950; border-radius: 4px;">
+                            <strong style="color: #c9d1d9;">Expected Impact at ${(tier1Threshold * 100).toFixed(0)}%:</strong>
+                            <div style="color: #8b949e; font-size: 0.85rem; margin-top: 6px; line-height: 1.6;">
+                                ${tier1Threshold <= 0.65 
+                                    ? '✅ <strong style="color:#3fb950;">AGGRESSIVE:</strong> 80-90% Tier 1 hit rate. Ultra-fast responses (<100ms). Best for high scenario coverage.'
+                                    : tier1Threshold <= 0.75
+                                    ? '⚖️ <strong style="color:#58a6ff;">BALANCED:</strong> 60-70% Tier 1 hit rate. Fast responses (100-300ms). Recommended for most companies.'
+                                    : tier1Threshold <= 0.85
+                                    ? '⚠️ <strong style="color:#f0883e;">CONSERVATIVE:</strong> 30-50% Tier 1 hit rate. Some Tier 3 fallback (1200ms). Higher LLM costs.'
+                                    : '🚨 <strong style="color:#da3633;">STRICT:</strong> 10-30% Tier 1 hit rate. Heavy Tier 3 usage (1200ms). Expensive ($0.04/call).'
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tier 2 Threshold Slider -->
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <div>
+                                <label style="color: #58a6ff; font-weight: 600; font-size: 1rem;">
+                                    🧠 Tier 2 Threshold (Semantic Matching)
+                                </label>
+                                <p style="color: #6e7681; font-size: 0.8rem; margin: 4px 0 0 0;">
+                                    Minimum confidence to use <strong>Tier 2</strong> (semantic, free, <300ms)
+                                </p>
+                            </div>
+                            <div style="text-align: right;">
+                                <div id="global-tier2-value" style="font-size: 2rem; font-weight: 700; color: #58a6ff;">
+                                    ${(tier2Threshold * 100).toFixed(0)}%
+                                </div>
+                                <div style="color: #6e7681; font-size: 0.75rem;">
+                                    0.${tier2Threshold.toString().split('.')[1] || '60'}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <input type="range" id="global-tier2-slider" 
+                            min="0.40" max="0.80" step="0.05" 
+                            value="${tier2Threshold}"
+                            style="width: 100%; height: 8px; border-radius: 4px; background: linear-gradient(to right, #3fb950 0%, #58a6ff 50%, #da3633 100%); outline: none; cursor: pointer;">
+                        
+                        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.75rem;">
+                            <span style="color: #3fb950;">40% - More matches</span>
+                            <span style="color: #8b949e;">60% - Recommended</span>
+                            <span style="color: #da3633;">80% - Strict</span>
+                        </div>
+                    </div>
+
+                    <!-- Tier 3 Toggle -->
+                    <div style="background: #0d1117; border: 1px solid ${enableTier3 ? '#f0883e' : '#da3633'}; border-radius: 8px; padding: 16px;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="global-enable-tier3" ${enableTier3 ? 'checked' : ''} 
+                                style="width: 20px; height: 20px; accent-color: #f0883e;">
+                            <div>
+                                <div style="color: ${enableTier3 ? '#f0883e' : '#6e7681'}; font-weight: 600; font-size: 1rem;">
+                                    🤖 Enable Tier 3 LLM Fallback
+                                </div>
+                                <div style="color: #6e7681; font-size: 0.8rem; margin-top: 2px;">
+                                    ${enableTier3 
+                                        ? '✅ GPT-4o-mini generates natural responses when no scenario matches (~1200ms, costs $)' 
+                                        : '❌ Disabled - AI will use fallback responses instead (free but less intelligent)'}
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- COMMON NAMES (VALIDATION) -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 8px 0; color: #f0883e; font-size: 1.25rem;">👤 Common Names (Booking Validation)</h3>
+                    <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.9rem;">
+                        Platform-wide lists used to validate first and last names during booking. 
+                        Names NOT in these lists may be rejected as invalid.
+                    </p>
+                    
+                    <!-- Common First Names -->
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                        <label style="display: block; color: #58a6ff; font-weight: 600; margin-bottom: 8px;">
+                            👨 Common First Names (${commonFirstNames.length})
+                        </label>
+                        <textarea id="global-common-first-names" rows="6" 
+                            placeholder="John, Jane, Michael, Sarah, David, Emily..."
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9rem;"
+                        >${commonFirstNames.join(', ')}</textarea>
+                        <p style="color: #6e7681; font-size: 0.75rem; margin: 6px 0 0 0;">
+                            Comma-separated list. Used to validate caller first names.
+                        </p>
+                    </div>
+                    
+                    <!-- Common Last Names -->
+                    <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px;">
+                        <label style="display: block; color: #58a6ff; font-weight: 600; margin-bottom: 8px;">
+                            👨‍👩‍👦 Common Last Names (${commonLastNames.length})
+                        </label>
+                        <textarea id="global-common-last-names" rows="6" 
+                            placeholder="Smith, Johnson, Williams, Brown, Jones, Garcia..."
+                            style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; resize: vertical; font-family: 'SF Mono', Monaco, monospace; font-size: 0.9rem;"
+                        >${commonLastNames.join(', ')}</textarea>
+                        <p style="color: #6e7681; font-size: 0.75rem; margin: 6px 0 0 0;">
+                            Comma-separated list. Used to validate caller last names.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- PERFORMANCE METRICS (READ-ONLY) -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
+                    <h3 style="margin: 0 0 8px 0; color: #8b949e; font-size: 1.25rem;">📊 Performance Metrics</h3>
+                    <p style="color: #6e7681; margin-bottom: 16px; font-size: 0.9rem;">
+                        Real-time tier usage stats (last 100 calls):
+                    </p>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center;">
+                            <div style="color: #3fb950; font-size: 2rem; font-weight: 700;">--</div>
+                            <div style="color: #8b949e; font-size: 0.85rem;">Tier 1 Hit Rate</div>
+                        </div>
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center;">
+                            <div style="color: #58a6ff; font-size: 2rem; font-weight: 700;">--</div>
+                            <div style="color: #8b949e; font-size: 0.85rem;">Tier 2 Hit Rate</div>
+                        </div>
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center;">
+                            <div style="color: #f0883e; font-size: 2rem; font-weight: 700;">--</div>
+                            <div style="color: #8b949e; font-size: 0.85rem;">Tier 3 Hit Rate</div>
+                        </div>
+                        <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center;">
+                            <div style="color: #c9d1d9; font-size: 2rem; font-weight: 700;">--ms</div>
+                            <div style="color: #8b949e; font-size: 0.85rem;">Avg Response Time</div>
+                        </div>
+                    </div>
+                    
+                    <p style="color: #6e7681; font-size: 0.75rem; margin: 12px 0 0 0; text-align: center;">
+                        💡 Run <code style="background: #0d1117; padding: 2px 6px; border-radius: 4px;">node scripts/penguin-air-tier-analysis.js</code> to populate metrics
+                    </p>
+                </div>
+            </div>
+        `;
+    }
 
     renderEmotionsTab() {
         const er = this.config.emotionResponses || {};
@@ -12207,6 +12454,7 @@ Sean → Shawn, Shaun`;
                 this.initDiscoveryFlowTab(content);
                 break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
+            case 'global-settings': content.innerHTML = this.renderGlobalSettingsTab(); break;
             // ☢️ NUKED: 'flows' case removed Feb 2026 - V110 architecture replaces Dynamic Flows
             case 'emotions': content.innerHTML = this.renderEmotionsTab(); break;
             // V80: frustration, escalation, forbidden, modes tabs merged into other tabs
@@ -12265,6 +12513,10 @@ Sean → Shawn, Shaun`;
                         if (slotId) this.removeBookingSlot(slotId);
                     });
                 });
+                break;
+            case 'global-settings':
+                // Global Settings tab - tier thresholds and common names
+                this.attachGlobalSettingsListeners(content);
                 break;
             case 'personality':
                 // V80: Forbidden phrases merged into Personality tab
@@ -13393,6 +13645,140 @@ Sean → Shawn, Shaun`;
             enabled: this.config.conversationMemory.enabled,
             captureGoals: this.config.conversationMemory.captureGoals
         });
+    }
+
+    /**
+     * ════════════════════════════════════════════════════════════════════
+     * GLOBAL SETTINGS TAB - Event Listeners (Feb 2026)
+     * ════════════════════════════════════════════════════════════════════
+     */
+    attachGlobalSettingsListeners(content) {
+        // Tier 1 Slider - Real-time value update and impact preview
+        const tier1Slider = content.querySelector('#global-tier1-slider');
+        const tier1Value = content.querySelector('#global-tier1-value');
+        const tier1Impact = content.querySelector('#global-tier1-impact');
+        
+        if (tier1Slider && tier1Value && tier1Impact) {
+            tier1Slider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                const percent = (value * 100).toFixed(0);
+                tier1Value.innerHTML = `${percent}%`;
+                
+                // Update impact preview
+                let impactHTML, borderColor;
+                if (value <= 0.65) {
+                    impactHTML = '✅ <strong style="color:#3fb950;">AGGRESSIVE:</strong> 80-90% Tier 1 hit rate. Ultra-fast responses (<100ms). Best for high scenario coverage.';
+                    borderColor = '#3fb950';
+                } else if (value <= 0.75) {
+                    impactHTML = '⚖️ <strong style="color:#58a6ff;">BALANCED:</strong> 60-70% Tier 1 hit rate. Fast responses (100-300ms). Recommended for most companies.';
+                    borderColor = '#58a6ff';
+                } else if (value <= 0.85) {
+                    impactHTML = '⚠️ <strong style="color:#f0883e;">CONSERVATIVE:</strong> 30-50% Tier 1 hit rate. Some Tier 3 fallback (1200ms). Higher LLM costs.';
+                    borderColor = '#f0883e';
+                } else {
+                    impactHTML = '🚨 <strong style="color:#da3633;">STRICT:</strong> 10-30% Tier 1 hit rate. Heavy Tier 3 usage (1200ms). Expensive ($0.04/call).';
+                    borderColor = '#da3633';
+                }
+                
+                tier1Impact.style.borderLeftColor = borderColor;
+                tier1Impact.innerHTML = `
+                    <strong style="color: #c9d1d9;">Expected Impact at ${percent}%:</strong>
+                    <div style="color: #8b949e; font-size: 0.85rem; margin-top: 6px; line-height: 1.6;">
+                        ${impactHTML}
+                    </div>
+                `;
+                
+                // Mark as dirty
+                this.isDirty = true;
+                
+                // Store in config
+                if (!this.config.aiAgentSettings) this.config.aiAgentSettings = {};
+                if (!this.config.aiAgentSettings.productionIntelligence) this.config.aiAgentSettings.productionIntelligence = {};
+                if (!this.config.aiAgentSettings.productionIntelligence.thresholds) this.config.aiAgentSettings.productionIntelligence.thresholds = {};
+                this.config.aiAgentSettings.productionIntelligence.thresholds.tier1 = value;
+            });
+        }
+        
+        // Tier 2 Slider - Real-time value update
+        const tier2Slider = content.querySelector('#global-tier2-slider');
+        const tier2Value = content.querySelector('#global-tier2-value');
+        
+        if (tier2Slider && tier2Value) {
+            tier2Slider.addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                const percent = (value * 100).toFixed(0);
+                tier2Value.innerHTML = `${percent}%`;
+                
+                // Mark as dirty
+                this.isDirty = true;
+                
+                // Store in config
+                if (!this.config.aiAgentSettings) this.config.aiAgentSettings = {};
+                if (!this.config.aiAgentSettings.productionIntelligence) this.config.aiAgentSettings.productionIntelligence = {};
+                if (!this.config.aiAgentSettings.productionIntelligence.thresholds) this.config.aiAgentSettings.productionIntelligence.thresholds = {};
+                this.config.aiAgentSettings.productionIntelligence.thresholds.tier2 = value;
+            });
+        }
+        
+        // Tier 3 Toggle
+        const tier3Toggle = content.querySelector('#global-enable-tier3');
+        if (tier3Toggle) {
+            tier3Toggle.addEventListener('change', (e) => {
+                this.isDirty = true;
+                
+                if (!this.config.aiAgentSettings) this.config.aiAgentSettings = {};
+                if (!this.config.aiAgentSettings.productionIntelligence) this.config.aiAgentSettings.productionIntelligence = {};
+                if (!this.config.aiAgentSettings.productionIntelligence.thresholds) this.config.aiAgentSettings.productionIntelligence.thresholds = {};
+                this.config.aiAgentSettings.productionIntelligence.thresholds.enableTier3 = e.target.checked;
+            });
+        }
+        
+        // Use Global Intelligence Toggle
+        const useGlobalToggle = content.querySelector('#global-use-global-intelligence');
+        if (useGlobalToggle) {
+            useGlobalToggle.addEventListener('change', (e) => {
+                this.isDirty = true;
+                
+                if (!this.config.aiAgentSettings) this.config.aiAgentSettings = {};
+                this.config.aiAgentSettings.useGlobalIntelligence = e.target.checked;
+                
+                // Re-render the tab to show the toggle effect
+                const container = e.target.closest('.front-desk-behavior-panel');
+                if (container) this.switchTab('global-settings', container);
+            });
+        }
+        
+        // Common First Names
+        const firstNamesTextarea = content.querySelector('#global-common-first-names');
+        if (firstNamesTextarea) {
+            firstNamesTextarea.addEventListener('change', (e) => {
+                this.isDirty = true;
+                
+                // Parse comma-separated list
+                const names = e.target.value
+                    .split(',')
+                    .map(n => n.trim())
+                    .filter(n => n.length > 0);
+                
+                this.config.commonFirstNames = names;
+            });
+        }
+        
+        // Common Last Names
+        const lastNamesTextarea = content.querySelector('#global-common-last-names');
+        if (lastNamesTextarea) {
+            lastNamesTextarea.addEventListener('change', (e) => {
+                this.isDirty = true;
+                
+                // Parse comma-separated list
+                const names = e.target.value
+                    .split(',')
+                    .map(n => n.trim())
+                    .filter(n => n.length > 0);
+                
+                this.config.commonLastNames = names;
+            });
+        }
     }
 
     showNotification(message, type = 'info') {

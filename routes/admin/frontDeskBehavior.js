@@ -1253,6 +1253,65 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         }
         
         // ════════════════════════════════════════════════════════════════════════════
+        // ⚡ 3-TIER INTELLIGENCE SETTINGS - Thresholds and LLM Fallback Control
+        // ════════════════════════════════════════════════════════════════════════════
+        // Controls how aggressively AI matches scenarios:
+        // - tier1Threshold: Min confidence for Tier 1 (rule-based, fast, free)
+        // - tier2Threshold: Min confidence for Tier 2 (semantic, free)
+        // - enableTier3: Whether to use GPT-4o-mini fallback (costs $)
+        // - useGlobalIntelligence: Inherit platform defaults or use company-specific
+        // ════════════════════════════════════════════════════════════════════════════
+        if (updates.aiAgentSettings) {
+            // Handle useGlobalIntelligence toggle
+            if (updates.aiAgentSettings.useGlobalIntelligence !== undefined) {
+                updateObj['aiAgentSettings.useGlobalIntelligence'] = updates.aiAgentSettings.useGlobalIntelligence;
+                logger.info('[FRONT DESK BEHAVIOR] ⚡ Saving useGlobalIntelligence', {
+                    companyId,
+                    value: updates.aiAgentSettings.useGlobalIntelligence
+                });
+            }
+            
+            // Handle company-specific intelligence thresholds
+            if (updates.aiAgentSettings.productionIntelligence) {
+                const intel = updates.aiAgentSettings.productionIntelligence;
+                
+                if (intel.thresholds) {
+                    if (intel.thresholds.tier1 !== undefined) {
+                        const tier1 = Math.max(0.50, Math.min(0.95, Number(intel.thresholds.tier1) || 0.80));
+                        updateObj['aiAgentSettings.productionIntelligence.thresholds.tier1'] = tier1;
+                        logger.info('[FRONT DESK BEHAVIOR] ⚡ Saving tier1Threshold', {
+                            companyId,
+                            tier1,
+                            originalValue: intel.thresholds.tier1
+                        });
+                    }
+                    
+                    if (intel.thresholds.tier2 !== undefined) {
+                        const tier2 = Math.max(0.40, Math.min(0.80, Number(intel.thresholds.tier2) || 0.60));
+                        updateObj['aiAgentSettings.productionIntelligence.thresholds.tier2'] = tier2;
+                        logger.info('[FRONT DESK BEHAVIOR] ⚡ Saving tier2Threshold', {
+                            companyId,
+                            tier2,
+                            originalValue: intel.thresholds.tier2
+                        });
+                    }
+                    
+                    if (intel.thresholds.enableTier3 !== undefined) {
+                        updateObj['aiAgentSettings.productionIntelligence.thresholds.enableTier3'] = intel.thresholds.enableTier3 === true;
+                        logger.info('[FRONT DESK BEHAVIOR] ⚡ Saving enableTier3', {
+                            companyId,
+                            enableTier3: intel.thresholds.enableTier3 === true
+                        });
+                    }
+                }
+                
+                // Save lastUpdated timestamp
+                updateObj['aiAgentSettings.productionIntelligence.lastUpdated'] = new Date();
+                updateObj['aiAgentSettings.productionIntelligence.updatedBy'] = req.user?.email || 'admin';
+            }
+        }
+        
+        // ════════════════════════════════════════════════════════════════════════════
         // 🚫 V111: NAME STOP WORDS - Words rejected as names during booking
         // ════════════════════════════════════════════════════════════════════════════
         // Company-specific additions to the system default stopwords list.
