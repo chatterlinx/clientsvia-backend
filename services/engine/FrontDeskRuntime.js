@@ -1327,68 +1327,98 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
             // FIX: Now that booking mode is LOCKED, re-run extraction with BOOKING
             // rules to capture any slots the caller provided on this consent turn.
             //
-            // This is not a hack — it's how a human receptionist works:
-            // "Oh you want to schedule? And you already gave me the address? Got it."
+            // GUARD: This block is inside `if (!callState.bookingModeLocked)` which
+            // means it ONLY runs on the flip turn (when booking mode just locked).
+            // Subsequent booking turns skip this entirely — no double-extraction.
+            //
+            // PERFORMANCE: Only run sweep if utterance contains likely slot language.
+            // This keeps calls snappy when caller just says "yeah" or "sure".
             // ═══════════════════════════════════════════════════════════════════════
             if (SlotExtractor && userTurn && userTurn.trim().length > 0) {
-                const slotsBefore = Object.keys(callState.slots || {});
+                const userTurnLower = userTurn.toLowerCase();
                 
-                // Re-extract with BOOKING context (ungated)
-                const consentTurnSlots = SlotExtractor.extractAll(userTurn, {
-                    turnCount: callState.turnCount || 1,
-                    existingSlots: callState.slots || {},
-                    company,
-                    // V117: BOOKING mode extraction — no gating
-                    bookingModeLocked: true,
-                    sessionMode: 'BOOKING',
-                    // Pass current step hint if available
-                    currentBookingStep: callState.currentBookingStep || null
-                });
+                // V117: Performance gate — only sweep if likely slot language present
+                // Address patterns: "address is", street numbers, "metro", "parkway", etc.
+                const hasAddressLanguage = /(?:address\s+is|my\s+address|street|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|parkway|pkwy|court|ct|place|pl|\d{2,5}\s+[a-z])/i.test(userTurn);
+                // Time patterns: "today", "tomorrow", "morning", "afternoon", "asap", time windows
+                const hasTimeLanguage = /(?:today|tomorrow|morning|afternoon|evening|asap|as soon as|8\s*(?:to|-)|\d{1,2}\s*(?:am|pm|o'?clock))/i.test(userTurn);
+                // Phone patterns: "call me at", "my number", phone digits
+                const hasPhoneLanguage = /(?:call\s+me\s+at|my\s+(?:number|phone)|reach\s+me\s+at|\d{3}[.\-\s]?\d{3}[.\-\s]?\d{4})/i.test(userTurn);
                 
-                if (Object.keys(consentTurnSlots).length > 0) {
-                    // Merge new extractions
-                    const mergedSlots = SlotExtractor.mergeSlots(
-                        callState.slots || {}, 
-                        consentTurnSlots
-                    );
+                const hasLikelySlotLanguage = hasAddressLanguage || hasTimeLanguage || hasPhoneLanguage;
+                
+                if (hasLikelySlotLanguage) {
+                    const slotsBefore = Object.keys(callState.slots || {});
                     
-                    // Remove internal tracking property if present
-                    delete mergedSlots._mergeDecisions;
-                    callState.slots = mergedSlots;
-                    
-                    const slotsAfter = Object.keys(callState.slots);
-                    const newSlots = slotsAfter.filter(k => !slotsBefore.includes(k));
-                    
-                    logger.info('[FRONT_DESK_RUNTIME] V117: Consent-turn slot sweep captured new slots', {
-                        callSid,
-                        slotsBefore,
-                        slotsAfter,
-                        newSlots,
-                        extractedKeys: Object.keys(consentTurnSlots),
-                        userTurnPreview: userTurn.substring(0, 60)
+                    // Re-extract with BOOKING context (ungated)
+                    // Uses same userTurn that consent detector saw — no normalization mismatch
+                    const consentTurnSlots = SlotExtractor.extractAll(userTurn, {
+                        turnCount: callState.turnCount || 1,
+                        existingSlots: callState.slots || {},
+                        company,
+                        // V117: BOOKING mode extraction — no gating
+                        bookingModeLocked: true,
+                        sessionMode: 'BOOKING',
+                        // Pass current step hint if available
+                        currentBookingStep: callState.currentBookingStep || null
                     });
                     
-                    if (BlackBoxLogger) {
-                        BlackBoxLogger.logEvent({
-                            callId: callSid,
-                            companyId,
-                            type: 'CONSENT_TURN_SLOT_SWEEP',
-                            data: {
-                                slotsBefore,
-                                slotsAfter,
-                                newSlots,
-                                extractedKeys: Object.keys(consentTurnSlots),
-                                extractedValues: Object.fromEntries(
-                                    Object.entries(consentTurnSlots).map(([k, v]) => [
-                                        k, 
-                                        { value: typeof v === 'object' ? v.value : v, confidence: v?.confidence }
-                                    ])
-                                ),
-                                userTurnPreview: userTurn.substring(0, 60),
-                                source: 'V117_CONSENT_SWEEP'
-                            }
-                        }).catch(() => {});
+                    if (Object.keys(consentTurnSlots).length > 0) {
+                        // Merge new extractions BEFORE determineNextAction() runs
+                        const mergedSlots = SlotExtractor.mergeSlots(
+                            callState.slots || {}, 
+                            consentTurnSlots
+                        );
+                        
+                        // Remove internal tracking property if present
+                        delete mergedSlots._mergeDecisions;
+                        callState.slots = mergedSlots;
+                        
+                        const slotsAfter = Object.keys(callState.slots);
+                        const newSlots = slotsAfter.filter(k => !slotsBefore.includes(k));
+                        
+                        logger.info('[FRONT_DESK_RUNTIME] V117: Consent-turn slot sweep captured new slots', {
+                            callSid,
+                            slotsBefore,
+                            slotsAfter,
+                            newSlots,
+                            extractedKeys: Object.keys(consentTurnSlots),
+                            userTurnPreview: userTurn.substring(0, 60)
+                        });
+                        
+                        if (BlackBoxLogger) {
+                            BlackBoxLogger.logEvent({
+                                callId: callSid,
+                                companyId,
+                                type: 'CONSENT_TURN_SLOT_SWEEP',
+                                data: {
+                                    slotsBefore,
+                                    slotsAfter,
+                                    newSlots,
+                                    extractedKeys: Object.keys(consentTurnSlots),
+                                    extractedValues: Object.fromEntries(
+                                        Object.entries(consentTurnSlots).map(([k, v]) => [
+                                            k, 
+                                            { value: typeof v === 'object' ? v.value : v, confidence: v?.confidence }
+                                        ])
+                                    ),
+                                    userTurnPreview: userTurn.substring(0, 60),
+                                    source: 'V117_CONSENT_SWEEP',
+                                    performanceGate: {
+                                        hasAddressLanguage,
+                                        hasTimeLanguage,
+                                        hasPhoneLanguage
+                                    }
+                                }
+                            }).catch(() => {});
+                        }
                     }
+                } else {
+                    // No likely slot language — skip sweep for performance
+                    logger.debug('[FRONT_DESK_RUNTIME] V117: Skipping consent-turn sweep (no slot language detected)', {
+                        callSid,
+                        userTurnPreview: userTurn.substring(0, 40)
+                    });
                 }
             }
         }
@@ -1494,6 +1524,39 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
                     mode: bookingResult.mode,
                     promptSource: bookingResult.promptSource,
                     slotsCollected: Object.keys(bookingResult.state?.bookingCollected || {})
+                }
+            }).catch(() => {});
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // V117: BOOKING_NEXT_STEP_SELECTED — Proves step skip when slot is filled
+            // ═══════════════════════════════════════════════════════════════════════
+            // This event shows which step was selected and why. If address was swept
+            // on consent turn, this event will show address in slotsPresent (not slotsMissing).
+            // ═══════════════════════════════════════════════════════════════════════
+            const allStepIds = resolution.steps.map(s => s.id);
+            const collectedSlotKeys = Object.keys(bookingResult.state?.bookingCollected || {});
+            const confirmedSlotKeys = Object.keys(bookingResult.state?.confirmedSlots || {});
+            const slotsMissing = allStepIds.filter(id => 
+                !collectedSlotKeys.includes(id) && !confirmedSlotKeys.includes(id)
+            );
+            
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'BOOKING_NEXT_STEP_SELECTED',
+                data: {
+                    selectedStepId: bookingResult.state?.currentStepId,
+                    reason: bookingResult.isComplete 
+                        ? 'ALL_SLOTS_COMPLETE' 
+                        : (bookingResult.mode === 'CONFIRM' ? 'CONFIRM_PENDING' : 'SLOT_MISSING'),
+                    slotsPresent: collectedSlotKeys,
+                    slotsConfirmed: confirmedSlotKeys,
+                    slotsMissing,
+                    flowStepOrder: allStepIds,
+                    // V117: Explicit proof that swept slots caused skip
+                    sweptSlotsPresent: collectedSlotKeys.filter(k => 
+                        ['address', 'time', 'phone'].includes(k)
+                    )
                 }
             }).catch(() => {});
         }
