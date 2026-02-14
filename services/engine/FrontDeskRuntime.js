@@ -28,6 +28,7 @@ let ConversationEngine = null;
 let BlackBoxLogger = null;
 let V111Router = null;
 let OpenerEngine = null;
+let SlotExtractor = null;
 
 function loadPlugins() {
     if (!BookingFlowRunner) {
@@ -66,6 +67,14 @@ function loadPlugins() {
             V111Router = require('./V111Router');
         } catch (e) {
             logger.debug('[FRONT_DESK_RUNTIME] V111Router not available (Phase 4 governance disabled)', { error: e.message });
+        }
+    }
+    // V117: Load SlotExtractor for consent-turn slot sweep
+    if (!SlotExtractor) {
+        try {
+            SlotExtractor = require('./booking/SlotExtractor');
+        } catch (e) {
+            logger.warn('[FRONT_DESK_RUNTIME] SlotExtractor not available', { error: e.message });
         }
     }
 }
@@ -1305,6 +1314,82 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
                         source: 'handleBookingLane'
                     }
                 }).catch(() => {});
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════
+            // V117: CONSENT-TURN SLOT SWEEP (MANDATORY)
+            // ═══════════════════════════════════════════════════════════════════════
+            // PROBLEM: When consent flips on a turn, slot extraction already ran in
+            // DISCOVERY mode (at v2twilio line ~3201), which gates address/time.
+            // Result: caller says "yeah, the address is 123 Main St" but address
+            // gets blocked because bookingModeLocked was still false at extraction.
+            //
+            // FIX: Now that booking mode is LOCKED, re-run extraction with BOOKING
+            // rules to capture any slots the caller provided on this consent turn.
+            //
+            // This is not a hack — it's how a human receptionist works:
+            // "Oh you want to schedule? And you already gave me the address? Got it."
+            // ═══════════════════════════════════════════════════════════════════════
+            if (SlotExtractor && userTurn && userTurn.trim().length > 0) {
+                const slotsBefore = Object.keys(callState.slots || {});
+                
+                // Re-extract with BOOKING context (ungated)
+                const consentTurnSlots = SlotExtractor.extractAll(userTurn, {
+                    turnCount: callState.turnCount || 1,
+                    existingSlots: callState.slots || {},
+                    company,
+                    // V117: BOOKING mode extraction — no gating
+                    bookingModeLocked: true,
+                    sessionMode: 'BOOKING',
+                    // Pass current step hint if available
+                    currentBookingStep: callState.currentBookingStep || null
+                });
+                
+                if (Object.keys(consentTurnSlots).length > 0) {
+                    // Merge new extractions
+                    const mergedSlots = SlotExtractor.mergeSlots(
+                        callState.slots || {}, 
+                        consentTurnSlots
+                    );
+                    
+                    // Remove internal tracking property if present
+                    delete mergedSlots._mergeDecisions;
+                    callState.slots = mergedSlots;
+                    
+                    const slotsAfter = Object.keys(callState.slots);
+                    const newSlots = slotsAfter.filter(k => !slotsBefore.includes(k));
+                    
+                    logger.info('[FRONT_DESK_RUNTIME] V117: Consent-turn slot sweep captured new slots', {
+                        callSid,
+                        slotsBefore,
+                        slotsAfter,
+                        newSlots,
+                        extractedKeys: Object.keys(consentTurnSlots),
+                        userTurnPreview: userTurn.substring(0, 60)
+                    });
+                    
+                    if (BlackBoxLogger) {
+                        BlackBoxLogger.logEvent({
+                            callId: callSid,
+                            companyId,
+                            type: 'CONSENT_TURN_SLOT_SWEEP',
+                            data: {
+                                slotsBefore,
+                                slotsAfter,
+                                newSlots,
+                                extractedKeys: Object.keys(consentTurnSlots),
+                                extractedValues: Object.fromEntries(
+                                    Object.entries(consentTurnSlots).map(([k, v]) => [
+                                        k, 
+                                        { value: typeof v === 'object' ? v.value : v, confidence: v?.confidence }
+                                    ])
+                                ),
+                                userTurnPreview: userTurn.substring(0, 60),
+                                source: 'V117_CONSENT_SWEEP'
+                            }
+                        }).catch(() => {});
+                    }
+                }
             }
         }
         
