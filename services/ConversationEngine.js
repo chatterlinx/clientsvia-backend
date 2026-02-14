@@ -8989,11 +8989,47 @@ async function processTurn({
             console.error('[CONVERSATION ENGINE] Scenario context:', JSON.stringify(scenarioContext, null, 2));
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // V116: SMART ERROR FALLBACK - Don't say "repeat that" if we know the intent
+        // ═══════════════════════════════════════════════════════════════════
+        // POLICY CHANGE:
+        //   OLD: Any exception → "Could you repeat that?" (horrible UX)
+        //   NEW: If scenario match exists but render threw → give empathetic fallback
+        //        Only use "repeat that" if STT was empty/garbled
+        //
+        // This prevents dead-air / repeat-loop even when something breaks.
+        // ═══════════════════════════════════════════════════════════════════
+        let fallbackReply;
+        let fallbackMatchSource;
+        
+        const userTextIsEmpty = !userText || userText.trim().length < 3;
+        const hadScenarioMatch = scenarioContext && scenarioContext.scenarioId;
+        
+        if (userTextIsEmpty) {
+            // STT was empty/garbled — asking to repeat is appropriate
+            fallbackReply = "I'm sorry, I didn't catch that. Could you repeat that?";
+            fallbackMatchSource = 'SYSTEM_ERROR_FALLBACK_EMPTY_STT';
+        } else if (hadScenarioMatch) {
+            // We had a scenario match but render failed — give empathetic fallback with funnel
+            // This is WAY better than "repeat that" when caller clearly described an issue
+            fallbackReply = "I understand you're having an issue. Let me help you with that — would you like me to schedule a service appointment?";
+            fallbackMatchSource = 'SYSTEM_ERROR_FALLBACK_WITH_FUNNEL';
+            logger.warn('[CONVERSATION ENGINE] ⚠️ Scenario render failed but recovered with funnel fallback', {
+                scenarioId: scenarioContext.scenarioId,
+                scenarioName: scenarioContext.scenarioName,
+                error: error.message
+            });
+        } else {
+            // Unknown error state — generic but still helpful
+            fallbackReply = "I'm here to help. Could you tell me a bit more about what's going on?";
+            fallbackMatchSource = 'SYSTEM_ERROR_FALLBACK_GENERIC';
+        }
+        
         const errResp = {
             success: false,
             error: error.message,
             errorType: error.name,
-            reply: "I'm sorry, I'm having trouble right now. Could you repeat that?",
+            reply: fallbackReply,
             sessionId: providedSessionId,
             phase: 'error',
             mode: 'ERROR',
@@ -9001,9 +9037,8 @@ async function processTurn({
             wantsBooking: false,
             conversationMode: 'free',
             latencyMs: Date.now() - startTime,
-            // V92 FIX: Honest trace labels - this is a SYSTEM ERROR, not LLM fallback
-            // Makes debugging faster: "SYSTEM_ERROR_FALLBACK" ≠ "LLM_FALLBACK"
-            matchSource: 'SYSTEM_ERROR_FALLBACK',
+            // V116: More specific matchSource based on fallback type
+            matchSource: fallbackMatchSource,
             tier: 'error',
             tokensUsed: 0,
             llmUsed: false,
