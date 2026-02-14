@@ -1,19 +1,19 @@
 /**
  * ============================================================================
- * FIX DIRECT INTENT PATTERNS - Critical Booking Flow Configuration
+ * FIX DIRECT INTENT PATTERNS - V110 Canonical Detection Triggers
  * ============================================================================
  * 
  * This script fixes the CRITICAL MISCONFIGURED field identified by the Wiring Report:
  * 
- * Field: booking.directIntentPatterns
- * DB Path: aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns
+ * Field: frontDesk.detectionTriggers.directIntentPatterns (V110 CANONICAL PATH)
+ * DB Path: aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns
  * Issue: Required field is UNDEFINED in database
  * 
  * Without this array, phrases like:
- *   - "How soon can you get somebody out here?"
- *   - "Send someone out today"
- *   - "When can you come?"
- * ...will NOT trigger direct booking intent and get stuck in normal conversation.
+ *   - "schedule", "book", "appointment"
+ *   - "send someone out"
+ *   - "get somebody out here"
+ * ...will NOT bypass the consent gate and agent will ask unnecessary questions.
  * 
  * Run with: node scripts/fix-direct-intent-patterns.js --dry-run
  * Apply with: node scripts/fix-direct-intent-patterns.js --apply
@@ -28,43 +28,42 @@ const Company = require('../models/v2Company');
 const COMPANY_ID = '68e3f77a9d623b8058c700c4'; // Penguin Air
 
 // ============================================================================
-// DIRECT INTENT PATTERNS - Triggers immediate booking flow
+// V110: DIRECT INTENT PATTERNS - Bypass consent gate
 // ============================================================================
 // These patterns are matched using substring/contains on normalized text.
 // When detected, the system skips the consent question and enters booking directly.
+// 
+// CANONICAL PATH: frontDesk.detectionTriggers.directIntentPatterns
+// DB PATH: aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns
 // ============================================================================
 
 const DIRECT_INTENT_PATTERNS = [
-    // Explicit service requests
-    'get somebody out',
-    'get someone out',
-    'get a tech out',
-    'get a technician out',
+    // Direct booking keywords
+    'schedule',
+    'book',
+    'appointment',
+    'come out',
     'send someone',
-    'send somebody out',
-    'send a tech',
+    'send somebody',
+    'get someone out',
+    'get somebody out',
+    'need a tech',
     'need someone out',
-    
-    // Timing/urgency requests
-    'when can you come',
-    'can you come out',
-    'how soon can you',
-    'come out today',
-    'come out tomorrow',
-    
-    // Urgency indicators
-    'asap',
-    'soonest',
-    'earliest',
-    'first available'
+    'dispatch',
+    'service call',
+    'help me out',
+    'need help',
+    'somebody to help',
+    'someone to help'
 ];
 
 async function run(dryRun) {
     console.log('═══════════════════════════════════════════════════════════════════════════');
-    console.log(`🔧 FIX DIRECT INTENT PATTERNS: ${dryRun ? 'DRY RUN' : 'APPLYING CHANGES'}`);
+    console.log(`🔧 FIX DIRECT INTENT PATTERNS (V110): ${dryRun ? 'DRY RUN' : 'APPLYING CHANGES'}`);
     console.log('═══════════════════════════════════════════════════════════════════════════');
     console.log(`Company ID: ${COMPANY_ID}`);
-    console.log(`DB Path: aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns`);
+    console.log(`Canonical Path: frontDesk.detectionTriggers.directIntentPatterns`);
+    console.log(`DB Path: aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns`);
     console.log('');
 
     const mongoUri = process.env.MONGODB_URI;
@@ -103,8 +102,8 @@ async function run(dryRun) {
         console.log('────────────────────────────────────────────────────────────');
 
         const frontDeskBehavior = company.aiAgentSettings?.frontDeskBehavior || {};
-        const bookingFlow = frontDeskBehavior.bookingFlow || {};
-        const currentPatterns = bookingFlow.directIntentPatterns;
+        const detectionTriggers = frontDeskBehavior.detectionTriggers || {};
+        const currentPatterns = detectionTriggers.directIntentPatterns;
 
         if (currentPatterns === undefined) {
             console.log('directIntentPatterns: undefined (MISCONFIGURED - Critical!)');
@@ -146,12 +145,12 @@ async function run(dryRun) {
             if (!company.aiAgentSettings.frontDeskBehavior) {
                 company.aiAgentSettings.frontDeskBehavior = {};
             }
-            if (!company.aiAgentSettings.frontDeskBehavior.bookingFlow) {
-                company.aiAgentSettings.frontDeskBehavior.bookingFlow = {};
+            if (!company.aiAgentSettings.frontDeskBehavior.detectionTriggers) {
+                company.aiAgentSettings.frontDeskBehavior.detectionTriggers = {};
             }
 
-            // Apply the fix
-            company.aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns = DIRECT_INTENT_PATTERNS;
+            // Apply the fix to the V110 canonical path
+            company.aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns = DIRECT_INTENT_PATTERNS;
 
             // Mark modified (required for nested objects in Mongoose)
             company.markModified('aiAgentSettings');
@@ -161,7 +160,7 @@ async function run(dryRun) {
 
             // Verify the save
             const verification = await Company.findById(COMPANY_ID);
-            const savedPatterns = verification.aiAgentSettings?.frontDeskBehavior?.bookingFlow?.directIntentPatterns;
+            const savedPatterns = verification.aiAgentSettings?.frontDeskBehavior?.detectionTriggers?.directIntentPatterns;
             
             if (Array.isArray(savedPatterns) && savedPatterns.length === DIRECT_INTENT_PATTERNS.length) {
                 console.log(`✅ Verified: ${savedPatterns.length} patterns saved correctly\n`);

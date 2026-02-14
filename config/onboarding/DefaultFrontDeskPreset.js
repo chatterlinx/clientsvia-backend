@@ -965,13 +965,15 @@ function getPresetForTrade(tradeKey = 'universal') {
         // Core booking config (LEGACY - kept for backward compatibility)
         bookingSlots: tradePreset.bookingSlots || DEFAULT_BOOKING_SLOTS,
         
-        // V106: Detection triggers - CRITICAL for booking intent detection
+        // V110: Detection triggers - CRITICAL for booking intent detection
         // Without these, callers saying "get someone out" stay stuck in DISCOVERY
-        detectionTriggers: tradePreset.detectionTriggers || DEFAULT_DETECTION_TRIGGERS,
-        
-        // V107: Direct intent patterns - MUST resolve from companyConfig (not globalDefaults)
-        // Without these, booking.directIntentPatterns shows [0 items] on turn 1
-        directIntentPatterns: DEFAULT_DIRECT_INTENT_PATTERNS,
+        // IMPORTANT: directIntentPatterns MUST be nested inside detectionTriggers, NOT at top level
+        detectionTriggers: {
+            ...(tradePreset.detectionTriggers || DEFAULT_DETECTION_TRIGGERS),
+            // V110: directIntentPatterns MUST be here (canonical path: frontDesk.detectionTriggers.directIntentPatterns)
+            // This is what the runtime reads from: aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns
+            directIntentPatterns: DEFAULT_DIRECT_INTENT_PATTERNS
+        },
         
         // Greeting responses
         greetingResponses: tradePreset.greetingResponses || DEFAULT_GREETING_RESPONSES,

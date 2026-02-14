@@ -351,35 +351,30 @@ const wiringRegistryV2 = {
                 },
                 
                 // ═══════════════════════════════════════════════════════════════════════════
-                // V94: DIRECT BOOKING INTENT PATTERNS (CRITICAL MVA REQUIREMENT)
-                // Detects "get somebody out here" as immediate booking (skip consent)
+                // V110: DIRECT INTENT PATTERNS - Bypass consent when caller clearly wants booking
+                // Detects "schedule", "book", "appointment", "send someone" → skip consent gate
                 // ═══════════════════════════════════════════════════════════════════════════
                 {
-                    id: 'frontDesk.bookingIntentDetection',
-                    label: 'Booking Intent Detection',
-                    description: 'Patterns that detect direct booking intent (skip consent question)',
+                    id: 'frontDesk.detectionTriggers.directIntentPatterns',
+                    label: 'Direct Intent Patterns (Bypass Consent)',
+                    description: 'Patterns that detect direct booking intent — caller uses these, AI skips consent and goes straight to booking',
                     critical: true,
                     tier: 'MVA',
                     ui: {
-                        sectionId: 'booking-intent-detection',
-                        path: 'Front Desk → Booking Intent Detection'
+                        sectionId: 'direct-intent-patterns',
+                        path: 'Front Desk → Detection → Direct Intent Patterns'
                     },
-                    fields: [
-                        {
-                            id: 'booking.directIntentPatterns',
-                            label: 'Direct Booking Patterns',
-                            ui: { inputId: 'directIntentPatterns', path: 'Front Desk → Booking → Direct Intent Patterns' },
-                            db: { path: 'aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns' },
-                            runtime: RUNTIME_READERS_MAP['booking.directIntentPatterns'],
-                            scope: 'company',
-                            required: true,
-                            critical: true,
-                            tier: 'MVA',
-                            validators: [VALIDATORS.isNonEmptyArray],
-                            defaultValue: ['get somebody out', 'get someone out', 'how soon can you', 'when can you come', 'send someone', 'send a tech', 'need someone out', 'come out today', 'come out tomorrow'],
-                            notes: 'Phrases that indicate caller wants immediate booking (skip consent question). E.g., "how soon can you get somebody out here"'
-                        }
-                    ]
+                    db: { path: 'aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns' },
+                    runtime: RUNTIME_READERS_MAP['frontDesk.detectionTriggers.directIntentPatterns'],
+                    scope: 'company',
+                    required: true,
+                    validators: [VALIDATORS.isNonEmptyArray],
+                    defaultValue: [
+                        'schedule', 'book', 'appointment', 'come out', 'send someone', 'send somebody',
+                        'get someone out', 'get somebody out', 'need a tech', 'need someone out',
+                        'dispatch', 'service call', 'help me out', 'need help', 'somebody to help', 'someone to help'
+                    ],
+                    notes: 'These patterns bypass the consent gate. If caller says any of these, AI skips "Would you like to book?" and goes straight to booking flow.'
                 },
 
                 // BUSINESS HOURS (CANONICAL)

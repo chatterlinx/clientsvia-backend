@@ -353,7 +353,49 @@ const RUNTIME_READERS_MAP = {
         defaultValue: ['fix', 'repair', 'service', 'appointment', 'schedule', 'technician', 'someone', 'come out', 'send', 'broken', 'not working', 'not cooling', 'not heating']
     },
 
-    // Legacy 'booking.directIntentPatterns' removed — use 'frontDesk.detectionTriggers.directIntentPatterns'
+    // =========================================================================
+    // V110: DIRECT INTENT PATTERNS - Bypass consent when caller clearly wants booking
+    // These patterns bypass the consent gate. If caller says "schedule", "book",
+    // "appointment", etc., AI skips "Would you like to book?" and goes straight to booking.
+    // =========================================================================
+    'frontDesk.detectionTriggers.directIntentPatterns': {
+        readers: [
+            {
+                file: 'services/engine/FrontDeskRuntime.js',
+                function: 'determineLane',
+                line: 859,
+                description: 'Checks if caller input matches direct booking intent patterns',
+                required: true,
+                critical: true,
+                checkpoint: 'DIRECT_INTENT_DETECTION'
+            },
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'detectDirectBookingIntent',
+                line: 4846,
+                description: 'Detects direct booking intent to bypass consent gate',
+                required: true,
+                critical: true,
+                checkpoint: 'DIRECT_BOOKING_INTENT'
+            },
+            {
+                file: 'services/wiring/BookingConfigResolver.js',
+                function: 'resolveDirectIntentPatterns',
+                line: 319,
+                description: 'Resolves direct intent patterns for booking config',
+                required: true,
+                critical: true,
+                checkpoint: 'BOOKING_CONFIG_RESOLUTION'
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns',
+        scope: 'company',
+        defaultValue: [
+            'schedule', 'book', 'appointment', 'come out', 'send someone', 'send somebody',
+            'get someone out', 'get somebody out', 'need a tech', 'need someone out',
+            'dispatch', 'service call', 'help me out', 'need help', 'somebody to help', 'someone to help'
+        ]
+    },
 
     // =========================================================================
     // V110: IMPLICIT CONSENT PHRASES

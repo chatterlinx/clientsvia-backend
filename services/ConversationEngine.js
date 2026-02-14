@@ -6233,6 +6233,20 @@ async function processTurn({
                     let finalReply = selectedReply;
                     let addedConsentQuestion = false;
                     
+                    // ═══════════════════════════════════════════════════════════════
+                    // V116 FIX: Hoist consent variables so they're available in BOTH paths
+                    // ═══════════════════════════════════════════════════════════════
+                    // BUG (Feb 2026): consentAlreadyGiven and autoInjectConsent were only
+                    // defined inside the else block (non-V110), but referenced after the
+                    // if/else at lines 6314, 6412, 6419, 6448. This caused:
+                    //   - ReferenceError: consentAlreadyGiven is not defined
+                    //   - SYSTEM_ERROR_FALLBACK with tokensUsed=0
+                    //
+                    // FIX: Define these before the if/else so they're always in scope.
+                    // ═══════════════════════════════════════════════════════════════
+                    const consentAlreadyGiven = session.booking?.consentGiven === true;
+                    const autoInjectConsent = discoveryBehavior.autoInjectConsentInScenarios !== false;
+                    
                     if (killSwitches.v110OwnerPriority && session.mode !== 'BOOKING') {
                         // ─────────────────────────────────────────────────────
                         // V110: Scenarios speak freely — acknowledge + funnel
@@ -6265,10 +6279,9 @@ async function processTurn({
                         // ─────────────────────────────────────────────────────
                         // Non-V110 (legacy): Consent injection as before
                         // ─────────────────────────────────────────────────────
-                        const autoInjectConsent = discoveryBehavior.autoInjectConsentInScenarios !== false;
+                        // V116: autoInjectConsent and consentAlreadyGiven now hoisted above
                         const consentQuestionTemplate = discoveryBehavior.consentQuestionTemplate || 
                             "Would you like me to schedule an appointment for you?";
-                        const consentAlreadyGiven = session.booking?.consentGiven === true;
                         
                         if (autoInjectConsent && impliesScheduling && !consentAlreadyGiven) {
                             log('🔄 V92: Scenario implies scheduling but no consent - modifying response', {
@@ -8925,23 +8938,56 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════
         // CRITICAL ERROR LOGGING - This is our main diagnostic point
         // ═══════════════════════════════════════════════════════════════════
+        // V116: Enhanced error capture with scenario context
+        // When SYSTEM_ERROR_FALLBACK fires, we need to know:
+        //   1. What scenario was being rendered (if any)
+        //   2. What phase the engine was in (via lastCheckpoint)
+        //   3. The actual stack trace for debugging
+        // ═══════════════════════════════════════════════════════════════════
+        
+        // Try to extract scenario context from the error if available
+        // (tier1Match is in scope from the try block)
+        let scenarioContext = null;
+        try {
+            if (typeof tier1Match !== 'undefined' && tier1Match) {
+                scenarioContext = {
+                    scenarioId: tier1Match.scenarioId,
+                    scenarioName: tier1Match.name,
+                    categoryName: tier1Match.categoryName,
+                    scenarioType: tier1Match.scenarioType,
+                    hasQuickReplies: Array.isArray(tier1Match.quickReplies) && tier1Match.quickReplies.length > 0,
+                    hasFullReplies: Array.isArray(tier1Match.fullReplies) && tier1Match.fullReplies.length > 0
+                };
+            }
+        } catch (contextErr) {
+            // Scenario context extraction failed - continue without it
+        }
+        
         const errorDetails = {
             error: error.message,
             errorType: error.name,
-            stack: error.stack?.split('\n').slice(0, 5).join('\n'), // First 5 lines of stack
+            stack: error.stack?.split('\n').slice(0, 8).join('\n'), // First 8 lines of stack (more context)
             companyId,
             channel,
             userTextPreview: userText?.substring(0, 50),
             latencyMs: Date.now() - startTime,
-            lastCheckpoint: debugLog[debugLog.length - 1]?.msg || 'unknown'
+            lastCheckpoint: debugLog[debugLog.length - 1]?.msg || 'unknown',
+            // V116: Scenario render error context
+            scenario: scenarioContext,
+            turnNumber: session?.metrics?.totalTurns || null,
+            sessionMode: session?.mode || null
         };
         
-        logger.error('[CONVERSATION ENGINE] ❌ CRITICAL ERROR in processTurn', errorDetails);
+        // V116: SCENARIO_RENDER_ERROR - explicit event for scenario rendering failures
+        logger.error('[CONVERSATION ENGINE] ❌ SCENARIO_RENDER_ERROR in processTurn', errorDetails);
         
         // Also log to console for immediate visibility
-        console.error('[CONVERSATION ENGINE] ❌ CRITICAL ERROR:', error.message);
-        console.error('[CONVERSATION ENGINE] Stack:', error.stack?.split('\n').slice(0, 5).join('\n'));
+        console.error('[CONVERSATION ENGINE] ❌ SCENARIO_RENDER_ERROR:', error.message);
+        console.error('[CONVERSATION ENGINE] Stack:', error.stack?.split('\n').slice(0, 8).join('\n'));
         console.error('[CONVERSATION ENGINE] Last checkpoint:', errorDetails.lastCheckpoint);
+        if (scenarioContext) {
+            console.error('[CONVERSATION ENGINE] Scenario context:', JSON.stringify(scenarioContext, null, 2));
+        }
         
         const errResp = {
             success: false,
@@ -8966,7 +9012,11 @@ async function processTurn({
                 error: error.message,
                 errorType: error.name,
                 lastCheckpoint: errorDetails.lastCheckpoint,
-                stackPreview: error.stack?.split('\n').slice(0, 3).join(' | ')
+                stackPreview: error.stack?.split('\n').slice(0, 5).join(' | '),
+                // V116: Scenario context for debugging SCENARIO_RENDER_ERROR
+                scenario: scenarioContext,
+                turnNumber: errorDetails.turnNumber,
+                sessionMode: errorDetails.sessionMode
             }
         };
         if (includeDebug) {

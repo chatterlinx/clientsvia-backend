@@ -77,16 +77,22 @@ function ensureCallReasonDiscoveryStep(discoveryFlow) {
     const existingStep = discoveryFlow.steps.find(s => s.slotId === 'call_reason_detail');
     
     if (!existingStep) {
-        // No step exists — add it as the last step (user can reorder in UI)
-        discoveryFlow.steps.push({
+        // V110: call_reason_detail MUST be first so triage/scenario can fire immediately
+        // Shift all existing step orders up by 1
+        discoveryFlow.steps.forEach(step => {
+            step.order = (step.order || 0) + 1;
+        });
+        
+        // Insert call_reason_detail at order: 0 (first position)
+        discoveryFlow.steps.unshift({
             stepId: 'd0',
             slotId: 'call_reason_detail',
-            order: discoveryFlow.steps.length,
+            order: 0,
             ask: "Got it — {value}.",
             reprompt: "What can I help you with today?",
             confirmMode: 'never'
         });
-        logger.info('[FRONT DESK BEHAVIOR] V115: Auto-seeded call_reason_detail discovery step (confirmMode: never)');
+        logger.info('[FRONT DESK BEHAVIOR] V115: Auto-seeded call_reason_detail discovery step at order: 0 (confirmMode: never)');
     } else {
         // Upgrade any non-'never' confirmMode and stale prompts
         let upgraded = false;

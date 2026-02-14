@@ -115,37 +115,34 @@ const TIER_MVA = {
             recommendedValue: true
         },
         {
-            fieldId: 'booking.directIntentPatterns',
-            purpose: 'Patterns that detect direct booking intent (skip consent question)',
-            failureMode: '"how soon can you get somebody out here" not recognized as booking intent',
+            fieldId: 'frontDesk.detectionTriggers.directIntentPatterns',
+            purpose: 'Patterns that detect direct booking intent (bypass consent gate)',
+            failureMode: '"schedule", "book an appointment", "send someone" not recognized as direct booking intent',
             impact: 'ux',
             priority: 1,
             critical: true,
             validator: (val) => Array.isArray(val) && val.length >= 5,
-            fixInstructions: 'Add direct booking patterns like "get somebody out", "how soon can you come"',
-            nav: { tab: 'front-desk', section: 'booking-flow', field: 'directIntentPatterns' },
-            dbPath: 'aiAgentSettings.frontDeskBehavior.bookingFlow.directIntentPatterns',
+            fixInstructions: 'Add direct intent patterns like "schedule", "book", "appointment", "send someone"',
+            nav: { tab: 'front-desk', section: 'detection', field: 'directIntentPatterns' },
+            dbPath: 'aiAgentSettings.frontDeskBehavior.detectionTriggers.directIntentPatterns',
             recommendedValue: [
-                // Explicit service requests
-                'get somebody out',
-                'get someone out',
-                'get a tech out',
-                'get a technician out',
+                // Direct booking keywords
+                'schedule',
+                'book',
+                'appointment',
+                'come out',
                 'send someone',
-                'send somebody out',
-                'send a tech',
+                'send somebody',
+                'get someone out',
+                'get somebody out',
+                'need a tech',
                 'need someone out',
-                // Timing/urgency requests
-                'when can you come',
-                'can you come out',
-                'how soon can you',
-                'come out today',
-                'come out tomorrow',
-                // Urgency indicators
-                'asap',
-                'soonest',
-                'earliest',
-                'first available'
+                'dispatch',
+                'service call',
+                'help me out',
+                'need help',
+                'somebody to help',
+                'someone to help'
             ]
         },
         {
