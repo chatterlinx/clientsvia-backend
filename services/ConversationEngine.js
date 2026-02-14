@@ -4767,53 +4767,55 @@ async function processTurn({
         // ═══════════════════════════════════════════════════════════════════════
         // 🎯 MINIMAL BOOKING DETECTION (Clean Sweep - Feb 2026)
         // ═══════════════════════════════════════════════════════════════════════
-        // SINGLE SOURCE OF TRUTH: Simple keyword detection + defer to BookingFlowRunner
-        // No complex intent detectors, no meta intents, no competing systems.
-        // Agent reads ONLY from V110 slotRegistry + bookingFlow configuration.
-        //
-        // V98 FIX: Also detect consent when consentPending=true
-        // V98c: Read patterns from Control Plane Wiring (not hardcoded)
-        // 
         // ═══════════════════════════════════════════════════════════════════════
-        // V109: STRICT MODE DISABLES MINIMAL_BOOKING_DETECTION ENTIRELY
+        // SCHEDULING ACCEPTANCE DETECTOR
         // ═══════════════════════════════════════════════════════════════════════
-        // When enforcement.level === 'strict', FrontDeskRuntime is the ONLY
-        // orchestrator. This detection code should NOT run, should NOT set
-        // bookingModeLocked, and should NOT compete with FrontDeskRuntime.
+        // Detects caller intent to schedule/book via:
+        //   1. Explicit consent ("yes", "go ahead") when consentPending
+        //   2. Explicit booking keywords ("schedule", "book", "appointment")
+        //   3. Implicit service requests ("I need service", "send someone")
         //
-        // If we're here in strict mode, it means FrontDeskRuntime called us for
-        // DISCOVERY lane handling only. We must NOT do booking intent detection.
+        // In V110, this feeds signals.deferToBookingRunner which causes
+        // FrontDeskRuntime to set schedulingAccepted (not bookingModeLocked).
+        // ConversationEngine never locks booking — FrontDeskRuntime decides.
+        //
+        // Patterns are config-driven via Control Plane Wiring:
+        //   frontDesk.detectionTriggers.directIntentPatterns
+        //   frontDesk.detectionTriggers.wantsBooking
+        //   frontDesk.detectionTriggers.implicitConsentPhrases
         // ═══════════════════════════════════════════════════════════════════════
         const strictModeEnabled = awReader 
             ? awReader.get('frontDesk.enforcement.level', 'warn') === 'strict'
             : (company?.aiAgentSettings?.frontDesk?.enforcement?.level === 'strict' ||
                company?.aiAgentSettings?.frontDeskBehavior?.enforcement?.level === 'strict');
         
+        // V110 detection: check if Discovery Flow is configured
+        const discoverySteps = awReader 
+            ? awReader.get('frontDesk.discoveryFlow.steps', [])
+            : (company?.aiAgentSettings?.frontDesk?.discoveryFlow?.steps || []);
+        const hasDiscoveryFlow = Array.isArray(discoverySteps) && discoverySteps.length > 0;
+        
         let bookingIntentDetected = false;
         let bookingConsentPending = session.booking?.consentPending || paramBookingConsentPending || false;
         let consentGivenThisTurn = false;
         
-        // V109: Skip ALL booking detection in strict mode
-        // FrontDeskRuntime is the ONLY orchestrator - this code should NOT compete
         // ═══════════════════════════════════════════════════════════════════════
-        // V109: STRICT MODE CHECK - Disable MINIMAL_BOOKING_DETECTION entirely
+        // BOOKING INTENT DETECTION — Runs in ALL modes (including V110)
         // ═══════════════════════════════════════════════════════════════════════
-        // In strict mode, FrontDeskRuntime is the ONLY orchestrator.
-        // This code should NOT detect booking intent or set bookingModeLocked.
-        // We skip the entire detection block and let FrontDeskRuntime handle it.
+        // In V110, this detects implicit consent ("I need service", "send someone")
+        // and explicit consent ("yes", "schedule"). FrontDeskRuntime handles the
+        // difference: V110 sets schedulingAccepted instead of bookingModeLocked.
+        //
+        // This is the "scheduling acceptance detector" that makes V110 work:
+        //   Caller: "I need AC service" → bookingIntentDetected = true
+        //   → signals.deferToBookingRunner → FrontDeskRuntime sets schedulingAccepted
+        //   → Info collection begins on next turn
         // ═══════════════════════════════════════════════════════════════════════
         
-        // V109: Log explicitly when MINIMAL_BOOKING_DETECTION is DISABLED in strict mode
-        if (strictModeEnabled) {
-            log('🚫 V109: MINIMAL_BOOKING_DETECTION DISABLED (strictMode=ON, FrontDeskRuntime is sole orchestrator)', {
-                strictModeEnabled: true,
-                reason: 'Strict mode active - FrontDeskRuntime handles all booking intent detection'
-            });
-        }
-        
-        if (!strictModeEnabled && !aiResult && userText && userText.length > 0 && !session.bookingModeLocked) {
-            log('📋 V109: MINIMAL_BOOKING_DETECTION running (strictMode=OFF)', {
-                strictModeEnabled: false,
+        if (!aiResult && userText && userText.length > 0 && !session.bookingModeLocked) {
+            log('📋 BOOKING_INTENT_DETECTION running', {
+                strictModeEnabled,
+                v110Active: hasDiscoveryFlow,
                 userTextPreview: userText.substring(0, 50)
             });
             
@@ -4917,7 +4919,7 @@ async function processTurn({
             }
             
             // ═══════════════════════════════════════════════════════════════════
-            // V98 FIX 2: Explicit booking keywords (UI-configurable)
+            // FIX 2: Explicit booking keywords (UI-configurable)
             // ═══════════════════════════════════════════════════════════════════
             // These words explicitly request scheduling regardless of consentPending
             // ═══════════════════════════════════════════════════════════════════
@@ -4925,24 +4927,92 @@ async function processTurn({
                 bookingIntentDetected = bookingRegex.test(userText);
                 
                 if (bookingIntentDetected) {
-                    log('📅 MINIMAL BOOKING: Keyword match detected', {
+                    log('📅 BOOKING_INTENT: Keyword match detected', {
                         userText: userText.substring(0, 60),
                         matchedKeyword: userText.match(bookingRegex)?.[0],
                         source: awReader ? 'control_plane' : 'defaults'
                     });
                 }
             }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // V110: IMPLICIT CONSENT DETECTION
+            // ═══════════════════════════════════════════════════════════════════
+            // When a caller says "I need service" or "send someone out" that IS
+            // consent. They don't need to be asked "would you like to schedule?"
+            //
+            // Config-driven: frontDesk.detectionTriggers.implicitConsentPhrases
+            // Defaults cover common service-trade phrases.
+            //
+            // This only fires when V110 is active (hasDiscoveryFlow = true).
+            // It sets consentGivenThisTurn so FrontDeskRuntime sets
+            // schedulingAccepted instead of wasting a turn asking.
+            // ═══════════════════════════════════════════════════════════════════
+            if (!bookingIntentDetected && hasDiscoveryFlow) {
+                const defaultImplicitPhrases = [
+                    'need service', 'need ac service', 'need hvac service',
+                    'need a service call', 'need someone to come out',
+                    'send someone', 'send someone out', 'send a tech',
+                    'send a technician', 'get someone out', 'get someone out here',
+                    'come out', 'come take a look', 'come check',
+                    'need repair', 'need a repair', 'need it fixed',
+                    'need this fixed', 'fix it', 'fix this',
+                    'need help', 'need someone to help',
+                    'can you come out', 'can someone come out',
+                    'i need a technician', 'i need a tech',
+                    'need an appointment', 'want an appointment',
+                    'need it looked at', 'need someone to look at'
+                ];
+                
+                const implicitPhrases = awReader 
+                    ? awReader.get('frontDesk.detectionTriggers.implicitConsentPhrases', defaultImplicitPhrases)
+                    : defaultImplicitPhrases;
+                
+                const implicitRegex = new RegExp(
+                    `\\b(${implicitPhrases.map(escapeRegex).join('|')})\\b`, 'i'
+                );
+                
+                if (implicitRegex.test(lowerText)) {
+                    bookingIntentDetected = true;
+                    consentGivenThisTurn = true;
+                    
+                    log('📅 V110_IMPLICIT_CONSENT: Service request detected as scheduling acceptance', {
+                        userText: userText.substring(0, 80),
+                        matchedPhrase: lowerText.match(implicitRegex)?.[0],
+                        source: awReader ? 'control_plane' : 'defaults',
+                        reason: 'Caller explicitly requested service — implicit consent to schedule'
+                    });
+                }
+            }
 
             // ═══════════════════════════════════════════════════════════════════
-            // V98 FIX 3: FORCE BOOKING HANDOFF when intent detected
+            // BOOKING INTENT HANDOFF — signal to FrontDeskRuntime
+            // ═══════════════════════════════════════════════════════════════════
+            // V110: ConversationEngine signals intent but does NOT lock booking.
+            //   FrontDeskRuntime checks discoveryComplete and decides.
+            //   If discovery slots are still missing → schedulingAccepted = true,
+            //   info collection continues in DISCOVERY lane.
+            //
+            // Legacy: ConversationEngine locks booking immediately.
             // ═══════════════════════════════════════════════════════════════════
             if (bookingIntentDetected) {
-                // V98e: Compute diagnostic reason codes for full visibility
+                // Compute diagnostic reason codes for full visibility
+                const implicitMatch = lowerText.match(new RegExp(
+                    `\\b(${(awReader 
+                        ? awReader.get('frontDesk.detectionTriggers.implicitConsentPhrases', [])
+                        : []).concat([
+                        'need service', 'send someone', 'come out', 'need repair',
+                        'need a repair', 'need it fixed', 'need this fixed'
+                    ]).map(escapeRegex).join('|')})\\b`, 'i'
+                ));
+                
                 const bookingTriggerReason = consentGivenThisTurn 
-                    ? (consentRegex.test(lowerText) ? 'consent_pending_affirmative' : 'consent_pending_urgency')
+                    ? (bookingConsentPending 
+                        ? (consentRegex.test(lowerText) ? 'consent_pending_affirmative' : 'consent_pending_urgency')
+                        : 'implicit_service_request')
                     : 'explicit_booking_keyword';
                 const yesEquivalentMatched = consentGivenThisTurn 
-                    ? (userText.match(consentRegex)?.[0] || userText.match(urgencyRegex)?.[0] || userText)
+                    ? (userText.match(consentRegex)?.[0] || userText.match(urgencyRegex)?.[0] || implicitMatch?.[0] || userText)
                     : null;
                 const explicitKeywordMatched = !consentGivenThisTurn 
                     ? userText.match(bookingRegex)?.[0] 
@@ -4950,17 +5020,18 @@ async function processTurn({
                 const bookingOfferOpenTurn = session.booking?.consentPendingTurn || null;
                 const bookingTriggerTurn = session.metrics?.totalTurns || 0;
                 
-                log('🔒 V98: FORCING BOOKING HANDOFF - deferring to BookingFlowRunner', {
+                log('📅 BOOKING_INTENT_HANDOFF: Signaling to FrontDeskRuntime', {
                     userText: userText.substring(0, 60),
                     bookingTriggerReason,
                     yesEquivalentMatched,
                     explicitKeywordMatched,
                     bookingOfferOpenTurn,
                     bookingTriggerTurn,
-                    consentPendingWas: bookingConsentPending
+                    consentPendingWas: bookingConsentPending,
+                    v110Active: hasDiscoveryFlow
                 });
                 
-                // V98e: Emit BOOKING_TRIGGER event with full diagnostic details
+                // Emit BOOKING_TRIGGER event with full diagnostic details
                 if (BlackBoxLogger && sessionId && companyId) {
                     BlackBoxLogger.logEvent({
                         callId: sessionId,
@@ -4975,59 +5046,95 @@ async function processTurn({
                             bookingTriggerTurn,
                             consentPendingWas: bookingConsentPending,
                             userTextPreview: userText.substring(0, 60),
-                            patternsSource: awReader ? 'controlPlane' : 'globalDefaults'
+                            patternsSource: awReader ? 'controlPlane' : 'globalDefaults',
+                            v110Active: hasDiscoveryFlow
                         }
                     }).catch(() => {});
                 }
 
-                // Set booking state and defer - NO response generation here
+                // Set booking consent state
                 session.booking = session.booking || {};
                 session.booking.consentGiven = true;
-                session.booking.consentPending = false; // Clear pending flag
+                session.booking.consentPending = false;
                 session.booking.consentTurn = bookingTriggerTurn;
                 session.booking.consentReason = bookingTriggerReason;
                 session.booking.consentPhrase = userText;
                 session.booking.yesEquivalentMatched = yesEquivalentMatched;
-                session.bookingModeLocked = true;
-                session.mode = 'BOOKING';
+                
+                // ───────────────────────────────────────────────────
+                // V110: Do NOT lock booking — FrontDeskRuntime decides
+                // based on discoveryComplete. Just signal intent.
+                // ───────────────────────────────────────────────────
+                // Legacy: Lock booking immediately (no Discovery Flow)
+                // ───────────────────────────────────────────────────
+                if (!hasDiscoveryFlow) {
+                    session.bookingModeLocked = true;
+                    session.mode = 'BOOKING';
+                }
 
-                // Set bookingFlowState for Redis persistence
-                session.bookingFlowState = {
-                    bookingModeLocked: true,
-                    bookingFlowId: 'minimal_booking_detection',
-                    currentStepId: 'name', // Start with first slot
-                    bookingCollected: { ...currentSlots },
-                    bookingState: 'ACTIVE'
+                // ───────────────────────────────────────────────────────
+                // V110: Do NOT set aiResult — let scenarios speak first.
+                // Store scheduling signals as deferred; they'll be merged
+                // into the final response after scenarios/LLM run.
+                // ───────────────────────────────────────────────────────
+                // Legacy: Set aiResult immediately (short-circuit scenarios)
+                // ───────────────────────────────────────────────────────
+                const bookingSignals = {
+                    deferToBookingRunner: true,
+                    bookingModeLocked: !hasDiscoveryFlow,
+                    schedulingAccepted: hasDiscoveryFlow,
+                    minimalDetection: true,
+                    consentGivenThisTurn,
+                    bookingTriggerReason,
+                    implicitConsent: bookingTriggerReason === 'implicit_service_request'
                 };
-
-                // Defer to BookingFlowRunner - it will generate the first booking prompt
-                aiResult = {
-                    reply: null, // BookingFlowRunner will generate the reply
-                    conversationMode: 'BOOKING',
-                    filledSlots: currentSlots,
-                    latencyMs: Date.now() - aiStartTime,
-                    tokensUsed: 0,
-                    fromStateMachine: false,
-                    matchSource: 'MINIMAL_BOOKING_DETECTION',
-                    tier: 'tier1',
-                    mode: 'BOOKING',
-                    bookingFlowState: session.bookingFlowState,
-                    signals: {
-                        deferToBookingRunner: true,
+                
+                if (hasDiscoveryFlow) {
+                    // V110: Defer signals — scenarios must acknowledge first
+                    // The deferred signals will be injected into the final
+                    // aiResult AFTER scenario matching / LLM runs.
+                    session._deferredBookingSignals = bookingSignals;
+                    
+                    log('📅 V110_DEFERRED: Scheduling detected — scenarios will speak first, signals deferred', {
+                        bookingTriggerReason,
+                        implicitConsent: bookingTriggerReason === 'implicit_service_request',
+                        capturedSlots: Object.keys(currentSlots).filter(k => currentSlots[k])
+                    });
+                } else {
+                    // Legacy: Set bookingFlowState for Redis persistence
+                    session.bookingFlowState = {
                         bookingModeLocked: true,
-                        minimalDetection: true,
-                        consentGivenThisTurn,
-                        bookingTriggerReason
-                    },
-                    debug: {
-                        source: 'MINIMAL_BOOKING_DETECTION',
-                        reason: consentGivenThisTurn ? 'Consent response to booking offer' : 'Explicit booking keyword',
-                        userText: userText.substring(0, 100),
-                        consentPendingWas: bookingConsentPending
-                    }
-                };
-
-                log('✅ V98: Booking locked, deferring to BookingFlowRunner');
+                        bookingFlowId: 'minimal_booking_detection',
+                        currentStepId: 'name',
+                        bookingCollected: { ...currentSlots },
+                        bookingState: 'ACTIVE'
+                    };
+                    
+                    aiResult = {
+                        reply: null,
+                        conversationMode: 'BOOKING',
+                        filledSlots: currentSlots,
+                        latencyMs: Date.now() - aiStartTime,
+                        tokensUsed: 0,
+                        fromStateMachine: false,
+                        matchSource: 'BOOKING_INTENT_DETECTION',
+                        tier: 'tier1',
+                        mode: 'BOOKING',
+                        bookingFlowState: session.bookingFlowState,
+                        signals: bookingSignals,
+                        debug: {
+                            source: 'BOOKING_INTENT_DETECTION',
+                            reason: consentGivenThisTurn 
+                                ? 'Consent response to booking offer' 
+                                : 'Explicit booking keyword',
+                            userText: userText.substring(0, 100),
+                            consentPendingWas: bookingConsentPending,
+                            v110Active: false
+                        }
+                    };
+                    
+                    log('📅 LEGACY_BOOKING_LOCKED: Booking locked, deferring to BookingFlowRunner');
+                }
             }
         }
             
@@ -7058,13 +7165,36 @@ async function processTurn({
                 // ═══════════════════════════════════════════════════════════
                 // V116: DISCOVERY TRUTH — Immutable caller context
                 // ═══════════════════════════════════════════════════════════
-                // Contains first_utterance, call_reason_detail, call_intent_guess
-                // from DiscoveryTruthWriter. Prevents LLM "amnesia" when gates
-                // blank the input — the LLM always knows why the caller called.
-                // ═══════════════════════════════════════════════════════════
                 discoveryTruth: discoveryTruth || null,
                 
-                // V22 Kill Switches (passed to LLM for prompt enforcement)
+                // ═══════════════════════════════════════════════════════════
+                // V110: SCHEDULING STATE + CONFIRM POLICY
+                // ═══════════════════════════════════════════════════════════
+                // When schedulingAccepted=true, the LLM should:
+                //   - CONFIRM captured slots ("I have X as {value}")
+                //   - ASK only missing slots ("What's the service address?")
+                //   - NEVER re-ask captured slots
+                // When schedulingAccepted=false, the LLM should:
+                //   - Acknowledge the caller's issue (scenario-driven)
+                //   - Offer scheduling (funnel question)
+                // ═══════════════════════════════════════════════════════════
+                schedulingAccepted: session.booking?.consentGiven === true || 
+                                   session._deferredBookingSignals?.schedulingAccepted === true,
+                confirmPolicy: {
+                    rule: 'If captured, confirm — if missing, ask — never re-ask',
+                    capturedSlots: Object.keys(currentSlots).filter(k => currentSlots[k]),
+                    missingSlots: (() => {
+                        const dSteps = awReader 
+                            ? awReader.get('frontDesk.discoveryFlow.steps', [])
+                            : (company?.aiAgentSettings?.frontDesk?.discoveryFlow?.steps || []);
+                        return (dSteps || [])
+                            .filter(s => s.slotId && s.slotId !== 'call_reason_detail')
+                            .filter(s => !currentSlots[s.slotId])
+                            .map(s => s.slotId);
+                    })()
+                },
+                
+                // Kill switches (prompt enforcement)
                 killSwitches
             };
             
@@ -8238,6 +8368,34 @@ async function processTurn({
             });
         }
         
+        // ═══════════════════════════════════════════════════════════════════
+        // V110: INJECT DEFERRED BOOKING SIGNALS
+        // ═══════════════════════════════════════════════════════════════════
+        // When booking intent was detected in V110, the detection block
+        // deferred signals (didn't set aiResult) so scenarios could speak
+        // first. Now that scenarios/LLM have generated the response, we
+        // merge the deferred scheduling signals into the final result.
+        //
+        // This ensures FrontDeskRuntime sees deferToBookingRunner + the
+        // scenario's response (acknowledgment + funnel) in the same turn.
+        // ═══════════════════════════════════════════════════════════════════
+        const deferredSignals = session._deferredBookingSignals || null;
+        if (deferredSignals) {
+            // Merge into aiResult signals
+            if (!aiResult) {
+                aiResult = { reply: aiResponse, signals: {} };
+            }
+            aiResult.signals = { ...(aiResult.signals || {}), ...deferredSignals };
+            
+            log('📅 V110_DEFERRED_INJECT: Booking signals merged into scenario response', {
+                scenarioReply: (aiResponse || '').substring(0, 80),
+                signals: Object.keys(deferredSignals)
+            });
+            
+            // Clean up
+            delete session._deferredBookingSignals;
+        }
+        
         const response = {
             success: true,
             reply: aiResponse,
@@ -8247,27 +8405,20 @@ async function processTurn({
             wantsBooking: aiResult?.wantsBooking || false,
             conversationMode: aiResult?.conversationMode || 'free',
             latencyMs,
-            // 🆕 Response source tracking for BlackBox
             matchSource,
             tier,
             tokensUsed: aiResult?.tokensUsed || 0,
             // ═══════════════════════════════════════════════════════════════════
-            // 🔒 BOOKING FLOW STATE (Feb 2026)
-            // ═══════════════════════════════════════════════════════════════════
-            // This is passed back to v2twilio.js to persist to Redis.
-            // On next turn, if bookingModeLocked === true, the booking flow runner
-            // will take over (no scenarios, no LLM, just the checklist).
-            // V96i: Now guaranteed to exist for all booking responses.
+            // BOOKING FLOW STATE — persisted to Redis via v2twilio
             // ═══════════════════════════════════════════════════════════════════
             bookingFlowState: finalBookingFlowState,
             // ═══════════════════════════════════════════════════════════════════
-            // V98: SIGNALS - Propagate booking consent state to v2twilio
+            // SIGNALS — propagated to FrontDeskRuntime / v2twilio
             // ═══════════════════════════════════════════════════════════════════
-            // bookingConsentPending tells v2twilio to save this flag to Redis.
-            // On next turn, if caller says "yes" or urgency, booking starts.
+            // In V110, deferredBookingSignals are merged here so 
+            // FrontDeskRuntime sees schedulingAccepted + scenario reply together.
             // ═══════════════════════════════════════════════════════════════════
             signals: aiResult?.signals || {}
-            // Booking is now handled by minimal keyword detection + BookingFlowRunner
         };
 
         // V93: Allow deterministic mid-call rules (and other protocols) to request transfer in a visible way

@@ -1665,7 +1665,7 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         // ═══════════════════════════════════════════════════════════════════════
         // BOOKING SIGNAL HANDLING — V110 vs Legacy behavior
         // ═══════════════════════════════════════════════════════════════════════
-        if (signals.deferToBookingRunner || signals.bookingModeLocked) {
+        if (signals.deferToBookingRunner || signals.bookingModeLocked || signals.schedulingAccepted) {
             
             // ─────────────────────────────────────────────────────────────────
             // V110: Caller accepted scheduling → set flag, DON'T lock booking
@@ -1684,13 +1684,25 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
             
             if (isV110) {
                 // Check if discovery info is already complete
+                // Merge ALL slot sources: callState persisted + engine extracted this turn
                 const bookingCollected = callState?.bookingCollected || callState?.slots || {};
                 const collectedSlots = callState?.collectedSlots || {};
                 const allCaptured = { ...collectedSlots, ...bookingCollected };
                 
+                // Merge slots from engine's booking flow state
                 if (engineResult.bookingFlowState?.bookingCollected) {
                     Object.assign(allCaptured, engineResult.bookingFlowState.bookingCollected);
                     callState.bookingCollected = { ...callState.bookingCollected, ...engineResult.bookingFlowState.bookingCollected };
+                }
+                
+                // Merge slots extracted this turn (name, address from "Mark Johnson 1212 Cleveland")
+                if (engineResult.filledSlots) {
+                    Object.assign(allCaptured, engineResult.filledSlots);
+                    callState.bookingCollected = { ...(callState.bookingCollected || {}), ...engineResult.filledSlots };
+                }
+                if (engineResult.slotsCollected) {
+                    Object.assign(allCaptured, engineResult.slotsCollected);
+                    callState.bookingCollected = { ...(callState.bookingCollected || {}), ...engineResult.slotsCollected };
                 }
                 
                 const requiredSteps = v110Steps.filter(s => s.slotId && s.slotId !== 'call_reason_detail');
@@ -1708,7 +1720,9 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                     logger.info('[FRONT_DESK_RUNTIME] V110: Scheduling accepted — collecting info before booking', {
                         callSid: context.callSid,
                         missingSlots: missingSlots.map(s => s.slotId),
-                        triggerReason: signals.bookingTriggerReason
+                        capturedThisTurn: Object.keys(engineResult.filledSlots || {}),
+                        triggerReason: signals.bookingTriggerReason,
+                        implicitConsent: !!signals.implicitConsent
                     });
                     
                     if (BlackBoxLogger) {

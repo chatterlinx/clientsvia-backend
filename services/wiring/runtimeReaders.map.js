@@ -289,6 +289,39 @@ const RUNTIME_READERS_MAP = {
     // Legacy 'booking.directIntentPatterns' removed — use 'frontDesk.detectionTriggers.directIntentPatterns'
 
     // =========================================================================
+    // V110: IMPLICIT CONSENT PHRASES
+    // Caller statements that count as scheduling acceptance without asking.
+    // e.g., "I need service", "send someone out", "come out"
+    // =========================================================================
+    'frontDesk.detectionTriggers.implicitConsentPhrases': {
+        readers: [
+            {
+                file: 'services/ConversationEngine.js',
+                function: 'processInput.implicitConsentDetection',
+                description: 'Phrases that imply caller wants to schedule without being asked',
+                required: false,
+                critical: false,
+                checkpoint: 'IMPLICIT_CONSENT'
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.detectionTriggers.implicitConsentPhrases',
+        scope: 'company',
+        defaultValue: [
+            'need service', 'need ac service', 'need hvac service',
+            'need a service call', 'need someone to come out',
+            'send someone', 'send someone out', 'send a tech',
+            'send a technician', 'get someone out', 'get someone out here',
+            'come out', 'come take a look', 'come check',
+            'need repair', 'need a repair', 'need it fixed',
+            'need this fixed', 'need help',
+            'can you come out', 'can someone come out',
+            'i need a technician', 'i need a tech',
+            'need an appointment', 'want an appointment',
+            'need it looked at', 'need someone to look at'
+        ]
+    },
+
+    // =========================================================================
     // FRONT DESK - BOOKING SLOTS (V110: Reads from slotRegistry + bookingFlow)
     // =========================================================================
     // Legacy 'frontDesk.bookingSlots' path removed. All slot config comes from

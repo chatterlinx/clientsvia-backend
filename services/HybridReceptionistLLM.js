@@ -964,16 +964,53 @@ ACKNOWLEDGE this context naturally:
                     systemPrompt += '\n- RULE: You already know why they called. Acknowledge it. Do NOT say "I didn\'t catch that" or "Could you describe the issue?"';
                 }
                 
-                // Add V22 discovery rules
-                systemPrompt += `\n\nV22 DISCOVERY RULES:
-1. You are in DISCOVERY mode - understand the caller's situation first
-2. Use the scenario knowledge above to provide helpful information
-3. Do NOT ask for name/phone/address until caller explicitly wants to book
-4. If caller describes a problem, acknowledge it and offer relevant guidance
-5. Only ask "Would you like me to schedule an appointment?" after understanding their issue - do NOT claim you're already scheduling
-6. V96j RULE: NEVER say "Let me get you scheduled" or "I'll schedule you" - instead ASK: "Would you like me to schedule...?"
-7. Output JSON: {"slot":"none","ack":"your natural response using scenario knowledge"}
-8. V116 RULE: If CALLER CONTEXT is provided above, you ALREADY KNOW the problem. Reference it naturally. NEVER ask "what can I help you with?" after the caller already told you.`;
+                // ════════════════════════════════════════════════════════════
+                // V110: Build discovery rules based on scheduling state
+                // ════════════════════════════════════════════════════════════
+                const v110SchedulingAccepted = enterpriseContext.schedulingAccepted === true;
+                const v110ConfirmPolicy = enterpriseContext.confirmPolicy || null;
+                const v110CapturedSlots = v110ConfirmPolicy?.capturedSlots || [];
+                const v110MissingSlots = v110ConfirmPolicy?.missingSlots || [];
+                
+                if (v110SchedulingAccepted && v110MissingSlots.length > 0) {
+                    // ── POST-ACCEPTANCE: Confirm captured, ask missing ──
+                    systemPrompt += `\n\nV110 INFO COLLECTION RULES (caller already agreed to schedule):`;
+                    systemPrompt += `\n1. The caller has agreed to schedule. Now collect the remaining info.`;
+                    
+                    if (v110CapturedSlots.length > 0) {
+                        systemPrompt += `\n2. ALREADY CAPTURED (confirm, do NOT re-ask): ${v110CapturedSlots.join(', ')}`;
+                        systemPrompt += `\n   - Use: "I have your [field] as [value] — is that correct?"`;
+                        systemPrompt += `\n   - NEVER re-ask something already captured.`;
+                    }
+                    
+                    systemPrompt += `\n3. STILL NEEDED (ask for these): ${v110MissingSlots.join(', ')}`;
+                    systemPrompt += `\n   - Ask naturally: "What's the service address?" or "What's the best phone number?"`;
+                    systemPrompt += `\n4. Combine confirm + ask in one response when possible.`;
+                    systemPrompt += `\n   Example: "I have you at 1212 Cleveland Ave — is that correct? And is the number you're calling from the best one for text updates?"`;
+                    systemPrompt += `\n5. End with: "Once you confirm, I'll get this scheduled."`;
+                    systemPrompt += `\n6. Output JSON: {"slot":"none","ack":"your natural response confirming + asking"}`;
+                    systemPrompt += `\n7. V116 RULE: If CALLER CONTEXT is provided above, reference the issue naturally. Do NOT re-ask what they already told you.`;
+                    
+                } else if (v110SchedulingAccepted) {
+                    // ── POST-ACCEPTANCE + COMPLETE: All info captured ──
+                    systemPrompt += `\n\nV110 RULES (all info captured — proceeding to booking):`;
+                    systemPrompt += `\n1. All required information has been collected. Confirm and proceed.`;
+                    systemPrompt += `\n2. Say something like: "Perfect — I have everything I need. Let me get this scheduled."`;
+                    systemPrompt += `\n3. Output JSON: {"slot":"none","ack":"confirmation message"}`;
+                    
+                } else {
+                    // ── PRE-ACCEPTANCE: Scenario speaks, funnel to scheduling ──
+                    systemPrompt += `\n\nV110 DISCOVERY RULES (understand the caller first):`;
+                    systemPrompt += `\n1. You are in DISCOVERY mode — understand the caller's situation first.`;
+                    systemPrompt += `\n2. Use the scenario knowledge above to acknowledge their problem and provide helpful information.`;
+                    systemPrompt += `\n3. If the caller describes a problem, acknowledge it with reassurance and relevant guidance.`;
+                    systemPrompt += `\n4. After acknowledging, offer scheduling: "Would you like me to schedule a service call?"`;
+                    systemPrompt += `\n5. NEVER say "Let me get you scheduled" or "I'll schedule you" — ASK first.`;
+                    systemPrompt += `\n6. Do NOT ask for name/phone/address yet — wait until they agree to schedule.`;
+                    systemPrompt += `\n7. If caller says "I need service" / "send someone" / "come out" — that IS consent. Proceed to confirm any captured info and ask for what's missing.`;
+                    systemPrompt += `\n8. Output JSON: {"slot":"none","ack":"your natural response using scenario knowledge"}`;
+                    systemPrompt += `\n9. V116 RULE: If CALLER CONTEXT is provided above, you ALREADY KNOW the problem. Reference it naturally. NEVER ask "what can I help you with?" after the caller already told you.`;
+                }
 
             } else {
                 // ════════════════════════════════════════════════════════════════

@@ -5006,6 +5006,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 bookingConsentPending: (engineResult.bookingFlowState?.bookingModeLocked === true || engineResult.signals?.bookingModeLocked === true)
                   ? false  // Consent granted → clear pending
                   : (engineResult.signals?.bookingConsentPending === true || callState.bookingConsentPending === true),
+                // V110: Persist schedulingAccepted flag to Redis
+                // Set when caller implicitly consents (e.g., "I need service")
+                // FrontDeskRuntime checks this to determine lane transition
+                schedulingAccepted: engineResult.signals?.schedulingAccepted === true || callState.schedulingAccepted === true,
                 // ═══════════════════════════════════════════════════════════════════
                 // 🔒 BOOKING FLOW STATE (Feb 2026)
                 // ═══════════════════════════════════════════════════════════════════
@@ -5931,6 +5935,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         logger.info('[CALL STATE] 🔒 Saved to Redis', {
           callSid,
           bookingModeLocked: !!updatedCallState.bookingModeLocked,
+          schedulingAccepted: !!updatedCallState.schedulingAccepted,
           bookingState: updatedCallState.bookingState,
           turnCount: updatedCallState.turnCount,
           slotsCount: Object.keys(updatedCallState.slots || {}).length

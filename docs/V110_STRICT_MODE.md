@@ -1,6 +1,6 @@
 # V110 Call Flow — Scenario-First Architecture
 
-**Date:** 2026-02-13  
+**Date:** 2026-02-13 (updated 2026-02-14)  
 **Status:** ACTIVE  
 **Trigger:** Discovery Flow configured in UI
 
@@ -8,27 +8,78 @@
 
 ## The Customer Experience
 
-```
-Turn 1: Caller complains
-  → Scenario: "Got it — [acknowledge problem]. Would you like me to schedule a service call?"
+### Fast Path (caller gives name + address + "I need service")
 
-Turn 2: Caller says yes
+```
+Turn 1: "Hi, my name is Mark Johnson, 1212 Cleveland Ave Fort Myers.
+         I need AC service — you installed a motor last week and it failed."
+
+  → Implicit consent detected ("need service")
+  → Slots captured: name, address, call_reason
+  → Scenario acknowledges: "Got it, Mark — sorry about that.
+    We'll pull up your service history and check warranty coverage.
+    I have you at 1212 Cleveland Ave in Fort Myers — is that correct?
+    And is the number you're calling from the best one for text updates?"
+
+Turn 2: "Yes, that's right."
+  → discoveryComplete → BOOKING flow starts
+```
+
+### Standard Path (caller describes problem, no address yet)
+
+```
+Turn 1: "My AC isn't cooling."
+  → Scenario: "Got it — we can help with that.
+    Would you like me to schedule a service call?"
+
+Turn 2: "Yes"
   → schedulingAccepted = true
-  → "Perfect. What's your first and last name?"
+  → "Perfect. What's the full service address?"
 
 Turn 3-4: Info collection
-  → "Best number for text updates?"
-  → "What's the full service address?"
+  → "And what's your first and last name?"
+  → "Is the number you're calling from the best one for text updates?"
 
-Turn 5+: Booking flow
-  → BookingFlowRunner handles remaining slots (last name, time, etc.)
+Turn 5+: BOOKING flow (remaining slots)
 ```
 
 ---
 
-## Architecture
+## Architecture Layers
 
-### Lane Transition (FrontDeskRuntime.determineLane)
+### Layer 1 — Scheduling Acceptance Detector (above V110 Discovery)
+
+Detects caller intent to schedule via three channels:
+
+| Channel | Example | Config Path |
+|---------|---------|-------------|
+| **Explicit consent** | "yes", "go ahead" (when consentPending) | `frontDesk.discoveryConsent.consentPhrases` |
+| **Booking keywords** | "schedule", "book", "appointment" | `frontDesk.detectionTriggers.directIntentPatterns` |
+| **Implicit service requests** | "I need service", "send someone", "come out" | `frontDesk.detectionTriggers.implicitConsentPhrases` |
+
+All phrases are **config-driven per company** (Control Plane Wiring tab).
+
+Key behavior: In V110, detection **defers signals** — it does NOT set `aiResult` or short-circuit scenarios. Instead, it stores `_deferredBookingSignals` on the session. Scenarios speak first (acknowledge + funnel). The deferred signals are injected into the final response, so FrontDeskRuntime sees both the scenario reply AND the scheduling acceptance.
+
+### Layer 2 — V110 Discovery Flow (UI-configured steps)
+
+Your Discovery Flow steps: name, phone, address, call_reason.
+
+Each step has a `confirmMode` from the UI:
+- `smart_if_captured` — confirm if captured ("I have your name as Mark"), ask if missing
+- `confirm_if_from_caller_id` — confirm phone from caller ID
+- `never` — don't confirm (e.g., call_reason)
+
+**Policy:** If captured → confirm. If missing → ask. Never re-ask.
+
+### Layer 3 — Booking Flow (after Discovery complete)
+
+Enters ONLY when `schedulingAccepted AND discoveryComplete`.
+BookingFlowRunner handles remaining booking slots.
+
+---
+
+## Lane Transition (FrontDeskRuntime.determineLane)
 
 ```
 if hasDiscoveryFlow:
@@ -41,18 +92,47 @@ Within DISCOVERY, there are two sub-phases:
 | Phase | Trigger | Who Speaks |
 |-------|---------|-----------|
 | **Scenario Q&A** | `schedulingAccepted = false` | Scenarios are PRIMARY brain (acknowledge + funnel) |
-| **Info Collection** | `schedulingAccepted = true` | LLM collects V110 steps (name, phone, address) |
+| **Info Collection** | `schedulingAccepted = true` | LLM collects V110 steps (confirm captured, ask missing) |
 
-### Booking Signal Handling (handleDiscoveryLane)
+---
 
-When ConversationEngine signals booking intent in V110:
+## Deferred Signal Architecture
 
-1. **DON'T** set `bookingModeLocked = true`
-2. **DO** set `callState.schedulingAccepted = true`
-3. Return the scenario response (includes the funnel)
-4. Next turn: `determineLane` sees `schedulingAccepted + !complete` → still DISCOVERY
-5. LLM knows `schedulingAccepted = true` + `missingSlots` → starts collecting info
-6. When info captured: `determineLane` → BOOKING
+```
+ConversationEngine:
+  1. Booking intent detected (implicit/explicit/keyword)
+  2. V110? → Store _deferredBookingSignals, DON'T set aiResult
+  3. Scenarios run → generate acknowledgment + funnel response
+  4. At end of processTurn, merge deferred signals into aiResult.signals
+  5. Return: scenario response + deferToBookingRunner signal
+
+FrontDeskRuntime.handleDiscoveryLane:
+  6. Receives signals.deferToBookingRunner
+  7. Check V110 → merge filledSlots into allCaptured
+  8. If missingSlots > 0 → set schedulingAccepted, return scenario response
+  9. If discoveryComplete → lock booking, run BookingFlowRunner
+```
+
+---
+
+## LLM Prompt Rules (HybridReceptionistLLM)
+
+The LLM receives different instruction sets based on scheduling state:
+
+### Pre-acceptance (schedulingAccepted = false)
+- Acknowledge caller's problem using scenario knowledge
+- Offer scheduling: "Would you like me to schedule a service call?"
+- Do NOT ask for name/phone/address yet
+- If caller says "I need service" → treat as consent
+
+### Post-acceptance, info missing (schedulingAccepted = true, missingSlots > 0)
+- CONFIRM captured slots: "I have your name as {value}"
+- ASK missing slots: "What's the service address?"
+- Combine confirm + ask in one response
+- End with: "Once you confirm, I'll get this scheduled."
+
+### Post-acceptance, complete (schedulingAccepted = true, missingSlots = 0)
+- Proceed to booking
 
 ---
 
@@ -79,54 +159,31 @@ These belong in **Booking flow only** (after name/phone/address captured).
 
 ---
 
-## The 2 Decision Detectors
+## Implicit Consent — "I need service" = scheduling accepted
 
-### 1. Scheduling Acceptance
-Caller says: yes / schedule / book it / send someone / ok / please do / come out  
-→ `schedulingAccepted = true` → enter V110 info collection
+When a caller's words imply they want service, the system treats it as consent:
 
-### 2. Refusal / More Questions  
-Caller says: no / just asking / not yet / how much  
-→ Stay in scenario Q&A mode, keep answering, keep funneling
+| Phrase | Detection |
+|--------|-----------|
+| "I need service" / "I need AC service" | implicit_service_request |
+| "Send someone" / "Send someone out" | implicit_service_request |
+| "Come out" / "Come take a look" | implicit_service_request |
+| "Need repair" / "Need it fixed" | implicit_service_request |
+| "I need a technician" | implicit_service_request |
 
----
+Config: `frontDesk.detectionTriggers.implicitConsentPhrases` (per-company).
 
-## What If Caller Asks Questions?
-
-Scenarios handle it naturally with answer + funnel:
-
-| Caller | Agent (Scenario) |
-|--------|-----------------|
-| "How much is it?" | "Exact price depends on diagnosis. Would you like me to schedule a tech?" |
-| "Can you come today?" | "We'll try for soonest available. Want me to schedule it now?" |
-| "Is this an emergency?" | "If you have no cooling and it's affecting safety, we treat it as urgent. Want me to schedule?" |
+The agent does NOT waste a turn asking "Would you like to schedule?" — it confirms captured info and proceeds.
 
 ---
 
-## Priority Order
+## Redis Persistence
 
-1. **Scenario response** (first — acknowledge + answer)
-2. **Scheduling offer** (always included unless caller explicitly refuses)
-3. If accepted → **V110 Discovery steps** (name → phone → address)
-4. Then → **Booking flow** (remaining slots)
-
----
-
-## What's Allowed vs Not Allowed
-
-### Allowed
-- Scenarios as PRIMARY brain in Discovery
-- Scheduling offers in scenario responses (that's the funnel)
-- Consent detection as scheduling acceptance detector
-- State-based lane transition (accepted + complete → BOOKING)
-- Company-scoped config (per companyID)
-
-### Not Allowed
-- Kill switches that muzzle scenarios
-- Stripping scheduling language from scenario output
-- Skipping scenarios to force info collection on Turn 1
-- Phrase detection for lane transitions
-- Booking-time prompts in Discovery (morning/afternoon)
+| Field | Saved | Loaded |
+|-------|-------|--------|
+| `schedulingAccepted` | v2twilio → Redis | FrontDeskRuntime.determineLane |
+| `bookingConsentPending` | v2twilio → Redis | ConversationEngine consent detector |
+| `booking.consentGiven` | v2twilio → Redis | FrontDeskRuntime + ConversationEngine |
 
 ---
 
@@ -134,14 +191,19 @@ Scenarios handle it naturally with answer + funnel:
 
 | File | Change |
 |------|--------|
-| `FrontDeskRuntime.js` | `determineLane()`: schedulingAccepted + discoveryComplete → BOOKING |
-| `FrontDeskRuntime.js` | `handleDiscoveryLane()`: V110 sets schedulingAccepted, not bookingModeLocked |
-| `ConversationEngine.js` | Scenarios are PRIMARY brain (not enrichment-only) |
-| `ConversationEngine.js` | Scheduling language stays (not stripped). Only booking-time prompts stripped. |
-| `ConversationEngine.js` | Consent detection works as scheduling acceptance detector |
+| `ConversationEngine.js` | Booking detection runs in ALL modes (not skipped in strict) |
+| `ConversationEngine.js` | V110 implicit consent detection (`implicitConsentPhrases`) |
+| `ConversationEngine.js` | V110 deferred signals (scenarios speak first, signals injected after) |
+| `ConversationEngine.js` | LLM context includes `schedulingAccepted` + `confirmPolicy` |
+| `FrontDeskRuntime.js` | Booking signal handler merges `filledSlots` + `slotsCollected` |
+| `FrontDeskRuntime.js` | Signal handler checks `signals.schedulingAccepted` |
+| `HybridReceptionistLLM.js` | V110-aware LLM prompt: confirm captured / ask missing |
+| `v2twilio.js` | `schedulingAccepted` persisted to Redis |
+| `v2Company.js` | Schema: `implicitConsentPhrases` added to `detectionTriggers` |
+| `runtimeReaders.map.js` | Wiring map: `implicitConsentPhrases` config path |
 
 ---
 
 ## Non-V110 Backward Compatibility
 
-Companies WITHOUT a Discovery Flow: zero changes. Legacy kill switches, phrase detection, and consent gates all preserved.
+Companies WITHOUT a Discovery Flow: zero changes. Legacy booking detection, phrase matching, and consent gates all preserved. The `if (hasDiscoveryFlow)` / `if (!hasDiscoveryFlow)` guards ensure complete isolation.

@@ -3256,7 +3256,22 @@ const companySchema = new mongoose.Schema({
                 // Example: ["book", "schedule", "appointment", "send a technician", "need service",
                 //           "repair", "come out today", "as soon as possible", "asap"]
                 // ═══════════════════════════════════════════════════════════════
-                directIntentPatterns: [{ type: String, trim: true, lowercase: true }]
+                directIntentPatterns: [{ type: String, trim: true, lowercase: true }],
+                
+                // ═══════════════════════════════════════════════════════════════
+                // V110: Implicit consent phrases — caller statements that count
+                // as scheduling acceptance without explicitly asking.
+                //
+                // When a caller says "I need service" or "send someone out",
+                // that IS consent. The agent should not waste a turn asking
+                // "would you like to schedule?" — it should confirm captured
+                // info and proceed.
+                //
+                // Config-driven per company/trade. Falls back to defaults if empty.
+                // Examples: ["need service", "send someone", "come out",
+                //            "need repair", "need it fixed", "need a technician"]
+                // ═══════════════════════════════════════════════════════════════
+                implicitConsentPhrases: [{ type: String, trim: true, lowercase: true }]
             },
             
             // ═══════════════════════════════════════════════════════════════
