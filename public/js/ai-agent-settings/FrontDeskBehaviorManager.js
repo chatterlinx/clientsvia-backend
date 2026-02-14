@@ -3532,7 +3532,16 @@ class FrontDeskBehaviorManager {
         // Export button
         const exportBtn = contentElement.querySelector('#fdb-export-flows');
         if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
+            exportBtn.addEventListener('click', async () => {
+                const statusEl = contentElement.querySelector('#fdb-flows-status');
+                const setStatus = (text, color) => {
+                    if (!statusEl) return;
+                    statusEl.textContent = text;
+                    if (color) statusEl.style.color = color;
+                };
+                
+                setStatus('Building export...', '#8b949e');
+                
                 // Ensure export reflects current UI state (even if not saved yet)
                 this._collectOpenersChanges(contentElement);
                 this._collectResponseTemplateChanges(contentElement);
@@ -3540,24 +3549,58 @@ class FrontDeskBehaviorManager {
                 this._collectDiscoveryFlowChanges(contentElement);
                 this._collectBookingFlowChanges(contentElement);
                 this._collectPolicyChanges(contentElement);
-
+                
+                let sttProfileSnapshot = null;
+                try {
+                    sttProfileSnapshot = await buildSttProfileSnapshot();
+                } catch (err) {
+                    sttProfileSnapshot = {
+                        error: err.message,
+                        templateId: sttTemplateId || null,
+                        templateName: sttTemplateName?.textContent?.trim() || null,
+                        loadedFrom: 'export_error'
+                    };
+                }
+                
+                const architectureNotesDraft = wiringTextarea?.value ?? this.config.architectureNotes ?? '';
+                const architectureNotesSaved = this.config.architectureNotes ?? '';
+                const architectureNotesDirty = typeof wiringTextarea?.value === 'string' && wiringTextarea.value !== architectureNotesSaved;
+                
                 const exportData = {
                     ...this.config,
                     exportMeta: {
-                        scope: 'discovery-flow',
+                        scope: 'discovery-flow-page',
                         exportedAt: new Date().toISOString(),
                         exportedBy: 'FrontDeskBehaviorManager',
                         uiBuild: FrontDeskBehaviorManager.UI_BUILD,
-                        companyId: this.companyId
+                        companyId: this.companyId,
+                        includesModals: true
+                    },
+                    pageSnapshots: {
+                        sttProfile: sttProfileSnapshot,
+                        protectedWords: {
+                            system: SYSTEM_PROTECTED_WORDS,
+                            company: companyProtectedWords,
+                            hasUnsavedChanges: pwHasChanges
+                        },
+                        architectureNotes: {
+                            value: architectureNotesDraft,
+                            savedValue: architectureNotesSaved,
+                            updatedAt: this.config.architectureNotesUpdated || null,
+                            hasUnsavedChanges: architectureNotesDirty
+                        }
                     }
                 };
                 const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `frontdesk-discovery-flow-${Date.now()}.json`;
+                a.download = `frontdesk-discovery-flow-page-${Date.now()}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
+                
+                setStatus('✅ Exported', '#3fb950');
+                setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
             });
         }
 
@@ -4187,6 +4230,8 @@ class FrontDeskBehaviorManager {
         // Store the loaded STT data for filtering
         let sttData = { fillers: [], corrections: [], synonyms: [], rawFillers: [], rawCorrections: [] };
         let sttTemplateId = null;
+        let sttProfileLoaded = false;
+        let sttProfileLoadedAt = null;
         
         // API helper for STT operations
         const sttApi = {
@@ -4953,11 +4998,108 @@ class FrontDeskBehaviorManager {
                 });
                 
                 renderSttData();
+                sttProfileLoaded = true;
+                sttProfileLoadedAt = new Date().toISOString();
                 
             } catch (err) {
                 console.error('[STT MODAL] Load failed:', err);
                 sttModalBody.innerHTML = `<div style="text-align:center; padding:40px; color:#f85149;"><span style="font-size:2rem;">❌</span><p>Failed to load: ${err.message}</p></div>`;
             }
+        };
+        
+        // Build a full snapshot for export (includes modal-only data)
+        const buildSttProfileSnapshot = async () => {
+            const snapshot = {
+                templateId: sttTemplateId || null,
+                templateName: sttTemplateName?.textContent?.trim() || null,
+                fillers: [],
+                rawFillers: [],
+                corrections: [],
+                rawCorrections: [],
+                synonyms: [],
+                synonymSource: this.config.inheritedSynonymsRaw ? 'inheritedSynonymsRaw' : 'profile',
+                loadedFrom: null,
+                loadedAt: sttProfileLoadedAt || null
+            };
+            
+            if (sttProfileLoaded && sttTemplateId) {
+                snapshot.fillers = sttData.fillers || [];
+                snapshot.rawFillers = sttData.rawFillers || [];
+                snapshot.corrections = sttData.corrections || [];
+                snapshot.rawCorrections = sttData.rawCorrections || [];
+                snapshot.synonyms = sttData.synonyms || [];
+                snapshot.loadedFrom = 'modal_cache';
+                return snapshot;
+            }
+            
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+            if (!token) {
+                throw new Error('Missing auth token');
+            }
+            
+            const configResponse = await fetch(`/api/company/${this.companyId}/configuration/templates`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!configResponse.ok) throw new Error('Failed to load templates');
+            const templates = await configResponse.json();
+            if (!templates || templates.length === 0) throw new Error('No template assigned to this company');
+            
+            const templateId = templates[0].templateId || templates[0]._id;
+            const templateName = templates[0].name || templates[0].templateName || 'Unknown';
+            
+            const sttResponse = await fetch(`/api/admin/stt-profile/${templateId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!sttResponse.ok) throw new Error('Failed to load STT profile');
+            const sttResult = await sttResponse.json();
+            const profile = sttResult.data || sttResult;
+            
+            let rawFillers = profile.fillers || [];
+            if (!Array.isArray(rawFillers)) rawFillers = [];
+            const normalizedRawFillers = rawFillers.map(f => {
+                if (typeof f === 'string') {
+                    return { phrase: f, enabled: true };
+                }
+                return { phrase: f.phrase || f.word || '', enabled: f.enabled !== false };
+            }).filter(f => f.phrase);
+            
+            const fillers = normalizedRawFillers
+                .filter(f => f.enabled !== false)
+                .map(f => f.phrase);
+            
+            let rawCorrections = profile.corrections || [];
+            if (!Array.isArray(rawCorrections)) {
+                if (typeof rawCorrections === 'object' && rawCorrections !== null) {
+                    rawCorrections = Object.entries(rawCorrections).map(([from, to]) => ({ heard: from, normalized: to }));
+                } else {
+                    rawCorrections = [];
+                }
+            }
+            
+            const corrections = rawCorrections
+                .filter(c => c.enabled !== false)
+                .map(c => ({
+                    from: c.heard || c.from || c.mishear || c.input || '',
+                    to: c.normalized || c.to || c.correct || c.output || ''
+                })).filter(c => c.from && c.to);
+            
+            const synonymMap = this.config.inheritedSynonymsRaw || profile.vocabulary?.synonymMap || profile.synonymMap || {};
+            const synonyms = Object.entries(synonymMap || {}).map(([word, syns]) => ({
+                word,
+                synonyms: Array.isArray(syns) ? syns : (syns ? [syns] : [])
+            }));
+            
+            snapshot.templateId = templateId;
+            snapshot.templateName = templateName;
+            snapshot.fillers = fillers;
+            snapshot.rawFillers = normalizedRawFillers;
+            snapshot.corrections = corrections;
+            snapshot.rawCorrections = rawCorrections;
+            snapshot.synonyms = synonyms;
+            snapshot.synonymSource = this.config.inheritedSynonymsRaw ? 'inheritedSynonymsRaw' : 'profile';
+            snapshot.loadedFrom = 'export_fetch';
+            snapshot.loadedAt = new Date().toISOString();
+            return snapshot;
         };
         
         // Event handlers
