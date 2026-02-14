@@ -647,6 +647,9 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 // Conversation Style: Openers (Layer 0 micro-acks)
                 openers: config.openers || null,
                 
+                // V110 Response Templates (Layer 0.5 — discovery-before-discovery LLM rules)
+                discoveryResponseTemplates: config.discoveryResponseTemplates || null,
+                
                 // V115: Triage config — single source of truth
                 triage: config.triage || {
                     enabled: false,
@@ -1014,6 +1017,19 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             });
         }
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V110 RESPONSE TEMPLATES — Discovery-before-discovery LLM rules
+        // ═══════════════════════════════════════════════════════════════════════
+        if (updates.discoveryResponseTemplates && typeof updates.discoveryResponseTemplates === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.discoveryResponseTemplates'] = updates.discoveryResponseTemplates;
+            logger.info('[FRONT DESK BEHAVIOR] Saving discoveryResponseTemplates', {
+                companyId,
+                preAcceptance: !!updates.discoveryResponseTemplates.preAcceptance,
+                postAcceptance: !!updates.discoveryResponseTemplates.postAcceptance,
+                allCaptured: !!updates.discoveryResponseTemplates.allCaptured
+            });
+        }
+
         // ═══════════════════════════════════════════════════════════════════════
         // V115: TRIAGE CONFIG — The ONLY triage gate
         // ═══════════════════════════════════════════════════════════════════════

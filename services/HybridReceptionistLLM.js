@@ -966,12 +966,32 @@ ACKNOWLEDGE this context naturally:
                 
                 // ════════════════════════════════════════════════════════════
                 // V110: Build discovery rules based on scheduling state
+                // Config-driven from frontDeskBehavior.discoveryResponseTemplates
                 // ════════════════════════════════════════════════════════════
                 const v110SchedulingAccepted = enterpriseContext.schedulingAccepted === true;
                 const v110ConfirmPolicy = enterpriseContext.confirmPolicy || null;
                 const v110CapturedSlots = v110ConfirmPolicy?.capturedSlots || [];
                 const v110MissingSlots = v110ConfirmPolicy?.missingSlots || [];
-                
+
+                // Read response templates from config (UI-editable)
+                const drt = behaviorConfig?.discoveryResponseTemplates || {};
+                const preAcc = drt.preAcceptance || {};
+                const postAcc = drt.postAcceptance || {};
+                const askTpl = postAcc.askTemplates || {};
+                const allCap = drt.allCaptured || {};
+
+                // Template defaults (fallback if config is empty)
+                const tplSchedulingOffer = preAcc.schedulingOffer || 'Would you like me to schedule a service call?';
+                const tplNeverAssume = preAcc.neverAssume || 'NEVER say "Let me get you scheduled" — ASK first.';
+                const tplImplicitConsent = preAcc.implicitConsentNote || 'If caller says "I need service" / "send someone" / "come out" — that IS consent. Proceed to confirm.';
+                const tplConfirm = postAcc.confirmTemplate || 'I have your {field} as {value} — is that correct?';
+                const tplCloser = postAcc.closer || "Once you confirm, I'll get this scheduled.";
+                const tplCombined = postAcc.combinedExample || "I have you at {address} — is that correct? And is the number you're calling from the best one for text updates?";
+                const tplAskName = askTpl.name || "What's your first and last name?";
+                const tplAskPhone = askTpl.phone || "Is the number you're calling from the best one for text updates?";
+                const tplAskAddress = askTpl.address || "What's the full service address?";
+                const tplProceed = allCap.proceedMessage || "Perfect — I have everything I need. Let me get this scheduled.";
+
                 if (v110SchedulingAccepted && v110MissingSlots.length > 0) {
                     // ── POST-ACCEPTANCE: Confirm captured, ask missing ──
                     systemPrompt += `\n\nV110 INFO COLLECTION RULES (caller already agreed to schedule):`;
@@ -979,15 +999,22 @@ ACKNOWLEDGE this context naturally:
                     
                     if (v110CapturedSlots.length > 0) {
                         systemPrompt += `\n2. ALREADY CAPTURED (confirm, do NOT re-ask): ${v110CapturedSlots.join(', ')}`;
-                        systemPrompt += `\n   - Use: "I have your [field] as [value] — is that correct?"`;
+                        systemPrompt += `\n   - Use: "${tplConfirm}"`;
                         systemPrompt += `\n   - NEVER re-ask something already captured.`;
                     }
                     
                     systemPrompt += `\n3. STILL NEEDED (ask for these): ${v110MissingSlots.join(', ')}`;
-                    systemPrompt += `\n   - Ask naturally: "What's the service address?" or "What's the best phone number?"`;
+                    // Build slot-specific ask instructions from config
+                    const askInstructions = v110MissingSlots.map(slot => {
+                        if (slot === 'name' || slot === 'firstName') return `   - Name: "${tplAskName}"`;
+                        if (slot === 'phone') return `   - Phone: "${tplAskPhone}"`;
+                        if (slot === 'address') return `   - Address: "${tplAskAddress}"`;
+                        return `   - ${slot}: ask naturally`;
+                    }).join('\n');
+                    systemPrompt += `\n${askInstructions}`;
                     systemPrompt += `\n4. Combine confirm + ask in one response when possible.`;
-                    systemPrompt += `\n   Example: "I have you at 1212 Cleveland Ave — is that correct? And is the number you're calling from the best one for text updates?"`;
-                    systemPrompt += `\n5. End with: "Once you confirm, I'll get this scheduled."`;
+                    systemPrompt += `\n   Example: "${tplCombined}"`;
+                    systemPrompt += `\n5. End with: "${tplCloser}"`;
                     systemPrompt += `\n6. Output JSON: {"slot":"none","ack":"your natural response confirming + asking"}`;
                     systemPrompt += `\n7. V116 RULE: If CALLER CONTEXT is provided above, reference the issue naturally. Do NOT re-ask what they already told you.`;
                     
@@ -995,7 +1022,7 @@ ACKNOWLEDGE this context naturally:
                     // ── POST-ACCEPTANCE + COMPLETE: All info captured ──
                     systemPrompt += `\n\nV110 RULES (all info captured — proceeding to booking):`;
                     systemPrompt += `\n1. All required information has been collected. Confirm and proceed.`;
-                    systemPrompt += `\n2. Say something like: "Perfect — I have everything I need. Let me get this scheduled."`;
+                    systemPrompt += `\n2. Say something like: "${tplProceed}"`;
                     systemPrompt += `\n3. Output JSON: {"slot":"none","ack":"confirmation message"}`;
                     
                 } else {
@@ -1004,10 +1031,10 @@ ACKNOWLEDGE this context naturally:
                     systemPrompt += `\n1. You are in DISCOVERY mode — understand the caller's situation first.`;
                     systemPrompt += `\n2. Use the scenario knowledge above to acknowledge their problem and provide helpful information.`;
                     systemPrompt += `\n3. If the caller describes a problem, acknowledge it with reassurance and relevant guidance.`;
-                    systemPrompt += `\n4. After acknowledging, offer scheduling: "Would you like me to schedule a service call?"`;
-                    systemPrompt += `\n5. NEVER say "Let me get you scheduled" or "I'll schedule you" — ASK first.`;
+                    systemPrompt += `\n4. After acknowledging, offer scheduling: "${tplSchedulingOffer}"`;
+                    systemPrompt += `\n5. ${tplNeverAssume}`;
                     systemPrompt += `\n6. Do NOT ask for name/phone/address yet — wait until they agree to schedule.`;
-                    systemPrompt += `\n7. If caller says "I need service" / "send someone" / "come out" — that IS consent. Proceed to confirm any captured info and ask for what's missing.`;
+                    systemPrompt += `\n7. ${tplImplicitConsent}`;
                     systemPrompt += `\n8. Output JSON: {"slot":"none","ack":"your natural response using scenario knowledge"}`;
                     systemPrompt += `\n9. V116 RULE: If CALLER CONTEXT is provided above, you ALREADY KNOW the problem. Reference it naturally. NEVER ask "what can I help you with?" after the caller already told you.`;
                 }

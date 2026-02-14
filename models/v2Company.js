@@ -2327,6 +2327,48 @@ const companySchema = new mongoose.Schema({
             },
 
             // ═══════════════════════════════════════════════════════════════
+            // V110 RESPONSE TEMPLATES — "Discovery Before Discovery"
+            // ═══════════════════════════════════════════════════════════════
+            // Configurable response patterns for the three V110 phases.
+            // These drive the LLM prompt rules so the agent responds
+            // naturally based on what was captured vs what's missing.
+            //
+            // Phase 1 (Pre-Acceptance): Scenario speaks, funnel to scheduling
+            // Phase 2 (Post-Acceptance, collecting): Confirm captured, ask missing
+            // Phase 3 (Post-Acceptance, complete): Proceed to booking
+            // ═══════════════════════════════════════════════════════════════
+            discoveryResponseTemplates: {
+                // Phase 1: Pre-acceptance — scenario acknowledges + offers scheduling
+                preAcceptance: {
+                    // How the agent offers scheduling after acknowledging the issue
+                    schedulingOffer: { type: String, trim: true, default: 'Would you like me to schedule a service call?' },
+                    // Rule: never assume scheduling — always ASK
+                    neverAssume: { type: String, trim: true, default: 'NEVER say "Let me get you scheduled" — ASK first.' },
+                    // Implicit consent phrases that skip the offer
+                    implicitConsentNote: { type: String, trim: true, default: 'If caller says "I need service" / "send someone" / "come out" — that IS consent. Proceed to confirm.' }
+                },
+                // Phase 2: Post-acceptance — confirm captured, ask missing
+                postAcceptance: {
+                    // Template for confirming a captured slot
+                    confirmTemplate: { type: String, trim: true, default: 'I have your {field} as {value} — is that correct?' },
+                    // Template for asking a missing slot
+                    askTemplates: {
+                        name: { type: String, trim: true, default: "What's your first and last name?" },
+                        phone: { type: String, trim: true, default: 'Is the number you\'re calling from the best one for text updates?' },
+                        address: { type: String, trim: true, default: "What's the full service address?" }
+                    },
+                    // Combined confirm+ask example
+                    combinedExample: { type: String, trim: true, default: 'I have you at {address} — is that correct? And is the number you\'re calling from the best one for text updates?' },
+                    // Closer — end of info collection turn
+                    closer: { type: String, trim: true, default: 'Once you confirm, I\'ll get this scheduled.' }
+                },
+                // Phase 3: Post-acceptance + complete — all info captured
+                allCaptured: {
+                    proceedMessage: { type: String, trim: true, default: 'Perfect — I have everything I need. Let me get this scheduled.' }
+                }
+            },
+
+            // ═══════════════════════════════════════════════════════════════
             // VENDOR / SUPPLIER CALL HANDLING (Call Center Directory)
             // ═══════════════════════════════════════════════════════════════
             // Purpose: If an inbound caller matches a Vendor by phone, treat them as

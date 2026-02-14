@@ -83,6 +83,30 @@ class FrontDeskBehaviorManager {
                 };
             }
 
+            // V110 Response Templates — "Discovery Before Discovery" LLM rules
+            if (!this.config.discoveryResponseTemplates) {
+                this.config.discoveryResponseTemplates = {
+                    preAcceptance: {
+                        schedulingOffer: 'Would you like me to schedule a service call?',
+                        neverAssume: 'NEVER say "Let me get you scheduled" — ASK first.',
+                        implicitConsentNote: 'If caller says "I need service" / "send someone" / "come out" — that IS consent. Proceed to confirm.'
+                    },
+                    postAcceptance: {
+                        confirmTemplate: 'I have your {field} as {value} — is that correct?',
+                        askTemplates: {
+                            name: "What's your first and last name?",
+                            phone: "Is the number you're calling from the best one for text updates?",
+                            address: "What's the full service address?"
+                        },
+                        combinedExample: "I have you at {address} — is that correct? And is the number you're calling from the best one for text updates?",
+                        closer: "Once you confirm, I'll get this scheduled."
+                    },
+                    allCaptured: {
+                        proceedMessage: "Perfect — I have everything I need. Let me get this scheduled."
+                    }
+                };
+            }
+
             // Prompt guards shape (promptPacks REMOVED Jan 2026)
             this.config.promptGuards = this.config.promptGuards || this.getDefaultConfig().promptGuards;
 
@@ -1700,6 +1724,33 @@ class FrontDeskBehaviorManager {
         };
         const openers = { ...openersDefaults, ...(this.config.openers || {}) };
         
+        // V110 Response Templates config (discovery-before-discovery LLM rules)
+        const drtDefaults = {
+            preAcceptance: {
+                schedulingOffer: 'Would you like me to schedule a service call?',
+                neverAssume: 'NEVER say "Let me get you scheduled" — ASK first.',
+                implicitConsentNote: 'If caller says "I need service" / "send someone" / "come out" — that IS consent. Proceed to confirm.'
+            },
+            postAcceptance: {
+                confirmTemplate: 'I have your {field} as {value} — is that correct?',
+                askTemplates: {
+                    name: "What's your first and last name?",
+                    phone: "Is the number you're calling from the best one for text updates?",
+                    address: "What's the full service address?"
+                },
+                combinedExample: "I have you at {address} — is that correct? And is the number you're calling from the best one for text updates?",
+                closer: "Once you confirm, I'll get this scheduled."
+            },
+            allCaptured: {
+                proceedMessage: "Perfect — I have everything I need. Let me get this scheduled."
+            }
+        };
+        const drt = this.config.discoveryResponseTemplates || drtDefaults;
+        const preAcc = { ...drtDefaults.preAcceptance, ...(drt.preAcceptance || {}) };
+        const postAcc = { ...drtDefaults.postAcceptance, ...(drt.postAcceptance || {}) };
+        const postAskTpl = { ...drtDefaults.postAcceptance.askTemplates, ...(postAcc.askTemplates || {}) };
+        const allCap = { ...drtDefaults.allCaptured, ...(drt.allCaptured || {}) };
+
         // Build slot options dropdown HTML
         const slotOptions = (slotRegistry.slots || []).map(s => 
             `<option value="${this.escapeHtml(s.id)}">${this.escapeHtml(s.label || s.id)} (${s.id})</option>`
@@ -2022,6 +2073,137 @@ class FrontDeskBehaviorManager {
                                         style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px; font-size:0.8rem;">
                                     <button class="fdb-openers-add-btn" data-pool="urgencyKeywords" style="background:#d2992220; color:#d29922; border:1px solid #d2992260; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">+</button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- V110 RESPONSE TEMPLATES (Layer 0.5 — Discovery Before Discovery) -->
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <div style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #58a6ff40; border-radius:12px; padding:20px; margin-bottom:20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+                            <div>
+                                <h3 style="margin:0; color:#58a6ff; font-size:1.15rem; display:flex; align-items:center; gap:10px;">
+                                    🎯 V110 Response Templates
+                                    <span style="background:#58a6ff20; color:#58a6ff; padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:600;">LAYER 0.5</span>
+                                </h3>
+                                <p style="margin:10px 0 0 0; color:#8b949e; font-size:0.85rem; line-height:1.6; max-width:700px;">
+                                    Controls <strong style="color:#c9d1d9;">how the agent responds</strong> in each V110 phase.
+                                    <strong style="color:#f0883e;">Phase 1</strong> (Pre-Acceptance): acknowledge the problem, offer scheduling.
+                                    <strong style="color:#3fb950;">Phase 2</strong> (Post-Acceptance): confirm captured info, ask for what's missing.
+                                    <strong style="color:#d29922;">Phase 3</strong> (All Captured): proceed to booking.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Phase 1: Pre-Acceptance -->
+                        <div style="border:1px solid #f0883e30; border-radius:8px; padding:16px; margin-bottom:16px; background:#f0883e08;">
+                            <h4 style="margin:0 0 12px 0; color:#f0883e; font-size:0.95rem; display:flex; align-items:center; gap:8px;">
+                                Phase 1 — Pre-Acceptance
+                                <span style="color:#8b949e; font-weight:normal; font-size:0.8rem;">(Scenario speaks, funnel to scheduling)</span>
+                            </h4>
+                            <div style="display:grid; grid-template-columns:1fr; gap:12px;">
+                                <div>
+                                    <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Scheduling Offer</label>
+                                    <input type="text" id="fdb-drt-pre-scheduling-offer" value="${this.escapeHtml(preAcc.schedulingOffer)}"
+                                        style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                        placeholder="Would you like me to schedule a service call?">
+                                    <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                        What the agent says to offer scheduling after acknowledging the caller's issue.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Guard Rule</label>
+                                    <input type="text" id="fdb-drt-pre-never-assume" value="${this.escapeHtml(preAcc.neverAssume)}"
+                                        style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                        placeholder='NEVER say "Let me get you scheduled" — ASK first.'>
+                                    <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                        Injected into LLM prompt to prevent presumptive scheduling.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Implicit Consent Note</label>
+                                    <input type="text" id="fdb-drt-pre-implicit-consent" value="${this.escapeHtml(preAcc.implicitConsentNote)}"
+                                        style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                        placeholder='If caller says "I need service" / "send someone" / "come out" — that IS consent.'>
+                                    <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                        Tells the LLM how to detect implicit consent from the caller.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Phase 2: Post-Acceptance (Confirm + Ask) -->
+                        <div style="border:1px solid #3fb95030; border-radius:8px; padding:16px; margin-bottom:16px; background:#3fb95008;">
+                            <h4 style="margin:0 0 12px 0; color:#3fb950; font-size:0.95rem; display:flex; align-items:center; gap:8px;">
+                                Phase 2 — Post-Acceptance
+                                <span style="color:#8b949e; font-weight:normal; font-size:0.8rem;">(Confirm captured, ask for missing)</span>
+                            </h4>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+                                <div>
+                                    <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Confirm Template</label>
+                                    <input type="text" id="fdb-drt-post-confirm-template" value="${this.escapeHtml(postAcc.confirmTemplate)}"
+                                        style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                        placeholder="I have your {field} as {value} — is that correct?">
+                                    <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                        Pattern for confirming a captured slot. Uses <code style="color:#3fb950; background:#3fb95015; padding:1px 4px; border-radius:3px;">{field}</code> and <code style="color:#3fb950; background:#3fb95015; padding:1px 4px; border-radius:3px;">{value}</code>.
+                                    </p>
+                                </div>
+                                <div>
+                                    <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Closer</label>
+                                    <input type="text" id="fdb-drt-post-closer" value="${this.escapeHtml(postAcc.closer)}"
+                                        style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                        placeholder="Once you confirm, I'll get this scheduled.">
+                                    <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                        How the agent ends a turn after confirming + asking.
+                                    </p>
+                                </div>
+                            </div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
+                                <div>
+                                    <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Ask: Name</label>
+                                    <input type="text" id="fdb-drt-post-ask-name" value="${this.escapeHtml(postAskTpl.name)}"
+                                        style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                        placeholder="What's your first and last name?">
+                                </div>
+                                <div>
+                                    <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Ask: Phone</label>
+                                    <input type="text" id="fdb-drt-post-ask-phone" value="${this.escapeHtml(postAskTpl.phone)}"
+                                        style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                        placeholder="Is the number you're calling from the best one?">
+                                </div>
+                                <div>
+                                    <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Ask: Address</label>
+                                    <input type="text" id="fdb-drt-post-ask-address" value="${this.escapeHtml(postAskTpl.address)}"
+                                        style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                        placeholder="What's the full service address?">
+                                </div>
+                            </div>
+                            <div>
+                                <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Combined Example (shown to LLM)</label>
+                                <input type="text" id="fdb-drt-post-combined-example" value="${this.escapeHtml(postAcc.combinedExample)}"
+                                    style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                    placeholder="I have you at {address} — is that correct? And is the number you're calling from the best one for text updates?">
+                                <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                    Multi-slot example injected into LLM prompt so it learns the combined confirm+ask pattern.
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Phase 3: All Captured -->
+                        <div style="border:1px solid #d2992230; border-radius:8px; padding:16px; background:#d2992208;">
+                            <h4 style="margin:0 0 12px 0; color:#d29922; font-size:0.95rem; display:flex; align-items:center; gap:8px;">
+                                Phase 3 — All Captured
+                                <span style="color:#8b949e; font-weight:normal; font-size:0.8rem;">(Proceed to booking)</span>
+                            </h4>
+                            <div>
+                                <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Proceed Message</label>
+                                <input type="text" id="fdb-drt-all-proceed" value="${this.escapeHtml(allCap.proceedMessage)}"
+                                    style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                    placeholder="Perfect — I have everything I need. Let me get this scheduled.">
+                                <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                    What the agent says when all required info is captured. Triggers transition to Booking Flow.
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -2924,6 +3106,11 @@ class FrontDeskBehaviorManager {
         this._initOpenersHandlers(contentElement);
 
         // ═══════════════════════════════════════════════════════════════════════════
+        // V110 RESPONSE TEMPLATES: Input change handlers
+        // ═══════════════════════════════════════════════════════════════════════════
+        this._initResponseTemplateHandlers(contentElement);
+
+        // ═══════════════════════════════════════════════════════════════════════════
         // V111 HEALTH CHECK - Load and display system health status
         // ═══════════════════════════════════════════════════════════════════════════
         const loadV111Health = async () => {
@@ -3325,6 +3512,7 @@ class FrontDeskBehaviorManager {
                     
                     // Collect all current values
                     this._collectOpenersChanges(contentElement);
+                    this._collectResponseTemplateChanges(contentElement);
                     this._collectSlotRegistryChanges(contentElement);
                     this._collectDiscoveryFlowChanges(contentElement);
                     this._collectBookingFlowChanges(contentElement);
@@ -3347,6 +3535,7 @@ class FrontDeskBehaviorManager {
             exportBtn.addEventListener('click', () => {
                 // Ensure export reflects current UI state (even if not saved yet)
                 this._collectOpenersChanges(contentElement);
+                this._collectResponseTemplateChanges(contentElement);
                 this._collectSlotRegistryChanges(contentElement);
                 this._collectDiscoveryFlowChanges(contentElement);
                 this._collectBookingFlowChanges(contentElement);
@@ -5517,6 +5706,67 @@ class FrontDeskBehaviorManager {
         ['general', 'frustration', 'urgency', 'frustrationKeywords', 'urgencyKeywords'].forEach(pool => {
             if (!this.config.openers[pool]) this.config.openers[pool] = [];
         });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V110 RESPONSE TEMPLATES — init handlers + collect
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    _initResponseTemplateHandlers(contentElement) {
+        // Mark dirty on any input change
+        const drtInputIds = [
+            'fdb-drt-pre-scheduling-offer',
+            'fdb-drt-pre-never-assume',
+            'fdb-drt-pre-implicit-consent',
+            'fdb-drt-post-confirm-template',
+            'fdb-drt-post-closer',
+            'fdb-drt-post-ask-name',
+            'fdb-drt-post-ask-phone',
+            'fdb-drt-post-ask-address',
+            'fdb-drt-post-combined-example',
+            'fdb-drt-all-proceed'
+        ];
+        drtInputIds.forEach(id => {
+            const el = contentElement.querySelector(`#${id}`);
+            if (el) el.addEventListener('input', () => { this.isDirty = true; });
+        });
+    }
+
+    _collectResponseTemplateChanges(container) {
+        if (!this.config.discoveryResponseTemplates) {
+            this.config.discoveryResponseTemplates = {};
+        }
+        const drt = this.config.discoveryResponseTemplates;
+
+        // Phase 1: Pre-Acceptance
+        if (!drt.preAcceptance) drt.preAcceptance = {};
+        const preOffer = container.querySelector('#fdb-drt-pre-scheduling-offer');
+        const preGuard = container.querySelector('#fdb-drt-pre-never-assume');
+        const preConsent = container.querySelector('#fdb-drt-pre-implicit-consent');
+        if (preOffer) drt.preAcceptance.schedulingOffer = preOffer.value.trim();
+        if (preGuard) drt.preAcceptance.neverAssume = preGuard.value.trim();
+        if (preConsent) drt.preAcceptance.implicitConsentNote = preConsent.value.trim();
+
+        // Phase 2: Post-Acceptance
+        if (!drt.postAcceptance) drt.postAcceptance = {};
+        if (!drt.postAcceptance.askTemplates) drt.postAcceptance.askTemplates = {};
+        const postConfirm = container.querySelector('#fdb-drt-post-confirm-template');
+        const postCloser = container.querySelector('#fdb-drt-post-closer');
+        const postAskName = container.querySelector('#fdb-drt-post-ask-name');
+        const postAskPhone = container.querySelector('#fdb-drt-post-ask-phone');
+        const postAskAddress = container.querySelector('#fdb-drt-post-ask-address');
+        const postCombined = container.querySelector('#fdb-drt-post-combined-example');
+        if (postConfirm) drt.postAcceptance.confirmTemplate = postConfirm.value.trim();
+        if (postCloser) drt.postAcceptance.closer = postCloser.value.trim();
+        if (postAskName) drt.postAcceptance.askTemplates.name = postAskName.value.trim();
+        if (postAskPhone) drt.postAcceptance.askTemplates.phone = postAskPhone.value.trim();
+        if (postAskAddress) drt.postAcceptance.askTemplates.address = postAskAddress.value.trim();
+        if (postCombined) drt.postAcceptance.combinedExample = postCombined.value.trim();
+
+        // Phase 3: All Captured
+        if (!drt.allCaptured) drt.allCaptured = {};
+        const allProceed = container.querySelector('#fdb-drt-all-proceed');
+        if (allProceed) drt.allCaptured.proceedMessage = allProceed.value.trim();
     }
 
     _collectDiscoveryFlowChanges(container) {

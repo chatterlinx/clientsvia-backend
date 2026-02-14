@@ -118,6 +118,45 @@ const RUNTIME_READERS_MAP = {
         }
     },
 
+    // =========================================================================
+    // V110 RESPONSE TEMPLATES — Discovery-before-discovery LLM prompt rules
+    // Three-phase response templates that drive how the agent responds
+    // during Discovery based on schedulingAccepted state.
+    // =========================================================================
+    'frontDesk.discoveryResponseTemplates': {
+        readers: [
+            {
+                file: 'services/HybridReceptionistLLM.js',
+                function: 'generateLLMResponse',
+                description: 'Injects phase-specific rules (pre-acceptance, post-acceptance, all-captured) into LLM prompt',
+                required: false,
+                checkpoint: 'V110_RESPONSE_TEMPLATE_INJECT'
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryResponseTemplates',
+        scope: 'company',
+        defaultValue: {
+            preAcceptance: {
+                schedulingOffer: 'Would you like me to schedule a service call?',
+                neverAssume: 'NEVER say "Let me get you scheduled" — ASK first.',
+                implicitConsentNote: 'If caller says "I need service" / "send someone" / "come out" — that IS consent. Proceed to confirm.'
+            },
+            postAcceptance: {
+                confirmTemplate: 'I have your {field} as {value} — is that correct?',
+                askTemplates: {
+                    name: "What's your first and last name?",
+                    phone: "Is the number you're calling from the best one for text updates?",
+                    address: "What's the full service address?"
+                },
+                combinedExample: "I have you at {address} — is that correct? And is the number you're calling from the best one for text updates?",
+                closer: "Once you confirm, I'll get this scheduled."
+            },
+            allCaptured: {
+                proceedMessage: "Perfect — I have everything I need. Let me get this scheduled."
+            }
+        }
+    },
+
     'frontDesk.personality.warmth': {
         readers: [
             {
