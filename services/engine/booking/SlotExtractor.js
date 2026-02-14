@@ -434,10 +434,19 @@ class SlotExtractor {
             
             // V92 CRITICAL: In DISCOVERY mode, only extract name and phone
             // Address and time require booking consent first!
+            // V116 FIX: EXCEPTION - If caller explicitly says "the address is X" or "my address is X",
+            // extract it anyway. They're clearly providing booking info even if consent isn't formally set.
+            // This fixes the bug where "yeah, the address is 12155 metro parkway" loses the address
+            // because consent detection happens AFTER slot extraction.
             if (!isBookingActive && !currentBookingStep) {
                 if (slotKey === 'address') {
-                    logger.debug('[SLOT EXTRACTOR] V92: Skipping address extraction (discovery mode - no booking consent)');
-                    return false;
+                    // V116: Check for explicit address statements that should bypass consent gating
+                    const hasExplicitAddressPhrase = /(?:the\s+address\s+is|my\s+address\s+is|address\s+is|i'm\s+at|i\s+live\s+at|we're\s+at)\s+\d/i.test(text);
+                    if (!hasExplicitAddressPhrase) {
+                        logger.debug('[SLOT EXTRACTOR] V92: Skipping address extraction (discovery mode - no booking consent)');
+                        return false;
+                    }
+                    logger.info('[SLOT EXTRACTOR] V116: Extracting address despite discovery mode (explicit address phrase detected)');
                 }
                 if (slotKey === 'time') {
                     logger.debug('[SLOT EXTRACTOR] V92: Skipping time extraction (discovery mode - no booking consent)');
@@ -1619,6 +1628,28 @@ class SlotExtractor {
         if (!text) return null;
         
         // ═══════════════════════════════════════════════════════════════════════════
+        // V116 FIX: STRIP EXPLICIT ADDRESS PHRASES BEFORE PATTERN MATCHING
+        // ═══════════════════════════════════════════════════════════════════════════
+        // BUG: Caller says "the address is 12155 Metro Parkway" but patterns expect
+        // number at start. The prefix "the address is" blocks the match.
+        //
+        // FIX: Strip explicit address introduction phrases FIRST, then match.
+        // ═══════════════════════════════════════════════════════════════════════════
+        let cleanedText = text
+            .replace(/^(?:my\s+address\s+is|the\s+address\s+is|address\s+is|it's\s+at|its\s+at|that's\s+at|i'm\s+at|i\s+am\s+at|we're\s+at|we\s+are\s+at|it's|its|that's|that\s+is|at|um|uh|well|so|yeah|yes|yep|sure|okay|ok)\s*/i, '')
+            .replace(/^[,.\s\-:;]+/, '')  // Remove leading punctuation after phrase stripping
+            .trim();
+        
+        // If stripping left us with nothing, fall back to original
+        if (!cleanedText) cleanedText = text;
+        
+        logger.debug('[SLOT EXTRACTOR] V116: Address extraction preprocessing', {
+            original: text.substring(0, 50),
+            cleaned: cleanedText.substring(0, 50),
+            expectingSlot: context.expectingSlot
+        });
+        
+        // ═══════════════════════════════════════════════════════════════════════════
         // FEB 2026 FIX: Use case-insensitive patterns that work with lowercased STT
         // The STT preprocessor lowercases everything, so [A-Z][a-z]+ won't match
         // Use [a-zA-Z]+ instead to match any case
@@ -1632,8 +1663,8 @@ class SlotExtractor {
         const TIME_PHRASE_BLOCKLIST = /\b\d+\s*(weeks?|days?|months?|years?|hours?|minutes?)\s*(ago|later|from now|back|prior|before|since|now)\b/i;
         const TIME_WORDS_BLOCKLIST = /\b(yesterday|today|tomorrow|ago|since|later|earlier|recently|before|after|last|next|past|week|month|year|day)\b/i;
         
-        if (TIME_PHRASE_BLOCKLIST.test(text)) {
-            logger.debug('[SLOT EXTRACTOR] Address rejected: matches time phrase pattern', { text: text.substring(0, 50) });
+        if (TIME_PHRASE_BLOCKLIST.test(cleanedText)) {
+            logger.debug('[SLOT EXTRACTOR] Address rejected: matches time phrase pattern', { text: cleanedText.substring(0, 50) });
             return null;
         }
         
@@ -1651,7 +1682,7 @@ class SlotExtractor {
         ];
         
         for (const pattern of addressPatterns) {
-            const match = text.match(pattern);
+            const match = cleanedText.match(pattern);
             if (match && match[1].length >= 10) {
                 const candidate = match[1].trim();
                 
@@ -1660,6 +1691,12 @@ class SlotExtractor {
                     logger.debug('[SLOT EXTRACTOR] Address candidate rejected: contains time words', { candidate });
                     continue;
                 }
+                
+                logger.info('[SLOT EXTRACTOR] V116: ✅ Address extracted', {
+                    candidate: candidate.substring(0, 40),
+                    pattern: 'strict_suffix_pattern',
+                    confidence: CONFIDENCE.UTTERANCE_HIGH
+                });
                 
                 return {
                     value: candidate,
@@ -1671,8 +1708,8 @@ class SlotExtractor {
         
         // If we're expecting address, be more lenient BUT still validate
         if (context.expectingSlot === 'address') {
-            // Look for number + words pattern
-            const lenientMatch = text.match(/(\d{1,5}\s+[A-Za-z].*)/);
+            // Look for number + words pattern (use cleanedText)
+            const lenientMatch = cleanedText.match(/(\d{1,5}\s+[A-Za-z].*)/);
             if (lenientMatch && lenientMatch[1].length >= 8) {
                 const candidate = lenientMatch[1].trim();
                 

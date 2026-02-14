@@ -7219,6 +7219,59 @@ class BookingFlowRunner {
                 const parts = existingAddress ? detectAddressParts(existingAddress) : null;
                 const isIncomplete = existingAddress && parts && !parts.hasCity && !parts.hasZip;
                 
+                // ═══════════════════════════════════════════════════════════════
+                // V116 FIX: Handle caller providing FULL address while on different step
+                // ═══════════════════════════════════════════════════════════════
+                // Bug: Caller says "yeah, the address is 12155 metro parkway" while on
+                // lastName step. The address phrase is detected but nothing happens
+                // because existingAddress is empty (isIncomplete is false).
+                //
+                // Fix: If no address exists and caller explicitly provides one,
+                // extract and store it, then acknowledge and continue with current step.
+                // ═══════════════════════════════════════════════════════════════
+                if (!existingAddress && hasAddressRef) {
+                    // Check if the input contains a full address (number + street + suffix)
+                    const addressMatch = input.match(/\b(\d{1,5}\s+[a-zA-Z]+(?:\s+[a-zA-Z]+)*\s+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|way|court|ct|circle|cir|place|pl|parkway|pkwy|highway|hwy|terrace|ter|trail|trl|path|plaza|square|sq))\b/i);
+                    
+                    if (addressMatch) {
+                        const extractedAddress = addressMatch[1].trim();
+                        const setResult = safeSetSlot(state, 'address', extractedAddress, {
+                            source: 'interruption_proactive_address',
+                            confidence: 0.9,
+                            bypassStepGate: true
+                        });
+                        
+                        if (setResult.accepted) {
+                            logger.info('[BOOKING INTERRUPTION] V116: Captured proactive address while on different step', {
+                                currentStep: currentFieldKey,
+                                extractedAddress,
+                                fullInput: input.substring(0, 50)
+                            });
+                            
+                            // Find the current step's prompt to continue asking
+                            const currentStepPrompt = currentStep.ask || currentStep.prompt || 
+                                `What is your ${currentStep.label || currentStep.id}?`;
+                            
+                            return {
+                                reply: `Got it, ${extractedAddress}. ${currentStepPrompt}`,
+                                state,
+                                isComplete: false,
+                                action: 'CONTINUE',
+                                matchSource: 'BOOKING_FLOW_RUNNER',
+                                tier: 'tier1',
+                                tokensUsed: 0,
+                                latencyMs: Date.now() - startTime,
+                                debug: {
+                                    promptSource: 'V116.interruption.proactive_address',
+                                    stepId: currentFieldKey,
+                                    capturedAddress: extractedAddress,
+                                    source: 'BOOKING_FLOW_RUNNER'
+                                }
+                            };
+                        }
+                    }
+                }
+                
                 if (isIncomplete) {
                     // Address exists but is incomplete — route back to address step
                     const addressStep = flow.steps.find(s => 

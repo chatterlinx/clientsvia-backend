@@ -1360,13 +1360,24 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
         // ═══════════════════════════════════════════════════════════════════════
         // BUILD: Prepare state for BookingFlowRunner
         // ═══════════════════════════════════════════════════════════════════════
+        // V116 FIX: Include transient state variables persisted from previous turns.
+        // Without these, the booking flow "forgets" context like:
+        //   - askedForLastName (was lastName question already asked?)
+        //   - firstNameCollected (what first name to combine with last name?)
+        //   - awaitingSpelledName (are we waiting for caller to spell their name?)
+        // ═══════════════════════════════════════════════════════════════════════
         const bookingState = {
             bookingCollected: callState.bookingCollected || callState.slots || {},
             confirmedSlots: callState.confirmedSlots || {},
             slotMetadata: callState.slotMetadata || {},
             currentStepId: callState.currentBookingStep,
             turn: callState.turnCount || 0,
-            _traceContext: { callSid, companyId }
+            _traceContext: { callSid, companyId },
+            // V116: Restore transient state variables from previous turns
+            askedForLastName: callState.askedForLastName,
+            firstNameCollected: callState.firstNameCollected,
+            awaitingSpelledName: callState.awaitingSpelledName,
+            pendingConfirmation: callState.pendingConfirmation
         };
         
         // Initialize state if this is first entry
@@ -1405,12 +1416,31 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
         // ═══════════════════════════════════════════════════════════════════════
         // UPDATE: Sync state back to callState
         // ═══════════════════════════════════════════════════════════════════════
+        // V116 FIX: Include transient booking state variables that control multi-turn
+        // slot collection (e.g., askedForLastName, firstNameCollected). Without these,
+        // the booking flow "forgets" that it already asked for last name and re-asks.
+        // ═══════════════════════════════════════════════════════════════════════
         if (bookingResult.state) {
             callState.bookingCollected = bookingResult.state.bookingCollected || callState.bookingCollected;
             callState.slots = bookingResult.state.bookingCollected || callState.slots;
             callState.confirmedSlots = bookingResult.state.confirmedSlots || callState.confirmedSlots;
             callState.slotMetadata = bookingResult.state.slotMetadata || callState.slotMetadata;
             callState.currentBookingStep = bookingResult.state.currentStepId;
+            
+            // V116: Sync transient state variables for multi-turn slot collection
+            // These control the "ask lastName" / "ask to spell" / "confirm" sub-flows
+            if (bookingResult.state.askedForLastName !== undefined) {
+                callState.askedForLastName = bookingResult.state.askedForLastName;
+            }
+            if (bookingResult.state.firstNameCollected !== undefined) {
+                callState.firstNameCollected = bookingResult.state.firstNameCollected;
+            }
+            if (bookingResult.state.awaitingSpelledName !== undefined) {
+                callState.awaitingSpelledName = bookingResult.state.awaitingSpelledName;
+            }
+            if (bookingResult.state.pendingConfirmation !== undefined) {
+                callState.pendingConfirmation = bookingResult.state.pendingConfirmation;
+            }
         }
         
         return {
