@@ -724,6 +724,53 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
             && tokens.length <= 4 
             && tokens.every(t => CONSENT_WORDS.has(t));
         
+        // ═══════════════════════════════════════════════════════════════
+        // V116 FIX: Accept leading affirmative + additional info
+        // ═══════════════════════════════════════════════════════════════
+        const LEADING_CONSENT_TOKENS = new Set([
+            'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
+            'absolutely', 'definitely', 'please', 'alright'
+        ]);
+        const hasLeadingConsent = tokens.length > 0 && LEADING_CONSENT_TOKENS.has(tokens[0]);
+        const consentDetected = isConsent || hasLeadingConsent;
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V118: CONSENT_DETECTION — Shows exactly how consent was evaluated
+        // ═══════════════════════════════════════════════════════════════════════
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: context.callSid,
+                companyId: context.company?._id?.toString() || context.companyId,
+                type: 'CONSENT_DETECTION',
+                data: {
+                    // Input state
+                    consentPending: true,
+                    userInput: userTurn?.substring(0, 60),
+                    cleanedInput: cleanedForConsent,
+                    tokens,
+                    tokenCount: tokens.length,
+                    
+                    // Detection results
+                    consentDetected,
+                    detectionMethod: isConsent 
+                        ? 'FULL_CONSENT_PHRASE' 
+                        : (hasLeadingConsent ? 'LEADING_AFFIRMATIVE' : 'NO_MATCH'),
+                    
+                    // Why it matched or didn't
+                    fullPhraseMatch: isConsent,
+                    leadingWordMatch: hasLeadingConsent,
+                    leadingWord: hasLeadingConsent ? tokens[0] : null,
+                    nonConsentTokens: tokens.filter(t => !CONSENT_WORDS.has(t)),
+                    
+                    // Result
+                    resultingLane: consentDetected ? 'BOOKING' : 'CONTINUE_EVALUATION',
+                    message: consentDetected 
+                        ? `Consent detected via ${isConsent ? 'full phrase' : 'leading "' + tokens[0] + '"'} → BOOKING lane`
+                        : `No consent detected (${tokens.length} tokens, non-consent: ${tokens.filter(t => !CONSENT_WORDS.has(t)).join(', ')})`
+                }
+            }).catch(() => {});
+        }
+        
         if (isConsent) {
             trace.addDecisionReason('LANE_BOOKING', { 
                 reason: 'consent_given_after_offer',
@@ -733,9 +780,6 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
             return LANES.BOOKING;
         }
         
-        // ═══════════════════════════════════════════════════════════════
-        // V116 FIX: Accept leading affirmative + additional info
-        // ═══════════════════════════════════════════════════════════════
         // Caller says "Yep. It's 12155 Metro Parkway" in response to
         // "Could you please provide your address so I can send a tech?"
         //
@@ -746,20 +790,31 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         //
         // SAFE because consentPending is ONLY set when we explicitly
         // offered booking on the previous turn.
-        // ═══════════════════════════════════════════════════════════════
-        if (!isConsent && tokens.length > 0) {
-            const LEADING_CONSENT_TOKENS = new Set([
-                'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
-                'absolutely', 'definitely', 'please', 'alright'
-            ]);
-            if (LEADING_CONSENT_TOKENS.has(tokens[0])) {
-                trace.addDecisionReason('LANE_BOOKING', { 
-                    reason: 'leading_consent_with_info',
-                    leadingWord: tokens[0],
-                    fullInput: cleanedForConsent.substring(0, 60)
-                });
-                return LANES.BOOKING;
-            }
+        if (hasLeadingConsent) {
+            trace.addDecisionReason('LANE_BOOKING', { 
+                reason: 'leading_consent_with_info',
+                leadingWord: tokens[0],
+                fullInput: cleanedForConsent.substring(0, 60)
+            });
+            return LANES.BOOKING;
+        }
+    } else {
+        // V118: Log when consent detection is SKIPPED (not pending)
+        // This helps understand why consent wasn't checked
+        if (BlackBoxLogger && callState?.bookingConsentPending === false) {
+            // Only log if explicitly false (not undefined) to avoid noise
+            BlackBoxLogger.logEvent({
+                callId: context.callSid,
+                companyId: context.company?._id?.toString() || context.companyId,
+                type: 'CONSENT_DETECTION',
+                data: {
+                    consentPending: false,
+                    consentDetected: false,
+                    detectionMethod: 'SKIPPED',
+                    reason: 'CONSENT_NOT_PENDING',
+                    message: 'Consent detection skipped — agent has not offered scheduling yet'
+                }
+            }).catch(() => {});
         }
     }
     
@@ -806,6 +861,74 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         
         const discoveryComplete = missingSlots.length === 0;
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // V118: DISCOVERY_FLOW_STATE — Shows complete discovery progress
+        // ═══════════════════════════════════════════════════════════════════════
+        // This is the SINGLE SOURCE OF TRUTH for understanding where agent is
+        // in the discovery flow and why it's choosing DISCOVERY vs BOOKING lane.
+        // ═══════════════════════════════════════════════════════════════════════
+        const stepEvaluations = discoverySteps.map(step => {
+            const slotValue = allCaptured[step.slotId];
+            const isFilled = slotValue && (typeof slotValue !== 'string' || slotValue.trim() !== '');
+            const isPassive = step.slotId === 'call_reason_detail';
+            const isRequired = !isPassive && step.slotId;
+            
+            return {
+                stepId: step.stepId,
+                slotId: step.slotId,
+                order: step.order,
+                status: isPassive ? 'PASSIVE' : (isFilled ? 'FILLED' : 'MISSING'),
+                value: isFilled ? (typeof slotValue === 'object' ? slotValue.value : slotValue) : null,
+                valuePreview: isFilled ? String(slotValue?.value || slotValue).substring(0, 30) : null,
+                isRequired,
+                isPassive
+            };
+        });
+        
+        const filledSteps = stepEvaluations.filter(s => s.status === 'FILLED');
+        const missingStepsDetail = stepEvaluations.filter(s => s.status === 'MISSING');
+        const passiveSteps = stepEvaluations.filter(s => s.status === 'PASSIVE');
+        
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: context.callSid,
+                companyId: context.company?._id?.toString() || context.companyId,
+                type: 'DISCOVERY_FLOW_STATE',
+                data: {
+                    // High-level state
+                    phase: schedulingAccepted ? 'INFO_COLLECTION' : 'SCENARIO_PHASE',
+                    schedulingAccepted,
+                    discoveryComplete,
+                    consentPending: callState?.bookingConsentPending === true,
+                    
+                    // Step-by-step evaluation
+                    totalSteps: discoverySteps.length,
+                    filledCount: filledSteps.length,
+                    missingCount: missingStepsDetail.length,
+                    passiveCount: passiveSteps.length,
+                    
+                    // Detailed step status (the truth)
+                    steps: stepEvaluations,
+                    
+                    // Summary for quick reading
+                    filledSlots: filledSteps.map(s => s.slotId),
+                    missingSlots: missingStepsDetail.map(s => s.slotId),
+                    passiveSlots: passiveSteps.map(s => s.slotId),
+                    
+                    // Flow order (what agent SHOULD follow)
+                    configuredOrder: discoverySteps.map(s => ({ 
+                        slotId: s.slotId, 
+                        order: s.order,
+                        confirmMode: s.confirmMode 
+                    })),
+                    
+                    // Turn context
+                    turnCount: callState?.turnCount || 0,
+                    userInputPreview: userTurn?.substring(0, 50)
+                }
+            }).catch(() => {});
+        }
+        
         // ───────────────────────────────────────────────────────────
         // BOOKING: Only when caller accepted scheduling AND info captured
         // ───────────────────────────────────────────────────────────
@@ -821,6 +944,25 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
                 capturedSlots: Object.keys(allCaptured).filter(k => allCaptured[k]),
                 discoveryTurnCount: callState?.discoveryTurnCount || 0
             });
+            
+            // V118: Log lane determination for BOOKING
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: context.callSid,
+                    companyId: context.company?._id?.toString() || context.companyId,
+                    type: 'LANE_DETERMINATION',
+                    data: {
+                        selectedLane: 'BOOKING',
+                        reason: 'V110_ACCEPTED_AND_COMPLETE',
+                        schedulingAccepted: true,
+                        discoveryComplete: true,
+                        filledSlots: filledSteps.map(s => s.slotId),
+                        missingSlots: [],
+                        transitionFrom: 'DISCOVERY',
+                        message: 'All discovery slots filled + consent given → transitioning to BOOKING'
+                    }
+                }).catch(() => {});
+            }
             
             return LANES.BOOKING;
         }
@@ -846,6 +988,31 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
             missingSlots: missingSlots.map(s => s.slotId),
             discoveryTurnCount: callState?.discoveryTurnCount || 0
         });
+        
+        // V118: Log lane determination for DISCOVERY
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: context.callSid,
+                companyId: context.company?._id?.toString() || context.companyId,
+                type: 'LANE_DETERMINATION',
+                data: {
+                    selectedLane: 'DISCOVERY',
+                    reason: schedulingAccepted ? 'V110_COLLECTING_INFO' : 'V110_SCENARIO_PHASE',
+                    schedulingAccepted,
+                    discoveryComplete,
+                    consentPending: callState?.bookingConsentPending === true,
+                    filledSlots: filledSteps.map(s => s.slotId),
+                    missingSlots: missingStepsDetail.map(s => s.slotId),
+                    // Why NOT booking?
+                    blockedFromBooking: !schedulingAccepted 
+                        ? 'CONSENT_NOT_GIVEN' 
+                        : 'SLOTS_MISSING',
+                    message: schedulingAccepted 
+                        ? `Consent given but ${missingStepsDetail.length} slots still missing: ${missingStepsDetail.map(s => s.slotId).join(', ')}`
+                        : 'Waiting for scheduling consent — scenarios are primary brain'
+                }
+            }).catch(() => {});
+        }
         
         return LANES.DISCOVERY;
     }
