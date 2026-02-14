@@ -2693,8 +2693,8 @@ class FrontDeskBehaviorManager {
                     <button id="fdb-save-flows" style="background:#238636; color:#fff; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:500;">
                         💾 Save All Changes
                     </button>
-                    <button id="fdb-export-flows" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:10px 20px; border-radius:6px; cursor:pointer;">
-                        📤 Export JSON
+                    <button id="fdb-export-flows" title="Exports full Discovery Flow page settings (V110 + V111)" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:10px 20px; border-radius:6px; cursor:pointer;">
+                        📤 Export Page JSON
                     </button>
                     <button id="fdb-import-flows" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:10px 20px; border-radius:6px; cursor:pointer;">
                         📥 Import JSON
@@ -3166,18 +3166,27 @@ class FrontDeskBehaviorManager {
         const exportBtn = contentElement.querySelector('#fdb-export-flows');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => {
+                // Ensure export reflects current UI state (even if not saved yet)
+                this._collectSlotRegistryChanges(contentElement);
+                this._collectDiscoveryFlowChanges(contentElement);
+                this._collectBookingFlowChanges(contentElement);
+                this._collectPolicyChanges(contentElement);
+
                 const exportData = {
-                    slotRegistry: this.config.slotRegistry,
-                    discoveryFlow: this.config.discoveryFlow,
-                    bookingFlow: this.config.bookingFlow,
-                    policies: this.config.policies,
-                    triage: this.config.triage
+                    ...this.config,
+                    exportMeta: {
+                        scope: 'discovery-flow',
+                        exportedAt: new Date().toISOString(),
+                        exportedBy: 'FrontDeskBehaviorManager',
+                        uiBuild: FrontDeskBehaviorManager.UI_BUILD,
+                        companyId: this.companyId
+                    }
                 };
                 const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `frontdesk-flows-${Date.now()}.json`;
+                a.download = `frontdesk-discovery-flow-${Date.now()}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
             });
