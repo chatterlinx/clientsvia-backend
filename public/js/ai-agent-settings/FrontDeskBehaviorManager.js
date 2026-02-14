@@ -70,6 +70,19 @@ class FrontDeskBehaviorManager {
             // Booking interruption behavior (UI-visible)
             this.config.bookingInterruption = this.config.bookingInterruption || this.getDefaultConfig().bookingInterruption;
 
+            // Conversation Style: Openers (Layer 0 micro-acks)
+            if (!this.config.openers) {
+                this.config.openers = {
+                    enabled: true, mode: 'reflect_first',
+                    general: ['Alright.', 'Okay.', 'Perfect.', 'Sounds good.', 'Understood.'],
+                    frustration: ['I hear you.', "Yeah, that's frustrating.", 'Sorry about that.'],
+                    urgency: ["Okay — we'll move quick.", "Alright — let's get this handled."],
+                    urgencyKeywords: ['asap', 'as soon as possible', 'today', 'right now', 'immediately', 'urgent', 'emergency'],
+                    frustrationKeywords: ['again', 'still', 'warranty', 'last week', 'second time', "didn't fix", 'did not fix', 'same problem', 'not working again'],
+                    reflectionTemplate: '{reason_short} — okay.'
+                };
+            }
+
             // Prompt guards shape (promptPacks REMOVED Jan 2026)
             this.config.promptGuards = this.config.promptGuards || this.getDefaultConfig().promptGuards;
 
@@ -1674,6 +1687,19 @@ class FrontDeskBehaviorManager {
         const policies = this.config.policies || {};
         const triageConfig = this.config.triage || { enabled: false, minConfidence: 0.62, autoOnProblem: true, perService: {}, engine: 'v110' };
         
+        // Conversation Style: Openers config
+        const openersDefaults = {
+            enabled: true,
+            mode: 'reflect_first',
+            general: ['Alright.', 'Okay.', 'Perfect.', 'Sounds good.', 'Understood.'],
+            frustration: ['I hear you.', "Yeah, that's frustrating.", 'Sorry about that.'],
+            urgency: ["Okay — we'll move quick.", "Alright — let's get this handled."],
+            urgencyKeywords: ['asap', 'as soon as possible', 'today', 'right now', 'immediately', 'urgent', 'emergency'],
+            frustrationKeywords: ['again', 'still', 'warranty', 'last week', 'second time', "didn't fix", 'did not fix', 'same problem', 'not working again'],
+            reflectionTemplate: '{reason_short} — okay.'
+        };
+        const openers = { ...openersDefaults, ...(this.config.openers || {}) };
+        
         // Build slot options dropdown HTML
         const slotOptions = (slotRegistry.slots || []).map(s => 
             `<option value="${this.escapeHtml(s.id)}">${this.escapeHtml(s.label || s.id)} (${s.id})</option>`
@@ -1853,6 +1879,153 @@ class FrontDeskBehaviorManager {
                 <!-- TAB 1: SLOT REGISTRY & CALL FLOW (V110)                         -->
                 <!-- ═══════════════════════════════════════════════════════════════ -->
                 <div id="fdb-flow-panel-v110">
+
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- CONVERSATION STYLE: OPENERS (Layer 0 — above V110 Discovery)  -->
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <div style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #da363340; border-radius:12px; padding:20px; margin-bottom:20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+                            <div>
+                                <h3 style="margin:0; color:#f0883e; font-size:1.15rem; display:flex; align-items:center; gap:10px;">
+                                    💬 Conversation Style: Openers
+                                    <span style="background:#f0883e20; color:#f0883e; padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:600;">LAYER 0</span>
+                                </h3>
+                                <p style="margin:10px 0 0 0; color:#8b949e; font-size:0.85rem; line-height:1.6; max-width:700px;">
+                                    Pre-prompt micro-acknowledgments that <strong style="color:#c9d1d9;">eliminate dead air</strong>. 
+                                    The caller hears <em>"Alright."</em> or <em>"I hear you."</em> instantly while the full response processes.
+                                    Runs <strong style="color:#f0883e;">before</strong> Discovery, scenarios, and LLM.
+                                </p>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                    <span style="color:#8b949e; font-size:0.85rem;">Enabled</span>
+                                    <input type="checkbox" id="fdb-openers-enabled" ${openers.enabled ? 'checked' : ''} 
+                                        style="width:18px; height:18px; cursor:pointer;">
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Mode + Reflection Template -->
+                        <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-bottom:16px;">
+                            <div>
+                                <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:6px; font-weight:600;">Mode</label>
+                                <select id="fdb-openers-mode" style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem;">
+                                    <option value="reflect_first" ${openers.mode === 'reflect_first' ? 'selected' : ''}>Reflect First (best)</option>
+                                    <option value="micro_ack_only" ${openers.mode === 'micro_ack_only' ? 'selected' : ''}>Micro-Ack Only</option>
+                                    <option value="off" ${openers.mode === 'off' ? 'selected' : ''}>Off</option>
+                                </select>
+                                <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                    reflect_first: echoes the reason back, then acks
+                                </p>
+                            </div>
+                            <div>
+                                <label style="display:block; color:#8b949e; font-size:0.8rem; margin-bottom:6px; font-weight:600;">Reflection Template</label>
+                                <input type="text" id="fdb-openers-reflection-template" value="${this.escapeHtml(openers.reflectionTemplate)}"
+                                    style="width:100%; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:8px; border-radius:6px; font-size:0.85rem; box-sizing:border-box;"
+                                    placeholder="{reason_short} — okay.">
+                                <p style="margin:4px 0 0 0; color:#6e7681; font-size:0.75rem;">
+                                    Use <code style="color:#f0883e; background:#f0883e15; padding:1px 4px; border-radius:3px;">{reason_short}</code> as placeholder. Example output: "AC not cooling — okay."
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Micro-Ack Pools -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px;">
+                            <!-- General Acks -->
+                            <div>
+                                <label style="display:block; color:#3fb950; font-size:0.8rem; margin-bottom:6px; font-weight:600;">General Micro-Acks</label>
+                                <div id="fdb-openers-general-tags" class="fdb-tag-container" style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; min-height:60px; display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;">
+                                    ${(openers.general || []).map(phrase => `
+                                        <span class="fdb-tag" style="background:#3fb95020; color:#3fb950; padding:4px 8px; border-radius:4px; font-size:0.8rem; display:flex; align-items:center; gap:4px;">
+                                            ${this.escapeHtml(phrase)}
+                                            <button class="fdb-tag-remove" data-pool="general" data-value="${this.escapeHtml(phrase)}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:0.9rem; padding:0 2px;">×</button>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                <div style="display:flex; gap:4px; margin-top:6px;">
+                                    <input type="text" class="fdb-openers-add-input" data-pool="general" placeholder="Add phrase..."
+                                        style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px; font-size:0.8rem;">
+                                    <button class="fdb-openers-add-btn" data-pool="general" style="background:#3fb95030; color:#3fb950; border:1px solid #3fb950; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Frustration Acks -->
+                            <div>
+                                <label style="display:block; color:#f85149; font-size:0.8rem; margin-bottom:6px; font-weight:600;">Frustration Micro-Acks</label>
+                                <div id="fdb-openers-frustration-tags" class="fdb-tag-container" style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; min-height:60px; display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;">
+                                    ${(openers.frustration || []).map(phrase => `
+                                        <span class="fdb-tag" style="background:#f8514920; color:#f85149; padding:4px 8px; border-radius:4px; font-size:0.8rem; display:flex; align-items:center; gap:4px;">
+                                            ${this.escapeHtml(phrase)}
+                                            <button class="fdb-tag-remove" data-pool="frustration" data-value="${this.escapeHtml(phrase)}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:0.9rem; padding:0 2px;">×</button>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                <div style="display:flex; gap:4px; margin-top:6px;">
+                                    <input type="text" class="fdb-openers-add-input" data-pool="frustration" placeholder="Add phrase..."
+                                        style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px; font-size:0.8rem;">
+                                    <button class="fdb-openers-add-btn" data-pool="frustration" style="background:#f8514930; color:#f85149; border:1px solid #f85149; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Urgency Acks -->
+                            <div>
+                                <label style="display:block; color:#d29922; font-size:0.8rem; margin-bottom:6px; font-weight:600;">Urgency Micro-Acks</label>
+                                <div id="fdb-openers-urgency-tags" class="fdb-tag-container" style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; min-height:60px; display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;">
+                                    ${(openers.urgency || []).map(phrase => `
+                                        <span class="fdb-tag" style="background:#d2992220; color:#d29922; padding:4px 8px; border-radius:4px; font-size:0.8rem; display:flex; align-items:center; gap:4px;">
+                                            ${this.escapeHtml(phrase)}
+                                            <button class="fdb-tag-remove" data-pool="urgency" data-value="${this.escapeHtml(phrase)}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:0.9rem; padding:0 2px;">×</button>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                <div style="display:flex; gap:4px; margin-top:6px;">
+                                    <input type="text" class="fdb-openers-add-input" data-pool="urgency" placeholder="Add phrase..."
+                                        style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px; font-size:0.8rem;">
+                                    <button class="fdb-openers-add-btn" data-pool="urgency" style="background:#d2992230; color:#d29922; border:1px solid #d29922; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Keyword Lists -->
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                            <!-- Frustration Keywords -->
+                            <div>
+                                <label style="display:block; color:#f85149; font-size:0.8rem; margin-bottom:6px; font-weight:600;">Frustration Keywords</label>
+                                <div id="fdb-openers-frustration-kw-tags" class="fdb-tag-container" style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; min-height:40px; display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;">
+                                    ${(openers.frustrationKeywords || []).map(kw => `
+                                        <span class="fdb-tag" style="background:#f8514915; color:#f85149; padding:3px 7px; border-radius:4px; font-size:0.75rem; display:flex; align-items:center; gap:4px;">
+                                            ${this.escapeHtml(kw)}
+                                            <button class="fdb-tag-remove" data-pool="frustrationKeywords" data-value="${this.escapeHtml(kw)}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:0.85rem; padding:0 2px;">×</button>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                <div style="display:flex; gap:4px; margin-top:6px;">
+                                    <input type="text" class="fdb-openers-add-input" data-pool="frustrationKeywords" placeholder="Add keyword..."
+                                        style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px; font-size:0.8rem;">
+                                    <button class="fdb-openers-add-btn" data-pool="frustrationKeywords" style="background:#f8514920; color:#f85149; border:1px solid #f8514960; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">+</button>
+                                </div>
+                            </div>
+
+                            <!-- Urgency Keywords -->
+                            <div>
+                                <label style="display:block; color:#d29922; font-size:0.8rem; margin-bottom:6px; font-weight:600;">Urgency Keywords</label>
+                                <div id="fdb-openers-urgency-kw-tags" class="fdb-tag-container" style="background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; min-height:40px; display:flex; flex-wrap:wrap; gap:6px; align-content:flex-start;">
+                                    ${(openers.urgencyKeywords || []).map(kw => `
+                                        <span class="fdb-tag" style="background:#d2992215; color:#d29922; padding:3px 7px; border-radius:4px; font-size:0.75rem; display:flex; align-items:center; gap:4px;">
+                                            ${this.escapeHtml(kw)}
+                                            <button class="fdb-tag-remove" data-pool="urgencyKeywords" data-value="${this.escapeHtml(kw)}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:0.85rem; padding:0 2px;">×</button>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                <div style="display:flex; gap:4px; margin-top:6px;">
+                                    <input type="text" class="fdb-openers-add-input" data-pool="urgencyKeywords" placeholder="Add keyword..."
+                                        style="flex:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:6px; border-radius:4px; font-size:0.8rem;">
+                                    <button class="fdb-openers-add-btn" data-pool="urgencyKeywords" style="background:#d2992220; color:#d29922; border:1px solid #d2992260; padding:6px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem;">+</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Tab Title & Description -->
                     <div style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #3fb95040; border-radius:12px; padding:20px; margin-bottom:20px;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -2746,6 +2919,11 @@ class FrontDeskBehaviorManager {
         if (tabV111Btn) tabV111Btn.addEventListener('click', () => switchFlowTab('v111'));
 
         // ═══════════════════════════════════════════════════════════════════════════
+        // OPENERS: Tag add/remove handlers
+        // ═══════════════════════════════════════════════════════════════════════════
+        this._initOpenersHandlers(contentElement);
+
+        // ═══════════════════════════════════════════════════════════════════════════
         // V111 HEALTH CHECK - Load and display system health status
         // ═══════════════════════════════════════════════════════════════════════════
         const loadV111Health = async () => {
@@ -3146,6 +3324,7 @@ class FrontDeskBehaviorManager {
                     statusEl.style.color = '#8b949e';
                     
                     // Collect all current values
+                    this._collectOpenersChanges(contentElement);
                     this._collectSlotRegistryChanges(contentElement);
                     this._collectDiscoveryFlowChanges(contentElement);
                     this._collectBookingFlowChanges(contentElement);
@@ -3167,6 +3346,7 @@ class FrontDeskBehaviorManager {
         if (exportBtn) {
             exportBtn.addEventListener('click', () => {
                 // Ensure export reflects current UI state (even if not saved yet)
+                this._collectOpenersChanges(contentElement);
                 this._collectSlotRegistryChanges(contentElement);
                 this._collectDiscoveryFlowChanges(contentElement);
                 this._collectBookingFlowChanges(contentElement);
@@ -5206,6 +5386,136 @@ class FrontDeskBehaviorManager {
             if (requiredCheck) this.config.slotRegistry.slots[idx].required = requiredCheck.checked;
             if (discFillCheck) this.config.slotRegistry.slots[idx].discoveryFillAllowed = discFillCheck.checked;
             if (bookConfirmCheck) this.config.slotRegistry.slots[idx].bookingConfirmRequired = bookConfirmCheck.checked;
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // OPENERS: Event handlers for tag add/remove + data collection
+    // ═══════════════════════════════════════════════════════════════════════════
+    _initOpenersHandlers(contentElement) {
+        if (!this.config.openers) {
+            this.config.openers = {
+                enabled: true, mode: 'reflect_first',
+                general: ['Alright.', 'Okay.', 'Perfect.', 'Sounds good.', 'Understood.'],
+                frustration: ['I hear you.', "Yeah, that's frustrating.", 'Sorry about that.'],
+                urgency: ["Okay — we'll move quick.", "Alright — let's get this handled."],
+                urgencyKeywords: ['asap', 'as soon as possible', 'today', 'right now', 'immediately', 'urgent', 'emergency'],
+                frustrationKeywords: ['again', 'still', 'warranty', 'last week', 'second time', "didn't fix", 'did not fix', 'same problem', 'not working again'],
+                reflectionTemplate: '{reason_short} — okay.'
+            };
+        }
+
+        // Tag color mapping for each pool
+        const poolColors = {
+            general: { bg: '#3fb95020', text: '#3fb950' },
+            frustration: { bg: '#f8514920', text: '#f85149' },
+            urgency: { bg: '#d2992220', text: '#d29922' },
+            frustrationKeywords: { bg: '#f8514915', text: '#f85149' },
+            urgencyKeywords: { bg: '#d2992215', text: '#d29922' }
+        };
+
+        // Handle "+" add buttons
+        contentElement.querySelectorAll('.fdb-openers-add-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pool = btn.dataset.pool;
+                const input = contentElement.querySelector(`.fdb-openers-add-input[data-pool="${pool}"]`);
+                const value = (input?.value || '').trim();
+                if (!value) return;
+
+                // Add to config
+                if (!this.config.openers[pool]) this.config.openers[pool] = [];
+                if (this.config.openers[pool].includes(value)) return; // no dupes
+                this.config.openers[pool].push(value);
+                this.isDirty = true;
+
+                // Add tag to DOM
+                const isKeyword = pool.includes('Keyword');
+                const colors = poolColors[pool] || poolColors.general;
+                const tagContainerId = pool === 'general' ? 'fdb-openers-general-tags'
+                    : pool === 'frustration' ? 'fdb-openers-frustration-tags'
+                    : pool === 'urgency' ? 'fdb-openers-urgency-tags'
+                    : pool === 'frustrationKeywords' ? 'fdb-openers-frustration-kw-tags'
+                    : 'fdb-openers-urgency-kw-tags';
+                const container = contentElement.querySelector(`#${tagContainerId}`);
+                if (container) {
+                    const tag = document.createElement('span');
+                    tag.className = 'fdb-tag';
+                    tag.style.cssText = `background:${colors.bg}; color:${colors.text}; padding:${isKeyword ? '3px 7px' : '4px 8px'}; border-radius:4px; font-size:${isKeyword ? '0.75rem' : '0.8rem'}; display:flex; align-items:center; gap:4px;`;
+                    tag.innerHTML = `${this.escapeHtml(value)}<button class="fdb-tag-remove" data-pool="${pool}" data-value="${this.escapeHtml(value)}" style="background:none; border:none; color:#f85149; cursor:pointer; font-size:${isKeyword ? '0.85rem' : '0.9rem'}; padding:0 2px;">×</button>`;
+                    container.appendChild(tag);
+
+                    // Bind remove on new tag
+                    tag.querySelector('.fdb-tag-remove').addEventListener('click', (e) => {
+                        this._removeOpenerTag(e.target, contentElement);
+                    });
+                }
+
+                input.value = '';
+                console.log(`[OPENERS] Added "${value}" to ${pool}`);
+            });
+        });
+
+        // Handle Enter key in add inputs
+        contentElement.querySelectorAll('.fdb-openers-add-input').forEach(input => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const pool = input.dataset.pool;
+                    const btn = contentElement.querySelector(`.fdb-openers-add-btn[data-pool="${pool}"]`);
+                    if (btn) btn.click();
+                }
+            });
+        });
+
+        // Handle "×" remove buttons (initial render)
+        contentElement.querySelectorAll('.fdb-tag-remove[data-pool]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this._removeOpenerTag(e.target, contentElement);
+            });
+        });
+
+        // Enabled toggle + mode + template → mark dirty
+        const enabledCb = contentElement.querySelector('#fdb-openers-enabled');
+        const modeSelect = contentElement.querySelector('#fdb-openers-mode');
+        const templateInput = contentElement.querySelector('#fdb-openers-reflection-template');
+        if (enabledCb) enabledCb.addEventListener('change', () => { this.isDirty = true; });
+        if (modeSelect) modeSelect.addEventListener('change', () => { this.isDirty = true; });
+        if (templateInput) templateInput.addEventListener('input', () => { this.isDirty = true; });
+    }
+
+    _removeOpenerTag(btnEl, contentElement) {
+        const pool = btnEl.dataset.pool;
+        const value = btnEl.dataset.value;
+        if (!pool || !value) return;
+
+        // Remove from config
+        if (this.config.openers?.[pool]) {
+            this.config.openers[pool] = this.config.openers[pool].filter(v => v !== value);
+            this.isDirty = true;
+        }
+
+        // Remove tag from DOM
+        const tag = btnEl.closest('.fdb-tag');
+        if (tag) tag.remove();
+
+        console.log(`[OPENERS] Removed "${value}" from ${pool}`);
+    }
+
+    _collectOpenersChanges(container) {
+        if (!this.config.openers) this.config.openers = {};
+        
+        const enabledCb = container.querySelector('#fdb-openers-enabled');
+        const modeSelect = container.querySelector('#fdb-openers-mode');
+        const templateInput = container.querySelector('#fdb-openers-reflection-template');
+        
+        if (enabledCb) this.config.openers.enabled = enabledCb.checked;
+        if (modeSelect) this.config.openers.mode = modeSelect.value;
+        if (templateInput) this.config.openers.reflectionTemplate = templateInput.value.trim();
+        
+        // Tag pools are already kept in sync via add/remove handlers
+        // Just ensure they exist
+        ['general', 'frustration', 'urgency', 'frustrationKeywords', 'urgencyKeywords'].forEach(pool => {
+            if (!this.config.openers[pool]) this.config.openers[pool] = [];
         });
     }
 

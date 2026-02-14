@@ -644,6 +644,9 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 bookingFlow: config.bookingFlow || null,
                 policies: config.policies || null,
                 
+                // Conversation Style: Openers (Layer 0 micro-acks)
+                openers: config.openers || null,
+                
                 // V115: Triage config — single source of truth
                 triage: config.triage || {
                     enabled: false,
@@ -993,6 +996,21 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
                 confirmCapturedFirst: updates.bookingFlow.confirmCapturedFirst,
                 stepCount: updates.bookingFlow.steps?.length || 0,
                 stepSlotIds: (updates.bookingFlow.steps || []).map(s => s.slotId)
+            });
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // CONVERSATION STYLE: OPENERS — Pre-prompt micro-acknowledgments
+        // ═══════════════════════════════════════════════════════════════════════
+        if (updates.openers && typeof updates.openers === 'object') {
+            updateObj['aiAgentSettings.frontDeskBehavior.openers'] = updates.openers;
+            logger.info('[FRONT DESK BEHAVIOR] Saving openers config', {
+                companyId,
+                enabled: updates.openers.enabled,
+                mode: updates.openers.mode,
+                generalCount: updates.openers.general?.length || 0,
+                frustrationCount: updates.openers.frustration?.length || 0,
+                urgencyCount: updates.openers.urgency?.length || 0
             });
         }
         
