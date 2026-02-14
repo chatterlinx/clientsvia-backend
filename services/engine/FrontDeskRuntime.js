@@ -27,6 +27,7 @@ let BookingFlowResolver = null;
 let ConversationEngine = null;
 let BlackBoxLogger = null;
 let V111Router = null;
+let OpenerEngine = null;
 
 function loadPlugins() {
     if (!BookingFlowRunner) {
@@ -43,6 +44,13 @@ function loadPlugins() {
             ConversationEngine = require('../ConversationEngine');
         } catch (e) {
             logger.warn('[FRONT_DESK_RUNTIME] ConversationEngine not available', { error: e.message });
+        }
+    }
+    if (!OpenerEngine) {
+        try {
+            OpenerEngine = require('./OpenerEngine');
+        } catch (e) {
+            logger.warn('[FRONT_DESK_RUNTIME] OpenerEngine not available', { error: e.message });
         }
     }
     if (!BlackBoxLogger) {
@@ -1884,10 +1892,52 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         }
         
         // ═══════════════════════════════════════════════════════════════════════
-        // V119: TRACE TRUTH PIPELINE — propagate tier/debug/tokensUsed from
-        // ConversationEngine so v2twilio can log honest trace events.
-        // Without this, every strict-mode discovery turn was labeled "tier3"
-        // with fabricated SCENARIO_NO_MATCH data (bestCandidate=null, conf=0).
+        // OPENER ENGINE — Pre-prompt micro-acknowledgment (Layer 0)
+        // ═══════════════════════════════════════════════════════════════════════
+        // Prepends a fast micro-ack ("Alright.", "I hear you.") to the response
+        // to eliminate dead air. Runs AFTER V111 capture injection so the ack
+        // appears before the full answer.
+        //
+        // Config: frontDesk.conversationStyle.openers (per-company, UI-driven)
+        // ═══════════════════════════════════════════════════════════════════════
+        let openerDebug = null;
+        if (OpenerEngine) {
+            try {
+                const openerConfig = getConfig('frontDesk.conversationStyle.openers', null);
+                const reasonShort = callState?.discovery?.truth?.call_reason_detail || 
+                                    callState?.slots?.call_reason_detail?.value ||
+                                    null;
+                
+                const openerResult = OpenerEngine.selectOpener({
+                    userText: userTurn,
+                    reasonShort,
+                    openerConfig,
+                    turnCount: callState?.turnCount || callState?.discoveryTurnCount || 0,
+                    callSid
+                });
+                
+                if (openerResult.opener) {
+                    finalResponse = OpenerEngine.prependOpener(openerResult.opener, finalResponse);
+                    openerDebug = openerResult.debug;
+                    
+                    logger.info('[FRONT_DESK_RUNTIME] Opener prepended', {
+                        callSid,
+                        opener: openerResult.opener,
+                        tone: openerResult.tone
+                    });
+                }
+            } catch (openerErr) {
+                // Opener must NEVER crash a call
+                logger.warn('[FRONT_DESK_RUNTIME] OpenerEngine error (non-fatal)', {
+                    callSid,
+                    error: openerErr.message
+                });
+            }
+        }
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // TRACE TRUTH PIPELINE — propagate tier/debug/tokensUsed from
+        // ConversationEngine for honest trace events.
         // ═══════════════════════════════════════════════════════════════════════
         return {
             response: finalResponse,
@@ -1895,7 +1945,7 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
             matchSource: engineResult.matchSource || 'CONVERSATION_ENGINE',
             tier: engineResult.tier || null,
             tokensUsed: engineResult.tokensUsed || 0,
-            debug: engineResult.debug || null,
+            debug: { ...(engineResult.debug || {}), opener: openerDebug },
             metadata: engineResult.metadata,
             v111: v111Decision
         };

@@ -90,6 +90,34 @@ const RUNTIME_READERS_MAP = {
         }
     },
 
+    // =========================================================================
+    // CONVERSATION STYLE: OPENERS — Pre-prompt micro-acknowledgments
+    // Layer 0: Runs BEFORE Discovery/scenarios/LLM to eliminate dead air
+    // =========================================================================
+    'frontDesk.conversationStyle.openers': {
+        readers: [
+            {
+                file: 'services/engine/OpenerEngine.js',
+                function: 'selectOpener',
+                description: 'Selects micro-ack based on caller tone (frustration/urgency/general)',
+                required: false,
+                checkpoint: 'OPENER_SELECTION'
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.openers',
+        scope: 'company',
+        defaultValue: {
+            enabled: true,
+            mode: 'reflect_first',
+            general: ['Alright.', 'Okay.', 'Perfect.', 'Sounds good.', 'Understood.'],
+            frustration: ['I hear you.', "Yeah, that's frustrating.", 'Sorry about that.'],
+            urgency: ["Okay — we'll move quick.", "Alright — let's get this handled."],
+            urgencyKeywords: ['asap', 'as soon as possible', 'today', 'right now', 'immediately', 'urgent', 'emergency'],
+            frustrationKeywords: ['again', 'still', 'warranty', 'last week', 'second time', "didn't fix", 'did not fix', 'same problem', 'not working again'],
+            reflectionTemplate: '{reason_short} — okay.'
+        }
+    },
+
     'frontDesk.personality.warmth': {
         readers: [
             {

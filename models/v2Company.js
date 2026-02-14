@@ -2271,6 +2271,62 @@ const companySchema = new mongoose.Schema({
             },
 
             // ═══════════════════════════════════════════════════════════════
+            // CONVERSATION STYLE: OPENERS
+            // ═══════════════════════════════════════════════════════════════
+            // Pre-prompt micro-acknowledgments that fire instantly when the
+            // caller speaks. Eliminates dead air while LLM/scenario processes.
+            //
+            // Architecture: This is Layer 0 — runs BEFORE Discovery, scenarios,
+            // or LLM. The opener is prepended to the final response so the
+            // caller hears "Alright." or "I hear you." immediately.
+            //
+            // Config hierarchy:
+            //   Global defaults → per-company override
+            //   frontDesk.conversationStyle.openers.*
+            //
+            // Modes:
+            //   reflect_first: Use reflection template if reason captured,
+            //                  else fall back to keyword-matched micro-ack
+            //   micro_ack_only: Skip reflection, just use micro-acks
+            //   off: No opener prepended
+            // ═══════════════════════════════════════════════════════════════
+            openers: {
+                enabled: { type: Boolean, default: true },
+                mode: {
+                    type: String,
+                    enum: ['reflect_first', 'micro_ack_only', 'off'],
+                    default: 'reflect_first'
+                },
+                // General-purpose micro-acks (no frustration/urgency detected)
+                general: [{
+                    type: String, trim: true
+                }],
+                // Frustration-detected micro-acks
+                frustration: [{
+                    type: String, trim: true
+                }],
+                // Urgency-detected micro-acks
+                urgency: [{
+                    type: String, trim: true
+                }],
+                // Keywords that trigger urgency ack selection
+                urgencyKeywords: [{
+                    type: String, trim: true, lowercase: true
+                }],
+                // Keywords that trigger frustration ack selection
+                frustrationKeywords: [{
+                    type: String, trim: true, lowercase: true
+                }],
+                // Template for reflect_first mode
+                // Placeholder: {reason_short}
+                reflectionTemplate: {
+                    type: String,
+                    trim: true,
+                    default: '{reason_short} — okay.'
+                }
+            },
+
+            // ═══════════════════════════════════════════════════════════════
             // VENDOR / SUPPLIER CALL HANDLING (Call Center Directory)
             // ═══════════════════════════════════════════════════════════════
             // Purpose: If an inbound caller matches a Vendor by phone, treat them as
