@@ -2033,6 +2033,177 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
         };
     }
     
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V120: STEP ENGINE — Discovery flow steps as the SPEAKER
+    // ═══════════════════════════════════════════════════════════════════════════
+    // When disableScenarioAutoResponses is ON (Mode A / "Scenarios as Context Only"),
+    // the discovery flow steps (d1→d2→d3→d0) drive the conversation instead of
+    // ConversationEngine/LLM. StepEngine reads the configured prompts and follows
+    // the step order deterministically:
+    //   - Confirm captured slots using ask/confirmMode templates
+    //   - Ask for missing slots using reprompt templates
+    //   - Replace {value} with actual captured values
+    //
+    // If StepEngine has nothing to say (all steps complete or no steps configured),
+    // fall through to ConversationEngine as before.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const disableScenarios = effectiveConfig?.frontDeskBehavior?.discoveryConsent?.disableScenarioAutoResponses === true;
+    const discoveryFlowConfig = effectiveConfig?.frontDeskBehavior?.discoveryFlow;
+    const hasDiscoverySteps = discoveryFlowConfig?.enabled !== false && 
+        Array.isArray(discoveryFlowConfig?.steps) && discoveryFlowConfig.steps.length > 0;
+    
+    if (disableScenarios && hasDiscoverySteps) {
+        try {
+            const { StepEngine } = require('./StepEngine');
+            const stepEngine = StepEngine.forCall({ company, callId: callSid });
+            
+            // Build extracted slots from callState
+            const extractedSlots = {};
+            if (callState?.slots) {
+                for (const [key, val] of Object.entries(callState.slots)) {
+                    if (val && typeof val === 'object' && val.v) {
+                        extractedSlots[key] = val.v;
+                    } else if (val && typeof val === 'string') {
+                        extractedSlots[key] = val;
+                    }
+                }
+            }
+            if (callState?.bookingCollected) {
+                Object.assign(extractedSlots, callState.bookingCollected);
+            }
+            
+            // Build discovery state from callState
+            const discoveryState = {
+                currentFlow: 'discovery',
+                collectedSlots: extractedSlots,
+                confirmedSlots: callState?.confirmedSlots || {},
+                repromptCount: callState?.discoveryRepromptCount || {},
+                pendingConfirmation: callState?.discoveryPendingConfirmation || null,
+                currentStepId: callState?.discoveryCurrentStepId || null,
+                currentSlotId: callState?.discoveryCurrentSlotId || null
+            };
+            
+            // Run the discovery step engine
+            const stepResult = stepEngine.runDiscoveryStep({
+                state: discoveryState,
+                userInput: userTurn,
+                extractedSlots
+            });
+            
+            logger.info('[FRONT_DESK_RUNTIME] V120: StepEngine discovery result', {
+                callSid,
+                hasReply: !!stepResult.reply,
+                slotId: stepResult.slotId,
+                action: stepResult.action,
+                source: stepResult.debug?.source,
+                promptSource: stepResult.debug?.promptSource,
+                capturedSlots: Object.keys(stepResult.state?.collectedSlots || {}),
+                confirmedSlots: Object.keys(stepResult.state?.confirmedSlots || {})
+            });
+            
+            // Persist discovery step state back to callState
+            if (stepResult.state) {
+                callState.confirmedSlots = stepResult.state.confirmedSlots || callState.confirmedSlots;
+                callState.discoveryRepromptCount = stepResult.state.repromptCount || {};
+                callState.discoveryPendingConfirmation = stepResult.state.pendingConfirmation || null;
+                callState.discoveryCurrentStepId = stepResult.state.currentStepId || null;
+                callState.discoveryCurrentSlotId = stepResult.state.currentSlotId || null;
+            }
+            
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'STEP_ENGINE_DISCOVERY_RESULT',
+                    turn: callState?.turnCount || 0,
+                    data: {
+                        hasReply: !!stepResult.reply,
+                        slotId: stepResult.slotId || null,
+                        promptSource: stepResult.debug?.promptSource || null,
+                        confirmMode: stepResult.debug?.confirmMode || null,
+                        capturedSlots: Object.keys(stepResult.state?.collectedSlots || {}),
+                        confirmedSlots: Object.keys(stepResult.state?.confirmedSlots || {}),
+                        pendingConfirmation: stepResult.state?.pendingConfirmation || null
+                    }
+                }).catch(() => {});
+            }
+            
+            // If StepEngine has a reply, use it — discovery flow is the speaker
+            if (stepResult.reply) {
+                trace.addDecisionReason('DISCOVERY_LANE_HANDLER', { 
+                    handler: 'StepEngine',
+                    stepId: stepResult.debug?.step,
+                    slotId: stepResult.slotId,
+                    promptSource: stepResult.debug?.promptSource
+                });
+                
+                return {
+                    response: stepResult.reply,
+                    signals: {
+                        setConsentPending: false // Discovery flow is speaking, not offering booking yet
+                    },
+                    matchSource: 'STEP_ENGINE_DISCOVERY',
+                    tier: 'deterministic',
+                    tokensUsed: 0
+                };
+            }
+            
+            // StepEngine has no reply — all discovery steps are confirmed.
+            // Now ask the consent question to transition to booking.
+            const allConfirmed = !stepEngine.getNextRequiredStep(
+                discoveryFlowConfig, 
+                stepResult.state?.collectedSlots || extractedSlots,
+                stepResult.state?.confirmedSlots || {}
+            );
+            
+            if (allConfirmed) {
+                let consentQuestion;
+                try {
+                    consentQuestion = cfgGet(effectiveConfig, 'frontDesk.discoveryConsent.consentQuestion', {
+                        callId: callSid,
+                        turn: callState?.turnCount || 0,
+                        strict: false,
+                        readerId: 'handleDiscoveryLane.consentQuestion'
+                    });
+                } catch (e) {
+                    consentQuestion = null;
+                }
+                consentQuestion = consentQuestion || 'Would you like me to schedule a service appointment?';
+                
+                trace.addDecisionReason('DISCOVERY_COMPLETE_ASK_CONSENT', {
+                    capturedSlots: Object.keys(stepResult.state?.collectedSlots || {}),
+                    confirmedSlots: Object.keys(stepResult.state?.confirmedSlots || {})
+                });
+                
+                return {
+                    response: consentQuestion,
+                    signals: {
+                        setConsentPending: true
+                    },
+                    matchSource: 'STEP_ENGINE_CONSENT_OFFER',
+                    tier: 'deterministic',
+                    tokensUsed: 0
+                };
+            }
+            
+            // Fall through to ConversationEngine if StepEngine has nothing to say
+            // but discovery isn't complete (shouldn't happen with well-configured steps)
+            logger.warn('[FRONT_DESK_RUNTIME] V120: StepEngine returned no reply but discovery not complete', {
+                callSid,
+                capturedSlots: Object.keys(extractedSlots),
+                reason: 'falling_through_to_conversation_engine'
+            });
+            
+        } catch (stepEngineErr) {
+            // StepEngine errors must NEVER crash the call
+            logger.error('[FRONT_DESK_RUNTIME] V120: StepEngine error (non-fatal, falling through)', {
+                callSid,
+                error: stepEngineErr.message,
+                stack: stepEngineErr.stack?.split('\n').slice(0, 3).join('\n')
+            });
+        }
+    }
+    
     trace.addDecisionReason('DISCOVERY_LANE_HANDLER', { handler: 'ConversationEngine' });
     
     // ═══════════════════════════════════════════════════════════════════════════
