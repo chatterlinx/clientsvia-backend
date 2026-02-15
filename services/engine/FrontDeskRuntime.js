@@ -627,6 +627,43 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
         assertModeOwnership('FrontDeskRouter', 'SET', 'consentPending');
         callState.bookingConsentPending = result.signals.setConsentPending;
         trace.addDecisionReason('CONSENT_PENDING_SET', { value: result.signals.setConsentPending });
+        
+        // ═══════════════════════════════════════════════════════════════════════
+        // V120 CONSENT GATE: Only mark consent question as "explicitly asked"
+        // when the agent's response text actually contains the consent question.
+        // This prevents scenario responses that IMPLY scheduling from triggering
+        // consent detection on the next turn.
+        // ═══════════════════════════════════════════════════════════════════════
+        if (result.signals.setConsentPending === true && result.response) {
+            const consentQuestionTemplate = getConfig('frontDesk.discoveryConsent.consentQuestion', 
+                'Would you like me to schedule');
+            const responseText = (result.response || '').toLowerCase();
+            const consentQuestion = (consentQuestionTemplate || '').toLowerCase();
+            
+            // Check if the response actually contains a scheduling question
+            const hasExplicitQuestion = responseText.includes('schedule') && responseText.includes('?');
+            const hasConsentTemplate = consentQuestion && responseText.includes(consentQuestion.substring(0, 30));
+            const hasBookingOffer = /would you like.*(schedule|book|appointment|technician|service)/i.test(result.response);
+            
+            if (hasExplicitQuestion || hasConsentTemplate || hasBookingOffer) {
+                callState.consentQuestionExplicitlyAsked = true;
+                logger.info('[FRONT_DESK_RUNTIME] V120: Consent question EXPLICITLY asked', {
+                    callSid,
+                    responsePreview: result.response.substring(0, 80),
+                    matchedBy: hasConsentTemplate ? 'template' : (hasBookingOffer ? 'offer_pattern' : 'schedule_question')
+                });
+            } else {
+                // Scenario implied scheduling but didn't ask the consent question
+                callState.consentQuestionExplicitlyAsked = false;
+                logger.info('[FRONT_DESK_RUNTIME] V120: Consent pending set but NO explicit question in response', {
+                    callSid,
+                    responsePreview: result.response.substring(0, 80),
+                    note: 'Generic acknowledgement will NOT be treated as consent next turn'
+                });
+            }
+        } else if (result.signals.setConsentPending === false) {
+            callState.consentQuestionExplicitlyAsked = false;
+        }
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -712,9 +749,22 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     }
     
     // 3. Check for booking consent (yes-equivalent after consent question)
-    // V116: Token-based matching — handles "yes please", "yeah sure", "ok thanks"
-    // Old regex demanded entire input = single phrase. Natural responses always failed.
-    if (callState?.bookingConsentPending === true) {
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V120 CONSENT GATE FIX: Consent detection ONLY fires when BOTH conditions met:
+    //   a) bookingConsentPending === true (engine signaled consent is expected)
+    //   b) consentQuestionExplicitlyAsked === true (agent actually spoke the consent question)
+    //
+    // Without (b), scenario responses that IMPLY scheduling (e.g. "We'll get a technician
+    // out") set consentPending=true via the scheduling-detection heuristic, and then a
+    // generic acknowledgement like "okay" or "sure" from the caller gets misinterpreted
+    // as booking consent — causing premature BOOKING lane lock.
+    //
+    // RULE: Only detect consent if the previous agent turn EXPLICITLY asked for it.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const consentPending = callState?.bookingConsentPending === true;
+    const consentQuestionAsked = callState?.consentQuestionExplicitlyAsked === true;
+    
+    if (consentPending && consentQuestionAsked) {
         // Consent words: any word that signals agreement or is harmless filler
         const CONSENT_WORDS = new Set([
             'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
@@ -741,12 +791,16 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
             && tokens.every(t => CONSENT_WORDS.has(t));
         
         // ═══════════════════════════════════════════════════════════════
-        // V116 FIX: Accept leading affirmative + additional info
+        // V120 FIX: Leading-affirmative consent ONLY when explicit consent
+        // question was asked. Prevents "okay my last name is gonzales"
+        // from triggering booking consent.
         // ═══════════════════════════════════════════════════════════════
         const LEADING_CONSENT_TOKENS = new Set([
-            'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
+            'yes', 'yeah', 'yep', 'yup', 'sure',
             'absolutely', 'definitely', 'please', 'alright'
         ]);
+        // V120: Removed 'ok' and 'okay' from leading consent — too ambiguous
+        // as standalone acknowledgements. They still work via full-phrase match.
         const hasLeadingConsent = tokens.length > 0 && LEADING_CONSENT_TOKENS.has(tokens[0]);
         const consentDetected = isConsent || hasLeadingConsent;
         
@@ -761,6 +815,7 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
                 data: {
                     // Input state
                     consentPending: true,
+                    consentQuestionAsked: true,
                     userInput: userTurn?.substring(0, 60),
                     cleanedInput: cleanedForConsent,
                     tokens,
@@ -789,10 +844,12 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         
         if (isConsent) {
             trace.addDecisionReason('LANE_BOOKING', { 
-                reason: 'consent_given_after_offer',
+                reason: 'consent_given_after_explicit_question',
                 consentInput: cleanedForConsent,
                 tokenCount: tokens.length
             });
+            // V120: Clear the consent question flag — it's been consumed
+            callState.consentQuestionExplicitlyAsked = false;
             return LANES.BOOKING;
         }
         
@@ -802,33 +859,34 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
         // "Yep" = consent, "12155 Metro Parkway" = address info.
         // The strict token-only check above fails because "metro" and
         // "parkway" aren't consent words. But the leading affirmative
-        // clearly signals agreement when consentPending is true.
-        //
-        // SAFE because consentPending is ONLY set when we explicitly
-        // offered booking on the previous turn.
+        // clearly signals agreement when consentQuestionExplicitlyAsked is true.
         if (hasLeadingConsent) {
             trace.addDecisionReason('LANE_BOOKING', { 
-                reason: 'leading_consent_with_info',
+                reason: 'leading_consent_after_explicit_question',
                 leadingWord: tokens[0],
                 fullInput: cleanedForConsent.substring(0, 60)
             });
+            callState.consentQuestionExplicitlyAsked = false;
             return LANES.BOOKING;
         }
     } else {
-        // V118: Log when consent detection is SKIPPED (not pending)
-        // This helps understand why consent wasn't checked
-        if (BlackBoxLogger && callState?.bookingConsentPending === false) {
-            // Only log if explicitly false (not undefined) to avoid noise
+        // V120: Log when consent detection is SKIPPED — shows exactly why
+        if (BlackBoxLogger && (consentPending || callState?.bookingConsentPending === false)) {
             BlackBoxLogger.logEvent({
                 callId: context.callSid,
                 companyId: context.company?._id?.toString() || context.companyId,
                 type: 'CONSENT_DETECTION',
                 data: {
-                    consentPending: false,
+                    consentPending,
+                    consentQuestionAsked,
                     consentDetected: false,
                     detectionMethod: 'SKIPPED',
-                    reason: 'CONSENT_NOT_PENDING',
-                    message: 'Consent detection skipped — agent has not offered scheduling yet'
+                    reason: !consentPending 
+                        ? 'CONSENT_NOT_PENDING'
+                        : 'CONSENT_QUESTION_NOT_ASKED',
+                    message: !consentPending
+                        ? 'Consent detection skipped — agent has not offered scheduling yet'
+                        : 'V120: Consent pending but agent did not ask explicit consent question — treating as acknowledgement, not consent'
                 }
             }).catch(() => {});
         }
@@ -1664,8 +1722,33 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
         //   - firstNameCollected (what first name to combine with last name?)
         //   - awaitingSpelledName (are we waiting for caller to spell their name?)
         // ═══════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
+        // V120: SLOT TRUTH UNIFICATION — merge ALL slot sources into a single truth
+        // ═══════════════════════════════════════════════════════════════════════
+        // Discovery slots (from SlotExtractor/DiscoveryTruthWriter) are in callState.slots
+        // Booking collected values are in callState.bookingCollected
+        // Both must be merged so the runner sees everything captured so far.
+        // Without this, slots captured in DISCOVERY (name, phone) appear null
+        // in the booking runner's slot lookup, causing re-collection.
+        // ═══════════════════════════════════════════════════════════════════════
+        const mergedSlots = {};
+        // Layer 1: Discovery slots (base)
+        if (callState.slots && typeof callState.slots === 'object') {
+            for (const [key, val] of Object.entries(callState.slots)) {
+                if (val && typeof val === 'object' && val.v) {
+                    mergedSlots[key] = val.v; // Slot format: { v: value, c: confidence, s: source }
+                } else if (val && typeof val === 'string') {
+                    mergedSlots[key] = val;
+                }
+            }
+        }
+        // Layer 2: Booking collected (overrides discovery — more recent)
+        if (callState.bookingCollected && typeof callState.bookingCollected === 'object') {
+            Object.assign(mergedSlots, callState.bookingCollected);
+        }
+        
         const bookingState = {
-            bookingCollected: callState.bookingCollected || callState.slots || {},
+            bookingCollected: mergedSlots,
             confirmedSlots: callState.confirmedSlots || {},
             slotMetadata: callState.slotMetadata || {},
             currentStepId: callState.currentBookingStep,
@@ -1675,8 +1758,14 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
             firstNameCollected: callState.firstNameCollected,
             awaitingSpelledName: callState.awaitingSpelledName,
             pendingConfirmation: callState.pendingConfirmation,
+            // V120: Persist askCount across turns — prevents repromptCount stuck at 0
+            askCount: callState.bookingAskCount || {},
+            // V120: Persist confirmRetryCount to prevent infinite confirm loops
+            confirmRetryCount: callState.confirmRetryCount || {},
             // CRITICAL FIX: Check frontDeskBehavior.* (DB path), not frontDesk.* (AW path)
-            _slotRegistry: effectiveConfig?.frontDeskBehavior?.slotRegistry
+            _slotRegistry: effectiveConfig?.frontDeskBehavior?.slotRegistry,
+            // V120: Loop prevention config from UI (frontDeskBehavior.loopPrevention)
+            _loopPrevention: effectiveConfig?.frontDeskBehavior?.loopPrevention || {}
         };
         
         // Initialize state if this is first entry
@@ -1773,10 +1862,17 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
             if (bookingResult.state.pendingConfirmation !== undefined) {
                 callState.pendingConfirmation = bookingResult.state.pendingConfirmation;
             }
+            // V120: Sync askCount — prevents repromptCount stuck at 0 across turns
+            if (bookingResult.state.askCount) {
+                callState.bookingAskCount = bookingResult.state.askCount;
+            }
+            // V120: Sync confirmRetryCount
+            if (bookingResult.state.confirmRetryCount) {
+                callState.confirmRetryCount = bookingResult.state.confirmRetryCount;
+            }
         }
         
-        // V119: CRITICAL DEBUG — Trace askedForLastName through FrontDeskRuntime path
-        // This helps diagnose the lastName loop bug where askedForLastName doesn't persist
+        // V120: Enhanced state sync trace — includes askCount for loop debugging
         if (BlackBoxLogger) {
             BlackBoxLogger.logEvent({
                 callId: callSid,
@@ -1787,14 +1883,16 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
                     fromRunner_askedForLastName: bookingResult.state?.askedForLastName,
                     fromRunner_firstNameCollected: bookingResult.state?.firstNameCollected,
                     fromRunner_awaitingSpelledName: bookingResult.state?.awaitingSpelledName,
+                    fromRunner_askCount: bookingResult.state?.askCount,
                     // Values synced to callState (what will be returned to v2twilio)
                     toCallState_askedForLastName: callState.askedForLastName,
                     toCallState_firstNameCollected: callState.firstNameCollected,
                     toCallState_awaitingSpelledName: callState.awaitingSpelledName,
+                    toCallState_bookingAskCount: callState.bookingAskCount,
                     // Debugging context
                     stepId: bookingResult.state?.currentStepId,
                     action: bookingResult.action,
-                    note: 'V119: Trace path of transient booking state flags through FrontDeskRuntime'
+                    note: 'V120: Trace transient booking state flags including askCount'
                 }
             }).catch(() => {});
         }

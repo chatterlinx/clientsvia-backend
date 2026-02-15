@@ -6776,16 +6776,60 @@ class BookingFlowRunner {
         state.askCount = state.askCount || {};
         state.askCount[step.id] = (state.askCount[step.id] || 0) + 1;
         
-        // V110: Track exact prompt source from UI
-        const promptSource = step.promptSource || 
+        // ═══════════════════════════════════════════════════════════════════════
+        // V120: LOOP PREVENTION — Enforce maxSameQuestion from UI config
+        // ═══════════════════════════════════════════════════════════════════════
+        // Reads frontDeskBehavior.loopPrevention (persisted from UI Loop tab).
+        // If the same step has been asked more than maxSameQuestion times:
+        //   1. "rephrase" → use rephraseIntro + reprompt text
+        //   2. "nudge" → use nudge prompt for the slot type
+        //   3. "escalate" → transfer to human
+        // ═══════════════════════════════════════════════════════════════════════
+        const currentAskCount = state.askCount[step.id];
+        const loopPrevention = state._loopPrevention || {};
+        const maxSameQuestion = loopPrevention.maxSameQuestion || 3;
+        const onLoop = loopPrevention.onLoop || 'rephrase';
+        
+        let effectivePrompt = prompt || `What is your ${step.label || step.id}?`;
+        let promptSource = step.promptSource || 
             (step.prompt ? 'V110:bookingFlow.steps' : 'ERROR:no_ui_prompt');
+        
+        if (currentAskCount > maxSameQuestion) {
+            logger.warn('[BOOKING FLOW RUNNER] V120: LOOP DETECTED — same step asked too many times', {
+                stepId: step.id,
+                askCount: currentAskCount,
+                maxSameQuestion,
+                onLoop
+            });
+            
+            if (onLoop === 'escalate') {
+                return this.buildEscalation(step, state, flow,
+                    `V120: Loop detected — ${step.label || step.id} asked ${currentAskCount} times (max: ${maxSameQuestion})`);
+            }
+            
+            // Rephrase: use rephraseIntro prefix + reprompt text
+            const rephraseIntro = loopPrevention.rephraseIntro || 'Let me try this differently —';
+            const repromptText = step.reprompt || step.prompt || `What is your ${step.label || step.id}?`;
+            effectivePrompt = `${rephraseIntro} ${repromptText}`;
+            promptSource = 'V120:loopPrevention.rephrase';
+            
+            // After rephrase, if STILL looping, escalate on next attempt
+            if (currentAskCount > maxSameQuestion + 1) {
+                logger.error('[BOOKING FLOW RUNNER] V120: LOOP ESCALATION — rephrase failed, escalating', {
+                    stepId: step.id,
+                    askCount: currentAskCount
+                });
+                return this.buildEscalation(step, state, flow,
+                    `V120: Loop escalation — ${step.label || step.id} asked ${currentAskCount} times after rephrase`);
+            }
+        }
         
         // V110: Update state with current slot tracking
         state.currentStepId = step.id;
         state.currentSlotId = step.slotId || step.fieldKey || step.id;
         
         return {
-            reply: prompt || `What is your ${step.label || step.id}?`,
+            reply: effectivePrompt,
             state,
             isComplete: false,
             action: 'CONTINUE',
@@ -6802,8 +6846,9 @@ class BookingFlowRunner {
                 stepId: step.id,
                 slotId: step.slotId || step.fieldKey || step.id,
                 slotSubStep: state.slotSubStep || null,
-                askCount: state.askCount[step.id],
-                repromptCount: state.askCount[step.id] - 1,
+                askCount: currentAskCount,
+                repromptCount: currentAskCount - 1,
+                loopDetected: currentAskCount > maxSameQuestion,
                 promptSource,
                 promptPath: step.promptPath || `frontDeskBehavior.bookingFlow.steps[${step.id}].ask`
             }

@@ -3379,7 +3379,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             askedForLastName: callState.askedForLastName,
             firstNameCollected: callState.firstNameCollected || null,
             // Spelling sub-step — caller was asked to spell their name
-            awaitingSpelledName: callState.awaitingSpelledName
+            awaitingSpelledName: callState.awaitingSpelledName,
+            // V120: Loop prevention config from UI (frontDeskBehavior.loopPrevention)
+            _loopPrevention: company?.aiAgentSettings?.frontDeskBehavior?.loopPrevention || {}
           };
           
           // Create AWConfigReader for traced config reads
@@ -5037,6 +5039,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
                 bookingConsentPending: (engineResult.bookingFlowState?.bookingModeLocked === true || engineResult.signals?.bookingModeLocked === true)
                   ? false  // Consent granted → clear pending
                   : (engineResult.signals?.bookingConsentPending === true || callState.bookingConsentPending === true),
+                // V120: Persist consent question flag — consent gate requires BOTH pending + explicit question
+                consentQuestionExplicitlyAsked: callState.consentQuestionExplicitlyAsked === true,
                 // V110: Persist schedulingAccepted flag to Redis
                 // Set when caller implicitly consents (e.g., "I need service")
                 // FrontDeskRuntime checks this to determine lane transition
