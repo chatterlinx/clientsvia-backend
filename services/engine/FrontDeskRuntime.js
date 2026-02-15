@@ -181,9 +181,10 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
                 missingV110: validation.v110?.missingV110 || [],
                 invalidSteps: validation.v110?.invalidSteps || [],
                 missingPrompts: validation.v110?.missingPrompts || [],
-                slotRegistryCount: effectiveConfig?.frontDesk?.slotRegistry?.slots?.length || 0,
-                discoveryFlowCount: effectiveConfig?.frontDesk?.discoveryFlow?.steps?.length || 0,
-                bookingFlowCount: effectiveConfig?.frontDesk?.bookingFlow?.steps?.length || 0
+                // CRITICAL FIX: Check frontDeskBehavior.* (DB path), not frontDesk.* (AW path)
+                slotRegistryCount: effectiveConfig?.frontDeskBehavior?.slotRegistry?.slots?.length || 0,
+                discoveryFlowCount: effectiveConfig?.frontDeskBehavior?.discoveryFlow?.steps?.length || 0,
+                bookingFlowCount: effectiveConfig?.frontDeskBehavior?.bookingFlow?.steps?.length || 0
             }
         }).catch(() => {});
     }
@@ -263,9 +264,8 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     // ═══════════════════════════════════════════════════════════════════════════
     try {
         const DiscoveryTruthWriter = require('./discovery/DiscoveryTruthWriter');
-        const discoveryFlowConfig = effectiveConfig?.frontDeskBehavior?.discoveryFlow 
-            || effectiveConfig?.frontDesk?.discoveryFlow 
-            || null;
+        // CRITICAL FIX: Only use frontDeskBehavior.* (DB path), no fallback to frontDesk.*
+        const discoveryFlowConfig = effectiveConfig?.frontDeskBehavior?.discoveryFlow || null;
         
         const truthResult = DiscoveryTruthWriter.apply({
             callState,
@@ -1675,7 +1675,8 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
             firstNameCollected: callState.firstNameCollected,
             awaitingSpelledName: callState.awaitingSpelledName,
             pendingConfirmation: callState.pendingConfirmation,
-            _slotRegistry: effectiveConfig?.frontDesk?.slotRegistry
+            // CRITICAL FIX: Check frontDeskBehavior.* (DB path), not frontDesk.* (AW path)
+            _slotRegistry: effectiveConfig?.frontDeskBehavior?.slotRegistry
         };
         
         // Initialize state if this is first entry

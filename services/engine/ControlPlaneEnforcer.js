@@ -224,8 +224,9 @@ function cfgGet(effectiveConfig, key, options = {}) {
     const trace = getTrace(callId, turn);
     
     // Determine enforcement level: "strict" = block+fail, "warn" = log only
-    const enforcementLevel = effectiveConfig?.frontDesk?.enforcement?.level || 
-        (effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn');
+    // CRITICAL FIX: Check frontDeskBehavior.* (DB path), not frontDesk.* (AW path)
+    const enforcementLevel = effectiveConfig?.frontDeskBehavior?.enforcement?.level || 
+        (effectiveConfig?.frontDeskBehavior?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn');
     const isStrictMode = enforcementLevel === 'strict';
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -381,20 +382,21 @@ function validateConfig(effectiveConfig, callId = 'unknown') {
     
     // ═══════════════════════════════════════════════════════════════════════════
     // V110 VALIDATION — UI is law, config is required
+    // CRITICAL FIX: Check frontDeskBehavior.* (DB path), not frontDesk.* (AW path)
     // ═══════════════════════════════════════════════════════════════════════════
-    const slots = effectiveConfig?.frontDesk?.slotRegistry?.slots;
+    const slots = effectiveConfig?.frontDeskBehavior?.slotRegistry?.slots;
     if (!slots || !Array.isArray(slots) || slots.length === 0) {
         result.v110.missingV110.push('frontDesk.slotRegistry.slots');
         result.v110.valid = false;
     }
     
-    const discoverySteps = effectiveConfig?.frontDesk?.discoveryFlow?.steps;
+    const discoverySteps = effectiveConfig?.frontDeskBehavior?.discoveryFlow?.steps;
     if (!discoverySteps || !Array.isArray(discoverySteps) || discoverySteps.length === 0) {
         result.v110.missingV110.push('frontDesk.discoveryFlow.steps');
         result.v110.valid = false;
     }
     
-    const bookingSteps = effectiveConfig?.frontDesk?.bookingFlow?.steps;
+    const bookingSteps = effectiveConfig?.frontDeskBehavior?.bookingFlow?.steps;
     if (!bookingSteps || !Array.isArray(bookingSteps) || bookingSteps.length === 0) {
         result.v110.missingV110.push('frontDesk.bookingFlow.steps');
         result.v110.valid = false;
@@ -510,16 +512,17 @@ function buildControlPlaneHeader(effectiveConfig, awHash, effectiveConfigVersion
     const validation = validateConfig(effectiveConfig, callId);
     
     // Determine enforcement level (strict vs warn)
-    const enforcementLevel = effectiveConfig?.frontDesk?.enforcement?.level || 
-        (effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn');
+    // CRITICAL FIX: Check frontDeskBehavior.* (DB path), not frontDesk.* (AW path)
+    const enforcementLevel = effectiveConfig?.frontDeskBehavior?.enforcement?.level || 
+        (effectiveConfig?.frontDeskBehavior?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn');
     const strictMode = enforcementLevel === 'strict';
     
     // Determine config source
     let configSource = 'defaults';
     if (awHash && effectiveConfigVersion) {
         configSource = 'company'; // Loaded from company-specific wiring
-    } else if (effectiveConfig?.frontDesk) {
-        configSource = 'template'; // Has frontDesk but no awHash
+    } else if (effectiveConfig?.frontDeskBehavior) {
+        configSource = 'template'; // Has frontDeskBehavior but no awHash
     }
     
     return {
