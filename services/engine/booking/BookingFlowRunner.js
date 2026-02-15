@@ -730,12 +730,22 @@ const SlotExtractors = {
         }
         
         // STEP 2: Score using name lists (global via AWConfigReader — single source)
-        const firstNames = (context.awReader && typeof context.awReader.getArray === 'function')
-            ? context.awReader.getArray('frontDesk.commonFirstNames')
-            : AWConfigReader.getGlobalFirstNames();
-        const lastNames = (context.awReader && typeof context.awReader.getArray === 'function')
-            ? context.awReader.getArray('frontDesk.commonLastNames')
-            : AWConfigReader.getGlobalLastNames();
+        // V120: Resilient fallback — if AWConfigReader is unavailable, use empty sets.
+        let firstNames = [];
+        let lastNames = [];
+        try {
+            if (context.awReader && typeof context.awReader.getArray === 'function') {
+                firstNames = context.awReader.getArray('frontDesk.commonFirstNames') || [];
+                lastNames = context.awReader.getArray('frontDesk.commonLastNames') || [];
+            } else if (AWConfigReader && typeof AWConfigReader.getGlobalFirstNames === 'function') {
+                firstNames = AWConfigReader.getGlobalFirstNames() || [];
+                lastNames = AWConfigReader.getGlobalLastNames() || [];
+            }
+        } catch (e) {
+            logger.warn('[SLOT EXTRACTOR] firstName: Name lists unavailable — scoring without lists', {
+                error: e.message
+            });
+        }
         const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
         const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
         
@@ -798,12 +808,23 @@ const SlotExtractors = {
         }
         
         // STEP 2: Score using name lists (global via AWConfigReader — single source)
-        const firstNames = (context.awReader && typeof context.awReader.getArray === 'function')
-            ? context.awReader.getArray('frontDesk.commonFirstNames')
-            : AWConfigReader.getGlobalFirstNames();
-        const lastNames = (context.awReader && typeof context.awReader.getArray === 'function')
-            ? context.awReader.getArray('frontDesk.commonLastNames')
-            : AWConfigReader.getGlobalLastNames();
+        // V120: Resilient fallback — if AWConfigReader is unavailable, use empty sets.
+        // The scorer still accepts valid-structure names (score ≥ 0.4) without lists.
+        let firstNames = [];
+        let lastNames = [];
+        try {
+            if (context.awReader && typeof context.awReader.getArray === 'function') {
+                firstNames = context.awReader.getArray('frontDesk.commonFirstNames') || [];
+                lastNames = context.awReader.getArray('frontDesk.commonLastNames') || [];
+            } else if (AWConfigReader && typeof AWConfigReader.getGlobalFirstNames === 'function') {
+                firstNames = AWConfigReader.getGlobalFirstNames() || [];
+                lastNames = AWConfigReader.getGlobalLastNames() || [];
+            }
+        } catch (e) {
+            logger.warn('[SLOT EXTRACTOR] lastName: Name lists unavailable — scoring without lists', {
+                error: e.message
+            });
+        }
         const firstNamesSet = new Set(firstNames.map(n => String(n).toLowerCase()));
         const lastNamesSet = new Set(lastNames.map(n => String(n).toLowerCase()));
         
