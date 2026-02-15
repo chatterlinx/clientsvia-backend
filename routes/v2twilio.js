@@ -2892,7 +2892,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           bookingModeLocked: !!callState.bookingModeLocked,
           bookingState: callState.bookingState || null,
           currentBookingStep: callState.currentBookingStep || null,
-          turnCount: callState.turnCount
+          turnCount: callState.turnCount,
+          // V119: Debug lastName state persistence
+          askedForLastName: callState.askedForLastName,
+          firstNameCollected: callState.firstNameCollected,
+          awaitingSpelledName: callState.awaitingSpelledName
         }
       }).catch(() => {});
     }
@@ -3196,8 +3200,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       slotKeysBefore = Object.keys(slotsBefore);
       
       // Extract slots from current utterance
-      // FEB 2026 FIX: Pass confirmedSlots to gate extraction properly
-      // V92 FIX: Pass bookingModeLocked and sessionMode to prevent premature time/address extraction
+      const slotRegistry = company?.aiAgentSettings?.frontDeskBehavior?.slotRegistry;
+      
       extractedSlots = SlotExtractor.extractAll(speechResult, {
         turnCount: callState.turnCount || 1,
         callerPhone: fromNumber,
@@ -3206,9 +3210,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         expectingSlot: callState.currentBookingStep || null,
         currentBookingStep: callState.currentBookingStep || null,
         confirmedSlots: callState.confirmedSlots || {},
-        // V92: Booking mode gating - prevents time/address extraction in discovery
         bookingModeLocked: callState.bookingModeLocked === true,
-        sessionMode: callState.sessionMode || 'DISCOVERY'
+        sessionMode: callState.sessionMode || 'DISCOVERY',
+        slotRegistry
       });
       
       // Merge new extractions with existing slots (with confidence rules)
@@ -3578,6 +3582,33 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           // 📼 BLACK BOX: Log BOOKING_RUNNER_PROMPT - the runner spoke, not the gate
           // V110: GATE_SUCCESS no longer includes responsePreview (gate doesn't speak)
           if (BlackBoxLogger) {
+            // V119: CRITICAL DEBUG — Trace askedForLastName through the booking gate path
+            // This event helps diagnose the lastName loop bug where askedForLastName is not persisting
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'BOOKING_GATE_STATE_SYNC',
+              turn: callState.turnCount,
+              data: {
+                // Source values from bookingResult (returned by BookingFlowRunner)
+                fromRunner_askedForLastName: bookingResult.state?.askedForLastName,
+                fromRunner_firstNameCollected: bookingResult.state?.firstNameCollected,
+                fromRunner_awaitingSpelledName: bookingResult.state?.awaitingSpelledName,
+                // Destination values in result.callState (what will be saved to Redis)
+                toCallState_askedForLastName: result.callState.askedForLastName,
+                toCallState_firstNameCollected: result.callState.firstNameCollected,
+                toCallState_awaitingSpelledName: result.callState.awaitingSpelledName,
+                // Input values that were loaded from Redis
+                input_askedForLastName: callState.askedForLastName,
+                input_firstNameCollected: callState.firstNameCollected,
+                input_awaitingSpelledName: callState.awaitingSpelledName,
+                // Debugging context
+                stepId: bookingResult.state?.currentStepId,
+                action: bookingResult.action,
+                note: 'V119: Trace path of transient booking state flags through absolute gate'
+              }
+            }).catch(() => {});
+            
             // Event 1: Gate routed successfully (no text)
             BlackBoxLogger.logEvent({
               callId: callSid,
@@ -5979,7 +6010,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           bookingCollected: updatedCallState.bookingCollected || null,
           // 🎯 Slots are now first-class in state logging!
           slots: slotsPreview,
-          slotsCount: Object.keys(slotsPreview).length
+          slotsCount: Object.keys(slotsPreview).length,
+          // V119: Debug lastName state persistence
+          askedForLastName: updatedCallState.askedForLastName,
+          firstNameCollected: updatedCallState.firstNameCollected,
+          awaitingSpelledName: updatedCallState.awaitingSpelledName
         }
       }).catch(() => {});
     }

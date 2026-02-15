@@ -64,7 +64,6 @@ module.exports = {
     SensitiveMasker,
     
     // Re-export constants for convenience
-    DEFAULT_STEP_PROMPTS: BookingFlowResolver.DEFAULT_STEP_PROMPTS,
     VALIDATION_PATTERNS: BookingFlowResolver.VALIDATION_PATTERNS,
     SlotExtractors: BookingFlowRunner.SlotExtractors,
     CONFIDENCE: SlotExtractor.CONFIDENCE,

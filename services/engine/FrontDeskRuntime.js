@@ -158,31 +158,47 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
     // ═══════════════════════════════════════════════════════════════════════════
     // GATE 1: Validate Control Plane is loaded
     // ═══════════════════════════════════════════════════════════════════════════
-    // Determine enforcement level: "strict" = block+fail, "warn" = log only
-    const enforcementLevel = effectiveConfig?.frontDesk?.enforcement?.level || 
-        (effectiveConfig?.frontDesk?.enforcement?.strictControlPlaneOnly === true ? 'strict' : 'warn');
-    const strictMode = enforcementLevel === 'strict';
+    // GATE 1: V110 Config Validation — UI is law
+    // ═══════════════════════════════════════════════════════════════════════════
     const validation = validateConfig(effectiveConfig, callSid);
     
-    // Log enforcement status on every turn for visibility
-    logger.info('[FRONT_DESK_RUNTIME] Enforcement status', {
+    logger.info('[FRONT_DESK_RUNTIME] V110 validation status', {
         callSid,
-        enforcementLevel,
-        strictMode,
         validationOk: validation.valid,
         missingRequiredCount: validation.missingRequired?.length || 0
     });
     
-    if (!validation.valid && strictMode) {
-        logger.error('[FRONT_DESK_RUNTIME] FAIL CLOSED - Control Plane validation failed', {
+    // Emit V110_CONFIG_VALIDATED or V110_CONFIG_INVALID event
+    if (BlackBoxLogger) {
+        const isV110Valid = validation.v110?.valid !== false;
+        BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId,
+            type: isV110Valid ? 'V110_CONFIG_VALIDATED' : 'V110_CONFIG_INVALID',
+            turn: turnCount,
+            data: {
+                v110Valid: isV110Valid,
+                missingV110: validation.v110?.missingV110 || [],
+                invalidSteps: validation.v110?.invalidSteps || [],
+                missingPrompts: validation.v110?.missingPrompts || [],
+                slotRegistryCount: effectiveConfig?.frontDesk?.slotRegistry?.slots?.length || 0,
+                discoveryFlowCount: effectiveConfig?.frontDesk?.discoveryFlow?.steps?.length || 0,
+                bookingFlowCount: effectiveConfig?.frontDesk?.bookingFlow?.steps?.length || 0
+            }
+        }).catch(() => {});
+    }
+    
+    if (!validation.valid) {
+        logger.error('[FRONT_DESK_RUNTIME] FAIL CLOSED - V110 config invalid', {
             callSid,
             missingRequired: validation.missingRequired,
-            strictMode
+            v110MissingV110: validation.v110?.missingV110 || []
         });
         
         trace.addDecisionReason('FAIL_CLOSED', { 
-            reason: 'CONTROL_PLANE_VALIDATION_FAILED',
-            missingRequired: validation.missingRequired
+            reason: 'V110_CONFIG_INVALID',
+            missingRequired: validation.missingRequired,
+            v110MissingV110: validation.v110?.missingV110 || []
         });
         
         if (BlackBoxLogger) {
@@ -192,9 +208,9 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
                 type: 'FRONT_DESK_FAIL_CLOSED',
                 turn: turnCount,
                 data: {
-                    reason: 'CONTROL_PLANE_VALIDATION_FAILED',
+                    reason: 'V110_CONFIG_INVALID',
                     missingRequired: validation.missingRequired,
-                    strictMode
+                    v110MissingV110: validation.v110?.missingV110 || []
                 }
             }).catch(() => {});
         }
@@ -1655,11 +1671,11 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
             currentStepId: callState.currentBookingStep,
             turn: callState.turnCount || 0,
             _traceContext: { callSid, companyId },
-            // V116: Restore transient state variables from previous turns
             askedForLastName: callState.askedForLastName,
             firstNameCollected: callState.firstNameCollected,
             awaitingSpelledName: callState.awaitingSpelledName,
-            pendingConfirmation: callState.pendingConfirmation
+            pendingConfirmation: callState.pendingConfirmation,
+            _slotRegistry: effectiveConfig?.frontDesk?.slotRegistry
         };
         
         // Initialize state if this is first entry
@@ -1756,6 +1772,30 @@ async function handleBookingLane(effectiveConfig, callState, userTurn, context, 
             if (bookingResult.state.pendingConfirmation !== undefined) {
                 callState.pendingConfirmation = bookingResult.state.pendingConfirmation;
             }
+        }
+        
+        // V119: CRITICAL DEBUG — Trace askedForLastName through FrontDeskRuntime path
+        // This helps diagnose the lastName loop bug where askedForLastName doesn't persist
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'BOOKING_LANE_STATE_SYNC',
+                data: {
+                    // Values from BookingFlowRunner
+                    fromRunner_askedForLastName: bookingResult.state?.askedForLastName,
+                    fromRunner_firstNameCollected: bookingResult.state?.firstNameCollected,
+                    fromRunner_awaitingSpelledName: bookingResult.state?.awaitingSpelledName,
+                    // Values synced to callState (what will be returned to v2twilio)
+                    toCallState_askedForLastName: callState.askedForLastName,
+                    toCallState_firstNameCollected: callState.firstNameCollected,
+                    toCallState_awaitingSpelledName: callState.awaitingSpelledName,
+                    // Debugging context
+                    stepId: bookingResult.state?.currentStepId,
+                    action: bookingResult.action,
+                    note: 'V119: Trace path of transient booking state flags through FrontDeskRuntime'
+                }
+            }).catch(() => {});
         }
         
         return {
@@ -2298,8 +2338,30 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
     } catch (error) {
         logger.error('[FRONT_DESK_RUNTIME] ConversationEngine error', {
             callSid,
-            error: error.message
+            error: error.message,
+            stack: error.stack?.substring(0, 800)
         });
+        
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V110 STRICT: SCENARIO_RENDER_ERROR — Log errors for call review visibility
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'SCENARIO_RENDER_ERROR',
+                turn: turnCount,
+                data: {
+                    lane: 'CONVERSATION_ENGINE',
+                    errorMessage: error.message,
+                    stack: error.stack?.split('\n').slice(0, 8).join('\n'),
+                    userTurn: userTurn?.substring(0, 50),
+                    sessionMode: callState?.sessionMode,
+                    bookingModeLocked: callState?.bookingModeLocked,
+                    note: 'V110 STRICT: ConversationEngine threw an exception'
+                }
+            }).catch(() => {});
+        }
         
         return {
             response: "I'm here to help! What can I assist you with?",

@@ -65,6 +65,55 @@ try {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * V110: PROMPT HELPER — UI IS LAW
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * 
+ * All prompts MUST come from config:
+ * - bookingFlow.steps[].ask / reprompt / confirmPrompt / lastNameQuestion
+ * - slotRegistry.slots[].question / reprompt
+ * 
+ * If missing, logs V110_PROMPT_MISSING and returns a visible placeholder.
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+function getV110Prompt(promptType, { step, slotOptions, slotRegistry, slotId, callSid }) {
+    const lookupChain = [
+        slotOptions?.[promptType],
+        step?.[promptType],
+        slotRegistry?.slots?.find(s => s.id === (slotId || step?.id || step?.slotId))?.[promptType]
+    ];
+    
+    const configuredPrompt = lookupChain.find(p => p !== undefined && p !== null && p !== '');
+    
+    if (configuredPrompt) {
+        return configuredPrompt;
+    }
+    
+    // Missing prompt — log and return visible placeholder
+    logger.error('[BOOKING FLOW RUNNER] Missing prompt config', {
+        promptType,
+        stepId: step?.id || step?.slotId,
+        slotId,
+        callSid
+    });
+    
+    if (BlackBoxLogger && callSid) {
+        BlackBoxLogger.logEvent({
+            callId: callSid,
+            type: 'V110_PROMPT_MISSING',
+            data: {
+                promptType,
+                stepId: step?.id || step?.slotId,
+                slotId,
+                note: 'Prompt not configured in bookingFlow.steps or slotRegistry'
+            }
+        }).catch(() => {});
+    }
+    
+    return `[CONFIG MISSING: ${promptType}]`;
+}
+
+/**
  * ============================================================================
  * V96j: SAFE SLOT WRITE FIREWALL (UNIFIED WITH IdentitySlotFirewall)
  * ============================================================================
@@ -2466,6 +2515,35 @@ class BookingFlowRunner {
         // ═══════════════════════════════════════════════════════════════════
         const nextAction = this.determineNextAction(flow, state, slots, company);
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V110 STRICT: BOOKING_NEXT_STEP_SELECTED — Log step selection for visibility
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This event shows exactly which step was selected, which slots are present/missing,
+        // and the order of steps in the flow. Critical for debugging step selection logic.
+        // ═══════════════════════════════════════════════════════════════════════════
+        if (BlackBoxLogger && callSid) {
+            const slotsPresent = Object.keys(state.bookingCollected || {}).filter(k => state.bookingCollected[k]);
+            const slotsMissing = flow.steps
+                .filter(s => s.required !== false)
+                .map(s => s.fieldKey || s.id)
+                .filter(k => !slotsPresent.includes(k));
+            
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId: company?._id?.toString(),
+                type: 'BOOKING_NEXT_STEP_SELECTED',
+                data: {
+                    selectedStepId: nextAction?.step?.id || 'NONE_ALL_COMPLETE',
+                    selectedMode: nextAction?.mode || 'COMPLETE',
+                    slotsPresent,
+                    slotsMissing,
+                    flowStepOrder: flow.steps.map(s => s.fieldKey || s.id),
+                    confirmedSlots: Object.keys(state.confirmedSlots || {}),
+                    currentStepId: state.currentStepId
+                }
+            }).catch(() => {});
+        }
+        
         if (!nextAction) {
             // All required steps confirmed - go to final confirmation
             logger.info('[BOOKING FLOW RUNNER] All slots ready - building final confirmation', {
@@ -3328,12 +3406,13 @@ class BookingFlowRunner {
                 const nameParts = existingValue.trim().split(/\s+/);
                 
                 if (askFullName && askMissingNamePart && nameParts.length < 2) {
-                    // V99: Use UI-configured last name question
-                    let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
-                    if (!lastNameQuestion) {
-                        logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for lastNameQuestion', { stepId: step.id });
-                        lastNameQuestion = "And your last name?";
-                    }
+                    const lastNameQuestion = getV110Prompt('lastNameQuestion', {
+                        step,
+                        slotOptions,
+                        slotRegistry: state._slotRegistry,
+                        slotId: fieldKey,
+                        callSid: state._traceContext?.callSid
+                    });
                     const ack = isYes ? 'Perfect.' : 'Got it.';
                     
                     state.firstNameCollected = nameParts[0];
@@ -3418,12 +3497,13 @@ class BookingFlowRunner {
                 const nameParts = fullCorrectedName.trim().split(/\s+/);
                 
                 if (askFullName && askMissingNamePart && nameParts.length < 2) {
-                    // V99: Use UI-configured last name question
-                    let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
-                    if (!lastNameQuestion) {
-                        logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for lastNameQuestion', { stepId: step.id });
-                        lastNameQuestion = "And your last name?";
-                    }
+                    const lastNameQuestion = getV110Prompt('lastNameQuestion', {
+                        step,
+                        slotOptions,
+                        slotRegistry: state._slotRegistry,
+                        slotId: fieldKey,
+                        callSid: state._traceContext?.callSid
+                    });
                     state.firstNameCollected = nameParts[0];
                     state.askedForLastName = true;
                     
@@ -3479,6 +3559,15 @@ class BookingFlowRunner {
         // LAST NAME COLLECTION HANDLING
         // ═══════════════════════════════════════════════════════════════════════
         if (detailReason === 'LAST_NAME_REQUIRED' && (fieldKey === 'name' || step.type === 'name')) {
+            // V119: CRITICAL DEBUG — Log state flags at lastName handler entry
+            // This helps diagnose the lastName loop bug
+            logger.info('[BOOKING FLOW RUNNER] V119 lastName handler entry', {
+                userInput: (userInput || '').substring(0, 50),
+                askedForLastName: state.askedForLastName,
+                firstNameCollected: state.firstNameCollected,
+                awaitingSpelledName: state.awaitingSpelledName,
+                stepId: step?.id
+            });
             // ═══════════════════════════════════════════════════════════════
             // PHASE 0: Handle spelled name response
             // ═══════════════════════════════════════════════════════════════
@@ -3558,11 +3647,13 @@ class BookingFlowRunner {
             // ═══════════════════════════════════════════════════════════════
             if (!userInput || userInput.trim() === '' || !state.askedForLastName) {
                 const firstName = existingValue?.split?.(/\s+/)?.[0] || existingValue;
-                let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
-                if (!lastNameQuestion) {
-                    logger.warn('[BOOKING FLOW RUNNER] No UI config for lastNameQuestion', { stepId: step.id });
-                    lastNameQuestion = "And your last name?";
-                }
+                const lastNameQuestion = getV110Prompt('lastNameQuestion', {
+                    step,
+                    slotOptions,
+                    slotRegistry: state._slotRegistry,
+                    slotId: fieldKey,
+                    callSid: state._traceContext?.callSid
+                });
                 
                 state.firstNameCollected = firstName;
                 state.askedForLastName = true;
@@ -5583,15 +5674,16 @@ class BookingFlowRunner {
                 state.firstNameCollected = firstName;
                 state.askedForLastName = true;
                 
-                // V99: Use UI-configured last name question
-                let lastNameQuestion = slotOptions.lastNameQuestion || step.lastNameQuestion;
-                if (!lastNameQuestion) {
-                    logger.warn('[BOOKING FLOW RUNNER] V99: No UI config for lastNameQuestion', { stepId: step.id });
-                    lastNameQuestion = "And your last name?";
-                }
+                const lastNameQuestion = getV110Prompt('lastNameQuestion', {
+                    step,
+                    slotOptions,
+                    slotRegistry: state._slotRegistry,
+                    slotId: fieldKey,
+                    callSid: state._traceContext?.callSid
+                });
                 const ack = `Got it, ${firstName}.`;
                 
-                logger.info('[BOOKING FLOW RUNNER] V92: Asking for last name', {
+                logger.info('[BOOKING FLOW RUNNER] Asking for last name', {
                     firstName,
                     askFullName,
                     askMissingNamePart,

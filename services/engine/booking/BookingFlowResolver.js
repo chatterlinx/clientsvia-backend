@@ -3,22 +3,20 @@
  * BOOKING FLOW RESOLVER
  * ============================================================================
  * 
- * Resolves the appropriate booking flow for a given context.
+ * Resolves the booking flow from V110 UI configuration (Control Plane).
  * 
- * This is the bridge between UI configuration (Wiring Tab) and runtime.
- * 
- * RESOLUTION PRIORITY:
- * 1. companyId + trade + serviceType (most specific)
- * 2. companyId + trade
- * 3. companyId default
+ * V110 ARCHITECTURE: UI IS LAW
+ * - All booking flows MUST be configured via frontDesk.slotRegistry + frontDesk.bookingFlow
+ * - No hardcoded defaults or fallbacks
+ * - Missing config = fail closed with clear error
  * 
  * FLOW STRUCTURE:
  * A flow is an ordered list of steps, where each step defines:
  * - id: Unique step identifier
  * - fieldKey: The slot key to collect (name, phone, address, time, etc.)
- * - prompt: The exact question to ask
- * - reprompt: The clarification prompt if validation fails
- * - validation: Validation rules (optional)
+ * - prompt: The exact question to ask (from bookingFlow.steps[].ask)
+ * - reprompt: The clarification prompt (from bookingFlow.steps[].reprompt)
+ * - validation: Validation rules
  * - required: Whether this step is required
  * - order: Step order
  * 
@@ -26,62 +24,6 @@
  */
 
 const logger = require('../../../utils/logger');
-
-/**
- * Default step prompts when company hasn't configured custom ones.
- * These are fallbacks - UI configuration should always be used when available.
- */
-const DEFAULT_STEP_PROMPTS = {
-    name: {
-        prompt: "May I have your name, please?",
-        reprompt: "I didn't quite catch that. Could you tell me your name?"
-    },
-    phone: {
-        prompt: "And what's the best phone number to reach you?",
-        reprompt: "I'm sorry, I didn't get that number. Can you repeat your phone number?"
-    },
-    address: {
-        prompt: "What is the service address?",
-        reprompt: "I want to make sure I have the right address. Can you say it one more time?"
-    },
-    // ═══════════════════════════════════════════════════════════════════════
-    // V92: ADDRESS-RELATED FOLLOW-UP STEPS
-    // These are triggered conditionally by Google Geo validation
-    // ═══════════════════════════════════════════════════════════════════════
-    propertyType: {
-        prompt: "Is this a house, apartment, condo, or business location?",
-        reprompt: "Just to clarify, is this a residential home, an apartment, or a commercial location?"
-    },
-    unit: {
-        prompt: "What's the apartment or unit number?",
-        reprompt: "I didn't catch the unit number. Could you repeat that?"
-    },
-    gateAccess: {
-        prompt: "Is there a gate or secured entry to get to your location?",
-        reprompt: "Does the technician need a gate code or any special access instructions?"
-    },
-    gateCode: {
-        prompt: "What's the gate code?",
-        reprompt: "I didn't catch that. What's the gate code the technician should use?"
-    },
-    accessInstructions: {
-        prompt: "Any special instructions for the technician to get to your unit?",
-        reprompt: "Are there any access instructions or notes for the technician?"
-    },
-    // ═══════════════════════════════════════════════════════════════════════
-    time: {
-        prompt: "When would work best for you?",
-        reprompt: "What time works best for your schedule?"
-    },
-    email: {
-        prompt: "What's your email address?",
-        reprompt: "Can you spell out your email address for me?"
-    },
-    serviceType: {
-        prompt: "What type of service do you need?",
-        reprompt: "What service are you looking for today?"
-    }
-};
 
 /**
  * Validation patterns for common field types
@@ -132,8 +74,17 @@ class BookingFlowResolver {
      */
     static resolve({ companyId, trade, serviceType, company, awReader }) {
         if (!company) {
-            logger.warn('[BOOKING FLOW RESOLVER] No company provided, using defaults', { companyId });
-            return this.buildDefaultFlow(companyId);
+            logger.error('[BOOKING FLOW RESOLVER] No company provided — FAIL CLOSED', { companyId });
+            return {
+                flowId: 'V110_FAIL_CLOSED',
+                flowName: 'V110 - No Company',
+                steps: [],
+                resolution: {
+                    source: 'V110_FAIL_CLOSED',
+                    status: 'NO_COMPANY',
+                    error: 'company is required for booking flow resolution'
+                }
+            };
         }
         
         // ═══════════════════════════════════════════════════════════════════════
@@ -228,23 +179,26 @@ class BookingFlowResolver {
             usedAwReader: !!(awReader && typeof awReader.get === 'function')
         });
         
-        // If no booking slots configured, use defaults
+        // V110: No booking slots = fail closed
         if (!bookingSlots || bookingSlots.length === 0) {
-            logger.warn('[BOOKING FLOW RESOLVER] No booking slots configured, using defaults', { 
+            logger.error('[BOOKING FLOW RESOLVER] No booking slots configured — FAIL CLOSED', { 
                 companyId: company._id,
                 companyName: company.name,
                 configSource,
                 checkedPaths
             });
-            const defaultFlow = this.buildDefaultFlow(companyId, bookingTemplates);
-            defaultFlow.resolution = {
-                source: 'default',
-                status: 'DEFAULT_FALLBACK',
-                configSource,
-                checkedPaths,
-                slotCount: 0
+            return {
+                flowId: 'V110_FAIL_CLOSED',
+                flowName: 'V110 - No Slots Configured',
+                steps: [],
+                resolution: {
+                    source: 'V110_FAIL_CLOSED',
+                    status: 'NO_SLOTS_CONFIGURED',
+                    configSource,
+                    checkedPaths,
+                    error: 'frontDesk.slotRegistry.slots and frontDesk.bookingFlow.steps are required'
+                }
             };
-            return defaultFlow;
         }
         
         // Build flow from UI-configured booking slots
@@ -411,11 +365,11 @@ class BookingFlowResolver {
             }
         }
         
-        // 3. Default fallback (hardcoded defaults - no UI config)
+        // 3. V110: No config found — return placeholder
         return { 
-            prompt: DEFAULT_STEP_PROMPTS[slotType]?.prompt || `What is your ${slotType}?`,
-            source: 'defaults',
-            path: 'DEFAULT_STEP_PROMPTS'
+            prompt: `[CONFIG MISSING: ${slotType} prompt]`,
+            source: 'missing',
+            path: 'none'
         };
     }
     
@@ -456,9 +410,8 @@ class BookingFlowResolver {
             return `I didn't quite catch that. ${slot.question}`;
         }
         
-        // 4. Default fallback
-        return DEFAULT_STEP_PROMPTS[slotType]?.reprompt || 
-            `I didn't quite catch that. What is your ${slotType}?`;
+        // 4. V110: No config found — return placeholder
+        return `[CONFIG MISSING: ${slotType} reprompt]`;
     }
     
     /**
@@ -643,11 +596,11 @@ class BookingFlowResolver {
                 bookingConfirmRequired: slot.bookingConfirmRequired !== false,
                 extraction: slot.extraction || {},
                 
-                // From BookingFlow step (if exists)
-                question: step?.ask || DEFAULT_STEP_PROMPTS[slotId]?.prompt || `What is your ${slotId}?`,
-                prompt: step?.ask || DEFAULT_STEP_PROMPTS[slotId]?.prompt || `What is your ${slotId}?`,
+                // From BookingFlow step (required in V110)
+                question: step?.ask || slot.question || `[CONFIG MISSING: ${slotId} ask]`,
+                prompt: step?.ask || slot.question || `[CONFIG MISSING: ${slotId} ask]`,
                 confirmPrompt: step?.confirmPrompt || null,
-                reprompt: step?.reprompt || DEFAULT_STEP_PROMPTS[slotId]?.reprompt || `Could you repeat your ${slotId}?`,
+                reprompt: step?.reprompt || slot.reprompt || `[CONFIG MISSING: ${slotId} reprompt]`,
                 repromptVariants: step?.repromptVariants || [],
                 confirmRetryPrompt: step?.confirmRetryPrompt || null,
                 correctionPrompt: step?.correctionPrompt || null,
@@ -656,14 +609,13 @@ class BookingFlowResolver {
                 stepId: step?.stepId || `step_${slotId}`,
                 order: step?.order || slot.order || 999,
                 
-                // V110 flag for tracing
                 _v110Source: true
             };
             
             // Handle name-specific fields
             if (slotId === 'name' || slot.type === 'name_first') {
                 mergedSlot.firstNameQuestion = step?.ask || mergedSlot.question;
-                mergedSlot.lastNameQuestion = step?.lastNameQuestion || "And what's your last name?";
+                mergedSlot.lastNameQuestion = step?.lastNameQuestion || `[CONFIG MISSING: lastNameQuestion]`;
             }
             
             mergedSlots.push(mergedSlot);
@@ -680,146 +632,6 @@ class BookingFlowResolver {
         });
         
         return mergedSlots;
-    }
-    
-    /**
-     * ========================================================================
-     * BUILD DEFAULT FLOW - Fallback when no UI config exists
-     * ========================================================================
-     */
-    static buildDefaultFlow(companyId, templates = {}) {
-        return {
-            flowId: `default_booking_v2`,  // V92: Updated to v2 with conditional steps
-            flowName: 'Default Booking Flow',
-            steps: [
-                {
-                    id: 'name',
-                    fieldKey: 'name',
-                    type: 'name',
-                    label: 'Name',
-                    prompt: DEFAULT_STEP_PROMPTS.name.prompt,
-                    reprompt: DEFAULT_STEP_PROMPTS.name.reprompt,
-                    required: true,
-                    order: 1,
-                    validation: { required: true, type: 'name', minLength: 2 },
-                    options: {}
-                },
-                {
-                    id: 'phone',
-                    fieldKey: 'phone',
-                    type: 'phone',
-                    label: 'Phone',
-                    prompt: DEFAULT_STEP_PROMPTS.phone.prompt,
-                    reprompt: DEFAULT_STEP_PROMPTS.phone.reprompt,
-                    required: true,
-                    order: 2,
-                    validation: { required: true, type: 'phone', minDigits: 10 },
-                    options: {}
-                },
-                {
-                    id: 'address',
-                    fieldKey: 'address',
-                    type: 'address',
-                    label: 'Address',
-                    prompt: DEFAULT_STEP_PROMPTS.address.prompt,
-                    reprompt: DEFAULT_STEP_PROMPTS.address.reprompt,
-                    required: true,
-                    order: 3,
-                    validation: { required: true, type: 'address' },
-                    options: { useGoogleMapsValidation: true }
-                },
-                // ═══════════════════════════════════════════════════════════════════
-                // V92: CONDITIONAL ADDRESS FOLLOW-UP STEPS
-                // These only trigger when Google Geo validation detects the need
-                // ═══════════════════════════════════════════════════════════════════
-                {
-                    id: 'propertyType',
-                    fieldKey: 'propertyType',
-                    type: 'select',
-                    label: 'Property Type',
-                    prompt: DEFAULT_STEP_PROMPTS.propertyType.prompt,
-                    reprompt: DEFAULT_STEP_PROMPTS.propertyType.reprompt,
-                    required: true,
-                    order: 4,
-                    validation: { required: true, type: 'select' },
-                    options: {
-                        choices: ['house', 'apartment', 'condo', 'townhouse', 'commercial', 'mobile home', 'other']
-                    },
-                    // Only ask if Google Geo detected possible multi-unit OR ambiguous
-                    condition: { stateKey: 'addressValidation.needsUnit', equals: true }
-                },
-                {
-                    id: 'unit',
-                    fieldKey: 'unit',
-                    type: 'text',
-                    label: 'Unit/Apt Number',
-                    prompt: DEFAULT_STEP_PROMPTS.unit.prompt,
-                    reprompt: DEFAULT_STEP_PROMPTS.unit.reprompt,
-                    required: true,
-                    order: 5,
-                    validation: { required: true, type: 'text' },
-                    options: {},
-                    // Only ask if property type is apartment/condo/commercial or needsUnit is true
-                    condition: { stateKey: 'addressNeedsUnit', equals: true }
-                },
-                {
-                    id: 'gateAccess',
-                    fieldKey: 'gateAccess',
-                    type: 'yesno',
-                    label: 'Gated/Secured Entry',
-                    prompt: DEFAULT_STEP_PROMPTS.gateAccess.prompt,
-                    reprompt: DEFAULT_STEP_PROMPTS.gateAccess.reprompt,
-                    required: true,
-                    order: 6,
-                    validation: { required: true, type: 'yesno' },
-                    options: {},
-                    // Only ask for multi-unit properties
-                    condition: { 
-                        stateKey: 'collected.propertyType', 
-                        in: ['apartment', 'condo', 'townhouse', 'commercial'] 
-                    }
-                },
-                {
-                    id: 'gateCode',
-                    fieldKey: 'gateCode',
-                    type: 'text',
-                    label: 'Gate Code',
-                    prompt: DEFAULT_STEP_PROMPTS.gateCode.prompt,
-                    reprompt: DEFAULT_STEP_PROMPTS.gateCode.reprompt,
-                    required: true,
-                    order: 7,
-                    validation: { required: true, type: 'text' },
-                    options: {},
-                    // Only ask if they said there IS a gate
-                    condition: { stateKey: 'collected.gateAccess', equals: 'yes' }
-                },
-                // ═══════════════════════════════════════════════════════════════════
-                {
-                    id: 'time',
-                    fieldKey: 'time',
-                    type: 'time',
-                    label: 'Preferred Time',
-                    prompt: DEFAULT_STEP_PROMPTS.time.prompt,
-                    reprompt: DEFAULT_STEP_PROMPTS.time.reprompt,
-                    required: false,
-                    order: 10,
-                    validation: { required: false, type: 'time' },
-                    options: {}
-                }
-            ],
-            confirmationTemplate: templates.confirmTemplate ||
-                "Let me confirm: I have {name} at {phone}, service address {address}. Is that correct?",
-            confirmationTemplateSource: templates.confirmTemplate ? 'config' : 'hardcoded_default',
-            completionTemplate: templates.completeTemplate ||
-                "Your appointment has been scheduled. Is there anything else I can help you with?",
-            completionTemplateSource: templates.completeTemplate ? 'config' : 'hardcoded_default',
-            // V96j: Default behavior options (can be overridden in company config)
-            enforcePromptOrder: false,
-            confirmIfPreFilled: true, // Default: ask to confirm pre-filled slots
-            alwaysAskEvenIfFilled: [],
-            source: 'default',
-            companyId
-        };
     }
     
     /**
@@ -879,5 +691,4 @@ class BookingFlowResolver {
 }
 
 module.exports = BookingFlowResolver;
-module.exports.DEFAULT_STEP_PROMPTS = DEFAULT_STEP_PROMPTS;
 module.exports.VALIDATION_PATTERNS = VALIDATION_PATTERNS;

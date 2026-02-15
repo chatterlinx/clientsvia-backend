@@ -411,71 +411,49 @@ class SlotExtractor {
         const confirmedSlots = context.confirmedSlots || {};
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // V92 FIX: BOOKING MODE GATING
+        // V110: DISCOVERY MODE SLOT GATING — UI IS LAW
         // ═══════════════════════════════════════════════════════════════════════════
-        // When NOT in booking mode, only extract NAME and PHONE (caller ID).
-        // Don't extract ADDRESS or TIME - these need booking consent first!
-        //
-        // Bug: "how soon can you get somebody out here" in DISCOVERY was extracting
-        // time=ASAP which blocked the direct booking intent detection.
-        //
-        // WIRED: This aligns with ConversationEngine's slot gating (line ~4395)
+        // Slot extraction in discovery mode is controlled by slotRegistry config.
+        // If discoveryFillAllowed === false, block extraction.
+        // If discoveryFillAllowed === true (or undefined), allow extraction.
         // ═══════════════════════════════════════════════════════════════════════════
         const bookingModeLocked = context.bookingModeLocked === true;
         const sessionMode = context.sessionMode || 'DISCOVERY';
         const isBookingActive = bookingModeLocked || sessionMode === 'BOOKING';
         
-        // Determine which extractors should run based on current booking step
+        const slotRegistry = context.slotRegistry || company?.aiAgentSettings?.frontDeskBehavior?.slotRegistry;
+        const slots = slotRegistry?.slots || [];
+        const slotConfigMap = new Map(slots.map(s => [s.id, s]));
+        
         const shouldExtract = (slotKey) => {
-            // If this slot is already confirmed, don't extract (except for explicit corrections)
             if (confirmedSlots[slotKey] === true) {
                 return false;
             }
             
-            // V92 CRITICAL: In DISCOVERY mode, only extract name and phone
-            // Address and time require booking consent first!
-            // V116 FIX: EXCEPTION - If caller explicitly says "the address is X" or "my address is X",
-            // extract it anyway. They're clearly providing booking info even if consent isn't formally set.
-            // This fixes the bug where "yeah, the address is 12155 metro parkway" loses the address
-            // because consent detection happens AFTER slot extraction.
+            // Discovery mode: check slotRegistry.discoveryFillAllowed
             if (!isBookingActive && !currentBookingStep) {
-                if (slotKey === 'address') {
-                    // V116: Check for explicit address statements that should bypass consent gating
-                    const hasExplicitAddressPhrase = /(?:the\s+address\s+is|my\s+address\s+is|address\s+is|i'm\s+at|i\s+live\s+at|we're\s+at)\s+\d/i.test(text);
-                    if (!hasExplicitAddressPhrase) {
-                        logger.debug('[SLOT EXTRACTOR] V92: Skipping address extraction (discovery mode - no booking consent)');
-                        return false;
-                    }
-                    logger.info('[SLOT EXTRACTOR] V116: Extracting address despite discovery mode (explicit address phrase detected)');
-                }
-                if (slotKey === 'time') {
-                    logger.debug('[SLOT EXTRACTOR] V92: Skipping time extraction (discovery mode - no booking consent)');
+                const slotConfig = slotConfigMap.get(slotKey);
+                if (slotConfig?.discoveryFillAllowed === false) {
+                    logger.debug('[SLOT EXTRACTOR] Skipping slot (discoveryFillAllowed=false)', { slotKey });
                     return false;
                 }
             }
             
-            // Booking step gating: only extract what's relevant to current step
+            // Booking step gating: prevent cross-contamination between slot types
             if (currentBookingStep) {
                 switch (currentBookingStep) {
                     case 'address':
-                        // During address collection, DON'T extract name or time
-                        // "12155 Metro Parkway" should NOT become name: "Metro Parkway"
-                        if (slotKey === 'name') return false;
-                        if (slotKey === 'time') return false;
+                        if (slotKey === 'name' || slotKey === 'time') return false;
                         break;
                     case 'name':
-                        // During name collection, DON'T extract address
+                    case 'lastName':
                         if (slotKey === 'address') return false;
                         break;
                     case 'phone':
-                        // During phone collection, DON'T extract name or address
-                        if (slotKey === 'name') return false;
-                        if (slotKey === 'address') return false;
+                        if (slotKey === 'name' || slotKey === 'address') return false;
                         break;
                     case 'time':
-                        // During time collection, DON'T extract name or address
-                        if (slotKey === 'name') return false;
-                        if (slotKey === 'address') return false;
+                        if (slotKey === 'name' || slotKey === 'address') return false;
                         break;
                 }
             }

@@ -364,7 +364,13 @@ function validateConfig(effectiveConfig, callId = 'unknown') {
         valid: true,
         missingRequired: [],
         unknownKeys: [],
-        warnings: []
+        warnings: [],
+        v110: {
+            valid: true,
+            missingV110: [],
+            invalidSteps: [],
+            missingPrompts: []
+        }
     };
     
     if (!effectiveConfig) {
@@ -373,7 +379,64 @@ function validateConfig(effectiveConfig, callId = 'unknown') {
         return result;
     }
     
-    // Check all required keys
+    // ═══════════════════════════════════════════════════════════════════════════
+    // V110 VALIDATION — UI is law, config is required
+    // ═══════════════════════════════════════════════════════════════════════════
+    const slots = effectiveConfig?.frontDesk?.slotRegistry?.slots;
+    if (!slots || !Array.isArray(slots) || slots.length === 0) {
+        result.v110.missingV110.push('frontDesk.slotRegistry.slots');
+        result.v110.valid = false;
+    }
+    
+    const discoverySteps = effectiveConfig?.frontDesk?.discoveryFlow?.steps;
+    if (!discoverySteps || !Array.isArray(discoverySteps) || discoverySteps.length === 0) {
+        result.v110.missingV110.push('frontDesk.discoveryFlow.steps');
+        result.v110.valid = false;
+    }
+    
+    const bookingSteps = effectiveConfig?.frontDesk?.bookingFlow?.steps;
+    if (!bookingSteps || !Array.isArray(bookingSteps) || bookingSteps.length === 0) {
+        result.v110.missingV110.push('frontDesk.bookingFlow.steps');
+        result.v110.valid = false;
+    }
+    
+    // Validate bookingFlow.steps[].slotId references exist in slotRegistry
+    if (slots && Array.isArray(slots) && bookingSteps && Array.isArray(bookingSteps)) {
+        const slotIds = new Set(slots.map(s => s.id));
+        for (const step of bookingSteps) {
+            if (step.slotId && !slotIds.has(step.slotId)) {
+                result.v110.invalidSteps.push(`bookingFlow step "${step.stepId}" references unknown slotId "${step.slotId}"`);
+                result.v110.valid = false;
+            }
+        }
+    }
+    
+    // Check required slots have 'ask' prompts
+    if (slots && Array.isArray(slots) && bookingSteps && Array.isArray(bookingSteps)) {
+        const slotMap = new Map(slots.map(s => [s.id, s]));
+        for (const step of bookingSteps) {
+            const slot = slotMap.get(step.slotId);
+            const hasAsk = step.ask || slot?.ask || slot?.question;
+            if (!hasAsk && slot?.required !== false) {
+                result.v110.missingPrompts.push(`No 'ask' prompt for required slot "${step.slotId}"`);
+            }
+        }
+    }
+    
+    if (!result.v110.valid) {
+        result.valid = false;
+        result.missingRequired.push(...result.v110.missingV110);
+    }
+    
+    logger.info('[CONTROL_PLANE_ENFORCER] V110 validation', {
+        callId,
+        v110Valid: result.v110.valid,
+        missingV110: result.v110.missingV110,
+        invalidSteps: result.v110.invalidSteps.length,
+        missingPrompts: result.v110.missingPrompts.length
+    });
+    
+    // Check all required keys from contract
     for (const tab of Object.values(CONTRACT.tabs || {})) {
         for (const [key, spec] of Object.entries(tab.keys || {})) {
             if (spec.required) {
