@@ -1088,6 +1088,21 @@ const SlotExtractors = {
     }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// V120: SLOT TYPE ALIASES — Map V110 slot registry types to extractors
+// ═══════════════════════════════════════════════════════════════════════════════
+// The V110 slot registry uses types like "name_first", "name_last" but the
+// SlotExtractors keys are "firstName", "lastName". Without these aliases,
+// extractValue() falls to the default extractor which just returns raw input,
+// causing lastName extraction to always fail (returns whole sentence instead
+// of extracted name token).
+// ═══════════════════════════════════════════════════════════════════════════════
+SlotExtractors.name_last = SlotExtractors.lastName;
+SlotExtractors.name_first = SlotExtractors.firstName;
+SlotExtractors.phone_number = SlotExtractors.phone;
+SlotExtractors.full_address = SlotExtractors.address;
+SlotExtractors.time_preference = SlotExtractors.time;
+
 /**
  * Helper functions
  */
@@ -6565,8 +6580,17 @@ class BookingFlowRunner {
      * ========================================================================
      */
     static extractValue(input, step, state, company) {
+        // V120: Try multiple keys to find the right extractor:
+        //   1. step.type (e.g., "name_last" from slot registry)
+        //   2. step.slotId (e.g., "lastName" from booking flow)
+        //   3. step.fieldKey (legacy alias)
+        //   4. step.id (step identifier)
+        // This ensures V110 slot types ("name_last") map to the correct extractor.
         const type = step.type || step.id;
-        const extractor = SlotExtractors[type] || SlotExtractors.default;
+        const extractor = SlotExtractors[type] 
+            || SlotExtractors[step.slotId] 
+            || SlotExtractors[step.fieldKey]
+            || SlotExtractors.default;
         
         const value = extractor(input, step, { state, company });
         
