@@ -2192,21 +2192,179 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                 };
             }
             
-            // Fall through to ConversationEngine if StepEngine has nothing to say
-            // but discovery isn't complete (shouldn't happen with well-configured steps)
-            logger.warn('[FRONT_DESK_RUNTIME] V120: StepEngine returned no reply but discovery not complete', {
+            // ═══════════════════════════════════════════════════════════════════════
+            // V121: SPEAKER OWNER CONTRACT — StepEngine MUST speak, NO FALLBACK
+            // ═══════════════════════════════════════════════════════════════════════
+            // If StepEngine has no reply and discovery isn't complete, we FORCE
+            // a deterministic next-step prompt. LLM CANNOT steal the mic.
+            // ═══════════════════════════════════════════════════════════════════════
+            
+            logger.warn('[FRONT_DESK_RUNTIME] V121: StepEngine hasReply=false — forcing next step prompt', {
                 callSid,
                 capturedSlots: Object.keys(extractedSlots),
-                reason: 'falling_through_to_conversation_engine'
+                confirmedSlots: Object.keys(stepResult.state?.confirmedSlots || {})
             });
             
+            // Log violation event
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'SPEAKER_OWNER_VIOLATION',
+                    turn: callState?.turnCount || 0,
+                    data: {
+                        lane: 'DISCOVERY',
+                        requiredOwner: 'STEP_ENGINE_DISCOVERY',
+                        wouldHaveFallenTo: 'ConversationEngine',
+                        action: 'FORCED_STEP_ENGINE_PROMPT',
+                        capturedSlots: Object.keys(extractedSlots),
+                        confirmedSlots: Object.keys(stepResult.state?.confirmedSlots || {})
+                    }
+                }).catch(() => {});
+            }
+            
+            // FORCE: Find next required step and generate prompt
+            const steps = (discoveryFlowConfig?.steps || []).sort((a, b) => (a.order || 0) - (b.order || 0));
+            let forcedPrompt = null;
+            let forcedSlotId = null;
+            
+            for (const step of steps) {
+                // Skip passive slots
+                if (step.passive === true || step.isPassive === true) continue;
+                
+                const value = extractedSlots[step.slotId];
+                const isConfirmed = (stepResult.state?.confirmedSlots || {})[step.slotId] === true;
+                
+                // Find first slot that needs attention (missing or unconfirmed)
+                if (!value) {
+                    // Missing — ask for it
+                    forcedPrompt = step.ask || step.reprompt || `What is your ${step.slotId}?`;
+                    forcedSlotId = step.slotId;
+                    break;
+                } else if (!isConfirmed && step.confirmMode !== 'never') {
+                    // Has value but not confirmed — confirm it
+                    forcedPrompt = (step.confirm || step.ask || `Is ${value} correct?`).replace('{value}', value);
+                    forcedSlotId = step.slotId;
+                    break;
+                }
+            }
+            
+            if (forcedPrompt) {
+                trace.addDecisionReason('DISCOVERY_LANE_HANDLER', { 
+                    handler: 'StepEngine',
+                    mode: 'FORCED_PROMPT',
+                    slotId: forcedSlotId,
+                    reason: 'speaker_owner_contract_enforcement'
+                });
+                
+                return {
+                    response: forcedPrompt,
+                    signals: {
+                        setConsentPending: false
+                    },
+                    matchSource: 'STEP_ENGINE_DISCOVERY',
+                    tier: 'deterministic',
+                    tokensUsed: 0
+                };
+            }
+            
+            // If we get here, all slots are filled+confirmed but discoveryComplete wasn't set
+            // This is a config issue — ask consent anyway
+            logger.error('[FRONT_DESK_RUNTIME] V121: All slots appear filled but discoveryComplete=false — config issue', {
+                callSid,
+                capturedSlots: Object.keys(extractedSlots),
+                confirmedSlots: Object.keys(stepResult.state?.confirmedSlots || {})
+            });
+            
+            const fallbackConsent = 'Would you like me to schedule a service appointment?';
+            trace.addDecisionReason('DISCOVERY_COMPLETE_FALLBACK', {
+                reason: 'all_slots_filled_but_flag_not_set'
+            });
+            
+            return {
+                response: fallbackConsent,
+                signals: {
+                    setConsentPending: true
+                },
+                matchSource: 'STEP_ENGINE_CONSENT_OFFER',
+                tier: 'deterministic',
+                tokensUsed: 0
+            };
+            
         } catch (stepEngineErr) {
-            // StepEngine errors must NEVER crash the call
-            logger.error('[FRONT_DESK_RUNTIME] V120: StepEngine error (non-fatal, falling through)', {
+            // ═══════════════════════════════════════════════════════════════════════
+            // V121: Even on error, StepEngine owns DISCOVERY. Use safe fallback prompt.
+            // ═══════════════════════════════════════════════════════════════════════
+            logger.error('[FRONT_DESK_RUNTIME] V121: StepEngine error — using safe fallback', {
                 callSid,
                 error: stepEngineErr.message,
                 stack: stepEngineErr.stack?.split('\n').slice(0, 3).join('\n')
             });
+            
+            if (BlackBoxLogger) {
+                BlackBoxLogger.logEvent({
+                    callId: callSid,
+                    companyId,
+                    type: 'SPEAKER_OWNER_VIOLATION',
+                    turn: callState?.turnCount || 0,
+                    data: {
+                        lane: 'DISCOVERY',
+                        requiredOwner: 'STEP_ENGINE_DISCOVERY',
+                        error: stepEngineErr.message,
+                        action: 'SAFE_FALLBACK_PROMPT'
+                    }
+                }).catch(() => {});
+            }
+            
+            // Safe fallback: ask for address (most commonly missing slot)
+            const safePrompt = 'What is your service address?';
+            trace.addDecisionReason('DISCOVERY_LANE_HANDLER', { 
+                handler: 'StepEngine',
+                mode: 'ERROR_SAFE_FALLBACK',
+                reason: stepEngineErr.message
+            });
+            
+            return {
+                response: safePrompt,
+                signals: {
+                    setConsentPending: false
+                },
+                matchSource: 'STEP_ENGINE_DISCOVERY',
+                tier: 'deterministic',
+                tokensUsed: 0
+            };
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // V121: If we reach here with discoveryFlow enabled, something is wrong.
+    // This should NEVER happen — log violation and still use deterministic prompt.
+    // ═══════════════════════════════════════════════════════════════════════════════
+    const discoveryFlowEnabled = effectiveConfig?.frontDeskBehavior?.discoveryFlow?.enabled !== false;
+    const hasDiscoveryStepsCheck = Array.isArray(effectiveConfig?.frontDeskBehavior?.discoveryFlow?.steps) && 
+        effectiveConfig.frontDeskBehavior.discoveryFlow.steps.length > 0;
+    
+    if (discoveryFlowEnabled && hasDiscoveryStepsCheck) {
+        logger.error('[FRONT_DESK_RUNTIME] V121: CRITICAL — reached ConversationEngine path with discoveryFlow enabled', {
+            callSid,
+            disableScenarios: effectiveConfig?.frontDeskBehavior?.discoveryConsent?.disableScenarioAutoResponses,
+            reason: 'speaker_owner_contract_violation'
+        });
+        
+        if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+                callId: callSid,
+                companyId,
+                type: 'SPEAKER_OWNER_VIOLATION',
+                turn: callState?.turnCount || 0,
+                data: {
+                    lane: 'DISCOVERY',
+                    requiredOwner: 'STEP_ENGINE_DISCOVERY',
+                    actualOwner: 'ConversationEngine',
+                    action: 'ALLOWED_LEGACY_PATH',
+                    reason: 'disableScenarioAutoResponses may be false'
+                }
+            }).catch(() => {});
         }
     }
     
