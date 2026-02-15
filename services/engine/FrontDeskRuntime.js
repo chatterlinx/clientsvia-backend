@@ -2057,12 +2057,17 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
             const { StepEngine } = require('./StepEngine');
             const stepEngine = StepEngine.forCall({ company, callId: callSid });
             
-            // Build extracted slots from callState
+            // Build extracted slots and metadata from callState
             const extractedSlots = {};
+            const slotMeta = {};
             if (callState?.slots) {
                 for (const [key, val] of Object.entries(callState.slots)) {
                     if (val && typeof val === 'object' && val.v) {
                         extractedSlots[key] = val.v;
+                        // V120: Extract source metadata for confirm_if_from_caller_id logic
+                        if (val.s) {
+                            slotMeta[key] = { source: val.s, confidence: val.c };
+                        }
                     } else if (val && typeof val === 'string') {
                         extractedSlots[key] = val;
                     }
@@ -2080,7 +2085,8 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                 repromptCount: callState?.discoveryRepromptCount || {},
                 pendingConfirmation: callState?.discoveryPendingConfirmation || null,
                 currentStepId: callState?.discoveryCurrentStepId || null,
-                currentSlotId: callState?.discoveryCurrentSlotId || null
+                currentSlotId: callState?.discoveryCurrentSlotId || null,
+                slotMeta // V120: Pass slot metadata for source-aware confirmation
             };
             
             // Run the discovery step engine
@@ -2148,15 +2154,15 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                 };
             }
             
-            // StepEngine has no reply — all discovery steps are confirmed.
-            // Now ask the consent question to transition to booking.
-            const allConfirmed = !stepEngine.getNextRequiredStep(
+            // V120: StepEngine has no reply — check if discovery is complete via the result flag
+            // OR fall back to checking the next required step
+            const discoveryComplete = stepResult.discoveryComplete || !stepEngine.getNextRequiredStep(
                 discoveryFlowConfig, 
                 stepResult.state?.collectedSlots || extractedSlots,
                 stepResult.state?.confirmedSlots || {}
             );
             
-            if (allConfirmed) {
+            if (discoveryComplete) {
                 let consentQuestion;
                 try {
                     consentQuestion = cfgGet(effectiveConfig, 'frontDesk.discoveryConsent.consentQuestion', {

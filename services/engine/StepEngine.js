@@ -334,9 +334,127 @@ class StepEngine {
             }
         }
 
-        // No confirmation needed - discovery continues
+        // ═══════════════════════════════════════════════════════════════════════
+        // STEP 4: Ask for missing required slots (V120: Discovery Flow as Speaker)
+        // ═══════════════════════════════════════════════════════════════════════
+        for (const step of steps) {
+            const slot = this.getSlot(step.slotId);
+            if (!slot) continue;
+            
+            // Skip passive slots (like call_reason_detail)
+            if (step.passive === true || step.isPassive === true) continue;
+            
+            const value = collectedSlots[step.slotId];
+            const isConfirmed = confirmedSlots[step.slotId] === true;
+            
+            // If slot is missing value, ask for it
+            if (!value) {
+                const count = repromptCount[step.slotId] || 0;
+                let prompt;
+                let promptSource;
+                
+                if (count > 0 && step.repromptVariants?.length > 0) {
+                    const idx = Math.min(count - 1, step.repromptVariants.length - 1);
+                    prompt = step.repromptVariants[idx];
+                    promptSource = `discoveryFlow.steps[${step.slotId}].repromptVariants[${idx}]`;
+                } else if (count > 0 && step.reprompt) {
+                    prompt = step.reprompt;
+                    promptSource = `discoveryFlow.steps[${step.slotId}].reprompt`;
+                } else {
+                    prompt = step.ask;
+                    promptSource = `discoveryFlow.steps[${step.slotId}].ask`;
+                }
+                
+                // Only ask if we have a prompt configured
+                if (prompt) {
+                    repromptCount[step.slotId] = count + 1;
+                    
+                    logger.info(`[STEP ENGINE] Discovery: Asking for missing slot`, {
+                        callId: this.callId,
+                        slotId: step.slotId,
+                        stepId: step.stepId,
+                        count
+                    });
+                    
+                    return {
+                        action: 'CONTINUE',
+                        reply: prompt,
+                        slotId: step.slotId,
+                        state: {
+                            ...state,
+                            currentFlow: 'discovery',
+                            currentStepId: step.stepId,
+                            currentSlotId: step.slotId,
+                            collectedSlots,
+                            confirmedSlots,
+                            repromptCount
+                        },
+                        debug: {
+                            source: 'STEP_ENGINE_DISCOVERY',
+                            step: step.stepId,
+                            slotId: step.slotId,
+                            mode: 'ASK_MISSING',
+                            repromptCount: repromptCount[step.slotId],
+                            promptSource
+                        }
+                    };
+                }
+            }
+            
+            // Also handle confirm_if_from_caller_id mode for phone
+            if (value && !isConfirmed) {
+                const confirmMode = step.confirmMode || CONFIRM_MODES.SMART_IF_CAPTURED;
+                
+                if (confirmMode === 'confirm_if_from_caller_id') {
+                    // Check if value came from caller ID
+                    const slotMeta = state.slotMeta?.[step.slotId] || {};
+                    if (slotMeta.source === 'caller_id' || slotMeta.source === 'callerID') {
+                        const count = repromptCount[step.slotId] || 0;
+                        const prompt = step.confirm || step.ask || `Is ${value} the best number to reach you?`;
+                        
+                        repromptCount[step.slotId] = count + 1;
+                        
+                        return {
+                            action: 'CONTINUE',
+                            reply: prompt.replace('{value}', value),
+                            slotId: step.slotId,
+                            state: {
+                                ...state,
+                                currentFlow: 'discovery',
+                                currentStepId: step.stepId,
+                                currentSlotId: step.slotId,
+                                collectedSlots,
+                                confirmedSlots,
+                                repromptCount,
+                                pendingConfirmation: step.slotId
+                            },
+                            debug: {
+                                source: 'STEP_ENGINE_DISCOVERY',
+                                step: step.stepId,
+                                slotId: step.slotId,
+                                confirmMode,
+                                repromptCount: repromptCount[step.slotId],
+                                promptSource: `discoveryFlow.steps[${step.slotId}].confirm`
+                            }
+                        };
+                    }
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // STEP 5: All required slots captured and confirmed - discovery complete
+        // ═══════════════════════════════════════════════════════════════════════
+        const allRequiredFilled = steps.every(step => {
+            if (step.passive === true || step.isPassive === true) return true;
+            const slot = this.getSlot(step.slotId);
+            if (!slot?.required) return true;
+            return collectedSlots[step.slotId] != null;
+        });
+        
         return {
             action: 'CONTINUE',
+            discoveryComplete: allRequiredFilled,
             state: { 
                 ...state, 
                 currentFlow: 'discovery',
@@ -346,7 +464,7 @@ class StepEngine {
             },
             debug: { 
                 source: 'STEP_ENGINE_DISCOVERY', 
-                reason: 'no_confirmation_needed',
+                reason: allRequiredFilled ? 'discovery_complete' : 'no_action_needed',
                 capturedSlots: Object.keys(collectedSlots),
                 confirmedSlots: Object.keys(confirmedSlots)
             }
