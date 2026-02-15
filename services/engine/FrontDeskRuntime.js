@@ -635,8 +635,20 @@ async function handleTurn(effectiveConfig, callState, userTurn, context = {}) {
         // consent detection on the next turn.
         // ═══════════════════════════════════════════════════════════════════════
         if (result.signals.setConsentPending === true && result.response) {
-            const consentQuestionTemplate = getConfig('frontDesk.discoveryConsent.consentQuestion', 
-                'Would you like me to schedule');
+            // V120: Read consent question template from config
+            // NOTE: Cannot use getConfig() here — it's local to determineLane().
+            // Use cfgGet directly with strict:false to avoid throwing on missing keys.
+            let consentQuestionTemplate = 'Would you like me to schedule';
+            try {
+                consentQuestionTemplate = cfgGet(effectiveConfig, 'frontDesk.discoveryConsent.consentQuestion', {
+                    callId: callSid,
+                    turn: turnCount,
+                    strict: false,
+                    readerId: 'handleTurn.consentGate'
+                }) || consentQuestionTemplate;
+            } catch (e) {
+                // Non-fatal — use default template
+            }
             const responseText = (result.response || '').toLowerCase();
             const consentQuestion = (consentQuestionTemplate || '').toLowerCase();
             
