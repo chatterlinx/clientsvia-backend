@@ -6084,9 +6084,9 @@ async function processTurn({
             //   They acknowledge the problem and funnel toward scheduling.
             //   Booking-time prompts (morning/afternoon) are stripped downstream.
             // Non-V110: Legacy kill switch behavior preserved.
-            const allowTier1AutoResponse = killSwitches.v110OwnerPriority
-                ? true  // V110: scenarios are PRIMARY brain (acknowledge + funnel)
-                : (killSwitches.disableScenarioAutoResponses !== true && killSwitches.forceLLMDiscovery !== true);
+            // V120: UI kill switches always respected — no v110OwnerPriority override
+            const allowTier1AutoResponse = killSwitches.disableScenarioAutoResponses !== true 
+                && killSwitches.forceLLMDiscovery !== true;
             
             log('CHECKPOINT 9c.0: 🎯 Tier-1 Short-Circuit Check', {
                 tier1Threshold,
@@ -6244,25 +6244,15 @@ async function processTurn({
                     const consentAlreadyGiven = session.booking?.consentGiven === true;
                     const autoInjectConsent = discoveryBehavior.autoInjectConsentInScenarios !== false;
                     
-                    if (killSwitches.v110OwnerPriority && session.mode !== 'BOOKING') {
+                    if (killSwitches.v110OwnerPriority && !killSwitches.disableScenarioAutoResponses && session.mode !== 'BOOKING') {
                         // ─────────────────────────────────────────────────────
-                        // V110: Scenarios speak freely — acknowledge + funnel
-                        // ─────────────────────────────────────────────────────
-                        // Scenario Response Contract:
-                        //   A. Reassure / answer the problem
-                        //   B. Optional safety clarifier
-                        //   C. Funnel: "Would you like me to schedule a service call?"
-                        //
-                        // Scheduling language stays IN the response — that's the funnel.
-                        // Consent detection will catch the caller's "yes" on next turn.
-                        //
-                        // Hard rule: In Discovery, scenario responses must NOT ask
-                        // about morning/afternoon, time windows, appointment dates,
-                        // or pricing deep dives. Those belong in Booking only.
+                        // V110 + Scenarios as Speaker: Scenarios speak freely
+                        // V120: Only when disableScenarioAutoResponses is FALSE.
+                        // When TRUE, scenarios are context-only — fall through
+                        // to legacy consent injection path (which won't speak).
                         // ─────────────────────────────────────────────────────
                         const bookingTimePatterns = /\b(morning|afternoon|evening|what time|which day|what day|available.*slot|time.*work|prefer.*time)/i;
                         if (bookingTimePatterns.test(selectedReply)) {
-                            // Strip booking-time prompts (these belong in Booking flow, not Discovery)
                             finalReply = selectedReply.replace(
                                 /\.\s*[^.]*\b(morning|afternoon|evening|what time|which day|what day|available.*slot|time.*work|prefer.*time)[^.]*\.?$/i,
                                 '.'
@@ -6271,7 +6261,6 @@ async function processTurn({
                                 stripped: selectedReply.substring(Math.max(0, selectedReply.length - 80))
                             });
                         }
-                        // Scheduling offers STAY — that's the funnel question
                     } else {
                         // ─────────────────────────────────────────────────────
                         // Non-V110 (legacy): Consent injection as before
@@ -7135,13 +7124,13 @@ async function processTurn({
                     //   disableScenarioAutoResponses=false → may_verbatim
                     //   disableScenarioAutoResponses=true  → context_only (with allowlist override)
                     const getUsageModeForScenario = (s) => {
-                        if (killSwitches.v110OwnerPriority) {
-                            // V110: Scenarios are PRIMARY — LLM can use them verbatim
-                            return 'may_verbatim';
+                        // V120: UI kill switches override v110OwnerPriority.
+                        // If admin set disableScenarioAutoResponses=true, respect it.
+                        if (killSwitches.disableScenarioAutoResponses === true) {
+                            const type = (s?.scenarioType || 'UNKNOWN').toString().trim().toUpperCase();
+                            return allowTypes.includes(type) ? 'may_verbatim' : 'context_only';
                         }
-                        const type = (s?.scenarioType || 'UNKNOWN').toString().trim().toUpperCase();
-                        if (killSwitches.disableScenarioAutoResponses !== true) return 'may_verbatim';
-                        return allowTypes.includes(type) ? 'may_verbatim' : 'context_only';
+                        return 'may_verbatim';
                     };
 
                     return scenarios.map(s => ({
@@ -7150,9 +7139,10 @@ async function processTurn({
                     }));
                 })(),
                 scenarioUsagePolicy: {
-                    defaultMode: killSwitches.v110OwnerPriority
-                        ? 'may_verbatim'  // V110: scenarios are PRIMARY brain
-                        : (killSwitches.disableScenarioAutoResponses ? 'context_only' : 'may_verbatim'),
+                    // V120: UI kill switch takes priority over v110OwnerPriority
+                    defaultMode: killSwitches.disableScenarioAutoResponses
+                        ? 'context_only'
+                        : 'may_verbatim',
                     allowVerbatimScenarioTypes: Array.isArray(killSwitches.autoReplyAllowedScenarioTypes) ? killSwitches.autoReplyAllowedScenarioTypes : [],
                     v110OwnerPriority: !!killSwitches.v110OwnerPriority
                 },
