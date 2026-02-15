@@ -778,12 +778,15 @@ function determineLane(effectiveConfig, callState, userTurn, trace, context) {
     
     if (consentPending && consentQuestionAsked) {
         // Consent words: any word that signals agreement or is harmless filler
+        // V120: Added "that's", "thats", "nice", "would", "be" — natural consent
+        // phrases like "okay that's fine yes" and "that would be nice" must match
         const CONSENT_WORDS = new Set([
             'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay',
             'please', 'thanks', 'thank', 'you', 'absolutely',
             'definitely', 'right', 'correct', 'go', 'ahead',
             'sounds', 'good', 'great', 'that', 'works', 'fine',
-            'do', 'it', 'lets', "let's", 'can', 'we', 'alright'
+            'do', 'it', 'lets', "let's", 'can', 'we', 'alright',
+            "that's", 'thats', 'nice', 'would', 'be', 'love', 'perfect'
         ]);
         
         // Clean: lowercase, strip punctuation, collapse spaces
@@ -2461,7 +2464,7 @@ async function handleDiscoveryLane(effectiveConfig, callState, userTurn, context
                 callId: callSid,
                 companyId,
                 type: 'SCENARIO_RENDER_ERROR',
-                turn: turnCount,
+                turn: callState?.turnCount || 0,
                 data: {
                     lane: 'CONVERSATION_ENGINE',
                     errorMessage: error.message,
