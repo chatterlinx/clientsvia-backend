@@ -5540,28 +5540,25 @@ async function processTurn({
             .map(t => (t || '').toString().trim().toUpperCase())
             .filter(Boolean);
         
-        // V110: Scenarios are the PRIMARY brain. Caller must accept scheduling
-        //       before info collection begins. No kill switches needed.
-        // Non-V110: Legacy behavior preserved.
-        const killSwitches = hasV110DiscoveryFlow
-            ? {
-                // V110: Scenarios speak freely (acknowledge + funnel toward scheduling).
-                // Consent = the caller saying "yes" to the scheduling offer.
-                // Info collection starts AFTER acceptance (managed by FrontDeskRuntime).
-                bookingRequiresConsent: true,          // Caller must accept scheduling offer
-                forceLLMDiscovery: false,               // Scenarios are PRIMARY brain
-                disableScenarioAutoResponses: false,    // Scenarios speak freely
-                autoReplyAllowedScenarioTypes: [],
-                // V110 flag — tells downstream code that V110 flow is active
-                v110OwnerPriority: true
-            }
-            : {
-                bookingRequiresConsent: bookingRequiresConsentAW !== false,
-                forceLLMDiscovery: forceLLMDiscoveryAW === true,
-                disableScenarioAutoResponses: disableScenarioAutoResponsesAW === true,
-                autoReplyAllowedScenarioTypes,
-                v110OwnerPriority: false
-            };
+        // ═══════════════════════════════════════════════════════════════════════
+        // V120 FIX: RESPECT UI KILL SWITCHES FOR V110 COMPANIES
+        // ═══════════════════════════════════════════════════════════════════════
+        // BEFORE: V110 companies had kill switches HARDCODED to off, ignoring
+        // the UI settings entirely. This meant flipping "Scenarios as Context Only"
+        // or "Force LLM Discovery" in the UI had ZERO effect at runtime.
+        //
+        // NOW: V110 companies use the SAME UI-driven kill switches as everyone.
+        // The UI is law. If the admin sets disableScenarioAutoResponses=true,
+        // scenarios become context-only and the discovery flow steps speak.
+        // ═══════════════════════════════════════════════════════════════════════
+        const killSwitches = {
+            bookingRequiresConsent: bookingRequiresConsentAW !== false,
+            forceLLMDiscovery: forceLLMDiscoveryAW === true,
+            disableScenarioAutoResponses: disableScenarioAutoResponsesAW === true,
+            autoReplyAllowedScenarioTypes,
+            // V110 flag — tells downstream code that V110 flow is active
+            v110OwnerPriority: hasV110DiscoveryFlow
+        };
         
         log('CHECKPOINT 9a: 🔒 Owner policy loaded', {
             v110: hasV110DiscoveryFlow,
