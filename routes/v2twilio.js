@@ -2538,7 +2538,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const companyID = req.params.companyID;
   const callSid = req.body.CallSid;
   const fromNumber = normalizePhoneNumber(req.body.From || req.body.Caller || '');
-  const speechResult = req.body.SpeechResult || '';
+  let speechResult = req.body.SpeechResult || '';
   const turnCountFromBody = parseInt(req.body.turnCount || 0, 10) || 0;
 
   try {
@@ -2558,8 +2558,33 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       return res.send(twiml.toString());
     }
 
-    let callState = null;
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FIX 1: Use cached partial transcript when Speech Result is missing
+    // ═══════════════════════════════════════════════════════════════════════════
+    let inputTextSource = 'speechResult';
     const redis = await getRedis();
+    
+    if (!speechResult || speechResult.trim().length === 0) {
+      // SpeechResult is empty - fallback to cached partial transcript
+      if (redis && callSid) {
+        const cacheKey = `partial:${callSid}`;
+        try {
+          const cachedTranscript = await redis.get(cacheKey);
+          if (cachedTranscript) {
+            speechResult = cachedTranscript;
+            inputTextSource = 'partialCache';
+            logger.info('[V2 RESPOND] Using cached partial transcript (SpeechResult empty)', {
+              callSid: callSid?.slice(-8),
+              textLength: speechResult.length
+            });
+          }
+        } catch (err) {
+          logger.warn('[V2 RESPOND] Failed to read cached transcript', { error: err.message });
+        }
+      }
+    }
+
+    let callState = null;
     const redisKey = callSid ? `call:${callSid}` : null;
     if (redis && redisKey) {
       try {
@@ -2608,6 +2633,77 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     req.session.callState = persistedState;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FIX 2: Use ElevenLabs TTS instead of <Say>
+    // ═══════════════════════════════════════════════════════════════════════════
+    const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
+    const elevenLabsVoice = voiceSettings.voiceId;
+    const responseText = runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?";
+    
+    let audioUrl = null;
+    let voiceProviderUsed = 'twilio_say';
+    let ttsLatencyMs = null;
+    
+    if (elevenLabsVoice && responseText) {
+      // Generate ElevenLabs audio
+      const ttsStartTime = Date.now();
+      const elevenLabsConfig = {
+        apiKey: process.env.ELEVENLABS_API_KEY,
+        voiceId: elevenLabsVoice,
+        modelId: voiceSettings.elevenLabsModel || 'eleven_turbo_v2_5',
+        stability: voiceSettings.stability ?? 0.5,
+        similarityBoost: voiceSettings.similarityBoost ?? 0.75,
+        style: voiceSettings.style ?? 0,
+        useSpeakerBoost: voiceSettings.useSpeakerBoost ?? true
+      };
+      
+      try {
+        const { generateAndUploadTTS } = require('../services/elevenlabs');
+        const result = await generateAndUploadTTS(responseText, elevenLabsConfig, callSid);
+        audioUrl = result.url;
+        ttsLatencyMs = Date.now() - ttsStartTime;
+        voiceProviderUsed = 'elevenlabs';
+        
+        logger.info('[V2 RESPOND] ElevenLabs TTS generated', {
+          callSid: callSid?.slice(-8),
+          voiceId: elevenLabsVoice,
+          latencyMs: ttsLatencyMs,
+          textLength: responseText.length
+        });
+        
+        // Log TTS event
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'TTS_STARTED',
+            turn: persistedState.turnCount || 0,
+            data: {
+              voiceId: elevenLabsVoice,
+              textLength: responseText.length
+            }
+          }).catch(() => {});
+          
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'TTS_COMPLETED',
+            turn: persistedState.turnCount || 0,
+            data: {
+              voiceId: elevenLabsVoice,
+              latencyMs: ttsLatencyMs
+            }
+          }).catch(() => {});
+        }
+      } catch (ttsError) {
+        logger.error('[V2 RESPOND] ElevenLabs TTS failed, falling back to <Say>', {
+          callSid: callSid?.slice(-8),
+          error: ttsError.message
+        });
+        // Fall through to <Say> below
+      }
+    }
+
     if (BlackBoxLogger) {
       BlackBoxLogger.logEvent({
         callId: callSid,
@@ -2618,7 +2714,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           source: 'V2TWILIO_PLUMBING_ROUTE',
           routePath: '/v2-agent-respond/:companyID',
           handler: 'FrontDeskCoreRuntime.processTurn',
-          runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null
+          runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
+          inputTextSource,  // NEW: Track where input came from
+          inputTextLength: speechResult?.length || 0
         }
       }).catch(() => {});
 
@@ -2633,21 +2731,50 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           routePath: '/v2-agent-respond/:companyID',
           runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
           responsePreview: (runtimeResult.response || '').substring(0, 120),
-          slotCount: Object.keys(persistedState.slots || {}).length
+          slotCount: Object.keys(persistedState.slots || {}).length,
+          voiceProviderUsed,  // NEW: Track voice provider
+          inputTextSource     // NEW: Track input source
         }
       }).catch(() => {});
     }
 
     const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say(escapeTwiML(runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?"));
-    twiml.gather({
+    const gather = twiml.gather({
       input: 'speech',
       action: `/api/twilio/v2-agent-respond/${companyID}`,
       method: 'POST',
       timeout: 5,
       speechTimeout: '3',
-      speechModel: 'phone_call'
+      speechModel: 'phone_call',
+      partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${companyID}`,
+      partialResultCallbackMethod: 'POST'
     });
+    
+    if (audioUrl) {
+      gather.play(audioUrl);
+    } else {
+      gather.say(escapeTwiML(responseText));
+    }
+    
+    // Log TwiML sent
+    if (BlackBoxLogger) {
+      const twimlString = twiml.toString();
+      BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'TWIML_SENT',
+        turn: persistedState.turnCount || 0,
+        data: {
+          route: '/v2-agent-respond',
+          twimlLength: twimlString.length,
+          hasGather: twimlString.includes('<Gather'),
+          hasPlay: twimlString.includes('<Play'),
+          hasSay: twimlString.includes('<Say'),
+          actionUrl: `/api/twilio/v2-agent-respond/${companyID}`,
+          twimlPreview: twimlString.substring(0, 500)
+        }
+      }).catch(() => {});
+    }
 
     res.type('text/xml');
     return res.send(twiml.toString());
@@ -2717,6 +2844,25 @@ router.post('/v2-agent-partial/:companyId', async (req, res) => {
             sequence: parseInt(SequenceNumber) || 0
           }
         }).catch(() => {}); // Fire and forget
+      }
+      
+      // ═══════════════════════════════════════════════════════════════════════════
+      // CACHE PARTIAL TRANSCRIPT - Fallback for when SpeechResult is missing
+      // ═══════════════════════════════════════════════════════════════════════════
+      // Store the last stable partial transcript in Redis so v2-agent-respond
+      // can use it when Twilio fails to send SpeechResult
+      const redis = await getRedis();
+      if (redis && CallSid) {
+        const cacheKey = `partial:${CallSid}`;
+        try {
+          await redis.set(cacheKey, StableSpeechResult, { EX: 300 }); // 5 min TTL
+          logger.debug('[V2 PARTIAL] Cached transcript for fallback', {
+            callSid: CallSid?.slice(-8),
+            textLength: StableSpeechResult.length
+          });
+        } catch (err) {
+          logger.warn('[V2 PARTIAL] Failed to cache transcript', { error: err.message });
+        }
       }
     }
     
