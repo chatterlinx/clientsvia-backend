@@ -2647,31 +2647,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     if (elevenLabsVoice && responseText) {
       // Generate ElevenLabs audio
       const ttsStartTime = Date.now();
-      const elevenLabsConfig = {
-        apiKey: process.env.ELEVENLABS_API_KEY,
-        voiceId: elevenLabsVoice,
-        modelId: voiceSettings.elevenLabsModel || 'eleven_turbo_v2_5',
-        stability: voiceSettings.stability ?? 0.5,
-        similarityBoost: voiceSettings.similarityBoost ?? 0.75,
-        style: voiceSettings.style ?? 0,
-        useSpeakerBoost: voiceSettings.useSpeakerBoost ?? true
-      };
       
       try {
-        const { generateAndUploadTTS } = require('../services/elevenlabs');
-        const result = await generateAndUploadTTS(responseText, elevenLabsConfig, callSid);
-        audioUrl = result.url;
-        ttsLatencyMs = Date.now() - ttsStartTime;
-        voiceProviderUsed = 'elevenlabs';
-        
-        logger.info('[V2 RESPOND] ElevenLabs TTS generated', {
-          callSid: callSid?.slice(-8),
-          voiceId: elevenLabsVoice,
-          latencyMs: ttsLatencyMs,
-          textLength: responseText.length
-        });
-        
-        // Log TTS event
+        // Log TTS started
         if (BlackBoxLogger) {
           BlackBoxLogger.logEvent({
             callId: callSid,
@@ -2683,7 +2661,43 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               textLength: responseText.length
             }
           }).catch(() => {});
-          
+        }
+        
+        const buffer = await synthesizeSpeech({
+          text: responseText,
+          voiceId: elevenLabsVoice,
+          stability: voiceSettings.stability,
+          similarity_boost: voiceSettings.similarityBoost,
+          style: voiceSettings.styleExaggeration,
+          model_id: voiceSettings.aiModel,
+          company
+        });
+        
+        ttsLatencyMs = Date.now() - ttsStartTime;
+        
+        // Save audio file
+        const fileName = `ai_respond_${callSid}_${Date.now()}.mp3`;
+        const audioDir = path.join(__dirname, '../public/audio');
+        if (!fs.existsSync(audioDir)) {
+          fs.mkdirSync(audioDir, { recursive: true });
+        }
+        const filePath = path.join(audioDir, fileName);
+        fs.writeFileSync(filePath, buffer);
+        
+        // Build audio URL
+        const baseUrl = `https://${req.get('host')}`;
+        audioUrl = `${baseUrl}/audio/${fileName}`;
+        voiceProviderUsed = 'elevenlabs';
+        
+        logger.info('[V2 RESPOND] ElevenLabs TTS generated', {
+          callSid: callSid?.slice(-8),
+          voiceId: elevenLabsVoice,
+          latencyMs: ttsLatencyMs,
+          textLength: responseText.length
+        });
+        
+        // Log TTS completed
+        if (BlackBoxLogger) {
           BlackBoxLogger.logEvent({
             callId: callSid,
             companyId: companyID,
@@ -2698,8 +2712,23 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       } catch (ttsError) {
         logger.error('[V2 RESPOND] ElevenLabs TTS failed, falling back to <Say>', {
           callSid: callSid?.slice(-8),
-          error: ttsError.message
+          error: ttsError.message,
+          stack: ttsError.stack
         });
+        
+        // Log TTS failure
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'TTS_FAILED',
+            turn: persistedState.turnCount || 0,
+            data: {
+              error: ttsError.message,
+              fallback: 'twilio_say'
+            }
+          }).catch(() => {});
+        }
         // Fall through to <Say> below
       }
     }
