@@ -2744,8 +2744,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           routePath: '/v2-agent-respond/:companyID',
           handler: 'FrontDeskCoreRuntime.processTurn',
           runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
-          inputTextSource,  // NEW: Track where input came from
-          inputTextLength: speechResult?.length || 0
+          inputTextSource,
+          inputTextLength: speechResult?.length || 0,
+          sectionTrail: persistedState.sectionTrail?.join('>') || 'no-trail'
         }
       }).catch(() => {});
 
@@ -2761,8 +2762,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
           responsePreview: (runtimeResult.response || '').substring(0, 120),
           slotCount: Object.keys(persistedState.slots || {}).length,
-          voiceProviderUsed,  // NEW: Track voice provider
-          inputTextSource     // NEW: Track input source
+          voiceProviderUsed,
+          inputTextSource,
+          sectionTrail: persistedState.sectionTrail?.join('>') || 'no-trail'
         }
       }).catch(() => {});
     }
@@ -2785,7 +2787,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       gather.say(escapeTwiML(responseText));
     }
     
-    // Log TwiML sent
+    // ═══════════════════════════════════════════════════════════════════════════
+    // S7: VOICE PROVIDER - Log TwiML with section trail
+    // ═══════════════════════════════════════════════════════════════════════════
     if (BlackBoxLogger) {
       const twimlString = twiml.toString();
       BlackBoxLogger.logEvent({
@@ -2794,13 +2798,16 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         type: 'TWIML_SENT',
         turn: persistedState.turnCount || 0,
         data: {
+          section: 'S7_VOICE_PROVIDER',
           route: '/v2-agent-respond',
           twimlLength: twimlString.length,
           hasGather: twimlString.includes('<Gather'),
           hasPlay: twimlString.includes('<Play'),
           hasSay: twimlString.includes('<Say'),
+          voiceProviderUsed,
           actionUrl: `/api/twilio/v2-agent-respond/${companyID}`,
-          twimlPreview: twimlString.substring(0, 500)
+          twimlPreview: twimlString.substring(0, 500),
+          sectionTrail: persistedState.sectionTrail?.join('>') || 'no-trail'
         }
       }).catch(() => {});
     }
