@@ -42,15 +42,20 @@ function minimalExtract(userInput = '') {
     if (phone) {
         extracted.phone = `${phone[1]}${phone[2]}${phone[3]}`;
     }
-    const name = text.match(/\b(?:my name is|i am|i'm)\s+([a-zA-Z]+)(?:\s+([a-zA-Z]+))?/i);
+    const name = text.match(/\b(?:my name is|i am|i'm|this is|call me)\s+([a-zA-Z]+)(?:\s+([a-zA-Z]+))?/i);
     if (name) {
-        extracted['name.first'] = name[1];
+        // ═══════════════════════════════════════════════════════════════════════
+        // V120 FIX: Use 'name' slot ID (not 'name.first') to match Discovery Flow config
+        // ═══════════════════════════════════════════════════════════════════════
+        // Discovery Flow config uses slotId: 'name', so extracted slots must match.
+        // This was the bug: extractor used 'name.first', Discovery expected 'name'.
+        extracted.name = name[1];
         if (name[2]) {
-            extracted['name.last'] = name[2];
+            extracted.lastName = name[2];
         }
     }
     if (/\b\d{1,5}\s+[a-z0-9.\- ]{3,}\b/i.test(text)) {
-        extracted['address.full'] = text;
+        extracted.address = text;
     }
     return extracted;
 }
