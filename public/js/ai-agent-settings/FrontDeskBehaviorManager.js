@@ -1052,6 +1052,7 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('discovery-flow', '🔄 Discovery Flow', true, true)}
                     ${this.renderTab('discovery', '🧠 Consent & Triggers')}
                     ${this.renderTab('booking', '📅 Booking Flow')}
+                    ${this.renderTab('global-settings', '🌐 Names & Intelligence')}
                     ${this.renderTab('hours', '🕒 Hours')}
                     ${this.renderTab('test', '🧪 Test')}
                 </div>
@@ -1063,7 +1064,6 @@ class FrontDeskBehaviorManager {
                      - loops: Partially wired, merged into Discovery Flow
                      - detection: Merged into Consent & Triggers
                      - llm0-controls: Not wired to runtime
-                     - global-settings: Not wired to runtime
                      ════════════════════════════════════════════════════════════════════════════ -->
 
                 <!-- Tab Content - V111: Default to Discovery Flow (the main wired tab) -->
@@ -12339,11 +12339,15 @@ Sean → Shawn, Shaun`;
                 break;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
+            case 'global-settings': 
+                content.innerHTML = this.renderGlobalSettingsTab();
+                this.attachGlobalSettingsListeners(content);
+                break;
             case 'hours': content.innerHTML = this.renderHoursTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
             // ════════════════════════════════════════════════════════════════════════════
             // ☢️ NUKED TABS (V111 Clean Sweep - Feb 2026):
-            // personality, vocabulary, emotions, loops, detection, llm0-controls, global-settings
+            // personality, vocabulary, emotions, loops, detection, llm0-controls
             // All removed because they were not wired to the runtime engine
             // ════════════════════════════════════════════════════════════════════════════
             default:
@@ -12406,11 +12410,15 @@ Sean → Shawn, Shaun`;
                     });
                 });
                 break;
+            case 'global-settings':
+                // Global Settings tab - tier thresholds and common names
+                this.attachGlobalSettingsListeners(content);
+                break;
             case 'test':
                 content.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(content));
                 break;
             // ════════════════════════════════════════════════════════════════════════════
-            // ☢️ NUKED: global-settings, personality, emotions, llm0-controls listeners
+            // ☢️ NUKED: personality, vocabulary, emotions, llm0-controls listeners
             // ════════════════════════════════════════════════════════════════════════════
         }
     }
