@@ -1,4 +1,5 @@
 const { StepEngine } = require('./StepEngine');
+const { renderSlotTemplateOrFallback, defaultSlotConfirmFallback } = require('./TemplateRenderer');
 
 class DiscoveryFlowRunner {
     static run({ company, callSid, userInput, state }) {
@@ -100,7 +101,13 @@ class DiscoveryFlowRunner {
             }
             if (!isConfirmed && step.confirmMode !== 'never') {
                 const template = step.confirm || step.ask || 'Is {value} correct?';
-                return template.replace('{value}', `${value}`);
+                return renderSlotTemplateOrFallback({
+                    template,
+                    slotId: step.slotId,
+                    slotValue: value,
+                    fallbackText: defaultSlotConfirmFallback(step.slotId, value),
+                    context: 'discovery_runner_forced_confirm'
+                });
             }
         }
 

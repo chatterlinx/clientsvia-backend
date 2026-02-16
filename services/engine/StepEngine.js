@@ -34,6 +34,7 @@
 
 const logger = require('../../utils/logger');
 const { DEFAULT_SLOT_REGISTRY, DEFAULT_DISCOVERY_FLOW, DEFAULT_BOOKING_FLOW, DEFAULT_FLOW_POLICIES } = require('../../config/onboarding/DefaultFrontDeskPreset');
+const { renderSlotTemplateOrFallback, defaultSlotConfirmFallback } = require('./TemplateRenderer');
 
 const VERSION = 'STEP_ENGINE_V110';
 
@@ -217,7 +218,15 @@ class StepEngine {
                     
                     return {
                         action: 'CONTINUE',
-                        reply: prompt.replace('{value}', currentValue),
+                        reply: renderSlotTemplateOrFallback({
+                            template: prompt,
+                            slotId: 'name.first',
+                            slotValue: currentValue,
+                            fallbackText: defaultSlotConfirmFallback('name.first', currentValue),
+                            logger,
+                            callId: this.callId,
+                            context: 'discovery_name_correction'
+                        }),
                         slotId: 'name.first',
                         state: {
                             ...state,
@@ -393,18 +402,21 @@ class StepEngine {
                     if (slotMeta.source === 'caller_id' || slotMeta.source === 'callerID') {
                         const count = repromptCount[step.slotId] || 0;
                         const basePrompt = step.confirm || step.ask || `Is ${value} the best number to reach you?`;
-                        const prompt = this._renderSlotTemplateStrict(
-                            basePrompt,
-                            step.slotId,
-                            value,
-                            `Is ${value} the best number to reach you?`
-                        );
+                        const prompt = renderSlotTemplateOrFallback({
+                            template: basePrompt,
+                            slotId: step.slotId,
+                            slotValue: value,
+                            fallbackText: `Is ${value} the best number to reach you?`,
+                            logger,
+                            callId: this.callId,
+                            context: 'discovery_confirm_if_caller_id'
+                        });
                         
                         repromptCount[step.slotId] = count + 1;
                         
                         return {
                             action: 'CONTINUE',
-                            reply: prompt.replace('{value}', value),
+                            reply: prompt,
                             slotId: step.slotId,
                             state: {
                                 ...state,
@@ -594,7 +606,15 @@ class StepEngine {
                 
                 // If we have a value but it's not confirmed
                 if (value && !isConfirmed && slot.bookingConfirmRequired !== false) {
-                    const prompt = (step.confirmPrompt || '').replace('{value}', value);
+                    const prompt = renderSlotTemplateOrFallback({
+                        template: step.confirmPrompt || '',
+                        slotId: step.slotId,
+                        slotValue: value,
+                        fallbackText: `I have ${value}. Is that correct?`,
+                        logger,
+                        callId: this.callId,
+                        context: 'booking_confirm_prompt'
+                    });
                     const promptSource = step.confirmPrompt 
                         ? `bookingFlow.steps[${step.slotId}].confirmPrompt`
                         : 'ERROR:NO_CONFIRM_PROMPT';
@@ -1078,74 +1098,19 @@ class StepEngine {
             promptSource = `discoveryFlow.steps[${step.slotId}].confirm[default]`;
         }
 
-        const fallback = this._safeDiscoveryConfirmFallback(step.slotId, value);
+        const fallback = defaultSlotConfirmFallback(step.slotId, value);
         return {
-            prompt: this._renderSlotTemplateStrict(prompt || '', step.slotId, value, fallback),
+            prompt: renderSlotTemplateOrFallback({
+                template: prompt || '',
+                slotId: step.slotId,
+                slotValue: value,
+                fallbackText: fallback,
+                logger,
+                callId: this.callId,
+                context: 'discovery_confirm_prompt'
+            }),
             promptSource
         };
-    }
-
-    _buildSlotTemplateVars(slotId, slotValue) {
-        const value = `${slotValue ?? ''}`.trim();
-        const vars = {
-            value,
-            slotValue: value,
-            name: value
-        };
-
-        const bySlot = {
-            'name.first': ['firstName', 'first_name'],
-            'name.last': ['lastName', 'last_name'],
-            'phone': ['phoneNumber', 'phone_number'],
-            'address': ['address'],
-            'address.full': ['address', 'serviceAddress', 'service_address']
-        };
-
-        (bySlot[slotId] || []).forEach((k) => {
-            vars[k] = value;
-        });
-
-        // Generic aliases derived from slotId parts.
-        const normalized = `${slotId || ''}`.replace(/[^a-zA-Z0-9.]/g, '');
-        const parts = normalized.split('.').filter(Boolean);
-        if (parts.length > 0) {
-            vars[parts[parts.length - 1]] = value;
-            vars[parts.join('_')] = value;
-        }
-        return vars;
-    }
-
-    _renderSlotTemplateStrict(template, slotId, slotValue, fallbackText) {
-        const vars = this._buildSlotTemplateVars(slotId, slotValue);
-        const rendered = `${template || ''}`.replace(/\{([a-zA-Z0-9_.-]+)\}/g, (full, key) => {
-            const mapped = vars[key];
-            return mapped != null && `${mapped}`.length > 0 ? `${mapped}` : full;
-        });
-
-        if (/[{}]/.test(rendered)) {
-            logger.error('[STEP ENGINE] Unresolved placeholder in rendered prompt', {
-                callId: this.callId,
-                slotId,
-                template: `${template || ''}`.substring(0, 120),
-                rendered: rendered.substring(0, 120)
-            });
-            return fallbackText;
-        }
-
-        return rendered;
-    }
-
-    _safeDiscoveryConfirmFallback(slotId, value) {
-        if (`${slotId}` === 'name.first') {
-            return `Just to confirm - is your first name ${value}?`;
-        }
-        if (`${slotId}` === 'name.last') {
-            return `Just to confirm - is your last name ${value}?`;
-        }
-        if (`${slotId}` === 'address' || `${slotId}` === 'address.full') {
-            return `Just to confirm - is your service address ${value}?`;
-        }
-        return `Just to confirm - is ${value} correct?`;
     }
 }
 
