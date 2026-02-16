@@ -13,6 +13,9 @@ const { ConsentGate } = require('./ConsentGate');
 const { BookingFlowRunner } = require('./BookingFlowRunner');
 const { SectionTracer, SECTIONS } = require('./SectionTracer');
 
+// S3: SLOT EXTRACTION - Use full battle-tested SlotExtractor (not minimal)
+const SlotExtractor = require('./booking/SlotExtractor');
+
 let BlackBoxLogger = null;
 try {
     BlackBoxLogger = require('../BlackBoxLogger');
@@ -31,34 +34,6 @@ function emitRawEvent({ callSid, companyId, turn, type, data }) {
         type,
         data
     }).catch(() => {});
-}
-
-function minimalExtract(userInput = '') {
-    const text = (userInput || '').trim();
-    if (!text) {
-        return {};
-    }
-    const extracted = {};
-    const phone = text.match(/(?:\+?1[\s-]?)?\(?(\d{3})\)?[\s-]?(\d{3})[\s-]?(\d{4})/);
-    if (phone) {
-        extracted.phone = `${phone[1]}${phone[2]}${phone[3]}`;
-    }
-    const name = text.match(/\b(?:my name is|i am|i'm|this is|call me)\s+([a-zA-Z]+)(?:\s+([a-zA-Z]+))?/i);
-    if (name) {
-        // ═══════════════════════════════════════════════════════════════════════
-        // V120 FIX: Use 'name' slot ID (not 'name.first') to match Discovery Flow config
-        // ═══════════════════════════════════════════════════════════════════════
-        // Discovery Flow config uses slotId: 'name', so extracted slots must match.
-        // This was the bug: extractor used 'name.first', Discovery expected 'name'.
-        extracted.name = name[1];
-        if (name[2]) {
-            extracted.lastName = name[2];
-        }
-    }
-    if (/\b\d{1,5}\s+[a-z0-9.\- ]{3,}\b/i.test(text)) {
-        extracted.address = text;
-    }
-    return extracted;
 }
 
 class FrontDeskCoreRuntime {
@@ -95,9 +70,22 @@ class FrontDeskCoreRuntime {
         });
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // S3: SLOT EXTRACTION
+        // S3: SLOT EXTRACTION - Use full SlotExtractor (2000+ lines, battle-tested)
         // ═══════════════════════════════════════════════════════════════════════════
-        const fromInput = minimalExtract(userInput);
+        const fromInput = SlotExtractor.extract(inputText, {
+            callId: callSid,
+            companyId: companyId,
+            company: company,
+            callerPhone: context.callerPhone,
+            slots: state.plainSlots || {},
+            confirmedSlots: state.discovery?.confirmedSlots || {},
+            slotMeta: state.slotMeta || {},
+            turnCount: turn,
+            currentBookingStep: null,
+            sessionMode: state.sessionMode || 'DISCOVERY'
+        });
+        
+        // Merge extracted slots into state
         state.plainSlots = { ...state.plainSlots, ...fromInput };
         
         const slotCount = Object.keys(state.plainSlots || {}).length;
@@ -114,7 +102,8 @@ class FrontDeskCoreRuntime {
                 phone: !!state.plainSlots.phone,
                 address: !!state.plainSlots.address
             },
-            extractedThisTurn: Object.keys(fromInput)
+            extractedThisTurn: Object.keys(fromInput),
+            nameValuePreview: fromInput.name ? String(fromInput.name).substring(0, 20) : null
         });
 
         emitRawEvent({
