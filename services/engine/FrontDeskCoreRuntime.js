@@ -10,7 +10,9 @@ const logger = require('../../utils/logger');
 const { StateStore } = require('./StateStore');
 const { DiscoveryFlowRunner } = require('./DiscoveryFlowRunner');
 const { ConsentGate } = require('./ConsentGate');
-const { BookingFlowRunner } = require('./BookingFlowRunner');
+// CRITICAL: Use the FULL deterministic booking engine (2600+ lines), NOT the legacy 57-line wrapper
+// The legacy ./BookingFlowRunner.js should be renamed to BookingFlowRunner_LEGACY_DISABLED.js
+const BookingFlowRunner = require('./booking/BookingFlowRunner');
 const { SectionTracer, SECTIONS } = require('./SectionTracer');
 
 // S3: SLOT EXTRACTION - Use full battle-tested SlotExtractor (not minimal)

@@ -40,13 +40,41 @@ try {
     BlackBoxLogger = null;
 }
 
+/**
+ * CANONICAL SECTION IDS - V110 Stabilization
+ * 
+ * These MUST match the advisor's canonical list exactly.
+ * Once a section is GREEN + LOCKED, do NOT modify its code.
+ * 
+ * Status:
+ * - S1: GREEN (proven in raw events, lane/sessionMode present)
+ * - S2: GREEN (proven in raw events, inputTextSource/length/preview present)
+ * - S3: GREEN (proven in raw events, name extraction working)
+ * - S4: GREEN (proven in raw events, DISCOVERY_FLOW_RUNNER owning turns)
+ * - S5: RED (call_reason_detail not being captured)
+ * - S6: YELLOW (not yet tested)
+ * - S7: GREEN (proven in raw events, elevenlabs + hasPlay=true)
+ */
 const SECTIONS = {
+    // S1 — Runtime Ownership (lane/mode owner)
     S1_RUNTIME_OWNER: 'S1_RUNTIME_OWNER',
+    
+    // S2 — Input Text Truth (speechResult vs partialCache)
     S2_INPUT_TEXT_TRUTH: 'S2_INPUT_TEXT_TRUTH',
+    
+    // S3 — Slot Extraction (name/phone/address/time)
     S3_SLOT_EXTRACTION: 'S3_SLOT_EXTRACTION',
-    S4_DISCOVERY_STEP_ENGINE: 'S4_DISCOVERY_STEP_ENGINE',
-    S5_CONSENT_GATE: 'S5_CONSENT_GATE',
-    S6_BOOKING_FLOW: 'S6_BOOKING_FLOW',
+    
+    // S4 — Discovery Engine (step progression)
+    S4_DISCOVERY_ENGINE: 'S4_DISCOVERY_ENGINE',
+    
+    // S5 — Call Reason Capture (call_reason_detail)
+    S5_CALL_REASON_CAPTURE: 'S5_CALL_REASON_CAPTURE',
+    
+    // S6 — Consent & Lane Transition (DISCOVERY → BOOKING)
+    S6_CONSENT_AND_TRANSITION: 'S6_CONSENT_AND_TRANSITION',
+    
+    // S7 — Voice Provider (ElevenLabs vs Twilio Say)
     S7_VOICE_PROVIDER: 'S7_VOICE_PROVIDER'
 };
 

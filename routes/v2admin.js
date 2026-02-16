@@ -234,6 +234,11 @@ router.use('/', fixUserCompanyRoutes);
 const deduplicatePlatformAdminRoutes = require('./admin/deduplicatePlatformAdmin');
 router.use('/', deduplicatePlatformAdminRoutes);
 
+// 📊 NEW: Section Health Dashboard (V110 Stabilization)
+// Tracks S1-S7 section status for the Front Desk AI agent
+const sectionHealthRoutes = require('./admin/sectionHealth');
+router.use('/section-health', sectionHealthRoutes);
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TRUTH BUNDLE EXPORT - The single source of truth
 // ═══════════════════════════════════════════════════════════════════════════
