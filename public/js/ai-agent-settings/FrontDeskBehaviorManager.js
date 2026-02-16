@@ -1054,6 +1054,7 @@ class FrontDeskBehaviorManager {
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
                     ${this.renderTab('discovery-flow', '🔄 Discovery Flow', true, true)}
                     ${this.renderTab('discovery', '🧠 Consent & Triggers')}
+                    ${this.renderTab('detection', '🔍 Detection')}
                     ${this.renderTab('booking', '📅 Booking Flow')}
                     ${this.renderTab('global-settings', '🌐 Names & Intelligence')}
                     ${this.renderTab('llm0-controls', '🧠 LLM-0 Controls')}
@@ -1066,7 +1067,6 @@ class FrontDeskBehaviorManager {
                      - vocabulary: Not wired to runtime  
                      - emotions: Not wired to runtime
                      - loops: Partially wired, merged into Discovery Flow
-                     - detection: Merged into Consent & Triggers
                      ════════════════════════════════════════════════════════════════════════════ -->
 
                 <!-- Tab Content - V111: Default to Discovery Flow (the main wired tab) -->
@@ -12344,6 +12344,7 @@ Sean → Shawn, Shaun`;
                 this.initDiscoveryFlowTab(content);
                 break;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
+            case 'detection': content.innerHTML = this.renderDetectionTab(); break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
             case 'global-settings': 
                 content.innerHTML = this.renderGlobalSettingsTab();
@@ -12357,7 +12358,7 @@ Sean → Shawn, Shaun`;
             case 'test': content.innerHTML = this.renderTestTab(); break;
             // ════════════════════════════════════════════════════════════════════════════
             // ☢️ NUKED TABS (V111 Clean Sweep - Feb 2026):
-            // personality, vocabulary, emotions, loops, detection
+            // personality, vocabulary, emotions, loops
             // All removed because they were not wired to the runtime engine
             // ════════════════════════════════════════════════════════════════════════════
             default:
@@ -13317,10 +13318,14 @@ Sean → Shawn, Shaun`;
                 },
                 
                 detectionTriggers: {
-                    _wiredTo: 'ConsentGate.js',
-                    _rawEvents: ['CONSENT_GATE_INTENT_DETECTION', 'CONSENT_GATE_DIRECT_INTENT_BYPASS'],
+                    _wiredTo: 'ConsentGate.js (wantsBooking, directIntentPatterns), ConversationEngine.js (all others)',
+                    _rawEvents: ['CONSENT_GATE_INTENT_DETECTION', 'CONSENT_GATE_DIRECT_INTENT_BYPASS', 'session.flags set in ConversationEngine'],
                     wantsBooking: this.config.detectionTriggers?.wantsBooking || [],
-                    directIntentPatterns: this.config.detectionTriggers?.directIntentPatterns || []
+                    directIntentPatterns: this.config.detectionTriggers?.directIntentPatterns || [],
+                    trustConcern: this.config.detectionTriggers?.trustConcern || [],
+                    callerFeelsIgnored: this.config.detectionTriggers?.callerFeelsIgnored || [],
+                    refusedSlot: this.config.detectionTriggers?.refusedSlot || [],
+                    describingProblem: this.config.detectionTriggers?.describingProblem || []
                 },
                 
                 discoveryConsent: {
@@ -13342,7 +13347,43 @@ Sean → Shawn, Shaun`;
             },
             
             // ════════════════════════════════════════════════════════════════════
-            // TAB 3: BOOKING FLOW
+            // TAB 3: DETECTION (session.flags for routing)
+            // ════════════════════════════════════════════════════════════════════
+            detection: {
+                _wiredTo: 'ConversationEngine.js lines 3854-3865',
+                _rawEvents: ['🎯 DETECTION FLAG SET logs in ConversationEngine'],
+                _description: 'Patterns that set session.flags for downstream routing/contract decisions',
+                
+                trustConcern: {
+                    _description: 'When caller questions if AI can actually help (sets session.flags.trustConcern)',
+                    patterns: this.config.detectionTriggers?.trustConcern || []
+                },
+                callerFeelsIgnored: {
+                    _description: 'When caller says AI is not listening (sets session.flags.callerFeelsIgnored)',
+                    patterns: this.config.detectionTriggers?.callerFeelsIgnored || []
+                },
+                refusedSlot: {
+                    _description: 'When caller refuses to give info (sets session.flags.refusedSlot)',
+                    patterns: this.config.detectionTriggers?.refusedSlot || []
+                },
+                describingProblem: {
+                    _description: 'When caller describes their issue - triggers triage mode (sets session.flags.describingProblem)',
+                    patterns: this.config.detectionTriggers?.describingProblem || []
+                },
+                wantsBooking: {
+                    _wiredTo: 'ConsentGate.js - triggers BOOKING lane',
+                    _description: 'Phrases that skip discovery and go straight to booking',
+                    patterns: this.config.detectionTriggers?.wantsBooking || []
+                },
+                directIntentPatterns: {
+                    _wiredTo: 'ConsentGate.js - bypass consent entirely',
+                    _description: 'Strong intent patterns that skip consent question',
+                    patterns: this.config.detectionTriggers?.directIntentPatterns || []
+                }
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB 4: BOOKING FLOW
             // ════════════════════════════════════════════════════════════════════
             bookingFlow: {
                 _wiredTo: 'BookingFlowRunner.js, StepEngine.js',
@@ -13375,7 +13416,7 @@ Sean → Shawn, Shaun`;
             },
             
             // ════════════════════════════════════════════════════════════════════
-            // TAB 4: NAMES & INTELLIGENCE (Global Settings)
+            // TAB 5: NAMES & INTELLIGENCE (Global Settings)
             // ════════════════════════════════════════════════════════════════════
             namesAndIntelligence: {
                 _wiredTo: 'SlotExtractor.js, BookingFlowRunner.js, AWConfigReader.js',
@@ -13408,7 +13449,7 @@ Sean → Shawn, Shaun`;
             },
             
             // ════════════════════════════════════════════════════════════════════
-            // TAB 5: LLM-0 CONTROLS
+            // TAB 6: LLM-0 CONTROLS
             // ════════════════════════════════════════════════════════════════════
             llm0Controls: {
                 _wiredTo: 'LLM0ControlsLoader.js, v2twilio.js',
@@ -13452,7 +13493,7 @@ Sean → Shawn, Shaun`;
             },
             
             // ════════════════════════════════════════════════════════════════════
-            // TAB 6: HOURS
+            // TAB 7: HOURS
             // ════════════════════════════════════════════════════════════════════
             hours: {
                 _wiredTo: 'Runtime via aiAgentSettings.operatingHours',
