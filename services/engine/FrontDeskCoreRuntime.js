@@ -72,12 +72,16 @@ class FrontDeskCoreRuntime {
         // ═══════════════════════════════════════════════════════════════════════════
         // S3: SLOT EXTRACTION - Use full SlotExtractor (2000+ lines, battle-tested)
         // ═══════════════════════════════════════════════════════════════════════════
-        const fromInput = SlotExtractor.extract(inputText, {
+        // extractAll() returns slot METADATA objects: { name: { value: 'Mark', confidence: 0.9, ... } }
+        // We need to:
+        //   1. Store metadata in slotMeta for merging/confidence tracking
+        //   2. Convert to plain values for plainSlots (used by DiscoveryFlowRunner)
+        const extractedMeta = SlotExtractor.extractAll(inputText, {
             callId: callSid,
             companyId: companyId,
             company: company,
             callerPhone: context.callerPhone,
-            slots: state.plainSlots || {},
+            existingSlots: state.plainSlots || {},
             confirmedSlots: state.discovery?.confirmedSlots || {},
             slotMeta: state.slotMeta || {},
             turnCount: turn,
@@ -85,14 +89,23 @@ class FrontDeskCoreRuntime {
             sessionMode: state.sessionMode || 'DISCOVERY'
         });
         
-        // Merge extracted slots into state
-        state.plainSlots = { ...state.plainSlots, ...fromInput };
+        // Merge metadata using SlotExtractor's canonical merge rules (handles confidence, corrections, etc.)
+        const existingMeta = state.slotMeta || {};
+        const mergedMeta = SlotExtractor.mergeSlots(existingMeta, extractedMeta);
+        state.slotMeta = mergedMeta;
+        
+        // Convert merged metadata to plain values for plainSlots
+        // plainSlots is { name: 'Mark', phone: '555-1234' } NOT { name: { value: 'Mark' } }
+        const plainValues = SlotExtractor.getSlotValues(mergedMeta);
+        state.plainSlots = { ...state.plainSlots, ...plainValues };
         
         const slotCount = Object.keys(state.plainSlots || {}).length;
+        const extractedKeys = Object.keys(extractedMeta || {});
+        
         tracer.enter(SECTIONS.S3_SLOT_EXTRACTION, {
-            name: fromInput.name ? '1' : '0',
-            phone: fromInput.phone ? '1' : '0',
-            address: fromInput.address ? '1' : '0'
+            name: extractedMeta.name ? '1' : '0',
+            phone: extractedMeta.phone ? '1' : '0',
+            address: extractedMeta.address ? '1' : '0'
         });
         
         tracer.emit('SLOTS_EXTRACTED', {
@@ -102,8 +115,10 @@ class FrontDeskCoreRuntime {
                 phone: !!state.plainSlots.phone,
                 address: !!state.plainSlots.address
             },
-            extractedThisTurn: Object.keys(fromInput),
-            nameValuePreview: fromInput.name ? String(fromInput.name).substring(0, 20) : null
+            extractedThisTurn: extractedKeys,
+            nameValuePreview: state.plainSlots.name ? String(state.plainSlots.name).substring(0, 20) : null,
+            nameConfidence: extractedMeta.name?.confidence || null,
+            namePatternSource: extractedMeta.name?.patternSource || null
         });
 
         emitRawEvent({
