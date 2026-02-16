@@ -7,6 +7,7 @@ function buildSlotTemplateVars(slotId, slotValue) {
     };
 
     const bySlot = {
+        'name': ['firstName', 'first_name', 'callerFirstName', 'caller_first_name', 'name', 'value'],
         'name.first': ['firstName', 'first_name', 'callerFirstName', 'caller_first_name'],
         'name.last': ['lastName', 'last_name'],
         'phone': ['phoneNumber', 'phone_number'],
@@ -40,7 +41,7 @@ function hasUnresolvedPlaceholders(text) {
 }
 
 function defaultSlotConfirmFallback(slotId, value) {
-    if (`${slotId}` === 'name.first') {
+    if (`${slotId}` === 'name' || `${slotId}` === 'name.first') {
         return `Just to confirm - is your first name ${value}?`;
     }
     if (`${slotId}` === 'name.last') {
