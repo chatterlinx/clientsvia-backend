@@ -1,26 +1,38 @@
 /**
- * ============================================================================
- * FRONT DESK CORE RUNTIME - V110 Clean Sweep
- * ============================================================================
+ * ════════════════════════════════════════════════════════════════════════════
+ * FRONT DESK CORE RUNTIME - V111 Enterprise Edition
+ * ════════════════════════════════════════════════════════════════════════════
  * 
- * SPEAKER OWNERSHIP CONTRACT (THE LAW):
- * 1) GREETING speaks through GreetingInterceptor (instant, no LLM)
- * 2) DISCOVERY speaks through DiscoveryFlowRunner
- * 3) CONSENT speaks through ConsentGate
- * 4) BOOKING speaks through BookingFlowRunner
+ * The single orchestrator for all call processing. Every turn goes through here.
  * 
- * If any other module emits final response text, it is a runtime bug.
+ * ARCHITECTURE:
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ S1    Runtime Ownership (set lane)                                     │
+ * │ S1.5  Connection Quality Gate (hello? detection)                       │
+ * │ S2    Input Text Truth (log what we got)                               │
+ * │ S2.5  Escalation Detection (manager/human requests)                    │
+ * │ GREET Greeting Intercept (good morning → instant response)             │
+ * │ S3    Slot Extraction (name/phone/address)                             │
+ * │ S4    Discovery Flow (step progression)                                │
+ * │ S5    Consent Gate (intent detection → booking consent)                │
+ * │ S6    Booking Flow (collect remaining info)                            │
+ * │ S7    Voice Provider (TTS output)                                      │
+ * │ OPEN  Opener Engine (prepend micro-acknowledgment)                     │
+ * └─────────────────────────────────────────────────────────────────────────┘
  * 
- * SECTION MAP (S1-S7):
- * S1 - Runtime Ownership (lane/mode)
- * S2 - Input Text Truth (speechResult vs cache)
- * S3 - Slot Extraction (name/phone/address)
- * S4 - Discovery Engine (step progression)
- * S5 - Call Reason Capture (call_reason_detail)
- * S6 - Consent & Lane Transition
- * S7 - Voice Provider (ElevenLabs/Twilio)
+ * SPEAKER OWNERSHIP CONTRACT:
+ * Only these modules may generate final response text:
+ * - GreetingInterceptor (instant greetings)
+ * - DiscoveryFlowRunner (discovery questions)
+ * - ConsentGate (consent questions)
+ * - BookingFlowRunner (booking questions)
+ * - OpenerEngine (prepends micro-acks to responses)
  * 
- * ============================================================================
+ * RAW EVENTS:
+ * Every section emits SECTION_* events for complete observability.
+ * See docs/RAW_EVENTS_MAP.md for the full list.
+ * 
+ * ════════════════════════════════════════════════════════════════════════════
  */
 
 const logger = require('../../utils/logger');
@@ -30,6 +42,13 @@ const { ConsentGate } = require('./ConsentGate');
 const BookingFlowRunner = require('./booking/BookingFlowRunner');
 const { SectionTracer, SECTIONS } = require('./SectionTracer');
 const SlotExtractor = require('./booking/SlotExtractor');
+const { selectOpener, prependOpener } = require('./OpenerEngine');
+
+// Interceptors - modular pattern matchers
+const GreetingInterceptor = require('./interceptors/GreetingInterceptor');
+const EscalationDetector = require('./interceptors/EscalationDetector');
+const ConnectionQualityGate = require('./interceptors/ConnectionQualityGate');
+const CallReasonExtractor = require('./interceptors/CallReasonExtractor');
 
 let BlackBoxLogger = null;
 try {
@@ -54,223 +73,9 @@ const CRITICAL_EVENTS = new Set([
 ]);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CALL REASON EXTRACTOR (S5)
+// NOTE: CallReasonExtractor, GreetingInterceptor, EscalationDetector, and
+// ConnectionQualityGate have been extracted to ./interceptors/ for modularity.
 // ═══════════════════════════════════════════════════════════════════════════
-// Extracts the caller's reason/problem from their utterance.
-// This is a simple pattern-based extractor - no LLM needed.
-// 
-// Examples:
-//   "My AC isn't cooling" → "AC isn't cooling"
-//   "The heater is broken" → "heater is broken"
-//   "It's 90 degrees in my house" → "90 degrees in house"
-// ═══════════════════════════════════════════════════════════════════════════
-const CallReasonExtractor = {
-    /**
-     * Problem indicator patterns - these suggest the caller is describing an issue
-     */
-    problemPatterns: [
-        // HVAC-specific problems
-        /(?:my\s+)?(?:ac|a\.?c\.?|air\s*condition(?:er|ing)?)\s+(?:is\s+)?(?:not\s+)?(\w+ing|\w+ed|broken|down|out)/i,
-        /(?:my\s+)?(?:heat(?:er|ing)?|furnace)\s+(?:is\s+)?(?:not\s+)?(\w+ing|\w+ed|broken|down|out)/i,
-        /(?:my\s+)?(?:unit|system)\s+(?:is\s+)?(?:not\s+)?(\w+ing|\w+ed|broken|down|out)/i,
-        
-        // Temperature problems
-        /(?:it'?s?\s+)?(\d+)\s*degrees/i,
-        /(?:too\s+)?(hot|cold|warm|freezing)/i,
-        
-        // General service problems
-        /(?:not\s+)?(?:working|cooling|heating|running|turning\s+on)/i,
-        /(?:is\s+)?(?:broken|leaking|making\s+noise|frozen)/i,
-        
-        // Water/plumbing (if applicable)
-        /(?:no\s+)?(?:hot\s+)?water/i,
-        /(?:leak(?:ing)?|flood(?:ing)?|clog(?:ged)?|drain)/i
-    ],
-    
-    /**
-     * Extract the call reason from user input
-     * Returns a short summary of the problem, or null if no problem detected
-     */
-    extract(text) {
-        if (!text || text.length < 10) return null;
-        
-        const textLower = text.toLowerCase();
-        
-        // Skip if this is just a greeting or confirmation
-        if (/^(yes|no|yeah|yep|nope|ok|okay|sure|hi|hello|good\s+(morning|afternoon|evening))[\s.,!?]*$/i.test(text.trim())) {
-            return null;
-        }
-        
-        // Look for problem indicators
-        let hasProblem = false;
-        for (const pattern of this.problemPatterns) {
-            if (pattern.test(textLower)) {
-                hasProblem = true;
-                break;
-            }
-        }
-        
-        if (!hasProblem) return null;
-        
-        // Extract the problem statement
-        // Try to find the core problem description
-        let reason = null;
-        
-        // Pattern 1: "my [thing] is [problem]"
-        const myThingPattern = /(?:my\s+)?(\w+(?:\s+\w+)?)\s+(?:is\s+)?(?:not\s+)?(working|cooling|heating|running|broken|down|out|leaking|frozen|making\s+noise)/i;
-        const myThingMatch = text.match(myThingPattern);
-        if (myThingMatch) {
-            const thing = myThingMatch[1].replace(/^(the|my|our)\s+/i, '');
-            const problem = myThingMatch[2];
-            reason = `${thing} ${myThingMatch[0].includes('not') ? 'not ' : ''}${problem}`;
-        }
-        
-        // Pattern 2: Temperature mention
-        if (!reason) {
-            const tempMatch = text.match(/(?:it'?s?\s+)?(\d+)\s*degrees/i);
-            if (tempMatch) {
-                reason = `${tempMatch[1]} degrees`;
-                // Check for additional context
-                if (/hot|warm/i.test(text)) reason += ' (too hot)';
-                if (/cold|freezing/i.test(text)) reason += ' (too cold)';
-            }
-        }
-        
-        // Pattern 3: Just use the first problem-related phrase
-        if (!reason) {
-            const problemPhrases = text.match(/(?:not\s+)?(?:working|cooling|heating|broken|leaking|down|out|frozen)/gi);
-            if (problemPhrases && problemPhrases.length > 0) {
-                reason = problemPhrases[0];
-            }
-        }
-        
-        // Fallback: If we detected a problem but couldn't extract specifics,
-        // use a truncated version of the input (first ~50 chars of problem area)
-        if (!reason && hasProblem) {
-            // Find where the problem description likely starts
-            const problemStart = text.search(/(?:my\s+)?(?:ac|heat|unit|system|it'?s)/i);
-            if (problemStart >= 0) {
-                reason = text.substring(problemStart, problemStart + 60).replace(/[.,!?]+$/, '').trim();
-            }
-        }
-        
-        return reason ? reason.trim() : null;
-    }
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// GREETING INTERCEPTOR
-// ═══════════════════════════════════════════════════════════════════════════
-// Handles instant responses to simple greetings like "good morning", "hi", etc.
-// These come from the Personality tab's Greeting Responses configuration.
-// Intercepted BEFORE Discovery Flow runs - saves LLM calls and is instant.
-// ═══════════════════════════════════════════════════════════════════════════
-const GreetingInterceptor = {
-    /**
-     * Fuzzy patterns for common greetings (used when fuzzy=true in UI config)
-     */
-    fuzzyPatterns: {
-        'good morning': /^(good\s*morning|morning|gm)\b/i,
-        'morning': /^(good\s*morning|morning|gm)\b/i,
-        'good afternoon': /^(good\s*afternoon|afternoon)\b/i,
-        'afternoon': /^(good\s*afternoon|afternoon)\b/i,
-        'good evening': /^(good\s*evening|evening)\b/i,
-        'evening': /^(good\s*evening|evening)\b/i,
-        'hi': /^(hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?)\b/i,
-        'hello': /^(hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?)\b/i,
-        'hey': /^(hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?)\b/i
-    },
-    
-    /**
-     * Filler prefixes to strip before checking for greeting
-     * "yes, good morning" → "good morning"
-     */
-    FILLER_PREFIXES: /^(yes|yeah|yep|yup|uh|um|uh\s*huh|ok|okay|sure|well|so|right|alright|,|\s)+/i,
-    
-    /**
-     * Check if text is JUST a greeting (not "hi I need help with my AC")
-     */
-    isShortGreeting(text) {
-        const cleaned = text.toLowerCase().replace(this.FILLER_PREFIXES, '').trim();
-        const isShort = cleaned.length < 40;
-        const startsWithGreeting = /^(good\s*(morning|afternoon|evening)|hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?|morning|afternoon|evening|gm)\b/i.test(cleaned);
-        return isShort && startsWithGreeting;
-    },
-    
-    /**
-     * Try to intercept a greeting and return instant response
-     * 
-     * @param {string} userText - The user's input
-     * @param {Object} company - Company config with greetingRules
-     * @param {Object} state - Call state
-     * @returns {Object|null} { response, matchedTrigger, matchType } or null if not a greeting
-     */
-    tryIntercept(userText, company, state) {
-        if (!userText) return null;
-        
-        const userTextLower = userText.toLowerCase().trim();
-        
-        // Skip if this isn't a short greeting-like message
-        if (!this.isShortGreeting(userText)) {
-            return null;
-        }
-        
-        // Skip if we've already greeted (existing session beyond turn 1)
-        const hasExistingSession = (state?.turnCount || 0) > 1;
-        if (hasExistingSession) {
-            return null;
-        }
-        
-        // Get greeting rules from company config (Personality tab)
-        const greetingRules = company?.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingRules || [];
-        
-        if (greetingRules.length === 0) {
-            return null;
-        }
-        
-        // Sort rules by trigger length (longest first) to prioritize specific matches
-        // "hi good afternoon" → should match "good afternoon" not "hi"
-        const sortedRules = [...greetingRules].sort((a, b) => 
-            (b.trigger?.length || 0) - (a.trigger?.length || 0)
-        );
-        
-        for (const rule of sortedRules) {
-            if (!rule.trigger || !rule.response) continue;
-            
-            const trigger = rule.trigger.toLowerCase().trim();
-            
-            if (rule.fuzzy) {
-                // Fuzzy matching - use pattern if available, otherwise contains check
-                const pattern = this.fuzzyPatterns[trigger];
-                if (pattern && pattern.test(userTextLower)) {
-                    return {
-                        response: rule.response,
-                        matchedTrigger: trigger,
-                        matchType: 'fuzzy-pattern'
-                    };
-                } else if (userTextLower.includes(trigger)) {
-                    return {
-                        response: rule.response,
-                        matchedTrigger: trigger,
-                        matchType: 'fuzzy-contains'
-                    };
-                }
-            } else {
-                // EXACT matching - trigger must appear as whole phrase
-                const exactPattern = new RegExp(`\\b${trigger.replace(/\s+/g, '\\s+')}\\b`, 'i');
-                if (exactPattern.test(userTextLower)) {
-                    return {
-                        response: rule.response,
-                        matchedTrigger: trigger,
-                        matchType: 'exact-phrase'
-                    };
-                }
-            }
-        }
-        
-        return null;
-    }
-};
 
 /**
  * Create an event object for the turn buffer.
@@ -338,6 +143,155 @@ class FrontDeskCoreRuntime {
             });
             
             // ═══════════════════════════════════════════════════════════════════════════
+            // S1.5: CONNECTION QUALITY GATE (V111)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // WIRED FROM: frontDeskBehavior.connectionQualityGate (Discovery & Consent tab)
+            // 
+            // PURPOSE: Detect bad connections, low STT confidence, and "hello? are you there?"
+            // patterns on early turns (1-2). Without this gate, the AI treats "hello?" as a
+            // real question and gives wrong answers.
+            //
+            // ACTIONS:
+            // - If trouble phrase detected OR STT confidence < threshold → re-greet
+            // - After maxRetries → offer DTMF escape (press 1 for human, press 2 for voicemail)
+            // ═══════════════════════════════════════════════════════════════════════════
+            currentSection = 'S1_5_CONNECTION_QUALITY_GATE';
+            const cqGate = company?.aiAgentSettings?.frontDeskBehavior?.connectionQualityGate || {};
+            const cqEnabled = cqGate.enabled !== false; // Default: enabled
+            const cqThreshold = cqGate.confidenceThreshold || 0.72;
+            const cqMaxRetries = cqGate.maxRetries || 3;
+            const cqTroublePhrases = cqGate.troublePhrases || [
+                'hello', 'hello?', 'hi', 'hi?', 'are you there',
+                'can you hear me', 'is anyone there', 'is somebody there',
+                'hey', 'hey?', 'anybody there'
+            ];
+            const cqClarificationPrompt = cqGate.clarificationPrompt || cqGate.reGreeting || 
+                "I'm sorry, I didn't quite catch that. Could you please repeat what you said?";
+            const cqDtmfMessage = cqGate.dtmfEscapeMessage || 
+                "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.";
+            
+            // Get STT confidence from context (passed from v2twilio.js)
+            const sttConfidence = context.sttConfidence || 1.0; // Default high if not provided
+            const inputTextRaw = userInput || '';
+            const inputTextLower = inputTextRaw.toLowerCase().trim();
+            
+            // Initialize connection trouble tracking in state
+            if (!callState._connectionTroubleCount) {
+                callState._connectionTroubleCount = 0;
+            }
+            
+            // Only run on early turns (1-2) when enabled
+            const isEarlyTurn = turn <= 2;
+            let connectionTroubleDetected = false;
+            let troubleReason = null;
+            
+            if (cqEnabled && isEarlyTurn) {
+                // Check 1: Is this a trouble phrase?
+                const matchedTroublePhrase = cqTroublePhrases.find(phrase => {
+                    const phraseLower = phrase.toLowerCase().trim();
+                    return inputTextLower === phraseLower || 
+                           inputTextLower.startsWith(phraseLower + ' ') ||
+                           inputTextLower.endsWith(' ' + phraseLower) ||
+                           inputTextLower.includes(' ' + phraseLower + ' ');
+                });
+                
+                if (matchedTroublePhrase) {
+                    connectionTroubleDetected = true;
+                    troubleReason = 'TROUBLE_PHRASE';
+                }
+                
+                // Check 2: Low STT confidence
+                if (!connectionTroubleDetected && sttConfidence < cqThreshold) {
+                    connectionTroubleDetected = true;
+                    troubleReason = 'LOW_STT_CONFIDENCE';
+                }
+            }
+            
+            // EMIT S1.5 CONNECTION QUALITY GATE EVENT (always, for debugging)
+            bufferEvent('SECTION_S1_5_CONNECTION_QUALITY_GATE', {
+                enabled: cqEnabled,
+                turn: turn,
+                isEarlyTurn: isEarlyTurn,
+                sttConfidence: sttConfidence,
+                confidenceThreshold: cqThreshold,
+                inputTextPreview: inputTextRaw.substring(0, 40),
+                troubleDetected: connectionTroubleDetected,
+                troubleReason: troubleReason,
+                troubleCount: callState._connectionTroubleCount,
+                maxRetries: cqMaxRetries,
+                configSource: 'frontDeskBehavior.connectionQualityGate'
+            });
+            
+            // If connection trouble detected, handle it
+            if (connectionTroubleDetected) {
+                callState._connectionTroubleCount++;
+                
+                // Check if we've exceeded max retries
+                if (callState._connectionTroubleCount >= cqMaxRetries) {
+                    // DTMF Escape - too many failures
+                    bufferEvent('CONNECTION_QUALITY_GATE_DTMF_ESCAPE', {
+                        troubleCount: callState._connectionTroubleCount,
+                        maxRetries: cqMaxRetries,
+                        action: 'DTMF_ESCAPE',
+                        dtmfMessage: cqDtmfMessage.substring(0, 100)
+                    });
+                    
+                    logger.warn('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: DTMF escape triggered', {
+                        callSid,
+                        troubleCount: callState._connectionTroubleCount,
+                        maxRetries: cqMaxRetries
+                    });
+                    
+                    // Return DTMF escape response
+                    // Note: The actual DTMF handling (Gather with numDigits) happens in v2twilio.js
+                    return {
+                        response: cqDtmfMessage,
+                        state: callState,
+                        lane: 'DISCOVERY',
+                        signals: { escalate: false, bookingComplete: false, dtmfEscape: true },
+                        action: 'DTMF_ESCAPE',
+                        matchSource: 'CONNECTION_QUALITY_GATE',
+                        turnEventBuffer
+                    };
+                } else {
+                    // Re-greet - still have retries left
+                    bufferEvent('CONNECTION_QUALITY_GATE_REGREET', {
+                        troubleCount: callState._connectionTroubleCount,
+                        maxRetries: cqMaxRetries,
+                        troubleReason: troubleReason,
+                        action: 'REGREET',
+                        clarificationPrompt: cqClarificationPrompt.substring(0, 100)
+                    });
+                    
+                    logger.info('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: re-greeting', {
+                        callSid,
+                        troubleCount: callState._connectionTroubleCount,
+                        troubleReason
+                    });
+                    
+                    // Return clarification prompt
+                    return {
+                        response: cqClarificationPrompt,
+                        state: callState,
+                        lane: 'DISCOVERY',
+                        signals: { escalate: false, bookingComplete: false },
+                        action: 'CONTINUE',
+                        matchSource: 'CONNECTION_QUALITY_GATE',
+                        turnEventBuffer
+                    };
+                }
+            }
+            
+            // Reset trouble count if this turn was clean
+            if (cqEnabled && isEarlyTurn && !connectionTroubleDetected && callState._connectionTroubleCount > 0) {
+                logger.info('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: trouble count reset (clean turn)', {
+                    callSid,
+                    previousTroubleCount: callState._connectionTroubleCount
+                });
+                callState._connectionTroubleCount = 0;
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════════
             // S2: INPUT TEXT TRUTH
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'S2_INPUT_TEXT_TRUTH';
@@ -353,6 +307,90 @@ class FrontDeskCoreRuntime {
                 inputTextLength: inputText.length,
                 inputTextPreview: inputText.substring(0, 120)
             });
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // S2.5: ESCALATION DETECTION (V111 WIRING) - HIGHEST PRIORITY
+            // ═══════════════════════════════════════════════════════════════════════════
+            // WIRED FROM: frontDeskBehavior.escalation.triggerPhrases
+            //
+            // PURPOSE: Detect when caller wants human assistance ("manager", "supervisor",
+            // "real person", "human", etc.) and escalate BEFORE any other processing.
+            //
+            // PRIORITY: Escalation trumps EVERYTHING - greeting, discovery, booking.
+            // If someone says "I want to speak to a manager", we don't ask their name.
+            //
+            // CONFIG PATHS:
+            // - frontDeskBehavior.escalation.enabled
+            // - frontDeskBehavior.escalation.triggerPhrases[]
+            // - frontDeskBehavior.escalation.escalationMessage
+            // - frontDeskBehavior.escalation.transferNumber
+            // ═══════════════════════════════════════════════════════════════════════════
+            currentSection = 'S2_5_ESCALATION_DETECTION';
+            const escalationConfig = company?.aiAgentSettings?.frontDeskBehavior?.escalation || {};
+            const escalationEnabled = escalationConfig.enabled !== false; // Default: enabled
+            const escalationTriggers = Array.isArray(escalationConfig.triggerPhrases) && escalationConfig.triggerPhrases.length > 0
+                ? escalationConfig.triggerPhrases
+                : ['manager', 'supervisor', 'real person', 'human', 'someone else', 'speak to a person', 'talk to someone'];
+            const escalationMessage = escalationConfig.escalationMessage || 
+                "I understand you'd like to speak with someone. Let me transfer you right away.";
+            const transferNumber = escalationConfig.transferNumber || null;
+            
+            const inputTextLowerEsc = inputText.toLowerCase().trim();
+            let escalationTriggered = false;
+            let matchedEscalationTrigger = null;
+            
+            if (escalationEnabled && inputTextLowerEsc) {
+                for (const trigger of escalationTriggers) {
+                    const triggerLower = trigger.toLowerCase().trim();
+                    if (inputTextLowerEsc.includes(triggerLower)) {
+                        escalationTriggered = true;
+                        matchedEscalationTrigger = trigger;
+                        break;
+                    }
+                }
+            }
+            
+            // EMIT ESCALATION DETECTION EVENT (always, for raw event visibility)
+            bufferEvent('SECTION_S2_5_ESCALATION_DETECTION', {
+                enabled: escalationEnabled,
+                inputTextPreview: inputText.substring(0, 60),
+                triggered: escalationTriggered,
+                matchedTrigger: matchedEscalationTrigger,
+                configuredTriggerCount: escalationTriggers.length,
+                hasTransferNumber: !!transferNumber,
+                configSource: 'frontDeskBehavior.escalation'
+            });
+            
+            // If escalation triggered, return immediately
+            if (escalationTriggered) {
+                bufferEvent('ESCALATION_TRIGGERED', {
+                    matchedTrigger: matchedEscalationTrigger,
+                    escalationMessage: escalationMessage.substring(0, 80),
+                    transferNumber: transferNumber ? '***' : null, // Don't log full number
+                    action: transferNumber ? 'TRANSFER' : 'ESCALATE',
+                    sectionTrail: tracer.getTrailString()
+                });
+                
+                logger.warn('[FRONT_DESK_CORE_RUNTIME] ESCALATION TRIGGERED', {
+                    callSid,
+                    matchedTrigger: matchedEscalationTrigger,
+                    hasTransferNumber: !!transferNumber
+                });
+                
+                return {
+                    response: escalationMessage,
+                    state: callState,
+                    lane: 'ESCALATION',
+                    signals: { 
+                        escalate: true, 
+                        bookingComplete: false,
+                        transferNumber: transferNumber || null
+                    },
+                    action: 'ESCALATE',
+                    matchSource: 'ESCALATION_DETECTOR',
+                    turnEventBuffer
+                };
+            }
             
             // ═══════════════════════════════════════════════════════════════════════════
             // GREETING INTERCEPT - CHECK BEFORE SLOT EXTRACTION
@@ -560,40 +598,147 @@ class FrontDeskCoreRuntime {
             });
 
             // ═══════════════════════════════════════════════════════════════════════════
-            // S4/S6: DISCOVERY → CONSENT → BOOKING
+            // S4/S5/S6: DISCOVERY → CONSENT → BOOKING (V111 ENHANCED)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // WIRED FROM: frontDeskBehavior.detectionTriggers, frontDeskBehavior.discoveryConsent
+            //
+            // FLOW:
+            // 1. If already in BOOKING lane → S6 Booking Flow
+            // 2. If consent pending → Evaluate consent response
+            // 3. NEW: Detect booking intent mid-discovery (directIntentPatterns, wantsBooking)
+            // 4. Run Discovery Flow
+            // 5. After discovery complete → Ask consent (if not bypassed)
             // ═══════════════════════════════════════════════════════════════════════════
             let ownerResult;
             
             if (state.lane === 'BOOKING') {
+                // Already in booking lane
                 currentSection = 'S6_BOOKING_FLOW';
                 tracer.enter(SECTIONS.S6_BOOKING_FLOW);
                 ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
             } else {
+                // DISCOVERY lane - check consent state and intent
                 currentSection = 'S5_CONSENT_GATE_EVAL';
-                const consentEval = ConsentGate.evaluate({ company, userInput, state });
+                const consentEval = ConsentGate.evaluate({ company, userInput, state, callSid });
+                
+                // Merge consent eval events into our buffer
+                if (consentEval.turnEventBuffer) {
+                    turnEventBuffer.push(...consentEval.turnEventBuffer);
+                }
                 
                 if (consentEval.granted) {
+                    // Consent granted - move to booking
                     currentSection = 'S5_CONSENT_GRANTED';
                     tracer.enter(SECTIONS.S5_CONSENT_GATE, { granted: '1' });
                     state.lane = 'BOOKING';
                     state.consent.pending = false;
                     state.consent.askedExplicitly = false;
+                    
+                    bufferEvent('SECTION_S5_CONSENT_GRANTED', {
+                        previousLane: 'DISCOVERY',
+                        newLane: 'BOOKING',
+                        action: 'TRANSITION_TO_BOOKING'
+                    });
+                    
                     currentSection = 'S6_BOOKING_FLOW';
                     tracer.enter(SECTIONS.S6_BOOKING_FLOW);
                     ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
-                } else if (consentEval.pending) {
+                } else if (consentEval.pending && state?.consent?.askedExplicitly) {
+                    // Consent was asked but user response unclear - re-ask
                     currentSection = 'S5_CONSENT_PENDING';
                     tracer.enter(SECTIONS.S5_CONSENT_GATE, { pending: '1' });
-                    ownerResult = ConsentGate.ask({ company, state });
+                    
+                    const askResult = ConsentGate.ask({ company, state, callSid });
+                    if (askResult.turnEventBuffer) {
+                        turnEventBuffer.push(...askResult.turnEventBuffer);
+                    }
+                    ownerResult = askResult;
                 } else {
-                    currentSection = 'S4_DISCOVERY_STEP_ENGINE';
-                    tracer.enter(SECTIONS.S4_DISCOVERY_ENGINE);
-                    ownerResult = DiscoveryFlowRunner.run({ company, callSid, userInput, state });
-                    const nowComplete = DiscoveryFlowRunner.isComplete(company, ownerResult.state?.plainSlots || {});
-                    if (nowComplete && ownerResult.state?.consent?.pending !== true) {
-                        currentSection = 'S5_CONSENT_AFTER_DISCOVERY';
-                        tracer.enter(SECTIONS.S5_CONSENT_GATE, { askAfterDiscovery: '1' });
-                        ownerResult = ConsentGate.ask({ company, state: ownerResult.state });
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    // V111: DETECT BOOKING INTENT MID-DISCOVERY
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    // Check if user is expressing booking intent ("I want to schedule service")
+                    // This allows us to:
+                    // 1. Bypass consent if intent is strong (directIntentPatterns)
+                    // 2. Note the intent for later (wantsBooking phrases)
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    currentSection = 'S5_INTENT_DETECTION';
+                    const intentResult = ConsentGate.detectBookingIntent({ company, userInput, state, callSid });
+                    
+                    // Merge intent detection events into our buffer
+                    if (intentResult.turnEventBuffer) {
+                        turnEventBuffer.push(...intentResult.turnEventBuffer);
+                    }
+                    
+                    // Check if we should bypass consent due to direct intent
+                    if (intentResult.hasBookingIntent && intentResult.bypassConsent) {
+                        // Strong intent detected - bypass consent, go straight to booking
+                        currentSection = 'S5_DIRECT_INTENT_BYPASS';
+                        tracer.enter(SECTIONS.S5_CONSENT_GATE, { directIntentBypass: '1' });
+                        
+                        state.lane = 'BOOKING';
+                        state.consent = { pending: false, askedExplicitly: false, bypassedByDirectIntent: true };
+                        
+                        bufferEvent('SECTION_S5_DIRECT_INTENT_BYPASS', {
+                            intentType: intentResult.intentType,
+                            matchedPattern: intentResult.matchedPattern,
+                            action: 'BYPASS_CONSENT_STRAIGHT_TO_BOOKING'
+                        });
+                        
+                        logger.info('[FRONT_DESK_CORE_RUNTIME] Direct intent bypass - skipping consent', {
+                            callSid,
+                            matchedPattern: intentResult.matchedPattern
+                        });
+                        
+                        currentSection = 'S6_BOOKING_FLOW';
+                        tracer.enter(SECTIONS.S6_BOOKING_FLOW);
+                        ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
+                    } else {
+                        // Normal discovery flow
+                        currentSection = 'S4_DISCOVERY_STEP_ENGINE';
+                        tracer.enter(SECTIONS.S4_DISCOVERY_ENGINE);
+                        ownerResult = DiscoveryFlowRunner.run({ company, callSid, userInput, state });
+                        
+                        // Note: If user expressed soft booking intent, mark it in state for later
+                        if (intentResult.hasBookingIntent && !intentResult.bypassConsent) {
+                            ownerResult.state = ownerResult.state || state;
+                            ownerResult.state._bookingIntentDetected = true;
+                            ownerResult.state._bookingIntentType = intentResult.intentType;
+                        }
+                        
+                        // Check if discovery is now complete
+                        const nowComplete = DiscoveryFlowRunner.isComplete(company, ownerResult.state?.plainSlots || {});
+                        const consentRequired = ConsentGate.isConsentRequired(company);
+                        
+                        if (nowComplete && ownerResult.state?.consent?.pending !== true) {
+                            if (consentRequired && !intentResult.bypassConsent) {
+                                // Discovery complete, need to ask consent
+                                currentSection = 'S5_CONSENT_AFTER_DISCOVERY';
+                                tracer.enter(SECTIONS.S5_CONSENT_GATE, { askAfterDiscovery: '1' });
+                                
+                                const askResult = ConsentGate.ask({ company, state: ownerResult.state, callSid });
+                                if (askResult.turnEventBuffer) {
+                                    turnEventBuffer.push(...askResult.turnEventBuffer);
+                                }
+                                ownerResult = askResult;
+                            } else if (!consentRequired) {
+                                // Consent not required - go straight to booking
+                                currentSection = 'S5_CONSENT_NOT_REQUIRED';
+                                tracer.enter(SECTIONS.S5_CONSENT_GATE, { consentNotRequired: '1' });
+                                
+                                state.lane = 'BOOKING';
+                                state.consent = { pending: false, askedExplicitly: false, skipped: true };
+                                
+                                bufferEvent('SECTION_S5_CONSENT_SKIPPED', {
+                                    reason: 'CONSENT_NOT_REQUIRED_BY_CONFIG',
+                                    configSource: 'frontDeskBehavior.discoveryConsent.enabled'
+                                });
+                                
+                                currentSection = 'S6_BOOKING_FLOW';
+                                tracer.enter(SECTIONS.S6_BOOKING_FLOW);
+                                ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
+                            }
+                        }
                     }
                 }
             }
@@ -603,14 +748,67 @@ class FrontDeskCoreRuntime {
             const lane = persistedState.sessionMode === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
 
             // ═══════════════════════════════════════════════════════════════════════════
+            // OPENER ENGINE (V111 WIRING)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // WIRED FROM: frontDeskBehavior.openers
+            //
+            // PURPOSE: Prepend micro-acknowledgment ("Alright.", "I hear you.") to
+            // eliminate dead air. Runs AFTER we have a response, BEFORE returning.
+            //
+            // CONFIG PATHS:
+            // - frontDeskBehavior.openers.enabled
+            // - frontDeskBehavior.openers.mode ('reflect_first', 'micro_ack_only', 'off')
+            // - frontDeskBehavior.openers.general[] (general acks)
+            // - frontDeskBehavior.openers.frustration[] (empathy acks)
+            // - frontDeskBehavior.openers.urgency[] (urgency acks)
+            // - frontDeskBehavior.openers.frustrationKeywords[] (trigger frustration pool)
+            // - frontDeskBehavior.openers.urgencyKeywords[] (trigger urgency pool)
+            // - frontDeskBehavior.openers.reflectionTemplate (for reflect_first mode)
+            // ═══════════════════════════════════════════════════════════════════════════
+            currentSection = 'OPENER_ENGINE';
+            const openerConfig = company?.aiAgentSettings?.frontDeskBehavior?.openers || {};
+            const reasonShort = persistedState?.plainSlots?.call_reason_detail || 
+                                persistedState?.slots?.call_reason_detail || null;
+            
+            const openerResult = selectOpener({
+                userText: inputText,
+                reasonShort,
+                openerConfig,
+                turnCount: turn,
+                callSid
+            });
+            
+            // Apply opener to response
+            let finalResponse = ownerResult.response;
+            if (openerResult.opener) {
+                finalResponse = prependOpener(openerResult.opener, ownerResult.response);
+            }
+            
+            // EMIT OPENER ENGINE EVENT (always, for raw event visibility)
+            bufferEvent('SECTION_OPENER_ENGINE', {
+                enabled: openerConfig.enabled !== false,
+                mode: openerConfig.mode || 'reflect_first',
+                turnCount: turn,
+                openerSelected: openerResult.opener || null,
+                tone: openerResult.tone,
+                reasonShort: reasonShort ? reasonShort.substring(0, 40) : null,
+                prependApplied: openerResult.opener ? true : false,
+                originalResponsePreview: (ownerResult.response || '').substring(0, 60),
+                finalResponsePreview: (finalResponse || '').substring(0, 80),
+                debug: openerResult.debug,
+                configSource: 'frontDeskBehavior.openers'
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════
             // CORE_RUNTIME_OWNER_RESULT - MANDATORY CRITICAL EVENT
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'EMIT_RESULT';
             bufferEvent('CORE_RUNTIME_OWNER_RESULT', {
                 lane,
                 matchSource: ownerResult.matchSource,
-                responsePreview: (ownerResult.response || '').substring(0, 120),
+                responsePreview: (finalResponse || '').substring(0, 120),
                 bookingComplete: ownerResult.complete === true,
+                openerApplied: openerResult.opener ? true : false,
                 sectionTrail: tracer.getTrailString()
             });
 
@@ -618,11 +816,12 @@ class FrontDeskCoreRuntime {
                 callSid,
                 lane,
                 matchSource: ownerResult.matchSource,
-                bookingComplete: ownerResult.complete === true
+                bookingComplete: ownerResult.complete === true,
+                openerApplied: !!openerResult.opener
             });
 
             return {
-                response: ownerResult.response,
+                response: finalResponse,
                 state: persistedState,
                 lane,
                 signals: {

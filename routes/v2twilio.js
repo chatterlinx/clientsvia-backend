@@ -2597,31 +2597,151 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
     }
 
-    // Load call state
+    // ═══════════════════════════════════════════════════════════════════════════
+    // S0: STATE INTEGRITY - LOAD PHASE
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CRITICAL: This section exposes state drift. If turnCount resets mid-call,
+    // SECTION_S0_STATE_LOAD will show found=false or wrong turnCount.
+    // The state key is ALWAYS: `call:${callSid}` - never phone, never sequence.
+    // ═══════════════════════════════════════════════════════════════════════════
     let callState = null;
     const redisKey = callSid ? `call:${callSid}` : null;
+    let stateSource = 'none';
+    let stateLoadError = null;
+    let previousStateKey = null;
+    
     if (redis && redisKey) {
       try {
         const raw = await redis.get(redisKey);
         if (raw) {
           callState = JSON.parse(raw);
+          stateSource = 'redis';
+          // Track previous state key for drift detection
+          previousStateKey = callState._stateKey || null;
         }
       } catch (err) {
+        stateLoadError = err.message;
         logger.warn('[V2TWILIO] Redis read failed', { callSid, error: err.message });
       }
     }
     if (!callState) {
       callState = req.session?.callState || null;
+      if (callState) stateSource = 'session';
     }
+    
+    // Capture loaded state values BEFORE any modifications
+    const loadedTurnCount = callState?.turnCount || 0;
+    const loadedLane = callState?.sessionMode || 'DISCOVERY';
+    const loadedStepId = callState?.discoveryCurrentStepId || callState?.currentStepId || null;
+    const loadedCallReasonCaptured = !!callState?.slots?.call_reason_detail;
+    const loadedNamePresent = !!callState?.slots?.name;
+    const loadedAddressPresent = !!callState?.slots?.address;
+    const stateFound = !!callState;
+    
+    // EMIT S0 STATE LOAD EVENT (CRITICAL - exposes state drift)
+    if (BlackBoxLogger && callSid) {
+      await BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'SECTION_S0_STATE_LOAD',
+        turn: loadedTurnCount,
+        data: {
+          stateKey: redisKey,
+          found: stateFound,
+          stateSource,
+          stateLoadError,
+          loaded: {
+            turnCount: loadedTurnCount,
+            lane: loadedLane,
+            stepId: loadedStepId,
+            callReasonCaptured: loadedCallReasonCaptured,
+            namePresent: loadedNamePresent,
+            addressPresent: loadedAddressPresent,
+            lastUpdatedTs: callState?._lastUpdatedTs || null
+          }
+        }
+      }).catch(err => {
+        logger.error('[V2TWILIO] S0_STATE_LOAD log failed', { error: err.message });
+      });
+    }
+    
+    // STATE KEY DRIFT DETECTION
+    // If we had a previous state key that differs from current, something is WRONG
+    if (previousStateKey && previousStateKey !== redisKey) {
+      logger.error('[V2TWILIO] STATE KEY DRIFT DETECTED', {
+        callSid,
+        previousKey: previousStateKey,
+        currentKey: redisKey
+      });
+      
+      if (BlackBoxLogger && callSid) {
+        await BlackBoxLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'SECTION_S0_STATE_KEY_CHANGED',
+          turn: loadedTurnCount,
+          data: {
+            prevKey: previousStateKey,
+            newKey: redisKey,
+            severity: 'CRITICAL'
+          }
+        }).catch(() => {});
+      }
+    }
+    
+    // MISSING CALLSID DETECTION - This would cause state chaos
+    if (!callSid) {
+      logger.error('[V2TWILIO] MISSING CALLSID - state will not persist correctly');
+      
+      if (BlackBoxLogger) {
+        await BlackBoxLogger.logEvent({
+          callId: 'MISSING',
+          companyId: companyID,
+          type: 'SECTION_S0_MISSING_CALLSID',
+          turn: 0,
+          data: {
+            fromNumber,
+            severity: 'CRITICAL',
+            requestBody: Object.keys(req.body || {})
+          }
+        }).catch(() => {});
+      }
+    }
+    
     if (!callState) {
       callState = initializeCall(callSid, fromNumber, companyID);
+      stateSource = 'initialized';
     }
 
+    // Store state key in state for drift detection on next turn
+    callState._stateKey = redisKey;
     callState.callSid = callSid;
     callState.companyId = companyID;
     callState.slots = callState.slots || {};
-    callState.turnCount = Math.max(callState.turnCount || 0, turnCountFromBody) + 1;
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // TURN COUNT FIX: Must come from persisted state ONLY
+    // ═══════════════════════════════════════════════════════════════════════════
+    // OLD (BROKEN): Math.max(callState.turnCount || 0, turnCountFromBody) + 1
+    // This allowed turnCountFromBody (from request) to override persisted state,
+    // causing resets when request param was 0.
+    // 
+    // NEW (FIXED): turnCount comes ONLY from persisted state, then incremented.
+    // turnCountFromBody is IGNORED for turn computation.
+    // ═══════════════════════════════════════════════════════════════════════════
+    const previousTurnCount = callState.turnCount || 0;
+    callState.turnCount = previousTurnCount + 1;
     turnNumber = callState.turnCount;
+    
+    // Log if turnCountFromBody was different (diagnostic only, not used for computation)
+    if (turnCountFromBody > 0 && turnCountFromBody !== previousTurnCount) {
+      logger.debug('[V2TWILIO] turnCountFromBody differs from persisted', {
+        callSid: callSid?.slice(-8),
+        turnCountFromBody,
+        persistedTurnCount: previousTurnCount,
+        newTurnCount: turnNumber
+      });
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CORE RUNTIME - Process turn and collect events in buffer
@@ -2651,16 +2771,51 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
 
     const persistedState = runtimeResult.state || StateStore.persist(callState, StateStore.load(callState));
+    
+    // Add timestamp for state freshness tracking
+    persistedState._lastUpdatedTs = new Date().toISOString();
+    persistedState._stateKey = redisKey; // Preserve for drift detection
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // S0: STATE INTEGRITY - SAVE PHASE
+    // ═══════════════════════════════════════════════════════════════════════════
+    let stateSaveError = null;
+    
     // Persist state to Redis
     if (redis && redisKey) {
       try {
         await redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 });
       } catch (err) {
+        stateSaveError = err.message;
         logger.warn('[V2TWILIO] Redis write failed', { callSid, error: err.message });
       }
     }
     req.session.callState = persistedState;
+    
+    // EMIT S0 STATE SAVE EVENT (CRITICAL - confirms state persistence)
+    if (BlackBoxLogger && callSid) {
+      await BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'SECTION_S0_STATE_SAVE',
+        turn: turnNumber,
+        data: {
+          stateKey: redisKey,
+          stateSaveError,
+          saved: {
+            turnCount: persistedState.turnCount,
+            lane: persistedState.sessionMode || 'DISCOVERY',
+            stepId: persistedState.discoveryCurrentStepId || persistedState.currentStepId || null,
+            callReasonCaptured: !!persistedState.slots?.call_reason_detail,
+            namePresent: !!persistedState.slots?.name,
+            addressPresent: !!persistedState.slots?.address,
+            lastUpdatedTs: persistedState._lastUpdatedTs
+          }
+        }
+      }).catch(err => {
+        logger.error('[V2TWILIO] S0_STATE_SAVE log failed', { error: err.message });
+      });
+    }
 
     // ═══════════════════════════════════════════════════════════════════════════
     // VOICE GENERATION: ElevenLabs TTS or Twilio <Say>

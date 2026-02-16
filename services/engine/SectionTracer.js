@@ -47,15 +47,25 @@ try {
  * Once a section is GREEN + LOCKED, do NOT modify its code.
  * 
  * Status:
+ * - S0: NEW (state integrity - load/save verification)
  * - S1: GREEN (proven in raw events, lane/sessionMode present)
  * - S2: GREEN (proven in raw events, inputTextSource/length/preview present)
  * - S3: GREEN (proven in raw events, name extraction working)
  * - S4: GREEN (proven in raw events, DISCOVERY_FLOW_RUNNER owning turns)
- * - S5: RED (call_reason_detail not being captured)
+ * - S5: GREEN (call_reason_detail captured, proven in raw events 2026-02-16)
  * - S6: YELLOW (not yet tested)
  * - S7: GREEN (proven in raw events, elevenlabs + hasPlay=true)
+ * 
+ * STATE CONTINUITY FIX (Phase B):
+ * S0 ensures state key never drifts. Every turn emits:
+ * - SECTION_S0_STATE_LOAD: What we loaded from Redis
+ * - SECTION_S0_STATE_SAVE: What we're saving back
+ * - SECTION_S0_STATE_KEY_CHANGED: RED ALERT if key changed mid-call
  */
 const SECTIONS = {
+    // S0 — State Integrity (pre-step: state load/save verification)
+    S0_STATE_INTEGRITY: 'S0_STATE_INTEGRITY',
+    
     // S1 — Runtime Ownership (lane/mode owner)
     S1_RUNTIME_OWNER: 'S1_RUNTIME_OWNER',
     
@@ -68,7 +78,10 @@ const SECTIONS = {
     // S4 — Discovery Engine (step progression)
     S4_DISCOVERY_ENGINE: 'S4_DISCOVERY_ENGINE',
     
-    // S5 — Consent Gate (booking consent detection & call_reason_detail)
+    // S5 — Call Reason Capture (call_reason_detail extraction & acknowledgment)
+    S5_CALL_REASON: 'S5_CALL_REASON',
+    
+    // S5b — Consent Gate (booking consent detection) - sub-section of transition
     S5_CONSENT_GATE: 'S5_CONSENT_GATE',
     
     // S6 — Booking Flow (booking step progression)
@@ -77,6 +90,36 @@ const SECTIONS = {
     // S7 — Voice Provider (ElevenLabs vs Twilio Say)
     S7_VOICE_PROVIDER: 'S7_VOICE_PROVIDER'
 };
+
+/**
+ * Compute the canonical state key for a call.
+ * RULE: State MUST be keyed by callSid only. Never by phone, sequence, etc.
+ * 
+ * @param {string} companyId - Company ID
+ * @param {string} callSid - Twilio CallSid
+ * @returns {string} The Redis key
+ */
+function computeStateKey(companyId, callSid) {
+    if (!callSid) {
+        return null;
+    }
+    // v22 prefix for versioning - if we ever need to migrate, bump this
+    return `call:${callSid}`;
+}
+
+/**
+ * Validate state key hasn't drifted.
+ * Returns { valid: true } or { valid: false, reason: string }
+ */
+function validateStateKey(expectedKey, actualKey) {
+    if (!expectedKey || !actualKey) {
+        return { valid: false, reason: 'MISSING_KEY' };
+    }
+    if (expectedKey !== actualKey) {
+        return { valid: false, reason: 'KEY_DRIFT', expectedKey, actualKey };
+    }
+    return { valid: true };
+}
 
 class SectionTracer {
     constructor(callState, callId, companyId) {
@@ -162,5 +205,7 @@ class SectionTracer {
 
 module.exports = {
     SectionTracer,
-    SECTIONS
+    SECTIONS,
+    computeStateKey,
+    validateStateKey
 };
