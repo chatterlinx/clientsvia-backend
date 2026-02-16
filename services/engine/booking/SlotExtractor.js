@@ -1272,13 +1272,24 @@ class SlotExtractor {
         // back to more ambiguous patterns only if no explicit match found.
         // ═══════════════════════════════════════════════════════════════════════════
         
-        // PRIORITY 1: "My name is X" - Most explicit, search ANYWHERE in text
+        // PRIORITY 1: "My name is X" / "First name is X" - Most explicit, search ANYWHERE in text
         // Uses matchAll to find ALL occurrences and pick the best one
+        // ═══════════════════════════════════════════════════════════════════════════
+        // FEB 2026 FIX: Added "first name is X" patterns
+        // User said "first name is Mark" and it wasn't being captured.
+        // Also handles: "my first name is X", "the first name is X"
+        // ═══════════════════════════════════════════════════════════════════════════
         const myNameIsPatterns = [
             // "my name is mark gonzales" OR "my name is mark, gonzales" 
             /my\s+name\s+is\s+([a-zA-Z]+)[,\s]+([a-zA-Z]+)/gi,
             // Single name: "my name is mark"
-            /my\s+name\s+is\s+([a-zA-Z]+)(?:\s|$|[.,!?])/gi
+            /my\s+name\s+is\s+([a-zA-Z]+)(?:\s|$|[.,!?])/gi,
+            // FEB 2026: "first name is mark" - explicit first name statement
+            /(?:my\s+)?first\s+name\s+is\s+([a-zA-Z]+)(?:\s|$|[.,!?])/gi,
+            // FEB 2026: "the first name is mark" 
+            /the\s+first\s+name\s+is\s+([a-zA-Z]+)(?:\s|$|[.,!?])/gi,
+            // FEB 2026: Handles "it's ... first name is mark" (user was frustrated)
+            /first\s+name\s+is\s+([a-zA-Z]+)(?:\s|$|[.,!?])/gi
         ];
         
         for (const pattern of myNameIsPatterns) {

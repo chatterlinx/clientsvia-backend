@@ -68,11 +68,11 @@ const SECTIONS = {
     // S4 — Discovery Engine (step progression)
     S4_DISCOVERY_ENGINE: 'S4_DISCOVERY_ENGINE',
     
-    // S5 — Call Reason Capture (call_reason_detail)
-    S5_CALL_REASON_CAPTURE: 'S5_CALL_REASON_CAPTURE',
+    // S5 — Consent Gate (booking consent detection & call_reason_detail)
+    S5_CONSENT_GATE: 'S5_CONSENT_GATE',
     
-    // S6 — Consent & Lane Transition (DISCOVERY → BOOKING)
-    S6_CONSENT_AND_TRANSITION: 'S6_CONSENT_AND_TRANSITION',
+    // S6 — Booking Flow (booking step progression)
+    S6_BOOKING_FLOW: 'S6_BOOKING_FLOW',
     
     // S7 — Voice Provider (ElevenLabs vs Twilio Say)
     S7_VOICE_PROVIDER: 'S7_VOICE_PROVIDER'
