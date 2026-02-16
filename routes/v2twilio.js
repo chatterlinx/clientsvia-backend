@@ -2533,13 +2533,26 @@ router.post('/voice/:companyID', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
 // V2 AI Agent response handler - PLUMBING ONLY CORE PATH
+// ═══════════════════════════════════════════════════════════════════════════
+// TRACE CONTINUITY GUARANTEE:
+// This route MUST always emit TWIML_SENT at the end, success or failure.
+// Critical events from turnEventBuffer are AWAITED before sending response.
+// No silent truncation - if events are missing, we know something crashed.
+// ═══════════════════════════════════════════════════════════════════════════
 router.post('/v2-agent-respond/:companyID', async (req, res) => {
   const companyID = req.params.companyID;
   const callSid = req.body.CallSid;
   const fromNumber = normalizePhoneNumber(req.body.From || req.body.Caller || '');
   let speechResult = req.body.SpeechResult || '';
   const turnCountFromBody = parseInt(req.body.turnCount || 0, 10) || 0;
+  
+  // Track for guaranteed TWIML_SENT logging
+  let turnNumber = 0;
+  let voiceProviderUsed = 'twilio_say';
+  let twimlString = '';
+  let routeError = null;
 
   try {
     const company = await Company.findById(companyID).lean();
@@ -2554,18 +2567,18 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         speechTimeout: '3',
         speechModel: 'phone_call'
       });
+      twimlString = twiml.toString();
       res.type('text/xml');
-      return res.send(twiml.toString());
+      return res.send(twimlString);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // FIX 1: Use cached partial transcript when Speech Result is missing
+    // INPUT TEXT SOURCE: SpeechResult or Cached Partial
     // ═══════════════════════════════════════════════════════════════════════════
     let inputTextSource = 'speechResult';
     const redis = await getRedis();
     
     if (!speechResult || speechResult.trim().length === 0) {
-      // SpeechResult is empty - fallback to cached partial transcript
       if (redis && callSid) {
         const cacheKey = `partial:${callSid}`;
         try {
@@ -2573,7 +2586,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           if (cachedTranscript) {
             speechResult = cachedTranscript;
             inputTextSource = 'partialCache';
-            logger.info('[V2 RESPOND] Using cached partial transcript (SpeechResult empty)', {
+            logger.info('[V2 RESPOND] Using cached partial transcript', {
               callSid: callSid?.slice(-8),
               textLength: speechResult.length
             });
@@ -2584,6 +2597,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       }
     }
 
+    // Load call state
     let callState = null;
     const redisKey = callSid ? `call:${callSid}` : null;
     if (redis && redisKey) {
@@ -2593,7 +2607,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           callState = JSON.parse(raw);
         }
       } catch (err) {
-        logger.warn('[V2TWILIO] Redis read failed; using session state', { callSid, error: err.message });
+        logger.warn('[V2TWILIO] Redis read failed', { callSid, error: err.message });
       }
     }
     if (!callState) {
@@ -2607,8 +2621,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     callState.companyId = companyID;
     callState.slots = callState.slots || {};
     callState.turnCount = Math.max(callState.turnCount || 0, turnCountFromBody) + 1;
+    turnNumber = callState.turnCount;
 
-    const loadedState = StateStore.load(callState);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CORE RUNTIME - Process turn and collect events in buffer
+    // ═══════════════════════════════════════════════════════════════════════════
     const runtimeResult = FrontDeskCoreRuntime.processTurn(
       company.aiAgentSettings || {},
       callState,
@@ -2618,12 +2635,24 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         callSid,
         companyId: companyID,
         callerPhone: fromNumber,
-        turnCount: callState.turnCount
+        turnCount: callState.turnCount,
+        inputTextSource  // Pass source to runtime for accurate logging
       }
     );
 
-    const persistedState = runtimeResult.state || StateStore.persist(callState, loadedState);
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CRITICAL: AWAIT FLUSH OF TURN EVENT BUFFER
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This is the KEY fix for trace continuity. Critical events are AWAITED.
+    // If this succeeds, we KNOW S1/S2/S3/OWNER_RESULT are persisted.
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (runtimeResult.turnEventBuffer && runtimeResult.turnEventBuffer.length > 0) {
+      await FrontDeskCoreRuntime.flushEventBuffer(runtimeResult.turnEventBuffer);
+    }
 
+    const persistedState = runtimeResult.state || StateStore.persist(callState, StateStore.load(callState));
+
+    // Persist state to Redis
     if (redis && redisKey) {
       try {
         await redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 });
@@ -2634,32 +2663,27 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     req.session.callState = persistedState;
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // FIX 2: Use ElevenLabs TTS instead of <Say>
+    // VOICE GENERATION: ElevenLabs TTS or Twilio <Say>
     // ═══════════════════════════════════════════════════════════════════════════
     const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
     const elevenLabsVoice = voiceSettings.voiceId;
     const responseText = runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?";
     
     let audioUrl = null;
-    let voiceProviderUsed = 'twilio_say';
     let ttsLatencyMs = null;
     
     if (elevenLabsVoice && responseText) {
-      // Generate ElevenLabs audio
       const ttsStartTime = Date.now();
       
       try {
-        // Log TTS started
+        // TTS started (fire-and-forget, not critical)
         if (BlackBoxLogger) {
           BlackBoxLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'TTS_STARTED',
-            turn: persistedState.turnCount || 0,
-            data: {
-              voiceId: elevenLabsVoice,
-              textLength: responseText.length
-            }
+            turn: turnNumber,
+            data: { voiceId: elevenLabsVoice, textLength: responseText.length }
           }).catch(() => {});
         }
         
@@ -2681,94 +2705,41 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         if (!fs.existsSync(audioDir)) {
           fs.mkdirSync(audioDir, { recursive: true });
         }
-        const filePath = path.join(audioDir, fileName);
-        fs.writeFileSync(filePath, buffer);
+        fs.writeFileSync(path.join(audioDir, fileName), buffer);
         
-        // Build audio URL
-        const baseUrl = `https://${req.get('host')}`;
-        audioUrl = `${baseUrl}/audio/${fileName}`;
+        audioUrl = `https://${req.get('host')}/audio/${fileName}`;
         voiceProviderUsed = 'elevenlabs';
         
-        logger.info('[V2 RESPOND] ElevenLabs TTS generated', {
-          callSid: callSid?.slice(-8),
-          voiceId: elevenLabsVoice,
-          latencyMs: ttsLatencyMs,
-          textLength: responseText.length
-        });
-        
-        // Log TTS completed
+        // TTS completed (fire-and-forget, not critical)
         if (BlackBoxLogger) {
           BlackBoxLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'TTS_COMPLETED',
-            turn: persistedState.turnCount || 0,
-            data: {
-              voiceId: elevenLabsVoice,
-              latencyMs: ttsLatencyMs
-            }
+            turn: turnNumber,
+            data: { voiceId: elevenLabsVoice, latencyMs: ttsLatencyMs }
           }).catch(() => {});
         }
       } catch (ttsError) {
-        logger.error('[V2 RESPOND] ElevenLabs TTS failed, falling back to <Say>', {
+        logger.error('[V2 RESPOND] ElevenLabs TTS failed', {
           callSid: callSid?.slice(-8),
-          error: ttsError.message,
-          stack: ttsError.stack
+          error: ttsError.message
         });
         
-        // Log TTS failure
         if (BlackBoxLogger) {
           BlackBoxLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'TTS_FAILED',
-            turn: persistedState.turnCount || 0,
-            data: {
-              error: ttsError.message,
-              fallback: 'twilio_say'
-            }
+            turn: turnNumber,
+            data: { error: ttsError.message, fallback: 'twilio_say' }
           }).catch(() => {});
         }
-        // Fall through to <Say> below
+        // Fall through to <Say>
       }
     }
 
-    if (BlackBoxLogger) {
-      BlackBoxLogger.logEvent({
-        callId: callSid,
-        companyId: companyID,
-        type: 'STATE_LOADED',
-        turn: persistedState.turnCount || 0,
-        data: {
-          source: 'V2TWILIO_PLUMBING_ROUTE',
-          routePath: '/v2-agent-respond/:companyID',
-          handler: 'FrontDeskCoreRuntime.processTurn',
-          runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
-          inputTextSource,
-          inputTextLength: speechResult?.length || 0,
-          sectionTrail: persistedState.sectionTrail?.join('>') || 'no-trail'
-        }
-      }).catch(() => {});
-
-      BlackBoxLogger.logEvent({
-        callId: callSid,
-        companyId: companyID,
-        type: 'TURN_COMPLETE',
-        turn: persistedState.turnCount || 0,
-        data: {
-          lane: runtimeResult.lane,
-          matchSource: runtimeResult.matchSource,
-          routePath: '/v2-agent-respond/:companyID',
-          runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
-          responsePreview: (runtimeResult.response || '').substring(0, 120),
-          slotCount: Object.keys(persistedState.slots || {}).length,
-          voiceProviderUsed,
-          inputTextSource,
-          sectionTrail: persistedState.sectionTrail?.join('>') || 'no-trail'
-        }
-      }).catch(() => {});
-    }
-
+    // Build TwiML response
     const twiml = new twilio.twiml.VoiceResponse();
     const gather = twiml.gather({
       input: 'speech',
@@ -2787,16 +2758,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       gather.say(escapeTwiML(responseText));
     }
     
+    twimlString = twiml.toString();
+
     // ═══════════════════════════════════════════════════════════════════════════
-    // S7: VOICE PROVIDER - Log TwiML with section trail
+    // TWIML_SENT - CRITICAL EVENT - MUST AWAIT
+    // ═══════════════════════════════════════════════════════════════════════════
+    // This is the FINAL gate. If this event exists, the turn completed.
+    // If this event is missing, something crashed before we got here.
     // ═══════════════════════════════════════════════════════════════════════════
     if (BlackBoxLogger) {
-      const twimlString = twiml.toString();
-      BlackBoxLogger.logEvent({
+      await BlackBoxLogger.logEvent({
         callId: callSid,
         companyId: companyID,
         type: 'TWIML_SENT',
-        turn: persistedState.turnCount || 0,
+        turn: turnNumber,
         data: {
           section: 'S7_VOICE_PROVIDER',
           route: '/v2-agent-respond',
@@ -2805,25 +2780,73 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           hasPlay: twimlString.includes('<Play'),
           hasSay: twimlString.includes('<Say'),
           voiceProviderUsed,
-          actionUrl: `/api/twilio/v2-agent-respond/${companyID}`,
-          twimlPreview: twimlString.substring(0, 500),
-          sectionTrail: persistedState.sectionTrail?.join('>') || 'no-trail'
+          responsePreview: responseText.substring(0, 80),
+          matchSource: runtimeResult.matchSource,
+          runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null
         }
-      }).catch(() => {});
+      }).catch(err => {
+        logger.error('[V2 RESPOND] TWIML_SENT log failed', { error: err.message });
+      });
     }
 
     res.type('text/xml');
-    return res.send(twiml.toString());
+    return res.send(twimlString);
+    
   } catch (error) {
-    logger.error('[V2TWILIO] plumbing route failed', {
+    routeError = error;
+    logger.error('[V2TWILIO] plumbing route CRASHED', {
       callSid,
       companyID,
-      error: error.message
+      error: error.message,
+      stack: error.stack?.substring(0, 500)
     });
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ROUTE_ERROR + FALLBACK TWIML_SENT - CRITICAL - MUST AWAIT
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (BlackBoxLogger && callSid) {
+      // Log the error
+      await BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'ROUTE_ERROR',
+        turn: turnNumber,
+        data: {
+          route: '/v2-agent-respond',
+          error: error.message,
+          stack: error.stack?.substring(0, 500)
+        }
+      }).catch(() => {});
+    }
+    
+    // Build fallback TwiML
     const twiml = new twilio.twiml.VoiceResponse();
     twiml.say("I'm connecting you to our team.");
+    twimlString = twiml.toString();
+    
+    // Log fallback TWIML_SENT
+    if (BlackBoxLogger && callSid) {
+      await BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'TWIML_SENT',
+        turn: turnNumber,
+        data: {
+          section: 'S7_VOICE_PROVIDER',
+          route: '/v2-agent-respond',
+          twimlLength: twimlString.length,
+          hasGather: false,
+          hasPlay: false,
+          hasSay: true,
+          voiceProviderUsed: 'twilio_say',
+          isFallback: true,
+          fallbackReason: error.message
+        }
+      }).catch(() => {});
+    }
+    
     res.type('text/xml');
-    return res.send(twiml.toString());
+    return res.send(twimlString);
   }
 });
 

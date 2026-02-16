@@ -23,20 +23,48 @@ try {
     BlackBoxLogger = null;
 }
 
-function emitRawEvent({ callSid, companyId, turn, type, data }) {
-    if (!BlackBoxLogger?.logEvent || !callSid) {
-        return;
-    }
-    BlackBoxLogger.logEvent({
+// ═══════════════════════════════════════════════════════════════════════════
+// CRITICAL EVENTS - Must be awaited, never fire-and-forget
+// ═══════════════════════════════════════════════════════════════════════════
+// These events form the "truth chain" - if ANY of these are missing from
+// raw-events, we know the turn didn't complete properly.
+// ═══════════════════════════════════════════════════════════════════════════
+const CRITICAL_EVENTS = new Set([
+    'SECTION_S1_RUNTIME_OWNER',
+    'INPUT_TEXT_SELECTED',
+    'SECTION_S3_SLOT_EXTRACTION',
+    'CORE_RUNTIME_TURN_START',
+    'CORE_RUNTIME_OWNER_RESULT',
+    'CORE_RUNTIME_ERROR',
+    'S3_EXTRACTION_ERROR',
+    'S3_MERGE_ERROR'
+]);
+
+/**
+ * Create an event object for the turn buffer.
+ * Events are NOT logged immediately - they're collected and flushed by the route handler.
+ */
+function createEvent({ callSid, companyId, turn, type, data }) {
+    return {
         callId: callSid,
         companyId,
         turn: turn || 0,
         type,
-        data
-    }).catch(() => {});
+        data,
+        isCritical: CRITICAL_EVENTS.has(type),
+        ts: new Date().toISOString()
+    };
 }
 
 class FrontDeskCoreRuntime {
+    /**
+     * Process a single turn of the conversation.
+     * 
+     * CRITICAL: This method returns a turnEventBuffer[] that MUST be flushed by the caller.
+     * The route handler is responsible for awaiting the flush of critical events.
+     * 
+     * @returns {Object} { response, state, lane, signals, action, matchSource, turnEventBuffer }
+     */
     static processTurn(effectiveConfig, callState, userInput, context = {}) {
         const company = context.company || {};
         const callSid = context.callSid || context.sessionId || null;
@@ -44,13 +72,20 @@ class FrontDeskCoreRuntime {
         const turn = callState?.turnCount || context.turnCount || 0;
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // MASTER TRY/CATCH - NO SILENT FAILURES
+        // TURN EVENT BUFFER - Collected here, flushed by route handler
         // ═══════════════════════════════════════════════════════════════════════════
-        // If ANYTHING crashes, we MUST emit CORE_RUNTIME_ERROR with:
-        // - section: which section was executing
-        // - sectionTrail: breadcrumb of what completed
-        // - error: message and stack
-        // This ensures we always know WHERE the failure happened.
+        // Events are NOT fire-and-forget. They're collected in this buffer.
+        // The route handler MUST await flush of critical events before sending TwiML.
+        // This guarantees trace continuity - no silent truncation.
+        // ═══════════════════════════════════════════════════════════════════════════
+        const turnEventBuffer = [];
+        
+        const bufferEvent = (type, data) => {
+            turnEventBuffer.push(createEvent({ callSid, companyId, turn, type, data }));
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // MASTER TRY/CATCH - NO SILENT FAILURES
         // ═══════════════════════════════════════════════════════════════════════════
         
         let state = null;
@@ -69,17 +104,10 @@ class FrontDeskCoreRuntime {
                 lane: state.lane || 'DISCOVERY'
             });
             
-            // Emit S1 as explicit event (not just embedded in trail)
-            emitRawEvent({
-                callSid,
-                companyId,
-                turn,
-                type: 'SECTION_S1_RUNTIME_OWNER',
-                data: {
-                    lane: state.lane || 'DISCOVERY',
-                    sessionMode: state.sessionMode || 'DISCOVERY',
-                    turnCount: turn
-                }
+            bufferEvent('SECTION_S1_RUNTIME_OWNER', {
+                lane: state.lane || 'DISCOVERY',
+                sessionMode: state.sessionMode || 'DISCOVERY',
+                turnCount: turn
             });
             
             // ═══════════════════════════════════════════════════════════════════════════
@@ -87,13 +115,13 @@ class FrontDeskCoreRuntime {
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'S2_INPUT_TEXT_TRUTH';
             const inputText = userInput || '';
-            const inputSource = 'speechResult'; // Will be enhanced later with partialCache fallback
+            const inputSource = context.inputTextSource || 'speechResult';
             tracer.enter(SECTIONS.S2_INPUT_TEXT_TRUTH, {
                 source: inputSource,
                 len: inputText.length
             });
             
-            tracer.emit('INPUT_TEXT_SELECTED', {
+            bufferEvent('INPUT_TEXT_SELECTED', {
                 inputTextSource: inputSource,
                 inputTextLength: inputText.length,
                 inputTextPreview: inputText.substring(0, 120)
@@ -104,7 +132,6 @@ class FrontDeskCoreRuntime {
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'S3_SLOT_EXTRACTION';
             
-            // extractAll() returns slot METADATA objects: { name: { value: 'Mark', confidence: 0.9, ... } }
             let extractedMeta = {};
             try {
                 extractedMeta = SlotExtractor.extractAll(inputText, {
@@ -125,18 +152,12 @@ class FrontDeskCoreRuntime {
                     error: extractError.message,
                     stack: extractError.stack?.substring(0, 500)
                 });
-                emitRawEvent({
-                    callSid,
-                    companyId,
-                    turn,
-                    type: 'S3_EXTRACTION_ERROR',
-                    data: {
-                        error: extractError.message,
-                        stack: extractError.stack?.substring(0, 500),
-                        inputTextPreview: inputText.substring(0, 80)
-                    }
+                bufferEvent('S3_EXTRACTION_ERROR', {
+                    error: extractError.message,
+                    stack: extractError.stack?.substring(0, 500),
+                    inputTextPreview: inputText.substring(0, 80)
                 });
-                extractedMeta = {}; // Continue with empty extraction
+                extractedMeta = {};
             }
             
             // Merge metadata using SlotExtractor's canonical merge rules
@@ -150,14 +171,8 @@ class FrontDeskCoreRuntime {
                     callSid,
                     error: mergeError.message
                 });
-                emitRawEvent({
-                    callSid,
-                    companyId,
-                    turn,
-                    type: 'S3_MERGE_ERROR',
-                    data: { error: mergeError.message }
-                });
-                mergedMeta = extractedMeta; // Fallback to just extracted
+                bufferEvent('S3_MERGE_ERROR', { error: mergeError.message });
+                mergedMeta = extractedMeta;
             }
             
             // Convert merged metadata to plain values for plainSlots
@@ -182,38 +197,25 @@ class FrontDeskCoreRuntime {
                 address: extractedMeta.address ? '1' : '0'
             });
             
-            // Emit S3 as explicit event with full details
-            emitRawEvent({
-                callSid,
-                companyId,
-                turn,
-                type: 'SECTION_S3_SLOT_EXTRACTION',
-                data: {
-                    slotCount,
-                    slotsPresent: {
-                        name: !!state.plainSlots.name,
-                        phone: !!state.plainSlots.phone,
-                        address: !!state.plainSlots.address
-                    },
-                    extractedThisTurn: extractedKeys,
-                    nameValuePreview: state.plainSlots.name ? String(state.plainSlots.name).substring(0, 20) : null,
-                    nameConfidence: extractedMeta.name?.confidence || null,
-                    namePatternSource: extractedMeta.name?.patternSource || null,
-                    sectionTrail: tracer.getTrailString()
-                }
+            bufferEvent('SECTION_S3_SLOT_EXTRACTION', {
+                slotCount,
+                slotsPresent: {
+                    name: !!state.plainSlots.name,
+                    phone: !!state.plainSlots.phone,
+                    address: !!state.plainSlots.address
+                },
+                extractedThisTurn: extractedKeys,
+                nameValuePreview: state.plainSlots.name ? String(state.plainSlots.name).substring(0, 20) : null,
+                nameConfidence: extractedMeta.name?.confidence || null,
+                namePatternSource: extractedMeta.name?.patternSource || null,
+                sectionTrail: tracer.getTrailString()
             });
 
-            emitRawEvent({
-                callSid,
-                companyId,
-                turn,
-                type: 'CORE_RUNTIME_TURN_START',
-                data: {
-                    lane: state.lane,
-                    consentPending: state.consent?.pending === true,
-                    slotCount,
-                    sectionTrail: tracer.getTrailString()
-                }
+            bufferEvent('CORE_RUNTIME_TURN_START', {
+                lane: state.lane,
+                consentPending: state.consent?.pending === true,
+                slotCount,
+                sectionTrail: tracer.getTrailString()
             });
 
             // ═══════════════════════════════════════════════════════════════════════════
@@ -260,21 +262,15 @@ class FrontDeskCoreRuntime {
             const lane = persistedState.sessionMode === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
 
             // ═══════════════════════════════════════════════════════════════════════════
-            // EMIT CORE_RUNTIME_OWNER_RESULT - MANDATORY
+            // CORE_RUNTIME_OWNER_RESULT - MANDATORY CRITICAL EVENT
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'EMIT_RESULT';
-            emitRawEvent({
-                callSid,
-                companyId,
-                turn,
-                type: 'CORE_RUNTIME_OWNER_RESULT',
-                data: {
-                    lane,
-                    matchSource: ownerResult.matchSource,
-                    responsePreview: (ownerResult.response || '').substring(0, 120),
-                    bookingComplete: ownerResult.complete === true,
-                    sectionTrail: tracer.getTrailString()
-                }
+            bufferEvent('CORE_RUNTIME_OWNER_RESULT', {
+                lane,
+                matchSource: ownerResult.matchSource,
+                responsePreview: (ownerResult.response || '').substring(0, 120),
+                bookingComplete: ownerResult.complete === true,
+                sectionTrail: tracer.getTrailString()
             });
 
             logger.info('[FRONT_DESK_CORE_RUNTIME] owner result', {
@@ -293,7 +289,8 @@ class FrontDeskCoreRuntime {
                     bookingComplete: ownerResult.complete === true
                 },
                 action: ownerResult.complete === true ? 'COMPLETE' : 'CONTINUE',
-                matchSource: ownerResult.matchSource
+                matchSource: ownerResult.matchSource,
+                turnEventBuffer  // MUST be flushed by route handler
             };
             
         } catch (error) {
@@ -309,30 +306,68 @@ class FrontDeskCoreRuntime {
                 stack: error.stack?.substring(0, 800)
             });
             
-            emitRawEvent({
-                callSid,
-                companyId,
-                turn,
-                type: 'CORE_RUNTIME_ERROR',
-                data: {
-                    section: currentSection,
-                    sectionTrail: tracer?.getTrailString() || 'no-tracer',
-                    error: error.message,
-                    stack: error.stack?.substring(0, 500)
-                }
+            bufferEvent('CORE_RUNTIME_ERROR', {
+                section: currentSection,
+                sectionTrail: tracer?.getTrailString() || 'no-tracer',
+                error: error.message,
+                stack: error.stack?.substring(0, 500)
             });
             
-            // Return graceful fallback - don't crash the whole call
+            // Return graceful fallback with buffer - don't crash the whole call
             return {
                 response: "I'm sorry, I didn't quite catch that. Could you repeat?",
                 state: state || callState,
                 lane: 'DISCOVERY',
                 signals: { escalate: false, bookingComplete: false },
                 action: 'CONTINUE',
-                matchSource: 'CORE_RUNTIME_ERROR_FALLBACK'
+                matchSource: 'CORE_RUNTIME_ERROR_FALLBACK',
+                turnEventBuffer  // MUST be flushed by route handler even on error
             };
+        }
+    }
+    
+    /**
+     * Flush turn event buffer to BlackBox logger.
+     * Awaits CRITICAL events, fire-and-forget for non-critical.
+     * 
+     * @param {Array} turnEventBuffer - Events to flush
+     * @returns {Promise<void>}
+     */
+    static async flushEventBuffer(turnEventBuffer) {
+        if (!BlackBoxLogger?.logEvent || !Array.isArray(turnEventBuffer)) {
+            return;
+        }
+        
+        const criticalPromises = [];
+        
+        for (const event of turnEventBuffer) {
+            const promise = BlackBoxLogger.logEvent({
+                callId: event.callId,
+                companyId: event.companyId,
+                turn: event.turn,
+                type: event.type,
+                data: event.data
+            });
+            
+            if (event.isCritical) {
+                // CRITICAL events MUST be awaited
+                criticalPromises.push(promise.catch(err => {
+                    logger.error('[FRONT_DESK_CORE_RUNTIME] Critical event flush failed', {
+                        type: event.type,
+                        error: err.message
+                    });
+                }));
+            } else {
+                // Non-critical events can be fire-and-forget
+                promise.catch(() => {});
+            }
+        }
+        
+        // Wait for all critical events to persist
+        if (criticalPromises.length > 0) {
+            await Promise.all(criticalPromises);
         }
     }
 }
 
-module.exports = { FrontDeskCoreRuntime };
+module.exports = { FrontDeskCoreRuntime, CRITICAL_EVENTS };
