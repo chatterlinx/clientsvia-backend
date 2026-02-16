@@ -1037,9 +1037,6 @@ class FrontDeskBehaviorManager {
                         </p>
                     </div>
                     <div style="display: flex; gap: 10px;">
-                        <button id="fdb-export-json-btn" style="padding: 8px 16px; background: #1f6feb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px;" title="Download complete Front Desk config as JSON">
-                            📥 Export JSON
-                        </button>
                         <button id="fdb-reset-btn" style="padding: 8px 16px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer;">
                             Reset to Defaults
                         </button>
@@ -1050,28 +1047,26 @@ class FrontDeskBehaviorManager {
                 </div>
 
                 <!-- Tab Navigation -->
-                <!-- V111 CLEAN SWEEP: Only wired tabs remain -->
+                <!-- V84: Added Global Settings tab for platform-wide controls (Feb 2026) -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
-                    ${this.renderTab('discovery-flow', '🔄 Discovery Flow', true, true)}
-                    ${this.renderTab('discovery', '🧠 Consent & Triggers')}
+                    ${this.renderTab('personality', '🎭 Personality', true)}
+                    ${this.renderTab('discovery', '🧠 Discovery & Consent')}
+                    ${this.renderTab('hours', '🕒 Hours & Availability')}
+                    ${this.renderTab('vocabulary', '📝 Vocabulary')}
+                    ${this.renderTab('discovery-flow', '🔄 Discovery Flow', false, true)}
+                    ${this.renderTab('booking', '📅 Booking Prompts')}
+                    ${this.renderTab('global-settings', '🌐 Global Settings', false, true)}
+                    <!-- ☢️ NUKED: 'flows' (Dynamic Flows) tab removed Feb 2026 - V110 architecture replaces it -->
+                    ${this.renderTab('emotions', '💭 Emotions')}
+                    ${this.renderTab('loops', '🔄 Loops')}
                     ${this.renderTab('detection', '🔍 Detection')}
-                    ${this.renderTab('booking', '📅 Booking Flow')}
-                    ${this.renderTab('global-settings', '🌐 Names & Intelligence')}
                     ${this.renderTab('llm0-controls', '🧠 LLM-0 Controls')}
-                    ${this.renderTab('hours', '🕒 Hours')}
                     ${this.renderTab('test', '🧪 Test')}
                 </div>
-                <!-- ════════════════════════════════════════════════════════════════════════════
-                     ☢️ NUKED TABS (V111 Clean Sweep - Feb 2026):
-                     - personality: Not wired to runtime
-                     - vocabulary: Not wired to runtime  
-                     - emotions: Not wired to runtime
-                     - loops: Partially wired, merged into Discovery Flow
-                     ════════════════════════════════════════════════════════════════════════════ -->
 
-                <!-- Tab Content - V111: Default to Discovery Flow (the main wired tab) -->
+                <!-- Tab Content -->
                 <div id="fdb-tab-content" style="min-height: 400px;">
-                    ${this.renderDiscoveryFlowTab()}
+                    ${this.renderPersonalityTab()}
                 </div>
             </div>
         `;
@@ -1935,59 +1930,6 @@ class FrontDeskBehaviorManager {
                 <!-- TAB 1: SLOT REGISTRY & CALL FLOW (V110)                         -->
                 <!-- ═══════════════════════════════════════════════════════════════ -->
                 <div id="fdb-flow-panel-v110">
-
-                    <!-- ═══════════════════════════════════════════════════════════════ -->
-                    <!-- GREETING RESPONSES (Layer -1 — fires FIRST, no LLM)            -->
-                    <!-- ═══════════════════════════════════════════════════════════════ -->
-                    <div style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #23863640; border-radius:12px; padding:20px; margin-bottom:20px;">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
-                            <div>
-                                <h3 style="margin:0; color:#3fb950; font-size:1.15rem; display:flex; align-items:center; gap:10px;">
-                                    👋 Greeting Responses
-                                    <span style="background:#23863640; color:#3fb950; padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:600;">0 TOKENS</span>
-                                </h3>
-                                <p style="margin:10px 0 0 0; color:#8b949e; font-size:0.85rem; line-height:1.6; max-width:700px;">
-                                    Instant responses to caller greetings. <strong style="color:#3fb950;">No LLM needed!</strong>
-                                    These fire <strong>immediately</strong> when the caller says "hello", "hi", "good morning", etc.
-                                </p>
-                            </div>
-                            <button type="button" onclick="window.frontDeskManager.addGreetingRow()" 
-                                style="padding:10px 18px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:600; display:flex; align-items:center; gap:8px; box-shadow:0 2px 8px rgba(35, 134, 54, 0.3);">
-                                <span style="font-size:1.2rem;">+</span> Add Greeting
-                            </button>
-                        </div>
-                        
-                        <!-- Greeting Response Table -->
-                        <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; overflow:hidden;">
-                            <div style="display:grid; grid-template-columns:1fr 1fr 50px; background:#21262d; border-bottom:1px solid #30363d;">
-                                <div style="padding:12px 16px; color:#8b949e; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
-                                    Caller Says (Trigger)
-                                </div>
-                                <div style="padding:12px 16px; color:#8b949e; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
-                                    AI Responds
-                                </div>
-                                <div></div>
-                            </div>
-                            <div id="fdb-greeting-rows" style="display:flex; flex-direction:column;">
-                                ${this.renderGreetingRows()}
-                            </div>
-                        </div>
-                        
-                        <!-- Legend -->
-                        <div style="display:flex; gap:16px; margin-top:12px; padding-top:12px; border-top:1px solid #21262d;">
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <span style="background:#238636; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;">EXACT</span>
-                                <span style="color:#6e7681; font-size:0.7rem;">Matches exact phrase only</span>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <span style="background:#58a6ff; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;">FUZZY</span>
-                                <span style="color:#6e7681; font-size:0.7rem;">Matches variations (e.g., "morning" → "good morning")</span>
-                            </div>
-                        </div>
-                        <p style="color:#6e7681; font-size:0.7rem; margin-top:8px;">
-                            💡 <strong>Tip:</strong> Use <code style="background:#21262d; padding:1px 4px; border-radius:3px;">{time}</code> for dynamic time → "Good {time}!" becomes "Good morning!"
-                        </p>
-                    </div>
 
                     <!-- ═══════════════════════════════════════════════════════════════ -->
                     <!-- CONVERSATION STYLE: OPENERS (Layer 0 — above V110 Discovery)  -->
@@ -12162,9 +12104,6 @@ Sean → Shawn, Shaun`;
             tab.addEventListener('click', () => this.switchTab(tab.dataset.tab, container));
         });
 
-        // Export JSON button
-        container.querySelector('#fdb-export-json-btn')?.addEventListener('click', () => this.exportConfigAsJSON());
-
         // Save button
         container.querySelector('#fdb-save-btn')?.addEventListener('click', () => this.collectAndSave());
 
@@ -12337,37 +12276,25 @@ Sean → Shawn, Shaun`;
         content.setAttribute('data-section-id', tabToSectionId[tabId] || tabId);
         content.setAttribute('data-section', tabToSectionId[tabId] || tabId);
         
-        // V111 CLEAN SWEEP: Only wired tabs remain
         switch (tabId) {
+            case 'personality': content.innerHTML = this.renderPersonalityTab(); break;
+            case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
+            case 'hours': content.innerHTML = this.renderHoursTab(); break;
+            case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
             case 'discovery-flow': 
                 content.innerHTML = this.renderDiscoveryFlowTab(); 
                 this.initDiscoveryFlowTab(content);
                 break;
-            case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
-            case 'detection': content.innerHTML = this.renderDetectionTab(); break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
-            case 'global-settings': 
-                content.innerHTML = this.renderGlobalSettingsTab();
-                this.attachGlobalSettingsListeners(content);
-                break;
-            case 'llm0-controls': 
-                content.innerHTML = this.renderLLM0ControlsTab();
-                this.initLLM0Controls(content);
-                break;
-            case 'hours': content.innerHTML = this.renderHoursTab(); break;
+            case 'global-settings': content.innerHTML = this.renderGlobalSettingsTab(); break;
+            // ☢️ NUKED: 'flows' case removed Feb 2026 - V110 architecture replaces Dynamic Flows
+            case 'emotions': content.innerHTML = this.renderEmotionsTab(); break;
+            // V80: frustration, escalation, forbidden, modes tabs merged into other tabs
+            case 'loops': content.innerHTML = this.renderLoopsTab(); break;
+            case 'detection': content.innerHTML = this.renderDetectionTab(); break;
+            // V81: fallbacks tab nuked - recovery settings in LLM-0 Controls
+            case 'llm0-controls': content.innerHTML = this.renderLLM0ControlsTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
-            // ════════════════════════════════════════════════════════════════════════════
-            // ☢️ NUKED TABS (V111 Clean Sweep - Feb 2026):
-            // personality, vocabulary, emotions, loops
-            // All removed because they were not wired to the runtime engine
-            // ════════════════════════════════════════════════════════════════════════════
-            default:
-                content.innerHTML = `<div style="padding: 40px; text-align: center; color: #8b949e;">
-                    <h3 style="color: #f85149;">⚠️ Tab Removed</h3>
-                    <p>This tab was removed in V111 Clean Sweep.</p>
-                    <p style="font-size: 0.85rem;">Not wired to runtime engine.</p>
-                </div>`;
-                break;
         }
         console.log(`[FRONT DESK] ⏱️ CHECKPOINT 2: Tab '${tabId}' rendered in ${(performance.now() - renderStart).toFixed(1)}ms`);
 
@@ -12384,19 +12311,14 @@ Sean → Shawn, Shaun`;
         }
     }
     
-    // V111 CLEAN SWEEP: Only attach listeners for wired tabs
+    // NEW: Attach only tab-specific listeners instead of ALL listeners
     attachTabSpecificListeners(tabId, content) {
+        // Only attach listeners for the current tab's content
         switch (tabId) {
-            case 'discovery-flow':
-                // Discovery flow has its own init via initDiscoveryFlowTab
-                break;
-            case 'discovery':
-                // Discovery & Consent listeners are delegated
-                break;
             case 'hours':
                 content.querySelectorAll('input[id^="bh-"][type="checkbox"]').forEach(cb => {
                     cb.addEventListener('change', () => {
-                        const id = cb.id;
+                        const id = cb.id; // bh-mon-closed
                         const day = id.split('-')[1];
                         const openEl = content.querySelector(`#bh-${day}-open`);
                         const closeEl = content.querySelector(`#bh-${day}-close`);
@@ -12410,10 +12332,13 @@ Sean → Shawn, Shaun`;
                 content.querySelector('#bh-save-btn')?.addEventListener('click', async () => {
                     try {
                         await this.saveBusinessHoursFromUI(content);
-                    } catch (e) {}
+                    } catch (e) {
+                        // saveBusinessHoursFromUI handles UI messaging
+                    }
                 });
                 break;
             case 'booking':
+                // Booking slot drag handles, delete buttons, etc.
                 content.querySelectorAll('.booking-slot-delete')?.forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         const slotId = e.target.closest('[data-slot-id]')?.dataset.slotId;
@@ -12425,15 +12350,22 @@ Sean → Shawn, Shaun`;
                 // Global Settings tab - tier thresholds and common names
                 this.attachGlobalSettingsListeners(content);
                 break;
-            case 'llm0-controls':
-                // LLM-0 Controls has its own init via initLLM0Controls
+            case 'personality':
+                // V80: Forbidden phrases merged into Personality tab
+                this.attachForbiddenListeners(content);
+                break;
+            case 'emotions':
+                // V80: Escalation merged into Emotions tab
+                this.attachEscalationListeners(content);
                 break;
             case 'test':
                 content.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(content));
                 break;
-            // ════════════════════════════════════════════════════════════════════════════
-            // ☢️ NUKED: personality, vocabulary, emotions listeners
-            // ════════════════════════════════════════════════════════════════════════════
+            case 'llm0-controls':
+                // Initialize LLM0ControlsManager in the container
+                this.initLLM0Controls(content);
+                break;
+            // Other tabs don't need special listeners or use delegated events
         }
     }
     
@@ -13216,309 +13148,6 @@ Sean → Shawn, Shaun`;
         } catch (error) {
             this.showNotification('❌ Reset failed: ' + error.message, 'error');
         }
-    }
-
-    /**
-     * ════════════════════════════════════════════════════════════════════════════
-     * EXPORT CONFIG AS JSON
-     * ════════════════════════════════════════════════════════════════════════════
-     * Downloads a comprehensive JSON file showing:
-     * - All current config values
-     * - What's wired to runtime
-     * - Tab structure
-     * - Metadata (company, timestamp, UI version)
-     * ════════════════════════════════════════════════════════════════════════════
-     */
-    exportConfigAsJSON() {
-        // Collect current form data first to ensure we have latest values
-        this.collectFormData();
-        
-        const exportData = {
-            _meta: {
-                exportedAt: new Date().toISOString(),
-                companyId: this.companyId,
-                uiBuild: FrontDeskBehaviorManager.UI_BUILD,
-                version: 'V111-ENTERPRISE',
-                description: 'Front Desk Behavior configuration export - all wired settings'
-            },
-            
-            // ════════════════════════════════════════════════════════════════════
-            // TAB 1: DISCOVERY FLOW
-            // ════════════════════════════════════════════════════════════════════
-            discoveryFlow: {
-                _wiredTo: 'DiscoveryFlowRunner.js, StepEngine.js',
-                _rawEvents: ['SECTION_S4_DISCOVERY_ENGINE', 'DISCOVERY_STEP_EXECUTED'],
-                
-                greetingResponses: {
-                    _wiredTo: 'GreetingInterceptor.js',
-                    _rawEvents: ['GREETING_INTERCEPTED'],
-                    rules: this.config.greetingRules || this.config.conversationStages?.greetingRules || []
-                },
-                
-                openers: {
-                    _wiredTo: 'OpenerEngine.js, FrontDeskCoreRuntime.js',
-                    _rawEvents: ['SECTION_OPENER_ENGINE'],
-                    enabled: this.config.openers?.enabled ?? true,
-                    mode: this.config.openers?.mode || 'reflect_first',
-                    general: this.config.openers?.general || [],
-                    frustration: this.config.openers?.frustration || [],
-                    urgency: this.config.openers?.urgency || [],
-                    frustrationKeywords: this.config.openers?.frustrationKeywords || [],
-                    urgencyKeywords: this.config.openers?.urgencyKeywords || [],
-                    reflectionTemplate: this.config.openers?.reflectionTemplate || '{reason_short} — okay.'
-                },
-                
-                slotRegistry: {
-                    _wiredTo: 'StepEngine.js, SlotExtractor.js',
-                    _rawEvents: ['SECTION_S3_SLOT_EXTRACTION'],
-                    version: this.config.slotRegistry?.version || 'v1',
-                    slots: this.config.slotRegistry?.slots || []
-                },
-                
-                discoverySteps: {
-                    _wiredTo: 'DiscoveryFlowRunner.js',
-                    _rawEvents: ['SECTION_S4_DISCOVERY_ENGINE'],
-                    enabled: this.config.discoveryFlow?.enabled ?? true,
-                    steps: this.config.discoveryFlow?.steps || []
-                },
-                
-                bookingSteps: {
-                    _wiredTo: 'BookingFlowRunner.js',
-                    _rawEvents: ['SECTION_S6_BOOKING_FLOW'],
-                    enabled: this.config.bookingFlow?.enabled ?? true,
-                    steps: this.config.bookingFlow?.steps || []
-                }
-            },
-            
-            // ════════════════════════════════════════════════════════════════════
-            // TAB 2: CONSENT & TRIGGERS
-            // ════════════════════════════════════════════════════════════════════
-            consentAndTriggers: {
-                _wiredTo: 'ConsentGate.js, FrontDeskCoreRuntime.js',
-                _rawEvents: ['CONSENT_GATE_INTENT_DETECTION', 'CONSENT_GATE_ASK', 'CONSENT_GATE_EVALUATE', 'SECTION_S5_CONSENT_GRANTED'],
-                
-                connectionQualityGate: {
-                    _wiredTo: 'FrontDeskCoreRuntime.js (S1.5)',
-                    _rawEvents: ['SECTION_S1_5_CONNECTION_QUALITY_GATE', 'CONNECTION_QUALITY_GATE_REGREET', 'CONNECTION_QUALITY_GATE_DTMF_ESCAPE'],
-                    enabled: this.config.connectionQualityGate?.enabled ?? true,
-                    confidenceThreshold: this.config.connectionQualityGate?.confidenceThreshold || 0.72,
-                    maxRetries: this.config.connectionQualityGate?.maxRetries || 3,
-                    troublePhrases: this.config.connectionQualityGate?.troublePhrases || [],
-                    clarificationPrompt: this.config.connectionQualityGate?.clarificationPrompt || this.config.connectionQualityGate?.reGreeting,
-                    dtmfEscapeMessage: this.config.connectionQualityGate?.dtmfEscapeMessage
-                },
-                
-                escalation: {
-                    _wiredTo: 'FrontDeskCoreRuntime.js (S2.5), EscalationDetector.js',
-                    _rawEvents: ['SECTION_S2_5_ESCALATION_DETECTION', 'ESCALATION_TRIGGERED'],
-                    enabled: this.config.escalation?.enabled ?? true,
-                    triggerPhrases: this.config.escalation?.triggerPhrases || [],
-                    escalationMessage: this.config.escalation?.escalationMessage,
-                    transferNumber: this.config.escalation?.transferNumber
-                },
-                
-                detectionTriggers: {
-                    _wiredTo: 'ConsentGate.js (wantsBooking, directIntentPatterns), ConversationEngine.js (all others)',
-                    _rawEvents: ['CONSENT_GATE_INTENT_DETECTION', 'CONSENT_GATE_DIRECT_INTENT_BYPASS', 'session.flags set in ConversationEngine'],
-                    wantsBooking: this.config.detectionTriggers?.wantsBooking || [],
-                    directIntentPatterns: this.config.detectionTriggers?.directIntentPatterns || [],
-                    trustConcern: this.config.detectionTriggers?.trustConcern || [],
-                    callerFeelsIgnored: this.config.detectionTriggers?.callerFeelsIgnored || [],
-                    refusedSlot: this.config.detectionTriggers?.refusedSlot || [],
-                    describingProblem: this.config.detectionTriggers?.describingProblem || []
-                },
-                
-                discoveryConsent: {
-                    _wiredTo: 'ConsentGate.js',
-                    _rawEvents: ['CONSENT_GATE_ASK', 'CONSENT_GATE_EVALUATE'],
-                    enabled: this.config.discoveryConsent?.enabled ?? true,
-                    consentQuestion: this.config.discoveryConsent?.consentQuestion,
-                    consentYesWords: this.config.discoveryConsent?.consentYesWords || [],
-                    consentNoWords: this.config.discoveryConsent?.consentNoWords || [],
-                    implicitConsentPatterns: this.config.discoveryConsent?.implicitConsentPatterns || []
-                },
-                
-                fastPathBooking: {
-                    _wiredTo: 'ConsentGate.js',
-                    _rawEvents: ['CONSENT_GATE_INTENT_DETECTION'],
-                    enabled: this.config.fastPathBooking?.enabled ?? false,
-                    triggerKeywords: this.config.fastPathBooking?.triggerKeywords || []
-                }
-            },
-            
-            // ════════════════════════════════════════════════════════════════════
-            // TAB 3: DETECTION (session.flags for routing)
-            // ════════════════════════════════════════════════════════════════════
-            detection: {
-                _wiredTo: 'ConversationEngine.js lines 3854-3865',
-                _rawEvents: ['🎯 DETECTION FLAG SET logs in ConversationEngine'],
-                _description: 'Patterns that set session.flags for downstream routing/contract decisions',
-                
-                trustConcern: {
-                    _description: 'When caller questions if AI can actually help (sets session.flags.trustConcern)',
-                    patterns: this.config.detectionTriggers?.trustConcern || []
-                },
-                callerFeelsIgnored: {
-                    _description: 'When caller says AI is not listening (sets session.flags.callerFeelsIgnored)',
-                    patterns: this.config.detectionTriggers?.callerFeelsIgnored || []
-                },
-                refusedSlot: {
-                    _description: 'When caller refuses to give info (sets session.flags.refusedSlot)',
-                    patterns: this.config.detectionTriggers?.refusedSlot || []
-                },
-                describingProblem: {
-                    _description: 'When caller describes their issue - triggers triage mode (sets session.flags.describingProblem)',
-                    patterns: this.config.detectionTriggers?.describingProblem || []
-                },
-                wantsBooking: {
-                    _wiredTo: 'ConsentGate.js - triggers BOOKING lane',
-                    _description: 'Phrases that skip discovery and go straight to booking',
-                    patterns: this.config.detectionTriggers?.wantsBooking || []
-                },
-                directIntentPatterns: {
-                    _wiredTo: 'ConsentGate.js - bypass consent entirely',
-                    _description: 'Strong intent patterns that skip consent question',
-                    patterns: this.config.detectionTriggers?.directIntentPatterns || []
-                }
-            },
-            
-            // ════════════════════════════════════════════════════════════════════
-            // TAB 4: BOOKING FLOW
-            // ════════════════════════════════════════════════════════════════════
-            bookingFlow: {
-                _wiredTo: 'BookingFlowRunner.js, StepEngine.js',
-                _rawEvents: ['SECTION_S6_BOOKING_FLOW', 'BOOKING_STEP_EXECUTED'],
-                
-                enabled: this.config.bookingFlow?.enabled ?? true,
-                disabledMessage: this.config.bookingFlow?.disabledMessage,
-                confirmCapturedFirst: this.config.bookingFlow?.confirmCapturedFirst ?? true,
-                
-                steps: this.config.bookingFlow?.steps || [],
-                
-                completion: {
-                    reviewAndConfirm: this.config.bookingFlow?.completion?.reviewAndConfirm ?? true,
-                    confirmScript: this.config.bookingFlow?.completion?.confirmScript,
-                    correctionPrompt: this.config.bookingFlow?.completion?.correctionPrompt,
-                    confirmRetryPrompt: this.config.bookingFlow?.completion?.confirmRetryPrompt
-                },
-                
-                nameSpellingVariants: {
-                    _wiredTo: 'BookingFlowRunner.js',
-                    enabled: this.config.nameSpellingVariants?.enabled ?? false,
-                    script: this.config.nameSpellingVariants?.script,
-                    maxAsksPerCall: this.config.nameSpellingVariants?.maxAsksPerCall || 1
-                },
-                
-                addressVerification: {
-                    _wiredTo: 'BookingFlowRunner.js',
-                    enabled: this.config.booking?.addressVerification?.enabled ?? false
-                }
-            },
-            
-            // ════════════════════════════════════════════════════════════════════
-            // TAB 5: NAMES & INTELLIGENCE (Global Settings)
-            // ════════════════════════════════════════════════════════════════════
-            namesAndIntelligence: {
-                _wiredTo: 'SlotExtractor.js, BookingFlowRunner.js, AWConfigReader.js',
-                _rawEvents: ['SECTION_S3_SLOT_EXTRACTION (includes isLikelyFirstName, isKnownLastName)'],
-                
-                commonFirstNames: {
-                    _wiredTo: 'SlotExtractor.js line 1096',
-                    count: (this.config.commonFirstNames || []).length,
-                    sample: (this.config.commonFirstNames || []).slice(0, 10)
-                },
-                
-                commonLastNames: {
-                    _wiredTo: 'SlotExtractor.js line 1105',
-                    count: (this.config.commonLastNames || []).length,
-                    sample: (this.config.commonLastNames || []).slice(0, 10)
-                },
-                
-                nameStopWords: {
-                    _wiredTo: 'BookingFlowRunner.js line 690',
-                    words: this.config.nameStopWords || []
-                },
-                
-                intelligenceThresholds: {
-                    _wiredTo: '3-Tier Intelligence System',
-                    useGlobalIntelligence: this.config.useGlobalIntelligence ?? true,
-                    tier1: this.config.productionIntelligence?.thresholds?.tier1 || this.config.globalProductionIntelligence?.thresholds?.tier1 || 0.80,
-                    tier2: this.config.productionIntelligence?.thresholds?.tier2 || this.config.globalProductionIntelligence?.thresholds?.tier2 || 0.60,
-                    enableTier3: this.config.productionIntelligence?.thresholds?.enableTier3 ?? true
-                }
-            },
-            
-            // ════════════════════════════════════════════════════════════════════
-            // TAB 6: LLM-0 CONTROLS
-            // ════════════════════════════════════════════════════════════════════
-            llm0Controls: {
-                _wiredTo: 'LLM0ControlsLoader.js, v2twilio.js',
-                _rawEvents: ['(runtime helpers called during processing)'],
-                _note: 'Loaded via separate API: /api/admin/llm0-controls/:companyId',
-                
-                silenceHandling: {
-                    _wiredTo: 'LLM0ControlsLoader.getSilencePrompt()',
-                    _description: 'Prompts when caller goes silent'
-                },
-                
-                spamFilter: {
-                    _wiredTo: 'LLM0ControlsLoader.isSpamPhrase(), CallFlowExecutor.js',
-                    _description: 'Telemarketer phrase detection'
-                },
-                
-                customerPatience: {
-                    _wiredTo: 'LLM0ControlsLoader',
-                    _description: 'Never auto-hangup settings'
-                },
-                
-                bailoutRules: {
-                    _wiredTo: 'LLM0ControlsLoader.shouldBailout()',
-                    _description: 'Escalate after X confused turns'
-                },
-                
-                confidenceThresholds: {
-                    _wiredTo: 'LLM0ControlsLoader.getConfidenceLevel()',
-                    _description: 'HIGH/MEDIUM/LOW/FALLBACK classification'
-                },
-                
-                recoveryMessages: {
-                    _wiredTo: 'v2twilio.js line 166',
-                    _description: 'Connection recovery messages'
-                },
-                
-                lowConfidenceHandling: {
-                    _wiredTo: 'v2twilio.js line 1731',
-                    _description: 'Actions on low STT confidence'
-                }
-            },
-            
-            // ════════════════════════════════════════════════════════════════════
-            // TAB 7: HOURS
-            // ════════════════════════════════════════════════════════════════════
-            hours: {
-                _wiredTo: 'Runtime via aiAgentSettings.operatingHours',
-                operatingHours: this.config.operatingHours || [],
-                timezone: this.config.timezone || 'America/New_York'
-            },
-            
-            // ════════════════════════════════════════════════════════════════════
-            // RAW CONFIG (for debugging)
-            // ════════════════════════════════════════════════════════════════════
-            _rawConfig: this.config
-        };
-        
-        // Create and download the file
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `front-desk-config-${this.companyId}-${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        this.showNotification('📥 Config exported as JSON', 'success');
     }
 
     // ☢️ NUKED Feb 2026: buildFlowPayloadFromModal() removed - V110 architecture replaces Dynamic Flows
