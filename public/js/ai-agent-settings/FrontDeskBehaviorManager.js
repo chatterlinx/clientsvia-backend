@@ -1053,6 +1053,7 @@ class FrontDeskBehaviorManager {
                     ${this.renderTab('discovery', '🧠 Consent & Triggers')}
                     ${this.renderTab('booking', '📅 Booking Flow')}
                     ${this.renderTab('global-settings', '🌐 Names & Intelligence')}
+                    ${this.renderTab('llm0-controls', '🧠 LLM-0 Controls')}
                     ${this.renderTab('hours', '🕒 Hours')}
                     ${this.renderTab('test', '🧪 Test')}
                 </div>
@@ -1063,7 +1064,6 @@ class FrontDeskBehaviorManager {
                      - emotions: Not wired to runtime
                      - loops: Partially wired, merged into Discovery Flow
                      - detection: Merged into Consent & Triggers
-                     - llm0-controls: Not wired to runtime
                      ════════════════════════════════════════════════════════════════════════════ -->
 
                 <!-- Tab Content - V111: Default to Discovery Flow (the main wired tab) -->
@@ -12343,11 +12343,15 @@ Sean → Shawn, Shaun`;
                 content.innerHTML = this.renderGlobalSettingsTab();
                 this.attachGlobalSettingsListeners(content);
                 break;
+            case 'llm0-controls': 
+                content.innerHTML = this.renderLLM0ControlsTab();
+                this.initLLM0Controls(content);
+                break;
             case 'hours': content.innerHTML = this.renderHoursTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
             // ════════════════════════════════════════════════════════════════════════════
             // ☢️ NUKED TABS (V111 Clean Sweep - Feb 2026):
-            // personality, vocabulary, emotions, loops, detection, llm0-controls
+            // personality, vocabulary, emotions, loops, detection
             // All removed because they were not wired to the runtime engine
             // ════════════════════════════════════════════════════════════════════════════
             default:
@@ -12414,16 +12418,50 @@ Sean → Shawn, Shaun`;
                 // Global Settings tab - tier thresholds and common names
                 this.attachGlobalSettingsListeners(content);
                 break;
+            case 'llm0-controls':
+                // LLM-0 Controls has its own init via initLLM0Controls
+                break;
             case 'test':
                 content.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(content));
                 break;
             // ════════════════════════════════════════════════════════════════════════════
-            // ☢️ NUKED: personality, vocabulary, emotions, llm0-controls listeners
+            // ☢️ NUKED: personality, vocabulary, emotions listeners
             // ════════════════════════════════════════════════════════════════════════════
         }
     }
     
-    // ☢️ NUKED: initLLM0Controls method removed - V111 Clean Sweep
+    // Initialize LLM-0 Controls using the dedicated manager
+    async initLLM0Controls(content) {
+        const container = content.querySelector('#llm0-controls-container');
+        if (!container) return;
+        
+        try {
+            // Check if LLM0ControlsManager is loaded
+            if (typeof LLM0ControlsManager === 'undefined') {
+                // Load the script dynamically
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = '/js/ai-agent-settings/LLM0ControlsManager.js?v=' + Date.now();
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+            
+            // Initialize the manager
+            if (typeof window.initLLM0Controls === 'function') {
+                window.initLLM0Controls(this.companyId, 'llm0-controls-container');
+            } else if (typeof LLM0ControlsManager !== 'undefined') {
+                window.llm0ControlsManager = new LLM0ControlsManager(this.companyId);
+                window.llm0ControlsManager.init('llm0-controls-container');
+            } else {
+                container.innerHTML = '<p style="color: #f85149;">Failed to load LLM-0 Controls Manager</p>';
+            }
+        } catch (err) {
+            console.error('[FRONT DESK] Failed to init LLM-0 Controls:', err);
+            container.innerHTML = '<p style="color: #f85149;">Error loading LLM-0 Controls: ' + err.message + '</p>';
+        }
+    }
 
     // Collect business hours from the Hours tab DOM and persist via existing admin endpoint.
     async saveBusinessHoursFromUI(content) {
