@@ -54,6 +54,111 @@ const CRITICAL_EVENTS = new Set([
 ]);
 
 // ═══════════════════════════════════════════════════════════════════════════
+// CALL REASON EXTRACTOR (S5)
+// ═══════════════════════════════════════════════════════════════════════════
+// Extracts the caller's reason/problem from their utterance.
+// This is a simple pattern-based extractor - no LLM needed.
+// 
+// Examples:
+//   "My AC isn't cooling" → "AC isn't cooling"
+//   "The heater is broken" → "heater is broken"
+//   "It's 90 degrees in my house" → "90 degrees in house"
+// ═══════════════════════════════════════════════════════════════════════════
+const CallReasonExtractor = {
+    /**
+     * Problem indicator patterns - these suggest the caller is describing an issue
+     */
+    problemPatterns: [
+        // HVAC-specific problems
+        /(?:my\s+)?(?:ac|a\.?c\.?|air\s*condition(?:er|ing)?)\s+(?:is\s+)?(?:not\s+)?(\w+ing|\w+ed|broken|down|out)/i,
+        /(?:my\s+)?(?:heat(?:er|ing)?|furnace)\s+(?:is\s+)?(?:not\s+)?(\w+ing|\w+ed|broken|down|out)/i,
+        /(?:my\s+)?(?:unit|system)\s+(?:is\s+)?(?:not\s+)?(\w+ing|\w+ed|broken|down|out)/i,
+        
+        // Temperature problems
+        /(?:it'?s?\s+)?(\d+)\s*degrees/i,
+        /(?:too\s+)?(hot|cold|warm|freezing)/i,
+        
+        // General service problems
+        /(?:not\s+)?(?:working|cooling|heating|running|turning\s+on)/i,
+        /(?:is\s+)?(?:broken|leaking|making\s+noise|frozen)/i,
+        
+        // Water/plumbing (if applicable)
+        /(?:no\s+)?(?:hot\s+)?water/i,
+        /(?:leak(?:ing)?|flood(?:ing)?|clog(?:ged)?|drain)/i
+    ],
+    
+    /**
+     * Extract the call reason from user input
+     * Returns a short summary of the problem, or null if no problem detected
+     */
+    extract(text) {
+        if (!text || text.length < 10) return null;
+        
+        const textLower = text.toLowerCase();
+        
+        // Skip if this is just a greeting or confirmation
+        if (/^(yes|no|yeah|yep|nope|ok|okay|sure|hi|hello|good\s+(morning|afternoon|evening))[\s.,!?]*$/i.test(text.trim())) {
+            return null;
+        }
+        
+        // Look for problem indicators
+        let hasProblem = false;
+        for (const pattern of this.problemPatterns) {
+            if (pattern.test(textLower)) {
+                hasProblem = true;
+                break;
+            }
+        }
+        
+        if (!hasProblem) return null;
+        
+        // Extract the problem statement
+        // Try to find the core problem description
+        let reason = null;
+        
+        // Pattern 1: "my [thing] is [problem]"
+        const myThingPattern = /(?:my\s+)?(\w+(?:\s+\w+)?)\s+(?:is\s+)?(?:not\s+)?(working|cooling|heating|running|broken|down|out|leaking|frozen|making\s+noise)/i;
+        const myThingMatch = text.match(myThingPattern);
+        if (myThingMatch) {
+            const thing = myThingMatch[1].replace(/^(the|my|our)\s+/i, '');
+            const problem = myThingMatch[2];
+            reason = `${thing} ${myThingMatch[0].includes('not') ? 'not ' : ''}${problem}`;
+        }
+        
+        // Pattern 2: Temperature mention
+        if (!reason) {
+            const tempMatch = text.match(/(?:it'?s?\s+)?(\d+)\s*degrees/i);
+            if (tempMatch) {
+                reason = `${tempMatch[1]} degrees`;
+                // Check for additional context
+                if (/hot|warm/i.test(text)) reason += ' (too hot)';
+                if (/cold|freezing/i.test(text)) reason += ' (too cold)';
+            }
+        }
+        
+        // Pattern 3: Just use the first problem-related phrase
+        if (!reason) {
+            const problemPhrases = text.match(/(?:not\s+)?(?:working|cooling|heating|broken|leaking|down|out|frozen)/gi);
+            if (problemPhrases && problemPhrases.length > 0) {
+                reason = problemPhrases[0];
+            }
+        }
+        
+        // Fallback: If we detected a problem but couldn't extract specifics,
+        // use a truncated version of the input (first ~50 chars of problem area)
+        if (!reason && hasProblem) {
+            // Find where the problem description likely starts
+            const problemStart = text.search(/(?:my\s+)?(?:ac|heat|unit|system|it'?s)/i);
+            if (problemStart >= 0) {
+                reason = text.substring(problemStart, problemStart + 60).replace(/[.,!?]+$/, '').trim();
+            }
+        }
+        
+        return reason ? reason.trim() : null;
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 // GREETING INTERCEPTOR
 // ═══════════════════════════════════════════════════════════════════════════
 // Handles instant responses to simple greetings like "good morning", "hi", etc.
@@ -370,15 +475,92 @@ class FrontDeskCoreRuntime {
                 sectionTrail: tracer.getTrailString()
             });
 
+            // ═══════════════════════════════════════════════════════════════════════════
+            // S5: CALL REASON EXTRACTION (call_reason_detail)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // Extract the caller's problem/reason from their utterance.
+            // When we first capture a call reason, we MUST acknowledge it before
+            // continuing with discovery. This makes the agent feel responsive.
+            // 
+            // Example:
+            //   User: "My AC isn't cooling and it's 90 degrees. My name is Mark."
+            //   Agent: "I understand your AC isn't cooling. Let me help you with that, Mark."
+            //          (NOT: "I have Mark. Is that correct?")
+            // ═══════════════════════════════════════════════════════════════════════════
+            currentSection = 'S5_CALL_REASON_EXTRACTION';
+            
+            let callReasonJustCaptured = false;
+            let capturedCallReason = null;
+            
+            // Only extract if we don't already have a call reason
+            if (!state.plainSlots.call_reason_detail) {
+                capturedCallReason = CallReasonExtractor.extract(inputText);
+                if (capturedCallReason) {
+                    state.plainSlots.call_reason_detail = capturedCallReason;
+                    callReasonJustCaptured = true;
+                    
+                    bufferEvent('SECTION_S5_CALL_REASON_CAPTURED', {
+                        callReasonDetail: capturedCallReason,
+                        inputTextPreview: inputText.substring(0, 80),
+                        sectionTrail: tracer.getTrailString()
+                    });
+                    
+                    logger.info('[FRONT_DESK_CORE_RUNTIME] S5: Call reason captured', {
+                        callSid,
+                        callReason: capturedCallReason,
+                        turn
+                    });
+                }
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // ACKNOWLEDGE CALL REASON (if just captured)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // If we just captured the call reason AND we have the caller's name,
+            // acknowledge both together for a natural response.
+            // If we don't have the name yet, acknowledge the problem and ask for name.
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (callReasonJustCaptured && capturedCallReason) {
+                const callerName = state.plainSlots.name;
+                let acknowledgment;
+                
+                if (callerName) {
+                    // We have both name and reason - acknowledge both
+                    acknowledgment = `I understand, ${callerName} — ${capturedCallReason}. Let me help you get that taken care of. Can I confirm your phone number?`;
+                } else {
+                    // We have reason but not name - acknowledge and ask for name
+                    acknowledgment = `I understand — ${capturedCallReason}. Let me help you get that taken care of. May I have your name?`;
+                }
+                
+                bufferEvent('CALL_REASON_ACKNOWLEDGED', {
+                    acknowledgment: acknowledgment.substring(0, 100),
+                    callReason: capturedCallReason,
+                    hasName: !!callerName,
+                    sectionTrail: tracer.getTrailString()
+                });
+                
+                // Return the acknowledgment - skip normal Discovery Flow for this turn
+                return {
+                    response: acknowledgment,
+                    state: state,
+                    lane: 'DISCOVERY',
+                    signals: { escalate: false, bookingComplete: false },
+                    action: 'CONTINUE',
+                    matchSource: 'CALL_REASON_ACKNOWLEDGER',
+                    turnEventBuffer
+                };
+            }
+
             bufferEvent('CORE_RUNTIME_TURN_START', {
                 lane: state.lane,
                 consentPending: state.consent?.pending === true,
-                slotCount,
+                slotCount: Object.keys(state.plainSlots || {}).length,
+                callReasonCaptured: !!state.plainSlots.call_reason_detail,
                 sectionTrail: tracer.getTrailString()
             });
 
             // ═══════════════════════════════════════════════════════════════════════════
-            // S4/S5/S6: DISCOVERY → CONSENT → BOOKING
+            // S4/S6: DISCOVERY → CONSENT → BOOKING
             // ═══════════════════════════════════════════════════════════════════════════
             let ownerResult;
             
