@@ -249,9 +249,18 @@ class StepEngine {
                 
                 const correctionPrompt = step?.correctionPrompt || step?.reprompt;
                 if (correctionPrompt) {
+                    const renderedCorrection = renderSlotTemplateOrFallback({
+                        template: correctionPrompt,
+                        slotId: pendingConfirmation,
+                        slotValue: collectedSlots[pendingConfirmation],
+                        fallbackText: step?.ask || `What is your ${pendingConfirmation}?`,
+                        logger,
+                        callId: this.callId,
+                        context: 'discovery_correction_prompt'
+                    });
                     return {
                         action: 'CONTINUE',
-                        reply: correctionPrompt,
+                        reply: renderedCorrection,
                         slotId: pendingConfirmation,
                         state: {
                             ...state,
@@ -359,6 +368,15 @@ class StepEngine {
                 // Only ask if we have a prompt configured
                 if (prompt) {
                     repromptCount[step.slotId] = count + 1;
+                    const renderedPrompt = renderSlotTemplateOrFallback({
+                        template: prompt,
+                        slotId: step.slotId,
+                        slotValue: value,
+                        fallbackText: `What is your ${slot.label || step.slotId}?`,
+                        logger,
+                        callId: this.callId,
+                        context: 'discovery_ask_missing'
+                    });
                     
                     logger.info(`[STEP ENGINE] Discovery: Asking for missing slot`, {
                         callId: this.callId,
@@ -369,7 +387,7 @@ class StepEngine {
                     
                     return {
                         action: 'CONTINUE',
-                        reply: prompt,
+                        reply: renderedPrompt,
                         slotId: step.slotId,
                         state: {
                             ...state,

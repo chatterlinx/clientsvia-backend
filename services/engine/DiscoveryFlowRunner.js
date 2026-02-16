@@ -1,5 +1,9 @@
 const { StepEngine } = require('./StepEngine');
-const { renderSlotTemplateOrFallback, defaultSlotConfirmFallback } = require('./TemplateRenderer');
+const {
+    renderSlotTemplateOrFallback,
+    defaultSlotConfirmFallback,
+    hasUnresolvedPlaceholders
+} = require('./TemplateRenderer');
 
 class DiscoveryFlowRunner {
     static run({ company, callSid, userInput, state }) {
@@ -46,8 +50,13 @@ class DiscoveryFlowRunner {
         };
 
         if (result.reply) {
-            return {
+            const response = DiscoveryFlowRunner.sanitizeReply({
+                company,
                 response: result.reply,
+                state: next
+            });
+            return {
+                response,
                 matchSource: 'DISCOVERY_FLOW_RUNNER',
                 state: next
             };
@@ -65,7 +74,11 @@ class DiscoveryFlowRunner {
         }
 
         return {
-            response: forcedPrompt,
+            response: DiscoveryFlowRunner.sanitizeReply({
+                company,
+                response: forcedPrompt,
+                state: next
+            }),
             matchSource: 'DISCOVERY_FLOW_RUNNER',
             state: next
         };
@@ -112,6 +125,43 @@ class DiscoveryFlowRunner {
         }
 
         return null;
+    }
+
+    static sanitizeReply({ company, response, state }) {
+        const text = `${response || ''}`;
+        if (!hasUnresolvedPlaceholders(text)) {
+            return text;
+        }
+
+        const steps = [...(company?.aiAgentSettings?.frontDeskBehavior?.discoveryFlow?.steps || [])]
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+        const byStepId = new Map(steps.map((s) => [s.stepId, s]));
+        const plainSlots = state?.plainSlots || {};
+
+        let slotId = state?.discovery?.pendingConfirmation || state?.discovery?.currentSlotId || null;
+        if (!slotId && state?.discovery?.currentStepId) {
+            slotId = byStepId.get(state.discovery.currentStepId)?.slotId || null;
+        }
+        if (!slotId) {
+            const firstFilled = steps.find((s) => {
+                const v = plainSlots[s.slotId];
+                return v != null && `${v}`.trim() !== '';
+            });
+            slotId = firstFilled?.slotId || 'name.first';
+        }
+
+        const slotValue = plainSlots[slotId];
+        const fallback = slotValue != null && `${slotValue}`.trim() !== ''
+            ? defaultSlotConfirmFallback(slotId, slotValue)
+            : 'Let me confirm that one more time. What is your first name?';
+
+        return renderSlotTemplateOrFallback({
+            template: text,
+            slotId,
+            slotValue,
+            fallbackText: fallback,
+            context: 'discovery_runner_sanitize_reply'
+        });
     }
 }
 
