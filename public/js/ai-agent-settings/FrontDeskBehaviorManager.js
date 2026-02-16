@@ -1047,26 +1047,28 @@ class FrontDeskBehaviorManager {
                 </div>
 
                 <!-- Tab Navigation -->
-                <!-- V84: Added Global Settings tab for platform-wide controls (Feb 2026) -->
+                <!-- V111 CLEAN SWEEP: Only wired tabs remain -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
-                    ${this.renderTab('personality', '🎭 Personality', true)}
-                    ${this.renderTab('discovery', '🧠 Discovery & Consent')}
-                    ${this.renderTab('hours', '🕒 Hours & Availability')}
-                    ${this.renderTab('vocabulary', '📝 Vocabulary')}
-                    ${this.renderTab('discovery-flow', '🔄 Discovery Flow', false, true)}
-                    ${this.renderTab('booking', '📅 Booking Prompts')}
-                    ${this.renderTab('global-settings', '🌐 Global Settings', false, true)}
-                    <!-- ☢️ NUKED: 'flows' (Dynamic Flows) tab removed Feb 2026 - V110 architecture replaces it -->
-                    ${this.renderTab('emotions', '💭 Emotions')}
-                    ${this.renderTab('loops', '🔄 Loops')}
-                    ${this.renderTab('detection', '🔍 Detection')}
-                    ${this.renderTab('llm0-controls', '🧠 LLM-0 Controls')}
+                    ${this.renderTab('discovery-flow', '🔄 Discovery Flow', true, true)}
+                    ${this.renderTab('discovery', '🧠 Consent & Triggers')}
+                    ${this.renderTab('booking', '📅 Booking Flow')}
+                    ${this.renderTab('hours', '🕒 Hours')}
                     ${this.renderTab('test', '🧪 Test')}
                 </div>
+                <!-- ════════════════════════════════════════════════════════════════════════════
+                     ☢️ NUKED TABS (V111 Clean Sweep - Feb 2026):
+                     - personality: Not wired to runtime
+                     - vocabulary: Not wired to runtime  
+                     - emotions: Not wired to runtime
+                     - loops: Partially wired, merged into Discovery Flow
+                     - detection: Merged into Consent & Triggers
+                     - llm0-controls: Not wired to runtime
+                     - global-settings: Not wired to runtime
+                     ════════════════════════════════════════════════════════════════════════════ -->
 
-                <!-- Tab Content -->
+                <!-- Tab Content - V111: Default to Discovery Flow (the main wired tab) -->
                 <div id="fdb-tab-content" style="min-height: 400px;">
-                    ${this.renderPersonalityTab()}
+                    ${this.renderDiscoveryFlowTab()}
                 </div>
             </div>
         `;
@@ -12276,25 +12278,28 @@ Sean → Shawn, Shaun`;
         content.setAttribute('data-section-id', tabToSectionId[tabId] || tabId);
         content.setAttribute('data-section', tabToSectionId[tabId] || tabId);
         
+        // V111 CLEAN SWEEP: Only wired tabs remain
         switch (tabId) {
-            case 'personality': content.innerHTML = this.renderPersonalityTab(); break;
-            case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
-            case 'hours': content.innerHTML = this.renderHoursTab(); break;
-            case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
             case 'discovery-flow': 
                 content.innerHTML = this.renderDiscoveryFlowTab(); 
                 this.initDiscoveryFlowTab(content);
                 break;
+            case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
             case 'booking': content.innerHTML = this.renderBookingPromptsTab(); break;
-            case 'global-settings': content.innerHTML = this.renderGlobalSettingsTab(); break;
-            // ☢️ NUKED: 'flows' case removed Feb 2026 - V110 architecture replaces Dynamic Flows
-            case 'emotions': content.innerHTML = this.renderEmotionsTab(); break;
-            // V80: frustration, escalation, forbidden, modes tabs merged into other tabs
-            case 'loops': content.innerHTML = this.renderLoopsTab(); break;
-            case 'detection': content.innerHTML = this.renderDetectionTab(); break;
-            // V81: fallbacks tab nuked - recovery settings in LLM-0 Controls
-            case 'llm0-controls': content.innerHTML = this.renderLLM0ControlsTab(); break;
+            case 'hours': content.innerHTML = this.renderHoursTab(); break;
             case 'test': content.innerHTML = this.renderTestTab(); break;
+            // ════════════════════════════════════════════════════════════════════════════
+            // ☢️ NUKED TABS (V111 Clean Sweep - Feb 2026):
+            // personality, vocabulary, emotions, loops, detection, llm0-controls, global-settings
+            // All removed because they were not wired to the runtime engine
+            // ════════════════════════════════════════════════════════════════════════════
+            default:
+                content.innerHTML = `<div style="padding: 40px; text-align: center; color: #8b949e;">
+                    <h3 style="color: #f85149;">⚠️ Tab Removed</h3>
+                    <p>This tab was removed in V111 Clean Sweep.</p>
+                    <p style="font-size: 0.85rem;">Not wired to runtime engine.</p>
+                </div>`;
+                break;
         }
         console.log(`[FRONT DESK] ⏱️ CHECKPOINT 2: Tab '${tabId}' rendered in ${(performance.now() - renderStart).toFixed(1)}ms`);
 
@@ -12311,14 +12316,19 @@ Sean → Shawn, Shaun`;
         }
     }
     
-    // NEW: Attach only tab-specific listeners instead of ALL listeners
+    // V111 CLEAN SWEEP: Only attach listeners for wired tabs
     attachTabSpecificListeners(tabId, content) {
-        // Only attach listeners for the current tab's content
         switch (tabId) {
+            case 'discovery-flow':
+                // Discovery flow has its own init via initDiscoveryFlowTab
+                break;
+            case 'discovery':
+                // Discovery & Consent listeners are delegated
+                break;
             case 'hours':
                 content.querySelectorAll('input[id^="bh-"][type="checkbox"]').forEach(cb => {
                     cb.addEventListener('change', () => {
-                        const id = cb.id; // bh-mon-closed
+                        const id = cb.id;
                         const day = id.split('-')[1];
                         const openEl = content.querySelector(`#bh-${day}-open`);
                         const closeEl = content.querySelector(`#bh-${day}-close`);
@@ -12332,13 +12342,10 @@ Sean → Shawn, Shaun`;
                 content.querySelector('#bh-save-btn')?.addEventListener('click', async () => {
                     try {
                         await this.saveBusinessHoursFromUI(content);
-                    } catch (e) {
-                        // saveBusinessHoursFromUI handles UI messaging
-                    }
+                    } catch (e) {}
                 });
                 break;
             case 'booking':
-                // Booking slot drag handles, delete buttons, etc.
                 content.querySelectorAll('.booking-slot-delete')?.forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         const slotId = e.target.closest('[data-slot-id]')?.dataset.slotId;
@@ -12346,61 +12353,16 @@ Sean → Shawn, Shaun`;
                     });
                 });
                 break;
-            case 'global-settings':
-                // Global Settings tab - tier thresholds and common names
-                this.attachGlobalSettingsListeners(content);
-                break;
-            case 'personality':
-                // V80: Forbidden phrases merged into Personality tab
-                this.attachForbiddenListeners(content);
-                break;
-            case 'emotions':
-                // V80: Escalation merged into Emotions tab
-                this.attachEscalationListeners(content);
-                break;
             case 'test':
                 content.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(content));
                 break;
-            case 'llm0-controls':
-                // Initialize LLM0ControlsManager in the container
-                this.initLLM0Controls(content);
-                break;
-            // Other tabs don't need special listeners or use delegated events
+            // ════════════════════════════════════════════════════════════════════════════
+            // ☢️ NUKED: global-settings, personality, emotions, llm0-controls listeners
+            // ════════════════════════════════════════════════════════════════════════════
         }
     }
     
-    // Initialize LLM-0 Controls using the dedicated manager
-    async initLLM0Controls(content) {
-        const container = content.querySelector('#llm0-controls-container');
-        if (!container) return;
-        
-        try {
-            // Check if LLM0ControlsManager is loaded
-            if (typeof LLM0ControlsManager === 'undefined') {
-                // Load the script dynamically
-                await new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = '/js/ai-agent-settings/LLM0ControlsManager.js?v=' + Date.now();
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-            
-            // Initialize the manager
-            if (typeof window.initLLM0Controls === 'function') {
-                window.initLLM0Controls(this.companyId, 'llm0-controls-container');
-            } else if (typeof LLM0ControlsManager !== 'undefined') {
-                window.llm0ControlsManager = new LLM0ControlsManager(this.companyId);
-                window.llm0ControlsManager.init('llm0-controls-container');
-            } else {
-                container.innerHTML = '<p style="color: #f85149;">Failed to load LLM-0 Controls Manager</p>';
-            }
-        } catch (err) {
-            console.error('[FRONT DESK] Failed to init LLM-0 Controls:', err);
-            container.innerHTML = '<p style="color: #f85149;">Error loading LLM-0 Controls: ' + err.message + '</p>';
-        }
-    }
+    // ☢️ NUKED: initLLM0Controls method removed - V111 Clean Sweep
 
     // Collect business hours from the Hours tab DOM and persist via existing admin endpoint.
     async saveBusinessHoursFromUI(content) {
