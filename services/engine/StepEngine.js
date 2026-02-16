@@ -284,32 +284,14 @@ class StepEngine {
                 
                 if (confirmMode === CONFIRM_MODES.ALWAYS || 
                     confirmMode === CONFIRM_MODES.SMART_IF_CAPTURED) {
-                    
-                    // Get prompt from config (with reprompt variants support)
                     const count = repromptCount[step.slotId] || 0;
-                    let prompt;
-                    let promptSource;
-                    
-                    if (count > 0 && step.repromptVariants?.length > 0) {
-                        const idx = Math.min(count - 1, step.repromptVariants.length - 1);
-                        prompt = step.repromptVariants[idx];
-                        promptSource = `discoveryFlow.steps[${step.slotId}].repromptVariants[${idx}]`;
-                    } else if (count > 0 && step.reprompt) {
-                        prompt = step.reprompt;
-                        promptSource = `discoveryFlow.steps[${step.slotId}].reprompt`;
-                    } else {
-                        prompt = step.ask;
-                        promptSource = `discoveryFlow.steps[${step.slotId}].ask`;
-                    }
-                    
-                    // Replace {value} placeholder
-                    const finalPrompt = (prompt || '').replace('{value}', value);
+                    const { prompt, promptSource } = this._buildDiscoveryConfirmPrompt(step, value, count);
                     
                     repromptCount[step.slotId] = count + 1;
                     
                     return {
                         action: 'CONTINUE',  // V110: Always CONTINUE
-                        reply: finalPrompt,
+                        reply: prompt,
                         slotId: step.slotId,
                         state: {
                             ...state,
@@ -449,7 +431,21 @@ class StepEngine {
             if (step.passive === true || step.isPassive === true) return true;
             const slot = this.getSlot(step.slotId);
             if (!slot?.required) return true;
-            return collectedSlots[step.slotId] != null;
+            const value = collectedSlots[step.slotId];
+            if (value == null || `${value}`.trim() === '') {
+                return false;
+            }
+
+            const confirmMode = step.confirmMode || CONFIRM_MODES.SMART_IF_CAPTURED;
+            if (confirmMode === CONFIRM_MODES.NEVER) {
+                return true;
+            }
+            if (confirmMode === CONFIRM_MODES.CONFIRM_IF_FROM_CALLER_ID) {
+                const slotMeta = state.slotMeta?.[step.slotId] || {};
+                const cameFromCallerId = slotMeta.source === 'caller_id' || slotMeta.source === 'callerID';
+                return !cameFromCallerId || confirmedSlots[step.slotId] === true;
+            }
+            return confirmedSlots[step.slotId] === true;
         });
         
         return {
@@ -1056,6 +1052,30 @@ class StepEngine {
             'actually', 'wait', 'hold on', 'change'
         ];
         return noPatterns.some(p => lower.includes(p));
+    }
+
+    _buildDiscoveryConfirmPrompt(step, value, count) {
+        let prompt;
+        let promptSource;
+
+        if (count > 0 && step.confirmReprompt) {
+            prompt = step.confirmReprompt;
+            promptSource = `discoveryFlow.steps[${step.slotId}].confirmReprompt`;
+        } else if (step.confirm) {
+            prompt = step.confirm;
+            promptSource = `discoveryFlow.steps[${step.slotId}].confirm`;
+        } else if (step.confirmPrompt) {
+            prompt = step.confirmPrompt;
+            promptSource = `discoveryFlow.steps[${step.slotId}].confirmPrompt`;
+        } else {
+            prompt = 'I have {value}. Is that correct?';
+            promptSource = `discoveryFlow.steps[${step.slotId}].confirm[default]`;
+        }
+
+        return {
+            prompt: (prompt || '').replace('{value}', value),
+            promptSource
+        };
     }
 }
 

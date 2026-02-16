@@ -1,0 +1,137 @@
+const clone = (value) => JSON.parse(JSON.stringify(value || {}));
+
+function slotToValue(slotEntry) {
+    if (slotEntry == null) {
+        return null;
+    }
+    if (typeof slotEntry === 'object' && !Array.isArray(slotEntry)) {
+        if (slotEntry.v != null) {
+            return slotEntry.v;
+        }
+        if (slotEntry.value != null) {
+            return slotEntry.value;
+        }
+    }
+    return slotEntry;
+}
+
+function extractPlainSlots(slots) {
+    const out = {};
+    Object.entries(slots || {}).forEach(([key, entry]) => {
+        if (key.startsWith('_')) {
+            return;
+        }
+        const value = slotToValue(entry);
+        if (value != null && `${value}`.trim() !== '') {
+            out[key] = value;
+        }
+    });
+    return out;
+}
+
+function extractSlotMeta(slots) {
+    const out = {};
+    Object.entries(slots || {}).forEach(([key, entry]) => {
+        if (key.startsWith('_') || entry == null || typeof entry !== 'object' || Array.isArray(entry)) {
+            return;
+        }
+        const source = entry.s || entry.source || null;
+        const confidence = entry.c ?? entry.confidence ?? null;
+        if (source || confidence != null) {
+            out[key] = { source, confidence };
+        }
+    });
+    return out;
+}
+
+function writeSlotValue(slots, key, value, source = 'core_runtime') {
+    if (value == null || `${value}`.trim() === '') {
+        return;
+    }
+    const existing = slots[key];
+    if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+        slots[key] = { ...existing, value, v: value, source, s: source };
+        return;
+    }
+    slots[key] = { value, v: value, source, s: source };
+}
+
+class StateStore {
+    static load(callState = {}) {
+        const slotsBag = clone(callState.slots || {});
+        const plainSlots = extractPlainSlots(slotsBag);
+        const slotMeta = extractSlotMeta(slotsBag);
+        const lane = callState.sessionMode === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
+
+        return {
+            lane,
+            slots: slotsBag,
+            plainSlots,
+            slotMeta,
+            discovery: {
+                currentStepId: callState.discoveryCurrentStepId || null,
+                currentSlotId: callState.discoveryCurrentSlotId || null,
+                pendingConfirmation: callState.discoveryPendingConfirmation || null,
+                repromptCount: clone(callState.discoveryRepromptCount || {}),
+                confirmedSlots: clone(callState.confirmedSlots || {})
+            },
+            consent: {
+                pending: callState.bookingConsentPending === true,
+                askedExplicitly: callState.consentQuestionExplicitlyAsked === true
+            },
+            booking: {
+                currentStepId: callState.currentStepId || callState.currentBookingStep || null,
+                currentSlotId: callState.currentSlotId || null,
+                slotSubStep: callState.slotSubStep || null,
+                pendingConfirmation: callState.pendingConfirmation || null,
+                pendingFinalConfirmation: callState.pendingFinalConfirmation || false,
+                confirmedSlots: clone(callState.confirmedSlots || {}),
+                lockedSlots: clone(callState.lockedSlots || {}),
+                repromptCount: clone(callState.repromptCount || {}),
+                addressCollected: clone(callState.addressCollected || {}),
+                bookingComplete: callState.bookingComplete === true
+            }
+        };
+    }
+
+    static persist(callState = {}, state = {}) {
+        const next = callState;
+        const slotsBag = clone(state.slots || next.slots || {});
+
+        // Persist plain slots as canonical truth.
+        Object.entries(state.plainSlots || {}).forEach(([key, value]) => {
+            writeSlotValue(slotsBag, key, value);
+        });
+
+        next.slots = slotsBag;
+        next.sessionMode = state.lane === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
+
+        next.discoveryCurrentStepId = state.discovery?.currentStepId || null;
+        next.discoveryCurrentSlotId = state.discovery?.currentSlotId || null;
+        next.discoveryPendingConfirmation = state.discovery?.pendingConfirmation || null;
+        next.discoveryRepromptCount = clone(state.discovery?.repromptCount || {});
+
+        next.bookingConsentPending = state.consent?.pending === true;
+        next.consentQuestionExplicitlyAsked = state.consent?.askedExplicitly === true;
+
+        next.currentStepId = state.booking?.currentStepId || null;
+        next.currentBookingStep = state.booking?.currentStepId || null;
+        next.currentSlotId = state.booking?.currentSlotId || null;
+        next.slotSubStep = state.booking?.slotSubStep || null;
+        next.pendingConfirmation = state.booking?.pendingConfirmation || null;
+        next.pendingFinalConfirmation = state.booking?.pendingFinalConfirmation === true;
+        next.repromptCount = clone(state.booking?.repromptCount || {});
+        next.confirmedSlots = clone(state.booking?.confirmedSlots || {});
+        next.lockedSlots = clone(state.booking?.lockedSlots || {});
+        next.addressCollected = clone(state.booking?.addressCollected || {});
+        next.bookingComplete = state.booking?.bookingComplete === true;
+
+        // Keep legacy views derived from slots to avoid downstream breakage.
+        next.bookingCollected = { ...(next.bookingCollected || {}), ...(state.plainSlots || {}) };
+        next.bookingModeLocked = state.lane === 'BOOKING' || next.bookingModeLocked === true;
+
+        return next;
+    }
+}
+
+module.exports = { StateStore, extractPlainSlots, writeSlotValue };

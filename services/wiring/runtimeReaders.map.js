@@ -212,11 +212,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryConsent.forceLLMDiscovery': {
         readers: [
             {
-                file: 'services/ConversationEngine.js',
+                file: 'services/engine/FrontDeskCoreRuntime.js',
                 function: 'processTurn',
-                line: 3200,
-                description: 'Kill switch - forces LLM-led discovery, scenarios as tools only',
-                checkpoint: 'CHECKPOINT 9a',
+                description: 'Core runtime consumes discovery consent controls during owner routing',
                 required: true,
                 critical: true
             }
@@ -229,11 +227,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryConsent.disableScenarioAutoResponses': {
         readers: [
             {
-                file: 'services/ConversationEngine.js',
+                file: 'services/engine/FrontDeskCoreRuntime.js',
                 function: 'processTurn',
-                line: 3205,
-                description: 'Kill switch - prevents scenarios from auto-responding',
-                checkpoint: 'CHECKPOINT 9a',
+                description: 'Core runtime enforces deterministic owner routing (no scenario speaker)',
                 required: true,
                 critical: true
             }
@@ -246,11 +242,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryConsent.bookingRequiresExplicitConsent': {
         readers: [
             {
-                file: 'services/ConversationEngine.js',
-                function: 'processTurn',
-                line: 3210,
-                description: 'Requires explicit "yes" before entering booking mode',
-                checkpoint: 'CHECKPOINT 9a',
+                file: 'services/engine/ConsentGate.js',
+                function: 'evaluate',
+                description: 'Consent accepted only when explicit consent question is pending',
                 required: true
             }
         ],
@@ -263,10 +257,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryConsent.consentPhrases': {
         readers: [
             {
-                file: 'services/ConversationEngine.js',
-                function: 'detectConsent',
-                line: 1200,
-                description: 'Phrases that trigger consent detection',
+                file: 'services/engine/ConsentGate.js',
+                function: 'evaluate',
+                description: 'Phrases that trigger consent detection in explicit consent turn',
                 required: true
             }
         ],
@@ -279,8 +272,8 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.connectionQualityGate': {
         readers: [
             {
-                file: 'services/engine/FrontDeskRuntime.js',
-                function: 'handleTurn',
+                file: 'services/engine/FrontDeskCoreRuntime.js',
+                function: 'processTurn',
                 description: 'GATE 1.5: Intercepts low-confidence STT and trouble phrases on early turns',
                 required: false
             }
@@ -332,6 +325,50 @@ const RUNTIME_READERS_MAP = {
         defaultValue: ['FAQ', 'TROUBLESHOOT', 'EMERGENCY']
     },
 
+    'frontDesk.discoveryFlow': {
+        readers: [
+            {
+                file: 'services/engine/DiscoveryFlowRunner.js',
+                function: 'run',
+                description: 'Discovery owner reads flow config and produces deterministic prompts',
+                required: true,
+                critical: true
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryFlow',
+        scope: 'company',
+        defaultValue: {}
+    },
+
+    'frontDesk.discoveryFlow.steps': {
+        readers: [
+            {
+                file: 'services/engine/DiscoveryFlowRunner.js',
+                function: 'run',
+                description: 'Discovery runner evaluates and advances configured step sequence',
+                required: true,
+                critical: true
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryFlow.steps',
+        scope: 'company',
+        defaultValue: []
+    },
+
+    'frontDesk.discoveryFlow.enabled': {
+        readers: [
+            {
+                file: 'services/engine/DiscoveryFlowRunner.js',
+                function: 'run',
+                description: 'Discovery owner checks flow enabled status before speaking',
+                required: true
+            }
+        ],
+        dbPath: 'company.aiAgentSettings.frontDeskBehavior.discoveryFlow.enabled',
+        scope: 'company',
+        defaultValue: true
+    },
+
     // =========================================================================
     // V94: BOOKING INTENT DETECTION (CRITICAL MVA REQUIREMENT)
     // Without these, agent cannot detect "fix my AC" or "not cooling" as booking intent
@@ -360,15 +397,6 @@ const RUNTIME_READERS_MAP = {
     // =========================================================================
     'frontDesk.detectionTriggers.directIntentPatterns': {
         readers: [
-            {
-                file: 'services/engine/FrontDeskRuntime.js',
-                function: 'determineLane',
-                line: 859,
-                description: 'Checks if caller input matches direct booking intent patterns',
-                required: true,
-                critical: true,
-                checkpoint: 'DIRECT_INTENT_DETECTION'
-            },
             {
                 file: 'services/ConversationEngine.js',
                 function: 'detectDirectBookingIntent',
@@ -1218,6 +1246,12 @@ const RUNTIME_READERS_MAP = {
                 line: 3600,
                 description: 'V54: Reads nudge prompts when caller says "just a second"',
                 checkpoint: 'V54_LOOP_NUDGE',
+                required: false
+            },
+            {
+                file: 'services/engine/BookingFlowRunner.js',
+                function: 'run',
+                description: 'Booking owner uses loop prevention settings during step execution',
                 required: false
             }
         ],
