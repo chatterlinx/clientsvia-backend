@@ -1934,6 +1934,59 @@ class FrontDeskBehaviorManager {
                 <div id="fdb-flow-panel-v110">
 
                     <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <!-- GREETING RESPONSES (Layer -1 — fires FIRST, no LLM)            -->
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
+                    <div style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #23863640; border-radius:12px; padding:20px; margin-bottom:20px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+                            <div>
+                                <h3 style="margin:0; color:#3fb950; font-size:1.15rem; display:flex; align-items:center; gap:10px;">
+                                    👋 Greeting Responses
+                                    <span style="background:#23863640; color:#3fb950; padding:4px 10px; border-radius:12px; font-size:0.7rem; font-weight:600;">0 TOKENS</span>
+                                </h3>
+                                <p style="margin:10px 0 0 0; color:#8b949e; font-size:0.85rem; line-height:1.6; max-width:700px;">
+                                    Instant responses to caller greetings. <strong style="color:#3fb950;">No LLM needed!</strong>
+                                    These fire <strong>immediately</strong> when the caller says "hello", "hi", "good morning", etc.
+                                </p>
+                            </div>
+                            <button type="button" onclick="window.frontDeskManager.addGreetingRow()" 
+                                style="padding:10px 18px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-size:0.9rem; font-weight:600; display:flex; align-items:center; gap:8px; box-shadow:0 2px 8px rgba(35, 134, 54, 0.3);">
+                                <span style="font-size:1.2rem;">+</span> Add Greeting
+                            </button>
+                        </div>
+                        
+                        <!-- Greeting Response Table -->
+                        <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; overflow:hidden;">
+                            <div style="display:grid; grid-template-columns:1fr 1fr 50px; background:#21262d; border-bottom:1px solid #30363d;">
+                                <div style="padding:12px 16px; color:#8b949e; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
+                                    Caller Says (Trigger)
+                                </div>
+                                <div style="padding:12px 16px; color:#8b949e; font-size:0.75rem; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
+                                    AI Responds
+                                </div>
+                                <div></div>
+                            </div>
+                            <div id="fdb-greeting-rows" style="display:flex; flex-direction:column;">
+                                ${this.renderGreetingRows()}
+                            </div>
+                        </div>
+                        
+                        <!-- Legend -->
+                        <div style="display:flex; gap:16px; margin-top:12px; padding-top:12px; border-top:1px solid #21262d;">
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="background:#238636; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;">EXACT</span>
+                                <span style="color:#6e7681; font-size:0.7rem;">Matches exact phrase only</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <span style="background:#58a6ff; color:white; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;">FUZZY</span>
+                                <span style="color:#6e7681; font-size:0.7rem;">Matches variations (e.g., "morning" → "good morning")</span>
+                            </div>
+                        </div>
+                        <p style="color:#6e7681; font-size:0.7rem; margin-top:8px;">
+                            💡 <strong>Tip:</strong> Use <code style="background:#21262d; padding:1px 4px; border-radius:3px;">{time}</code> for dynamic time → "Good {time}!" becomes "Good morning!"
+                        </p>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════════════════════ -->
                     <!-- CONVERSATION STYLE: OPENERS (Layer 0 — above V110 Discovery)  -->
                     <!-- ═══════════════════════════════════════════════════════════════ -->
                     <div style="background:linear-gradient(135deg, #0d1117 0%, #161b22 100%); border:1px solid #da363340; border-radius:12px; padding:20px; margin-bottom:20px;">
