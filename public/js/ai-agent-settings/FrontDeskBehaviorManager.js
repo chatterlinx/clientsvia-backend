@@ -1037,6 +1037,9 @@ class FrontDeskBehaviorManager {
                         </p>
                     </div>
                     <div style="display: flex; gap: 10px;">
+                        <button id="fdb-export-json-btn" style="padding: 8px 16px; background: #1f6feb; color: white; border: none; border-radius: 6px; cursor: pointer;" title="Download full config as JSON with wiring metadata">
+                            📥 Export JSON
+                        </button>
                         <button id="fdb-reset-btn" style="padding: 8px 16px; background: #21262d; color: #8b949e; border: 1px solid #30363d; border-radius: 6px; cursor: pointer;">
                             Reset to Defaults
                         </button>
@@ -12110,6 +12113,9 @@ Sean → Shawn, Shaun`;
         // Reset button
         container.querySelector('#fdb-reset-btn')?.addEventListener('click', () => this.resetToDefaults());
 
+        // Export JSON button
+        container.querySelector('#fdb-export-json-btn')?.addEventListener('click', () => this.exportConfigAsJSON());
+
         // V82: Deep Verification removed - was cosmetic/broken
 
         // --------------------------------------------------------------------
@@ -13148,6 +13154,235 @@ Sean → Shawn, Shaun`;
         } catch (error) {
             this.showNotification('❌ Reset failed: ' + error.message, 'error');
         }
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════════════
+     * EXPORT CONFIG AS JSON
+     * ═══════════════════════════════════════════════════════════════════════════════
+     * Downloads the entire Front Desk configuration as a JSON file with metadata
+     * about what is wired to runtime and what raw events to trace.
+     * ═══════════════════════════════════════════════════════════════════════════════
+     */
+    exportConfigAsJSON() {
+        // Collect current form data first to ensure we have latest values
+        this.collectFormData();
+        
+        const exportData = {
+            _meta: {
+                exportedAt: new Date().toISOString(),
+                companyId: this.companyId,
+                uiBuild: FrontDeskBehaviorManager.UI_BUILD,
+                version: 'V111-ENTERPRISE',
+                description: 'Front Desk Behavior configuration export with wiring metadata'
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: PERSONALITY
+            // ════════════════════════════════════════════════════════════════════
+            personality: {
+                _wiredTo: 'HybridReceptionistLLM.js (system prompt construction)',
+                agentName: this.config.agentName,
+                companyName: this.config.companyName,
+                tone: this.config.tone,
+                maxWords: this.config.maxWords,
+                personality: this.config.personality,
+                greetingRules: this.config.greetingRules || this.config.conversationStages?.greetingRules || []
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: DISCOVERY & CONSENT
+            // ════════════════════════════════════════════════════════════════════
+            discoveryAndConsent: {
+                _wiredTo: 'ConsentGate.js, FrontDeskCoreRuntime.js',
+                _rawEvents: ['CONSENT_GATE_INTENT_DETECTION', 'CONSENT_GATE_ASK', 'CONSENT_GATE_EVALUATE', 'SECTION_S5_CONSENT_GRANTED'],
+                
+                connectionQualityGate: {
+                    _wiredTo: 'FrontDeskCoreRuntime.js (S1.5)',
+                    enabled: this.config.connectionQualityGate?.enabled,
+                    confidenceThreshold: this.config.connectionQualityGate?.confidenceThreshold,
+                    maxRetries: this.config.connectionQualityGate?.maxRetries,
+                    troublePhrases: this.config.connectionQualityGate?.troublePhrases || [],
+                    clarificationPrompt: this.config.connectionQualityGate?.clarificationPrompt
+                },
+                
+                escalation: {
+                    _wiredTo: 'FrontDeskCoreRuntime.js (S2.5), EscalationDetector.js',
+                    enabled: this.config.escalation?.enabled,
+                    triggerPhrases: this.config.escalation?.triggerPhrases || [],
+                    escalationMessage: this.config.escalation?.escalationMessage,
+                    transferNumber: this.config.escalation?.transferNumber
+                },
+                
+                discoveryConsent: {
+                    _wiredTo: 'ConsentGate.js',
+                    enabled: this.config.discoveryConsent?.enabled,
+                    consentQuestion: this.config.discoveryConsent?.consentQuestion,
+                    consentYesWords: this.config.discoveryConsent?.consentYesWords || [],
+                    consentNoWords: this.config.discoveryConsent?.consentNoWords || [],
+                    implicitConsentPatterns: this.config.discoveryConsent?.implicitConsentPatterns || []
+                },
+                
+                fastPathBooking: {
+                    _wiredTo: 'ConsentGate.js',
+                    enabled: this.config.fastPathBooking?.enabled,
+                    triggerKeywords: this.config.fastPathBooking?.triggerKeywords || []
+                }
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: DISCOVERY FLOW
+            // ════════════════════════════════════════════════════════════════════
+            discoveryFlow: {
+                _wiredTo: 'DiscoveryFlowRunner.js, StepEngine.js',
+                _rawEvents: ['SECTION_S4_DISCOVERY_ENGINE', 'DISCOVERY_STEP_EXECUTED'],
+                
+                openers: {
+                    _wiredTo: 'OpenerEngine.js',
+                    enabled: this.config.openers?.enabled,
+                    mode: this.config.openers?.mode,
+                    general: this.config.openers?.general || [],
+                    frustration: this.config.openers?.frustration || [],
+                    urgency: this.config.openers?.urgency || []
+                },
+                
+                slotRegistry: {
+                    _wiredTo: 'StepEngine.js, SlotExtractor.js',
+                    version: this.config.slotRegistry?.version,
+                    slots: this.config.slotRegistry?.slots || []
+                },
+                
+                discoverySteps: {
+                    _wiredTo: 'DiscoveryFlowRunner.js',
+                    enabled: this.config.discoveryFlow?.enabled,
+                    steps: this.config.discoveryFlow?.steps || []
+                }
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: BOOKING PROMPTS
+            // ════════════════════════════════════════════════════════════════════
+            bookingFlow: {
+                _wiredTo: 'BookingFlowRunner.js, StepEngine.js',
+                _rawEvents: ['SECTION_S6_BOOKING_FLOW', 'BOOKING_STEP_EXECUTED'],
+                
+                enabled: this.config.bookingFlow?.enabled,
+                steps: this.config.bookingFlow?.steps || [],
+                
+                completion: {
+                    reviewAndConfirm: this.config.bookingFlow?.completion?.reviewAndConfirm,
+                    confirmScript: this.config.bookingFlow?.completion?.confirmScript,
+                    correctionPrompt: this.config.bookingFlow?.completion?.correctionPrompt
+                }
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: DETECTION
+            // ════════════════════════════════════════════════════════════════════
+            detection: {
+                _wiredTo: 'ConversationEngine.js lines 3854-3865 (sets session.flags)',
+                _rawEvents: ['🎯 DETECTION FLAG SET logs'],
+                
+                trustConcern: this.config.detectionTriggers?.trustConcern || [],
+                callerFeelsIgnored: this.config.detectionTriggers?.callerFeelsIgnored || [],
+                refusedSlot: this.config.detectionTriggers?.refusedSlot || [],
+                describingProblem: this.config.detectionTriggers?.describingProblem || [],
+                wantsBooking: {
+                    _wiredTo: 'ConsentGate.js (triggers BOOKING lane)',
+                    patterns: this.config.detectionTriggers?.wantsBooking || []
+                },
+                directIntentPatterns: {
+                    _wiredTo: 'ConsentGate.js (bypass consent)',
+                    patterns: this.config.detectionTriggers?.directIntentPatterns || []
+                }
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: LOOPS
+            // ════════════════════════════════════════════════════════════════════
+            loopPrevention: {
+                _wiredTo: 'BookingFlowRunner.js lines 6827-6870',
+                _rawEvents: ['V120: LOOP DETECTED logs'],
+                
+                enabled: this.config.loopPrevention?.enabled,
+                maxSameQuestion: this.config.loopPrevention?.maxSameQuestion,
+                onLoop: this.config.loopPrevention?.onLoop,
+                rephraseIntro: this.config.loopPrevention?.rephraseIntro,
+                nudgePrompts: {
+                    name: this.config.loopPrevention?.nudgePrompts?.name,
+                    phone: this.config.loopPrevention?.nudgePrompts?.phone,
+                    address: this.config.loopPrevention?.nudgePrompts?.address
+                }
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: GLOBAL SETTINGS
+            // ════════════════════════════════════════════════════════════════════
+            globalSettings: {
+                _wiredTo: 'SlotExtractor.js (name validation), AWConfigReader.js',
+                
+                commonFirstNames: {
+                    _wiredTo: 'SlotExtractor.js line 1096',
+                    count: (this.config.commonFirstNames || []).length,
+                    sample: (this.config.commonFirstNames || []).slice(0, 10)
+                },
+                
+                commonLastNames: {
+                    _wiredTo: 'SlotExtractor.js line 1105',
+                    count: (this.config.commonLastNames || []).length,
+                    sample: (this.config.commonLastNames || []).slice(0, 10)
+                },
+                
+                nameStopWords: {
+                    _wiredTo: 'BookingFlowRunner.js line 690',
+                    words: this.config.nameStopWords || []
+                },
+                
+                intelligenceThresholds: {
+                    _wiredTo: '3-Tier Intelligence System',
+                    useGlobalIntelligence: this.config.useGlobalIntelligence,
+                    tier1: this.config.productionIntelligence?.thresholds?.tier1,
+                    tier2: this.config.productionIntelligence?.thresholds?.tier2,
+                    enableTier3: this.config.productionIntelligence?.thresholds?.enableTier3
+                }
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: LLM-0 CONTROLS
+            // ════════════════════════════════════════════════════════════════════
+            llm0Controls: {
+                _wiredTo: 'LLM0ControlsLoader.js, v2twilio.js',
+                _note: 'Loaded via separate API: /api/admin/llm0-controls/:companyId',
+                _description: 'These control pre-LLM behaviors: silence, spam, patience, bailout, confidence'
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // TAB: HOURS
+            // ════════════════════════════════════════════════════════════════════
+            hours: {
+                _wiredTo: 'Runtime via aiAgentSettings.operatingHours',
+                operatingHours: this.config.operatingHours || [],
+                timezone: this.config.timezone
+            },
+            
+            // ════════════════════════════════════════════════════════════════════
+            // RAW CONFIG (for debugging)
+            // ════════════════════════════════════════════════════════════════════
+            _rawConfig: this.config
+        };
+        
+        // Create and download the file
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `front-desk-config-${this.companyId}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        this.showNotification('📥 Config exported as JSON', 'success');
     }
 
     // ☢️ NUKED Feb 2026: buildFlowPayloadFromModal() removed - V110 architecture replaces Dynamic Flows
