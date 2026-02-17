@@ -1472,6 +1472,49 @@ class SlotExtractor {
                 }
             }
         }
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // PRIORITY 2.5: HONORIFIC + SURNAME ("Mrs. Johnson", "Mr Gonzales")
+        // ═══════════════════════════════════════════════════════════════════════════
+        // This is the deterministic path for callers who only give last name with an honorific.
+        // Example: "Hi, I'm Mrs. Johnson" → lastName=Johnson, needsFirstName=true
+        //
+        // IMPORTANT:
+        // - We treat this as an explicit identity statement (high confidence).
+        // - We DO NOT assume the surname is a first name even if it's in the first-name list.
+        // - Booking should confirm last name first, then ask for first name.
+        const honorificPatterns = [
+            // "i'm mrs johnson", "i am mr gonzales"
+            /\b(i\s*(?:am|'m)|this\s+is|it'?s)\s+(mr|mrs|ms|miss|dr)\.?\s+([a-zA-Z'\-]{2,25})(?:\s|$|[.,!?])/i,
+            // Standalone "mrs johnson" (often used after agent asks "name?")
+            /\b(mr|mrs|ms|miss|dr)\.?\s+([a-zA-Z'\-]{2,25})(?:\s|$|[.,!?])/i
+        ];
+
+        for (const pattern of honorificPatterns) {
+            const match = text.match(pattern);
+            if (!match) continue;
+
+            const honorific = this.cleanName(match[2] || match[1]);
+            const surname = this.cleanName(match[3] || match[2]);
+            if (!surname || NAME_STOP_WORDS.has(surname.toLowerCase())) {
+                continue;
+            }
+
+            const result = {
+                value: surname, // keep compact; booking will confirm lastName
+                confidence: CONFIDENCE.UTTERANCE_HIGH,
+                source: SOURCE.UTTERANCE,
+                extractedViaExplicitPhrase: true,
+                patternSource: 'honorific_lastname',
+                nameLocked: true,
+                honorific: honorific || null,
+                lastName: surname,
+                needsFirstName: true,
+                isLikelyFirstName: false
+            };
+
+            return enrichWithLastNameData(result);
+        }
         
         // Pattern 2: "Hi [Name]" / "Hello [Name]" at start
         const greetingMatch = text.match(/^(?:hi|hello|hey)\s+([a-zA-Z]+)/i);
@@ -2140,6 +2183,43 @@ class SlotExtractor {
                 values[key] = slot.value;
             }
         }
+
+        // ───────────────────────────────────────────────────────────────────
+        // V118: Name-part projection for booking compatibility
+        // ───────────────────────────────────────────────────────────────────
+        // SlotExtractor.extractName enriches `name` with { firstName, lastName, honorific }.
+        // The runtime stores plainSlots as a flat map; BookingFlow uses slotIds:
+        // - name     (first name)
+        // - lastName (surname)
+        //
+        // So we project extracted name parts into these canonical keys.
+        const nameSlot = slots?.name;
+        if (nameSlot && typeof nameSlot === 'object' && nameSlot.value) {
+            const first = `${nameSlot.firstName || ''}`.trim() || null;
+            const last = `${nameSlot.lastName || ''}`.trim() || null;
+            const honorific = `${nameSlot.honorific || ''}`.trim() || null;
+
+            if (honorific) {
+                values.nameHonorific = honorific;
+            }
+
+            // If we have a clear first name, store it as `name` (booking expects first name here).
+            if (first) {
+                values.name = first;
+            }
+
+            // If we have a last name, store it for booking confirmation/collection.
+            if (last && !values.lastName) {
+                values.lastName = last;
+            }
+
+            // If the extraction indicates "this is a last-name-only intro", do not populate `name`
+            // with the surname (prevents booking from treating Johnson as the first name).
+            if (!first && last) {
+                delete values.name;
+            }
+        }
+
         return values;
     }
 }
