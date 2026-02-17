@@ -842,7 +842,7 @@ class FrontDeskCoreRuntime {
                         // Run booking flow for this turn since discovery is done and consent not needed
                         currentSection = 'S6_BOOKING_FLOW';
                         tracer.enter(SECTIONS.S6_BOOKING_FLOW);
-                        ownerResult = BookingFlowRunner.run({ company, callSid, userInput, ownerResult.state });
+                        ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state: ownerResult.state });
                     }
                 }
             }
