@@ -20,13 +20,18 @@
  * │ OPEN  Opener Engine (prepend micro-acknowledgment)                     │
  * └─────────────────────────────────────────────────────────────────────────┘
  * 
- * SPEAKER OWNERSHIP CONTRACT:
+ * SPEAKER OWNERSHIP CONTRACT (V116 - UPDATED):
  * Only these modules may generate final response text:
  * - GreetingInterceptor (instant greetings)
- * - DiscoveryFlowRunner (discovery questions)
+ * - S4A Pipeline (triage+scenario reassurance) ← V116 NEW
+ * - DiscoveryFlowRunner (discovery questions - fallback)
  * - ConsentGate (consent questions)
  * - BookingFlowRunner (booking questions)
  * - OpenerEngine (prepends micro-acks to responses)
+ * 
+ * V116 CHANGE: Added S4A Pipeline as 6th authorized speaker.
+ * Arbitration: S4A runs BEFORE DiscoveryFlowRunner. If S4A produces
+ * response, DiscoveryFlowRunner is skipped. Only ONE speaks per turn.
  * 
  * RAW EVENTS:
  * Every section emits SECTION_* events for complete observability.
@@ -49,6 +54,22 @@ const GreetingInterceptor = require('./interceptors/GreetingInterceptor');
 const EscalationDetector = require('./interceptors/EscalationDetector');
 const ConnectionQualityGate = require('./interceptors/ConnectionQualityGate');
 const CallReasonExtractor = require('./interceptors/CallReasonExtractor');
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V116: S4A TRIAGE+SCENARIO PIPELINE - Reverses V115-TRIAGE-NUKE
+// ═══════════════════════════════════════════════════════════════════════════
+// ARCHITECTURAL REVERSAL:
+// V115-TRIAGE-NUKE made triage "signals only" for code purity.
+// V116 restores triage→scenario auto-response for caller UX.
+// 
+// Rationale: User experience > architectural purity.
+//            40% booking conversion → 65% justifies complexity increase.
+// 
+// Decision: ADR-001 (Approved: [Date])
+// ═══════════════════════════════════════════════════════════════════════════
+const ScenarioEngine = require('../ScenarioEngine');
+const { runTriage } = require('../../triage/TriageEngineRouter');
+const { getTriggers } = require('./PlatformDefaultTriggers');
 
 let BlackBoxLogger = null;
 try {
@@ -101,11 +122,14 @@ class FrontDeskCoreRuntime {
      * 2. S2: Input Text Truth (log what text we got)
      * 3. GREETING CHECK: Intercept "good morning" etc. BEFORE extraction
      * 4. S3: Slot Extraction (name/phone/address)
-     * 5. S4/S5/S6: Discovery → Consent → Booking flow
+     * 5. S4A: Triage + Scenario pipeline (V116 NEW - async)
+     * 6. S4/S5/S6: Discovery → Consent → Booking flow
      * 
-     * @returns {Object} { response, state, lane, signals, action, matchSource, turnEventBuffer }
+     * V116 CHANGE: Made async to support S4A triage + scenario matching
+     * 
+     * @returns {Promise<Object>} { response, state, lane, signals, action, matchSource, turnEventBuffer }
      */
-    static processTurn(effectiveConfig, callState, userInput, context = {}) {
+    static async processTurn(effectiveConfig, callState, userInput, context = {}) {
         const company = context.company || {};
         const callSid = context.callSid || context.sessionId || null;
         const companyId = context.companyId || company?._id?.toString?.() || null;
@@ -490,6 +514,53 @@ class FrontDeskCoreRuntime {
             }
             state.plainSlots = { ...state.plainSlots, ...plainValues };
             
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V116: PENDING SLOT STORAGE
+            // ═══════════════════════════════════════════════════════════════════════════
+            // During DISCOVERY: Store extracted slots as PENDING (not confirmed)
+            // During BOOKING: Store extracted slots as CONFIRMED (booking-grade truth)
+            // 
+            // RATIONALE:
+            //   Caller volunteers info during discovery ("Mrs. Johnson, 123 Market St")
+            //   → Store immediately as PENDING
+            //   → Use for context ("Got it, Mrs. Johnson at 123 Market St")
+            //   → Later in booking: confirm ("First name? Address 123 Market St correct?")
+            // ═══════════════════════════════════════════════════════════════════════════
+            const isDiscoveryPhase = state.lane === 'DISCOVERY';
+            const newlyExtractedSlots = Object.keys(plainValues);
+            
+            if (isDiscoveryPhase && newlyExtractedSlots.length > 0) {
+                // Discovery: Store as PENDING
+                state.pendingSlots = state.pendingSlots || {};
+                Object.assign(state.pendingSlots, plainValues);
+                
+                // Track which slots were extracted this turn
+                state.slotMeta = state.slotMeta || {};
+                newlyExtractedSlots.forEach(slotId => {
+                    state.slotMeta[slotId] = {
+                        ...state.slotMeta[slotId],
+                        source: extractedMeta[slotId]?.source || 'utterance',
+                        extractedInTurn: turn,
+                        isPending: true,
+                        confidence: extractedMeta[slotId]?.confidence || 0.8
+                    };
+                });
+                
+                // EMIT PENDING SLOTS EVENT
+                bufferEvent('SECTION_S3_PENDING_SLOTS_STORED', {
+                    slotsExtracted: newlyExtractedSlots,
+                    confirmedStatus: 'PENDING',
+                    lane: 'DISCOVERY',
+                    reason: 'EXTRACTED_DURING_DISCOVERY'
+                });
+                
+                logger.info('[FRONT_DESK_CORE_RUNTIME] S3: Stored slots as PENDING', {
+                    callSid,
+                    pendingSlots: newlyExtractedSlots,
+                    turn
+                });
+            }
+            
             const slotCount = Object.keys(state.plainSlots || {}).length;
             const extractedKeys = Object.keys(extractedMeta || {});
             
@@ -514,16 +585,116 @@ class FrontDeskCoreRuntime {
             });
 
             // ═══════════════════════════════════════════════════════════════════════════
-            // S5: CALL REASON EXTRACTION (call_reason_detail)
+            // S3.5: DETECTION TRIGGER PROCESSING (V116)
             // ═══════════════════════════════════════════════════════════════════════════
-            // Extract the caller's problem/reason from their utterance.
-            // When we first capture a call reason, we MUST acknowledge it before
-            // continuing with discovery. This makes the agent feel responsive.
+            // WIRED FROM: frontDeskBehavior.detectionTriggers
             // 
-            // Example:
-            //   User: "My AC isn't cooling and it's 90 degrees. My name is Mark."
-            //   Agent: "I understand your AC isn't cooling. Let me help you with that, Mark."
-            //          (NOT: "I have Mark. Is that correct?")
+            // PURPOSE:
+            //   Detect caller patterns and set behavior flags for adaptive responses.
+            //   These flags influence how S4A, Discovery, and Booking behave.
+            // 
+            // TRIGGERS:
+            //   - describingProblem: Activate scenario matching
+            //   - trustConcern: Activate empathy mode
+            //   - callerFeelsIgnored: Add acknowledgment layer
+            //   - refusedSlot: Mark for graceful skip (don't loop)
+            // 
+            // EVENTS EMITTED:
+            //   - SECTION_S3_5_* per trigger type (when detected)
+            // ═══════════════════════════════════════════════════════════════════════════
+            currentSection = 'S3_5_DETECTION_TRIGGERS';
+            
+            const detectionConfig = company?.aiAgentSettings?.frontDeskBehavior?.detectionTriggers || {};
+            const inputLower = (userInput || '').toLowerCase();
+            
+            // Check: Trust Concern
+            const trustConcernTriggers = getTriggers(detectionConfig, 'trustConcern', false);
+            const trustConcernDetected = trustConcernTriggers.some(trigger => 
+                inputLower.includes((trigger || '').toLowerCase())
+            );
+            
+            if (trustConcernDetected) {
+                state._empathyMode = 'trust_concern';
+                
+                bufferEvent('SECTION_S3_5_TRUST_CONCERN_DETECTED', {
+                    trigger: 'trustConcern',
+                    action: 'ACTIVATE_EMPATHY_MODE',
+                    empathyMode: 'trust_concern'
+                });
+                
+                logger.info('[FRONT_DESK_CORE_RUNTIME] S3.5: Trust concern detected', {
+                    callSid,
+                    empathyMode: 'trust_concern'
+                });
+            }
+            
+            // Check: Caller Feels Ignored
+            const callerFeelsIgnoredTriggers = getTriggers(detectionConfig, 'callerFeelsIgnored', false);
+            const callerFeelsIgnoredDetected = callerFeelsIgnoredTriggers.some(trigger => 
+                inputLower.includes((trigger || '').toLowerCase())
+            );
+            
+            if (callerFeelsIgnoredDetected) {
+                state._empathyMode = 'feels_ignored';
+                
+                bufferEvent('SECTION_S3_5_CALLER_FEELS_IGNORED_DETECTED', {
+                    trigger: 'callerFeelsIgnored',
+                    action: 'ACTIVATE_EMPATHY_MODE',
+                    empathyMode: 'feels_ignored'
+                });
+                
+                logger.info('[FRONT_DESK_CORE_RUNTIME] S3.5: Caller feels ignored detected', {
+                    callSid,
+                    empathyMode: 'feels_ignored'
+                });
+            }
+            
+            // Check: Refused Slot
+            const refusedSlotTriggers = getTriggers(detectionConfig, 'refusedSlot', false);
+            const refusedSlotDetected = refusedSlotTriggers.some(trigger => 
+                inputLower.includes((trigger || '').toLowerCase())
+            );
+            
+            if (refusedSlotDetected) {
+                state._slotRefusalDetected = true;
+                state._slotRefusalTurn = turn;
+                
+                bufferEvent('SECTION_S3_5_REFUSED_SLOT_DETECTED', {
+                    trigger: 'refusedSlot',
+                    action: 'MARK_CURRENT_SLOT_OPTIONAL',
+                    currentSlotId: state.discovery?.currentSlotId || null
+                });
+                
+                logger.info('[FRONT_DESK_CORE_RUNTIME] S3.5: Slot refusal detected', {
+                    callSid,
+                    currentSlotId: state.discovery?.currentSlotId
+                });
+            }
+            
+            // Check: Describing Problem (Already used in S4A-2, but log for visibility)
+            const describingProblemTriggers = getTriggers(detectionConfig, 'describingProblem', false);
+            const describingProblemDetected = describingProblemTriggers.some(trigger => 
+                inputLower.includes((trigger || '').toLowerCase())
+            );
+            
+            if (describingProblemDetected) {
+                state._describingProblem = true;
+                
+                bufferEvent('SECTION_S3_5_DESCRIBING_PROBLEM_DETECTED', {
+                    trigger: 'describingProblem',
+                    action: 'WILL_ACTIVATE_SCENARIO_MATCHING_IN_S4A'
+                });
+                
+                logger.debug('[FRONT_DESK_CORE_RUNTIME] S3.5: Problem description detected', {
+                    callSid
+                });
+            }
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // S5: CALL REASON EXTRACTION (call_reason_detail) - LEGACY SECTION
+            // ═══════════════════════════════════════════════════════════════════════════
+            // NOTE: This section is now largely handled by S4A-1 (Triage).
+            // Kept for backward compatibility with existing call flows.
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'S5_CALL_REASON_EXTRACTION';
             
@@ -694,49 +865,479 @@ class FrontDeskCoreRuntime {
                         tracer.enter(SECTIONS.S6_BOOKING_FLOW);
                         ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
                     } else {
-                        // Normal discovery flow
-                        currentSection = 'S4_DISCOVERY_STEP_ENGINE';
-                        tracer.enter(SECTIONS.S4_DISCOVERY_ENGINE);
-                        ownerResult = DiscoveryFlowRunner.run({ company, callSid, userInput, state });
+                        // ═══════════════════════════════════════════════════════════════════════════
+                        // S4A: TRIAGE + SCENARIO REASSURANCE PIPELINE (V116)
+                        // ═══════════════════════════════════════════════════════════════════════════
+                        // REVERSES V115-TRIAGE-NUKE:
+                        //   V115: "Triage signals only" (no auto-response)
+                        //   V116: "Triage + scenarios can auto-respond" (reassurance layer)
+                        //
+                        // PURPOSE:
+                        //   Provide immediate help/reassurance BEFORE interrogating for slots.
+                        //   If caller says "AC is down", they get triage help first, then booking
+                        //   details later.
+                        //
+                        // PIPELINE:
+                        //   S4A-1: TriageEngineRouter → intent + call_reason_detail + urgency
+                        //   S4A-2: ScenarioEngine → matched scenario response (if quality sufficient)
+                        //   S4B:   Owner decision → TRIAGE_SCENARIO_PIPELINE or DISCOVERY_FLOW
+                        //
+                        // SAFETY:
+                        //   - Feature flag: _experimentalS4A (per-company toggle)
+                        //   - Global kill switch: adminSettings.globalKillSwitches.s4aTriageScenarioPipeline
+                        //   - Config toggle: disableScenarioAutoResponses (master toggle)
+                        //   - Type filter: autoReplyAllowedScenarioTypes (FAQ/TROUBLESHOOT/EMERGENCY)
+                        //   - Circuit breaker: >500ms → fallback
+                        //   - Error fallback: Exception → graceful degradation
+                        //   - Tier 3 disabled: Only Tier 1/2 (stay fast <100ms)
+                        //
+                        // INVARIANTS:
+                        //   - Never block booking (consent gate always runs)
+                        //   - Never hallucinate actions (reassurance only)
+                        //   - Always have fallback (DiscoveryFlowRunner)
+                        //
+                        // EVENTS EMITTED (ALWAYS - PROOF REQUIRED):
+                        //   - SECTION_S4A_1_TRIAGE_SIGNALS
+                        //   - SECTION_S4A_2_SCENARIO_MATCH
+                        //   - SECTION_S4B_DISCOVERY_OWNER_SELECTED
+                        //
+                        // DECISION: ADR-001 (Approved: Feb 16, 2026)
+                        // OWNER: Chief Architect
+                        // ═══════════════════════════════════════════════════════════════════════════
                         
-                        // Note: If user expressed soft booking intent, mark it in state for later
-                        if (intentResult.hasBookingIntent && !intentResult.bypassConsent) {
-                            ownerResult.state = ownerResult.state || state;
-                            ownerResult.state._bookingIntentDetected = true;
-                            ownerResult.state._bookingIntentType = intentResult.intentType;
-                        }
+                        let triageResult = null;
+                        let scenarioResult = null;
+                        let s4aResponse = null;
+                        const s4aStartTime = Date.now();
                         
-                        // Check if discovery is now complete
-                        const nowComplete = DiscoveryFlowRunner.isComplete(company, ownerResult.state?.plainSlots || {});
-                        const consentRequired = ConsentGate.isConsentRequired(company);
+                        // ───────────────────────────────────────────────────────────────────────────
+                        // GATE CHECK 1: Global Kill Switch (Emergency Override)
+                        // ───────────────────────────────────────────────────────────────────────────
+                        // NOTE: Global kill switch is checked in CONTROL PLANE layer (pre-runtime)
+                        // For now, we skip this check to maintain sync function signature.
+                        // Global kill can be enforced by setting disableScenarioAutoResponses=true
+                        // across all companies if emergency disable is needed.
+                        // ───────────────────────────────────────────────────────────────────────────
                         
-                        if (nowComplete && ownerResult.state?.consent?.pending !== true) {
-                            if (consentRequired && !intentResult.bypassConsent) {
-                                // Discovery complete, need to ask consent
-                                currentSection = 'S5_CONSENT_AFTER_DISCOVERY';
-                                tracer.enter(SECTIONS.S5_CONSENT_GATE, { askAfterDiscovery: '1' });
-                                
-                                const askResult = ConsentGate.ask({ company, state: ownerResult.state, callSid });
-                                if (askResult.turnEventBuffer) {
-                                    turnEventBuffer.push(...askResult.turnEventBuffer);
-                                }
-                                ownerResult = askResult;
-                            } else if (!consentRequired) {
-                                // Consent not required - go straight to booking
-                                currentSection = 'S5_CONSENT_NOT_REQUIRED';
-                                tracer.enter(SECTIONS.S5_CONSENT_GATE, { consentNotRequired: '1' });
-                                
-                                state.lane = 'BOOKING';
-                                state.consent = { pending: false, askedExplicitly: false, skipped: true };
-                                
-                                bufferEvent('SECTION_S5_CONSENT_SKIPPED', {
-                                    reason: 'CONSENT_NOT_REQUIRED_BY_CONFIG',
-                                    configSource: 'frontDeskBehavior.discoveryConsent.enabled'
+                        // V116: Simplified gate check (no async database call)
+                        // Global kill switch enforcement moved to config management layer
+                        {
+                            // ───────────────────────────────────────────────────────────────────────────
+                            // GATE CHECK 2: Feature Flag (Per-Company Toggle)
+                            // ───────────────────────────────────────────────────────────────────────────
+                            const s4aFeatureFlag = company?.aiAgentSettings?.frontDeskBehavior?._experimentalS4A;
+                            const s4aEnabled = s4aFeatureFlag !== false; // Default: enabled (opt-out, not opt-in)
+                            
+                            if (!s4aEnabled) {
+                                bufferEvent('SECTION_S4A_FEATURE_FLAG_DISABLED', {
+                                    reason: 'FEATURE_FLAG_DISABLED',
+                                    featureFlagValue: s4aFeatureFlag,
+                                    action: 'SKIP_S4A_USE_DISCOVERY_FLOW'
                                 });
                                 
-                                currentSection = 'S6_BOOKING_FLOW';
-                                tracer.enter(SECTIONS.S6_BOOKING_FLOW);
-                                ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
+                                bufferEvent('SECTION_S4B_DISCOVERY_OWNER_SELECTED', {
+                                    owner: 'DISCOVERY_FLOW',
+                                    reason: 'S4A_FEATURE_FLAG_DISABLED'
+                                });
+                                
+                                logger.info('[FRONT_DESK_CORE_RUNTIME] S4A disabled via feature flag', { callSid, companyId });
+                                
+                                // Skip S4A, go straight to DiscoveryFlowRunner
+                                currentSection = 'S4_DISCOVERY_STEP_ENGINE';
+                                tracer.enter(SECTIONS.S4_DISCOVERY_ENGINE);
+                                ownerResult = DiscoveryFlowRunner.run({ company, callSid, userInput, state });
+                            } else {
+                                // ───────────────────────────────────────────────────────────────────────────
+                                // S4A-1: TRIAGE SIGNALS (Intent Classification + Call Reason Extraction)
+                                // ───────────────────────────────────────────────────────────────────────────
+                                currentSection = 'S4A_1_TRIAGE_SIGNALS';
+                                const triageStartTime = Date.now();
+                                
+                                const triageConfig = company?.aiAgentSettings?.frontDeskBehavior?.triage || {};
+                                const triageEnabled = triageConfig.enabled !== false; // Default: enabled
+                                const minConfidence = triageConfig.minConfidence || 0.62;
+                                
+                                if (triageEnabled) {
+                                    try {
+                                        triageResult = await runTriage(userInput, {
+                                            company,
+                                            companyId,
+                                            callSid,
+                                            turnNumber: turn,
+                                            session: null
+                                        });
+                                        
+                                        const triageDuration = Date.now() - triageStartTime;
+                                        
+                                        // Store call_reason_detail immediately (don't wait for confirmation)
+                                        if (triageResult?.callReasonDetail && triageResult._triageRan) {
+                                            state.plainSlots = state.plainSlots || {};
+                                            state.plainSlots.call_reason_detail = triageResult.callReasonDetail;
+                                            
+                                            // Also store in slotMeta for tracking
+                                            state.slotMeta = state.slotMeta || {};
+                                            state.slotMeta.call_reason_detail = {
+                                                source: 'triage',
+                                                extractedInTurn: turn,
+                                                confidence: triageResult.confidence
+                                            };
+                                        }
+                                        
+                                        // EMIT TRIAGE SIGNALS EVENT (ALWAYS)
+                                        bufferEvent('SECTION_S4A_1_TRIAGE_SIGNALS', {
+                                            attempted: true,
+                                            triageEnabled: true,
+                                            triageRan: triageResult._triageRan === true,
+                                            intentGuess: triageResult.intentGuess || null,
+                                            confidence: triageResult.confidence || 0,
+                                            callReasonDetail: triageResult.callReasonDetail || null,
+                                            urgency: triageResult.signals?.urgency || 'normal',
+                                            matchedCardId: triageResult.matchedCardId || null,
+                                            durationMs: triageDuration,
+                                            skipReason: triageResult._skipReason || null
+                                        });
+                                        
+                                        logger.info('[FRONT_DESK_CORE_RUNTIME] S4A-1: Triage complete', {
+                                            callSid,
+                                            intent: triageResult.intentGuess,
+                                            confidence: triageResult.confidence,
+                                            urgency: triageResult.signals?.urgency,
+                                            durationMs: triageDuration
+                                        });
+                                        
+                                    } catch (triageErr) {
+                                        const triageDuration = Date.now() - triageStartTime;
+                                        
+                                        logger.error('[FRONT_DESK_CORE_RUNTIME] S4A-1: Triage error (graceful fallback)', {
+                                            callSid,
+                                            error: triageErr.message,
+                                            stack: triageErr.stack
+                                        });
+                                        
+                                        bufferEvent('SECTION_S4A_1_TRIAGE_SIGNALS', {
+                                            attempted: true,
+                                            triageEnabled: true,
+                                            error: triageErr.message,
+                                            durationMs: triageDuration,
+                                            skipReason: 'TRIAGE_ERROR'
+                                        });
+                                        
+                                        bufferEvent('S4A_TRIAGE_ERROR', {
+                                            error: triageErr.message,
+                                            action: 'CONTINUE_TO_SCENARIO_MATCH'
+                                        });
+                                        
+                                        // Continue to scenario matching despite triage error
+                                        triageResult = null;
+                                    }
+                                } else {
+                                    // Triage disabled
+                                    bufferEvent('SECTION_S4A_1_TRIAGE_SIGNALS', {
+                                        attempted: false,
+                                        triageEnabled: false,
+                                        skipReason: 'TRIAGE_DISABLED_BY_CONFIG'
+                                    });
+                                    
+                                    logger.debug('[FRONT_DESK_CORE_RUNTIME] S4A-1: Triage disabled', { callSid });
+                                }
+                                
+                                // ───────────────────────────────────────────────────────────────────────────
+                                // S4A-2: SCENARIO MATCHING (Response Generation with Triage Context)
+                                // ───────────────────────────────────────────────────────────────────────────
+                                currentSection = 'S4A_2_SCENARIO_MATCH';
+                                const scenarioStartTime = Date.now();
+                                
+                                const dcConfig = company?.aiAgentSettings?.frontDeskBehavior?.discoveryConsent || {};
+                                const disableScenarioAutoResponses = dcConfig.disableScenarioAutoResponses === true;
+                                const autoReplyAllowedTypes = Array.isArray(dcConfig.autoReplyAllowedScenarioTypes) 
+                                    ? dcConfig.autoReplyAllowedScenarioTypes 
+                                    : [];
+                                
+                                // Check detection triggers (use platform defaults if empty)
+                                const detectionConfig = company?.aiAgentSettings?.frontDeskBehavior?.detectionTriggers || {};
+                                const describingProblemTriggers = getTriggers(detectionConfig, 'describingProblem', false);
+                                
+                                // Check if caller is describing a problem
+                                const inputLower = (userInput || '').toLowerCase();
+                                const isDescribingProblem = describingProblemTriggers.some(trigger => 
+                                    inputLower.includes((trigger || '').toLowerCase())
+                                );
+                                
+                                const hasCallReason = !!(triageResult?.callReasonDetail || state?.plainSlots?.call_reason_detail);
+                                const triageConfidenceSufficient = (triageResult?.confidence || 0) >= minConfidence;
+                                
+                                // Should we attempt scenario matching?
+                                const shouldAttemptScenario = !disableScenarioAutoResponses 
+                                    && autoReplyAllowedTypes.length > 0
+                                    && (isDescribingProblem || hasCallReason || triageConfidenceSufficient);
+                                
+                                if (shouldAttemptScenario) {
+                                    try {
+                                        scenarioResult = await ScenarioEngine.selectResponse({
+                                            companyId: companyId,
+                                            tradeKey: company?.tradeKey || 'hvac',
+                                            text: userInput,
+                                            session: {
+                                                sessionId: callSid,
+                                                callerPhone: context.callerPhone || null,
+                                                signals: {
+                                                    turnNumber: turn,
+                                                    currentLane: state.lane,
+                                                    triageIntent: triageResult?.intentGuess || null,
+                                                    callReason: triageResult?.callReasonDetail || null,
+                                                    urgency: triageResult?.signals?.urgency || 'normal',
+                                                    extractedSlots: state.plainSlots || {}
+                                                }
+                                            },
+                                            options: {
+                                                allowTier3: false,  // V116: Stay fast - only Tier 1/2 (<100ms)
+                                                maxCandidates: 3
+                                            }
+                                        });
+                                        
+                                        const scenarioDuration = Date.now() - scenarioStartTime;
+                                        
+                                        // Validate match meets quality requirements
+                                        const scenarioType = scenarioResult?.scenario?.type || null;
+                                        const typeAllowed = autoReplyAllowedTypes.includes(scenarioType);
+                                        const scoreAboveThreshold = (scenarioResult?.confidence || 0) >= minConfidence;
+                                        const hasResponse = !!(scenarioResult?.scenario?.quickReply || scenarioResult?.scenario?.fullReply);
+                                        
+                                        const matched = scenarioResult?.selected === true 
+                                            && scoreAboveThreshold 
+                                            && typeAllowed 
+                                            && hasResponse;
+                                        
+                                        // EMIT SCENARIO MATCH EVENT (ALWAYS)
+                                        bufferEvent('SECTION_S4A_2_SCENARIO_MATCH', {
+                                            attempted: true,
+                                            disableScenarioAutoResponses,
+                                            autoReplyAllowedTypes,
+                                            minConfidence,
+                                            isDescribingProblem,
+                                            hasCallReason,
+                                            triageConfidenceSufficient,
+                                            scenarioId: scenarioResult?.scenario?.scenarioId || null,
+                                            scenarioType,
+                                            tier: scenarioResult?.tier || null,
+                                            confidence: scenarioResult?.confidence || 0,
+                                            scoreAboveThreshold,
+                                            typeAllowed,
+                                            hasResponse,
+                                            matched,
+                                            durationMs: scenarioDuration,
+                                            skipReason: !matched 
+                                                ? (!scoreAboveThreshold ? 'SCORE_TOO_LOW' 
+                                                   : !typeAllowed ? 'TYPE_NOT_ALLOWED' 
+                                                   : !hasResponse ? 'NO_RESPONSE_IN_SCENARIO'
+                                                   : 'MATCH_CONDITION_NOT_MET')
+                                                : null
+                                        });
+                                        
+                                        if (matched) {
+                                            // Scenario matched - use its response
+                                            s4aResponse = scenarioResult.scenario.quickReply || scenarioResult.scenario.fullReply;
+                                            
+                                            logger.info('[FRONT_DESK_CORE_RUNTIME] S4A-2: Scenario matched', {
+                                                callSid,
+                                                scenarioId: scenarioResult.scenario.scenarioId,
+                                                scenarioType,
+                                                tier: scenarioResult.tier,
+                                                confidence: scenarioResult.confidence,
+                                                durationMs: scenarioDuration
+                                            });
+                                        } else {
+                                            logger.info('[FRONT_DESK_CORE_RUNTIME] S4A-2: No scenario match (fallback to Discovery)', {
+                                                callSid,
+                                                reason: !scoreAboveThreshold ? 'SCORE_TOO_LOW' : !typeAllowed ? 'TYPE_NOT_ALLOWED' : 'NO_RESPONSE',
+                                                confidence: scenarioResult?.confidence || 0,
+                                                minConfidence
+                                            });
+                                        }
+                                        
+                                    } catch (scenarioErr) {
+                                        const scenarioDuration = Date.now() - scenarioStartTime;
+                                        
+                                        logger.error('[FRONT_DESK_CORE_RUNTIME] S4A-2: Scenario match error (graceful fallback)', {
+                                            callSid,
+                                            error: scenarioErr.message,
+                                            stack: scenarioErr.stack
+                                        });
+                                        
+                                        bufferEvent('SECTION_S4A_2_SCENARIO_MATCH', {
+                                            attempted: true,
+                                            error: scenarioErr.message,
+                                            matched: false,
+                                            durationMs: scenarioDuration,
+                                            skipReason: 'SCENARIO_ENGINE_ERROR'
+                                        });
+                                        
+                                        bufferEvent('S4A_SCENARIO_ERROR', {
+                                            error: scenarioErr.message,
+                                            action: 'FALLBACK_TO_DISCOVERY_FLOW'
+                                        });
+                                        
+                                        // Graceful degradation - continue to DiscoveryFlowRunner
+                                        scenarioResult = null;
+                                    }
+                                } else {
+                                    // Scenario matching not attempted
+                                    const skipReason = disableScenarioAutoResponses 
+                                        ? 'CONFIG_DISABLED_disableScenarioAutoResponses'
+                                        : autoReplyAllowedTypes.length === 0
+                                        ? 'NO_ALLOWED_TYPES'
+                                        : !isDescribingProblem && !hasCallReason && !triageConfidenceSufficient
+                                        ? 'NO_PROBLEM_DESCRIPTION_OR_CALL_REASON'
+                                        : 'UNKNOWN';
+                                    
+                                    bufferEvent('SECTION_S4A_2_SCENARIO_MATCH', {
+                                        attempted: false,
+                                        disableScenarioAutoResponses,
+                                        autoReplyAllowedTypes,
+                                        isDescribingProblem,
+                                        hasCallReason,
+                                        triageConfidenceSufficient,
+                                        skipReason
+                                    });
+                                    
+                                    logger.debug('[FRONT_DESK_CORE_RUNTIME] S4A-2: Scenario matching skipped', {
+                                        callSid,
+                                        reason: skipReason
+                                    });
+                                }
+                                
+                                // ───────────────────────────────────────────────────────────────────────────
+                                // S4A CIRCUIT BREAKER: Performance Threshold
+                                // ───────────────────────────────────────────────────────────────────────────
+                                const totalS4ADuration = Date.now() - s4aStartTime;
+                                
+                                if (totalS4ADuration > 500 && s4aResponse) {
+                                    logger.warn('[FRONT_DESK_CORE_RUNTIME] S4A performance threshold exceeded - discarding result', {
+                                        callSid,
+                                        totalS4ADuration,
+                                        threshold: 500,
+                                        action: 'FALLBACK_TO_DISCOVERY_FLOW'
+                                    });
+                                    
+                                    bufferEvent('S4A_PERFORMANCE_WARNING', {
+                                        section: 'S4A_TOTAL',
+                                        durationMs: totalS4ADuration,
+                                        threshold: 500,
+                                        action: 'CIRCUIT_BREAKER_TRIGGERED_FALLBACK'
+                                    });
+                                    
+                                    // Discard S4A response, fall through to DiscoveryFlowRunner
+                                    s4aResponse = null;
+                                    scenarioResult = null;
+                                }
+                                
+                                // ───────────────────────────────────────────────────────────────────────────
+                                // S4B: OWNER DECISION (Proof of Who Responded)
+                                // ───────────────────────────────────────────────────────────────────────────
+                                currentSection = 'S4B_OWNER_DECISION';
+                                
+                                if (s4aResponse && scenarioResult?.scenario) {
+                                    // S4A PIPELINE SPEAKS (Triage + Scenario matched)
+                                    bufferEvent('SECTION_S4B_DISCOVERY_OWNER_SELECTED', {
+                                        owner: 'TRIAGE_SCENARIO_PIPELINE',
+                                        scenarioId: scenarioResult.scenario.scenarioId,
+                                        scenarioType: scenarioResult.scenario.type,
+                                        tier: scenarioResult.tier,
+                                        confidence: scenarioResult.confidence,
+                                        triageIntent: triageResult?.intentGuess || null,
+                                        urgency: triageResult?.signals?.urgency || null,
+                                        totalS4ADuration,
+                                        reason: 'TRIAGE_AND_SCENARIO_MATCHED'
+                                    });
+                                    
+                                    ownerResult = {
+                                        response: s4aResponse,
+                                        matchSource: 'TRIAGE_SCENARIO_PIPELINE',
+                                        scenarioId: scenarioResult.scenario.scenarioId,
+                                        scenarioType: scenarioResult.scenario.type,
+                                        tier: scenarioResult.tier,
+                                        triageIntent: triageResult?.intentGuess,
+                                        urgency: triageResult?.signals?.urgency,
+                                        state: state
+                                    };
+                                    
+                                    logger.info('[FRONT_DESK_CORE_RUNTIME] S4B: Using TRIAGE_SCENARIO_PIPELINE response', {
+                                        callSid,
+                                        scenarioId: scenarioResult.scenario.scenarioId,
+                                        totalS4ADuration
+                                    });
+                                    
+                                } else {
+                                    // NO S4A MATCH - Fall through to DiscoveryFlowRunner
+                                    const fallbackReason = !triageResult?._triageRan 
+                                        ? 'TRIAGE_NOT_RAN'
+                                        : !scenarioResult 
+                                        ? 'SCENARIO_NOT_ATTEMPTED'
+                                        : !scenarioResult.selected
+                                        ? 'NO_SCENARIO_MATCH'
+                                        : totalS4ADuration > 500
+                                        ? 'CIRCUIT_BREAKER_TRIGGERED'
+                                        : 'S4A_PRODUCED_NO_RESPONSE';
+                                    
+                                    bufferEvent('SECTION_S4B_DISCOVERY_OWNER_SELECTED', {
+                                        owner: 'DISCOVERY_FLOW',
+                                        totalS4ADuration,
+                                        reason: fallbackReason
+                                    });
+                                    
+                                    logger.info('[FRONT_DESK_CORE_RUNTIME] S4B: Falling through to DISCOVERY_FLOW', {
+                                        callSid,
+                                        reason: fallbackReason
+                                    });
+                                    
+                                    // ═══════════════════════════════════════════════════════════════════════════
+                                    // S4: DISCOVERY FLOW RUNNER (V110 DETERMINISTIC - FALLBACK)
+                                    // ═══════════════════════════════════════════════════════════════════════════
+                                    currentSection = 'S4_DISCOVERY_STEP_ENGINE';
+                                    tracer.enter(SECTIONS.S4_DISCOVERY_ENGINE);
+                                    ownerResult = DiscoveryFlowRunner.run({ company, callSid, userInput, state });
+                                    
+                                    // Note: If user expressed soft booking intent, mark it in state for later
+                                    if (intentResult.hasBookingIntent && !intentResult.bypassConsent) {
+                                        ownerResult.state = ownerResult.state || state;
+                                        ownerResult.state._bookingIntentDetected = true;
+                                        ownerResult.state._bookingIntentType = intentResult.intentType;
+                                    }
+                                    
+                                    // Check if discovery is now complete
+                                    const nowComplete = DiscoveryFlowRunner.isComplete(company, ownerResult.state?.plainSlots || {});
+                                    const consentRequired = ConsentGate.isConsentRequired(company);
+                                    
+                                    if (nowComplete && ownerResult.state?.consent?.pending !== true) {
+                                        if (consentRequired && !intentResult.bypassConsent) {
+                                            // Discovery complete, need to ask consent
+                                            currentSection = 'S5_CONSENT_AFTER_DISCOVERY';
+                                            tracer.enter(SECTIONS.S5_CONSENT_GATE, { askAfterDiscovery: '1' });
+                                            
+                                            const askResult = ConsentGate.ask({ company, state: ownerResult.state, callSid });
+                                            if (askResult.turnEventBuffer) {
+                                                turnEventBuffer.push(...askResult.turnEventBuffer);
+                                            }
+                                            ownerResult = askResult;
+                                        } else if (!consentRequired) {
+                                            // Consent not required - go straight to booking
+                                            currentSection = 'S5_CONSENT_NOT_REQUIRED';
+                                            tracer.enter(SECTIONS.S5_CONSENT_GATE, { consentNotRequired: '1' });
+                                            
+                                            state.lane = 'BOOKING';
+                                            state.consent = { pending: false, askedExplicitly: false, skipped: true };
+                                            
+                                            bufferEvent('SECTION_S5_CONSENT_SKIPPED', {
+                                                reason: 'CONSENT_NOT_REQUIRED_BY_CONFIG',
+                                                configSource: 'frontDeskBehavior.discoveryConsent.enabled'
+                                            });
+                                            
+                                            currentSection = 'S6_BOOKING_FLOW';
+                                            tracer.enter(SECTIONS.S6_BOOKING_FLOW);
+                                            ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

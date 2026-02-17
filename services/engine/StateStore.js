@@ -68,12 +68,28 @@ class StateStore {
             slots: slotsBag,
             plainSlots,
             slotMeta,
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V116: PENDING SLOTS - Extracted but not confirmed
+            // ═══════════════════════════════════════════════════════════════════════════
+            // ARCHITECTURE:
+            //   Discovery: Slots extracted → stored as PENDING (not confirmed)
+            //   Discovery: Uses pending slots for CONTEXT ("Got it, Mrs. Johnson...")
+            //   Booking: Confirms pending slots → moves to CONFIRMED
+            // 
+            // RATIONALE:
+            //   Callers volunteer info out of order. Discovery should use it immediately
+            //   for context, but formally confirm during booking (not re-ask).
+            // ═══════════════════════════════════════════════════════════════════════════
+            pendingSlots: clone(callState.pendingSlots || {}),      // V116: Unconfirmed
+            confirmedSlots: clone(callState.confirmedSlots || {}),  // V116: Booking-confirmed
+            
             discovery: {
                 currentStepId: callState.discoveryCurrentStepId || null,
                 currentSlotId: callState.discoveryCurrentSlotId || null,
                 pendingConfirmation: callState.discoveryPendingConfirmation || null,
                 repromptCount: clone(callState.discoveryRepromptCount || {}),
-                confirmedSlots: clone(callState.confirmedSlots || {})
+                confirmedSlots: clone(callState.discoveryConfirmedSlots || {})  // Discovery-level confirmed
             },
             consent: {
                 pending: callState.bookingConsentPending === true,
@@ -85,7 +101,7 @@ class StateStore {
                 slotSubStep: callState.slotSubStep || null,
                 pendingConfirmation: callState.pendingConfirmation || null,
                 pendingFinalConfirmation: callState.pendingFinalConfirmation || false,
-                confirmedSlots: clone(callState.confirmedSlots || {}),
+                confirmedSlots: clone(callState.bookingConfirmedSlots || {}),  // Booking-level confirmed
                 lockedSlots: clone(callState.lockedSlots || {}),
                 repromptCount: clone(callState.repromptCount || {}),
                 addressCollected: clone(callState.addressCollected || {}),
@@ -106,10 +122,17 @@ class StateStore {
         next.slots = slotsBag;
         next.sessionMode = state.lane === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
 
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V116: Persist pending and confirmed slots
+        // ═══════════════════════════════════════════════════════════════════════════
+        next.pendingSlots = clone(state.pendingSlots || {});      // V116: Unconfirmed slots
+        next.confirmedSlots = clone(state.confirmedSlots || {});  // V116: Confirmed slots
+
         next.discoveryCurrentStepId = state.discovery?.currentStepId || null;
         next.discoveryCurrentSlotId = state.discovery?.currentSlotId || null;
         next.discoveryPendingConfirmation = state.discovery?.pendingConfirmation || null;
         next.discoveryRepromptCount = clone(state.discovery?.repromptCount || {});
+        next.discoveryConfirmedSlots = clone(state.discovery?.confirmedSlots || {});  // Discovery-level
 
         next.bookingConsentPending = state.consent?.pending === true;
         next.consentQuestionExplicitlyAsked = state.consent?.askedExplicitly === true;
@@ -121,7 +144,7 @@ class StateStore {
         next.pendingConfirmation = state.booking?.pendingConfirmation || null;
         next.pendingFinalConfirmation = state.booking?.pendingFinalConfirmation === true;
         next.repromptCount = clone(state.booking?.repromptCount || {});
-        next.confirmedSlots = clone(state.booking?.confirmedSlots || {});
+        next.bookingConfirmedSlots = clone(state.booking?.confirmedSlots || {});  // Booking-level
         next.lockedSlots = clone(state.booking?.lockedSlots || {});
         next.addressCollected = clone(state.booking?.addressCollected || {});
         next.bookingComplete = state.booking?.bookingComplete === true;

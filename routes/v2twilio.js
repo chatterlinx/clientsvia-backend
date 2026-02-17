@@ -2746,7 +2746,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // ═══════════════════════════════════════════════════════════════════════════
     // CORE RUNTIME - Process turn and collect events in buffer
     // ═══════════════════════════════════════════════════════════════════════════
-    const runtimeResult = FrontDeskCoreRuntime.processTurn(
+    // V116: processTurn is now async (supports S4A triage + scenario matching)
+    const runtimeResult = await FrontDeskCoreRuntime.processTurn(
       company.aiAgentSettings || {},
       callState,
       speechResult,
