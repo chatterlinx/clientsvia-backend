@@ -381,8 +381,15 @@ class ConsentGate {
         const cleaned = text.replace(/[^a-z'\s]/g, ' ').replace(/\s+/g, ' ').trim();
         const tokens = cleaned.split(' ').filter(Boolean);
 
-        const isYes = tokens.length > 0 && tokens.length <= 3 && tokens.every((t) => yesSet.has(t));
-        const isNo = tokens.length > 0 && tokens.length <= 3 && tokens.every((t) => noSet.has(t));
+        // V117c: Be tolerant of natural "yes I would / yeah that works" phrasing.
+        // We treat it as YES if it contains at least one yes-token and no no-tokens.
+        // (Same for NO). If it contains both, it's unclear.
+        const hasYesToken = tokens.some((t) => yesSet.has(t));
+        const hasNoToken = tokens.some((t) => noSet.has(t));
+        const tokenLimit = 6; // keep it tight to avoid misclassifying long utterances
+
+        const isYes = tokens.length > 0 && tokens.length <= tokenLimit && hasYesToken && !hasNoToken;
+        const isNo = tokens.length > 0 && tokens.length <= tokenLimit && hasNoToken && !hasYesToken;
 
         let result = 'UNCLEAR';
         let granted = false;

@@ -139,6 +139,7 @@ const CALL_REASON_PATTERNS = [
     { regex: /not\s+cool|no\s+cool|warm\s+air|hot\s+air/i, label: 'AC not cooling' },
     { regex: /not\s+heat|no\s+heat/i, label: 'not heating' },
     { regex: /not\s+turn|not\s+run|system\s+dead|thermostat.*blank/i, label: 'system not running' },
+    { regex: /not\s+work|not\s+working|isn'?t\s+work|isn'?t\s+working|stopped\s+working|won'?t\s+work/i, label: 'system not working' },
     { regex: /leak|drip|water/i, label: 'water leak' },
     { regex: /noise|loud|bang|rattle|squeal|buzz/i, label: 'unusual noise' },
     { regex: /smell|burning|smoke/i, label: 'burning smell' },
@@ -146,6 +147,25 @@ const CALL_REASON_PATTERNS = [
     { regex: /maintenance|tune[\s-]?up|check[\s-]?up|inspection/i, label: 'maintenance request' },
     { regex: /schedule|appointment|book|send\s+someone|get\s+someone\s+out/i, label: 'service request' }
 ];
+
+function stripCallReasonIntro(text) {
+    let t = `${text || ''}`.trim();
+    if (!t) return '';
+
+    // Remove leading greeting.
+    t = t.replace(/^(hi|hello|hey)\b[,\s]*/i, '');
+
+    // Remove common "my name is X" intro (keep the remainder).
+    t = t.replace(/\bmy\s+name\s+is\s+[a-zA-Z'\-]{2,25}[,\s]*/i, '');
+
+    // Remove "I'm a longtime customer..." style fluff.
+    t = t.replace(/\bi\s*(?:am|'m)\s+(?:a\s+)?long[-\s]?time\s+customer\b[^.?!]*[.?!]\s*/i, '');
+
+    // Remove repeated filler.
+    t = t.replace(/\b(um|uh)\b[,\s]*/gi, '');
+
+    return t.trim();
+}
 
 /**
  * Correction detection patterns
@@ -1967,9 +1987,12 @@ class SlotExtractor {
             return null;
         }
 
+        const stripped = stripCallReasonIntro(cleaned);
+        const sourceText = stripped || cleaned;
+
         const matchedLabels = [];
         for (const pattern of CALL_REASON_PATTERNS) {
-            if (pattern.regex.test(cleaned)) {
+            if (pattern.regex.test(sourceText)) {
                 matchedLabels.push(pattern.label);
             }
         }
@@ -1985,13 +2008,13 @@ class SlotExtractor {
         }
 
         // Keep this conservative so random short replies do not contaminate the slot.
-        const tokenCount = cleaned.split(/\s+/).length;
+        const tokenCount = sourceText.split(/\s+/).length;
         if (tokenCount < 4) {
             return null;
         }
 
         return {
-            value: cleaned.substring(0, 160),
+            value: sourceText.substring(0, 160),
             confidence: 0.55,
             source: SOURCE.UTTERANCE,
             patternSource: 'call_reason_fallback_utterance'

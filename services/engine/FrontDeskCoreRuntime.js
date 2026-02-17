@@ -728,11 +728,13 @@ class FrontDeskCoreRuntime {
                         }
 
                         const reason = `${state.plainSlots.call_reason_detail || ''}`.trim();
+                        const firstName = `${state.plainSlots.name || ''}`.trim().split(/\s+/)[0] || null;
+                        const nameAck = firstName ? `Thanks, ${firstName}. ` : '';
                         const reasonAck = reason && reason.length <= 80 ? `Got it — ${reason}. ` : 'Got it. ';
 
                         ownerResult = {
                             ...askResult,
-                            response: `${reasonAck}${askResult.response || ''}`.trim(),
+                            response: `${nameAck}${reasonAck}${askResult.response || ''}`.trim(),
                             matchSource: 'DISCOVERY_REASON_CONSENT'
                         };
                     } else {
