@@ -748,11 +748,15 @@ class FrontDeskCoreRuntime {
                     sectionTrail: tracer.getTrailString()
                 });
                 
-                // Return the acknowledgment - skip normal Discovery Flow for this turn
+                // Return the acknowledgment - skip normal Discovery Flow for this turn.
+                // CRITICAL: Persist state before returning so extracted slots (name/phone/call_reason_detail)
+                // are not lost on the next turn. Otherwise the system re-asks for data it already has.
+                const persistedEarly = StateStore.persist(callState, state);
+                const earlyLane = persistedEarly.sessionMode === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
                 return {
                     response: acknowledgment,
-                    state: state,
-                    lane: 'DISCOVERY',
+                    state: persistedEarly,
+                    lane: earlyLane,
                     signals: { escalate: false, bookingComplete: false },
                     action: 'CONTINUE',
                     matchSource: 'CALL_REASON_ACKNOWLEDGER',
