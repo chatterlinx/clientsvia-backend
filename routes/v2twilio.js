@@ -67,6 +67,8 @@ const { synthesizeSpeech } = require('../services/v2elevenLabsService');
 const { getSharedRedisClient, isRedisConfigured } = require('../services/redisClientFactory');
 const { normalizePhoneNumber, extractDigits, numbersMatch, } = require('../utils/phone');
 const crypto = require('crypto');
+// V116: Instant audio cache for ultra-fast <Play> on known lines
+const InstantAudioService = require('../services/instantAudio/InstantAudioService');
 
 // 🔌 V94: AWConfigReader for traced config reads in BookingFlowRunner (Phase B)
 let AWConfigReader;
@@ -2905,8 +2907,54 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     
     let audioUrl = null;
     let ttsLatencyMs = null;
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // V116 FAST-PATH: Pre-generated instant audio (GreetingInterceptor)
+    // ────────────────────────────────────────────────────────────────────────────
+    // If a cached MP3 exists for this exact line + voice fingerprint, skip ElevenLabs TTS.
+    try {
+      const isGreetingIntercept = runtimeResult?.matchSource === 'GREETING_INTERCEPTOR';
+      if (!audioUrl && isGreetingIntercept && elevenLabsVoice && responseText) {
+        const status = InstantAudioService.getStatus({
+          companyId: companyID,
+          kind: 'GREETING_RULE',
+          text: responseText,
+          voiceSettings
+        });
+
+        if (status.exists) {
+          audioUrl = `${getSecureBaseUrl(req)}${status.url}`;
+          voiceProviderUsed = 'instant_audio_cache';
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'INSTANT_AUDIO_CACHE_HIT',
+              turn: turnNumber,
+              data: {
+                kind: status.kind,
+                fileName: status.fileName,
+                url: status.url,
+                matchSource: runtimeResult?.matchSource || null
+              }
+            }).catch(() => {});
+          }
+        } else if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'INSTANT_AUDIO_CACHE_MISS',
+            turn: turnNumber,
+            data: { kind: 'GREETING_RULE', matchSource: runtimeResult?.matchSource || null }
+          }).catch(() => {});
+        }
+      }
+    } catch (e) {
+      // Never block voice output on cache logic.
+      logger.warn('[V2 RESPOND] Instant audio cache check failed', { error: e.message });
+    }
     
-    if (elevenLabsVoice && responseText) {
+    if (!audioUrl && elevenLabsVoice && responseText) {
       const ttsStartTime = Date.now();
       
       try {

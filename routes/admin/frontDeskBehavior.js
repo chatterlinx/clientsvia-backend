@@ -28,6 +28,8 @@ const { computeEffectiveConfigVersion } = require('../../utils/effectiveConfigVe
 const GlobalInstantResponseTemplate = require('../../models/GlobalInstantResponseTemplate');
 // V93: BlackBoxLogger for CONFIG_WRITE events (AW ⇄ RE marriage)
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
+// V116: Instant audio generator/cache (prebuilt MP3 for instant response lines)
+const InstantAudioService = require('../../services/instantAudio/InstantAudioService');
 // V110++: Import canonical slot/flow defaults
 const { 
     DEFAULT_SLOT_REGISTRY, 
@@ -494,6 +496,123 @@ function sanitizeServiceFlow(input, { legacyKeyMap, companyId }) {
         conversions
     };
 }
+
+// ============================================================================
+// INSTANT AUDIO (V116) - Generate/cache MP3 per instant-response line
+// ============================================================================
+// Used by: Front Desk Behavior → Global Settings → Instant Audio Generator modal
+// Initial use case: GreetingInterceptor responses (greeting rules)
+// ============================================================================
+
+/**
+ * POST /api/admin/front-desk-behavior/:companyId/instant-audio/status
+ * Body: { items: [{ kind: 'GREETING_RULE', text: '...' }, ...] }
+ * Returns: { success, items: [{ kind, exists, url, fileName, hash }] }
+ */
+router.post('/:companyId/instant-audio/status', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_READ), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const items = Array.isArray(req.body?.items) ? req.body.items : [];
+        if (!companyId) {
+            return res.status(400).json({ success: false, error: 'companyId required' });
+        }
+
+        const company = await v2Company.findById(companyId)
+            .select('aiAgentSettings.voiceSettings companyName')
+            .lean();
+        if (!company) {
+            return res.status(404).json({ success: false, error: 'Company not found' });
+        }
+
+        const voiceSettings = company?.aiAgentSettings?.voiceSettings || {};
+
+        const out = items.map((it) => {
+            const kind = it?.kind || 'LINE';
+            const text = it?.text || '';
+            const status = InstantAudioService.getStatus({ companyId, kind, text, voiceSettings });
+            return {
+                kind: status.kind,
+                exists: status.exists,
+                url: status.url,
+                fileName: status.fileName,
+                hash: status.hash
+            };
+        });
+
+        return res.json({ success: true, items: out });
+    } catch (err) {
+        logger.error('[FRONT DESK BEHAVIOR] instant-audio status failed', { error: err.message });
+        return res.status(500).json({ success: false, error: 'Failed to check instant audio status', message: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/front-desk-behavior/:companyId/instant-audio/generate
+ * Body: { kind: 'GREETING_RULE', text: '...', force?: boolean }
+ * Returns: { success, generated, url, fileName, hash, bytes }
+ */
+router.post('/:companyId/instant-audio/generate', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const kind = req.body?.kind || 'LINE';
+        const text = req.body?.text || '';
+        const force = req.body?.force === true;
+
+        const company = await v2Company.findById(companyId);
+        if (!company) {
+            return res.status(404).json({ success: false, error: 'Company not found' });
+        }
+
+        const voiceSettings = company?.aiAgentSettings?.voiceSettings || {};
+
+        const result = await InstantAudioService.generate({
+            companyId,
+            kind,
+            text,
+            company,
+            voiceSettings,
+            force
+        });
+
+        return res.json({
+            success: true,
+            generated: result.generated === true,
+            url: result.url,
+            fileName: result.fileName,
+            hash: result.hash,
+            bytes: result.bytes || null
+        });
+    } catch (err) {
+        const status = err.code === 'VOICE_NOT_CONFIGURED' || err.code === 'TEXT_REQUIRED' || err.code === 'TEXT_TOO_LONG' ? 400 : 500;
+        logger.error('[FRONT DESK BEHAVIOR] instant-audio generate failed', { error: err.message, code: err.code });
+        return res.status(status).json({ success: false, error: err.message, code: err.code || null });
+    }
+});
+
+/**
+ * POST /api/admin/front-desk-behavior/:companyId/instant-audio/remove
+ * Body: { kind: 'GREETING_RULE', text: '...' }
+ * Returns: { success, removed }
+ */
+router.post('/:companyId/instant-audio/remove', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const kind = req.body?.kind || 'LINE';
+        const text = req.body?.text || '';
+
+        const company = await v2Company.findById(companyId).select('aiAgentSettings.voiceSettings').lean();
+        if (!company) {
+            return res.status(404).json({ success: false, error: 'Company not found' });
+        }
+        const voiceSettings = company?.aiAgentSettings?.voiceSettings || {};
+
+        const result = InstantAudioService.remove({ companyId, kind, text, voiceSettings });
+        return res.json({ success: true, removed: result.removed === true });
+    } catch (err) {
+        logger.error('[FRONT DESK BEHAVIOR] instant-audio remove failed', { error: err.message });
+        return res.status(500).json({ success: false, error: 'Failed to remove instant audio', message: err.message });
+    }
+});
 
 // ============================================================================
 // GET - Fetch current config

@@ -10096,6 +10096,74 @@ Sean → Shawn, Shaun`;
                     <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Transfer Message</label>
                     <input type="text" id="fdb-escalation-transfer" value="${e.transferMessage || ''}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                 </div>
+
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- INSTANT AUDIO GENERATOR (V116) -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                ${this.renderInstantAudioGeneratorCard()}
+            </div>
+        `;
+    }
+
+    renderInstantAudioGeneratorCard() {
+        const hasVoice = Boolean(this.config?.voiceSettings?.voiceId) || Boolean(this.config?.aiVoiceSettings?.voiceId);
+        return `
+            <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+                    <div>
+                        <h3 style="margin:0 0 4px 0; color:#7ee787; font-size:1.25rem;">🎧 Instant Audio Generator</h3>
+                        <p style="color:#8b949e; font-size:0.85rem; margin:0; line-height:1.5; max-width:900px;">
+                            Pre-generate MP3 files for <strong style="color:#c9d1d9;">instant response lines</strong> so Twilio can <code>&lt;Play&gt;</code> them with near-zero latency.
+                            <br/>Initial scope: <strong>Greeting Interceptor</strong> (your Greeting Rules responses).
+                        </p>
+                        <p style="color:#6e7681; font-size:0.8rem; margin:10px 0 0 0;">
+                            Uses the company’s ElevenLabs voice from the <strong>AI Voice Settings</strong> tab. If no voice is configured, generation will fail.
+                        </p>
+                    </div>
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+                        <button id="global-instant-audio-open"
+                            style="background:#238636; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:700; font-size:0.85rem; white-space:nowrap;">
+                            Open Generator
+                        </button>
+                        <span style="color:${hasVoice ? '#3fb950' : '#f85149'}; font-size:0.75rem; font-weight:700;">
+                            ${hasVoice ? 'VOICE: CONFIGURED' : 'VOICE: NOT DETECTED'}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Modal -->
+                <div id="global-instant-audio-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center;">
+                    <div style="background:#0d1117; border:1px solid #30363d; border-radius:12px; width:95%; max-width:1100px; max-height:90vh; overflow:hidden; display:flex; flex-direction:column;">
+                        <div style="padding:18px 20px; border-bottom:1px solid #30363d; display:flex; justify-content:space-between; align-items:center; background:#161b22;">
+                            <div>
+                                <div style="color:#c9d1d9; font-weight:800; font-size:1.05rem;">🎧 Instant Audio Generator</div>
+                                <div style="color:#8b949e; font-size:0.8rem; margin-top:2px;">
+                                    Generate cached MP3s for Greeting Rules (GreetingInterceptor). These files live under <code>/audio/instant-lines</code>.
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <button id="global-instant-audio-generate-all"
+                                    style="background:#1f6feb; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:700; font-size:0.8rem;">
+                                    Generate All
+                                </button>
+                                <button id="global-instant-audio-close" style="background:transparent; border:none; color:#8b949e; font-size:26px; cursor:pointer; padding:6px;">&times;</button>
+                            </div>
+                        </div>
+
+                        <div id="global-instant-audio-body" style="padding:18px 20px; overflow-y:auto; flex:1; background:#0d1117;">
+                            <div style="color:#8b949e; font-size:0.9rem; padding:10px 0;">
+                                Loading greeting rules...
+                            </div>
+                        </div>
+
+                        <div style="padding:14px 20px; border-top:1px solid #30363d; background:#161b22; display:flex; justify-content:flex-end; gap:10px;">
+                            <button id="global-instant-audio-done"
+                                style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:8px 18px; border-radius:8px; cursor:pointer; font-weight:700; font-size:0.85rem;">
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -13820,6 +13888,196 @@ Sean → Shawn, Shaun`;
         
         // Global Names: no textarea listeners needed — all interactions go through
         // globalAddNames(), globalRemoveName(), globalSearchNames(), globalCopyNames()
+
+        // ════════════════════════════════════════════════════════════════════════
+        // V116: INSTANT AUDIO GENERATOR MODAL (Greeting Rules)
+        // ════════════════════════════════════════════════════════════════════════
+        const openBtn = content.querySelector('#global-instant-audio-open');
+        const modal = content.querySelector('#global-instant-audio-modal');
+        const closeBtn = content.querySelector('#global-instant-audio-close');
+        const doneBtn = content.querySelector('#global-instant-audio-done');
+        const body = content.querySelector('#global-instant-audio-body');
+        const genAllBtn = content.querySelector('#global-instant-audio-generate-all');
+
+        const closeModal = () => {
+            if (modal) modal.style.display = 'none';
+        };
+
+        const token = () => localStorage.getItem('adminToken') || localStorage.getItem('token') || sessionStorage.getItem('token');
+
+        const getGreetingRules = () => {
+            // Prefer UI state if present, otherwise API-loaded persisted rules.
+            return (this.config?.greetingRules && Array.isArray(this.config.greetingRules))
+                ? this.config.greetingRules
+                : (this.config?.conversationStages?.greetingRules || []);
+        };
+
+        const renderRows = (rules, statusByIdx = {}) => {
+            if (!rules || rules.length === 0) {
+                return `<div style="color:#8b949e; padding:10px 0;">No greeting rules found. Add some in the Personality tab first.</div>`;
+            }
+
+            const rows = rules.map((r, idx) => {
+                const trigger = this.escapeHtml(r?.trigger || '');
+                const response = this.escapeHtml(r?.response || '');
+                const st = statusByIdx[idx] || {};
+                const exists = st.exists === true;
+                const url = st.url || '';
+
+                return `
+                    <div data-idx="${idx}" style="border:1px solid #21262d; border-radius:10px; padding:14px; background:#0b0f14; margin-bottom:10px;">
+                        <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                            <div style="flex:1;">
+                                <div style="color:#6e7681; font-size:0.72rem; font-weight:800; letter-spacing:0.04em;">TRIGGER</div>
+                                <div style="color:#c9d1d9; font-size:0.95rem; margin-top:4px;">${trigger || '<em style="color:#8b949e;">(empty)</em>'}</div>
+                                <div style="color:#6e7681; font-size:0.72rem; font-weight:800; letter-spacing:0.04em; margin-top:10px;">RESPONSE LINE</div>
+                                <div style="color:#c9d1d9; font-size:0.95rem; margin-top:4px; line-height:1.45;">${response || '<em style="color:#8b949e;">(empty)</em>'}</div>
+                            </div>
+                            <div style="width:320px; flex-shrink:0;">
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="color:#6e7681; font-size:0.72rem; font-weight:800; letter-spacing:0.04em;">AUDIO</div>
+                                    <span style="padding:4px 10px; border-radius:999px; font-size:0.72rem; font-weight:900; border:1px solid ${exists ? '#238636' : '#30363d'}; color:${exists ? '#7ee787' : '#8b949e'}; background:${exists ? '#052e16' : '#161b22'};">
+                                        ${exists ? 'GENERATED' : 'MISSING'}
+                                    </span>
+                                </div>
+                                <div style="margin-top:10px;">
+                                    ${exists
+                                        ? `<audio controls preload="none" style="width:100%;" src="${url}"></audio>
+                                           <div style="margin-top:8px; display:flex; gap:8px;">
+                                               <a href="${url}" download style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; padding:6px 10px; border-radius:8px; text-decoration:none; font-weight:800; font-size:0.75rem;">Download</a>
+                                               <button class="global-instant-audio-remove" style="background:#2d0b0b; color:#f85149; border:1px solid #f8514940; padding:6px 10px; border-radius:8px; cursor:pointer; font-weight:900; font-size:0.75rem;">Remove</button>
+                                           </div>`
+                                        : `<div style="color:#8b949e; font-size:0.8rem; margin-top:6px;">Not generated yet.</div>`
+                                    }
+                                </div>
+                                <div style="display:flex; gap:8px; margin-top:12px;">
+                                    <button class="global-instant-audio-generate"
+                                        style="flex:1; background:#238636; color:#fff; border:none; padding:8px 10px; border-radius:8px; cursor:pointer; font-weight:900; font-size:0.8rem;">
+                                        Generate MP3
+                                    </button>
+                                </div>
+                                <div class="global-instant-audio-status" style="margin-top:8px; color:#6e7681; font-size:0.75rem;"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return rows;
+        };
+
+        const loadStatus = async () => {
+            if (!body) return;
+            const rules = getGreetingRules();
+            const items = rules.map(r => ({ kind: 'GREETING_RULE', text: r?.response || '' }));
+            body.innerHTML = renderRows(rules, {});
+
+            try {
+                const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/status`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                const json = await res.json();
+                const statusByIdx = {};
+                (json.items || []).forEach((it, idx) => { statusByIdx[idx] = it; });
+                body.innerHTML = renderRows(rules, statusByIdx);
+            } catch (e) {
+                body.innerHTML = `
+                    <div style="color:#f85149; padding:10px 0; font-weight:800;">Failed to load audio status.</div>
+                    <div style="color:#8b949e; font-size:0.85rem; line-height:1.6;">${this.escapeHtml(e.message || String(e))}</div>
+                `;
+            }
+        };
+
+        const generateOne = async (idx, force = false) => {
+            const rules = getGreetingRules();
+            const rule = rules[idx];
+            const text = rule?.response || '';
+            const card = body?.querySelector(`[data-idx="${idx}"]`);
+            const statusEl = card?.querySelector('.global-instant-audio-status');
+            if (statusEl) statusEl.textContent = 'Generating...';
+
+            try {
+                const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/generate`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ kind: 'GREETING_RULE', text, force })
+                });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+                if (statusEl) statusEl.textContent = json.generated ? 'Generated.' : 'Already generated.';
+                await loadStatus();
+            } catch (e) {
+                if (statusEl) statusEl.textContent = `Error: ${e.message || String(e)}`;
+            }
+        };
+
+        const removeOne = async (idx) => {
+            const rules = getGreetingRules();
+            const rule = rules[idx];
+            const text = rule?.response || '';
+            const card = body?.querySelector(`[data-idx="${idx}"]`);
+            const statusEl = card?.querySelector('.global-instant-audio-status');
+            if (statusEl) statusEl.textContent = 'Removing...';
+
+            try {
+                const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/remove`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ kind: 'GREETING_RULE', text })
+                });
+                const json = await res.json();
+                if (!res.ok || !json.success) throw new Error(json.error || `HTTP ${res.status}`);
+                if (statusEl) statusEl.textContent = json.removed ? 'Removed.' : 'Not present.';
+                await loadStatus();
+            } catch (e) {
+                if (statusEl) statusEl.textContent = `Error: ${e.message || String(e)}`;
+            }
+        };
+
+        if (openBtn && modal) {
+            openBtn.addEventListener('click', async () => {
+                modal.style.display = 'flex';
+                await loadStatus();
+            });
+        }
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (doneBtn) doneBtn.addEventListener('click', closeModal);
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+        }
+        if (genAllBtn) {
+            genAllBtn.addEventListener('click', async () => {
+                const rules = getGreetingRules();
+                for (let i = 0; i < rules.length; i++) {
+                    // Skip empty lines
+                    if (!rules[i]?.response) continue;
+                    // eslint-disable-next-line no-await-in-loop
+                    await generateOne(i, false);
+                }
+            });
+        }
+
+        // Event delegation inside modal body
+        if (body) {
+            body.addEventListener('click', async (e) => {
+                const card = e.target.closest('[data-idx]');
+                if (!card) return;
+                const idx = parseInt(card.getAttribute('data-idx'), 10);
+                if (Number.isNaN(idx)) return;
+
+                if (e.target.closest('.global-instant-audio-generate')) {
+                    await generateOne(idx, false);
+                }
+                if (e.target.closest('.global-instant-audio-remove')) {
+                    await removeOne(idx);
+                }
+            });
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════════
