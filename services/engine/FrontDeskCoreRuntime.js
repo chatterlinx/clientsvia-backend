@@ -49,9 +49,8 @@ const { selectOpener, prependOpener } = require('./OpenerEngine');
 
 // Interceptors - modular pattern matchers
 const GreetingInterceptor = require('./interceptors/GreetingInterceptor');
-const EscalationDetector = require('./interceptors/EscalationDetector');
-const ConnectionQualityGate = require('./interceptors/ConnectionQualityGate');
 // NOTE: CallReasonExtractor REMOVED in V117 Nuclear Cut - was hijacking turn ownership
+// NOTE: S3.5 detection trigger block removed in V117 clean-sweep (unused + crash risk)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // V117: NUCLEAR CUT - ONE BRAIN ARCHITECTURE
@@ -120,6 +119,13 @@ function readSlotValue(slots, slotId) {
     return entry;
 }
 
+function checkpoint(bufferEvent, name, data = {}) {
+    bufferEvent('FD_CHECKPOINT', {
+        checkpoint: name,
+        ...data
+    });
+}
+
 class FrontDeskCoreRuntime {
     /**
      * Process a single turn of the conversation.
@@ -129,10 +135,9 @@ class FrontDeskCoreRuntime {
      * 2. S2: Input Text Truth (log what text we got)
      * 3. GREETING CHECK: Intercept "good morning" etc. BEFORE extraction
      * 4. S3: Slot Extraction (name/phone/address)
-     * 5. S4A: Triage + Scenario pipeline (V116 NEW - async)
-     * 6. S4/S5/S6: Discovery → Consent → Booking flow
+     * 5. S4/S5/S6: Discovery → Consent → Booking flow
      * 
-     * V116 CHANGE: Made async to support S4A triage + scenario matching
+     * V117 CHANGE: S4A removed (clean sweep). No competing speakers.
      * 
      * @returns {Promise<Object>} { response, state, lane, signals, action, matchSource, turnEventBuffer }
      */
@@ -157,6 +162,14 @@ class FrontDeskCoreRuntime {
         
         try {
             state = StateStore.load(callState);
+            checkpoint(bufferEvent, 'STATE_LOADED', {
+                lane: state.lane,
+                turnCount: turn,
+                plainSlotKeys: Object.keys(state.plainSlots || {}),
+                pendingSlotKeys: Object.keys(state.pendingSlots || {}),
+                discoveryStepId: state.discovery?.currentStepId || null,
+                discoverySlotId: state.discovery?.currentSlotId || null
+            });
             
             // ═══════════════════════════════════════════════════════════════════════════
             // S1: RUNTIME OWNERSHIP
@@ -337,6 +350,11 @@ class FrontDeskCoreRuntime {
                 inputTextSource: inputSource,
                 inputTextLength: inputText.length,
                 inputTextPreview: inputText.substring(0, 120)
+            });
+            checkpoint(bufferEvent, 'INPUT_TEXT_SELECTED', {
+                inputTextSource: inputSource,
+                sttConfidence: context.sttConfidence ?? null,
+                inputTextLength: inputText.length
             });
             
             // ═══════════════════════════════════════════════════════════════════════════
@@ -520,6 +538,11 @@ class FrontDeskCoreRuntime {
                 plainValues = {};
             }
             state.plainSlots = { ...state.plainSlots, ...plainValues };
+            checkpoint(bufferEvent, 'SLOTS_MERGED', {
+                extractedSlotIds: Object.keys(plainValues || {}),
+                plainSlotKeys: Object.keys(state.plainSlots || {}),
+                pendingSlotKeys: Object.keys(state.pendingSlots || {})
+            });
             
             // ═══════════════════════════════════════════════════════════════════════════
             // V116: PENDING SLOT STORAGE
@@ -592,112 +615,6 @@ class FrontDeskCoreRuntime {
             });
 
             // ═══════════════════════════════════════════════════════════════════════════
-            // S3.5: DETECTION TRIGGER PROCESSING (V116)
-            // ═══════════════════════════════════════════════════════════════════════════
-            // WIRED FROM: frontDeskBehavior.detectionTriggers
-            // 
-            // PURPOSE:
-            //   Detect caller patterns and set behavior flags for adaptive responses.
-            //   These flags influence how S4A, Discovery, and Booking behave.
-            // 
-            // TRIGGERS:
-            //   - describingProblem: Activate scenario matching
-            //   - trustConcern: Activate empathy mode
-            //   - callerFeelsIgnored: Add acknowledgment layer
-            //   - refusedSlot: Mark for graceful skip (don't loop)
-            // 
-            // EVENTS EMITTED:
-            //   - SECTION_S3_5_* per trigger type (when detected)
-            // ═══════════════════════════════════════════════════════════════════════════
-            currentSection = 'S3_5_DETECTION_TRIGGERS';
-            
-            const detectionConfig = company?.aiAgentSettings?.frontDeskBehavior?.detectionTriggers || {};
-            const inputLower = (userInput || '').toLowerCase();
-            
-            // Check: Trust Concern
-            const trustConcernTriggers = getTriggers(detectionConfig, 'trustConcern', false);
-            const trustConcernDetected = trustConcernTriggers.some(trigger => 
-                inputLower.includes((trigger || '').toLowerCase())
-            );
-            
-            if (trustConcernDetected) {
-                state._empathyMode = 'trust_concern';
-                
-                bufferEvent('SECTION_S3_5_TRUST_CONCERN_DETECTED', {
-                    trigger: 'trustConcern',
-                    action: 'ACTIVATE_EMPATHY_MODE',
-                    empathyMode: 'trust_concern'
-                });
-                
-                logger.info('[FRONT_DESK_CORE_RUNTIME] S3.5: Trust concern detected', {
-                    callSid,
-                    empathyMode: 'trust_concern'
-                });
-            }
-            
-            // Check: Caller Feels Ignored
-            const callerFeelsIgnoredTriggers = getTriggers(detectionConfig, 'callerFeelsIgnored', false);
-            const callerFeelsIgnoredDetected = callerFeelsIgnoredTriggers.some(trigger => 
-                inputLower.includes((trigger || '').toLowerCase())
-            );
-            
-            if (callerFeelsIgnoredDetected) {
-                state._empathyMode = 'feels_ignored';
-                
-                bufferEvent('SECTION_S3_5_CALLER_FEELS_IGNORED_DETECTED', {
-                    trigger: 'callerFeelsIgnored',
-                    action: 'ACTIVATE_EMPATHY_MODE',
-                    empathyMode: 'feels_ignored'
-                });
-                
-                logger.info('[FRONT_DESK_CORE_RUNTIME] S3.5: Caller feels ignored detected', {
-                    callSid,
-                    empathyMode: 'feels_ignored'
-                });
-            }
-            
-            // Check: Refused Slot
-            const refusedSlotTriggers = getTriggers(detectionConfig, 'refusedSlot', false);
-            const refusedSlotDetected = refusedSlotTriggers.some(trigger => 
-                inputLower.includes((trigger || '').toLowerCase())
-            );
-            
-            if (refusedSlotDetected) {
-                state._slotRefusalDetected = true;
-                state._slotRefusalTurn = turn;
-                
-                bufferEvent('SECTION_S3_5_REFUSED_SLOT_DETECTED', {
-                    trigger: 'refusedSlot',
-                    action: 'MARK_CURRENT_SLOT_OPTIONAL',
-                    currentSlotId: state.discovery?.currentSlotId || null
-                });
-                
-                logger.info('[FRONT_DESK_CORE_RUNTIME] S3.5: Slot refusal detected', {
-                    callSid,
-                    currentSlotId: state.discovery?.currentSlotId
-                });
-            }
-            
-            // Check: Describing Problem (Already used in S4A-2, but log for visibility)
-            const describingProblemTriggers = getTriggers(detectionConfig, 'describingProblem', false);
-            const describingProblemDetected = describingProblemTriggers.some(trigger => 
-                inputLower.includes((trigger || '').toLowerCase())
-            );
-            
-            if (describingProblemDetected) {
-                state._describingProblem = true;
-                
-                bufferEvent('SECTION_S3_5_DESCRIBING_PROBLEM_DETECTED', {
-                    trigger: 'describingProblem',
-                    action: 'WILL_ACTIVATE_SCENARIO_MATCHING_IN_S4A'
-                });
-                
-                logger.debug('[FRONT_DESK_CORE_RUNTIME] S3.5: Problem description detected', {
-                    callSid
-                });
-            }
-
-            // ═══════════════════════════════════════════════════════════════════════════
             // V117: CALL REASON EXTRACTION REMOVED
             // ═══════════════════════════════════════════════════════════════════════════
             // CallReasonExtractor acknowledgment DELETED - was hijacking turn ownership.
@@ -711,6 +628,12 @@ class FrontDeskCoreRuntime {
                 slotCount: Object.keys(state.plainSlots || {}).length,
                 callReasonCaptured: !!state.plainSlots.call_reason_detail,
                 sectionTrail: tracer.getTrailString()
+            });
+            checkpoint(bufferEvent, 'OWNER_SELECTION_START', {
+                lane: state.lane,
+                plainSlotKeys: Object.keys(state.plainSlots || {}),
+                discoveryStepId: state.discovery?.currentStepId || null,
+                discoverySlotId: state.discovery?.currentSlotId || null
             });
 
             // ═══════════════════════════════════════════════════════════════════════════
@@ -749,7 +672,20 @@ class FrontDeskCoreRuntime {
                 tracer.enter(SECTIONS.S4_DISCOVERY_ENGINE);
                 
                 // DiscoveryFlowRunner is the ONLY speaker - run it FIRST, always
-                ownerResult = DiscoveryFlowRunner.run({ company, callSid, userInput, state });
+                ownerResult = DiscoveryFlowRunner.run({
+                    company,
+                    callSid,
+                    userInput,
+                    state,
+                    emitEvent: bufferEvent,
+                    turn
+                });
+                checkpoint(bufferEvent, 'DISCOVERY_FLOW_RETURNED', {
+                    matchSource: ownerResult.matchSource,
+                    stepId: ownerResult.state?.discovery?.currentStepId || null,
+                    slotId: ownerResult.state?.discovery?.currentSlotId || null,
+                    responsePreview: (ownerResult.response || '').substring(0, 80)
+                });
                 
                 // EMIT PROOF EVENT: Discovery is the owner
                 bufferEvent('FD_OWNER_PROOF', {
@@ -850,6 +786,14 @@ class FrontDeskCoreRuntime {
             currentSection = 'PERSIST_STATE';
             const persistedState = StateStore.persist(callState, ownerResult.state || state);
             const lane = persistedState.sessionMode === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
+            checkpoint(bufferEvent, 'STATE_PERSISTED', {
+                lane,
+                callReasonCaptured: persistedState.callReasonCaptured === true,
+                namePresent: persistedState.namePresent === true,
+                addressPresent: persistedState.addressPresent === true,
+                discoveryStepId: persistedState.discoveryCurrentStepId || null,
+                discoverySlotId: persistedState.discoveryCurrentSlotId || null
+            });
 
             // ═══════════════════════════════════════════════════════════════════════════
             // OPENER ENGINE (V117 - Simplified, no scenario reflection)

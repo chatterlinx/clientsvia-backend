@@ -34,9 +34,33 @@
 
 const logger = require('../../utils/logger');
 const { DEFAULT_SLOT_REGISTRY, DEFAULT_DISCOVERY_FLOW, DEFAULT_BOOKING_FLOW, DEFAULT_FLOW_POLICIES } = require('../../config/onboarding/DefaultFrontDeskPreset');
-const { renderSlotTemplateOrFallback, defaultSlotConfirmFallback } = require('./TemplateRenderer');
+const { renderSlotTemplateOrFallback, defaultSlotConfirmFallback, hasUnresolvedPlaceholders } = require('./TemplateRenderer');
 
 const VERSION = 'STEP_ENGINE_V110';
+
+function defaultDiscoveryMissingPrompt(slot, step) {
+    const rawLabel = `${slot?.label || ''}`.trim();
+    const slotId = `${step?.slotId || ''}`.trim();
+    const labelLower = rawLabel.toLowerCase();
+    const slotLower = slotId.toLowerCase();
+
+    if (slotLower === 'name' || labelLower.includes('first name')) {
+        return "What's your first name?";
+    }
+    if (slotLower === 'lastname' || slotLower === 'name.last' || labelLower.includes('last name')) {
+        return "What's your last name?";
+    }
+    if (slotLower === 'phone' || labelLower.includes('phone') || labelLower.includes('number')) {
+        return "What's the best number to reach you?";
+    }
+    if (slotLower === 'address' || slotLower === 'address.full' || labelLower.includes('address')) {
+        return "What's the service address?";
+    }
+    if (slotLower === 'call_reason_detail' || labelLower.includes('reason')) {
+        return "What can I help you with today?";
+    }
+    return `What is your ${rawLabel || slotId}?`;
+}
 
 /**
  * SLOT STATES - Enterprise lifecycle
@@ -459,8 +483,20 @@ class StepEngine {
                     prompt = step.reprompt;
                     promptSource = `discoveryFlow.steps[${step.slotId}].reprompt`;
                 } else {
-                    prompt = step.ask;
-                    promptSource = `discoveryFlow.steps[${step.slotId}].ask`;
+                    // V117: Ask-missing MUST NOT use templates that require {value}.
+                    // Prefer askMissing; otherwise use ask only if it doesn't contain placeholders.
+                    prompt = step.askMissing || step.ask;
+                    promptSource = step.askMissing
+                        ? `discoveryFlow.steps[${step.slotId}].askMissing`
+                        : `discoveryFlow.steps[${step.slotId}].ask`;
+                    if (prompt && hasUnresolvedPlaceholders(prompt)) {
+                        // When slot value is missing, do NOT use "did I get X right?" reprompts.
+                        // Prefer explicit repromptMissing, otherwise use a deterministic default.
+                        prompt = step.repromptMissing || defaultDiscoveryMissingPrompt(slot, step) || step.reprompt;
+                        promptSource = step.repromptMissing
+                            ? `discoveryFlow.steps[${step.slotId}].repromptMissing`
+                            : 'DEFAULT_DISCOVERY_MISSING_PROMPT';
+                    }
                 }
                 
                 // Only ask if we have a prompt configured
@@ -470,7 +506,7 @@ class StepEngine {
                         template: prompt,
                         slotId: step.slotId,
                         slotValue: value,
-                        fallbackText: `What is your ${slot.label || step.slotId}?`,
+                        fallbackText: defaultDiscoveryMissingPrompt(slot, step),
                         logger,
                         callId: this.callId,
                         context: 'discovery_ask_missing'

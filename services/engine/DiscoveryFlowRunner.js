@@ -13,6 +13,26 @@ try {
     BlackBoxLogger = null;
 }
 
+function defaultDiscoveryMissingPrompt(slotId) {
+    const id = `${slotId || ''}`.toLowerCase();
+    if (id === 'name' || id === 'name.first') {
+        return "What's your first name?";
+    }
+    if (id === 'name.last' || id === 'lastname') {
+        return "What's your last name?";
+    }
+    if (id === 'phone') {
+        return "What's the best number to reach you?";
+    }
+    if (id === 'address' || id === 'address.full') {
+        return "What's the service address?";
+    }
+    if (id === 'call_reason_detail') {
+        return 'What can I help you with today?';
+    }
+    return `What is your ${slotId}?`;
+}
+
 /**
  * ============================================================================
  * DISCOVERY FLOW RUNNER - V110 Phase B State Continuity
@@ -30,9 +50,47 @@ try {
  * ============================================================================
  */
 class DiscoveryFlowRunner {
-    static run({ company, callSid, userInput, state }) {
+    /**
+     * ============================================================================
+     * S4 — DISCOVERY FLOW (SECTIONED, LOCKABLE)
+     * ============================================================================
+     * This runner is intentionally split into explicit sub-sections so we can
+     * stabilize each one independently without disturbing others.
+     *
+     * Contract:
+     * - DiscoveryFlowRunner is the ONLY discovery speaker.
+     * - Emits SECTION_S4_* events when emitEvent is provided (preferred).
+     * - No other modules should modify discovery state pointers.
+     */
+    static run({ company, callSid, userInput, state, emitEvent = null, turn = null }) {
+        const emit = (type, data) => {
+            try {
+                if (typeof emitEvent === 'function') {
+                    emitEvent(type, data);
+                    return;
+                }
+            } catch (_err) {
+                // Never let observability break discovery.
+            }
+        };
+
+        const safePreview = (text, n) => `${text || ''}`.substring(0, n);
+
+        // ───────────────────────────────────────────────────────────────────
+        // S4.0 — Start + input snapshot
+        // ───────────────────────────────────────────────────────────────────
+        emit('SECTION_S4_0_DISCOVERY_START', {
+            turn: typeof turn === 'number' ? turn : null,
+            inputLength: `${userInput || ''}`.length,
+            inputPreview: safePreview(userInput, 120),
+            lane: state?.lane || 'DISCOVERY'
+        });
+
         const stepEngine = StepEngine.forCall({ company, callId: callSid });
 
+        // ───────────────────────────────────────────────────────────────────
+        // S4.1 — Build engine state (inputs to StepEngine)
+        // ───────────────────────────────────────────────────────────────────
         const discoveryState = {
             currentFlow: 'discovery',
             collectedSlots: { ...(state.plainSlots || {}) },
@@ -43,18 +101,50 @@ class DiscoveryFlowRunner {
             currentSlotId: state.discovery?.currentSlotId || null,
             slotMeta: { ...(state.slotMeta || {}) }
         };
+        emit('SECTION_S4_1_ENGINE_STATE_BUILT', {
+            currentStepId: discoveryState.currentStepId,
+            currentSlotId: discoveryState.currentSlotId,
+            pendingConfirmation: discoveryState.pendingConfirmation,
+            collectedSlotKeys: Object.keys(discoveryState.collectedSlots || {}),
+            confirmedSlotKeys: Object.keys(discoveryState.confirmedSlots || {}),
+            repromptKeys: Object.keys(discoveryState.repromptCount || {})
+        });
 
+        // ───────────────────────────────────────────────────────────────────
+        // S4.2 — StepEngine execution
+        // ───────────────────────────────────────────────────────────────────
         const result = stepEngine.runDiscoveryStep({
             state: discoveryState,
             userInput,
             extractedSlots: { ...(state.plainSlots || {}) }
         });
+        emit('SECTION_S4_2_STEP_ENGINE_RESULT', {
+            replyPresent: !!result?.reply,
+            replyPreview: safePreview(result?.reply, 120),
+            stepId: result?.state?.currentStepId || null,
+            slotId: result?.state?.currentSlotId || null,
+            pendingConfirmation: result?.state?.pendingConfirmation || null,
+            debug: result?.debug || null
+        });
 
+        // ───────────────────────────────────────────────────────────────────
+        // S4.3 — Merge collected slots back into plainSlots truth
+        // ───────────────────────────────────────────────────────────────────
         const nextPlainSlots = {
             ...(state.plainSlots || {}),
             ...(result.state?.collectedSlots || {})
         };
+        emit('SECTION_S4_3_PLAIN_SLOTS_MERGED', {
+            mergedKeys: Object.keys(result.state?.collectedSlots || {}),
+            plainSlotKeys: Object.keys(nextPlainSlots || {}),
+            hasCallReason: !!nextPlainSlots.call_reason_detail,
+            hasName: !!nextPlainSlots.name || !!nextPlainSlots['name.first'],
+            hasAddress: !!nextPlainSlots.address
+        });
 
+        // ───────────────────────────────────────────────────────────────────
+        // S4.4 — Persist discovery pointers into shared state
+        // ───────────────────────────────────────────────────────────────────
         const next = {
             ...state,
             lane: 'DISCOVERY',
@@ -73,6 +163,11 @@ class DiscoveryFlowRunner {
             }
         };
         DiscoveryFlowRunner.ensureDiscoveryStepPointers(company, next);
+        emit('SECTION_S4_4_POINTERS_ENSURED', {
+            currentStepId: next?.discovery?.currentStepId || null,
+            currentSlotId: next?.discovery?.currentSlotId || null,
+            pendingConfirmation: next?.discovery?.pendingConfirmation || null
+        });
 
         // ═══════════════════════════════════════════════════════════════════════════
         // REGRESSION GUARD: Check if reply would regress after S5
@@ -84,11 +179,25 @@ class DiscoveryFlowRunner {
                 response: result.reply,
                 state: next
             });
+            emit('SECTION_S4_5_REGRESSION_GUARD_APPLIED', {
+                source: 'step_engine_reply',
+                changed: guardedReply !== result.reply,
+                guardedPreview: safePreview(guardedReply, 120)
+            });
             
             const response = DiscoveryFlowRunner.sanitizeReply({
                 company,
                 response: guardedReply,
                 state: next
+            });
+            emit('SECTION_S4_6_REPLY_SANITIZED', {
+                hadPlaceholders: hasUnresolvedPlaceholders(guardedReply),
+                finalPreview: safePreview(response, 160)
+            });
+            emit('SECTION_S4_7_DISCOVERY_END', {
+                matchSource: 'DISCOVERY_FLOW_RUNNER',
+                stepId: next?.discovery?.currentStepId || null,
+                slotId: next?.discovery?.currentSlotId || null
             });
             return {
                 response,
@@ -104,6 +213,10 @@ class DiscoveryFlowRunner {
             next.discovery?.confirmedSlots || {},
             next // Pass full state for regression guard
         );
+        emit('SECTION_S4_2B_FORCED_PROMPT_SELECTED', {
+            forcedPromptPresent: !!forcedPrompt,
+            forcedPromptPreview: safePreview(forcedPrompt, 120)
+        });
 
         if (!forcedPrompt) {
             throw new Error('DiscoveryFlowRunner produced no reply and no deterministic fallback prompt');
@@ -116,13 +229,29 @@ class DiscoveryFlowRunner {
             response: forcedPrompt,
             state: next
         });
+        emit('SECTION_S4_5_REGRESSION_GUARD_APPLIED', {
+            source: 'forced_prompt',
+            changed: guardedPrompt !== forcedPrompt,
+            guardedPreview: safePreview(guardedPrompt, 120)
+        });
+
+        const sanitized = DiscoveryFlowRunner.sanitizeReply({
+            company,
+            response: guardedPrompt,
+            state: next
+        });
+        emit('SECTION_S4_6_REPLY_SANITIZED', {
+            hadPlaceholders: hasUnresolvedPlaceholders(guardedPrompt),
+            finalPreview: safePreview(sanitized, 160)
+        });
+        emit('SECTION_S4_7_DISCOVERY_END', {
+            matchSource: 'DISCOVERY_FLOW_RUNNER',
+            stepId: next?.discovery?.currentStepId || null,
+            slotId: next?.discovery?.currentSlotId || null
+        });
 
         return {
-            response: DiscoveryFlowRunner.sanitizeReply({
-                company,
-                response: guardedPrompt,
-                state: next
-            }),
+            response: sanitized,
             matchSource: 'DISCOVERY_FLOW_RUNNER',
             state: next
         };
@@ -216,7 +345,12 @@ class DiscoveryFlowRunner {
             const isPending = !!pendingSlots[step.slotId];  // V116: Check if pending
 
             if (!value) {
-                return step.ask || step.reprompt || `What is your ${step.slotId}?`;
+                // V117: Missing-value prompts must not rely on {value}. Prefer askMissing/repromptMissing.
+                let prompt = step.askMissing || step.repromptMissing || step.reprompt || step.ask;
+                if (!prompt || hasUnresolvedPlaceholders(prompt)) {
+                    prompt = step.repromptMissing || defaultDiscoveryMissingPrompt(step.slotId) || step.reprompt;
+                }
+                return prompt;
             }
             
             // ═══════════════════════════════════════════════════════════════════════════
@@ -359,7 +493,11 @@ class DiscoveryFlowRunner {
             const isConfirmed = confirmedSlots[step.slotId] === true;
             
             if (!value) {
-                return step.ask || step.reprompt || `What is your ${step.slotId}?`;
+                let prompt = step.askMissing || step.repromptMissing || step.reprompt || step.ask;
+                if (!prompt || hasUnresolvedPlaceholders(prompt)) {
+                    prompt = step.repromptMissing || defaultDiscoveryMissingPrompt(step.slotId) || step.reprompt;
+                }
+                return prompt;
             }
             if (!isConfirmed && step.confirmMode !== 'never') {
                 const template = step.confirm || step.ask || 'Is {value} correct?';

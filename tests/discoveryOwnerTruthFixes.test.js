@@ -51,6 +51,19 @@ describe('Discovery truth hardening', () => {
         assert.strictEqual(loaded.callReasonCaptured, true);
     });
 
+    it('treats pending name/address as present for truth flags', () => {
+        const callState = {
+            slots: {},
+            pendingSlots: {
+                name: 'Mark',
+                address: '123 Main St'
+            }
+        };
+        const loaded = StateStore.load(callState);
+        assert.strictEqual(loaded.namePresent, true);
+        assert.strictEqual(loaded.addressPresent, true);
+    });
+
     it('extracts call_reason_detail from utterance when slot exists in registry', () => {
         const extracted = SlotExtractor.extractAll('my AC is not cooling and leaking water', {
             turnCount: 1,

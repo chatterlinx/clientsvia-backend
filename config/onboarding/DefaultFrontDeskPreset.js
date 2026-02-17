@@ -196,6 +196,9 @@ const DEFAULT_DISCOVERY_FLOW = {
             stepId: 'd1', 
             slotId: 'name',  // CANONICAL: matches SlotExtractor
             order: 1,
+            // V117: When name is missing, ask directly (no {value} placeholders).
+            askMissing: "What's your first name?",
+            repromptMissing: "Sorry — what's your first name?",
             // V110: Confirm prompt uses {value} placeholder for captured value
             ask: "Got it — I have your first name as {value}. Is that right?", 
             reprompt: "Did I get your first name right?",
@@ -230,6 +233,9 @@ const DEFAULT_DISCOVERY_FLOW = {
             stepId: 'd3', 
             slotId: 'address',  // CANONICAL: matches SlotExtractor
             order: 3,
+            // V117: When address is missing, ask directly (no {value} placeholders).
+            askMissing: "What's the service address?",
+            repromptMissing: "Sorry — what's the service address?",
             ask: "I have your address as {value}. Is that the service location?", 
             reprompt: "What's the service address?",
             repromptVariants: [

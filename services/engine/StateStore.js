@@ -61,9 +61,15 @@ function hasValue(value) {
 }
 
 function derivePresenceFlags(slots = {}, pendingSlots = {}) {
-    const nameValue = slotToValue(slots.name) ?? slotToValue(slots['name.first']);
+    // Presence flags are a runtime truth-view. In DISCOVERY, slots are often stored
+    // in pendingSlots first; these must count as "present" to prevent regressions.
+    const nameValue =
+        slotToValue(slots.name) ??
+        slotToValue(slots['name.first']) ??
+        pendingSlots.name ??
+        pendingSlots['name.first'];
     const callReasonValue = slotToValue(slots.call_reason_detail) ?? pendingSlots.call_reason_detail;
-    const addressValue = slotToValue(slots.address);
+    const addressValue = slotToValue(slots.address) ?? pendingSlots.address;
     return {
         callReasonCaptured: hasValue(callReasonValue),
         namePresent: hasValue(nameValue),
