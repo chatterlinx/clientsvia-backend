@@ -2,29 +2,36 @@
 
 **Version:** V116  
 **Feature:** S4A Triage+Scenario Pipeline  
-**Status:** READY FOR DEPLOYMENT  
+**Status:** DRAFT RUNBOOK (Deployment gated by evidence)  
 **Date:** February 16, 2026
 
 ---
 
 ## 📋 PRE-DEPLOYMENT CHECKLIST
 
-### **Code Status:**
-- [x] All files pushed to `main` branch (commit: 4e638a81)
-- [x] Syntax validated (all files compile)
-- [x] Tests created (unit + integration)
-- [x] Governance docs complete (ADR, Runtime Spec, Risk Register)
-- [x] Observability plan ready
+### **Change Governance (Non-Negotiable)**
+- [ ] **Owner assigned:** One accountable release owner for V116 S4A rollout
+- [ ] **Approval recorded:** ADR status set to “Approved” (or equivalent) by required stakeholders
+- [ ] **Runtime spec published:** Single-page truth for routing order + speaker-ownership contract
+- [ ] **Risk register reviewed:** Top risks acknowledged with mitigations and rollback triggers
+- [ ] **Incident readiness:** On-call owner confirmed, rollback drill completed in staging
+
+### **Code & CI Evidence (No “trust me”)**
+Replace “already done” with verifiable artifacts.
+- [ ] **Git evidence:** PR link (or commit hash) reviewed and approved
+- [ ] **CI evidence:** Green build/test results attached (unit + integration)
+- [ ] **Deploy evidence:** Staging deployment record (timestamp + version identifier)
+- [ ] **Runtime evidence:** Health checks pass in staging after deploy
 
 ### **Configuration Ready:**
-- [ ] Config fix applied (disableScenarioAutoResponses: false)
-- [ ] Feature flag set (_experimentalS4A: true for test company)
-- [ ] Scenario pool validated (has TROUBLESHOOT scenarios)
+- [ ] Config preconditions applied for test company (see Step 2)
+- [ ] Feature flag enabled for a single canary company only (see Step 3)
+- [ ] Scenario pool validated for the company/trade (types allowed by config actually exist)
 
 ### **Monitoring Ready:**
-- [ ] Dashboard queries saved
-- [ ] Alert rules configured
-- [ ] On-call playbook distributed
+- [ ] Dashboard queries saved (owner distribution, error rate, latency)
+- [ ] Alert rules configured (error rate, latency regression, conversion regression)
+- [ ] On-call playbook distributed (what to check first, how to disable safely)
 
 ---
 
@@ -33,11 +40,10 @@
 ### **STEP 1: Deploy Code to Staging** (5 min)
 
 ```bash
-# Already done - code is on main branch
-# If using deployment pipeline:
-# - Trigger staging deployment
-# - Wait for services to restart
-# - Verify health checks pass
+# Trigger staging deployment using your standard pipeline.
+# Requirements:
+# - Capture the deployed version identifier (commit SHA / image tag).
+# - Verify health checks and smoke endpoints.
 ```
 
 **Validation:**
@@ -87,6 +93,8 @@ db.companies.findOne(
 }
 ```
 
+**Note (critical):** This config change is a **precondition**, not proof. If runtime wiring is incomplete, behavior will not change.
+
 ---
 
 ### **STEP 3: Enable Feature Flag** (1 min)
@@ -99,19 +107,13 @@ db.companies.updateOne(
 )
 ```
 
-**For All Companies (Use with caution):**
-```javascript
-db.companies.updateMany(
-  {},
-  { $set: { "aiAgentSettings.frontDeskBehavior._experimentalS4A": true } }
-)
-```
-
-**Recommendation:** Start with single company, validate, then expand.
+**Enterprise rule:** Never enable for all companies in one step. Roll out by explicit cohort selection with measured gates (see Progressive Rollout Plan).
 
 ---
 
 ### **STEP 4: Make Test Calls** (10 min)
+
+**Goal:** Validate routing + proof events + safety behavior. Do not rely on “the response sounded right.”
 
 **Test Scenario 1: Problem Description**
 ```
@@ -120,9 +122,8 @@ Input: "My AC is not cooling"
 Expected Flow:
 1. S3: Extract nothing (no name/address volunteered)
 2. S3.5: Detect "describing problem" trigger
-3. S4A-1: Triage classifies as service_request
-4. S4A-2: Scenario matches (if TROUBLESHOOT scenario exists)
-5. S4B: Owner = TRIAGE_SCENARIO_PIPELINE (if matched) or DISCOVERY_FLOW
+3. S4A: Triage/scenario layer is evaluated (attempted OR explicitly skipped with reason)
+4. S4B: Owner selected (triage/scenario OR discovery fallback)
 
 Check:
 - Does response sound like reassurance? ("Got it - AC not cooling...")
@@ -135,14 +136,13 @@ Input: "This is Mrs. Johnson, 123 Market St, Fort Myers — AC is down"
 
 Expected Flow:
 1. S3: Extract lastName, address, call_reason
-2. S3: Store as PENDING
-3. S3.5: Detect "describing problem"
-4. S4A-1: Triage extracts call reason
-5. S4A-2: Scenario matches
-6. Response: Uses pending slots ("Got it, Mrs. Johnson at 123 Market St...")
+2. (Optional, if implemented): Store extracted values as pending vs confirmed
+3. S4A: Evaluated (attempted OR skipped with reason)
+4. If scenario match: response acknowledges problem before interrogating for slots
+5. If no match: fall back to discovery cleanly
 
 Check:
-- Are pending slots mentioned in response?
+- If pending/volunteered slots are used, are they used safely (no premature “confirmation loops”)?
 - Is call_reason acknowledged?
 ```
 
@@ -152,10 +152,9 @@ Input: "Um, hi, calling about stuff"
 
 Expected Flow:
 1. S3: Extract nothing
-2. S4A-1: Triage (low confidence)
-3. S4A-2: No scenario match (score too low)
-4. S4B: Owner = DISCOVERY_FLOW (fallback)
-5. Response: Discovery question ("What can I help you with?")
+2. S4A evaluated and produces “no match” reasons (not silent failure)
+3. S4B selects discovery fallback
+4. Response: discovery question ("What can I help you with?")
 
 Check:
 - Does it fall back to discovery gracefully?
@@ -166,15 +165,21 @@ Check:
 
 ### **STEP 5: Verify Events in Database** (5 min)
 
-**Query 1: Check S4A Events Exist**
+**Minimum required proof events (per turn):**
+- `SECTION_S4A_TRIAGE_CHECK` (attempted true/false + reason)
+- `SECTION_S4B_DISCOVERY_OWNER_SELECTED` (owner + reason)
+
+**Query 1: Check S4A proof exists**
 ```javascript
 db.rawEvents.find({
-  type: { $regex: "S4A" },
+  type: "SECTION_S4A_TRIAGE_CHECK",
   timestamp: { $gte: new Date(Date.now() - 3600000) }  // Last hour
 }).sort({ timestamp: -1 }).limit(20)
 ```
 
-**Expected Result:** Should see S4A-1, S4A-2, S4B events for each test call
+**Expected Result:** Should see documents for the test calls. Each should include:
+- `data.attempted` (true/false)
+- `data.reason` (why attempted, why skipped, or why no match)
 
 ---
 
@@ -192,22 +197,23 @@ db.rawEvents.aggregate([
 ])
 ```
 
-**Expected Result:**
+**Interpretation:**
 ```json
 [
-  { "_id": "TRIAGE_SCENARIO_PIPELINE", "count": X },  // If scenarios match
-  { "_id": "DISCOVERY_FLOW", "count": Y }             // Fallback
+  { "_id": "<TRIAGE_OWNER_VALUE>", "count": X },
+  { "_id": "<DISCOVERY_OWNER_VALUE>", "count": Y }
 ]
 ```
 
-**If only DISCOVERY_FLOW appears:**
+**If only discovery appears:**
 - Check: Are scenarios in database?
 - Check: Is ScenarioEngine working?
 - Check: Are confidence scores too low?
+- Check: Is S4A being skipped by config/feature flag (inspect `SECTION_S4A_TRIAGE_CHECK.data.reason`)?
 
 ---
 
-**Query 3: Check Pending Slots**
+**Query 3: Check Pending Slots (only if pending-slot feature is implemented)**
 ```javascript
 db.rawEvents.find({
   type: "SECTION_S3_PENDING_SLOTS_STORED",
@@ -215,7 +221,7 @@ db.rawEvents.find({
 }).limit(5)
 ```
 
-**Expected Result:** Should see pending slot events when callers volunteer info
+**Expected Result:** Pending slot events appear only when caller volunteered extractable info.
 
 ---
 
@@ -233,7 +239,7 @@ db.rawEvents.find({
 
 ### **STEP 6: Validate Performance** (5 min)
 
-**Query: S4A Latency**
+**Query: Latency (only if durationMs is emitted by runtime)**
 ```javascript
 db.rawEvents.aggregate([
   { $match: { 
@@ -249,18 +255,9 @@ db.rawEvents.aggregate([
 ])
 ```
 
-**Expected Result:**
-```json
-[
-  { "_id": "SECTION_S4A_1_TRIAGE_SIGNALS", "avgDuration": 30, "maxDuration": 80, "count": 10 },
-  { "_id": "SECTION_S4A_2_SCENARIO_MATCH", "avgDuration": 70, "maxDuration": 150, "count": 10 }
-]
-```
-
 **Thresholds:**
-- ✅ avgDuration < 100ms (good)
-- ⚠️ avgDuration 100-200ms (acceptable)
-- ❌ avgDuration > 200ms (investigate)
+- ✅ Within defined SLO budgets (must be specified in the runtime spec)
+- ❌ If budgets are not specified: **NO-GO** (you cannot manage what you don’t define)
 
 ---
 
@@ -269,18 +266,19 @@ db.rawEvents.aggregate([
 ### **After Staging Validation:**
 
 **GO Criteria (ALL must be true):**
-- ✅ S4A events appearing in rawEvents (100% of discovery turns)
-- ✅ No errors in logs (S4A_TRIAGE_ERROR, S4A_SCENARIO_ERROR = 0)
-- ✅ Performance within SLO (avg <100ms, max <300ms)
-- ✅ Calls completing successfully (no crashes)
-- ✅ At least 1 TRIAGE_SCENARIO_PIPELINE matchSource (proves matching works)
+- ✅ `SECTION_S4A_TRIAGE_CHECK` exists for staged test calls; each has explicit attempted/skip reasons
+- ✅ `SECTION_S4B_DISCOVERY_OWNER_SELECTED` exists for staged test calls; owner values align with runtime spec
+- ✅ Zero critical errors attributable to S4A (define “critical” in runbook; do not use vague “no errors”)
+- ✅ Performance SLOs met (p95/p99 where applicable, not only averages)
+- ✅ Calls complete successfully (no crash loops, no stuck lanes)
+- ✅ At least one verified triage/scenario owner selection in staging (proves matching path can win)
 
 **NO-GO Criteria (ANY triggers stop):**
 - ❌ S4A events missing (not running)
-- ❌ Error rate > 1%
-- ❌ Performance > 500ms average
+- ❌ Error rate above threshold (must be defined; default 1% is a placeholder until agreed)
+- ❌ Latency regression above budget (budgets must be defined)
 - ❌ Calls failing/crashing
-- ❌ 100% DISCOVERY_FLOW with good scenarios (matching broken)
+- ❌ 100% discovery owner selection despite validated scenario pool + eligible config
 
 ---
 
@@ -311,25 +309,26 @@ db.companies.updateOne(
 
 ### **Stage 2: 10% of Companies** - 24 hours
 
-**Enable:**
+**Enable (cohort must be explicitly defined):**
 ```javascript
-// Get list of 10% of companies
-const companies = db.companies.find().limit(Math.floor(db.companies.countDocuments() * 0.1)).toArray();
-
-// Enable for each
-companies.forEach(c => {
-  db.companies.updateOne(
-    { _id: c._id },
-    { $set: { "aiAgentSettings.frontDeskBehavior._experimentalS4A": true } }
-  );
-});
+// DO NOT pick an arbitrary “first N” cohort.
+// Use an explicit cohort selection method (e.g., allowlisted company IDs).
+// Example (illustrative):
+const cohortIds = [
+  ObjectId("..."),
+  ObjectId("...")
+];
+db.companies.updateMany(
+  { _id: { $in: cohortIds } },
+  { $set: { "aiAgentSettings.frontDeskBehavior._experimentalS4A": true } }
+);
 ```
 
 **Monitor:** Same metrics, larger sample
 
 **GO/NO-GO:**
 - ✅ GO if: Metrics stable, no degradation
-- ❌ NO-GO if: Conversion drops >5%, errors spike
+- ❌ NO-GO if: Conversion drops above agreed threshold, errors spike, or latency regresses beyond budget
 
 ---
 
@@ -349,7 +348,7 @@ Full rollout, monitor for 72 hours, measure final success metrics
 
 ### **Emergency Rollback (Immediate)**
 
-**If:** Errors >5%, conversion drops >10%, or critical incident
+**If:** Critical incident, policy violation, severe regression, or per gates above
 
 **Action:**
 ```javascript
@@ -359,7 +358,7 @@ db.companies.updateMany(
   { $set: { "aiAgentSettings.frontDeskBehavior._experimentalS4A": false } }
 )
 
-// Or: Set master toggle
+// Alternative safety lever (config-level):
 db.companies.updateMany(
   {},
   { $set: { "aiAgentSettings.frontDeskBehavior.discoveryConsent.disableScenarioAutoResponses": true } }
@@ -391,7 +390,7 @@ db.companies.updateOne(
 
 ### **2 Weeks Post-Deployment:**
 
-**Primary KPI: Booking Conversion**
+**Primary KPI: Booking Conversion (define this precisely before you measure)**
 ```javascript
 // Get conversion by matchSource
 db.rawEvents.aggregate([
@@ -417,17 +416,17 @@ db.rawEvents.aggregate([
 ])
 ```
 
-**Success Criteria:**
-- Overall conversion: >60% (was 40%)
-- TRIAGE_SCENARIO conversion: >70%
-- matchSource distribution: 60-70% TRIAGE, 30-40% DISCOVERY
+**Success Criteria (targets; must be agreed and baselined):**
+- Conversion uplift measured against a pre-deploy baseline window with consistent cohorting
+- No unacceptable regression in guardrails (hangups, turns-to-booking, latency, error rate)
+- Owner distribution aligns with expected operating point (do not enforce a single fixed percentage without evidence; tune via data)
 
 ---
 
 ## 🎊 DEPLOYMENT COMPLETE CHECKLIST
 
 - [ ] Code deployed to production
-- [ ] Config applied (disableScenarioAutoResponses: false)
+- [ ] Config preconditions applied for enabled cohort
 - [ ] Feature flag enabled (progressive rollout)
 - [ ] Test calls validated
 - [ ] Events verified in rawEvents
