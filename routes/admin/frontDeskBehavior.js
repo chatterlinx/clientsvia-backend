@@ -96,6 +96,10 @@ function ensureCallReasonDiscoveryStep(discoveryFlow) {
     } else {
         // Upgrade any non-'never' confirmMode and stale prompts
         let upgraded = false;
+        if (existingStep.order !== 0) {
+            existingStep.order = 0;
+            upgraded = true;
+        }
         if (existingStep.confirmMode !== 'never') {
             existingStep.confirmMode = 'never';
             upgraded = true;
@@ -112,6 +116,22 @@ function ensureCallReasonDiscoveryStep(discoveryFlow) {
             logger.info('[FRONT DESK BEHAVIOR] V115: Upgraded call_reason_detail step → confirmMode: never, cleaner prompts');
         }
     }
+
+    // Enforce deterministic, unique ordering with call_reason_detail first.
+    const reasonStep = discoveryFlow.steps.find(step => step?.slotId === 'call_reason_detail');
+    const remainingSteps = discoveryFlow.steps
+        .filter(step => step && step !== reasonStep)
+        .sort((a, b) => {
+            const orderA = Number.isFinite(a?.order) ? a.order : Number.MAX_SAFE_INTEGER;
+            const orderB = Number.isFinite(b?.order) ? b.order : Number.MAX_SAFE_INTEGER;
+            if (orderA !== orderB) return orderA - orderB;
+            return `${a?.stepId || ''}`.localeCompare(`${b?.stepId || ''}`);
+        });
+
+    discoveryFlow.steps = [reasonStep, ...remainingSteps].filter(Boolean).map((step, index) => ({
+        ...step,
+        order: index
+    }));
     
     return discoveryFlow;
 }

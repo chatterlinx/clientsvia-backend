@@ -112,6 +112,21 @@ async function getRedis() {
   }
 }
 
+function slotBagValue(slots, slotId) {
+  const entry = slots?.[slotId];
+  if (entry == null) return null;
+  if (typeof entry === 'object' && !Array.isArray(entry)) {
+    if (entry.v != null) return entry.v;
+    if (entry.value != null) return entry.value;
+  }
+  return entry;
+}
+
+function hasSlotValue(slots, slotId) {
+  const value = slotBagValue(slots, slotId);
+  return value != null && `${value}`.trim() !== '';
+}
+
 // ============================================================================
 // 🔌 V94: AW TRUTH PROOF - Compute awHash + effectiveConfigVersion at CALL_START
 // ============================================================================
@@ -2633,9 +2648,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const loadedTurnCount = callState?.turnCount || 0;
     const loadedLane = callState?.sessionMode || 'DISCOVERY';
     const loadedStepId = callState?.discoveryCurrentStepId || callState?.currentStepId || null;
-    const loadedCallReasonCaptured = !!callState?.slots?.call_reason_detail;
-    const loadedNamePresent = !!callState?.slots?.name;
-    const loadedAddressPresent = !!callState?.slots?.address;
+    const loadedCallReasonCaptured = hasSlotValue(callState?.slots, 'call_reason_detail') ||
+      hasSlotValue(callState?.pendingSlots, 'call_reason_detail');
+    const loadedNamePresent = hasSlotValue(callState?.slots, 'name') ||
+      hasSlotValue(callState?.slots, 'name.first') ||
+      hasSlotValue(callState?.slots, 'name.last') ||
+      hasSlotValue(callState?.slots, 'lastName');
+    const loadedAddressPresent = hasSlotValue(callState?.slots, 'address');
     const stateFound = !!callState;
     
     // EMIT S0 STATE LOAD EVENT (CRITICAL - exposes state drift)
@@ -2807,9 +2826,13 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             turnCount: persistedState.turnCount,
             lane: persistedState.sessionMode || 'DISCOVERY',
             stepId: persistedState.discoveryCurrentStepId || persistedState.currentStepId || null,
-            callReasonCaptured: !!persistedState.slots?.call_reason_detail,
-            namePresent: !!persistedState.slots?.name,
-            addressPresent: !!persistedState.slots?.address,
+            callReasonCaptured: hasSlotValue(persistedState.slots, 'call_reason_detail') ||
+              hasSlotValue(persistedState.pendingSlots, 'call_reason_detail'),
+            namePresent: hasSlotValue(persistedState.slots, 'name') ||
+              hasSlotValue(persistedState.slots, 'name.first') ||
+              hasSlotValue(persistedState.slots, 'name.last') ||
+              hasSlotValue(persistedState.slots, 'lastName'),
+            addressPresent: hasSlotValue(persistedState.slots, 'address'),
             lastUpdatedTs: persistedState._lastUpdatedTs
           }
         }

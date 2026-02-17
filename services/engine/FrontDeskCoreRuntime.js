@@ -113,6 +113,16 @@ function createEvent({ callSid, companyId, turn, type, data }) {
     };
 }
 
+function readSlotValue(slots, slotId) {
+    const entry = slots?.[slotId];
+    if (entry == null) return null;
+    if (typeof entry === 'object' && !Array.isArray(entry)) {
+        if (entry.v != null) return entry.v;
+        if (entry.value != null) return entry.value;
+    }
+    return entry;
+}
+
 class FrontDeskCoreRuntime {
     /**
      * Process a single turn of the conversation.
@@ -1374,12 +1384,18 @@ class FrontDeskCoreRuntime {
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'OPENER_ENGINE';
             const openerConfig = company?.aiAgentSettings?.frontDeskBehavior?.openers || {};
-            const reasonShort = persistedState?.plainSlots?.call_reason_detail || 
-                                persistedState?.slots?.call_reason_detail || null;
+            const reasonShortRaw = readSlotValue(persistedState?.slots, 'call_reason_detail') || null;
+            const reasonShort = typeof reasonShortRaw === 'string' ? reasonShortRaw : null;
+            
+            // Prevent discovery-loop echoes ("<reason> -- okay. What is your ...").
+            // Keep reason reflection for scenario responses only.
+            const reasonShortForOpener = ownerResult.matchSource === 'TRIAGE_SCENARIO_PIPELINE'
+                ? reasonShort
+                : null;
             
             const openerResult = selectOpener({
                 userText: inputText,
-                reasonShort,
+                reasonShort: reasonShortForOpener,
                 openerConfig,
                 turnCount: turn,
                 callSid
