@@ -44,6 +44,7 @@ const { DiscoveryFlowRunner } = require('./DiscoveryFlowRunner');
 const { ConsentGate } = require('./ConsentGate');
 const BookingFlowRunner = require('./booking/BookingFlowRunner');
 const BookingFlowResolver = require('./booking/BookingFlowResolver');
+const ScenarioEngine = require('../ScenarioEngine');
 const { SectionTracer, SECTIONS } = require('./SectionTracer');
 const SlotExtractor = require('./booking/SlotExtractor');
 const { selectOpener, prependOpener } = require('./OpenerEngine');
@@ -260,6 +261,22 @@ function formatCallReasonForSpeech(rawReason) {
     // Generic: keep at most two items, join naturally.
     if (parts.length === 1) return parts[0];
     return `${parts[0]} and ${parts[1]}`;
+}
+
+function sanitizeScenarioAssistText(text) {
+    const raw = `${text || ''}`.trim();
+    if (!raw) return null;
+
+    // Remove any booking/CTA sentences so we don't double-ask consent.
+    const sentences = raw
+        .split(/(?<=[.!?])\s+/)
+        .map((s) => `${s}`.trim())
+        .filter(Boolean)
+        .filter((s) => !/\b(would you like|why don'?t we|can i|get (?:a|the) technician|schedule (?:a|an)|book (?:a|an))\b/i.test(s));
+
+    const kept = sentences.length > 0 ? sentences.slice(0, 2).join(' ') : raw;
+    const clipped = kept.length > 240 ? `${kept.substring(0, 237).trim()}...` : kept;
+    return clipped || null;
 }
 
 class FrontDeskCoreRuntime {
@@ -923,10 +940,64 @@ class FrontDeskCoreRuntime {
                         const reasonShort = formatCallReasonForSpeech(reasonRaw);
                         const firstName = `${state.plainSlots.name || ''}`.trim().split(/\s+/)[0] || null;
                         const nameAck = firstName ? `Thanks, ${firstName}. ` : '';
+
+                        // Scenario assist (SILENT TOOL): run scenarios for empathy/helpful context,
+                        // but NEVER let scenarios own the turn (one-brain contract).
+                        let assistLine = null;
+                        try {
+                            const companyIdSafe = companyId || company?._id?.toString?.() || null;
+                            if (ScenarioEngine?.selectResponse && companyIdSafe && inputText) {
+                                const sel = await ScenarioEngine.selectResponse({
+                                    companyId: companyIdSafe,
+                                    tradeKey: company?.tradeKey || company?.industryType || null,
+                                    text: inputText,
+                                    session: {
+                                        sessionId: callSid,
+                                        callerPhone: context?.callerPhone || null,
+                                        signals: {
+                                            lane: 'DISCOVERY',
+                                            hasCallReason: true
+                                        }
+                                    },
+                                    options: {
+                                        // Deterministic + cheap: do NOT use Tier 3 LLM during discovery.
+                                        allowTier3: false,
+                                        maxCandidates: 3
+                                    }
+                                });
+
+                                if (sel?.selected && sel?.scenario?.quickReply) {
+                                    assistLine = sanitizeScenarioAssistText(sel.scenario.quickReply);
+                                }
+
+                                bufferEvent('SECTION_S4_ASSIST_SCENARIO', {
+                                    selected: sel?.selected === true,
+                                    tier: sel?.tier || null,
+                                    scenarioId: sel?.scenario?.scenarioId || null,
+                                    confidence: sel?.confidence ?? null,
+                                    assistPreview: (assistLine || '').substring(0, 120) || null,
+                                    allowTier3: false
+                                });
+                            }
+                        } catch (err) {
+                            bufferEvent('SECTION_S4_ASSIST_SCENARIO', {
+                                selected: false,
+                                tier: null,
+                                scenarioId: null,
+                                confidence: null,
+                                assistPreview: null,
+                                allowTier3: false,
+                                error: err?.message || 'unknown'
+                            });
+                        }
+
                         // Human-friendly acknowledgment: empathetic and not "self-confirmy".
-                        const reasonAck = reasonShort
-                            ? `Sorry you're dealing with that — ${reasonShort}. `
-                            : "Sorry you're dealing with that. ";
+                        // Prefer scenario assist if present; otherwise use a consistent fallback.
+                        const reasonAck = assistLine
+                            ? `${assistLine} `
+                            : (reasonShort
+                                ? `Sorry you're dealing with that — ${reasonShort}. `
+                                : "Sorry you're dealing with that. ");
 
                         ownerResult = {
                             ...askResult,
