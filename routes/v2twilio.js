@@ -2588,28 +2588,80 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // INPUT TEXT SOURCE: SpeechResult or Cached Partial
+    // INPUT TEXT SOURCE: SpeechResult + Cached Partial (TRUTH FINALIZATION)
+    // ═══════════════════════════════════════════════════════════════════════════
+    // Twilio sometimes sends a truncated SpeechResult even when partial callbacks
+    // contain the full stabilized transcript. We prefer:
+    // 1) SpeechResult (if good)
+    // 2) Cached stable partial transcript when SpeechResult missing OR clearly truncated
+    //
+    // This is critical for deterministic slot extraction (call_reason_detail).
     // ═══════════════════════════════════════════════════════════════════════════
     let inputTextSource = 'speechResult';
     const redis = await getRedis();
+    const speechRaw = `${speechResult || ''}`.trim();
+    let cachedTranscript = null;
+    let cacheReadError = null;
     
-    if (!speechResult || speechResult.trim().length === 0) {
-      if (redis && callSid) {
-        const cacheKey = `partial:${callSid}`;
-        try {
-          const cachedTranscript = await redis.get(cacheKey);
-          if (cachedTranscript) {
-            speechResult = cachedTranscript;
-            inputTextSource = 'partialCache';
-            logger.info('[V2 RESPOND] Using cached partial transcript', {
-              callSid: callSid?.slice(-8),
-              textLength: speechResult.length
-            });
-          }
-        } catch (err) {
-          logger.warn('[V2 RESPOND] Failed to read cached transcript', { error: err.message });
-        }
+    if (redis && callSid) {
+      const cacheKey = `partial:${callSid}`;
+      try {
+        cachedTranscript = await redis.get(cacheKey);
+      } catch (err) {
+        cacheReadError = err.message;
+        logger.warn('[V2 RESPOND] Failed to read cached transcript', { error: err.message });
       }
+    }
+    
+    const cachedRaw = `${cachedTranscript || ''}`.trim();
+    const hasSpeech = speechRaw.length > 0;
+    const hasCached = cachedRaw.length > 0;
+    
+    // Use cached when SpeechResult is missing
+    if (!hasSpeech && hasCached) {
+      speechResult = cachedRaw;
+      inputTextSource = 'partialCache';
+      logger.info('[V2 RESPOND] Using cached partial transcript (SpeechResult missing)', {
+        callSid: callSid?.slice(-8),
+        textLength: speechResult.length
+      });
+    }
+    
+    // Use cached when SpeechResult is likely truncated
+    // Heuristic: cached starts with speech AND is meaningfully longer.
+    if (hasSpeech && hasCached) {
+      const cachedLooksLikeSuperset = cachedRaw.toLowerCase().startsWith(speechRaw.toLowerCase());
+      const cachedIsMeaningfullyLonger = cachedRaw.length >= speechRaw.length + 40;
+      const speechLooksCutOff = !/[.!?]\s*$/.test(speechRaw) && /\b(?:and|but|so|because|however|since)\b\s*$/i.test(speechRaw);
+      
+      if (cachedLooksLikeSuperset && cachedIsMeaningfullyLonger) {
+        speechResult = cachedRaw;
+        inputTextSource = 'partialCachePreferred';
+        logger.info('[V2 RESPOND] Using cached partial transcript (preferred over truncated SpeechResult)', {
+          callSid: callSid?.slice(-8),
+          speechLen: speechRaw.length,
+          cachedLen: cachedRaw.length,
+          speechLooksCutOff
+        });
+      }
+    }
+    
+    // Proof event: what text we finalized for downstream extraction
+    if (BlackBoxLogger && callSid) {
+      await BlackBoxLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'INPUT_TEXT_FINALIZED',
+        turn: turnCountFromBody || 0,
+        data: {
+          sourceUsed: inputTextSource,
+          finalTextLen: `${speechResult || ''}`.length,
+          finalPreview: `${speechResult || ''}`.substring(0, 140),
+          speechResultLen: speechRaw.length,
+          cachedLen: cachedRaw.length,
+          cacheReadError
+        }
+      }).catch(() => {});
     }
 
     // ═══════════════════════════════════════════════════════════════════════════

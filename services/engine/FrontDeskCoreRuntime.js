@@ -1011,6 +1011,24 @@ class FrontDeskCoreRuntime {
             });
 
             // ═══════════════════════════════════════════════════════════════════════════
+            // TURN CONTRACT (single truth snapshot for debugging)
+            // ═══════════════════════════════════════════════════════════════════════════
+            // This is the one event you should be able to scan per turn to know:
+            // lane, step, completion, consent state, and what slot we are asking next.
+            bufferEvent('TURN_CONTRACT', {
+                lane,
+                discoveryComplete: persistedState.discoveryComplete === true,
+                consentPending: persistedState.bookingConsentPending === true,
+                stepId: persistedState.discoveryCurrentStepId || persistedState.currentStepId || null,
+                nextSlotToAsk:
+                    lane === 'BOOKING'
+                        ? (persistedState.currentStepId || null)
+                        : (persistedState.discoveryCurrentSlotId || null),
+                inputTextSource: context?.inputTextSource || null,
+                inputTextLength: (userInput || '').length
+            });
+
+            // ═══════════════════════════════════════════════════════════════════════════
             // OPENER ENGINE (V117 - Simplified, no scenario reflection)
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'OPENER_ENGINE';
