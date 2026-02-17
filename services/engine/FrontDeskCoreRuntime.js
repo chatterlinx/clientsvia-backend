@@ -1057,11 +1057,13 @@ class FrontDeskCoreRuntime {
                                 const detectionConfig = company?.aiAgentSettings?.frontDeskBehavior?.detectionTriggers || {};
                                 const describingProblemTriggers = getTriggers(detectionConfig, 'describingProblem', false);
                                 
-                                // Check if caller is describing a problem
+                                // V116 FIX: Check if caller is describing a problem (current input OR state flag from earlier turn)
                                 const inputLower = (userInput || '').toLowerCase();
-                                const isDescribingProblem = describingProblemTriggers.some(trigger => 
+                                const describingProblemThisTurn = describingProblemTriggers.some(trigger => 
                                     inputLower.includes((trigger || '').toLowerCase())
                                 );
+                                const describingProblemInState = state._describingProblem === true;
+                                const isDescribingProblem = describingProblemThisTurn || describingProblemInState;
                                 
                                 const hasCallReason = !!(triageResult?.callReasonDetail || state?.plainSlots?.call_reason_detail);
                                 const triageConfidenceSufficient = (triageResult?.confidence || 0) >= minConfidence;
