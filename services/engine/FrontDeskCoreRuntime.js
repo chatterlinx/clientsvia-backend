@@ -230,6 +230,38 @@ async function runBookingLane({
     };
 }
 
+function formatCallReasonForSpeech(rawReason) {
+    const reason = `${rawReason || ''}`.trim();
+    if (!reason) return null;
+
+    // If SlotExtractor produced label list ("a; b; c"), make it sound natural.
+    const parts = reason
+        .split(';')
+        .map((p) => `${p}`.trim())
+        .filter(Boolean);
+
+    const lower = parts.map((p) => p.toLowerCase());
+    const hasNotCooling = lower.includes('ac not cooling') || lower.some((p) => p.includes('not cool'));
+    const hasLeak = lower.includes('water leak') || lower.some((p) => p.includes('leak'));
+    const hasNotRunning = lower.includes('system not running') || lower.includes('system not working');
+
+    // Prefer compact HVAC phrasing.
+    const out = [];
+    if (hasNotCooling) out.push('AC not cooling');
+    if (hasLeak) out.push('leaking water');
+    if (!hasNotCooling && hasNotRunning) out.push('system not running');
+
+    if (out.length > 0) {
+        if (out.length === 1) return out[0];
+        if (out.length === 2) return `${out[0]} and ${out[1]}`;
+        return `${out[0]}, ${out[1]}`;
+    }
+
+    // Generic: keep at most two items, join naturally.
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} and ${parts[1]}`;
+}
+
 class FrontDeskCoreRuntime {
     /**
      * Process a single turn of the conversation.
@@ -887,10 +919,14 @@ class FrontDeskCoreRuntime {
                         state.discovery.currentStepId = state.discovery.currentStepId || 'dConsent';
                         state.discovery.currentSlotId = 'booking_consent';
 
-                        const reason = `${state.plainSlots.call_reason_detail || ''}`.trim();
+                        const reasonRaw = `${state.plainSlots.call_reason_detail || ''}`.trim();
+                        const reasonShort = formatCallReasonForSpeech(reasonRaw);
                         const firstName = `${state.plainSlots.name || ''}`.trim().split(/\s+/)[0] || null;
                         const nameAck = firstName ? `Thanks, ${firstName}. ` : '';
-                        const reasonAck = reason && reason.length <= 80 ? `Got it — ${reason}. ` : 'Got it. ';
+                        // Human-friendly acknowledgment: empathetic and not "self-confirmy".
+                        const reasonAck = reasonShort
+                            ? `Sorry you're dealing with that — ${reasonShort}. `
+                            : "Sorry you're dealing with that. ";
 
                         ownerResult = {
                             ...askResult,
@@ -965,7 +1001,12 @@ class FrontDeskCoreRuntime {
             
             // Apply opener to response
             let finalResponse = ownerResult.response;
-            if (openerResult.opener) {
+            // If we already crafted an empathy-style acknowledgment (consent ask turn),
+            // skip micro-openers like "Understood." that make it sound robotic.
+            const skipOpener =
+                ownerResult?.matchSource === 'DISCOVERY_REASON_CONSENT' &&
+                /^thanks,\s+/i.test(ownerResult?.response || '');
+            if (openerResult.opener && !skipOpener) {
                 finalResponse = prependOpener(openerResult.opener, ownerResult.response);
             }
             
@@ -976,7 +1017,7 @@ class FrontDeskCoreRuntime {
                 turnCount: turn,
                 openerSelected: openerResult.opener || null,
                 tone: openerResult.tone,
-                prependApplied: openerResult.opener ? true : false,
+                prependApplied: openerResult.opener && !skipOpener ? true : false,
                 originalResponsePreview: (ownerResult.response || '').substring(0, 60),
                 finalResponsePreview: (finalResponse || '').substring(0, 80),
                 configSource: 'frontDeskBehavior.openers'
