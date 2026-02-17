@@ -39,10 +39,11 @@
  */
 
 const logger = require('../../utils/logger');
-const { StateStore } = require('./StateStore');
+const { StateStore, extractPlainSlots, writeSlotValue } = require('./StateStore');
 const { DiscoveryFlowRunner } = require('./DiscoveryFlowRunner');
 const { ConsentGate } = require('./ConsentGate');
 const BookingFlowRunner = require('./booking/BookingFlowRunner');
+const BookingFlowResolver = require('./booking/BookingFlowResolver');
 const { SectionTracer, SECTIONS } = require('./SectionTracer');
 const SlotExtractor = require('./booking/SlotExtractor');
 const { selectOpener, prependOpener } = require('./OpenerEngine');
@@ -124,6 +125,109 @@ function checkpoint(bufferEvent, name, data = {}) {
         checkpoint: name,
         ...data
     });
+}
+
+function buildPreExtractedBookingSlots(state = {}) {
+    const out = {};
+    const plain = state.plainSlots || {};
+    const meta = state.slotMeta || {};
+    Object.entries(plain).forEach(([slotId, value]) => {
+        if (value == null || `${value}`.trim() === '') return;
+        const m = meta?.[slotId] || {};
+        out[slotId] = {
+            value,
+            confidence: m.confidence ?? 0.8,
+            source: m.source || 'discovery'
+        };
+    });
+    return out;
+}
+
+async function runBookingLane({
+    company,
+    companyId,
+    callSid,
+    userInput,
+    turn,
+    bufferEvent,
+    callState,
+    state
+}) {
+    const resolvedFlow = BookingFlowResolver.resolve({
+        companyId,
+        trade: null,
+        serviceType: null,
+        company
+    });
+
+    bufferEvent('SECTION_S6_BOOKING_FLOW_RESOLVED', {
+        flowId: resolvedFlow?.flowId || null,
+        stepCount: resolvedFlow?.steps?.length || 0,
+        source: resolvedFlow?.resolution?.source || resolvedFlow?.source || null,
+        status: resolvedFlow?.resolution?.status || null
+    });
+
+    // Ensure booking runner sees the latest extracted truth in its canonical slots bag.
+    const slotsBag = state.slots || callState.slots || {};
+    Object.entries(state.plainSlots || {}).forEach(([slotId, value]) => {
+        writeSlotValue(slotsBag, slotId, value, 'discovery');
+    });
+
+    const bookingRunnerState = {
+        ...(callState || {}),
+        // Canonical slots store used by BookingFlowRunner.initializeState
+        slots: slotsBag,
+        // Keep legacy view for compatibility paths inside BookingFlowRunner
+        bookingCollected: {
+            ...(callState?.bookingCollected || {}),
+            ...(state.plainSlots || {})
+        },
+        slotMetadata: state.slotMeta || callState?.slotMetadata || {}
+    };
+
+    const preExtractedSlots = buildPreExtractedBookingSlots(state);
+    const bookingResult = await BookingFlowRunner.runStep({
+        flow: resolvedFlow,
+        state: bookingRunnerState,
+        userInput,
+        company,
+        session: { metrics: { totalTurns: turn } },
+        callSid,
+        slots: preExtractedSlots
+    });
+
+    bufferEvent('SECTION_S6_BOOKING_FLOW_RESULT', {
+        replyPreview: (bookingResult?.reply || '').substring(0, 120),
+        isComplete: bookingResult?.isComplete === true,
+        action: bookingResult?.action || null,
+        nextStepId: bookingResult?.state?.currentStepId || null
+    });
+
+    const nextSlotsBag = bookingResult?.state?.slots || slotsBag;
+    const nextPlainFromSlots = extractPlainSlots(nextSlotsBag);
+
+    const nextState = {
+        ...state,
+        lane: 'BOOKING',
+        slots: nextSlotsBag,
+        plainSlots: { ...(state.plainSlots || {}), ...(nextPlainFromSlots || {}) },
+        consent: { pending: false, askedExplicitly: false },
+        booking: {
+            ...state.booking,
+            currentStepId: bookingResult?.state?.currentStepId || state.booking?.currentStepId || null,
+            bookingComplete:
+                bookingResult?.isComplete === true ||
+                bookingResult?.action === 'COMPLETE' ||
+                bookingResult?.state?.bookingComplete === true
+        }
+    };
+
+    return {
+        response: bookingResult?.reply || 'Okay — let me grab a few details to get you scheduled.',
+        matchSource: 'BOOKING_FLOW_RUNNER',
+        complete: nextState.booking.bookingComplete === true,
+        state: nextState
+    };
 }
 
 class FrontDeskCoreRuntime {
@@ -537,6 +641,36 @@ class FrontDeskCoreRuntime {
                 });
                 plainValues = {};
             }
+
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V118: CALL REASON TRUTH GUARDS (prevent consent utterance overwrite)
+            // ═══════════════════════════════════════════════════════════════════════════
+            const consentTurn = state?.consent?.pending === true && state?.consent?.askedExplicitly === true;
+            const existingReason = `${state?.plainSlots?.call_reason_detail || ''}`.trim();
+            const extractedReasonMeta = extractedMeta?.call_reason_detail || null;
+            const extractedReasonValue = `${plainValues?.call_reason_detail || ''}`.trim();
+            const extractedIsFallback =
+                extractedReasonMeta?.patternSource === 'call_reason_fallback_utterance' ||
+                extractedReasonMeta?.patternSource === 'fallback_utterance';
+
+            if (consentTurn && extractedReasonValue) {
+                delete plainValues.call_reason_detail;
+                bufferEvent('SECTION_S3_CALL_REASON_OVERWRITE_BLOCKED', {
+                    reason: 'CONSENT_TURN',
+                    existingPreview: existingReason.substring(0, 80) || null,
+                    blockedPreview: extractedReasonValue.substring(0, 80),
+                    patternSource: extractedReasonMeta?.patternSource || null
+                });
+            } else if (existingReason && extractedReasonValue && extractedIsFallback) {
+                delete plainValues.call_reason_detail;
+                bufferEvent('SECTION_S3_CALL_REASON_OVERWRITE_BLOCKED', {
+                    reason: 'EXISTING_REASON_PROTECTED_FROM_FALLBACK',
+                    existingPreview: existingReason.substring(0, 80),
+                    blockedPreview: extractedReasonValue.substring(0, 80),
+                    patternSource: extractedReasonMeta?.patternSource || null
+                });
+            }
+
             state.plainSlots = { ...state.plainSlots, ...plainValues };
             checkpoint(bufferEvent, 'SLOTS_MERGED', {
                 extractedSlotIds: Object.keys(plainValues || {}),
@@ -660,7 +794,16 @@ class FrontDeskCoreRuntime {
                 // ───────────────────────────────────────────────────────────────────────────
                 currentSection = 'S6_BOOKING_FLOW';
                 tracer.enter(SECTIONS.S6_BOOKING_FLOW);
-                ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
+                ownerResult = await runBookingLane({
+                    company,
+                    companyId,
+                    callSid,
+                    userInput,
+                    turn,
+                    bufferEvent,
+                    callState,
+                    state
+                });
                 
             } else {
                 // ───────────────────────────────────────────────────────────────────────────
@@ -692,13 +835,25 @@ class FrontDeskCoreRuntime {
 
                         currentSection = 'S6_BOOKING_FLOW';
                         tracer.enter(SECTIONS.S6_BOOKING_FLOW);
-                        ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
+                        ownerResult = await runBookingLane({
+                            company,
+                            companyId,
+                            callSid,
+                            userInput,
+                            turn,
+                            bufferEvent,
+                            callState,
+                            state
+                        });
                     } else if (consentEval.pending === true) {
                         currentSection = 'S5_CONSENT_PENDING';
                         const askResult = ConsentGate.ask({ company, state, callSid });
                         if (askResult.turnEventBuffer) {
                             turnEventBuffer.push(...askResult.turnEventBuffer);
                         }
+                        state.discovery = state.discovery || {};
+                        state.discovery.currentStepId = state.discovery.currentStepId || 'dConsent';
+                        state.discovery.currentSlotId = 'booking_consent';
                         ownerResult = askResult;
                     } else {
                         bufferEvent('SECTION_S5_CONSENT_DENIED', {
@@ -726,6 +881,11 @@ class FrontDeskCoreRuntime {
                         if (askResult.turnEventBuffer) {
                             turnEventBuffer.push(...askResult.turnEventBuffer);
                         }
+
+                        // Treat consent prompt as a deterministic discovery step pointer for observability.
+                        state.discovery = state.discovery || {};
+                        state.discovery.currentStepId = state.discovery.currentStepId || 'dConsent';
+                        state.discovery.currentSlotId = 'booking_consent';
 
                         const reason = `${state.plainSlots.call_reason_detail || ''}`.trim();
                         const firstName = `${state.plainSlots.name || ''}`.trim().split(/\s+/)[0] || null;
