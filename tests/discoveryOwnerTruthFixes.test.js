@@ -131,6 +131,44 @@ describe('Discovery truth hardening', () => {
         assert.strictEqual(new Set(orders).size, orders.length);
     });
 
+    it('uses discovery reprompt as initial ask when askMissing/ask are absent (UI-driven)', () => {
+        const company = {
+            aiAgentSettings: {
+                frontDeskBehavior: {
+                    slotRegistry: {
+                        slots: [
+                            { id: 'call_reason_detail', required: true, discoveryFillAllowed: true }
+                        ]
+                    },
+                    discoveryFlow: {
+                        enabled: true,
+                        steps: [
+                            // Simulates UI that only provides a Reprompt field.
+                            { stepId: 'd0', slotId: 'call_reason_detail', order: 0, reprompt: 'What can I help you with today?', confirmMode: 'never' }
+                        ]
+                    }
+                }
+            }
+        };
+        const engine = StepEngine.forCall({ company, callId: 'CA-test' });
+        const result = engine.runDiscoveryStep({
+            state: {
+                currentFlow: 'discovery',
+                collectedSlots: {},
+                confirmedSlots: {},
+                repromptCount: {},
+                pendingConfirmation: null,
+                currentStepId: null,
+                currentSlotId: null,
+                slotMeta: {}
+            },
+            userInput: '',
+            extractedSlots: {}
+        });
+        // First ask should come from reprompt when no ask/askMissing exists.
+        assert.ok(`${result.reply || ''}`.toLowerCase().includes('what can i help you with today'));
+    });
+
     it('ensures discovery step pointers are never persisted as null', () => {
         const company = {
             aiAgentSettings: {

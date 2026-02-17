@@ -485,10 +485,15 @@ class StepEngine {
                 } else {
                     // V117: Ask-missing MUST NOT use templates that require {value}.
                     // Prefer askMissing; otherwise use ask only if it doesn't contain placeholders.
-                    prompt = step.askMissing || step.ask;
+                    // UI NOTE:
+                    // Many tenants only configure a "Reprompt" field for discovery steps (no ask/askMissing).
+                    // In that case, we treat reprompt as the initial askMissing to ensure UI-driven prompting.
+                    prompt = step.askMissing || step.ask || step.reprompt;
                     promptSource = step.askMissing
                         ? `discoveryFlow.steps[${step.slotId}].askMissing`
-                        : `discoveryFlow.steps[${step.slotId}].ask`;
+                        : (step.ask
+                            ? `discoveryFlow.steps[${step.slotId}].ask`
+                            : `discoveryFlow.steps[${step.slotId}].reprompt`);
                     if (prompt && hasUnresolvedPlaceholders(prompt)) {
                         // When slot value is missing, do NOT use "did I get X right?" reprompts.
                         // Prefer explicit repromptMissing, otherwise use a deterministic default.
