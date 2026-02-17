@@ -6670,7 +6670,29 @@ class BookingFlowRunner {
      */
     static findNextRequiredStep(flow, state) {
         const collected = state.bookingCollected || {};
+        const pendingSlots = state.pendingSlots || {};  // V116: Pending from discovery
+        const confirmedSlots = state.confirmedSlots || {};  // V116: Already confirmed
         
+        // V116: First priority - confirm pending slots from discovery
+        for (const step of flow.steps) {
+            const fieldKey = step.fieldKey || step.id;
+            
+            // If slot is PENDING (from discovery) and not yet CONFIRMED in booking, confirm it first
+            if (pendingSlots[fieldKey] && !confirmedSlots[fieldKey] && !collected[fieldKey]) {
+                logger.info('[BOOKING FLOW RUNNER] V116: Pending slot needs confirmation', {
+                    fieldKey,
+                    valuePreview: typeof pendingSlots[fieldKey] === 'string' 
+                        ? pendingSlots[fieldKey].substring(0, 30) 
+                        : pendingSlots[fieldKey]
+                });
+                
+                // Mark this as needing confirmation
+                state._pendingSlotToConfirm = fieldKey;
+                return step;
+            }
+        }
+        
+        // V116: Second priority - collect missing required slots
         for (const step of flow.steps) {
             // Skip optional steps
             if (!step.required) continue;

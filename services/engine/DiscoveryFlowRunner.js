@@ -147,6 +147,11 @@ class DiscoveryFlowRunner {
      * REGRESSION GUARD (Phase B):
      * If call_reason_detail is captured, do NOT ask to confirm name again.
      * Instead, skip to the next unconfirmed slot after name.
+     * 
+     * V116 PENDING SLOT AWARENESS:
+     * If a slot exists in pendingSlots (extracted but not confirmed), use it for
+     * CONTEXT but don't ask for confirmation yet. Save confirmation for booking.
+     * This prevents re-asking during discovery when caller volunteers info.
      */
     static buildDeterministicPrompt(company, plainSlots = {}, confirmedSlots = {}, fullState = null) {
         const steps = [...(company?.aiAgentSettings?.frontDeskBehavior?.discoveryFlow?.steps || [])]
@@ -156,15 +161,44 @@ class DiscoveryFlowRunner {
         const callReasonCaptured = !!plainSlots.call_reason_detail;
         const namePresent = !!plainSlots.name || !!plainSlots['name.first'];
         
+        // V116: Get pending slots from state
+        const pendingSlots = fullState?.pendingSlots || {};
+        
         for (const step of steps) {
             if (!step?.slotId || step.passive === true || step.isPassive === true) {
                 continue;
             }
             const value = plainSlots[step.slotId];
             const isConfirmed = confirmedSlots[step.slotId] === true;
+            const isPending = !!pendingSlots[step.slotId];  // V116: Check if pending
 
             if (!value) {
                 return step.ask || step.reprompt || `What is your ${step.slotId}?`;
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════════════
+            // V116: PENDING SLOT SKIP
+            // ═══════════════════════════════════════════════════════════════════════════
+            // If slot is PENDING (extracted during discovery but not confirmed):
+            //   - Use it for CONTEXT (S4A already used it in response)
+            //   - Skip confirmation during discovery
+            //   - Booking will confirm it later
+            // 
+            // Example: Caller says "Mrs. Johnson, 123 Market St" upfront
+            //   Discovery: Uses these for context, doesn't re-ask
+            //   Booking: "First name? Last name Johnson? Address 123 Market St correct?"
+            // ═══════════════════════════════════════════════════════════════════════════
+            if (isPending && !isConfirmed && step.confirmMode !== 'always') {
+                logger.info('[DISCOVERY FLOW] V116: Slot is pending - using for context, skipping confirmation until booking', {
+                    slotId: step.slotId,
+                    value: typeof value === 'string' ? value.substring(0, 30) : value,
+                    isPending: true,
+                    willConfirmInBooking: true
+                });
+                
+                // Mark as "seen" so we don't ask for it, but don't mark confirmed yet
+                // (Booking will handle confirmation)
+                continue; // Skip to next step
             }
             
             // ═══════════════════════════════════════════════════════════════════════════
