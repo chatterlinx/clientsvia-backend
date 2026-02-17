@@ -116,6 +116,7 @@ class StateStore {
                 pendingConfirmation: callState.discoveryPendingConfirmation || null,
                 repromptCount: clone(callState.discoveryRepromptCount || {}),
                 confirmedSlots: clone(callState.discoveryConfirmedSlots || {}),  // Discovery-level confirmed
+                acknowledgedSlots: clone(callState.discoveryAcknowledgedSlots || {}),
                 complete: callState.discoveryComplete === true
             },
             consent: {
@@ -160,6 +161,7 @@ class StateStore {
         next.discoveryPendingConfirmation = state.discovery?.pendingConfirmation || null;
         next.discoveryRepromptCount = clone(state.discovery?.repromptCount || {});
         next.discoveryConfirmedSlots = clone(state.discovery?.confirmedSlots || {});  // Discovery-level
+        next.discoveryAcknowledgedSlots = clone(state.discovery?.acknowledgedSlots || {});
         next.discoveryComplete = state.discovery?.complete === true;
 
         next.bookingConsentPending = state.consent?.pending === true;

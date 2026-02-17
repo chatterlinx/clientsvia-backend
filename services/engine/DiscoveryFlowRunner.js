@@ -89,6 +89,7 @@ class DiscoveryFlowRunner {
             collectedSlots: { ...(state.plainSlots || {}) },
             confirmedSlots: { ...(state.discovery?.confirmedSlots || {}) },
             repromptCount: { ...(state.discovery?.repromptCount || {}) },
+            acknowledgedSlots: { ...(state.discovery?.acknowledgedSlots || {}) },
             pendingConfirmation: state.discovery?.pendingConfirmation || null,
             currentStepId: state.discovery?.currentStepId || null,
             currentSlotId: state.discovery?.currentSlotId || null,
@@ -150,6 +151,7 @@ class DiscoveryFlowRunner {
                 pendingConfirmation: result.state?.pendingConfirmation || null,
                 repromptCount: { ...(result.state?.repromptCount || {}) },
                 confirmedSlots: { ...(result.state?.confirmedSlots || {}) },
+                acknowledgedSlots: { ...(result.state?.acknowledgedSlots || state.discovery?.acknowledgedSlots || {}) },
                 complete: result?.discoveryComplete === true
             },
             booking: {

@@ -169,6 +169,51 @@ describe('Discovery truth hardening', () => {
         assert.ok(`${result.reply || ''}`.toLowerCase().includes('what can i help you with today'));
     });
 
+    it('acknowledges captured call reason using UI prompt, then continues to next step', () => {
+        const company = {
+            aiAgentSettings: {
+                frontDeskBehavior: {
+                    slotRegistry: {
+                        slots: [
+                            { id: 'call_reason_detail', required: false },
+                            { id: 'name', required: true }
+                        ]
+                    },
+                    discoveryFlow: {
+                        enabled: true,
+                        steps: [
+                            // UI "Confirm Prompt" for call reason (stored as ask)
+                            { stepId: 'd0', slotId: 'call_reason_detail', order: 0, ask: 'Got it — {value}.', reprompt: 'What can I help you with today?', confirmMode: 'never' },
+                            { stepId: 'd1', slotId: 'name', order: 1, askMissing: "What's your first name?", repromptMissing: "Sorry — what's your first name?", confirmMode: 'never' }
+                        ]
+                    }
+                }
+            }
+        };
+        const engine = StepEngine.forCall({ company, callId: 'CA-test' });
+        const result = engine.runDiscoveryStep({
+            state: {
+                currentFlow: 'discovery',
+                collectedSlots: { call_reason_detail: 'AC not cooling' },
+                confirmedSlots: {},
+                repromptCount: {},
+                acknowledgedSlots: {},
+                pendingConfirmation: null,
+                currentStepId: null,
+                currentSlotId: null,
+                slotMeta: {}
+            },
+            userInput: '',
+            extractedSlots: { call_reason_detail: 'AC not cooling' }
+        });
+
+        const reply = `${result.reply || ''}`.toLowerCase();
+        assert.ok(reply.includes('got it'));
+        assert.ok(reply.includes('ac not cooling'));
+        assert.ok(reply.includes("what's your first name"));
+        assert.strictEqual(result.state.acknowledgedSlots.call_reason_detail, true);
+    });
+
     it('ensures discovery step pointers are never persisted as null', () => {
         const company = {
             aiAgentSettings: {

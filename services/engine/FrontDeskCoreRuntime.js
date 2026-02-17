@@ -1056,9 +1056,13 @@ class FrontDeskCoreRuntime {
             }
             // If we already crafted an empathy-style acknowledgment (consent ask turn),
             // skip micro-openers like "Understood." that make it sound robotic.
+            const reasonExtractedThisTurn = state?.slotMeta?.call_reason_detail?.extractedInTurn === turn;
             const skipOpener =
-                ownerResult?.matchSource === 'DISCOVERY_REASON_CONSENT' &&
-                /^thanks,\s+/i.test(ownerResult?.response || '');
+                (ownerResult?.matchSource === 'DISCOVERY_REASON_CONSENT' && /^thanks,\s+/i.test(ownerResult?.response || '')) ||
+                // If we just acknowledged the call reason (starts with "Got it"), don't prepend "Great!" etc.
+                (lane === 'DISCOVERY' && /^got it\b/i.test(ownerResult?.response || '')) ||
+                // If call reason was extracted this turn, keep the top line clean and deterministic.
+                (lane === 'DISCOVERY' && reasonExtractedThisTurn === true);
             if (openerResult.opener && !skipOpener) {
                 finalResponse = prependOpener(openerResult.opener, ownerResult.response);
             }

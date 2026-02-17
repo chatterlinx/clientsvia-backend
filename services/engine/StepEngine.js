@@ -257,6 +257,8 @@ class StepEngine {
         const collectedSlots = state.collectedSlots || {};
         const confirmedSlots = state.confirmedSlots || {};
         const repromptCount = state.repromptCount || {};
+        const acknowledgedSlots = state.acknowledgedSlots || {};
+        state.acknowledgedSlots = acknowledgedSlots;
         
         // ═══════════════════════════════════════════════════════════════════════
         // STEP 1: Merge extracted slots (passive capture)
@@ -377,6 +379,44 @@ class StepEngine {
         }
 
         // ═══════════════════════════════════════════════════════════════════════
+        // STEP 2.5: Deterministic acknowledgement of captured call reason (UI-driven)
+        // ═══════════════════════════════════════════════════════════════════════
+        // This is the "confidence builder" you want:
+        // If the caller says something straightforward ("AC not cooling"),
+        // the agent MUST acknowledge it using the UI-configured prompt for d0
+        // (call_reason_detail), then immediately proceed to the next discovery step.
+        //
+        // RULE: The acknowledgement text comes from discoveryFlow.steps[d0].ask
+        // (the UI "Confirm Prompt" column for call reason).
+        //
+        // This runs ONCE per call (tracked in discovery.acknowledgedSlots).
+        // ═══════════════════════════════════════════════════════════════════════
+        let replyPrefix = null;
+        const callReasonValue = collectedSlots.call_reason_detail;
+        if (callReasonValue && acknowledgedSlots.call_reason_detail !== true) {
+            const reasonStep = this.getStepForSlot(this.discoveryFlow, 'call_reason_detail');
+            const template = reasonStep?.ask || 'Got it — {value}.';
+            const ackLine = renderSlotTemplateOrFallback({
+                template,
+                slotId: 'call_reason_detail',
+                slotValue: callReasonValue,
+                fallbackText: `Got it — ${callReasonValue}.`,
+                logger,
+                callId: this.callId,
+                context: 'discovery_call_reason_ack'
+            });
+            acknowledgedSlots.call_reason_detail = true;
+            replyPrefix = `${ackLine || ''}`.trim() || null;
+        }
+
+        const applyPrefix = (reply) => {
+            const base = `${reply || ''}`.trim();
+            if (!replyPrefix) return base;
+            if (!base) return replyPrefix;
+            return `${replyPrefix} ${base}`.trim();
+        };
+
+        // ═══════════════════════════════════════════════════════════════════════
         // STEP 3: Find next slot needing confirmation (smart confirm)
         // ═══════════════════════════════════════════════════════════════════════
         const steps = (this.discoveryFlow.steps || []).sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -401,7 +441,7 @@ class StepEngine {
                     
                     return {
                         action: 'CONTINUE',  // V110: Always CONTINUE
-                        reply: prompt,
+                        reply: applyPrefix(prompt),
                         slotId: step.slotId,
                         state: {
                             ...state,
@@ -449,7 +489,7 @@ class StepEngine {
                     repromptCount[step.slotId] = currentCount + 1;
                     return {
                         action: 'CONTINUE',
-                        reply: prompt,
+                        reply: applyPrefix(prompt),
                         slotId: step.slotId,
                         state: {
                             ...state,
@@ -526,7 +566,7 @@ class StepEngine {
                     
                     return {
                         action: 'CONTINUE',
-                        reply: renderedPrompt,
+                        reply: applyPrefix(renderedPrompt),
                         slotId: step.slotId,
                         state: {
                             ...state,
@@ -573,7 +613,7 @@ class StepEngine {
                         
                         return {
                             action: 'CONTINUE',
-                            reply: prompt,
+                            reply: applyPrefix(prompt),
                             slotId: step.slotId,
                             state: {
                                 ...state,
