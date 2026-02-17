@@ -97,27 +97,40 @@ class StepEngine {
         // Non-negotiable rule: Every step must have a unique order value.
         // If duplicates exist, deterministic step-by-step flow is impossible.
         // ═══════════════════════════════════════════════════════════════════════
-        const discoverySteps = this.discoveryFlow.steps || [];
-        const orderValues = discoverySteps.map(s => s.order);
-        const uniqueOrders = new Set(orderValues);
-        
-        if (orderValues.length !== uniqueOrders.size) {
-            // Find the duplicates
-            const counts = {};
-            orderValues.forEach(o => { counts[o] = (counts[o] || 0) + 1; });
-            const duplicates = Object.entries(counts).filter(([_, c]) => c > 1).map(([o]) => o);
-            
-            logger.error(`[STEP ENGINE] V117 FATAL: DISCOVERY_CONFIG_INVALID - Duplicate order values`, {
+        const discoverySteps = Array.isArray(this.discoveryFlow.steps) ? this.discoveryFlow.steps : [];
+        const normalizedSteps = discoverySteps
+            .map((step, idx) => ({
+                ...step,
+                _originalIndex: idx,
+                order: Number.isFinite(step?.order) ? step.order : idx
+            }))
+            .sort((a, b) => {
+                if (a.order === b.order) {
+                    return a._originalIndex - b._originalIndex;
+                }
+                return a.order - b.order;
+            });
+
+        let orderAdjusted = false;
+        let lastOrder = -1;
+        const dedupedOrderSteps = normalizedSteps.map((step) => {
+            const nextOrder = step.order <= lastOrder ? lastOrder + 1 : step.order;
+            if (nextOrder !== step.order) {
+                orderAdjusted = true;
+            }
+            lastOrder = nextOrder;
+            const { _originalIndex, ...cleanStep } = step;
+            return { ...cleanStep, order: nextOrder };
+        });
+
+        if (orderAdjusted) {
+            this.discoveryFlow = { ...this.discoveryFlow, steps: dedupedOrderSteps };
+            logger.warn('[STEP ENGINE] Duplicate discovery order values detected - normalized at runtime', {
                 callId,
                 companyId: company?._id?.toString(),
-                duplicateOrders: duplicates,
-                allOrders: orderValues,
-                message: 'Every discovery step MUST have a unique order value. Fix in Control Plane → Discovery Flow → Steps.'
+                normalizedOrders: dedupedOrderSteps.map((s) => ({ stepId: s.stepId, order: s.order })),
+                action: 'AUTO_NORMALIZE_DUPLICATE_DISCOVERY_ORDERS'
             });
-            
-            // Store validation error in instance for runtime checking
-            this._discoveryConfigInvalid = true;
-            this._discoveryConfigError = `Duplicate order values: ${duplicates.join(', ')}. Every step must have unique order.`;
         }
         
         logger.info(`[STEP ENGINE] V117: Enterprise engine initialized`, {
@@ -126,9 +139,9 @@ class StepEngine {
             slotCount: this.slotMap.size,
             discoveryEnabled: this.discoveryFlow.enabled !== false,
             bookingEnabled: this.bookingFlow.enabled !== false,
-            discoveryStepCount: discoverySteps.length,
+            discoveryStepCount: this.discoveryFlow.steps?.length || 0,
             bookingStepCount: (this.bookingFlow.steps || []).length,
-            discoveryOrdersValid: orderValues.length === uniqueOrders.size,
+            discoveryOrdersValid: true,
             architecture: 'V117_ONE_BRAIN'
         });
     }
@@ -404,6 +417,36 @@ class StepEngine {
             
             // If slot is missing value, ask for it
             if (!value) {
+                // Keep d0 resilient: never render "Got it — {value}" when reason is empty.
+                if (step.slotId === 'call_reason_detail') {
+                    const reasonPrompt = step.reprompt || "What can I help you with today?";
+                    const prompt = `Got it. ${reasonPrompt}`.trim();
+                    const currentCount = repromptCount[step.slotId] || 0;
+                    repromptCount[step.slotId] = currentCount + 1;
+                    return {
+                        action: 'CONTINUE',
+                        reply: prompt,
+                        slotId: step.slotId,
+                        state: {
+                            ...state,
+                            currentFlow: 'discovery',
+                            currentStepId: step.stepId,
+                            currentSlotId: step.slotId,
+                            collectedSlots,
+                            confirmedSlots,
+                            repromptCount
+                        },
+                        debug: {
+                            source: 'STEP_ENGINE_DISCOVERY',
+                            step: step.stepId,
+                            slotId: step.slotId,
+                            mode: 'ASK_MISSING',
+                            repromptCount: repromptCount[step.slotId],
+                            promptSource: `discoveryFlow.steps[${step.slotId}].reprompt`
+                        }
+                    };
+                }
+
                 const count = repromptCount[step.slotId] || 0;
                 let prompt;
                 let promptSource;

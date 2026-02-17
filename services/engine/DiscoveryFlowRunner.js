@@ -72,6 +72,7 @@ class DiscoveryFlowRunner {
                 confirmedSlots: { ...(result.state?.confirmedSlots || state.booking?.confirmedSlots || {}) }
             }
         };
+        DiscoveryFlowRunner.ensureDiscoveryStepPointers(company, next);
 
         // ═══════════════════════════════════════════════════════════════════════════
         // REGRESSION GUARD: Check if reply would regress after S5
@@ -139,6 +140,48 @@ class DiscoveryFlowRunner {
                 const value = plainSlots[step.slotId];
                 return value != null && `${value}`.trim() !== '';
             });
+    }
+
+    static ensureDiscoveryStepPointers(company, state) {
+        const currentStepId = state?.discovery?.currentStepId;
+        const currentSlotId = state?.discovery?.currentSlotId;
+        if (currentStepId && currentSlotId) {
+            return;
+        }
+
+        const steps = [...(company?.aiAgentSettings?.frontDeskBehavior?.discoveryFlow?.steps || [])]
+            .filter((step) => !!step?.slotId && step.passive !== true && step.isPassive !== true)
+            .sort((a, b) => (a.order || 0) - (b.order || 0));
+        const plainSlots = state?.plainSlots || {};
+        const confirmedSlots = state?.discovery?.confirmedSlots || {};
+        const pendingConfirmation = state?.discovery?.pendingConfirmation || null;
+
+        let activeStep = null;
+        if (pendingConfirmation) {
+            activeStep = steps.find((step) => step.slotId === pendingConfirmation) || null;
+        }
+
+        if (!activeStep) {
+            activeStep = steps.find((step) => {
+                const value = plainSlots[step.slotId];
+                if (value == null || `${value}`.trim() === '') {
+                    return true;
+                }
+                if (step.confirmMode !== 'never' && confirmedSlots[step.slotId] !== true) {
+                    return true;
+                }
+                return false;
+            }) || null;
+        }
+
+        if (!activeStep) {
+            state.discovery.currentStepId = currentStepId || 'discovery_complete';
+            state.discovery.currentSlotId = currentSlotId || 'discovery_complete';
+            return;
+        }
+
+        state.discovery.currentStepId = currentStepId || activeStep.stepId || 'discovery_active';
+        state.discovery.currentSlotId = currentSlotId || activeStep.slotId || 'discovery_active';
     }
 
     /**

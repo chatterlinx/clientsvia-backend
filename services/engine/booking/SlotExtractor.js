@@ -135,6 +135,18 @@ const SOURCE = {
     CRM: 'crm'
 };
 
+const CALL_REASON_PATTERNS = [
+    { regex: /not\s+cool|no\s+cool|warm\s+air|hot\s+air/i, label: 'AC not cooling' },
+    { regex: /not\s+heat|no\s+heat/i, label: 'not heating' },
+    { regex: /not\s+turn|not\s+run|system\s+dead|thermostat.*blank/i, label: 'system not running' },
+    { regex: /leak|drip|water/i, label: 'water leak' },
+    { regex: /noise|loud|bang|rattle|squeal|buzz/i, label: 'unusual noise' },
+    { regex: /smell|burning|smoke/i, label: 'burning smell' },
+    { regex: /frozen|ice|frost/i, label: 'frozen unit' },
+    { regex: /maintenance|tune[\s-]?up|check[\s-]?up|inspection/i, label: 'maintenance request' },
+    { regex: /schedule|appointment|book|send\s+someone|get\s+someone\s+out/i, label: 'service request' }
+];
+
 /**
  * Correction detection patterns
  */
@@ -433,6 +445,9 @@ class SlotExtractor {
             // Discovery mode: check slotRegistry.discoveryFillAllowed
             if (!isBookingActive && !currentBookingStep) {
                 const slotConfig = slotConfigMap.get(slotKey);
+                if (slotKey === 'call_reason_detail' && !slotConfig) {
+                    return false;
+                }
                 if (slotConfig?.discoveryFillAllowed === false) {
                     logger.debug('[SLOT EXTRACTOR] Skipping slot (discoveryFillAllowed=false)', { slotKey });
                     return false;
@@ -512,6 +527,17 @@ class SlotExtractor {
             if (addressResult) {
                 extracted.address = {
                     ...addressResult,
+                    turn: turnCount,
+                    isCorrection
+                };
+            }
+        }
+
+        if (shouldExtract('call_reason_detail')) {
+            const callReasonResult = this.extractCallReasonDetail(text);
+            if (callReasonResult) {
+                extracted.call_reason_detail = {
+                    ...callReasonResult,
                     turn: turnCount,
                     isCorrection
                 };
@@ -1928,6 +1954,48 @@ class SlotExtractor {
         }
         
         return null;
+    }
+
+    static extractCallReasonDetail(text) {
+        const cleaned = (text || '').trim();
+        if (!cleaned) {
+            return null;
+        }
+
+        const normalized = cleaned.toLowerCase();
+        if (/^(hi|hello|hey|good (morning|afternoon|evening))[.!?,\s]*$/i.test(normalized)) {
+            return null;
+        }
+
+        const matchedLabels = [];
+        for (const pattern of CALL_REASON_PATTERNS) {
+            if (pattern.regex.test(cleaned)) {
+                matchedLabels.push(pattern.label);
+            }
+        }
+
+        const uniqueLabels = [...new Set(matchedLabels)];
+        if (uniqueLabels.length > 0) {
+            return {
+                value: uniqueLabels.join('; '),
+                confidence: 0.82,
+                source: SOURCE.UTTERANCE,
+                patternSource: 'call_reason_patterns'
+            };
+        }
+
+        // Keep this conservative so random short replies do not contaminate the slot.
+        const tokenCount = cleaned.split(/\s+/).length;
+        if (tokenCount < 4) {
+            return null;
+        }
+
+        return {
+            value: cleaned.substring(0, 160),
+            confidence: 0.55,
+            source: SOURCE.UTTERANCE,
+            patternSource: 'call_reason_fallback_utterance'
+        };
     }
     
     /**

@@ -56,18 +56,38 @@ function writeSlotValue(slots, key, value, source = 'core_runtime') {
     slots[key] = { value, v: value, source, s: source };
 }
 
+function hasValue(value) {
+    return value != null && `${value}`.trim() !== '';
+}
+
+function derivePresenceFlags(slots = {}, pendingSlots = {}) {
+    const nameValue = slotToValue(slots.name) ?? slotToValue(slots['name.first']);
+    const callReasonValue = slotToValue(slots.call_reason_detail) ?? pendingSlots.call_reason_detail;
+    const addressValue = slotToValue(slots.address);
+    return {
+        callReasonCaptured: hasValue(callReasonValue),
+        namePresent: hasValue(nameValue),
+        addressPresent: hasValue(addressValue)
+    };
+}
+
 class StateStore {
     static load(callState = {}) {
         const slotsBag = clone(callState.slots || {});
         const plainSlots = extractPlainSlots(slotsBag);
         const slotMeta = extractSlotMeta(slotsBag);
         const lane = callState.sessionMode === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
+        const pendingSlots = clone(callState.pendingSlots || {});
+        const presenceFlags = derivePresenceFlags(slotsBag, pendingSlots);
 
         return {
             lane,
             slots: slotsBag,
             plainSlots,
             slotMeta,
+            callReasonCaptured: presenceFlags.callReasonCaptured,
+            namePresent: presenceFlags.namePresent,
+            addressPresent: presenceFlags.addressPresent,
             
             // ═══════════════════════════════════════════════════════════════════════════
             // V116: PENDING SLOTS - Extracted but not confirmed
@@ -81,7 +101,7 @@ class StateStore {
             //   Callers volunteer info out of order. Discovery should use it immediately
             //   for context, but formally confirm during booking (not re-ask).
             // ═══════════════════════════════════════════════════════════════════════════
-            pendingSlots: clone(callState.pendingSlots || {}),      // V116: Unconfirmed
+            pendingSlots,      // V116: Unconfirmed
             confirmedSlots: clone(callState.confirmedSlots || {}),  // V116: Booking-confirmed
             
             discovery: {
@@ -148,6 +168,12 @@ class StateStore {
         next.lockedSlots = clone(state.booking?.lockedSlots || {});
         next.addressCollected = clone(state.booking?.addressCollected || {});
         next.bookingComplete = state.booking?.bookingComplete === true;
+
+        // Derive legacy presence flags from slot truth to prevent stale false writes.
+        const presenceFlags = derivePresenceFlags(next.slots, next.pendingSlots);
+        next.callReasonCaptured = presenceFlags.callReasonCaptured;
+        next.namePresent = presenceFlags.namePresent;
+        next.addressPresent = presenceFlags.addressPresent;
 
         // Keep legacy views derived from slots to avoid downstream breakage.
         next.bookingCollected = { ...(next.bookingCollected || {}), ...(state.plainSlots || {}) };

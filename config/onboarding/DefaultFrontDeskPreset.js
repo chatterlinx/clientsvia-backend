@@ -156,7 +156,7 @@ const DEFAULT_SLOT_REGISTRY = {
             // DiscoveryTruthWriter enforces this; confirmMode: 'never' in discoveryFlow.
             writePolicy: 'write_once_append',
             extraction: {
-                source: ['triage', 'discovery_truth'],  // Filled by TriageEngineRouter + DiscoveryTruthWriter
+                source: ['utterance', 'triage', 'discovery_truth'],  // Prefer direct utterance, then triage/truth enrichments
                 confidenceMin: 0.40  // Lower threshold — any symptom is useful
             }
         }
@@ -183,7 +183,7 @@ const DEFAULT_DISCOVERY_FLOW = {
             stepId: 'd0',
             slotId: 'call_reason_detail',
             order: 0,
-            ask: "Got it — {value}.",
+            ask: "Got it.",
             reprompt: "What can I help you with today?",
             repromptVariants: [
                 "What can I help you with today?",
