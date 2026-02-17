@@ -11054,13 +11054,13 @@ Sean → Shawn, Shaun`;
                             </div>
                         </label>
                         
-                        <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px;">
-                            <input type="checkbox" id="fdb-dc-disableScenarioAuto" ${disableScenarioAuto ? 'checked' : ''} 
+                        <label style="display: flex; align-items: center; gap: 12px; cursor: not-allowed; padding: 12px; background: #161b22; border: 1px solid #3fb950; border-radius: 6px; opacity: 0.7;">
+                            <input type="checkbox" id="fdb-dc-disableScenarioAuto" checked disabled
                                 style="accent-color: #3fb950; width: 20px; height: 20px;">
                             <div>
-                                <span style="color: #c9d1d9; font-weight: 600;">📚 Scenarios as Context Only (No Verbatim)</span>
+                                <span style="color: #3fb950; font-weight: 600;">📚 Scenarios as Context Only (ENFORCED V117)</span>
                                 <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
-                                    Scenarios inform the LLM but are never read word-for-word. (Recommended: ON)
+                                    <strong>V117:</strong> Scenario auto-responses removed. DiscoveryFlowRunner is the only speaker. This is now always enforced.
                                 </p>
                             </div>
                         </label>
@@ -11144,32 +11144,31 @@ Sean → Shawn, Shaun`;
                     </div>
                 </div>
 
-                <!-- Consent Split: Safe scenario auto-replies BEFORE consent (multi-tenant safe) -->
-                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-                    <h4 style="margin: 0 0 12px 0; color: #3fb950;">🧩 Consent Split (Non-booking Auto-Replies)</h4>
-                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
-                        Multi-tenant safe rule: you may allow <strong>specific scenario types</strong> to reply before consent, while still requiring explicit consent for <strong>BOOKING</strong>.
-                        This is a <em>policy</em> (not trade logic).
+                <!-- V117: Scenario Auto-Replies REMOVED - One Brain Architecture -->
+                <div style="background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 24px; opacity: 0.5;">
+                    <h4 style="margin: 0 0 12px 0; color: #8b949e; text-decoration: line-through;">🧩 Consent Split (Non-booking Auto-Replies)</h4>
+                    <p style="color: #f85149; font-size: 0.8rem; margin-bottom: 16px; background: #f8514920; padding: 8px 12px; border-radius: 4px;">
+                        <strong>V117 REMOVED:</strong> Scenario auto-replies have been disabled. DiscoveryFlowRunner is now the ONLY speaker during discovery.
+                        This ensures deterministic, step-by-step flow execution. These controls no longer affect runtime behavior.
                     </p>
 
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:pointer;">
-                            <input type="checkbox" id="fdb-dc-autoReply-FAQ" ${autoReplyAllowedTypes.includes('FAQ') ? 'checked' : ''} style="accent-color:#3fb950; width:16px; height:16px;">
-                            <span style="color:#c9d1d9; font-weight:600;">FAQ</span>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px; pointer-events: none;">
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:not-allowed; opacity: 0.5;">
+                            <input type="checkbox" id="fdb-dc-autoReply-FAQ" disabled style="accent-color:#8b949e; width:16px; height:16px;">
+                            <span style="color:#8b949e; font-weight:600; text-decoration: line-through;">FAQ</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:pointer;">
-                            <input type="checkbox" id="fdb-dc-autoReply-TROUBLESHOOT" ${autoReplyAllowedTypes.includes('TROUBLESHOOT') ? 'checked' : ''} style="accent-color:#3fb950; width:16px; height:16px;">
-                            <span style="color:#c9d1d9; font-weight:600;">TROUBLESHOOT</span>
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:not-allowed; opacity: 0.5;">
+                            <input type="checkbox" id="fdb-dc-autoReply-TROUBLESHOOT" disabled style="accent-color:#8b949e; width:16px; height:16px;">
+                            <span style="color:#8b949e; font-weight:600; text-decoration: line-through;">TROUBLESHOOT</span>
                         </label>
-                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:pointer;">
-                            <input type="checkbox" id="fdb-dc-autoReply-EMERGENCY" ${autoReplyAllowedTypes.includes('EMERGENCY') ? 'checked' : ''} style="accent-color:#3fb950; width:16px; height:16px;">
-                            <span style="color:#c9d1d9; font-weight:600;">EMERGENCY</span>
+                        <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid #30363d; border-radius:8px; background:#161b22; cursor:not-allowed; opacity: 0.5;">
+                            <input type="checkbox" id="fdb-dc-autoReply-EMERGENCY" disabled style="accent-color:#8b949e; width:16px; height:16px;">
+                            <span style="color:#8b949e; font-weight:600; text-decoration: line-through;">EMERGENCY</span>
                         </label>
                     </div>
 
                     <div style="margin-top: 10px; color:#8b949e; font-size:0.75rem;">
-                        <div><strong>Important:</strong> BOOKING actions remain consent-gated by <code>bookingRequiresExplicitConsent</code>.</div>
-                        <div>If <strong>Scenarios as Context Only</strong> is ON, these types are the only ones allowed to be used verbatim; others stay context-only.</div>
+                        <div><strong>V117 One Brain:</strong> DiscoveryFlowRunner controls all discovery speech. No competing speakers.</div>
                     </div>
                 </div>
                 

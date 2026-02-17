@@ -91,14 +91,45 @@ class StepEngine {
             this.slotMap.set(slot.id, slot);
         });
         
-        logger.info(`[STEP ENGINE] V110: Enterprise engine initialized`, {
+        // ═══════════════════════════════════════════════════════════════════════
+        // V117: VALIDATE DISCOVERY STEP ORDER VALUES (MUST BE UNIQUE)
+        // ═══════════════════════════════════════════════════════════════════════
+        // Non-negotiable rule: Every step must have a unique order value.
+        // If duplicates exist, deterministic step-by-step flow is impossible.
+        // ═══════════════════════════════════════════════════════════════════════
+        const discoverySteps = this.discoveryFlow.steps || [];
+        const orderValues = discoverySteps.map(s => s.order);
+        const uniqueOrders = new Set(orderValues);
+        
+        if (orderValues.length !== uniqueOrders.size) {
+            // Find the duplicates
+            const counts = {};
+            orderValues.forEach(o => { counts[o] = (counts[o] || 0) + 1; });
+            const duplicates = Object.entries(counts).filter(([_, c]) => c > 1).map(([o]) => o);
+            
+            logger.error(`[STEP ENGINE] V117 FATAL: DISCOVERY_CONFIG_INVALID - Duplicate order values`, {
+                callId,
+                companyId: company?._id?.toString(),
+                duplicateOrders: duplicates,
+                allOrders: orderValues,
+                message: 'Every discovery step MUST have a unique order value. Fix in Control Plane → Discovery Flow → Steps.'
+            });
+            
+            // Store validation error in instance for runtime checking
+            this._discoveryConfigInvalid = true;
+            this._discoveryConfigError = `Duplicate order values: ${duplicates.join(', ')}. Every step must have unique order.`;
+        }
+        
+        logger.info(`[STEP ENGINE] V117: Enterprise engine initialized`, {
             callId,
             companyId: company?._id?.toString(),
             slotCount: this.slotMap.size,
             discoveryEnabled: this.discoveryFlow.enabled !== false,
             bookingEnabled: this.bookingFlow.enabled !== false,
-            discoveryStepCount: (this.discoveryFlow.steps || []).length,
-            bookingStepCount: (this.bookingFlow.steps || []).length
+            discoveryStepCount: discoverySteps.length,
+            bookingStepCount: (this.bookingFlow.steps || []).length,
+            discoveryOrdersValid: orderValues.length === uniqueOrders.size,
+            architecture: 'V117_ONE_BRAIN'
         });
     }
 
@@ -154,6 +185,30 @@ class StepEngine {
      * - NOT interrogate the caller
      */
     runDiscoveryStep({ state, userInput, extractedSlots = {} }) {
+        // ═══════════════════════════════════════════════════════════════════════
+        // V117: BLOCK IF CONFIG INVALID (duplicate orders, missing prompts, etc.)
+        // ═══════════════════════════════════════════════════════════════════════
+        if (this._discoveryConfigInvalid) {
+            logger.error(`[STEP ENGINE] V117: DISCOVERY_CONFIG_INVALID - Cannot run discovery`, {
+                callId: this.callId,
+                error: this._discoveryConfigError
+            });
+            
+            // Return safe fallback - don't loop or ask random questions
+            return {
+                action: 'CONTINUE',
+                reply: "One moment — I'm pulling up your account.",
+                state,
+                configInvalid: true,
+                debug: { 
+                    source: 'STEP_ENGINE_DISCOVERY', 
+                    reason: 'DISCOVERY_CONFIG_INVALID',
+                    error: this._discoveryConfigError,
+                    action: 'PIPELINE_ABORT_OWNER_SELECTION'
+                }
+            };
+        }
+        
         if (this.discoveryFlow.enabled === false) {
             return { 
                 action: 'CONTINUE',  // V110: Standardized action
