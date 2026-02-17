@@ -81,5 +81,57 @@ describe('Discovery sections (S4) are stable and ordered', () => {
         assert.ok(idx('SECTION_S4_3_PLAIN_SLOTS_MERGED') < idx('SECTION_S4_4_POINTERS_ENSURED'));
         assert.ok(idx('SECTION_S4_4_POINTERS_ENSURED') < idx('SECTION_S4_7_DISCOVERY_END'));
     });
+
+    it('does not treat initial name confirmation as regression when reason is present', () => {
+        const company = {
+            aiAgentSettings: {
+                frontDeskBehavior: {
+                    slotRegistry: {
+                        slots: [
+                            { id: 'call_reason_detail', required: false, discoveryFillAllowed: true },
+                            { id: 'name', required: true, discoveryFillAllowed: true }
+                        ]
+                    },
+                    discoveryFlow: {
+                        enabled: true,
+                        steps: [
+                            { stepId: 'd0', slotId: 'call_reason_detail', order: 0, ask: 'Got it.', reprompt: 'What can I help you with today?', confirmMode: 'never' },
+                            { stepId: 'd1', slotId: 'name', order: 1, askMissing: "What's your first name?", repromptMissing: "Sorry — what's your first name?", ask: 'I have {value}. Is that correct?', confirmMode: 'smart_if_captured' }
+                        ]
+                    }
+                }
+            }
+        };
+
+        const state = {
+            lane: 'DISCOVERY',
+            plainSlots: {
+                call_reason_detail: 'AC not working',
+                name: 'Mark'
+            },
+            slotMeta: {},
+            discovery: {
+                currentStepId: null,
+                currentSlotId: null,
+                repromptCount: {},
+                confirmedSlots: {}, // name NOT confirmed yet
+                pendingConfirmation: null
+            },
+            booking: {}
+        };
+
+        const result = DiscoveryFlowRunner.run({
+            company,
+            callSid: 'CA-test',
+            userInput: '',
+            state,
+            emitEvent: () => {},
+            turn: 1
+        });
+
+        // Should still ask to confirm name (not rewrite to phone/address prompts).
+        assert.ok(result.response.toLowerCase().includes('i have'));
+        assert.ok(result.response.toLowerCase().includes('mark'));
+    });
 });
 

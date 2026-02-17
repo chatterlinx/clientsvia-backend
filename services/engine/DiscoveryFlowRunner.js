@@ -6,13 +6,6 @@ const {
 } = require('./TemplateRenderer');
 const logger = require('../../utils/logger');
 
-let BlackBoxLogger = null;
-try {
-    BlackBoxLogger = require('../BlackBoxLogger');
-} catch (err) {
-    BlackBoxLogger = null;
-}
-
 function defaultDiscoveryMissingPrompt(slotId) {
     const id = `${slotId || ''}`.toLowerCase();
     if (id === 'name' || id === 'name.first') {
@@ -219,7 +212,20 @@ class DiscoveryFlowRunner {
         });
 
         if (!forcedPrompt) {
-            throw new Error('DiscoveryFlowRunner produced no reply and no deterministic fallback prompt');
+            // V117b: Never crash the call because a deterministic prompt was null.
+            // Fall back to a safe, slot-specific missing prompt.
+            const fallbackSlotId = next?.discovery?.currentSlotId || next?.discovery?.pendingConfirmation || 'call_reason_detail';
+            const safeFallback = defaultDiscoveryMissingPrompt(fallbackSlotId);
+            emit('SECTION_S4_FALLBACK_SAFE_PROMPT_USED', {
+                slotId: fallbackSlotId,
+                responsePreview: safePreview(safeFallback, 120),
+                reason: 'FORCED_PROMPT_NULL'
+            });
+            return {
+                response: safeFallback,
+                matchSource: 'DISCOVERY_FLOW_RUNNER',
+                state: next
+            };
         }
 
         // Apply regression guard to forced prompt too
@@ -378,24 +384,8 @@ class DiscoveryFlowRunner {
                 continue; // Skip to next step
             }
             
-            // ═══════════════════════════════════════════════════════════════════════════
-            // REGRESSION GUARD: If S5 complete + name present, skip name confirmation
-            // ═══════════════════════════════════════════════════════════════════════════
-            // This prevents the bug: after S5 (call reason captured), the agent regresses
-            // to "I have Mark. Is that correct?" instead of moving forward.
-            // ═══════════════════════════════════════════════════════════════════════════
-            const isNameSlot = step.slotId === 'name' || step.slotId === 'name.first' || step.slotId === 'name.last';
-            if (isNameSlot && callReasonCaptured && namePresent && !isConfirmed) {
-                // Auto-confirm name if call reason is already captured
-                // This is safe because S5 wouldn't fire without name being captured first
-                logger.info('[DISCOVERY FLOW] Regression guard: auto-confirming name after S5', {
-                    slotId: step.slotId,
-                    value,
-                    callReasonCaptured
-                });
-                confirmedSlots[step.slotId] = true;
-                continue; // Skip to next step
-            }
+            // NOTE (V117b): Never auto-confirm name based on call reason presence.
+            // That caused "random skipping" on turn 1 when call_reason_detail is captured early.
             
             if (!isConfirmed && step.confirmMode !== 'never') {
                 const template = step.confirm || step.ask || 'Is {value} correct?';
@@ -425,6 +415,9 @@ class DiscoveryFlowRunner {
     static applyRegressionGuard({ company, callSid, response, state }) {
         const callReasonCaptured = !!state?.plainSlots?.call_reason_detail;
         const namePresent = !!state?.plainSlots?.name || !!state?.plainSlots?.['name.first'];
+        const confirmed = state?.discovery?.confirmedSlots || {};
+        const nameAlreadyConfirmed = confirmed.name === true || confirmed['name.first'] === true;
+        const pendingConfirmation = state?.discovery?.pendingConfirmation || null;
         
         // Only guard if S5 is complete (call reason captured)
         if (!callReasonCaptured || !namePresent) {
@@ -440,6 +433,13 @@ class DiscoveryFlowRunner {
         // Also check for the specific regression pattern from raw events
         const isRegressionPattern = /i have (mark|[a-z]+)\.\s*is that correct/i.test(responseText);
         
+        // V117b: Only treat it as regression if name is ALREADY confirmed and we're not
+        // currently awaiting name confirmation. Otherwise this is normal early discovery.
+        const isNamePending = pendingConfirmation === 'name' || pendingConfirmation === 'name.first' || pendingConfirmation === 'name.last';
+        if (!nameAlreadyConfirmed || isNamePending) {
+            return response;
+        }
+
         if (!isNameConfirmation && !isRegressionPattern) {
             return response;
         }
@@ -453,23 +453,8 @@ class DiscoveryFlowRunner {
             currentSlots: Object.keys(state?.plainSlots || {})
         });
         
-        // Emit SECTION_S4_REGRESSION_BLOCKED event
-        if (BlackBoxLogger && callSid) {
-            BlackBoxLogger.logEvent({
-                callId: callSid,
-                companyId: company?._id?.toString?.() || null,
-                type: 'SECTION_S4_REGRESSION_BLOCKED',
-                turn: state?.turnCount || 0,
-                data: {
-                    attemptedPrompt: response.substring(0, 100),
-                    lane: state?.lane || 'DISCOVERY',
-                    stepId: state?.discovery?.currentStepId || null,
-                    callReasonCaptured: true,
-                    nameValue: state?.plainSlots?.name || state?.plainSlots?.['name.first'] || null,
-                    severity: 'WARNING'
-                }
-            }).catch(() => {});
-        }
+        // NOTE (V117b clean sweep): Do not emit out-of-band BlackBoxLogger events from here.
+        // DiscoveryFlowRunner already emits ordered SECTION_S4_* events via emitEvent.
         
         // Return a forward-looking prompt instead
         // Find the next slot that actually needs input

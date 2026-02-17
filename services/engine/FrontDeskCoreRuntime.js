@@ -670,16 +670,84 @@ class FrontDeskCoreRuntime {
                 
                 currentSection = 'S4_DISCOVERY_FLOW';
                 tracer.enter(SECTIONS.S4_DISCOVERY_ENGINE);
-                
-                // DiscoveryFlowRunner is the ONLY speaker - run it FIRST, always
-                ownerResult = DiscoveryFlowRunner.run({
-                    company,
-                    callSid,
-                    userInput,
-                    state,
-                    emitEvent: bufferEvent,
-                    turn
-                });
+
+                // ───────────────────────────────────────────────────────────────────────────
+                // V117b: CONSENT PENDING MUST BE EVALUATED BEFORE DISCOVERY RUNS
+                // ───────────────────────────────────────────────────────────────────────────
+                if (state?.consent?.pending === true && state?.consent?.askedExplicitly === true) {
+                    currentSection = 'S5_CONSENT_GATE_EVAL';
+                    const consentEval = ConsentGate.evaluate({ company, userInput, state, callSid });
+                    if (consentEval.turnEventBuffer) {
+                        turnEventBuffer.push(...consentEval.turnEventBuffer);
+                    }
+
+                    if (consentEval.granted) {
+                        state.lane = 'BOOKING';
+                        state.consent = { pending: false, askedExplicitly: false };
+                        bufferEvent('SECTION_S5_CONSENT_GRANTED', {
+                            previousLane: 'DISCOVERY',
+                            newLane: 'BOOKING',
+                            action: 'TRANSITION_AND_RUN_BOOKING_THIS_TURN'
+                        });
+
+                        currentSection = 'S6_BOOKING_FLOW';
+                        tracer.enter(SECTIONS.S6_BOOKING_FLOW);
+                        ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state });
+                    } else if (consentEval.pending === true) {
+                        currentSection = 'S5_CONSENT_PENDING';
+                        const askResult = ConsentGate.ask({ company, state, callSid });
+                        if (askResult.turnEventBuffer) {
+                            turnEventBuffer.push(...askResult.turnEventBuffer);
+                        }
+                        ownerResult = askResult;
+                    } else {
+                        bufferEvent('SECTION_S5_CONSENT_DENIED', {
+                            previousLane: 'DISCOVERY',
+                            action: 'STAY_IN_DISCOVERY'
+                        });
+                        ownerResult = {
+                            response: "No problem. What can I help you with today?",
+                            matchSource: 'CONSENT_GATE',
+                            state: { ...state, lane: 'DISCOVERY', consent: { pending: false, askedExplicitly: false } }
+                        };
+                    }
+                }
+
+                // ───────────────────────────────────────────────────────────────────────────
+                // V117b: DISCOVERY SEQUENCE POLICY (REASON → CONSENT → BOOKING)
+                // ───────────────────────────────────────────────────────────────────────────
+                if (!ownerResult) {
+                    const hasCallReason = !!state?.plainSlots?.call_reason_detail;
+                    const consentAlreadyAsked = state?.consent?.askedExplicitly === true || state?.consent?.pending === true;
+
+                    if (hasCallReason && !consentAlreadyAsked) {
+                        currentSection = 'S5_CONSENT_PENDING';
+                        const askResult = ConsentGate.ask({ company, state, callSid });
+                        if (askResult.turnEventBuffer) {
+                            turnEventBuffer.push(...askResult.turnEventBuffer);
+                        }
+
+                        const reason = `${state.plainSlots.call_reason_detail || ''}`.trim();
+                        const reasonAck = reason && reason.length <= 80 ? `Got it — ${reason}. ` : 'Got it. ';
+
+                        ownerResult = {
+                            ...askResult,
+                            response: `${reasonAck}${askResult.response || ''}`.trim(),
+                            matchSource: 'DISCOVERY_REASON_CONSENT'
+                        };
+                    } else {
+                        // Otherwise: run DiscoveryFlowRunner to capture call reason deterministically.
+                        ownerResult = DiscoveryFlowRunner.run({
+                            company,
+                            callSid,
+                            userInput,
+                            state,
+                            emitEvent: bufferEvent,
+                            turn
+                        });
+                    }
+                }
+
                 checkpoint(bufferEvent, 'DISCOVERY_FLOW_RETURNED', {
                     matchSource: ownerResult.matchSource,
                     stepId: ownerResult.state?.discovery?.currentStepId || null,
@@ -687,100 +755,23 @@ class FrontDeskCoreRuntime {
                     responsePreview: (ownerResult.response || '').substring(0, 80)
                 });
                 
-                // EMIT PROOF EVENT: Discovery is the owner
+                // EMIT PROOF EVENT: which owner actually spoke this turn
+                const effectiveLane = ownerResult?.state?.lane || state?.lane || 'DISCOVERY';
                 bufferEvent('FD_OWNER_PROOF', {
-                    lane: 'DISCOVERY',
-                    owner: 'DISCOVERY_FLOW',
+                    lane: effectiveLane,
+                    owner: ownerResult?.matchSource || 'UNKNOWN',
                     stepId: ownerResult.state?.discovery?.currentStepId || null,
                     slotId: ownerResult.state?.discovery?.currentSlotId || null,
                     turnCount: turn,
                     architecture: 'V117_ONE_BRAIN'
                 });
-                
-                logger.info('[FRONT_DESK_CORE_RUNTIME] V117: DISCOVERY_FLOW is owner (one brain)', {
+
+                logger.info('[FRONT_DESK_CORE_RUNTIME] V117b discovery result', {
                     callSid,
+                    matchSource: ownerResult.matchSource,
                     stepId: ownerResult.state?.discovery?.currentStepId,
                     turn
                 });
-                
-                // ───────────────────────────────────────────────────────────────────────────
-                // CONSENT EVALUATION: Only AFTER discovery runs, never hijacks
-                // ───────────────────────────────────────────────────────────────────────────
-                currentSection = 'S5_CONSENT_GATE_EVAL';
-                
-                // Check if discovery is complete
-                const discoveryComplete = DiscoveryFlowRunner.isComplete(company, ownerResult.state?.plainSlots || {});
-                
-                // Check if user just granted consent (in their response)
-                const consentEval = ConsentGate.evaluate({ company, userInput, state: ownerResult.state, callSid });
-                if (consentEval.turnEventBuffer) {
-                    turnEventBuffer.push(...consentEval.turnEventBuffer);
-                }
-                
-                // Lane transition logic: Only after discovery complete
-                if (consentEval.granted) {
-                    // User said "yes" to consent - transition to BOOKING
-                    currentSection = 'S5_CONSENT_GRANTED';
-                    tracer.enter(SECTIONS.S5_CONSENT_GATE, { granted: '1' });
-                    
-                    ownerResult.state.lane = 'BOOKING';
-                    ownerResult.state.consent = { pending: false, askedExplicitly: false };
-                    
-                    bufferEvent('SECTION_S5_CONSENT_GRANTED', {
-                        previousLane: 'DISCOVERY',
-                        newLane: 'BOOKING',
-                        action: 'TRANSITION_TO_BOOKING_NEXT_TURN'
-                    });
-                    
-                    // NOTE: We do NOT override ownerResult.response here.
-                    // DiscoveryFlowRunner owns this turn. Booking starts next turn.
-                    
-                } else if (discoveryComplete && ownerResult.state?.consent?.pending !== true) {
-                    // Discovery complete but consent not yet asked or granted
-                    const consentRequired = ConsentGate.isConsentRequired(company);
-                    
-                    if (consentRequired) {
-                        // Mark consent as pending - ConsentGate.ask will be a discovery step
-                        currentSection = 'S5_CONSENT_PENDING';
-                        tracer.enter(SECTIONS.S5_CONSENT_GATE, { needsConsent: '1' });
-                        
-                        ownerResult.state.consent = ownerResult.state.consent || {};
-                        ownerResult.state.consent.pending = true;
-                        
-                        // Ask consent as part of discovery flow (not hijacking)
-                        const askResult = ConsentGate.ask({ company, state: ownerResult.state, callSid });
-                        if (askResult.turnEventBuffer) {
-                            turnEventBuffer.push(...askResult.turnEventBuffer);
-                        }
-                        
-                        // Consent prompt becomes the response (it's a discovery step)
-                        ownerResult = askResult;
-                        ownerResult.state.consent.askedExplicitly = true;
-                        
-                        bufferEvent('SECTION_S5_CONSENT_ASKED', {
-                            reason: 'DISCOVERY_COMPLETE_ASKING_CONSENT',
-                            responsePreview: (askResult.response || '').substring(0, 60)
-                        });
-                        
-                    } else {
-                        // Consent not required - transition to BOOKING
-                        currentSection = 'S5_CONSENT_NOT_REQUIRED';
-                        tracer.enter(SECTIONS.S5_CONSENT_GATE, { consentNotRequired: '1' });
-                        
-                        ownerResult.state.lane = 'BOOKING';
-                        ownerResult.state.consent = { pending: false, askedExplicitly: false, skipped: true };
-                        
-                        bufferEvent('SECTION_S5_CONSENT_SKIPPED', {
-                            reason: 'CONSENT_NOT_REQUIRED_BY_CONFIG',
-                            configSource: 'frontDeskBehavior.discoveryConsent.enabled'
-                        });
-                        
-                        // Run booking flow for this turn since discovery is done and consent not needed
-                        currentSection = 'S6_BOOKING_FLOW';
-                        tracer.enter(SECTIONS.S6_BOOKING_FLOW);
-                        ownerResult = BookingFlowRunner.run({ company, callSid, userInput, state: ownerResult.state });
-                    }
-                }
             }
 
             currentSection = 'PERSIST_STATE';
