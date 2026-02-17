@@ -2648,6 +2648,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const loadedTurnCount = callState?.turnCount || 0;
     const loadedLane = callState?.sessionMode || 'DISCOVERY';
     const loadedStepId = callState?.discoveryCurrentStepId || callState?.currentStepId || null;
+    const loadedDiscoveryComplete = callState?.discoveryComplete === true;
     const loadedCallReasonCaptured = hasSlotValue(callState?.slots, 'call_reason_detail') ||
       hasSlotValue(callState?.pendingSlots, 'call_reason_detail');
     const loadedNamePresent = hasSlotValue(callState?.slots, 'name') ||
@@ -2673,6 +2674,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             turnCount: loadedTurnCount,
             lane: loadedLane,
             stepId: loadedStepId,
+            discoveryComplete: loadedDiscoveryComplete,
             callReasonCaptured: loadedCallReasonCaptured,
             namePresent: loadedNamePresent,
             addressPresent: loadedAddressPresent,
@@ -2826,6 +2828,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             turnCount: persistedState.turnCount,
             lane: persistedState.sessionMode || 'DISCOVERY',
             stepId: persistedState.discoveryCurrentStepId || persistedState.currentStepId || null,
+            discoveryComplete: persistedState.discoveryComplete === true,
             callReasonCaptured: hasSlotValue(persistedState.slots, 'call_reason_detail') ||
               hasSlotValue(persistedState.pendingSlots, 'call_reason_detail'),
             namePresent: hasSlotValue(persistedState.slots, 'name') ||

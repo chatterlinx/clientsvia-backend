@@ -117,6 +117,7 @@ class DiscoveryFlowRunner {
             stepId: result?.state?.currentStepId || null,
             slotId: result?.state?.currentSlotId || null,
             pendingConfirmation: result?.state?.pendingConfirmation || null,
+            discoveryComplete: result?.discoveryComplete === true,
             debug: result?.debug || null
         });
 
@@ -148,7 +149,8 @@ class DiscoveryFlowRunner {
                 currentSlotId: result.state?.currentSlotId || null,
                 pendingConfirmation: result.state?.pendingConfirmation || null,
                 repromptCount: { ...(result.state?.repromptCount || {}) },
-                confirmedSlots: { ...(result.state?.confirmedSlots || {}) }
+                confirmedSlots: { ...(result.state?.confirmedSlots || {}) },
+                complete: result?.discoveryComplete === true
             },
             booking: {
                 ...state.booking,
@@ -161,6 +163,30 @@ class DiscoveryFlowRunner {
             currentSlotId: next?.discovery?.currentSlotId || null,
             pendingConfirmation: next?.discovery?.pendingConfirmation || null
         });
+
+        // ───────────────────────────────────────────────────────────────────
+        // S4.4B — Discovery complete marker (no prompt should be emitted here)
+        // ───────────────────────────────────────────────────────────────────
+        // When discovery is complete, we return a sentinel matchSource so the
+        // orchestrator can ask the booking consent question (S5) deterministically.
+        if (result?.discoveryComplete === true && !result?.reply) {
+            emit('SECTION_S4_4B_DISCOVERY_COMPLETE', {
+                stepId: next?.discovery?.currentStepId || null,
+                slotId: next?.discovery?.currentSlotId || null,
+                plainSlotKeys: Object.keys(next?.plainSlots || {}),
+                confirmedSlotKeys: Object.keys(next?.discovery?.confirmedSlots || {})
+            });
+            emit('SECTION_S4_7_DISCOVERY_END', {
+                matchSource: 'DISCOVERY_FLOW_COMPLETE',
+                stepId: next?.discovery?.currentStepId || null,
+                slotId: next?.discovery?.currentSlotId || null
+            });
+            return {
+                response: null,
+                matchSource: 'DISCOVERY_FLOW_COMPLETE',
+                state: next
+            };
+        }
 
         // ═══════════════════════════════════════════════════════════════════════════
         // REGRESSION GUARD: Check if reply would regress after S5

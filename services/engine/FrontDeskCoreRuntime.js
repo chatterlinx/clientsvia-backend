@@ -921,99 +921,54 @@ class FrontDeskCoreRuntime {
                 // V117b: DISCOVERY SEQUENCE POLICY (REASON → CONSENT → BOOKING)
                 // ───────────────────────────────────────────────────────────────────────────
                 if (!ownerResult) {
-                    const hasCallReason = !!state?.plainSlots?.call_reason_detail;
-                    const consentAlreadyAsked = state?.consent?.askedExplicitly === true || state?.consent?.pending === true;
+                    // DISCOVERY MUST RUN LINE-BY-LINE UNTIL COMPLETE.
+                    // Consent is asked ONLY AFTER discovery is complete (million-dollar question).
+                    ownerResult = DiscoveryFlowRunner.run({
+                        company,
+                        callSid,
+                        userInput,
+                        state,
+                        emitEvent: bufferEvent,
+                        turn
+                    });
 
-                    if (hasCallReason && !consentAlreadyAsked) {
+                    const discoveryComplete =
+                        ownerResult?.matchSource === 'DISCOVERY_FLOW_COMPLETE' ||
+                        ownerResult?.state?.discovery?.complete === true;
+
+                    const consentAlreadyAsked =
+                        ownerResult?.state?.consent?.askedExplicitly === true ||
+                        ownerResult?.state?.consent?.pending === true ||
+                        state?.consent?.askedExplicitly === true ||
+                        state?.consent?.pending === true;
+
+                    if (discoveryComplete && !consentAlreadyAsked) {
                         currentSection = 'S5_CONSENT_PENDING';
-                        const askResult = ConsentGate.ask({ company, state, callSid });
+                        bufferEvent('SECTION_S5_CONSENT_READY', {
+                            discoveryComplete: true,
+                            hasCallReason: !!ownerResult?.state?.plainSlots?.call_reason_detail,
+                            hasName: !!ownerResult?.state?.plainSlots?.name,
+                            hasPhone: !!ownerResult?.state?.plainSlots?.phone,
+                            hasAddress: !!ownerResult?.state?.plainSlots?.address
+                        });
+
+                        const askResult = ConsentGate.ask({ company, state: ownerResult.state || state, callSid });
                         if (askResult.turnEventBuffer) {
                             turnEventBuffer.push(...askResult.turnEventBuffer);
                         }
 
-                        // Treat consent prompt as a deterministic discovery step pointer for observability.
-                        state.discovery = state.discovery || {};
-                        state.discovery.currentStepId = state.discovery.currentStepId || 'dConsent';
-                        state.discovery.currentSlotId = 'booking_consent';
-
-                        const reasonRaw = `${state.plainSlots.call_reason_detail || ''}`.trim();
-                        const reasonShort = formatCallReasonForSpeech(reasonRaw);
-                        const firstName = `${state.plainSlots.name || ''}`.trim().split(/\s+/)[0] || null;
-                        const nameAck = firstName ? `Thanks, ${firstName}. ` : '';
-
-                        // Scenario assist (SILENT TOOL): run scenarios for empathy/helpful context,
-                        // but NEVER let scenarios own the turn (one-brain contract).
-                        let assistLine = null;
-                        try {
-                            const companyIdSafe = companyId || company?._id?.toString?.() || null;
-                            if (ScenarioEngine?.selectResponse && companyIdSafe && inputText) {
-                                const sel = await ScenarioEngine.selectResponse({
-                                    companyId: companyIdSafe,
-                                    tradeKey: company?.tradeKey || company?.industryType || null,
-                                    text: inputText,
-                                    session: {
-                                        sessionId: callSid,
-                                        callerPhone: context?.callerPhone || null,
-                                        signals: {
-                                            lane: 'DISCOVERY',
-                                            hasCallReason: true
-                                        }
-                                    },
-                                    options: {
-                                        // Deterministic + cheap: do NOT use Tier 3 LLM during discovery.
-                                        allowTier3: false,
-                                        maxCandidates: 3
-                                    }
-                                });
-
-                                if (sel?.selected && sel?.scenario?.quickReply) {
-                                    assistLine = sanitizeScenarioAssistText(sel.scenario.quickReply);
-                                }
-
-                                bufferEvent('SECTION_S4_ASSIST_SCENARIO', {
-                                    selected: sel?.selected === true,
-                                    tier: sel?.tier || null,
-                                    scenarioId: sel?.scenario?.scenarioId || null,
-                                    confidence: sel?.confidence ?? null,
-                                    assistPreview: (assistLine || '').substring(0, 120) || null,
-                                    allowTier3: false
-                                });
-                            }
-                        } catch (err) {
-                            bufferEvent('SECTION_S4_ASSIST_SCENARIO', {
-                                selected: false,
-                                tier: null,
-                                scenarioId: null,
-                                confidence: null,
-                                assistPreview: null,
-                                allowTier3: false,
-                                error: err?.message || 'unknown'
-                            });
-                        }
-
-                        // Human-friendly acknowledgment: empathetic and not "self-confirmy".
-                        // Prefer scenario assist if present; otherwise use a consistent fallback.
-                        const reasonAck = assistLine
-                            ? `${assistLine} `
-                            : (reasonShort
-                                ? `Sorry you're dealing with that — ${reasonShort}. `
-                                : "Sorry you're dealing with that. ");
+                        // Observability pointers (do NOT let this change discovery flow ordering).
+                        const nextState = askResult?.state || ownerResult.state || state;
+                        nextState.discovery = nextState.discovery || {};
+                        nextState.discovery.currentStepId = nextState.discovery.currentStepId || 'dConsent';
+                        nextState.discovery.currentSlotId = 'booking_consent';
 
                         ownerResult = {
                             ...askResult,
-                            response: `${nameAck}${reasonAck}${askResult.response || ''}`.trim(),
-                            matchSource: 'DISCOVERY_REASON_CONSENT'
+                            // If discovery runner returned no prompt (complete), ConsentGate becomes speaker now.
+                            response: askResult.response,
+                            matchSource: 'CONSENT_GATE'
                         };
-                    } else {
-                        // Otherwise: run DiscoveryFlowRunner to capture call reason deterministically.
-                        ownerResult = DiscoveryFlowRunner.run({
-                            company,
-                            callSid,
-                            userInput,
-                            state,
-                            emitEvent: bufferEvent,
-                            turn
-                        });
                     }
                 }
 
@@ -1071,7 +1026,16 @@ class FrontDeskCoreRuntime {
             });
             
             // Apply opener to response
-            let finalResponse = ownerResult.response;
+            let finalResponse = ownerResult.response || '';
+            if (!finalResponse || `${finalResponse}`.trim() === '') {
+                // Safety: never emit empty speech. Should not happen, but avoid silent turns.
+                finalResponse = "One moment — I'm pulling up your account.";
+                bufferEvent('SECTION_EMPTY_RESPONSE_FALLBACK', {
+                    matchSource: ownerResult?.matchSource || null,
+                    lane,
+                    reason: 'OWNER_RETURNED_EMPTY_RESPONSE'
+                });
+            }
             // If we already crafted an empathy-style acknowledgment (consent ask turn),
             // skip micro-openers like "Understood." that make it sound robotic.
             const skipOpener =

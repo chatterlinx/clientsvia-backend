@@ -169,4 +169,21 @@ describe('Discovery truth hardening', () => {
         assert.ok(result.state.discovery.currentStepId);
         assert.ok(result.state.discovery.currentSlotId);
     });
+
+    it('persists and reloads discoveryComplete flag', () => {
+        const callState = {};
+        const state = {
+            lane: 'DISCOVERY',
+            plainSlots: { call_reason_detail: 'AC not cooling' },
+            discovery: { currentStepId: 'd3', currentSlotId: 'address', complete: true },
+            consent: {},
+            booking: {}
+        };
+
+        const persisted = StateStore.persist(callState, state);
+        assert.strictEqual(persisted.discoveryComplete, true);
+
+        const loaded = StateStore.load(persisted);
+        assert.strictEqual(loaded.discovery.complete, true);
+    });
 });
