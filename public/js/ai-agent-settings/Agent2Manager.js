@@ -17,7 +17,7 @@
  */
 
 class Agent2Manager {
-  static UI_BUILD = 'AGENT2_UI_V0.3';
+  static UI_BUILD = 'AGENT2_UI_V0.4';
 
   constructor(companyId) {
     this.companyId = companyId;
@@ -372,6 +372,9 @@ class Agent2Manager {
               style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px;" />
           </div>
           <div style="align-self:flex-end; display:flex; gap:8px;">
+            <button id="a2-load-samples" style="padding:10px 16px; background:#6e40c9; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">
+              Load 50 Sample Cards
+            </button>
             <button id="a2-generate-all-audio" style="padding:10px 16px; background:#1f6feb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">
               Generate All Audio
             </button>
@@ -705,6 +708,12 @@ class Agent2Manager {
     });
 
     container.querySelector('#a2-generate-all-audio')?.addEventListener('click', () => this._openAudioGenerator());
+
+    container.querySelector('#a2-load-samples')?.addEventListener('click', () => {
+      if (!confirm('This will add 50 sample HVAC trigger cards. Existing cards will be kept. Continue?')) return;
+      this._loadSampleCards();
+      this.render(container);
+    });
 
     container.querySelectorAll('.a2-rule-delete').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -1137,6 +1146,478 @@ class Agent2Manager {
     }
 
     await this._refreshAudioGeneratorList();
+  }
+
+  _loadSampleCards() {
+    const sampleCards = [
+      // ========== PRICING (1-10) ==========
+      {
+        id: 'pricing.service_call',
+        enabled: true,
+        priority: 10,
+        label: 'Service call fee',
+        match: { keywords: ['service call', 'diagnostic fee', 'trip charge', 'service fee'], phrases: ['how much to come out', 'what do you charge'], negativeKeywords: ['cancel', 'refund'] },
+        answer: { answerText: 'Our service call is $89, which includes the diagnostic. If we do the repair, the diagnostic fee is waived.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a repair visit?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.tune_up',
+        enabled: true,
+        priority: 11,
+        label: 'Tune-up pricing',
+        match: { keywords: ['tune up', 'tune-up', 'maintenance cost', 'checkup price'], phrases: ['how much is a tune up', 'maintenance price'], negativeKeywords: [] },
+        answer: { answerText: 'Our tune-up is $79 for one system. If you have two systems, we can do both for $139.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a tune-up?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.freon',
+        enabled: true,
+        priority: 12,
+        label: 'Freon/refrigerant cost',
+        match: { keywords: ['freon', 'refrigerant', 'r22', 'r410a', 'coolant cost'], phrases: ['how much is freon', 'refrigerant price'], negativeKeywords: [] },
+        answer: { answerText: 'Refrigerant pricing depends on the type your system uses. R-410A is around $85 per pound, while R-22 is more expensive due to limited supply. The technician can check your system and give you an exact quote.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule someone to take a look?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.new_system',
+        enabled: true,
+        priority: 13,
+        label: 'New system pricing',
+        match: { keywords: ['new unit', 'new system', 'replacement cost', 'new ac price', 'new furnace price'], phrases: ['how much for a new', 'cost to replace'], negativeKeywords: [] },
+        answer: { answerText: 'New system pricing varies based on the size of your home and the equipment you choose. We offer free in-home estimates so we can give you an accurate quote.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a free estimate?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.after_hours',
+        enabled: true,
+        priority: 14,
+        label: 'After-hours/emergency pricing',
+        match: { keywords: ['after hours', 'emergency fee', 'weekend rate', 'holiday rate', 'overtime'], phrases: ['extra charge for after hours', 'emergency service cost'], negativeKeywords: [] },
+        answer: { answerText: 'We do have an after-hours fee of $49 for evenings, weekends, and holidays. This is in addition to the regular service call fee.', audioUrl: '' },
+        followUp: { question: 'Do you need service right away, or can it wait until regular hours?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.duct_cleaning',
+        enabled: true,
+        priority: 15,
+        label: 'Duct cleaning pricing',
+        match: { keywords: ['duct cleaning', 'air duct', 'clean ducts', 'ductwork cleaning'], phrases: ['how much to clean ducts'], negativeKeywords: [] },
+        answer: { answerText: 'Duct cleaning starts at $299 for a standard home. Larger homes or homes with more vents may be a bit more. We can give you an exact quote when we know more about your setup.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a duct cleaning?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.filter',
+        enabled: true,
+        priority: 16,
+        label: 'Filter pricing',
+        match: { keywords: ['filter price', 'filter cost', 'air filter'], phrases: ['how much are filters', 'cost of a filter'], negativeKeywords: [] },
+        answer: { answerText: 'Standard filters range from $15 to $35 depending on size and quality. Our technicians can also bring the right filter on a service call if you need one replaced.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a service visit?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.thermostat',
+        enabled: true,
+        priority: 17,
+        label: 'Thermostat pricing',
+        match: { keywords: ['thermostat price', 'thermostat cost', 'smart thermostat', 'new thermostat'], phrases: ['how much for a thermostat'], negativeKeywords: [] },
+        answer: { answerText: 'Basic thermostats start around $89 installed. Smart thermostats like Nest or Ecobee run between $249 and $349 installed.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a thermostat installation?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.capacitor',
+        enabled: true,
+        priority: 18,
+        label: 'Capacitor replacement',
+        match: { keywords: ['capacitor', 'capacitor price', 'capacitor cost'], phrases: ['how much to replace capacitor'], negativeKeywords: [] },
+        answer: { answerText: 'A capacitor replacement is typically between $150 and $250 including parts and labor. The exact price depends on the type your system needs.', audioUrl: '' },
+        followUp: { question: 'Is your unit not starting or making a humming noise?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'pricing.blower_motor',
+        enabled: true,
+        priority: 19,
+        label: 'Blower motor replacement',
+        match: { keywords: ['blower motor', 'fan motor', 'motor replacement'], phrases: ['how much for a blower motor'], negativeKeywords: [] },
+        answer: { answerText: 'Blower motor replacements typically range from $400 to $700 depending on the motor type. Variable speed motors cost more than single-speed.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a diagnostic to confirm the issue?', nextAction: 'CONTINUE' }
+      },
+
+      // ========== SCHEDULING (11-20) ==========
+      {
+        id: 'schedule.today',
+        enabled: true,
+        priority: 20,
+        label: 'Same-day appointment',
+        match: { keywords: ['today', 'same day', 'right now', 'as soon as possible', 'asap', 'immediately'], phrases: ['can you come today', 'available today'], negativeKeywords: ['cancel'] },
+        answer: { answerText: 'Let me check our schedule for today. We do our best to accommodate same-day requests.', audioUrl: '' },
+        followUp: { question: 'What time works best for you — morning or afternoon?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.tomorrow',
+        enabled: true,
+        priority: 21,
+        label: 'Tomorrow appointment',
+        match: { keywords: ['tomorrow', 'next day'], phrases: ['can you come tomorrow', 'available tomorrow'], negativeKeywords: ['cancel'] },
+        answer: { answerText: 'We usually have good availability for tomorrow. Let me get some details to get you scheduled.', audioUrl: '' },
+        followUp: { question: 'Do you prefer morning or afternoon?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.weekend',
+        enabled: true,
+        priority: 22,
+        label: 'Weekend appointment',
+        match: { keywords: ['weekend', 'saturday', 'sunday'], phrases: ['available on saturday', 'come on sunday'], negativeKeywords: [] },
+        answer: { answerText: 'Yes, we do offer weekend appointments. There is an additional $49 after-hours fee for weekend service.', audioUrl: '' },
+        followUp: { question: 'Would you like to schedule for this weekend?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.evening',
+        enabled: true,
+        priority: 23,
+        label: 'Evening appointment',
+        match: { keywords: ['evening', 'after work', 'after 5', 'after five', 'late appointment'], phrases: ['come in the evening', 'available after work'], negativeKeywords: [] },
+        answer: { answerText: 'We do have evening appointments available. Our last appointment slot is typically 5 or 6 PM depending on the day.', audioUrl: '' },
+        followUp: { question: 'What day works best for an evening appointment?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.reschedule',
+        enabled: true,
+        priority: 24,
+        label: 'Reschedule appointment',
+        match: { keywords: ['reschedule', 'change appointment', 'move appointment', 'different time'], phrases: ['need to reschedule', 'change my appointment'], negativeKeywords: [] },
+        answer: { answerText: 'No problem, I can help you reschedule. Let me pull up your appointment.', audioUrl: '' },
+        followUp: { question: 'What day and time works better for you?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.cancel',
+        enabled: true,
+        priority: 25,
+        label: 'Cancel appointment',
+        match: { keywords: ['cancel', 'cancel appointment', 'dont need'], phrases: ['need to cancel', 'cancel my appointment'], negativeKeywords: [] },
+        answer: { answerText: "I understand. I can cancel that appointment for you. There's no cancellation fee.", audioUrl: '' },
+        followUp: { question: 'Is there anything else I can help you with today?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.confirm',
+        enabled: true,
+        priority: 26,
+        label: 'Confirm appointment',
+        match: { keywords: ['confirm', 'verify appointment', 'still coming'], phrases: ['confirm my appointment', 'is my appointment still on'], negativeKeywords: [] },
+        answer: { answerText: 'Let me check on your appointment. Can you give me the name or phone number on the account?', audioUrl: '' },
+        followUp: { question: '', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.eta',
+        enabled: true,
+        priority: 27,
+        label: 'Technician ETA',
+        match: { keywords: ['eta', 'on the way', 'running late', 'when will tech arrive', 'where is technician'], phrases: ['when will the technician be here', 'is the tech on the way'], negativeKeywords: [] },
+        answer: { answerText: "Let me check on your technician's status. Can you confirm the address or phone number on the account?", audioUrl: '' },
+        followUp: { question: '', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.hours',
+        enabled: true,
+        priority: 28,
+        label: 'Business hours',
+        match: { keywords: ['hours', 'open', 'close', 'business hours', 'office hours'], phrases: ['what are your hours', 'when do you open', 'when do you close'], negativeKeywords: [] },
+        answer: { answerText: "Our office is open Monday through Friday, 8 AM to 5 PM. We also offer after-hours emergency service with an additional fee.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule an appointment?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'schedule.service_area',
+        enabled: true,
+        priority: 29,
+        label: 'Service area',
+        match: { keywords: ['service area', 'come to', 'cover', 'serve'], phrases: ['do you service', 'do you come to', 'what areas do you cover'], negativeKeywords: [] },
+        answer: { answerText: "We service most areas within a 30-mile radius of our office. If you give me your zip code, I can confirm we cover your area.", audioUrl: '' },
+        followUp: { question: 'What is your zip code?', nextAction: 'CONTINUE' }
+      },
+
+      // ========== PROBLEMS/SYMPTOMS (21-35) ==========
+      {
+        id: 'problem.not_cooling',
+        enabled: true,
+        priority: 30,
+        label: 'AC not cooling',
+        match: { keywords: ['not cooling', 'no cold air', 'warm air', 'not cold', 'ac not working'], phrases: ['blowing warm air', 'not getting cold'], negativeKeywords: [] },
+        answer: { answerText: "I'm sorry to hear that. There are a few things that could cause this — it could be the thermostat, refrigerant, or a component issue. We can send a technician to diagnose the problem.", audioUrl: '' },
+        followUp: { question: 'Is the system running at all, or is it completely off?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.not_heating',
+        enabled: true,
+        priority: 31,
+        label: 'Furnace not heating',
+        match: { keywords: ['not heating', 'no heat', 'cold air from furnace', 'furnace not working'], phrases: ['blowing cold air', 'not getting warm'], negativeKeywords: [] },
+        answer: { answerText: "I understand, that's uncomfortable. This could be an igniter, thermostat, or gas valve issue. We should have a technician take a look.", audioUrl: '' },
+        followUp: { question: 'Is the system turning on at all?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.strange_noise',
+        enabled: true,
+        priority: 32,
+        label: 'Strange noise',
+        match: { keywords: ['noise', 'loud', 'banging', 'squealing', 'grinding', 'rattling', 'humming'], phrases: ['making a noise', 'sounds weird', 'hearing a sound'], negativeKeywords: [] },
+        answer: { answerText: "Strange noises can indicate a variety of issues — from a loose part to a failing motor. It's best to have it checked before it gets worse.", audioUrl: '' },
+        followUp: { question: 'Is the system still running, or did it stop?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.water_leak',
+        enabled: true,
+        priority: 33,
+        label: 'Water leak',
+        match: { keywords: ['water leak', 'leaking water', 'water around unit', 'puddle', 'dripping'], phrases: ['water coming from', 'water on the floor'], negativeKeywords: [] },
+        answer: { answerText: "Water leaks usually mean a clogged drain line or frozen evaporator coil. Turn off the system to prevent water damage and we'll send someone out.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule service today?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.frozen',
+        enabled: true,
+        priority: 34,
+        label: 'Frozen unit/ice',
+        match: { keywords: ['frozen', 'ice', 'iced over', 'frost', 'freezing up'], phrases: ['ice on the unit', 'coils are frozen'], negativeKeywords: [] },
+        answer: { answerText: "A frozen unit usually indicates low airflow or low refrigerant. Turn the system off and let it thaw. Running it frozen can damage the compressor.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a technician to find the cause?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.wont_turn_on',
+        enabled: true,
+        priority: 35,
+        label: 'System won\'t turn on',
+        match: { keywords: ['wont turn on', 'not turning on', 'dead', 'no power', 'nothing happens'], phrases: ['system is dead', 'nothing is working'], negativeKeywords: [] },
+        answer: { answerText: "If the system isn't turning on at all, it could be a breaker issue, thermostat, or a safety switch. Check your breaker first, and if that's not it, we can send someone out.", audioUrl: '' },
+        followUp: { question: 'Have you checked the circuit breaker yet?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.short_cycling',
+        enabled: true,
+        priority: 36,
+        label: 'Short cycling',
+        match: { keywords: ['short cycling', 'turning on and off', 'keeps shutting off', 'starts and stops'], phrases: ['runs for a few minutes then stops', 'keeps turning off'], negativeKeywords: [] },
+        answer: { answerText: "Short cycling can be caused by an oversized unit, thermostat issue, or overheating. It puts extra stress on the system, so it's good to get it checked.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a diagnostic?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.bad_smell',
+        enabled: true,
+        priority: 37,
+        label: 'Bad smell',
+        match: { keywords: ['smell', 'odor', 'stink', 'burning smell', 'musty'], phrases: ['smells like burning', 'weird smell'], negativeKeywords: [] },
+        answer: { answerText: "A burning smell could indicate an electrical issue — turn off the system if it smells like burning. A musty smell usually means mold in the ducts or drain pan.", audioUrl: '' },
+        followUp: { question: 'Can you describe the smell — is it more burning or musty?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.high_bill',
+        enabled: true,
+        priority: 38,
+        label: 'High energy bill',
+        match: { keywords: ['high bill', 'electric bill', 'energy bill', 'expensive to run'], phrases: ['bill went up', 'using too much electricity'], negativeKeywords: [] },
+        answer: { answerText: "Higher bills can be caused by a system running inefficiently — dirty coils, low refrigerant, or an aging unit. A tune-up can help identify the issue.", audioUrl: '' },
+        followUp: { question: 'When was the last time the system was serviced?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.uneven_temp',
+        enabled: true,
+        priority: 39,
+        label: 'Uneven temperatures',
+        match: { keywords: ['uneven', 'hot spots', 'cold spots', 'one room', 'some rooms'], phrases: ['some rooms are hot', 'upstairs is hotter'], negativeKeywords: [] },
+        answer: { answerText: "Uneven temperatures can be caused by ductwork issues, improper airflow, or an undersized system. We can do an assessment to find the cause.", audioUrl: '' },
+        followUp: { question: 'Is this a new issue, or has it always been this way?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.thermostat',
+        enabled: true,
+        priority: 40,
+        label: 'Thermostat issue',
+        match: { keywords: ['thermostat', 'thermostat blank', 'thermostat not working'], phrases: ['thermostat is blank', 'cant change temperature'], negativeKeywords: ['price', 'cost', 'new thermostat'] },
+        answer: { answerText: "Thermostat issues can be as simple as dead batteries or as complex as wiring problems. Check the batteries first — if that doesn't help, we can send someone out.", audioUrl: '' },
+        followUp: { question: 'Is the thermostat screen blank, or is it on but not responding?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.breaker_tripping',
+        enabled: true,
+        priority: 41,
+        label: 'Breaker tripping',
+        match: { keywords: ['breaker', 'tripping', 'keeps tripping', 'circuit breaker'], phrases: ['breaker keeps tripping', 'blowing the breaker'], negativeKeywords: [] },
+        answer: { answerText: "A tripping breaker usually indicates an electrical issue with the unit — possibly a short or a failing compressor. Don't keep resetting it; we should have it checked.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a diagnostic?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.humidity',
+        enabled: true,
+        priority: 42,
+        label: 'Humidity issues',
+        match: { keywords: ['humidity', 'humid', 'sticky', 'muggy', 'moisture'], phrases: ['too humid', 'house feels sticky'], negativeKeywords: [] },
+        answer: { answerText: "High humidity even with AC running can indicate an oversized unit or airflow issues. A properly sized system should remove humidity as it cools.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule someone to take a look?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.outdoor_unit',
+        enabled: true,
+        priority: 43,
+        label: 'Outdoor unit issue',
+        match: { keywords: ['outdoor unit', 'outside unit', 'condenser', 'fan not spinning'], phrases: ['outside unit not running', 'fan stopped'], negativeKeywords: [] },
+        answer: { answerText: "If the outdoor unit isn't running, it could be a capacitor, contactor, or compressor issue. Check that the breaker is on, and if so, we'll need to diagnose it.", audioUrl: '' },
+        followUp: { question: 'Is the breaker for the outdoor unit on?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'problem.weak_airflow',
+        enabled: true,
+        priority: 44,
+        label: 'Weak airflow',
+        match: { keywords: ['weak airflow', 'low airflow', 'no airflow', 'barely blowing'], phrases: ['not much air coming out', 'airflow is weak'], negativeKeywords: [] },
+        answer: { answerText: "Weak airflow is often caused by a dirty filter, blocked ducts, or a failing blower motor. When was the filter last changed?", audioUrl: '' },
+        followUp: { question: 'Have you checked or replaced the air filter recently?', nextAction: 'CONTINUE' }
+      },
+
+      // ========== GENERAL/FAQ (36-50) ==========
+      {
+        id: 'faq.maintenance_plan',
+        enabled: true,
+        priority: 50,
+        label: 'Maintenance plan',
+        match: { keywords: ['maintenance plan', 'service plan', 'membership', 'annual plan', 'preventive maintenance'], phrases: ['do you have a maintenance plan', 'tell me about your service plan'], negativeKeywords: [] },
+        answer: { answerText: "Yes, we offer a maintenance plan that includes two tune-ups per year, priority scheduling, and discounts on repairs. It's $189 per year for one system.", audioUrl: '' },
+        followUp: { question: 'Would you like more details about the plan?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.financing',
+        enabled: true,
+        priority: 51,
+        label: 'Financing options',
+        match: { keywords: ['financing', 'payment plan', 'finance', 'monthly payments'], phrases: ['do you offer financing', 'can I make payments'], negativeKeywords: [] },
+        answer: { answerText: "Yes, we offer financing through several partners with options for 0% interest on approved credit. We can go over the options during your estimate.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule a free estimate?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.warranty',
+        enabled: true,
+        priority: 52,
+        label: 'Warranty',
+        match: { keywords: ['warranty', 'guarantee', 'covered', 'under warranty'], phrases: ['is this under warranty', 'do you offer a warranty'], negativeKeywords: [] },
+        answer: { answerText: "Most new equipment comes with a manufacturer warranty, typically 5-10 years on parts. We also warranty our labor for one year on all repairs.", audioUrl: '' },
+        followUp: { question: 'Is this regarding a recent repair or a new installation?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.brands',
+        enabled: true,
+        priority: 53,
+        label: 'Brands serviced',
+        match: { keywords: ['brand', 'make', 'carrier', 'trane', 'lennox', 'goodman', 'rheem'], phrases: ['what brands do you service', 'do you work on'], negativeKeywords: [] },
+        answer: { answerText: "We service all major brands including Carrier, Trane, Lennox, Goodman, Rheem, and more. Our technicians are trained on all types of equipment.", audioUrl: '' },
+        followUp: { question: 'What brand is your system?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.experience',
+        enabled: true,
+        priority: 54,
+        label: 'Company experience',
+        match: { keywords: ['how long', 'experience', 'been in business', 'established'], phrases: ['how long have you been in business'], negativeKeywords: [] },
+        answer: { answerText: "We've been serving the area for over 20 years. Our technicians are licensed, insured, and background-checked.", audioUrl: '' },
+        followUp: { question: 'Is there anything specific I can help you with today?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.licensed',
+        enabled: true,
+        priority: 55,
+        label: 'Licensed/insured',
+        match: { keywords: ['licensed', 'insured', 'bonded', 'certified'], phrases: ['are you licensed', 'are you insured'], negativeKeywords: [] },
+        answer: { answerText: "Yes, we are fully licensed, bonded, and insured. All our technicians are also EPA certified.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule service?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.estimate',
+        enabled: true,
+        priority: 56,
+        label: 'Free estimate',
+        match: { keywords: ['estimate', 'quote', 'free estimate', 'free quote'], phrases: ['can I get an estimate', 'how much would it cost'], negativeKeywords: [] },
+        answer: { answerText: "We offer free estimates for new system installations. For repairs, our $89 diagnostic fee covers the assessment and you'll know the repair cost before we do any work.", audioUrl: '' },
+        followUp: { question: 'Are you looking at a repair or a new system?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.filter_change',
+        enabled: true,
+        priority: 57,
+        label: 'How often change filter',
+        match: { keywords: ['how often', 'filter change', 'replace filter'], phrases: ['how often should I change', 'when to replace filter'], negativeKeywords: ['price', 'cost'] },
+        answer: { answerText: "We recommend changing your filter every 1-3 months depending on the type. If you have pets or allergies, change it monthly.", audioUrl: '' },
+        followUp: { question: 'Do you need help getting the right filter size?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.system_age',
+        enabled: true,
+        priority: 58,
+        label: 'System age/replace',
+        match: { keywords: ['how old', 'system age', 'replace', 'last'], phrases: ['how long do systems last', 'when should I replace'], negativeKeywords: [] },
+        answer: { answerText: "Most systems last 15-20 years with proper maintenance. If yours is over 15 years and needing frequent repairs, it may be more cost-effective to replace.", audioUrl: '' },
+        followUp: { question: 'How old is your current system?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.second_opinion',
+        enabled: true,
+        priority: 59,
+        label: 'Second opinion',
+        match: { keywords: ['second opinion', 'another opinion', 'verify', 'check quote'], phrases: ['get a second opinion', 'someone else said'], negativeKeywords: [] },
+        answer: { answerText: "Absolutely, we're happy to provide a second opinion. We can send a technician to evaluate and give you an honest assessment.", audioUrl: '' },
+        followUp: { question: 'Would you like to schedule that diagnostic?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'faq.payment',
+        enabled: true,
+        priority: 60,
+        label: 'Payment methods',
+        match: { keywords: ['payment', 'pay', 'credit card', 'cash', 'check', 'accept'], phrases: ['how can I pay', 'what payment methods'], negativeKeywords: [] },
+        answer: { answerText: "We accept cash, check, and all major credit cards. Payment is due when the service is completed.", audioUrl: '' },
+        followUp: { question: 'Is there anything else I can help you with?', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'speak.advisor',
+        enabled: true,
+        priority: 61,
+        label: 'Speak to a person',
+        match: { keywords: ['speak to someone', 'talk to a person', 'human', 'representative', 'manager', 'supervisor'], phrases: ['can I speak to', 'talk to a real person', 'transfer me'], negativeKeywords: [] },
+        answer: { answerText: "I'd be happy to connect you with someone. Let me transfer you now.", audioUrl: '' },
+        followUp: { question: '', nextAction: 'TRANSFER_SERVICE_ADVISOR' }
+      },
+      {
+        id: 'faq.callback',
+        enabled: true,
+        priority: 62,
+        label: 'Request callback',
+        match: { keywords: ['call me back', 'callback', 'return call', 'call back'], phrases: ['have someone call me', 'can you call me back'], negativeKeywords: [] },
+        answer: { answerText: "Sure, I can have someone call you back. What's the best number and time to reach you?", audioUrl: '' },
+        followUp: { question: '', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'greeting.hello',
+        enabled: true,
+        priority: 99,
+        label: 'Simple greeting',
+        match: { keywords: ['hello', 'hi', 'hey', 'good morning', 'good afternoon'], phrases: [], negativeKeywords: [] },
+        answer: { answerText: "Hello! Thanks for calling. How can I help you today?", audioUrl: '' },
+        followUp: { question: '', nextAction: 'CONTINUE' }
+      },
+      {
+        id: 'greeting.thanks',
+        enabled: true,
+        priority: 99,
+        label: 'Thanks/goodbye',
+        match: { keywords: ['thank you', 'thanks', 'goodbye', 'bye', 'thats all'], phrases: ["that's all I needed", 'have a good day'], negativeKeywords: [] },
+        answer: { answerText: "You're welcome! Thanks for calling. Have a great day!", audioUrl: '' },
+        followUp: { question: '', nextAction: 'CONTINUE' }
+      }
+    ];
+
+    const existingRules = this.config.discovery?.playbook?.rules || [];
+    const existingIds = new Set(existingRules.map(r => r.id));
+
+    const newCards = sampleCards.filter(c => !existingIds.has(c.id));
+    this.config.discovery.playbook.rules = [...existingRules, ...newCards];
+    this.isDirty = true;
+    this._setDirty(true);
+
+    alert(`Added ${newCards.length} new trigger cards. ${sampleCards.length - newCards.length} were skipped (already exist).`);
   }
 
   _readFormIntoConfig(container) {

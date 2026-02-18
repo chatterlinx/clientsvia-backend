@@ -25,7 +25,7 @@ const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
 
-const UI_BUILD = 'AGENT2_UI_V0.3';
+const UI_BUILD = 'AGENT2_UI_V0.4';
 
 function defaultAgent2Config() {
   return {
