@@ -624,11 +624,11 @@ class Agent2Manager {
           </button>
         </div>
         <div style="margin-bottom:12px;">
-          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Keywords (comma separated) - Use 2-3 word combos, NOT single words</label>
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Keywords (comma separated) - All words must appear in caller's speech</label>
           <input id="a2-modal-keywords" value="${this.escapeHtml(keywords)}"
-            placeholder="ac not cooling, service call fee, come out today"
+            placeholder="thermostat blank, ac not cooling, schedule today"
             style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:12px;" />
-          <small style="color:#64748b; font-size:11px;">Bad: "today", "noise" | Good: "come today", "making noise"</small>
+          <small style="color:#64748b; font-size:11px;">Flexible: "thermostat blank" matches "my thermostat is blank right now"</small>
         </div>
         <div style="margin-bottom:12px;">
           <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Phrases (one per line) - exact phrase match</label>
@@ -1621,21 +1621,29 @@ class Agent2Manager {
 
   _loadSampleCards() {
     // ═══════════════════════════════════════════════════════════════════════════════
-    // KEYWORD STRATEGY FOR TRIGGER CARDS
+    // KEYWORD MATCHING STRATEGY (V2 - Word-Based)
     // ═══════════════════════════════════════════════════════════════════════════════
-    // 1. KEYWORDS: Use 2-3 word combinations, NOT single words
-    //    BAD:  "today", "now", "cooling", "noise"
-    //    GOOD: "come out today", "ac not cooling", "making noise"
     //
-    // 2. PHRASES: Use full caller expressions (what they actually say)
-    //    GOOD: "can you come today", "my ac is not cooling", "it's making a noise"
+    // KEYWORDS use WORD-BASED matching:
+    //   - ALL words in keyword must appear in caller's speech
+    //   - Words can have other words in between (flexible)
+    //   - Example: "thermostat blank" matches "my thermostat is blank right now"
     //
-    // 3. NEGATIVE KEYWORDS: Block false matches
-    //    If "today" could match scheduling OR canceling, add "cancel today" as negative
+    // PHRASES use SUBSTRING matching:
+    //   - Exact phrase must appear in caller's speech
+    //   - Use when word ORDER matters
+    //   - Example: "how much" matches "how much does it cost"
     //
-    // WHY: Single words like "now" or "today" match when people describe situations:
-    //    "my thermostat is blank RIGHT NOW" → should NOT match "Same-day appointment"
-    //    "I need someone TODAY" → should match "Same-day appointment"
+    // NEGATIVE KEYWORDS block matches:
+    //   - If ALL negative words found, card is skipped
+    //   - Use to prevent false positives
+    //   - Example: "cancel today" prevents scheduling card from matching cancellations
+    //
+    // BEST PRACTICES:
+    //   - Use 2-3 word keywords for specificity
+    //   - Avoid single common words ("today", "now", "noise")
+    //   - Test your keywords mentally: would this phrase ONLY mean this intent?
+    //
     // ═══════════════════════════════════════════════════════════════════════════════
     const sampleCards = [
       // ========== PRICING (1-10) ==========

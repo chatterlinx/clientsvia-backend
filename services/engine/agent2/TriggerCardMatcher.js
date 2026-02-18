@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * TRIGGER CARD MATCHER
+ * TRIGGER CARD MATCHER (V2 - Word-Based Matching)
  * ============================================================================
  *
  * Deterministic, keyword/phrase-based matching for Agent 2.0 Discovery.
@@ -15,9 +15,20 @@
  * Matching Logic (in order):
  * 1. Check if card is enabled
  * 2. Check negative keywords — if ANY match, skip this card
- * 3. Check keywords — if ANY match, card matches
- * 4. Check phrases — if ANY match (substring), card matches
+ * 3. Check keywords (WORD-BASED) — ALL words in keyword must appear in input
+ * 4. Check phrases (SUBSTRING) — exact phrase must appear in input
  * 5. First matching card (by priority) wins
+ *
+ * WORD-BASED MATCHING (V2):
+ * Keywords now use flexible word matching. All words in the keyword must
+ * appear in the input, but they can have other words in between.
+ *
+ * Example:
+ *   Keyword: "thermostat blank"
+ *   Input: "my thermostat is blank right now" → ✅ MATCH (both words found)
+ *   Input: "the blank form" → ❌ NO MATCH (missing "thermostat")
+ *
+ * This allows admins to write natural keywords without predicting exact phrasing.
  *
  * ============================================================================
  */
@@ -38,6 +49,46 @@ function normalizeText(text) {
 
 function clip(text, n) {
   return `${text || ''}`.substring(0, n);
+}
+
+/**
+ * Extract words from text (letters, numbers, apostrophes only).
+ * Filters out empty strings and very short words.
+ */
+function extractWords(text) {
+  return normalizeText(text)
+    .replace(/[^a-z0-9'\s]/g, ' ')  // Keep letters, numbers, apostrophes
+    .split(/\s+/)
+    .filter(w => w.length > 0);
+}
+
+/**
+ * Word-based matching: ALL words in the keyword must appear in the input.
+ * Words can have other words in between — flexible natural language matching.
+ *
+ * @param {string} input - The caller's utterance (normalized)
+ * @param {string} keyword - The keyword to match (normalized)
+ * @returns {boolean} - True if all keyword words found in input
+ */
+function matchesAllWords(input, keyword) {
+  const inputWords = new Set(extractWords(input));
+  const keywordWords = extractWords(keyword);
+  
+  // All keyword words must be present in input
+  if (keywordWords.length === 0) return false;
+  return keywordWords.every(kw => inputWords.has(kw));
+}
+
+/**
+ * Substring matching: exact phrase must appear in input.
+ * Used for phrases where word order matters.
+ *
+ * @param {string} input - The caller's utterance (normalized)
+ * @param {string} phrase - The phrase to match (normalized)
+ * @returns {boolean} - True if phrase is substring of input
+ */
+function matchesSubstring(input, phrase) {
+  return input.includes(phrase);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -128,12 +179,14 @@ class TriggerCardMatcher {
 
       result.enabledCards++;
 
-      // Check negative keywords first
+      // ─────────────────────────────────────────────────────────────────────
+      // NEGATIVE KEYWORDS (word-based) — if ALL words found, block this card
+      // ─────────────────────────────────────────────────────────────────────
       const negKeywords = safeArr(card.match?.negativeKeywords)
         .map(normalizeText)
         .filter(Boolean);
 
-      const negativeHit = negKeywords.find((nk) => input.includes(nk));
+      const negativeHit = negKeywords.find((nk) => matchesAllWords(input, nk));
       if (negativeHit) {
         cardEval.negativeHit = negativeHit;
         cardEval.skipped = true;
@@ -143,12 +196,16 @@ class TriggerCardMatcher {
         continue;
       }
 
-      // Check keywords
+      // ─────────────────────────────────────────────────────────────────────
+      // KEYWORDS (word-based) — ALL words in keyword must appear in input
+      // ─────────────────────────────────────────────────────────────────────
+      // This allows flexible matching where words can have other words between.
+      // Example: keyword "ac not cooling" matches "my ac is not cooling well"
       const keywords = safeArr(card.match?.keywords)
         .map(normalizeText)
         .filter(Boolean);
 
-      const keywordHit = keywords.find((kw) => input.includes(kw));
+      const keywordHit = keywords.find((kw) => matchesAllWords(input, kw));
       if (keywordHit) {
         cardEval.keywordHit = keywordHit;
         cardEval.matched = true;
@@ -160,7 +217,7 @@ class TriggerCardMatcher {
         result.cardLabel = card.label || null;
         result.evaluated.push(cardEval);
 
-        logger.info('[TriggerCardMatcher] Matched card via keyword', {
+        logger.info('[TriggerCardMatcher] Matched card via keyword (word-based)', {
           cardId: card.id,
           keyword: keywordHit,
           inputPreview: clip(input, 80)
@@ -169,12 +226,15 @@ class TriggerCardMatcher {
         return result;
       }
 
-      // Check phrases
+      // ─────────────────────────────────────────────────────────────────────
+      // PHRASES (substring) — exact phrase must appear in input
+      // ─────────────────────────────────────────────────────────────────────
+      // Use phrases when word ORDER matters (e.g., "how much" vs "much how")
       const phrases = safeArr(card.match?.phrases)
         .map(normalizeText)
         .filter(Boolean);
 
-      const phraseHit = phrases.find((ph) => input.includes(ph));
+      const phraseHit = phrases.find((ph) => matchesSubstring(input, ph));
       if (phraseHit) {
         cardEval.phraseHit = phraseHit;
         cardEval.matched = true;
@@ -186,7 +246,7 @@ class TriggerCardMatcher {
         result.cardLabel = card.label || null;
         result.evaluated.push(cardEval);
 
-        logger.info('[TriggerCardMatcher] Matched card via phrase', {
+        logger.info('[TriggerCardMatcher] Matched card via phrase (substring)', {
           cardId: card.id,
           phrase: phraseHit,
           inputPreview: clip(input, 80)
