@@ -60,6 +60,8 @@ function defaultAgent2Config() {
         minScenarioScore: 0.72,
         fallback: {
           noMatchAnswer: "Ok. How can I help you today?",
+          noMatchWhenReasonCaptured: "Ok. I'm sorry about that.",
+          noMatchClarifierQuestion: "Just so I help you the right way — is the system not running at all right now, or is it running but not cooling?",
           afterAnswerQuestion: "Would you like to schedule a visit, or do you have a question I can help with?"
         },
         rules: [

@@ -93,6 +93,9 @@ class ScenarioEngine {
       tier: null,
       scenario: null,
       confidence: 0,
+      // Debug-friendly metadata (safe to ignore by callers)
+      templateMeta: null,
+      queryMeta: null,
       matchMeta: {
         tier1: { bestScore: 0, matchedPhrases: [] },
         tier2: { bestScore: 0, topCandidates: [] },
@@ -180,6 +183,16 @@ class ScenarioEngine {
         tradeKey: effectiveTradeKey,
         categoriesCount: template.categories?.length || 0
       });
+
+      result.templateMeta = {
+        templateId: template._id?.toString?.() || null,
+        templateName: template.name || null,
+        categoriesCount: template.categories?.length || 0
+      };
+      result.queryMeta = {
+        textLength: text?.length || 0,
+        textPreview: `${text || ''}`.trim().substring(0, 160)
+      };
 
       // ═══════════════════════════════════════════════════════════════
       // 3. FILTER SCENARIOS BY TRADE (Multi-tenant safety)

@@ -116,6 +116,8 @@ class Agent2Manager {
           minScenarioScore: 0.72,
           fallback: {
             noMatchAnswer: 'Ok. How can I help you today?',
+            noMatchWhenReasonCaptured: "Ok. I'm sorry about that.",
+            noMatchClarifierQuestion: "Just so I help you the right way — is the system not running at all right now, or is it running but not cooling?",
             afterAnswerQuestion: 'Would you like to schedule a visit, or do you have a question I can help with?'
           },
           rules: []
@@ -409,6 +411,21 @@ class Agent2Manager {
           </div>
         </div>
 
+        <div style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
+            <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">No-match fallback when call reason is already captured</label>
+            <textarea id="a2-fallback-noMatchWhenReasonCaptured" rows="2"
+              style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px; resize:vertical;"
+              placeholder="Ok. I'm sorry about that.">${this.escapeHtml(fallback.noMatchWhenReasonCaptured || '')}</textarea>
+          </div>
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
+            <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Clarifier question (no match + reason captured)</label>
+            <textarea id="a2-fallback-noMatchClarifierQuestion" rows="2"
+              style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px; resize:vertical;"
+              placeholder="Just so I help you the right way — is the system not running at all right now, or is it running but not cooling?">${this.escapeHtml(fallback.noMatchClarifierQuestion || '')}</textarea>
+          </div>
+        </div>
+
         <div style="margin-top:12px; overflow:auto; border:1px solid #1f2937; border-radius:12px;">
           <table style="width:100%; border-collapse:collapse; min-width:1200px;">
             <thead style="background:#0b1220;">
@@ -514,6 +531,8 @@ class Agent2Manager {
       .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelectorAll('#a2-fallback-noMatchAnswer, #a2-fallback-afterAnswerQuestion')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
+    container.querySelectorAll('#a2-fallback-noMatchWhenReasonCaptured, #a2-fallback-noMatchClarifierQuestion')
+      .forEach((el) => el?.addEventListener('input', onAnyChange));
 
     // Playbook
     container.querySelector('#a2-add-rule')?.addEventListener('click', () => {
@@ -599,6 +618,8 @@ class Agent2Manager {
     discovery.playbook.fallback = discovery.playbook.fallback || {};
     discovery.playbook.fallback.noMatchAnswer = (container.querySelector('#a2-fallback-noMatchAnswer')?.value || '').trim();
     discovery.playbook.fallback.afterAnswerQuestion = (container.querySelector('#a2-fallback-afterAnswerQuestion')?.value || '').trim();
+    discovery.playbook.fallback.noMatchWhenReasonCaptured = (container.querySelector('#a2-fallback-noMatchWhenReasonCaptured')?.value || '').trim();
+    discovery.playbook.fallback.noMatchClarifierQuestion = (container.querySelector('#a2-fallback-noMatchClarifierQuestion')?.value || '').trim();
 
     // Rules table inputs
     const rules = discovery.playbook.rules || [];
