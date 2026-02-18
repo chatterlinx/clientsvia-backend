@@ -1102,6 +1102,11 @@
       <span>Front Desk</span>
       <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('front-desk')"></i>
     </button>
+    <button class="nav-tab" data-tab="agent2">
+      <i class="fas fa-layer-group"></i>
+      <span>Agent 2.0</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('agent2')"></i>
+    </button>
     <button class="nav-tab" data-tab="flow-tree">
       <i class="fas fa-project-diagram"></i>
       <span>Flow Tree</span>
@@ -1214,6 +1219,21 @@
           </div>
         </div>
       </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         AGENT 2.0 - Clean, Isolated Config Surface
+         UI-first, modular, raw-event proof oriented
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="agent2">
+      <div class="card">
+        <div id="agent2-container">
+          <div class="loading-container">
+            <i class="fas fa-layer-group fa-spin"></i>
+            <p>Loading Agent 2.0...</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
          FLOW TREE - Live AI Decision Visualization + System Snapshot
@@ -2763,6 +2783,18 @@
           </ul>
           <p><strong>Runtime Impact:</strong> Controls deterministic runtime owners (ConsentGate, DiscoveryFlowRunner, SlotExtractor, GreetingInterceptor).</p>`
       },
+      'agent2': {
+        title: '🧩 Agent 2.0',
+        content: `<p><strong>Purpose:</strong> A clean, isolated configuration surface for the next-generation agent.</p>
+          <p><strong>Design Rules:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>UI is law:</strong> If it’s not in the UI, it does not exist</li>
+            <li><strong>Single mic owner:</strong> One module speaks; everything else provides signals</li>
+            <li><strong>Build & lock:</strong> We perfect Discovery before building Booking</li>
+          </ul>
+          <p><strong>Storage:</strong> <code>company.aiAgentSettings.agent2</code></p>
+          <p><strong>Note:</strong> This tab stores config now; runtime takeover is a separate, explicit step.</p>`
+      },
       'flow-tree': {
         title: '🌳 Flow Tree (Visualization)',
         content: `<p><strong>Purpose:</strong> READ-ONLY dashboard showing the overall system architecture and current state.</p>
@@ -3095,6 +3127,9 @@
           case 'front-desk':
             await initFrontDesk();
             break;
+          case 'agent2':
+            await initAgent2();
+            break;
           case 'flow-tree':
             await initFlowTree();
             break;
@@ -3150,6 +3185,24 @@
         await window.frontDeskManager.load();
         window.frontDeskManager.render(container);
         console.log('✅ [INIT] Front Desk initialized');
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AGENT 2.0 INITIALIZATION (Clean, Isolated)
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initAgent2() {
+      console.log('🧩 [INIT] Initializing Agent 2.0...');
+      await loadScript(`/js/ai-agent-settings/Agent2Manager.js?v=${Date.now()}`);
+      
+      const container = document.getElementById('agent2-container');
+      if (container && window.Agent2Manager) {
+        window.agent2Manager = new window.Agent2Manager(currentCompanyId);
+        await window.agent2Manager.load();
+        window.agent2Manager.render(container);
+        console.log('✅ [INIT] Agent 2.0 initialized');
+      } else {
+        console.error('❌ [INIT] Agent 2.0 container or manager missing');
       }
     }
     

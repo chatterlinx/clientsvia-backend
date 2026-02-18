@@ -44,7 +44,7 @@ router.post('/support-tokens/mint', async (req, res) => {
 
     const prefixes = Array.isArray(allowedPathPrefixes) && allowedPathPrefixes.length > 0
       ? allowedPathPrefixes.map(String)
-      : ['/api/admin/front-desk-behavior/', '/api/company/'];
+      : ['/api/admin/front-desk-behavior/', '/api/admin/agent2/', '/api/company/'];
 
     const methods = Array.isArray(allowedMethods) && allowedMethods.length > 0
       ? allowedMethods.map(m => String(m).toUpperCase())

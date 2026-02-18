@@ -48,6 +48,7 @@ const ScenarioEngine = require('../ScenarioEngine');
 const { SectionTracer, SECTIONS } = require('./SectionTracer');
 const SlotExtractor = require('./booking/SlotExtractor');
 const { selectOpener, prependOpener } = require('./OpenerEngine');
+const { Agent2DiscoveryRunner } = require('./agent2/Agent2DiscoveryRunner');
 
 // Interceptors - modular pattern matchers
 const GreetingInterceptor = require('./interceptors/GreetingInterceptor');
@@ -921,6 +922,46 @@ class FrontDeskCoreRuntime {
                 // V117b: DISCOVERY SEQUENCE POLICY (REASON → CONSENT → BOOKING)
                 // ───────────────────────────────────────────────────────────────────────────
                 if (!ownerResult) {
+                    // ───────────────────────────────────────────────────────────────────────────
+                    // AGENT 2.0 (DISCOVERY ONLY) — Single mic owner, UI-gated
+                    // ───────────────────────────────────────────────────────────────────────────
+                    // IMPORTANT:
+                    // - This path is explicitly enabled via company.aiAgentSettings.agent2.*
+                    // - Discovery only (no booking build yet)
+                    // - Emits A2_DISCOVERY_* events for BlackBox proof
+                    const agent2Enabled =
+                        company?.aiAgentSettings?.agent2?.enabled === true &&
+                        company?.aiAgentSettings?.agent2?.discovery?.enabled === true;
+                    if (agent2Enabled) {
+                        currentSection = 'A2_DISCOVERY';
+                        bufferEvent('A2_DISCOVERY_GATE', {
+                            enabled: true,
+                            uiBuild: company?.aiAgentSettings?.agent2?.meta?.uiBuild || null
+                        });
+                        ownerResult = await Agent2DiscoveryRunner.run({
+                            company,
+                            companyId,
+                            callSid,
+                            userInput,
+                            state,
+                            emitEvent: bufferEvent,
+                            turn
+                        });
+                    } else {
+                        bufferEvent('A2_DISCOVERY_GATE', { enabled: false });
+                    }
+
+                    // If Agent 2.0 produced a response, we stop here (Discovery only).
+                    // Otherwise, fall through to legacy DiscoveryFlowRunner.
+                    if (ownerResult) {
+                        checkpoint(bufferEvent, 'A2_DISCOVERY_RETURNED', {
+                            matchSource: ownerResult.matchSource,
+                            responsePreview: (ownerResult.response || '').substring(0, 80)
+                        });
+                    }
+                }
+
+                if (!ownerResult) {
                     // DISCOVERY MUST RUN LINE-BY-LINE UNTIL COMPLETE.
                     // Consent is asked ONLY AFTER discovery is complete (million-dollar question).
                     ownerResult = DiscoveryFlowRunner.run({
@@ -1059,6 +1100,8 @@ class FrontDeskCoreRuntime {
             const reasonExtractedThisTurn = state?.slotMeta?.call_reason_detail?.extractedInTurn === turn;
             const skipOpener =
                 (ownerResult?.matchSource === 'DISCOVERY_REASON_CONSENT' && /^thanks,\s+/i.test(ownerResult?.response || '')) ||
+                // Agent 2.0 responses should not be prefixed by legacy openers ("Alright.") — keep "Ok" contract.
+                (ownerResult?.matchSource === 'AGENT2_DISCOVERY') ||
                 // If we just acknowledged the call reason (starts with "Got it"), don't prepend "Great!" etc.
                 (lane === 'DISCOVERY' && /^got it\b/i.test(ownerResult?.response || '')) ||
                 // If call reason was extracted this turn, keep the top line clean and deterministic.

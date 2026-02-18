@@ -248,6 +248,7 @@ async function loadAllRoutes() {
         routes.callFlowEngineRoutes = await loadRouteWithTimeout('./routes/admin/callFlowEngine', 'callFlowEngineRoutes'); // 🎯 Call Flow Engine (Universal flow routing)
         // serviceTypeClarificationRoutes REMOVED Dec 2025 - redundant with Triage
         routes.frontDeskBehaviorRoutes = await loadRouteWithTimeout('./routes/admin/frontDeskBehavior', 'frontDeskBehaviorRoutes'); // 💬 Front Desk Behavior (LLM-0 conversation style)
+        routes.agent2Routes = await loadRouteWithTimeout('./routes/admin/agent2', 'agent2Routes'); // 🧩 Agent 2.0 (isolated, UI-controlled)
         routes.conversationMemoryRoutes = await loadRouteWithTimeout('./routes/admin/conversationMemory', 'conversationMemoryRoutes'); // 📊 V111 Conversation Memory Viewer
         routes.transcriptsRoutes = await loadRouteWithTimeout('./routes/admin/transcripts', 'transcriptsRoutes'); // 📝 V111 Call Transcripts
         routes.v111HealthRoutes = await loadRouteWithTimeout('./routes/admin/v111Health', 'v111HealthRoutes'); // 🩺 V111 Health Check API
@@ -735,6 +736,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/call-flow-engine', routes.callFlowEngineRoutes); // 🎯 Call Flow Engine (Universal flow routing)
     // serviceTypeClarificationRoutes REMOVED Dec 2025 - nuked
     app.use('/api/admin/front-desk-behavior', routes.frontDeskBehaviorRoutes); // 💬 Front Desk Behavior (LLM-0 conversation style - ALL UI controlled)
+    app.use('/api/admin/agent2', routes.agent2Routes); // 🧩 Agent 2.0 (isolated, UI-controlled)
     app.use('/api/admin/conversation-memory', routes.conversationMemoryRoutes); // 📊 V111 Conversation Memory Viewer
     app.use('/api/admin/transcripts', routes.transcriptsRoutes); // 📝 V111 Call Transcripts
     app.use('/api/admin/v111', routes.v111HealthRoutes); // 🩺 V111 Health Check API

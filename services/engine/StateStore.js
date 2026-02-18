@@ -134,7 +134,12 @@ class StateStore {
                 repromptCount: clone(callState.repromptCount || {}),
                 addressCollected: clone(callState.addressCollected || {}),
                 bookingComplete: callState.bookingComplete === true
-            }
+            },
+
+            // ───────────────────────────────────────────────────────────────────
+            // AGENT 2.0 - Isolated state namespace (persisted)
+            // ───────────────────────────────────────────────────────────────────
+            agent2: clone(callState.agent2 || {})
         };
     }
 
@@ -188,6 +193,9 @@ class StateStore {
         // Keep legacy views derived from slots to avoid downstream breakage.
         next.bookingCollected = { ...(next.bookingCollected || {}), ...(state.plainSlots || {}) };
         next.bookingModeLocked = state.lane === 'BOOKING' || next.bookingModeLocked === true;
+
+        // Persist Agent 2.0 isolated state (never interpreted by legacy runtime).
+        next.agent2 = clone(state.agent2 || next.agent2 || {});
 
         return next;
     }

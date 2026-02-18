@@ -4215,6 +4215,26 @@ const companySchema = new mongoose.Schema({
             lastUpdated: { type: Date, default: Date.now },
             updatedBy: { type: String, default: null, trim: true }
         },
+
+        // -------------------------------------------------------------------
+        // AGENT 2.0 (ISOLATED, UI-CONTROLLED)
+        // -------------------------------------------------------------------
+        // A clean, modular namespace for the next-generation agent.
+        // Intentionally separate from frontDeskBehavior to prevent legacy
+        // routing/kill-switch entanglement.
+        //
+        // NOTE: Keep schema minimal early; expand only as sections are locked.
+        agent2: {
+            enabled: { type: Boolean, default: false },
+            discovery: {
+                enabled: { type: Boolean, default: false },
+                // UI-driven playbook + style blocks (stored as structured JSON)
+                style: { type: mongoose.Schema.Types.Mixed, default: {} },
+                playbook: { type: mongoose.Schema.Types.Mixed, default: {} },
+                updatedAt: { type: Date, default: null }
+            },
+            meta: { type: mongoose.Schema.Types.Mixed, default: {} }
+        },
         
         // -------------------------------------------------------------------
         // CHEAT SHEET META - Version Control Pointers (NEW ARCHITECTURE)
