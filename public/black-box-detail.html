@@ -1840,6 +1840,9 @@
                     <button onclick="openRawEventsJson()" style="background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">
                         🔎 Open JSON
                     </button>
+                    <button onclick="downloadRawEventsJson()" style="background: #f59e0b; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                        📥 Download JSON
+                    </button>
                     <span style="color: #94a3b8; font-size: 13px;">${events.length} events</span>
                 </div>
                 <div style="background: #0f172a; border-radius: 8px; padding: 16px; overflow: auto; max-height: 600px;">
@@ -1899,6 +1902,18 @@
               <pre>${safe}</pre>
             `);
             w.document.close();
+        }
+
+        function downloadRawEventsJson() {
+            const events = recording.events || [];
+            const json = JSON.stringify(events, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `raw-events-${callId}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         // ═══════════════════════════════════════════════════════════════════
