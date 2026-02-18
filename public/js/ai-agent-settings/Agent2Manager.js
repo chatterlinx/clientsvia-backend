@@ -17,7 +17,7 @@
  */
 
 class Agent2Manager {
-  static UI_BUILD = 'AGENT2_UI_V0.2';
+  static UI_BUILD = 'AGENT2_UI_V0.3';
 
   constructor(companyId) {
     this.companyId = companyId;
@@ -371,7 +371,10 @@ class Agent2Manager {
               value="${this.escapeHtml(pb.minScenarioScore ?? 0.72)}"
               style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px;" />
           </div>
-          <div style="align-self:flex-end;">
+          <div style="align-self:flex-end; display:flex; gap:8px;">
+            <button id="a2-generate-all-audio" style="padding:10px 16px; background:#1f6feb; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">
+              Generate All Audio
+            </button>
             <button id="a2-add-rule" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">
               + Add Trigger Card
             </button>
@@ -434,6 +437,29 @@ class Agent2Manager {
               <button id="a2-modal-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:4px 8px;">X</button>
             </div>
             <div id="a2-modal-content"></div>
+          </div>
+        </div>
+
+        <div id="a2-audio-generator-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+          <div style="background:#0d1117; border:1px solid #30363d; border-radius:16px; width:90%; max-width:800px; max-height:90vh; overflow-y:auto; padding:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #30363d; padding-bottom:16px;">
+              <div>
+                <h3 style="margin:0; color:#7ee787; font-size:1.25rem;">Instant Audio Generator</h3>
+                <div style="color:#8b949e; font-size:12px; margin-top:4px;">Generate cached MP3s for Trigger Card answers. Uses your company's voice settings.</div>
+              </div>
+              <div style="display:flex; gap:12px; align-items:center;">
+                <button id="a2-audio-generate-all" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;">
+                  Generate All
+                </button>
+                <button id="a2-audio-generator-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:4px 8px;">X</button>
+              </div>
+            </div>
+            <div id="a2-audio-generator-content"></div>
+            <div style="margin-top:20px; text-align:right;">
+              <button id="a2-audio-generator-done" style="padding:12px 24px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:10px; cursor:pointer;">
+                Done
+              </button>
+            </div>
           </div>
         </div>
       `
@@ -514,10 +540,24 @@ class Agent2Manager {
             placeholder="Our service call is $89, which includes the diagnostic. If we do the repair, the diagnostic fee is waived."
             style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:12px; resize:vertical;">${this.escapeHtml(answerText)}</textarea>
         </div>
+        <div style="margin-bottom:12px;">
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Pre-generated Audio</label>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <div id="a2-modal-audio-status" style="flex:1; padding:10px 12px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#8b949e; font-size:13px;">
+              Checking audio status...
+            </div>
+            <button id="a2-modal-generate-audio" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap;">
+              Generate MP3
+            </button>
+          </div>
+          <div style="margin-top:6px; color:#6e7681; font-size:11px;">
+            Pre-generate audio for instant playback (no TTS latency). Uses your company's voice settings.
+          </div>
+        </div>
         <div>
-          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Audio URL (optional - plays instead of TTS if set)</label>
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Audio URL (auto-filled when generated, or paste custom URL)</label>
           <input id="a2-modal-audioUrl" value="${this.escapeHtml(audioUrl)}"
-            placeholder="https://cdn.example.com/audio/service-call-pricing.mp3"
+            placeholder="Generated automatically, or paste custom URL"
             style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:12px; font-family:monospace; font-size:12px;" />
         </div>
       </div>
@@ -664,6 +704,8 @@ class Agent2Manager {
       setTimeout(() => this._openModal(newIdx), 50);
     });
 
+    container.querySelector('#a2-generate-all-audio')?.addEventListener('click', () => this._openAudioGenerator());
+
     container.querySelectorAll('.a2-rule-delete').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -720,6 +762,15 @@ class Agent2Manager {
     document.getElementById('a2-modal-cancel')?.addEventListener('click', () => this._closeModal());
     document.getElementById('a2-modal-save')?.addEventListener('click', () => this._saveModal());
     document.getElementById('a2-modal-close')?.addEventListener('click', () => this._closeModal());
+    document.getElementById('a2-modal-generate-audio')?.addEventListener('click', () => this._generateAudio());
+
+    let audioCheckTimeout = null;
+    document.getElementById('a2-modal-answerText')?.addEventListener('input', () => {
+      clearTimeout(audioCheckTimeout);
+      audioCheckTimeout = setTimeout(() => this._checkAudioStatus(), 500);
+    });
+
+    this._checkAudioStatus();
   }
 
   _closeModal() {
@@ -759,6 +810,333 @@ class Agent2Manager {
     this.isDirty = true;
     this._closeModal();
     if (this._container) this.render(this._container);
+  }
+
+  async _checkAudioStatus() {
+    const statusEl = document.getElementById('a2-modal-audio-status');
+    const generateBtn = document.getElementById('a2-modal-generate-audio');
+    const answerTextEl = document.getElementById('a2-modal-answerText');
+    const text = (answerTextEl?.value || '').trim();
+
+    if (!text) {
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color:#8b949e;">Enter answer text first</span>';
+      }
+      if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.style.opacity = '0.5';
+      }
+      return;
+    }
+
+    if (statusEl) {
+      statusEl.innerHTML = '<span style="color:#8b949e;">Checking...</span>';
+    }
+
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/status`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          items: [{ kind: 'TRIGGER_CARD_ANSWER', text }]
+        })
+      });
+
+      const json = await res.json();
+      const item = json?.items?.[0];
+
+      if (item?.exists) {
+        if (statusEl) {
+          statusEl.innerHTML = `
+            <span style="color:#7ee787;">Audio ready</span>
+            <span style="color:#6e7681; margin-left:8px; font-size:11px;">${item.fileName || ''}</span>
+          `;
+        }
+        if (generateBtn) {
+          generateBtn.textContent = 'Regenerate MP3';
+          generateBtn.disabled = false;
+          generateBtn.style.opacity = '1';
+        }
+        const audioUrlEl = document.getElementById('a2-modal-audioUrl');
+        if (audioUrlEl && !audioUrlEl.value && item.url) {
+          audioUrlEl.value = item.url;
+        }
+      } else {
+        if (statusEl) {
+          statusEl.innerHTML = '<span style="color:#f0883e;">Not generated yet</span>';
+        }
+        if (generateBtn) {
+          generateBtn.textContent = 'Generate MP3';
+          generateBtn.disabled = false;
+          generateBtn.style.opacity = '1';
+        }
+      }
+    } catch (e) {
+      console.error('Audio status check failed:', e);
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color:#f85149;">Error checking status</span>';
+      }
+    }
+  }
+
+  async _generateAudio() {
+    const generateBtn = document.getElementById('a2-modal-generate-audio');
+    const statusEl = document.getElementById('a2-modal-audio-status');
+    const answerTextEl = document.getElementById('a2-modal-answerText');
+    const text = (answerTextEl?.value || '').trim();
+
+    if (!text) {
+      alert('Enter answer text first');
+      return;
+    }
+
+    if (generateBtn) {
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
+    }
+    if (statusEl) {
+      statusEl.innerHTML = '<span style="color:#58a6ff;">Generating audio...</span>';
+    }
+
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/generate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          kind: 'TRIGGER_CARD_ANSWER',
+          text,
+          force: true
+        })
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        if (statusEl) {
+          statusEl.innerHTML = `
+            <span style="color:#7ee787;">Audio generated!</span>
+            <span style="color:#6e7681; margin-left:8px; font-size:11px;">${json.fileName || ''}</span>
+          `;
+        }
+        if (generateBtn) {
+          generateBtn.textContent = 'Regenerate MP3';
+          generateBtn.disabled = false;
+        }
+        const audioUrlEl = document.getElementById('a2-modal-audioUrl');
+        if (audioUrlEl && json.url) {
+          audioUrlEl.value = json.url;
+        }
+      } else {
+        throw new Error(json.error || 'Generation failed');
+      }
+    } catch (e) {
+      console.error('Audio generation failed:', e);
+      if (statusEl) {
+        statusEl.innerHTML = `<span style="color:#f85149;">Error: ${e.message || 'Generation failed'}</span>`;
+      }
+      if (generateBtn) {
+        generateBtn.textContent = 'Generate MP3';
+        generateBtn.disabled = false;
+      }
+    }
+  }
+
+  async _openAudioGenerator() {
+    const modal = document.getElementById('a2-audio-generator-modal');
+    const content = document.getElementById('a2-audio-generator-content');
+    if (!modal || !content) return;
+
+    const rules = this.config.discovery?.playbook?.rules || [];
+    const cardsWithText = rules.filter(r => r.enabled !== false && (r.answer?.answerText || '').trim());
+
+    if (cardsWithText.length === 0) {
+      alert('No enabled trigger cards with answer text found.');
+      return;
+    }
+
+    content.innerHTML = '<div style="color:#8b949e; text-align:center; padding:20px;">Loading audio status...</div>';
+    modal.style.display = 'flex';
+
+    document.getElementById('a2-audio-generator-close')?.addEventListener('click', () => this._closeAudioGenerator());
+    document.getElementById('a2-audio-generator-done')?.addEventListener('click', () => this._closeAudioGenerator());
+    document.getElementById('a2-audio-generate-all')?.addEventListener('click', () => this._generateAllAudio());
+    modal.addEventListener('click', (e) => {
+      if (e.target.id === 'a2-audio-generator-modal') this._closeAudioGenerator();
+    });
+
+    await this._refreshAudioGeneratorList();
+  }
+
+  _closeAudioGenerator() {
+    const modal = document.getElementById('a2-audio-generator-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async _refreshAudioGeneratorList() {
+    const content = document.getElementById('a2-audio-generator-content');
+    if (!content) return;
+
+    const rules = this.config.discovery?.playbook?.rules || [];
+    const cardsWithText = rules.filter(r => r.enabled !== false && (r.answer?.answerText || '').trim());
+
+    const items = cardsWithText.map(r => ({
+      kind: 'TRIGGER_CARD_ANSWER',
+      text: (r.answer?.answerText || '').trim()
+    }));
+
+    let statuses = [];
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/status`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ items })
+      });
+      const json = await res.json();
+      statuses = json?.items || [];
+    } catch (e) {
+      console.error('Failed to get audio statuses:', e);
+    }
+
+    const rows = cardsWithText.map((r, idx) => {
+      const text = (r.answer?.answerText || '').trim();
+      const status = statuses[idx] || {};
+      const exists = status.exists === true;
+      const statusBadge = exists
+        ? '<span style="background:#238636; color:white; padding:4px 10px; border-radius:6px; font-size:11px;">READY</span>'
+        : '<span style="background:#6e7681; color:#c9d1d9; padding:4px 10px; border-radius:6px; font-size:11px;">MISSING</span>';
+      const btnText = exists ? 'Regenerate' : 'Generate MP3';
+      const btnColor = exists ? '#21262d' : '#238636';
+      const btnBorder = exists ? '1px solid #30363d' : 'none';
+
+      return `
+        <div style="padding:16px; background:#161b22; border:1px solid #30363d; border-radius:12px; margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px;">
+            <div style="flex:1; min-width:0;">
+              <div style="color:#8b949e; font-size:11px; text-transform:uppercase; margin-bottom:4px;">
+                ${this.escapeHtml(r.label || r.id || 'Untitled')}
+              </div>
+              <div style="color:#e5e7eb; font-size:13px; line-height:1.5; word-break:break-word;">
+                ${this.escapeHtml(text.length > 120 ? text.substring(0, 120) + '...' : text)}
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0;">
+              <div>${statusBadge}</div>
+              <button class="a2-audio-gen-single" data-idx="${idx}"
+                style="padding:8px 14px; background:${btnColor}; color:white; border:${btnBorder}; border-radius:8px; cursor:pointer; font-size:12px; white-space:nowrap;">
+                ${btnText}
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    content.innerHTML = rows || '<div style="color:#8b949e; text-align:center; padding:20px;">No cards with answer text.</div>';
+
+    content.querySelectorAll('.a2-audio-gen-single').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        const idx = Number(btn.getAttribute('data-idx'));
+        const card = cardsWithText[idx];
+        if (!card) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Generating...';
+
+        try {
+          const token = this._getToken();
+          const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/generate`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              kind: 'TRIGGER_CARD_ANSWER',
+              text: (card.answer?.answerText || '').trim(),
+              force: true
+            })
+          });
+
+          const json = await res.json();
+          if (json.success && json.url) {
+            const ruleIdx = rules.findIndex(r => r.id === card.id);
+            if (ruleIdx >= 0 && this.config.discovery?.playbook?.rules?.[ruleIdx]) {
+              this.config.discovery.playbook.rules[ruleIdx].answer = this.config.discovery.playbook.rules[ruleIdx].answer || {};
+              this.config.discovery.playbook.rules[ruleIdx].answer.audioUrl = json.url;
+              this.isDirty = true;
+              this._setDirty(true);
+            }
+          }
+
+          await this._refreshAudioGeneratorList();
+        } catch (err) {
+          console.error('Generate single failed:', err);
+          btn.textContent = 'Error';
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  async _generateAllAudio() {
+    const generateAllBtn = document.getElementById('a2-audio-generate-all');
+    if (generateAllBtn) {
+      generateAllBtn.disabled = true;
+      generateAllBtn.textContent = 'Generating...';
+    }
+
+    const rules = this.config.discovery?.playbook?.rules || [];
+    const cardsWithText = rules.filter(r => r.enabled !== false && (r.answer?.answerText || '').trim());
+
+    for (const card of cardsWithText) {
+      try {
+        const token = this._getToken();
+        const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/generate`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            kind: 'TRIGGER_CARD_ANSWER',
+            text: (card.answer?.answerText || '').trim(),
+            force: false
+          })
+        });
+
+        const json = await res.json();
+        if (json.success && json.url) {
+          const ruleIdx = rules.findIndex(r => r.id === card.id);
+          if (ruleIdx >= 0 && this.config.discovery?.playbook?.rules?.[ruleIdx]) {
+            this.config.discovery.playbook.rules[ruleIdx].answer = this.config.discovery.playbook.rules[ruleIdx].answer || {};
+            this.config.discovery.playbook.rules[ruleIdx].answer.audioUrl = json.url;
+            this.isDirty = true;
+            this._setDirty(true);
+          }
+        }
+      } catch (err) {
+        console.error('Generate all - single item failed:', err, card.id);
+      }
+    }
+
+    if (generateAllBtn) {
+      generateAllBtn.textContent = 'Generate All';
+      generateAllBtn.disabled = false;
+    }
+
+    await this._refreshAudioGeneratorList();
   }
 
   _readFormIntoConfig(container) {
