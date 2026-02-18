@@ -17,7 +17,7 @@
  */
 
 class Agent2Manager {
-  static UI_BUILD = 'AGENT2_UI_V0.6';
+  static UI_BUILD = 'AGENT2_UI_V0.7';
 
   constructor(companyId) {
     this.companyId = companyId;
@@ -548,12 +548,12 @@ class Agent2Manager {
             placeholder="Our service call is $89, which includes the diagnostic. If we do the repair, the diagnostic fee is waived."
             style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:12px; resize:vertical;">${this.escapeHtml(answerText)}</textarea>
         </div>
-        <div style="margin-bottom:12px;">
-          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Pre-generated Audio</label>
-          <div style="display:flex; gap:12px; align-items:center;">
-            <div id="a2-modal-audio-status" style="flex:1; padding:10px 12px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#8b949e; font-size:13px;">
-              Checking audio status...
-            </div>
+        <div>
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Audio URL (agent plays this instead of TTS if set)</label>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="a2-modal-audioUrl" value="${this.escapeHtml(audioUrl)}"
+              placeholder="Click 'Generate MP3' or paste a URL"
+              style="flex:1; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px 12px; font-family:monospace; font-size:12px;" />
             <button id="a2-modal-play-audio" style="padding:10px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap; display:none;">
               ▶ Play
             </button>
@@ -561,15 +561,9 @@ class Agent2Manager {
               Generate MP3
             </button>
           </div>
-          <div style="margin-top:6px; color:#6e7681; font-size:11px;">
-            Pre-generate audio for instant playback (no TTS latency). Uses your company's voice settings.
+          <div id="a2-modal-audio-status" style="margin-top:6px; color:#6e7681; font-size:11px;">
+            Checking...
           </div>
-        </div>
-        <div>
-          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Audio URL (auto-filled when generated, or paste custom URL)</label>
-          <input id="a2-modal-audioUrl" value="${this.escapeHtml(audioUrl)}"
-            placeholder="Generated automatically, or paste custom URL"
-            style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:12px; font-family:monospace; font-size:12px;" />
         </div>
       </div>
 
@@ -789,6 +783,15 @@ class Agent2Manager {
       audioCheckTimeout = setTimeout(() => this._checkAudioStatus(), 500);
     });
 
+    // Show/hide play button when URL changes
+    document.getElementById('a2-modal-audioUrl')?.addEventListener('input', () => {
+      const playBtn = document.getElementById('a2-modal-play-audio');
+      const audioUrl = (document.getElementById('a2-modal-audioUrl')?.value || '').trim();
+      if (playBtn) {
+        playBtn.style.display = audioUrl ? 'block' : 'none';
+      }
+    });
+
     this._checkAudioStatus();
   }
 
@@ -834,12 +837,29 @@ class Agent2Manager {
   async _checkAudioStatus() {
     const statusEl = document.getElementById('a2-modal-audio-status');
     const generateBtn = document.getElementById('a2-modal-generate-audio');
+    const playBtn = document.getElementById('a2-modal-play-audio');
     const answerTextEl = document.getElementById('a2-modal-answerText');
+    const audioUrlEl = document.getElementById('a2-modal-audioUrl');
     const text = (answerTextEl?.value || '').trim();
+    const savedAudioUrl = (audioUrlEl?.value || '').trim();
+
+    // Show/hide play button based on whether there's a URL in the input
+    const updatePlayButton = () => {
+      const currentUrl = (audioUrlEl?.value || '').trim();
+      if (currentUrl && playBtn) {
+        playBtn.style.display = 'block';
+        playBtn.setAttribute('data-audio-url', currentUrl);
+      } else if (playBtn) {
+        playBtn.style.display = 'none';
+      }
+    };
+
+    // Always show play button if there's a URL
+    updatePlayButton();
 
     if (!text) {
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color:#8b949e;">Enter answer text first</span>';
+        statusEl.innerHTML = 'Enter answer text to generate audio';
       }
       if (generateBtn) {
         generateBtn.disabled = true;
@@ -848,8 +868,13 @@ class Agent2Manager {
       return;
     }
 
+    if (generateBtn) {
+      generateBtn.disabled = false;
+      generateBtn.style.opacity = '1';
+    }
+
     if (statusEl) {
-      statusEl.innerHTML = '<span style="color:#8b949e;">Checking...</span>';
+      statusEl.innerHTML = 'Checking if audio matches current text...';
     }
 
     try {
@@ -868,84 +893,83 @@ class Agent2Manager {
       const json = await res.json();
       const item = json?.items?.[0];
 
-      const playBtn = document.getElementById('a2-modal-play-audio');
-
       if (item?.exists) {
+        // Audio file exists for current text
         if (statusEl) {
-          statusEl.innerHTML = `
-            <span style="color:#7ee787;">Audio ready</span>
-            <span style="color:#6e7681; margin-left:8px; font-size:11px;">${item.fileName || ''}</span>
-          `;
+          statusEl.innerHTML = `<span style="color:#7ee787;">Audio matches current text</span>`;
         }
         if (generateBtn) {
-          generateBtn.textContent = 'Regenerate MP3';
-          generateBtn.disabled = false;
-          generateBtn.style.opacity = '1';
+          generateBtn.textContent = 'Regenerate';
         }
-        if (playBtn && item.url) {
-          playBtn.style.display = 'block';
-          playBtn.setAttribute('data-audio-url', item.url);
-        }
-        const audioUrlEl = document.getElementById('a2-modal-audioUrl');
-        if (audioUrlEl && !audioUrlEl.value && item.url) {
+        // Update URL if different (keeps it in sync)
+        if (audioUrlEl && item.url && audioUrlEl.value !== item.url) {
           audioUrlEl.value = item.url;
+          updatePlayButton();
+        }
+      } else if (savedAudioUrl) {
+        // There's a URL but no matching audio for current text
+        if (statusEl) {
+          statusEl.innerHTML = `<span style="color:#f0883e;">Text changed — regenerate to update audio</span>`;
+        }
+        if (generateBtn) {
+          generateBtn.textContent = 'Regenerate';
         }
       } else {
+        // No audio at all
         if (statusEl) {
-          statusEl.innerHTML = '<span style="color:#f0883e;">Not generated yet</span>';
+          statusEl.innerHTML = 'No audio yet — click Generate MP3';
         }
         if (generateBtn) {
           generateBtn.textContent = 'Generate MP3';
-          generateBtn.disabled = false;
-          generateBtn.style.opacity = '1';
-        }
-        if (playBtn) {
-          playBtn.style.display = 'none';
         }
       }
     } catch (e) {
       console.error('Audio status check failed:', e);
       if (statusEl) {
-        statusEl.innerHTML = '<span style="color:#f85149;">Error checking status</span>';
+        statusEl.innerHTML = savedAudioUrl 
+          ? 'Could not verify audio status' 
+          : 'Error checking audio status';
       }
     }
   }
 
   _playAudio() {
     const playBtn = document.getElementById('a2-modal-play-audio');
-    const audioUrl = playBtn?.getAttribute('data-audio-url');
+    const audioUrlEl = document.getElementById('a2-modal-audioUrl');
+    const audioUrl = (audioUrlEl?.value || '').trim();
 
     if (!audioUrl) {
-      alert('No audio available. Generate MP3 first.');
+      alert('No audio URL. Generate MP3 first or paste a URL.');
       return;
     }
 
+    // If already playing, stop
     if (this._currentAudio) {
       this._currentAudio.pause();
       this._currentAudio = null;
-      playBtn.textContent = '▶ Play';
+      if (playBtn) playBtn.textContent = '▶ Play';
       return;
     }
 
     const audio = new Audio(audioUrl);
     this._currentAudio = audio;
-    playBtn.textContent = '⏹ Stop';
+    if (playBtn) playBtn.textContent = '⏹ Stop';
 
     audio.onended = () => {
       this._currentAudio = null;
-      playBtn.textContent = '▶ Play';
+      if (playBtn) playBtn.textContent = '▶ Play';
     };
 
     audio.onerror = () => {
       this._currentAudio = null;
-      playBtn.textContent = '▶ Play';
-      alert('Failed to play audio. The file may not exist.');
+      if (playBtn) playBtn.textContent = '▶ Play';
+      alert('Failed to play audio. The file may not exist or the URL is invalid.');
     };
 
     audio.play().catch(err => {
       console.error('Audio play failed:', err);
       this._currentAudio = null;
-      playBtn.textContent = '▶ Play';
+      if (playBtn) playBtn.textContent = '▶ Play';
     });
   }
 

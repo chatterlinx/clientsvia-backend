@@ -26,7 +26,7 @@ const ConfigAuditService = require('../../services/ConfigAuditService');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
 const openaiClient = require('../../config/openai');
 
-const UI_BUILD = 'AGENT2_UI_V0.6';
+const UI_BUILD = 'AGENT2_UI_V0.7';
 
 function defaultAgent2Config() {
   return {
