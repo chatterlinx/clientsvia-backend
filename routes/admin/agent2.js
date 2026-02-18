@@ -24,8 +24,9 @@ const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
+const openaiClient = require('../../config/openai');
 
-const UI_BUILD = 'AGENT2_UI_V0.4';
+const UI_BUILD = 'AGENT2_UI_V0.5';
 
 function defaultAgent2Config() {
   return {
@@ -247,6 +248,99 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
   } catch (error) {
     logger.error('[AGENT2] PATCH error', { error: error.message });
     return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ============================================================================
+// GPT-4 PREFILL - Auto-generate trigger card fields from keywords
+// ============================================================================
+
+/**
+ * POST /:companyId/gpt-prefill
+ * Body: { keywords: "service call, diagnostic fee, trip charge" }
+ * Returns: { success, data: { label, phrases, negativeKeywords, answerText, followUpQuestion } }
+ */
+router.post('/:companyId/gpt-prefill', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const keywords = (req.body?.keywords || '').trim();
+
+    if (!keywords) {
+      return res.status(400).json({ success: false, error: 'Keywords required' });
+    }
+
+    if (!openaiClient) {
+      return res.status(503).json({ success: false, error: 'OpenAI not configured' });
+    }
+
+    const company = await v2Company.findById(companyId).select('companyName').lean();
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    const companyName = company.companyName || 'our company';
+
+    const systemPrompt = `You are an HVAC/home service business assistant helping create trigger cards for an AI phone agent.
+
+Given a set of keywords, generate:
+1. label: A short display name (2-4 words)
+2. phrases: 3-5 common phrases callers might say (natural language)
+3. negativeKeywords: 1-3 words that would indicate a different intent (to avoid false matches)
+4. answerText: A helpful, conversational answer (1-3 sentences, friendly tone, include specifics if the keywords suggest pricing use realistic HVAC prices)
+5. followUpQuestion: A natural follow-up to keep the conversation going
+
+The business is: ${companyName}
+
+Respond ONLY with valid JSON, no markdown, no explanation:
+{
+  "label": "...",
+  "phrases": ["...", "..."],
+  "negativeKeywords": ["...", "..."],
+  "answerText": "...",
+  "followUpQuestion": "..."
+}`;
+
+    const userPrompt = `Keywords: ${keywords}`;
+
+    logger.info('[AGENT2] GPT-4 prefill request', { companyId, keywords });
+
+    const response = await openaiClient.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 500
+    });
+
+    const content = response.choices?.[0]?.message?.content || '';
+
+    let parsed;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON in response');
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (parseErr) {
+      logger.error('[AGENT2] GPT-4 prefill parse error', { content, error: parseErr.message });
+      return res.status(500).json({ success: false, error: 'Failed to parse GPT response' });
+    }
+
+    logger.info('[AGENT2] GPT-4 prefill success', { companyId, keywords, label: parsed.label });
+
+    return res.json({
+      success: true,
+      data: {
+        label: parsed.label || '',
+        phrases: Array.isArray(parsed.phrases) ? parsed.phrases : [],
+        negativeKeywords: Array.isArray(parsed.negativeKeywords) ? parsed.negativeKeywords : [],
+        answerText: parsed.answerText || '',
+        followUpQuestion: parsed.followUpQuestion || ''
+      }
+    });
+  } catch (error) {
+    logger.error('[AGENT2] GPT-4 prefill error', { error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 

@@ -17,7 +17,7 @@
  */
 
 class Agent2Manager {
-  static UI_BUILD = 'AGENT2_UI_V0.4';
+  static UI_BUILD = 'AGENT2_UI_V0.5';
 
   constructor(companyId) {
     this.companyId = companyId;
@@ -514,7 +514,12 @@ class Agent2Manager {
       </div>
 
       <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; padding:16px; margin-bottom:16px;">
-        <div style="font-weight:700; color:#22d3ee; margin-bottom:12px;">Matching</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="font-weight:700; color:#22d3ee;">Matching</div>
+          <button id="a2-modal-gpt-prefill" style="padding:8px 14px; background:#6e40c9; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:12px;">
+            GPT-4 Prefill
+          </button>
+        </div>
         <div style="margin-bottom:12px;">
           <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Keywords (comma separated) - triggers if caller says ANY of these</label>
           <input id="a2-modal-keywords" value="${this.escapeHtml(keywords)}"
@@ -772,6 +777,7 @@ class Agent2Manager {
     document.getElementById('a2-modal-save')?.addEventListener('click', () => this._saveModal());
     document.getElementById('a2-modal-close')?.addEventListener('click', () => this._closeModal());
     document.getElementById('a2-modal-generate-audio')?.addEventListener('click', () => this._generateAudio());
+    document.getElementById('a2-modal-gpt-prefill')?.addEventListener('click', () => this._gptPrefill());
 
     let audioCheckTimeout = null;
     document.getElementById('a2-modal-answerText')?.addEventListener('input', () => {
@@ -954,6 +960,80 @@ class Agent2Manager {
       if (generateBtn) {
         generateBtn.textContent = 'Generate MP3';
         generateBtn.disabled = false;
+      }
+    }
+  }
+
+  async _gptPrefill() {
+    const keywordsEl = document.getElementById('a2-modal-keywords');
+    const keywords = (keywordsEl?.value || '').trim();
+
+    if (!keywords) {
+      alert('Enter at least one keyword first, then click GPT-4 Prefill.');
+      return;
+    }
+
+    const btn = document.getElementById('a2-modal-gpt-prefill');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Generating...';
+    }
+
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/agent2/${this.companyId}/gpt-prefill`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ keywords })
+      });
+
+      const json = await res.json();
+
+      if (!json.success) {
+        throw new Error(json.error || 'GPT prefill failed');
+      }
+
+      const data = json.data || {};
+
+      if (data.label) {
+        const el = document.getElementById('a2-modal-label');
+        if (el) el.value = data.label;
+      }
+      if (data.phrases && Array.isArray(data.phrases)) {
+        const el = document.getElementById('a2-modal-phrases');
+        if (el) el.value = data.phrases.join('\n');
+      }
+      if (data.negativeKeywords && Array.isArray(data.negativeKeywords)) {
+        const el = document.getElementById('a2-modal-negKeywords');
+        if (el) el.value = data.negativeKeywords.join(', ');
+      }
+      if (data.answerText) {
+        const el = document.getElementById('a2-modal-answerText');
+        if (el) el.value = data.answerText;
+      }
+      if (data.followUpQuestion) {
+        const el = document.getElementById('a2-modal-followup');
+        if (el) el.value = data.followUpQuestion;
+      }
+
+      this._checkAudioStatus();
+
+      if (btn) {
+        btn.textContent = 'Done!';
+        setTimeout(() => {
+          btn.textContent = 'GPT-4 Prefill';
+          btn.disabled = false;
+        }, 1500);
+      }
+    } catch (e) {
+      console.error('GPT prefill failed:', e);
+      alert('GPT prefill failed: ' + (e.message || 'Unknown error'));
+      if (btn) {
+        btn.textContent = 'GPT-4 Prefill';
+        btn.disabled = false;
       }
     }
   }
