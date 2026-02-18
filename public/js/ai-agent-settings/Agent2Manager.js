@@ -624,10 +624,11 @@ class Agent2Manager {
           </button>
         </div>
         <div style="margin-bottom:12px;">
-          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Keywords (comma separated) - triggers if caller says ANY of these</label>
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Keywords (comma separated) - Use 2-3 word combos, NOT single words</label>
           <input id="a2-modal-keywords" value="${this.escapeHtml(keywords)}"
-            placeholder="service call, diagnostic fee, trip charge"
+            placeholder="ac not cooling, service call fee, come out today"
             style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:12px;" />
+          <small style="color:#64748b; font-size:11px;">Bad: "today", "noise" | Good: "come today", "making noise"</small>
         </div>
         <div style="margin-bottom:12px;">
           <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Phrases (one per line) - exact phrase match</label>
@@ -1619,6 +1620,23 @@ class Agent2Manager {
   }
 
   _loadSampleCards() {
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // KEYWORD STRATEGY FOR TRIGGER CARDS
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // 1. KEYWORDS: Use 2-3 word combinations, NOT single words
+    //    BAD:  "today", "now", "cooling", "noise"
+    //    GOOD: "come out today", "ac not cooling", "making noise"
+    //
+    // 2. PHRASES: Use full caller expressions (what they actually say)
+    //    GOOD: "can you come today", "my ac is not cooling", "it's making a noise"
+    //
+    // 3. NEGATIVE KEYWORDS: Block false matches
+    //    If "today" could match scheduling OR canceling, add "cancel today" as negative
+    //
+    // WHY: Single words like "now" or "today" match when people describe situations:
+    //    "my thermostat is blank RIGHT NOW" → should NOT match "Same-day appointment"
+    //    "I need someone TODAY" → should match "Same-day appointment"
+    // ═══════════════════════════════════════════════════════════════════════════════
     const sampleCards = [
       // ========== PRICING (1-10) ==========
       {
@@ -1713,12 +1731,17 @@ class Agent2Manager {
       },
 
       // ========== SCHEDULING (11-20) ==========
+      // STRATEGY: Use 2-3 word keyword combos + full phrases. Avoid single common words.
       {
         id: 'schedule.today',
         enabled: true,
         priority: 20,
         label: 'Same-day appointment',
-        match: { keywords: ['today', 'same day', 'asap', 'immediately'], phrases: ['can you come today', 'available today', 'come out today', 'send someone today', 'need someone today', 'as soon as possible'], negativeKeywords: ['cancel', 'not today'] },
+        match: { 
+          keywords: ['come out today', 'someone today', 'appointment today', 'service today', 'technician today', 'same day service', 'same day appointment'], 
+          phrases: ['can you come today', 'available today', 'send someone today', 'need someone today', 'as soon as possible', 'need help today', 'can someone come out today'], 
+          negativeKeywords: ['cancel today', 'not today', 'cant do today'] 
+        },
         answer: { answerText: 'Let me check our schedule for today. We do our best to accommodate same-day requests.', audioUrl: '' },
         followUp: { question: 'What time works best for you — morning or afternoon?', nextAction: 'CONTINUE' }
       },
@@ -1727,7 +1750,11 @@ class Agent2Manager {
         enabled: true,
         priority: 21,
         label: 'Tomorrow appointment',
-        match: { keywords: ['tomorrow', 'next day'], phrases: ['can you come tomorrow', 'available tomorrow'], negativeKeywords: ['cancel'] },
+        match: { 
+          keywords: ['come tomorrow', 'appointment tomorrow', 'someone tomorrow', 'service tomorrow'], 
+          phrases: ['can you come tomorrow', 'available tomorrow', 'schedule for tomorrow', 'need someone tomorrow'], 
+          negativeKeywords: ['cancel tomorrow', 'not tomorrow'] 
+        },
         answer: { answerText: 'We usually have good availability for tomorrow. Let me get some details to get you scheduled.', audioUrl: '' },
         followUp: { question: 'Do you prefer morning or afternoon?', nextAction: 'CONTINUE' }
       },
@@ -1736,7 +1763,11 @@ class Agent2Manager {
         enabled: true,
         priority: 22,
         label: 'Weekend appointment',
-        match: { keywords: ['weekend', 'saturday', 'sunday'], phrases: ['available on saturday', 'come on sunday'], negativeKeywords: [] },
+        match: { 
+          keywords: ['come saturday', 'come sunday', 'weekend appointment', 'saturday appointment', 'sunday appointment'], 
+          phrases: ['available on saturday', 'come on sunday', 'do you work weekends', 'open on weekends', 'schedule for saturday'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: 'Yes, we do offer weekend appointments. There is an additional $49 after-hours fee for weekend service.', audioUrl: '' },
         followUp: { question: 'Would you like to schedule for this weekend?', nextAction: 'CONTINUE' }
       },
@@ -1745,7 +1776,11 @@ class Agent2Manager {
         enabled: true,
         priority: 23,
         label: 'Evening appointment',
-        match: { keywords: ['evening', 'after work', 'after 5', 'after five', 'late appointment'], phrases: ['come in the evening', 'available after work'], negativeKeywords: [] },
+        match: { 
+          keywords: ['evening appointment', 'after work appointment', 'late appointment', 'after 5 pm', 'after five'], 
+          phrases: ['come in the evening', 'available after work', 'do you have evening hours', 'appointment after 5'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: 'We do have evening appointments available. Our last appointment slot is typically 5 or 6 PM depending on the day.', audioUrl: '' },
         followUp: { question: 'What day works best for an evening appointment?', nextAction: 'CONTINUE' }
       },
@@ -1754,7 +1789,11 @@ class Agent2Manager {
         enabled: true,
         priority: 24,
         label: 'Reschedule appointment',
-        match: { keywords: ['reschedule', 'change appointment', 'move appointment', 'different time'], phrases: ['need to reschedule', 'change my appointment'], negativeKeywords: [] },
+        match: { 
+          keywords: ['reschedule appointment', 'change appointment', 'move appointment', 'different time', 'change my time'], 
+          phrases: ['need to reschedule', 'change my appointment', 'move my appointment', 'can i reschedule'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: 'No problem, I can help you reschedule. Let me pull up your appointment.', audioUrl: '' },
         followUp: { question: 'What day and time works better for you?', nextAction: 'CONTINUE' }
       },
@@ -1763,7 +1802,11 @@ class Agent2Manager {
         enabled: true,
         priority: 25,
         label: 'Cancel appointment',
-        match: { keywords: ['cancel', 'cancel appointment', 'dont need'], phrases: ['need to cancel', 'cancel my appointment'], negativeKeywords: [] },
+        match: { 
+          keywords: ['cancel appointment', 'cancel my appointment', 'cancel service'], 
+          phrases: ['need to cancel', 'cancel my appointment', 'want to cancel', 'canceling my appointment'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: "I understand. I can cancel that appointment for you. There's no cancellation fee.", audioUrl: '' },
         followUp: { question: 'Is there anything else I can help you with today?', nextAction: 'CONTINUE' }
       },
@@ -1772,7 +1815,11 @@ class Agent2Manager {
         enabled: true,
         priority: 26,
         label: 'Confirm appointment',
-        match: { keywords: ['confirm', 'verify appointment', 'still coming'], phrases: ['confirm my appointment', 'is my appointment still on'], negativeKeywords: [] },
+        match: { 
+          keywords: ['confirm appointment', 'verify appointment', 'check appointment', 'appointment confirmation'], 
+          phrases: ['confirm my appointment', 'is my appointment still on', 'still have an appointment', 'checking on my appointment'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: 'Let me check on your appointment. Can you give me the name or phone number on the account?', audioUrl: '' },
         followUp: { question: '', nextAction: 'CONTINUE' }
       },
@@ -1781,7 +1828,11 @@ class Agent2Manager {
         enabled: true,
         priority: 27,
         label: 'Technician ETA',
-        match: { keywords: ['eta', 'on the way', 'running late', 'when will tech arrive', 'where is technician'], phrases: ['when will the technician be here', 'is the tech on the way'], negativeKeywords: [] },
+        match: { 
+          keywords: ['technician eta', 'tech on the way', 'where is tech', 'where is technician', 'tech running late'], 
+          phrases: ['when will the technician be here', 'is the tech on the way', 'how long until tech arrives', 'where is my technician'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: "Let me check on your technician's status. Can you confirm the address or phone number on the account?", audioUrl: '' },
         followUp: { question: '', nextAction: 'CONTINUE' }
       },
@@ -1790,7 +1841,11 @@ class Agent2Manager {
         enabled: true,
         priority: 28,
         label: 'Business hours',
-        match: { keywords: ['hours', 'open', 'close', 'business hours', 'office hours'], phrases: ['what are your hours', 'when do you open', 'when do you close'], negativeKeywords: [] },
+        match: { 
+          keywords: ['business hours', 'office hours', 'what time open', 'what time close', 'hours of operation'], 
+          phrases: ['what are your hours', 'when do you open', 'when do you close', 'are you open now'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: "Our office is open Monday through Friday, 8 AM to 5 PM. We also offer after-hours emergency service with an additional fee.", audioUrl: '' },
         followUp: { question: 'Would you like to schedule an appointment?', nextAction: 'CONTINUE' }
       },
@@ -1799,18 +1854,27 @@ class Agent2Manager {
         enabled: true,
         priority: 29,
         label: 'Service area',
-        match: { keywords: ['service area', 'come to', 'cover', 'serve'], phrases: ['do you service', 'do you come to', 'what areas do you cover'], negativeKeywords: [] },
+        match: { 
+          keywords: ['service area', 'what areas', 'service my area', 'come to my area'], 
+          phrases: ['do you service', 'do you come to', 'what areas do you cover', 'do you service my zip code', 'what zip codes'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: "We service most areas within a 30-mile radius of our office. If you give me your zip code, I can confirm we cover your area.", audioUrl: '' },
         followUp: { question: 'What is your zip code?', nextAction: 'CONTINUE' }
       },
 
       // ========== PROBLEMS/SYMPTOMS (21-35) ==========
+      // STRATEGY: Use specific problem descriptions, not single symptoms
       {
         id: 'problem.not_cooling',
         enabled: true,
         priority: 30,
         label: 'AC not cooling',
-        match: { keywords: ['not cooling', 'no cold air', 'warm air', 'not cold', 'ac not working'], phrases: ['blowing warm air', 'not getting cold'], negativeKeywords: [] },
+        match: { 
+          keywords: ['ac not cooling', 'not cooling down', 'no cold air', 'blowing warm', 'blowing hot', 'ac not working', 'unit not cooling'], 
+          phrases: ['blowing warm air', 'not getting cold', 'ac wont cool', 'house not cooling', 'air conditioner not working'], 
+          negativeKeywords: ['not heating'] 
+        },
         answer: { answerText: "I'm sorry to hear that. There are a few things that could cause this — it could be the thermostat, refrigerant, or a component issue. We can send a technician to diagnose the problem.", audioUrl: '' },
         followUp: { question: 'Is the system running at all, or is it completely off?', nextAction: 'CONTINUE' }
       },
@@ -1819,7 +1883,11 @@ class Agent2Manager {
         enabled: true,
         priority: 31,
         label: 'Furnace not heating',
-        match: { keywords: ['not heating', 'no heat', 'cold air from furnace', 'furnace not working'], phrases: ['blowing cold air', 'not getting warm'], negativeKeywords: [] },
+        match: { 
+          keywords: ['not heating', 'no heat', 'furnace not working', 'heater not working', 'heat not working', 'no warm air'], 
+          phrases: ['blowing cold air from furnace', 'not getting warm', 'furnace wont heat', 'heater wont turn on', 'house is cold'], 
+          negativeKeywords: ['not cooling'] 
+        },
         answer: { answerText: "I understand, that's uncomfortable. This could be an igniter, thermostat, or gas valve issue. We should have a technician take a look.", audioUrl: '' },
         followUp: { question: 'Is the system turning on at all?', nextAction: 'CONTINUE' }
       },
@@ -1828,7 +1896,11 @@ class Agent2Manager {
         enabled: true,
         priority: 32,
         label: 'Strange noise',
-        match: { keywords: ['noise', 'loud', 'banging', 'squealing', 'grinding', 'rattling', 'humming'], phrases: ['making a noise', 'sounds weird', 'hearing a sound'], negativeKeywords: [] },
+        match: { 
+          keywords: ['making noise', 'loud noise', 'banging noise', 'squealing noise', 'grinding noise', 'rattling noise', 'humming noise', 'weird noise'], 
+          phrases: ['making a noise', 'sounds weird', 'hearing a sound', 'unit is loud', 'strange sound coming from'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: "Strange noises can indicate a variety of issues — from a loose part to a failing motor. It's best to have it checked before it gets worse.", audioUrl: '' },
         followUp: { question: 'Is the system still running, or did it stop?', nextAction: 'CONTINUE' }
       },
@@ -1837,7 +1909,11 @@ class Agent2Manager {
         enabled: true,
         priority: 33,
         label: 'Water leak',
-        match: { keywords: ['water leak', 'leaking water', 'water around unit', 'puddle', 'dripping'], phrases: ['water coming from', 'water on the floor'], negativeKeywords: [] },
+        match: { 
+          keywords: ['water leak', 'leaking water', 'water around unit', 'water puddle', 'ac dripping', 'unit leaking'], 
+          phrases: ['water coming from', 'water on the floor', 'puddle of water', 'water under ac', 'ac is leaking water'], 
+          negativeKeywords: ['refrigerant leak'] 
+        },
         answer: { answerText: "Water leaks usually mean a clogged drain line or frozen evaporator coil. Turn off the system to prevent water damage and we'll send someone out.", audioUrl: '' },
         followUp: { question: 'Would you like to schedule service today?', nextAction: 'CONTINUE' }
       },
@@ -1846,7 +1922,11 @@ class Agent2Manager {
         enabled: true,
         priority: 34,
         label: 'Frozen unit/ice',
-        match: { keywords: ['frozen', 'ice', 'iced over', 'frost', 'freezing up'], phrases: ['ice on the unit', 'coils are frozen'], negativeKeywords: [] },
+        match: { 
+          keywords: ['unit frozen', 'coils frozen', 'ice on unit', 'ice on coils', 'iced over', 'freezing up'], 
+          phrases: ['ice on the unit', 'coils are frozen', 'ac is frozen', 'ice building up', 'unit keeps freezing'], 
+          negativeKeywords: [] 
+        },
         answer: { answerText: "A frozen unit usually indicates low airflow or low refrigerant. Turn the system off and let it thaw. Running it frozen can damage the compressor.", audioUrl: '' },
         followUp: { question: 'Would you like to schedule a technician to find the cause?', nextAction: 'CONTINUE' }
       },
