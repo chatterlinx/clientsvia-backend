@@ -1,5 +1,37 @@
+/**
+ * ============================================================================
+ * AGENT 2.0 DISCOVERY RUNNER
+ * ============================================================================
+ *
+ * Orchestrates the Discovery phase of Agent 2.0 calls.
+ *
+ * Flow Order (deterministic-first):
+ * 1. Robot challenge detection (UI-controlled response)
+ * 2. TRIGGER CARD MATCHING — keywords/phrases/negatives (PRIMARY PATH)
+ * 3. Scenario engine fallback (only if no card matches)
+ * 4. Captured reason acknowledgment (if reason extracted but no match)
+ * 5. Generic fallback (last resort)
+ *
+ * Raw Events Emitted (for debugging via BlackBox):
+ * - A2_DISCOVERY_TURN_START     : Turn context
+ * - A2_DISCOVERY_SKIPPED        : Why discovery was skipped
+ * - A2_DISCOVERY_PATH_SELECTED  : Robot challenge path
+ * - A2_DISCOVERY_TRIGGER_MATCH  : Trigger card matching result (NEW)
+ * - A2_DISCOVERY_RULE_MATCH     : Legacy rule matching (deprecated)
+ * - A2_DISCOVERY_MATCH_DIAG     : Scenario engine diagnostics
+ * - A2_DISCOVERY_SCENARIO_EVAL  : Scenario evaluation details
+ * - A2_DISCOVERY_REPLY_COMPOSED : Final response assembly
+ *
+ * ============================================================================
+ */
+
 const logger = require('../../../utils/logger');
 const ScenarioEngine = require('../../ScenarioEngine');
+const { TriggerCardMatcher } = require('./TriggerCardMatcher');
+
+// ────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ────────────────────────────────────────────────────────────────────────────
 
 function safeArr(v) {
   return Array.isArray(v) ? v : (v ? [v] : []);
@@ -53,15 +85,24 @@ function normalizeScenarioType(scenario) {
   return `${t}`.trim().toUpperCase();
 }
 
-function firstMatchRule(playbookRules, inputTextLower) {
-  for (const rule of playbookRules || []) {
-    const kws = safeArr(rule?.match?.keywords).map((k) => `${k}`.toLowerCase().trim()).filter(Boolean);
-    if (kws.some((k) => inputTextLower.includes(k))) return rule;
-  }
-  return null;
-}
+// ────────────────────────────────────────────────────────────────────────────
+// MAIN RUNNER
+// ────────────────────────────────────────────────────────────────────────────
 
 class Agent2DiscoveryRunner {
+  /**
+   * Run the Discovery phase for a single turn.
+   *
+   * @param {Object} params
+   * @param {Object} params.company - Company document
+   * @param {string} params.companyId - Company ID
+   * @param {string} params.callSid - Twilio call SID
+   * @param {string} params.userInput - Caller's utterance
+   * @param {Object} params.state - Current call state
+   * @param {Function} params.emitEvent - Raw event emitter
+   * @param {number} params.turn - Current turn number
+   * @returns {Object|null} { response, matchSource, state } or null if disabled
+   */
   static async run({ company, companyId, callSid, userInput, state, emitEvent = null, turn = null }) {
     const emit = (type, data) => {
       try {
@@ -71,6 +112,9 @@ class Agent2DiscoveryRunner {
       }
     };
 
+    // ──────────────────────────────────────────────────────────────────────
+    // CONFIG EXTRACTION
+    // ──────────────────────────────────────────────────────────────────────
     const agent2 = safeObj(company?.aiAgentSettings?.agent2, {});
     const enabled = agent2.enabled === true && agent2.discovery?.enabled === true;
     const discoveryCfg = safeObj(agent2.discovery, {});
@@ -82,6 +126,9 @@ class Agent2DiscoveryRunner {
     const inputLower = input.toLowerCase();
     const capturedReason = naturalizeReason(state?.plainSlots?.call_reason_detail || state?.slots?.call_reason_detail || null);
 
+    // ──────────────────────────────────────────────────────────────────────
+    // STATE SETUP
+    // ──────────────────────────────────────────────────────────────────────
     const nextState = { ...(state || {}) };
     nextState.lane = 'DISCOVERY';
     nextState.consent = { pending: false, askedExplicitly: false };
@@ -104,7 +151,9 @@ class Agent2DiscoveryRunner {
 
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
 
-    // Robot challenge (UI-controlled response line)
+    // ──────────────────────────────────────────────────────────────────────
+    // PATH 1: ROBOT CHALLENGE
+    // ──────────────────────────────────────────────────────────────────────
     if (style?.robotChallenge?.enabled === true && detectRobotChallenge(input)) {
       const line = `${style.robotChallenge?.line || ''}`.trim();
       const response = line ? `${ack} ${line}`.trim() : `${ack} How can I help you today?`;
@@ -114,23 +163,96 @@ class Agent2DiscoveryRunner {
       return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
     }
 
-    const rules = safeArr(playbook.rules);
-    const matchedRule = firstMatchRule(rules, inputLower);
+    // ──────────────────────────────────────────────────────────────────────
+    // PATH 2: TRIGGER CARD MATCHING (PRIMARY — DETERMINISTIC)
+    // ──────────────────────────────────────────────────────────────────────
+    const triggerCards = safeArr(playbook.rules);
+    const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
+    const triggerResult = TriggerCardMatcher.match(input, triggerCards);
+
+    emit('A2_DISCOVERY_TRIGGER_MATCH', {
+      inputPreview: clip(input, 120),
+      matched: triggerResult.matched,
+      matchType: triggerResult.matchType,
+      matchedOn: triggerResult.matchedOn,
+      cardId: triggerResult.cardId,
+      cardLabel: triggerResult.cardLabel,
+      poolStats: cardPoolStats,
+      totalCards: triggerResult.totalCards,
+      enabledCards: triggerResult.enabledCards,
+      negativeBlocked: triggerResult.negativeBlocked,
+      evaluated: triggerResult.evaluated.slice(0, 10) // Cap for event size
+    });
+
+    if (triggerResult.matched && triggerResult.card) {
+      const card = triggerResult.card;
+      const cardAnswer = card.answer || {};
+      const answerText = `${cardAnswer.answerText || ''}`.trim();
+      const audioUrl = `${cardAnswer.audioUrl || ''}`.trim();
+      const followUpQuestion = `${card.followUp?.question || ''}`.trim();
+      const nextAction = card.followUp?.nextAction || 'CONTINUE';
+      const defaultAfter = `${fallback.afterAnswerQuestion || ''}`.trim();
+      const afterQuestion = followUpQuestion || defaultAfter || null;
+
+      // Update state
+      nextState.agent2.discovery.lastPath = 'TRIGGER_CARD_ANSWER';
+      nextState.agent2.discovery.lastTriggerId = card.id || null;
+      nextState.agent2.discovery.lastTriggerLabel = card.label || null;
+      nextState.agent2.discovery.lastNextAction = nextAction;
+
+      // Build response
+      let response;
+      if (answerText) {
+        response = afterQuestion
+          ? `${ack} ${answerText} ${afterQuestion}`.trim()
+          : `${ack} ${answerText}`.trim();
+      } else {
+        // Card matched but has no answer text — use audio URL or fallback
+        response = afterQuestion
+          ? `${ack} ${afterQuestion}`.trim()
+          : `${ack} How can I help you with that?`;
+      }
+
+      emit('A2_DISCOVERY_REPLY_COMPOSED', {
+        path: 'TRIGGER_CARD_ANSWER',
+        responsePreview: clip(response, 220),
+        ackWord: ack,
+        hasAnswer: !!answerText,
+        hasAudio: !!audioUrl,
+        hasFollowUp: !!afterQuestion,
+        cardId: card.id,
+        cardLabel: card.label,
+        matchType: triggerResult.matchType,
+        matchedOn: triggerResult.matchedOn
+      });
+
+      return {
+        response,
+        matchSource: 'AGENT2_DISCOVERY',
+        state: nextState,
+        // Expose audio URL for TTS/audio routing
+        audioUrl: audioUrl || null,
+        triggerCard: {
+          id: card.id,
+          label: card.label,
+          matchType: triggerResult.matchType,
+          matchedOn: triggerResult.matchedOn,
+          nextAction
+        }
+      };
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // PATH 3: SCENARIO ENGINE FALLBACK (LEGACY)
+    // ──────────────────────────────────────────────────────────────────────
     const globalAllowedTypes = new Set(safeArr(playbook.allowedScenarioTypes).map((t) => `${t}`.trim().toUpperCase()).filter(Boolean));
     const minScore = Number.isFinite(playbook.minScenarioScore) ? playbook.minScenarioScore : 0.72;
-
-    emit('A2_DISCOVERY_RULE_MATCH', {
-      matched: !!matchedRule,
-      ruleId: matchedRule?.id || null,
-      ruleLabel: matchedRule?.label || null
-    });
 
     let scenarioPicked = null;
     let scenarioConfidence = 0;
     let scenarioCandidates = [];
     let scenarioDebug = { error: null, message: null, enforcement: null, templateMeta: null, queryMeta: null, tier1BestScore: 0, tier2BestScore: 0 };
 
-    // Scenario selection: deterministic, non-LLM
     try {
       const engine = new ScenarioEngine();
       const result = await engine.selectResponse({
@@ -171,9 +293,7 @@ class Agent2DiscoveryRunner {
     }
 
     const scenarioType = normalizeScenarioType(scenarioPicked);
-    const ruleAllow = new Set(safeArr(matchedRule?.match?.scenarioTypeAllowlist).map((t) => `${t}`.trim().toUpperCase()).filter(Boolean));
-    const typeAllowedByRule = ruleAllow.size === 0 ? true : (scenarioType ? ruleAllow.has(scenarioType) : false);
-    const typeAllowedByGlobal = globalAllowedTypes.size === 0 ? true : (scenarioType ? globalAllowedTypes.has(scenarioType) : null);
+    const typeAllowedByGlobal = globalAllowedTypes.size === 0 ? true : (scenarioType ? globalAllowedTypes.has(scenarioType) : false);
     const scoreAllowed = scenarioConfidence >= minScore;
 
     const totalPool = Number(scenarioDebug?.enforcement?.totalScenarios || 0);
@@ -206,15 +326,15 @@ class Agent2DiscoveryRunner {
       confidence: scenarioConfidence,
       scoreAllowed,
       scenarioType,
-      typeAllowedByRule,
       typeAllowedByGlobal,
       selectedScenarioId: scenarioPicked?._id?.toString?.() || scenarioPicked?.id || null,
       enforcement: scenarioDebug?.enforcement || null,
       candidates: scenarioCandidates
     });
 
+    // Check if scenario is usable
     let answerText = null;
-    if (scenarioPicked && scoreAllowed && typeAllowedByRule && typeAllowedByGlobal) {
+    if (scenarioPicked && scoreAllowed && typeAllowedByGlobal) {
       const rawScenarioResponse =
         scenarioPicked.response ||
         scenarioPicked.responseText ||
@@ -225,18 +345,22 @@ class Agent2DiscoveryRunner {
       nextState.agent2.discovery.lastScenarioId = scenarioPicked?._id?.toString?.() || scenarioPicked?.id || null;
     }
 
-    const followUp = `${matchedRule?.followUp?.question || ''}`.trim();
     const defaultAfter = `${fallback.afterAnswerQuestion || ''}`.trim();
-    const afterQuestion = followUp || defaultAfter || null;
+    const afterQuestion = defaultAfter || null;
 
+    // ──────────────────────────────────────────────────────────────────────
+    // RESPONSE COMPOSITION
+    // ──────────────────────────────────────────────────────────────────────
     let response = null;
-    let fallbackPath = null;
 
     if (answerText) {
-      response = afterQuestion ? `${ack} ${answerText} ${afterQuestion}`.trim() : `${ack} ${answerText}`.trim();
+      // Path 3a: Scenario engine provided an answer
+      response = afterQuestion
+        ? `${ack} ${answerText} ${afterQuestion}`.trim()
+        : `${ack} ${answerText}`.trim();
       nextState.agent2.discovery.lastPath = 'SCENARIO_ANSWER';
     } else if (capturedReason) {
-      // We captured a call reason but couldn't match a scenario — acknowledge what they said
+      // Path 4: We captured a call reason but couldn't match — acknowledge what they said
       const reasonAck = `${fallback.noMatchWhenReasonCaptured || ''}`.trim() || "I'm sorry to hear that.";
       const clarifier = `${fallback.noMatchClarifierQuestion || ''}`.trim();
       const defaultFollowUp = `${fallback.afterAnswerQuestion || ''}`.trim() || 'Would you like to schedule a visit, or do you have a question I can help with?';
@@ -245,17 +369,12 @@ class Agent2DiscoveryRunner {
       // Build natural response: "Ok. I'm sorry to hear that — it sounds like [reason]. [follow-up question]"
       response = `${ack} ${reasonAck} It sounds like ${capturedReason}. ${nextQ}`.replace(/\s+/g, ' ').trim();
       nextState.agent2.discovery.lastPath = 'FALLBACK_REASON_CAPTURED';
-      fallbackPath = 'FALLBACK_REASON_CAPTURED';
     } else {
-      // No scenario match AND no captured reason — generic fallback
+      // Path 5: No trigger match, no scenario match, no captured reason — generic fallback
       const baseNoMatch = `${fallback.noMatchAnswer || ''}`.trim() || `${ack} How can I help you today?`;
       response = baseNoMatch;
       nextState.agent2.discovery.lastPath = 'FALLBACK_NO_MATCH';
-      fallbackPath = 'FALLBACK_NO_MATCH';
     }
-
-    nextState.agent2.discovery.lastRuleId = matchedRule?.id || null;
-    nextState.agent2.discovery.lastNextAction = matchedRule?.followUp?.nextAction || null;
 
     emit('A2_DISCOVERY_REPLY_COMPOSED', {
       path: nextState.agent2.discovery.lastPath,
@@ -272,4 +391,3 @@ class Agent2DiscoveryRunner {
 }
 
 module.exports = { Agent2DiscoveryRunner };
-

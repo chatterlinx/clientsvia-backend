@@ -323,16 +323,22 @@ class Agent2Manager {
       const keywords = Array.isArray(r.match?.keywords) ? r.match.keywords.join(', ') : '';
       const hasAnswer = !!(r.answer?.answerText || '').trim();
       const hasAudio = !!(r.answer?.audioUrl || '').trim();
+      const isEnabled = r.enabled !== false;
+      const priority = typeof r.priority === 'number' ? r.priority : 100;
+      const enabledBadge = isEnabled
+        ? ''
+        : '<span style="background:#f8514940; color:#f85149; padding:2px 6px; border-radius:4px; font-size:10px; margin-right:4px;">OFF</span>';
       const answerBadge = hasAnswer
         ? '<span style="background:#238636; color:white; padding:2px 6px; border-radius:4px; font-size:10px;">TEXT</span>'
         : '<span style="background:#6e7681; color:#c9d1d9; padding:2px 6px; border-radius:4px; font-size:10px;">EMPTY</span>';
       const audioBadge = hasAudio
         ? '<span style="background:#1f6feb; color:white; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:4px;">AUDIO</span>'
         : '';
+      const rowOpacity = isEnabled ? '1' : '0.5';
       return `
-        <tr class="a2-rule-row" data-idx="${idx}" style="border-bottom:1px solid #1f2937; cursor:pointer; transition:background 0.15s;">
-          <td style="padding:12px; color:#94a3b8; font-family:monospace;">${idx + 1}</td>
-          <td style="padding:12px; font-family:monospace; color:#22d3ee;">${this.escapeHtml(r.id || '---')}</td>
+        <tr class="a2-rule-row" data-idx="${idx}" style="border-bottom:1px solid #1f2937; cursor:pointer; transition:background 0.15s; opacity:${rowOpacity};">
+          <td style="padding:12px; color:#94a3b8; font-family:monospace;">${priority}</td>
+          <td style="padding:12px; font-family:monospace; color:#22d3ee;">${enabledBadge}${this.escapeHtml(r.id || '---')}</td>
           <td style="padding:12px; color:#e5e7eb; font-weight:600;">${this.escapeHtml(r.label || 'Untitled')}</td>
           <td style="padding:12px; color:#94a3b8; font-size:13px;">${this.escapeHtml(keywords || '---')}</td>
           <td style="padding:12px;">${answerBadge}${audioBadge}</td>
@@ -406,7 +412,7 @@ class Agent2Manager {
           <table style="width:100%; border-collapse:collapse;">
             <thead style="background:#0b1220;">
               <tr style="border-bottom:1px solid #1f2937;">
-                <th style="text-align:left; padding:12px; color:#94a3b8; font-size:12px; width:40px;">#</th>
+                <th style="text-align:left; padding:12px; color:#94a3b8; font-size:12px; width:50px;">Pri</th>
                 <th style="text-align:left; padding:12px; color:#94a3b8; font-size:12px; width:140px;">Rule ID</th>
                 <th style="text-align:left; padding:12px; color:#94a3b8; font-size:12px; width:160px;">Label</th>
                 <th style="text-align:left; padding:12px; color:#94a3b8; font-size:12px;">Keywords</th>
@@ -445,9 +451,25 @@ class Agent2Manager {
     const audioUrl = r.answer?.audioUrl || '';
     const followUp = r.followUp?.question || '';
     const nextAction = r.followUp?.nextAction || 'CONTINUE';
+    const isEnabled = r.enabled !== false;
+    const priority = typeof r.priority === 'number' ? r.priority : 100;
 
     return `
       <input type="hidden" id="a2-modal-idx" value="${idx}" />
+
+      <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px; padding:12px; background:#161b22; border:1px solid #30363d; border-radius:10px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input id="a2-modal-enabled" type="checkbox" ${isEnabled ? 'checked' : ''} />
+          <span style="color:#e5e7eb; font-weight:600;">Enabled</span>
+        </label>
+        <div style="flex:1;"></div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <label style="color:#8b949e; font-size:12px;">Priority:</label>
+          <input id="a2-modal-priority" type="number" min="1" max="999" value="${priority}"
+            style="width:70px; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; text-align:center;" />
+          <span style="color:#6e7681; font-size:11px;">(lower = first)</span>
+        </div>
+      </div>
 
       <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
         <div>
@@ -711,6 +733,10 @@ class Agent2Manager {
     const idx = Number(idxEl.value);
     const rules = this.config.discovery?.playbook?.rules || [];
     if (!rules[idx]) rules[idx] = {};
+
+    rules[idx].enabled = document.getElementById('a2-modal-enabled')?.checked !== false;
+    const priorityVal = Number(document.getElementById('a2-modal-priority')?.value);
+    rules[idx].priority = Number.isFinite(priorityVal) && priorityVal > 0 ? priorityVal : 100;
 
     rules[idx].id = (document.getElementById('a2-modal-id')?.value || '').trim();
     rules[idx].label = (document.getElementById('a2-modal-label')?.value || '').trim();

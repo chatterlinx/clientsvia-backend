@@ -25,7 +25,7 @@ const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const ConfigAuditService = require('../../services/ConfigAuditService');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
 
-const UI_BUILD = 'AGENT2_UI_V0.1';
+const UI_BUILD = 'AGENT2_UI_V0.2';
 
 function defaultAgent2Config() {
   return {
@@ -55,7 +55,7 @@ function defaultAgent2Config() {
         }
       },
       playbook: {
-        version: 'v1',
+        version: 'v2',
         allowedScenarioTypes: ['FAQ', 'TROUBLESHOOT', 'PRICING', 'SERVICE', 'UNKNOWN'],
         minScenarioScore: 0.72,
         fallback: {
@@ -67,9 +67,19 @@ function defaultAgent2Config() {
         rules: [
           {
             id: 'pricing.service_call',
+            enabled: true,
+            priority: 10,
             label: 'Service call pricing',
-            match: { keywords: ['service call', 'diagnostic fee', 'trip charge'], scenarioTypeAllowlist: ['PRICING'] },
-            answer: { source: 'scenario', scenarioId: null },
+            match: {
+              keywords: ['service call', 'diagnostic fee', 'trip charge'],
+              phrases: ['how much is', 'what does it cost'],
+              negativeKeywords: ['cancel', 'refund'],
+              scenarioTypeAllowlist: ['PRICING']
+            },
+            answer: {
+              answerText: 'Our service call is $89, which includes the diagnostic. If we do the repair, the diagnostic fee is waived.',
+              audioUrl: ''
+            },
             followUp: {
               question: 'Would you like to schedule a repair visit, or were you looking for a maintenance tune-up?',
               nextAction: 'OFFER_REPAIR_VS_MAINTENANCE'
