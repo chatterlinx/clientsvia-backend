@@ -2559,6 +2559,10 @@ router.post('/voice/:companyID', async (req, res) => {
 // No silent truncation - if events are missing, we know something crashed.
 // ═══════════════════════════════════════════════════════════════════════════
 router.post('/v2-agent-respond/:companyID', async (req, res) => {
+  // T0: Webhook received
+  const T0 = Date.now();
+  const timings = { T0 };
+  
   const companyID = req.params.companyID;
   const callSid = req.body.CallSid;
   const fromNumber = normalizePhoneNumber(req.body.From || req.body.Caller || '');
@@ -2572,7 +2576,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
   let routeError = null;
 
   try {
+    // T1: Company load start
+    const T1_start = Date.now();
     const company = await Company.findById(companyID).lean();
+    timings.companyLoadMs = Date.now() - T1_start;
     if (!company) {
       const twiml = new twilio.twiml.VoiceResponse();
       twiml.say("I'm sorry, I didn't catch that. Could you repeat that?");
@@ -2822,6 +2829,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // CORE RUNTIME - Process turn and collect events in buffer
     // ═══════════════════════════════════════════════════════════════════════════
     // V116: processTurn is now async (supports S4A triage + scenario matching)
+    // T2: Core runtime start
+    const T2_start = Date.now();
     const runtimeResult = await FrontDeskCoreRuntime.processTurn(
       company.aiAgentSettings || {},
       callState,
@@ -2835,6 +2844,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         inputTextSource  // Pass source to runtime for accurate logging
       }
     );
+    timings.coreRuntimeMs = Date.now() - T2_start;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // CRITICAL: AWAIT FLUSH OF TURN EVENT BUFFER
@@ -2842,9 +2852,11 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // This is the KEY fix for trace continuity. Critical events are AWAITED.
     // If this succeeds, we KNOW S1/S2/S3/OWNER_RESULT are persisted.
     // ═══════════════════════════════════════════════════════════════════════════
+    const T3_start = Date.now();
     if (runtimeResult.turnEventBuffer && runtimeResult.turnEventBuffer.length > 0) {
       await FrontDeskCoreRuntime.flushEventBuffer(runtimeResult.turnEventBuffer);
     }
+    timings.eventFlushMs = Date.now() - T3_start;
 
     const persistedState = runtimeResult.state || StateStore.persist(callState, StateStore.load(callState));
     
@@ -3080,6 +3092,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // This is the FINAL gate. If this event exists, the turn completed.
     // If this event is missing, something crashed before we got here.
     // ═══════════════════════════════════════════════════════════════════════════
+    // Calculate total time and add TTS timing
+    timings.ttsMs = ttsLatencyMs || 0;
+    timings.totalMs = Date.now() - T0;
+    
     if (BlackBoxLogger) {
       await BlackBoxLogger.logEvent({
         callId: callSid,
@@ -3096,7 +3112,15 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           voiceProviderUsed,
           responsePreview: responseText.substring(0, 80),
           matchSource: runtimeResult.matchSource,
-          runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null
+          runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
+          // TIMING BREAKDOWN (all values in ms)
+          timings: {
+            companyLoadMs: timings.companyLoadMs || 0,
+            coreRuntimeMs: timings.coreRuntimeMs || 0,
+            eventFlushMs: timings.eventFlushMs || 0,
+            ttsMs: timings.ttsMs || 0,
+            totalMs: timings.totalMs || 0
+          }
         }
       }).catch(err => {
         logger.error('[V2 RESPOND] TWIML_SENT log failed', { error: err.message });
