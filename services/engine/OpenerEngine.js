@@ -69,9 +69,10 @@ const DEFAULTS = {
  * @param {Object} [options.openerConfig]    - Company opener config (from Control Plane)
  * @param {number} [options.turnCount=0]     - Current turn number
  * @param {string} [options.callSid]         - For logging
+ * @param {string} [options.callerName]      - Caller's first name (if extracted)
  * @returns {{ opener: string|null, tone: string, debug: Object }}
  */
-function selectOpener({ userText, reasonShort, openerConfig, turnCount = 0, callSid }) {
+function selectOpener({ userText, reasonShort, openerConfig, turnCount = 0, callSid, callerName }) {
     const config = { ...DEFAULTS, ...(openerConfig || {}) };
 
     // ─── Guard: disabled or off ───
@@ -142,12 +143,22 @@ function selectOpener({ userText, reasonShort, openerConfig, turnCount = 0, call
         };
     }
 
-    const opener = pickRandom(pool);
+    let opener = pickRandom(pool);
+    
+    // ─── Step 4: Inject caller name if available ───
+    // "Ok." becomes "Ok, Mark." when we have a confirmed name.
+    // Only inject on turns 2-4 to feel natural, not every turn.
+    const nameUsed = !!(callerName && turnCount >= 2 && turnCount <= 4);
+    if (nameUsed) {
+        opener = injectName(opener, callerName);
+    }
 
     logger.debug('[OPENER_ENGINE] micro-ack selected', {
         callSid,
         opener,
         tone,
+        nameUsed,
+        callerName: nameUsed ? callerName : null,
         frustrationMatched: frustrationMatched || false,
         urgencyMatched: urgencyMatched || false
     });
@@ -159,6 +170,7 @@ function selectOpener({ userText, reasonShort, openerConfig, turnCount = 0, call
             mode: config.mode,
             tone,
             poolSize: pool.length,
+            nameUsed,
             frustrationMatched: frustrationMatched || false,
             urgencyMatched: urgencyMatched || false
         }
@@ -198,6 +210,35 @@ function prependOpener(opener, response) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // INTERNAL HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Inject caller name into opener.
+ * "Ok." → "Ok, Mark."
+ * "Alright." → "Alright, Mark."
+ * 
+ * @param {string} opener - The micro-ack (e.g., "Okay.")
+ * @param {string} name   - Caller's first name
+ * @returns {string}      - Opener with name injected
+ */
+function injectName(opener, name) {
+    if (!opener || !name) return opener;
+    
+    const trimmedName = name.trim();
+    if (!trimmedName) return opener;
+    
+    // Capitalize first letter of name
+    const capitalizedName = trimmedName.charAt(0).toUpperCase() + trimmedName.slice(1).toLowerCase();
+    
+    // Find where to inject: before the period/punctuation at end
+    const match = opener.match(/^(.+?)([.!]?)$/);
+    if (match) {
+        const base = match[1].trim();
+        const punct = match[2] || '.';
+        return `${base}, ${capitalizedName}${punct}`;
+    }
+    
+    return `${opener.replace(/[.!]$/, '')}, ${capitalizedName}.`;
+}
 
 /**
  * Check if any keyword from the list appears in the text.

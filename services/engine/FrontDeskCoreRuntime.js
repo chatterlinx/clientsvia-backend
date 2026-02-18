@@ -1113,13 +1113,16 @@ class FrontDeskCoreRuntime {
             currentSection = 'OPENER_ENGINE';
             const openerConfig = company?.aiAgentSettings?.frontDeskBehavior?.openers || {};
             
-            // V117: No scenario reflection - scenarios are deleted
+            // V119: Pass caller name for personalized bridges ("Ok, Mark.")
+            const callerName = state?.plainSlots?.name || null;
+            
             const openerResult = selectOpener({
                 userText: inputText,
                 reasonShort: null, // V117: No call reason reflection in openers
                 openerConfig,
                 turnCount: turn,
-                callSid
+                callSid,
+                callerName
             });
             
             // Apply opener to response
