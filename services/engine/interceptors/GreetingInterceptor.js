@@ -29,13 +29,43 @@ const FUZZY_PATTERNS = {
 const FILLER_PREFIXES = /^(yes|yeah|yep|yup|uh|um|uh\s*huh|ok|okay|sure|well|so|right|alright|,|\s)+/i;
 
 /**
- * Check if text is JUST a greeting (not "hi I need help with my AC")
+ * ════════════════════════════════════════════════════════════════════════════
+ * STRICT GREETING CHECK - Only matches if utterance IS the greeting
+ * ════════════════════════════════════════════════════════════════════════════
+ * 
+ * ✅ "hi" → match
+ * ✅ "hello" → match
+ * ✅ "good morning" → match
+ * ✅ "hi there" → match (greeting + filler)
+ * ❌ "hi my name is marc" → NO MATCH (has real content after greeting)
+ * ❌ "hi I need help with my AC" → NO MATCH
+ * 
+ * Rule: After removing the greeting word(s), only filler/punctuation should remain.
  */
 function isShortGreeting(text) {
-    const cleaned = text.toLowerCase().replace(FILLER_PREFIXES, '').trim();
-    const isShort = cleaned.length < 40;
-    const startsWithGreeting = /^(good\s*(morning|afternoon|evening)|hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?|morning|afternoon|evening|gm)\b/i.test(cleaned);
-    return isShort && startsWithGreeting;
+    // Normalize: lowercase, trim, remove filler prefixes
+    let cleaned = text.toLowerCase().replace(FILLER_PREFIXES, '').trim();
+    
+    // Remove punctuation at the end
+    cleaned = cleaned.replace(/[.!?,;:]+$/, '').trim();
+    
+    // List of valid greeting patterns (what we'll strip to check if anything meaningful remains)
+    const greetingPattern = /^(good\s*(morning|afternoon|evening)|hi|hello|hey|howdy|yo|sup|what'?s\s*up|greetings?|morning|afternoon|evening|gm)(\s+there)?/i;
+    
+    // Check if it starts with a greeting
+    const match = cleaned.match(greetingPattern);
+    if (!match) return false;
+    
+    // Remove the greeting and see what's left
+    const afterGreeting = cleaned.slice(match[0].length).trim();
+    
+    // Only allow empty or very short filler remnants (max 2 words like "there" or "hey")
+    // If there's real content after the greeting, reject it
+    const remainingWords = afterGreeting.split(/\s+/).filter(w => w.length > 0);
+    
+    // Max 1 extra word allowed (e.g., "hi there" = greeting + "there")
+    // "hi my name is marc" = greeting + 4 words = REJECT
+    return remainingWords.length <= 1;
 }
 
 /**
