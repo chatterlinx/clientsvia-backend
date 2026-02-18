@@ -3143,7 +3143,8 @@
     // ═══════════════════════════════════════════════════════════════════════════
     async function initFrontDesk() {
       console.log('🏢 [INIT] Initializing Front Desk...');
-      await loadScript('/js/ai-agent-settings/FrontDeskBehaviorManager.js');
+      // Cache-bust to avoid stale UI during rapid deploys.
+      await loadScript(`/js/ai-agent-settings/FrontDeskBehaviorManager.js?v=${Date.now()}`);
       
       const container = document.getElementById('front-desk-container');
       if (container && window.FrontDeskBehaviorManager) {

@@ -12,7 +12,7 @@
 class FrontDeskBehaviorManager {
     // Visible on-page build stamp so admins can confirm what UI code is running.
     // Keep this human-readable (no giant hashes).
-    static UI_BUILD = 'FD-BEHAVIOR_UI_V84.2'; // V84.2: Name Rejection Words moved to Global Settings + full Booking Prompts cleanup
+    static UI_BUILD = 'FD-BEHAVIOR_UI_V116.1'; // V116.1: Instant Audio Generator renders in Global Settings + control plane cache-bust
     constructor(companyId) {
         this.companyId = companyId;
         this.config = null;
@@ -9647,6 +9647,11 @@ Sean → Shawn, Shaun`;
                 </div>
 
                 <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- INSTANT AUDIO GENERATOR (V116) -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                ${this.renderInstantAudioGeneratorCard()}
+
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
                 <!-- 3-TIER INTELLIGENCE THRESHOLDS -->
                 <!-- ═══════════════════════════════════════════════════════════════════ -->
                 <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
@@ -10096,11 +10101,6 @@ Sean → Shawn, Shaun`;
                     <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Transfer Message</label>
                     <input type="text" id="fdb-escalation-transfer" value="${e.transferMessage || ''}" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                 </div>
-
-                <!-- ═══════════════════════════════════════════════════════════════════ -->
-                <!-- INSTANT AUDIO GENERATOR (V116) -->
-                <!-- ═══════════════════════════════════════════════════════════════════ -->
-                ${this.renderInstantAudioGeneratorCard()}
             </div>
         `;
     }
