@@ -17,7 +17,7 @@
  */
 
 class Agent2Manager {
-  static UI_BUILD = 'AGENT2_UI_V0.5';
+  static UI_BUILD = 'AGENT2_UI_V0.6';
 
   constructor(companyId) {
     this.companyId = companyId;
@@ -554,6 +554,9 @@ class Agent2Manager {
             <div id="a2-modal-audio-status" style="flex:1; padding:10px 12px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#8b949e; font-size:13px;">
               Checking audio status...
             </div>
+            <button id="a2-modal-play-audio" style="padding:10px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap; display:none;">
+              ▶ Play
+            </button>
             <button id="a2-modal-generate-audio" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap;">
               Generate MP3
             </button>
@@ -778,6 +781,7 @@ class Agent2Manager {
     document.getElementById('a2-modal-close')?.addEventListener('click', () => this._closeModal());
     document.getElementById('a2-modal-generate-audio')?.addEventListener('click', () => this._generateAudio());
     document.getElementById('a2-modal-gpt-prefill')?.addEventListener('click', () => this._gptPrefill());
+    document.getElementById('a2-modal-play-audio')?.addEventListener('click', () => this._playAudio());
 
     let audioCheckTimeout = null;
     document.getElementById('a2-modal-answerText')?.addEventListener('input', () => {
@@ -864,6 +868,8 @@ class Agent2Manager {
       const json = await res.json();
       const item = json?.items?.[0];
 
+      const playBtn = document.getElementById('a2-modal-play-audio');
+
       if (item?.exists) {
         if (statusEl) {
           statusEl.innerHTML = `
@@ -875,6 +881,10 @@ class Agent2Manager {
           generateBtn.textContent = 'Regenerate MP3';
           generateBtn.disabled = false;
           generateBtn.style.opacity = '1';
+        }
+        if (playBtn && item.url) {
+          playBtn.style.display = 'block';
+          playBtn.setAttribute('data-audio-url', item.url);
         }
         const audioUrlEl = document.getElementById('a2-modal-audioUrl');
         if (audioUrlEl && !audioUrlEl.value && item.url) {
@@ -889,6 +899,9 @@ class Agent2Manager {
           generateBtn.disabled = false;
           generateBtn.style.opacity = '1';
         }
+        if (playBtn) {
+          playBtn.style.display = 'none';
+        }
       }
     } catch (e) {
       console.error('Audio status check failed:', e);
@@ -896,6 +909,44 @@ class Agent2Manager {
         statusEl.innerHTML = '<span style="color:#f85149;">Error checking status</span>';
       }
     }
+  }
+
+  _playAudio() {
+    const playBtn = document.getElementById('a2-modal-play-audio');
+    const audioUrl = playBtn?.getAttribute('data-audio-url');
+
+    if (!audioUrl) {
+      alert('No audio available. Generate MP3 first.');
+      return;
+    }
+
+    if (this._currentAudio) {
+      this._currentAudio.pause();
+      this._currentAudio = null;
+      playBtn.textContent = '▶ Play';
+      return;
+    }
+
+    const audio = new Audio(audioUrl);
+    this._currentAudio = audio;
+    playBtn.textContent = '⏹ Stop';
+
+    audio.onended = () => {
+      this._currentAudio = null;
+      playBtn.textContent = '▶ Play';
+    };
+
+    audio.onerror = () => {
+      this._currentAudio = null;
+      playBtn.textContent = '▶ Play';
+      alert('Failed to play audio. The file may not exist.');
+    };
+
+    audio.play().catch(err => {
+      console.error('Audio play failed:', err);
+      this._currentAudio = null;
+      playBtn.textContent = '▶ Play';
+    });
   }
 
   async _generateAudio() {
@@ -944,6 +995,11 @@ class Agent2Manager {
         if (generateBtn) {
           generateBtn.textContent = 'Regenerate MP3';
           generateBtn.disabled = false;
+        }
+        const playBtn = document.getElementById('a2-modal-play-audio');
+        if (playBtn && json.url) {
+          playBtn.style.display = 'block';
+          playBtn.setAttribute('data-audio-url', json.url);
         }
         const audioUrlEl = document.getElementById('a2-modal-audioUrl');
         if (audioUrlEl && json.url) {
