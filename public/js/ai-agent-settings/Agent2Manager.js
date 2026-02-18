@@ -2147,21 +2147,23 @@ class Agent2Manager {
         answer: { answerText: "Sure, I can have someone call you back. What's the best number and time to reach you?", audioUrl: '' },
         followUp: { question: '', nextAction: 'CONTINUE' }
       },
+      // ═══════════════════════════════════════════════════════════════════════════════
+      // GREETING CARDS REMOVED — Greetings are handled by GreetingInterceptor
+      // ═══════════════════════════════════════════════════════════════════════════════
+      // DO NOT add greeting cards here. Single-word keywords like "hi", "hello" will
+      // hijack real intent. Example: "Hi, my AC isn't cooling" would match "hi" and
+      // fire the greeting card instead of the AC problem card.
+      //
+      // Greetings are handled separately in Global Settings → Greeting Responses,
+      // which ONLY fires if the utterance is JUST a greeting (e.g., "hi" alone).
+      // ═══════════════════════════════════════════════════════════════════════════════
+
       {
-        id: 'greeting.hello',
-        enabled: true,
-        priority: 99,
-        label: 'Simple greeting',
-        match: { keywords: ['hello', 'hi', 'hey', 'good morning', 'good afternoon'], phrases: [], negativeKeywords: [] },
-        answer: { answerText: "Hello! Thanks for calling. How can I help you today?", audioUrl: '' },
-        followUp: { question: '', nextAction: 'CONTINUE' }
-      },
-      {
-        id: 'greeting.thanks',
+        id: 'closing.thanks',
         enabled: true,
         priority: 99,
         label: 'Thanks/goodbye',
-        match: { keywords: ['thank you', 'thanks', 'goodbye', 'bye', 'thats all'], phrases: ["that's all I needed", 'have a good day'], negativeKeywords: [] },
+        match: { keywords: ['thank you so much', 'thanks for your help', 'goodbye for now', 'thats all i needed'], phrases: ["that's all I needed", 'have a good day', 'thanks for the help'], negativeKeywords: [] },
         answer: { answerText: "You're welcome! Thanks for calling. Have a great day!", audioUrl: '' },
         followUp: { question: '', nextAction: 'CONTINUE' }
       }

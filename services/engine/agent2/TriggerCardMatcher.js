@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * TRIGGER CARD MATCHER (V2 - Word-Based Matching)
+ * TRIGGER CARD MATCHER (V3 - Word-Based Matching + Greeting Protection)
  * ============================================================================
  *
  * Deterministic, keyword/phrase-based matching for Agent 2.0 Discovery.
@@ -11,11 +11,14 @@
  * - Transparent matching — every decision is logged
  * - Priority-based — higher priority cards evaluated first
  * - Negative keywords — explicit exclusions prevent false positives
+ * - GREETING PROTECTION — single-word greetings never hijack real intent
  *
  * Matching Logic (in order):
  * 1. Check if card is enabled
  * 2. Check negative keywords — if ANY match, skip this card
  * 3. Check keywords (WORD-BASED) — ALL words in keyword must appear in input
+ *    - GREETING PROTECTION: Single-word greeting keywords ONLY match if the
+ *      utterance is JUST that greeting (max 4 words total)
  * 4. Check phrases (SUBSTRING) — exact phrase must appear in input
  * 5. First matching card (by priority) wins
  *
@@ -28,12 +31,39 @@
  *   Input: "my thermostat is blank right now" → ✅ MATCH (both words found)
  *   Input: "the blank form" → ❌ NO MATCH (missing "thermostat")
  *
- * This allows admins to write natural keywords without predicting exact phrasing.
+ * GREETING PROTECTION (V3):
+ * Single-word greeting keywords ("hi", "hello", "hey", etc.) will ONLY match
+ * if the entire utterance is short (≤4 words). This prevents "hi" from matching
+ * "Hi, my AC isn't cooling" — that's a real problem, not a greeting.
+ *
+ * Example:
+ *   Keyword: "hi"
+ *   Input: "hi" → ✅ MATCH (greeting-only utterance)
+ *   Input: "hi there" → ✅ MATCH (short, still greeting-like)
+ *   Input: "hi my ac is not cooling" → ❌ NO MATCH (real intent present)
  *
  * ============================================================================
  */
 
 const logger = require('../../../utils/logger');
+
+// ────────────────────────────────────────────────────────────────────────────
+// GREETING PROTECTION CONSTANTS
+// ────────────────────────────────────────────────────────────────────────────
+// Single-word greetings like "hi", "hello" should ONLY match if the utterance
+// is JUST a greeting. This prevents hijacking real intent like:
+//   "Hi, my AC isn't cooling" → should NOT match greeting card
+//
+// Strategy: If keyword is a single greeting word, require utterance ≤ MAX_GREETING_WORDS
+
+const GREETING_WORDS = new Set([
+  'hi', 'hello', 'hey', 'howdy', 'yo', 'sup', 'greetings',
+  'morning', 'afternoon', 'evening'
+]);
+
+// If the keyword is a greeting word and input has MORE than this many words,
+// the greeting keyword will NOT match (prevents hijacking)
+const MAX_GREETING_WORDS = 4;
 
 // ────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -63,20 +93,53 @@ function extractWords(text) {
 }
 
 /**
+ * Check if keyword is a single greeting word that needs protection.
+ */
+function isSingleGreetingWord(keyword) {
+  const words = extractWords(keyword);
+  if (words.length !== 1) return false;
+  return GREETING_WORDS.has(words[0]);
+}
+
+/**
+ * Check if input is short enough to be a greeting-only utterance.
+ */
+function isGreetingOnlyUtterance(input) {
+  const words = extractWords(input);
+  return words.length <= MAX_GREETING_WORDS;
+}
+
+/**
  * Word-based matching: ALL words in the keyword must appear in the input.
  * Words can have other words in between — flexible natural language matching.
  *
+ * GREETING PROTECTION: If keyword is a single greeting word (hi, hello, etc.),
+ * it will ONLY match if the utterance is short (≤4 words). This prevents
+ * greeting keywords from hijacking real intent.
+ *
  * @param {string} input - The caller's utterance (normalized)
  * @param {string} keyword - The keyword to match (normalized)
- * @returns {boolean} - True if all keyword words found in input
+ * @returns {{ matches: boolean, blocked: string|null }} - Match result with block reason
  */
 function matchesAllWords(input, keyword) {
   const inputWords = new Set(extractWords(input));
   const keywordWords = extractWords(keyword);
   
   // All keyword words must be present in input
-  if (keywordWords.length === 0) return false;
-  return keywordWords.every(kw => inputWords.has(kw));
+  if (keywordWords.length === 0) return { matches: false, blocked: null };
+  
+  const allWordsFound = keywordWords.every(kw => inputWords.has(kw));
+  if (!allWordsFound) return { matches: false, blocked: null };
+  
+  // GREETING PROTECTION: Block single greeting words if utterance is too long
+  if (isSingleGreetingWord(keyword) && !isGreetingOnlyUtterance(input)) {
+    return { 
+      matches: false, 
+      blocked: 'GREETING_PROTECTION' 
+    };
+  }
+  
+  return { matches: true, blocked: null };
 }
 
 /**
@@ -166,6 +229,7 @@ class TriggerCardMatcher {
         negativeHit: null,
         keywordHit: null,
         phraseHit: null,
+        greetingBlocked: null, // V3: Track greeting protection
         matched: false
       };
 
@@ -186,7 +250,7 @@ class TriggerCardMatcher {
         .map(normalizeText)
         .filter(Boolean);
 
-      const negativeHit = negKeywords.find((nk) => matchesAllWords(input, nk));
+      const negativeHit = negKeywords.find((nk) => matchesAllWords(input, nk).matches);
       if (negativeHit) {
         cardEval.negativeHit = negativeHit;
         cardEval.skipped = true;
@@ -201,11 +265,40 @@ class TriggerCardMatcher {
       // ─────────────────────────────────────────────────────────────────────
       // This allows flexible matching where words can have other words between.
       // Example: keyword "ac not cooling" matches "my ac is not cooling well"
+      //
+      // GREETING PROTECTION: Single greeting keywords (hi, hello) only match
+      // if utterance is short (≤4 words). Prevents hijacking real intent.
       const keywords = safeArr(card.match?.keywords)
         .map(normalizeText)
         .filter(Boolean);
 
-      const keywordHit = keywords.find((kw) => matchesAllWords(input, kw));
+      let keywordHit = null;
+      let greetingBlocked = false;
+      let blockedKeyword = null;
+      
+      for (const kw of keywords) {
+        const result_kw = matchesAllWords(input, kw);
+        if (result_kw.matches) {
+          keywordHit = kw;
+          break;
+        } else if (result_kw.blocked === 'GREETING_PROTECTION') {
+          // Track that we blocked a greeting — log but don't match
+          greetingBlocked = true;
+          blockedKeyword = kw;
+        }
+      }
+      
+      // Log greeting protection if triggered
+      if (greetingBlocked && !keywordHit) {
+        cardEval.greetingBlocked = blockedKeyword;
+        logger.debug('[TriggerCardMatcher] Greeting protection blocked keyword', {
+          cardId: card.id,
+          blockedKeyword,
+          inputWordCount: extractWords(input).length,
+          maxAllowed: MAX_GREETING_WORDS
+        });
+      }
+      
       if (keywordHit) {
         cardEval.keywordHit = keywordHit;
         cardEval.matched = true;
