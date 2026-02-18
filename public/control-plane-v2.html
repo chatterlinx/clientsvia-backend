@@ -2754,15 +2754,14 @@
     const TAB_INFO = {
       'front-desk': {
         title: '🛎️ Front Desk',
-        content: `<p><strong>Purpose:</strong> Configure the AI receptionist's personality, behavior, and booking settings.</p>
+        content: `<p><strong>Purpose:</strong> Configure deterministic call handling: discovery/consent, booking prompts, vocabulary normalization, and instant responses.</p>
           <p><strong>Key Features:</strong></p>
           <ul style="margin: 8px 0; padding-left: 20px;">
-            <li><strong>Personality:</strong> Greeting, tone, voice</li>
+            <li><strong>Instant Responses:</strong> 0-token greeting rules + pre-generated audio cache</li>
             <li><strong>Booking Slots:</strong> What info to collect (name, phone, address, issue)</li>
-            <li><strong>Conversation Style:</strong> Confident, Balanced, or Polite</li>
             <li><strong>Interruption Handling:</strong> How to handle off-topic questions</li>
           </ul>
-          <p><strong>Runtime Impact:</strong> Directly controls LLM system prompt and slot collection.</p>`
+          <p><strong>Runtime Impact:</strong> Controls deterministic runtime owners (ConsentGate, DiscoveryFlowRunner, SlotExtractor, GreetingInterceptor).</p>`
       },
       'flow-tree': {
         title: '🌳 Flow Tree (Visualization)',
@@ -2963,21 +2962,20 @@
           if (container) {
             // Map section IDs to Front Desk internal tab names
             const sectionToTab = {
-              'personality': 'basic',
-              'greetings': 'greetings',
-              'discoveryConsent': 'discovery-consent',
-              'discovery-consent': 'discovery-consent',
-              'bookingPrompts': 'booking-prompts',
-              'booking-prompts': 'booking-prompts',
-              'fastPath': 'fast-path',
-              'fast-path': 'fast-path',
+              'discoveryConsent': 'discovery',
+              'discovery-consent': 'discovery',
+              'bookingPrompts': 'booking',
+              'booking-prompts': 'booking',
+              'instantResponses': 'global-settings',
+              'instant-responses': 'global-settings',
+              'global-settings': 'global-settings',
               'vocabulary': 'vocabulary',
-              'escalation': 'escalation',
               'emotions': 'emotions',
-              'frustration': 'frustration',
-              'forbidden': 'forbidden',
+              'escalation': 'emotions',
+              'frustration': 'emotions',
+              'forbidden': 'vocabulary',
               'loops': 'loops',
-              'fallbacks': 'fallbacks',
+              'fallbacks': 'llm0-controls',
               // ☢️ NUKED Feb 2026: 'dynamic-flows' section mapping removed - V110 architecture replaces Dynamic Flows
             };
             
@@ -3307,12 +3305,12 @@
           go: { tab: 'data-config', subtab: 'placeholders' }
         },
         {
-          id: 'personality',
-          title: 'Front Desk Tone (Personality)',
-          description: 'Set conversation style and voice identity so the agent sounds premium and consistent.',
+          id: 'instant-responses',
+          title: 'Instant Responses (0-token)',
+          description: 'Configure greeting rules and pre-generated audio for instant replies.',
           status: 'todo',
-          statusText: 'Configure in Front Desk → Personality',
-          go: { tab: 'front-desk', frontDeskTab: 'personality' }
+          statusText: 'Configure in Front Desk → Global Settings',
+          go: { tab: 'front-desk', frontDeskTab: 'global-settings' }
         },
         {
           id: 'consent',
@@ -12457,8 +12455,6 @@ END OF SCENARIO OPS MANUAL
         'frontDeskBehavior.greeting': 'connectionMessages.voice.text',
         'frontDeskBehavior.bookingSlots': 'frontDeskBehavior.bookingSlots',
         'frontDeskBehavior.bookingEnabled': 'frontDeskBehavior.bookingEnabled',
-        'frontDeskBehavior.conversationStyle': 'frontDeskBehavior.personality.conversationStyle',
-        'frontDeskBehavior.personality.conversationStyle': 'frontDeskBehavior.personality.conversationStyle',
         'companyResponseDefaults.notOfferedReply.fullReply': 'companyResponseDefaults.notOfferedReply.fullReply',
         'companyResponseDefaults.unknownIntentReply.fullReply': 'companyResponseDefaults.unknownIntentReply.fullReply',
         'companyResponseDefaults.afterHoursReply.fullReply': 'companyResponseDefaults.afterHoursReply.fullReply'

@@ -1052,8 +1052,7 @@ class FrontDeskBehaviorManager {
                 <!-- Tab Navigation -->
                 <!-- V84: Added Global Settings tab for platform-wide controls (Feb 2026) -->
                 <div id="fdb-tabs" style="display: flex; gap: 4px; margin-bottom: 20px; flex-wrap: wrap;">
-                    ${this.renderTab('personality', '🎭 Personality', true)}
-                    ${this.renderTab('discovery', '🧠 Discovery & Consent')}
+                    ${this.renderTab('discovery', '🧠 Discovery & Consent', true)}
                     ${this.renderTab('hours', '🕒 Hours & Availability')}
                     ${this.renderTab('vocabulary', '📝 Vocabulary')}
                     ${this.renderTab('discovery-flow', '🔄 Discovery Flow', false, true)}
@@ -1069,7 +1068,7 @@ class FrontDeskBehaviorManager {
 
                 <!-- Tab Content -->
                 <div id="fdb-tab-content" style="min-height: 400px;">
-                    ${this.renderPersonalityTab()}
+                    ${this.renderDiscoveryConsentTab()}
                 </div>
             </div>
         `;
@@ -1102,336 +1101,8 @@ class FrontDeskBehaviorManager {
         `;
     }
 
-    renderPersonalityTab() {
-        const p = this.config.personality || {};
-        const warmthPct = Number.isFinite(p.warmth) ? Math.round(p.warmth * 100) : 60;
-        const maxWords = Number.isFinite(p.maxResponseWords) ? p.maxResponseWords : 30;
-        
-        const RECOMMENDED = {
-            maxResponseWords: 30,
-            warmthPct: 60,
-            speakingPace: 'normal'
-        };
-        
-        // Tiny helper for consistent "what does this setting do?" UX.
-        // Clickable so it works in all browsers + mobile (no hover dependency).
-        const infoIcon = (key) => `
-            <button type="button"
-                    class="fdb-info-btn"
-                    data-info-key="${String(key)}"
-                    aria-label="Help"
-                    style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; margin-left:8px;
-                           border:1px solid #30363d; border-radius:999px; color:#9ca3af; font-size:12px; cursor:pointer; user-select:none;
-                           background:#0d1117; padding:0; line-height:18px;">
-                i
-            </button>
-        `;
-        
-        const warmthHelp = [
-            'Warmth controls how empathetic vs direct the AI sounds.',
-            'Recommended (World‑Class Default): 60%.',
-            'Lower (20–45%): more concise/transactional; can feel robotic if too low.',
-            'Higher (75–90%): more reassuring/luxury tone; can feel slow if too high.',
-            'Tip: keep warmth ~60% and adjust pace first if you want faster booking.'
-        ].join(' ');
-        
-        const paceHelp = [
-            'Speaking Pace controls how quickly the AI moves through the call.',
-            'Recommended (World‑Class Default): Normal.',
-            'Fast: fewer extra words; better for high call volume + strong scripts.',
-            'Slow: more confirmations; better for elderly callers or high-stress scenarios.'
-        ].join(' ');
-        
-        const maxWordsHelp = [
-            'Max Response Words is a hard ceiling that prevents the AI from rambling.',
-            'Recommended (World‑Class Default): 30 words.',
-            'Lower (20–25): very efficient/transactional; can feel abrupt.',
-            'Higher (45–60): more explanatory; can feel slow and reduce booking conversion.',
-            'Tip: keep this near 30 and use “Warmth” + “Speaking Pace” for most tuning.'
-        ].join(' ');
-        return `
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
-                <h3 style="margin: 0 0 16px 0; color: #58a6ff;">🎭 Personality Settings</h3>
-                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">Control the overall tone and style of your AI receptionist.</p>
-                
-                <!-- Agent Name - Full Width -->
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                        🤖 AI Receptionist Name
-                    </label>
-                    <input type="text" id="fdb-agent-name" 
-                        value="${p.agentName || ''}" 
-                        placeholder="e.g., Sarah, Alex, Jordan (leave empty for no name)"
-                        style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 14px;">
-                    <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
-                        The name your AI will use when introducing itself. Example: "Hi, this is <strong>${p.agentName || '[Name]'}</strong> from [Company]"
-                    </p>
-                </div>
-                
-                <!-- Greeting Responses - V36 Clean 2-Column Table with Add Button -->
-                <div style="margin-bottom: 20px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div>
-                            <label style="color: #c9d1d9; font-weight: 500; display: flex; align-items: center; gap: 8px;">
-                        👋 Greeting Responses
-                                <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0 TOKENS</span>
-                    </label>
-                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
-                                Instant responses to caller greetings. <strong style="color: #3fb950;">No LLM needed!</strong>
-                            </p>
-                        </div>
-                        <button type="button" onclick="window.frontDeskManager.addGreetingRow()" 
-                            style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(35, 134, 54, 0.3);">
-                            <span style="font-size: 1.1rem;">+</span> Add Greeting
-                        </button>
-                    </div>
-                    
-                    <!-- Clean 2-Column Table -->
-                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;">
-                        <!-- Table Header -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 50px; background: #21262d; border-bottom: 1px solid #30363d;">
-                            <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                                Caller Says (Trigger)
-                        </div>
-                            <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                                AI Responds
-                        </div>
-                            <div></div>
-                        </div>
-                        
-                        <!-- Table Body -->
-                        <div id="fdb-greeting-rows" style="display: flex; flex-direction: column;">
-                            ${this.renderGreetingRows()}
-                        </div>
-                    </div>
-                    
-                    <!-- Legend -->
-                    <div style="display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #21262d;">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="background: #238636; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">EXACT</span>
-                            <span style="color: #6e7681; font-size: 0.7rem;">Matches exact phrase only</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="background: #58a6ff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;">FUZZY</span>
-                            <span style="color: #6e7681; font-size: 0.7rem;">Matches variations (e.g., "morning" → "good morning")</span>
-                        </div>
-                    </div>
-                    
-                    <p style="color: #6e7681; font-size: 0.7rem; margin-top: 8px;">
-                        💡 <strong>Tip:</strong> Use <code style="background: #21262d; padding: 1px 4px; border-radius: 3px;">{time}</code> for dynamic time → "Good {time}!" becomes "Good morning!"
-                    </p>
-                </div>
-                
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Tone</label>
-                        <select id="fdb-tone" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                            <option value="warm" ${p.tone === 'warm' ? 'selected' : ''}>🌟 Warm - Friendly and caring</option>
-                            <option value="professional" ${p.tone === 'professional' ? 'selected' : ''}>💼 Professional - Business-like</option>
-                            <option value="casual" ${p.tone === 'casual' ? 'selected' : ''}>😊 Casual - Laid-back</option>
-                            <option value="formal" ${p.tone === 'formal' ? 'selected' : ''}>🎩 Formal - Very proper</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Response Length</label>
-                        <select id="fdb-verbosity" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                            <option value="concise" ${p.verbosity === 'concise' ? 'selected' : ''}>📝 Concise - Short and direct</option>
-                            <option value="balanced" ${p.verbosity === 'balanced' ? 'selected' : ''}>⚖️ Balanced - Medium length</option>
-                            <option value="detailed" ${p.verbosity === 'detailed' ? 'selected' : ''}>📖 Detailed - More explanation</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                            Max Response Words: <span id="fdb-max-words-val" style="color: #58a6ff;">${maxWords}</span>
-                            ${infoIcon('maxResponseWords')}
-                            <button type="button"
-                                    class="fdb-reset-recommended"
-                                    data-reset-key="maxResponseWords"
-                                    style="margin-left:10px; padding:2px 8px; font-size:11px; border-radius:999px; cursor:pointer;
-                                           border:1px solid #30363d; background:#0d1117; color:#8b949e;">
-                                Reset
-                            </button>
-                        </label>
-                        <input type="range" id="fdb-max-words" min="10" max="100" value="${maxWords}" style="width: 100%; accent-color: #58a6ff;">
-                        <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
-                            <strong style="color:#fbbf24;">Recommended:</strong> ${RECOMMENDED.maxResponseWords} words (world‑class default). Lower = faster/shorter. Higher = more explanation.
-                        </p>
-                        <div class="fdb-info-panel" data-info-key="maxResponseWords" style="display:none; margin-top:10px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#c9d1d9; font-size:12px; line-height:1.4;">
-                            <div style="font-weight:700; color:#fbbf24; margin-bottom:6px;">Max Response Words (anti‑ramble safety)</div>
-                            <div>${maxWordsHelp}</div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                            Warmth: <span id="fdb-warmth-val" style="color: #58a6ff;">${warmthPct}%</span>
-                            ${infoIcon('warmth')}
-                            <button type="button"
-                                    class="fdb-reset-recommended"
-                                    data-reset-key="warmth"
-                                    style="margin-left:10px; padding:2px 8px; font-size:11px; border-radius:999px; cursor:pointer;
-                                           border:1px solid #30363d; background:#0d1117; color:#8b949e;">
-                                Reset
-                            </button>
-                        </label>
-                        <input type="range" id="fdb-warmth" min="0" max="100" value="${warmthPct}" style="width: 100%; accent-color: #f59e0b;">
-                        <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
-                            <strong style="color:#fbbf24;">Recommended:</strong> 60% (world‑class default). Higher warmth = more empathetic. Lower warmth = more direct.
-                        </p>
-                        <div class="fdb-info-panel" data-info-key="warmth" style="display:none; margin-top:10px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#c9d1d9; font-size:12px; line-height:1.4;">
-                            <div style="font-weight:700; color:#fbbf24; margin-bottom:6px;">Warmth (how it sounds)</div>
-                            <div>${warmthHelp}</div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">
-                            Speaking Pace
-                            ${infoIcon('speakingPace')}
-                            <button type="button"
-                                    class="fdb-reset-recommended"
-                                    data-reset-key="speakingPace"
-                                    style="margin-left:10px; padding:2px 8px; font-size:11px; border-radius:999px; cursor:pointer;
-                                           border:1px solid #30363d; background:#0d1117; color:#8b949e;">
-                                Reset
-                            </button>
-                        </label>
-                        <select id="fdb-speaking-pace" style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                            <option value="slow" ${(p.speakingPace || 'normal') === 'slow' ? 'selected' : ''}>🐢 Slow - more pauses, more confirmation</option>
-                            <option value="normal" ${(p.speakingPace || 'normal') === 'normal' ? 'selected' : ''}>🚶 Normal - balanced</option>
-                            <option value="fast" ${(p.speakingPace || 'normal') === 'fast' ? 'selected' : ''}>🏃 Fast - moves through booking quickly</option>
-                        </select>
-                        <p style="color: #8b949e; font-size: 0.75rem; margin-top: 4px;">
-                            <strong style="color:#fbbf24;">Recommended:</strong> Normal (world‑class default).
-                        </p>
-                        <div class="fdb-info-panel" data-info-key="speakingPace" style="display:none; margin-top:10px; padding:10px; background:#0d1117; border:1px solid #30363d; border-radius:8px; color:#c9d1d9; font-size:12px; line-height:1.4;">
-                            <div style="font-weight:700; color:#fbbf24; margin-bottom:6px;">Speaking Pace (how it moves)</div>
-                            <div>${paceHelp}</div>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500;">Use Caller's Name</label>
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
-                            <input type="checkbox" id="fdb-use-name" ${p.useCallerName !== false ? 'checked' : ''} style="accent-color: #58a6ff; width: 18px; height: 18px;">
-                            <span style="color: #c9d1d9;">Address caller by name once known</span>
-                        </label>
-                    </div>
-                </div>
-                
-                <!-- Conversation Style - Full Width Section -->
-                <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #30363d;">
-                    <h4 style="margin: 0 0 8px 0; color: #58a6ff;">🎯 Conversation Style</h4>
-                    <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.8rem;">
-                        How should the AI approach booking? This affects how decisively the AI guides callers toward scheduling.
-                    </p>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
-                        <label style="display: flex; flex-direction: column; padding: 16px; background: ${(this.config.conversationStyle || 'balanced') === 'confident' ? '#238636' : '#0d1117'}; border: 2px solid ${(this.config.conversationStyle || 'balanced') === 'confident' ? '#238636' : '#30363d'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                            <input type="radio" name="fdb-conversation-style" value="confident" ${(this.config.conversationStyle || 'balanced') === 'confident' ? 'checked' : ''} style="display: none;">
-                            <span style="font-size: 1.5rem; margin-bottom: 8px;">⭐</span>
-                            <span style="font-weight: 600; color: #c9d1d9; margin-bottom: 4px;">Confident</span>
-                            <span style="font-size: 0.75rem; color: #8b949e;">"Let's get you scheduled"</span>
-                            <span style="font-size: 0.7rem; color: #8b949e; margin-top: 8px;">Best for: HVAC, Plumbing, Medical</span>
-                        </label>
-                        <label style="display: flex; flex-direction: column; padding: 16px; background: ${(this.config.conversationStyle || 'balanced') === 'balanced' ? '#238636' : '#0d1117'}; border: 2px solid ${(this.config.conversationStyle || 'balanced') === 'balanced' ? '#238636' : '#30363d'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                            <input type="radio" name="fdb-conversation-style" value="balanced" ${(this.config.conversationStyle || 'balanced') === 'balanced' ? 'checked' : ''} style="display: none;">
-                            <span style="font-size: 1.5rem; margin-bottom: 8px;">🤝</span>
-                            <span style="font-weight: 600; color: #c9d1d9; margin-bottom: 4px;">Balanced</span>
-                            <span style="font-size: 0.75rem; color: #8b949e;">"I can help with that"</span>
-                            <span style="font-size: 0.7rem; color: #8b949e; margin-top: 8px;">Universal default - works for all</span>
-                        </label>
-                        <label style="display: flex; flex-direction: column; padding: 16px; background: ${(this.config.conversationStyle || 'balanced') === 'polite' ? '#238636' : '#0d1117'}; border: 2px solid ${(this.config.conversationStyle || 'balanced') === 'polite' ? '#238636' : '#30363d'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                            <input type="radio" name="fdb-conversation-style" value="polite" ${(this.config.conversationStyle || 'balanced') === 'polite' ? 'checked' : ''} style="display: none;">
-                            <span style="font-size: 1.5rem; margin-bottom: 8px;">🎩</span>
-                            <span style="font-weight: 600; color: #c9d1d9; margin-bottom: 4px;">Polite</span>
-                            <span style="font-size: 0.75rem; color: #8b949e;">"Would you like me to...?"</span>
-                            <span style="font-size: 0.7rem; color: #8b949e; margin-top: 8px;">Best for: Legal, Luxury, Consulting</span>
-                        </label>
-                    </div>
-                    
-                    <!-- Style Acknowledgments - Customizable phrases -->
-                    <div style="margin-top: 20px; padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
-                        <h5 style="margin: 0 0 12px 0; color: #c9d1d9; font-size: 0.9rem;">
-                            💬 Style Acknowledgments
-                            <span style="font-weight: normal; color: #8b949e; font-size: 0.75rem; margin-left: 8px;">
-                                What AI says when acknowledging a request
-                            </span>
-                        </h5>
-                        <div style="display: grid; gap: 12px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">⭐ Confident Style:</label>
-                                <input type="text" id="fdb-ack-confident" 
-                                    value="${this.config.styleAcknowledgments?.confident || "Let's get this taken care of."}" 
-                                    placeholder="Let's get this taken care of."
-                                    style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">🤝 Balanced Style:</label>
-                                <input type="text" id="fdb-ack-balanced" 
-                                    value="${this.config.styleAcknowledgments?.balanced || "I can help with that!"}" 
-                                    placeholder="I can help with that!"
-                                    style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 4px; color: #8b949e; font-size: 0.8rem;">🎩 Polite Style:</label>
-                                <input type="text" id="fdb-ack-polite" 
-                                    value="${this.config.styleAcknowledgments?.polite || "I'd be happy to help."}" 
-                                    placeholder="I'd be happy to help."
-                                    style="width: 100%; padding: 8px 12px; background: #161b22; border: 1px solid #30363d; border-radius: 4px; color: #c9d1d9; font-size: 0.85rem;">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- V80: Forbidden Phrases (merged from separate tab) -->
-            ${this.renderForbiddenSection()}
-        `;
-    }
-
-    // V80: Forbidden phrases merged into Personality tab
-    renderForbiddenSection() {
-        const phrases = this.config.forbiddenPhrases || [];
-        return `
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-top: 20px;">
-                <h3 style="margin: 0 0 16px 0; color: #f85149;">🚫 Forbidden Phrases</h3>
-                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">The AI will never say these phrases. Add anything that sounds robotic or annoying.</p>
-                
-                <div id="fdb-forbidden-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-                    ${phrases.map((p, i) => `
-                        <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
-                            <span style="color: #f85149; font-size: 1.2rem;">🚫</span>
-                            <span style="flex: 1; color: #c9d1d9;">"${p}"</span>
-                            <button onclick="window.frontDeskBehaviorManager.removeTrigger('forbidden', ${i})" 
-                                style="background: none; border: none; color: #f85149; cursor: pointer; font-size: 1.2rem;">×</button>
-                        </div>
-                    `).join('')}
-                </div>
-                
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="fdb-new-forbidden" placeholder="Add forbidden phrase..." 
-                        style="flex: 1; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                    <button id="fdb-add-forbidden" style="padding: 10px 20px; background: #f85149; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                        + Add
-                    </button>
-                </div>
-            </div>
-        `;
-    }
-
-    // V80: Helper to attach forbidden phrase listeners in Personality tab
-    attachForbiddenListeners(content) {
-        const addBtn = content.querySelector('#fdb-add-forbidden');
-        const input = content.querySelector('#fdb-new-forbidden');
-        if (addBtn && input) {
-            addBtn.addEventListener('click', () => this.addTrigger('forbidden', input.value, content));
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') this.addTrigger('forbidden', input.value, content);
-            });
-        }
-    }
+    // ☢️ NUKED Feb 2026: Personality tab UI removed (dead weight).
+    // Greeting Rules now live in Global Settings via renderInstantResponsesCard().
 
     // ============================================================================
     // BUSINESS HOURS - Canonical company truth used by:
@@ -6870,6 +6541,63 @@ Sean → Shawn, Shaun"
     
     // ☢️ NUKED V84: renderCommonFirstNameTags() removed — names are now global in Global Settings tab
     
+    // Canonical home for greeting rules UI (formerly in the Personality tab).
+    renderInstantResponsesCard() {
+        return `
+            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin: 0 0 8px 0; color: #f0883e; font-size: 1.25rem;">⚡ Instant Responses (0 tokens)</h3>
+                <p style="color: #8b949e; margin-bottom: 16px; font-size: 0.9rem;">
+                    Deterministic instant replies to simple greetings. No LLM. Great for pre-generated audio.
+                </p>
+                
+                <div style="padding: 16px; background: #0d1117; border: 1px solid #30363d; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div>
+                            <label style="color: #c9d1d9; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+                                👋 Greeting Responses
+                                <span style="background: #238636; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px;">0 TOKENS</span>
+                            </label>
+                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
+                                Caller says “hi” → instant response. Supports EXACT and FUZZY matching.
+                            </p>
+                        </div>
+                        <button type="button" onclick="window.frontDeskManager.addGreetingRow()" 
+                            style="padding: 8px 16px; background: #238636; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.1rem;">+</span> Add Greeting
+                        </button>
+                    </div>
+                    
+                    <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 50px; background: #21262d; border-bottom: 1px solid #30363d;">
+                            <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                Caller Says (Trigger)
+                            </div>
+                            <div style="padding: 12px 16px; color: #8b949e; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                                AI Responds
+                            </div>
+                            <div></div>
+                        </div>
+                        
+                        <div id="fdb-greeting-rows" style="display: flex; flex-direction: column;">
+                            ${this.renderGreetingRows()}
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #21262d;">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="background: #238636; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">EXACT</span>
+                            <span style="color: #6e7681; font-size: 0.7rem;">Matches exact phrase only</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <span style="background: #58a6ff; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">FUZZY</span>
+                            <span style="color: #6e7681; font-size: 0.7rem;">Matches variations</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // GREETING RESPONSES (V32) - Two-column format with fuzzy matching
     // ═══════════════════════════════════════════════════════════════════════════
@@ -9652,6 +9380,11 @@ Sean → Shawn, Shaun`;
                 ${this.renderInstantAudioGeneratorCard()}
 
                 <!-- ═══════════════════════════════════════════════════════════════════ -->
+                <!-- INSTANT RESPONSES (0 TOKENS) -->
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
+                ${this.renderInstantResponsesCard()}
+
+                <!-- ═══════════════════════════════════════════════════════════════════ -->
                 <!-- 3-TIER INTELLIGENCE THRESHOLDS -->
                 <!-- ═══════════════════════════════════════════════════════════════════ -->
                 <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
@@ -10328,35 +10061,6 @@ Sean → Shawn, Shaun`;
                                 style="width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
                         </div>
                     </div>
-                </div>
-            </div>
-        `;
-    }
-
-    renderForbiddenTab() {
-        const phrases = this.config.forbiddenPhrases || [];
-        return `
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px;">
-                <h3 style="margin: 0 0 16px 0; color: #f85149;">🚫 Forbidden Phrases</h3>
-                <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">The AI will never say these phrases. Add anything that sounds robotic or annoying.</p>
-                
-                <div id="fdb-forbidden-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-                    ${phrases.map((p, i) => `
-                        <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
-                            <span style="color: #f85149; font-size: 1.2rem;">🚫</span>
-                            <span style="flex: 1; color: #c9d1d9;">"${p}"</span>
-                            <button onclick="window.frontDeskBehaviorManager.removeTrigger('forbidden', ${i})" 
-                                style="background: none; border: none; color: #f85149; cursor: pointer; font-size: 1.2rem;">×</button>
-                        </div>
-                    `).join('')}
-                </div>
-                
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="fdb-new-forbidden" placeholder="Add forbidden phrase..." 
-                        style="flex: 1; padding: 10px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9;">
-                    <button id="fdb-add-forbidden" style="padding: 10px 20px; background: #f85149; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                        + Add
-                    </button>
                 </div>
             </div>
         `;
@@ -12192,67 +11896,11 @@ Sean → Shawn, Shaun`;
         // --------------------------------------------------------------------
         if (!this._delegatesBound) {
             this._delegatesBound = true;
-
-            // Slider text updates (personality tab)
-            container.addEventListener('input', (e) => {
-                const t = e?.target;
-                if (!t || !t.id) return;
-                if (t.id === 'fdb-max-words') {
-                    const val = container.querySelector('#fdb-max-words-val');
-                    if (val) val.textContent = t.value;
-                }
-                if (t.id === 'fdb-warmth') {
-                    const val = container.querySelector('#fdb-warmth-val');
-                    if (val) val.textContent = `${t.value}%`;
-                }
-            });
-
-            // V79 UX: Clickable info popovers (no hover dependency)
-            container.addEventListener('click', (e) => {
-                const btn = e?.target?.closest?.('.fdb-info-btn[data-info-key]');
-                if (!btn) return;
-                e.preventDefault();
-                const key = btn.dataset.infoKey;
-                const panel = container.querySelector(`.fdb-info-panel[data-info-key="${key}"]`);
-                if (!panel) return;
-                const isHidden = panel.style.display === 'none' || !panel.style.display;
-                panel.style.display = isHidden ? 'block' : 'none';
-            });
-            
-            // V79.3 UX: Reset-to-recommended buttons for key personality controls
-            container.addEventListener('click', (e) => {
-                const btn = e?.target?.closest?.('.fdb-reset-recommended[data-reset-key]');
-                if (!btn) return;
-                e.preventDefault();
-                const key = btn.dataset.resetKey;
-                
-                if (key === 'maxResponseWords') {
-                    const slider = container.querySelector('#fdb-max-words');
-                    const val = container.querySelector('#fdb-max-words-val');
-                    if (slider) slider.value = '30';
-                    if (val) val.textContent = '30';
-                    this.isDirty = true;
-                    return;
-                }
-                if (key === 'warmth') {
-                    const slider = container.querySelector('#fdb-warmth');
-                    const val = container.querySelector('#fdb-warmth-val');
-                    if (slider) slider.value = '60';
-                    if (val) val.textContent = '60%';
-                    this.isDirty = true;
-                    return;
-                }
-                if (key === 'speakingPace') {
-                    const sel = container.querySelector('#fdb-speaking-pace');
-                    if (sel) sel.value = 'normal';
-                    this.isDirty = true;
-                    return;
-                }
-            });
+            // ☢️ NUKED Feb 2026: Personality tab delegates removed (dead weight).
         }
 
         // Add trigger buttons
-        ['frustration', 'escalation', 'forbidden'].forEach(type => {
+        ['frustration', 'escalation'].forEach(type => {
             const addBtn = container.querySelector(`#fdb-add-${type}`);
             const input = container.querySelector(`#fdb-new-${type}`);
             if (addBtn && input) {
@@ -12265,26 +11913,6 @@ Sean → Shawn, Shaun`;
 
         // Test button
         container.querySelector('#fdb-test-btn')?.addEventListener('click', () => this.testPhrase(container));
-
-        // Conversation style radio buttons - update card highlighting
-        container.querySelectorAll('input[name="fdb-conversation-style"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                // Update all card styles
-                container.querySelectorAll('input[name="fdb-conversation-style"]').forEach(r => {
-                    const label = r.closest('label');
-                    if (label) {
-                        if (r.checked) {
-                            label.style.background = '#238636';
-                            label.style.borderColor = '#238636';
-                        } else {
-                            label.style.background = '#0d1117';
-                            label.style.borderColor = '#30363d';
-                        }
-                    }
-                });
-                console.log('[FRONT DESK BEHAVIOR] 🎯 Style changed to:', e.target.value);
-            });
-        });
 
         // Make manager globally accessible
         // NOTE: legacy UI uses both names in onclick handlers.
@@ -12329,7 +11957,6 @@ Sean → Shawn, Shaun`;
         // Add data-section-id for deep linking from Wiring Tab
         // Maps internal tab IDs to wiring registry section IDs
         const tabToSectionId = {
-            'personality': 'personality',
             'discovery': 'discovery-consent',
             'hours': 'hours-availability',
             'vocabulary': 'vocabulary',
@@ -12340,7 +11967,6 @@ Sean → Shawn, Shaun`;
             'frustration': 'frustration',
             'escalation': 'escalation',
             'loops': 'loops',
-            'forbidden': 'forbidden',
             'detection': 'detection',
             'fallbacks': 'fallbacks',
             'modes': 'modes',
@@ -12350,7 +11976,6 @@ Sean → Shawn, Shaun`;
         content.setAttribute('data-section', tabToSectionId[tabId] || tabId);
         
         switch (tabId) {
-            case 'personality': content.innerHTML = this.renderPersonalityTab(); break;
             case 'discovery': content.innerHTML = this.renderDiscoveryConsentTab(); break;
             case 'hours': content.innerHTML = this.renderHoursTab(); break;
             case 'vocabulary': content.innerHTML = this.renderVocabularyTab(); break;
@@ -12422,10 +12047,6 @@ Sean → Shawn, Shaun`;
             case 'global-settings':
                 // Global Settings tab - tier thresholds and common names
                 this.attachGlobalSettingsListeners(content);
-                break;
-            case 'personality':
-                // V80: Forbidden phrases merged into Personality tab
-                this.attachForbiddenListeners(content);
                 break;
             case 'emotions':
                 // V80: Escalation merged into Emotions tab
@@ -12546,9 +12167,6 @@ Sean → Shawn, Shaun`;
             if (!this.config.escalation) this.config.escalation = {};
             if (!this.config.escalation.triggerPhrases) this.config.escalation.triggerPhrases = [];
             this.config.escalation.triggerPhrases.push(value.trim().toLowerCase());
-        } else if (type === 'forbidden') {
-            if (!this.config.forbiddenPhrases) this.config.forbiddenPhrases = [];
-            this.config.forbiddenPhrases.push(value.trim());
         } else {
             if (!this.config.frustrationTriggers) this.config.frustrationTriggers = [];
             this.config.frustrationTriggers.push(value.trim().toLowerCase());
@@ -12564,8 +12182,6 @@ Sean → Shawn, Shaun`;
     removeTrigger(type, index) {
         if (type === 'escalation') {
             this.config.escalation?.triggerPhrases?.splice(index, 1);
-        } else if (type === 'forbidden') {
-            this.config.forbiddenPhrases?.splice(index, 1);
         } else {
             this.config.frustrationTriggers?.splice(index, 1);
         }
@@ -12579,42 +12195,6 @@ Sean → Shawn, Shaun`;
     collectFormData() {
         const get = (id) => document.getElementById(id)?.value;
         const getChecked = (id) => document.getElementById(id)?.checked;
-
-        if (document.getElementById('fdb-tone')) {
-            const warmthRaw = parseInt(get('fdb-warmth'));
-            const warmth = Number.isFinite(warmthRaw) ? Math.max(0, Math.min(1, warmthRaw / 100)) : 0.6;
-            const agentNameInput = (get('fdb-agent-name') || '').trim();
-            const effectiveAgentName = agentNameInput || 'Front Desk';
-            if (!agentNameInput) {
-                this.showNotification('ℹ️ Agent name was empty. Set to \"Front Desk\" to avoid blank identity.', 'info');
-            }
-            this.config.personality = {
-                agentName: effectiveAgentName,  // AI receptionist name
-                tone: get('fdb-tone'),
-                verbosity: get('fdb-verbosity'),
-                maxResponseWords: parseInt(get('fdb-max-words')) || 30,
-                useCallerName: getChecked('fdb-use-name'),
-                warmth,
-                speakingPace: get('fdb-speaking-pace') || 'normal'
-            };
-        }
-        
-        // Collect conversation style from radio buttons
-        const styleRadio = document.querySelector('input[name="fdb-conversation-style"]:checked');
-        if (styleRadio) {
-            this.config.conversationStyle = styleRadio.value;
-            console.log('[FRONT DESK BEHAVIOR] 🎯 Conversation style:', this.config.conversationStyle);
-        }
-        
-        // Collect style acknowledgments
-        if (document.getElementById('fdb-ack-confident')) {
-            this.config.styleAcknowledgments = {
-                confident: get('fdb-ack-confident') || "Let's get this taken care of.",
-                balanced: get('fdb-ack-balanced') || "I can help with that!",
-                polite: get('fdb-ack-polite') || "I'd be happy to help."
-            };
-            console.log('[FRONT DESK BEHAVIOR] 💬 Style acknowledgments:', this.config.styleAcknowledgments);
-        }
         
         // V32: Collect greeting rules (new 2-column format with fuzzy matching)
         if (document.getElementById('fdb-greeting-rows')) {
@@ -13245,15 +12825,11 @@ Sean → Shawn, Shaun`;
             },
             
             // ════════════════════════════════════════════════════════════════════
-            // TAB: PERSONALITY
+            // TAB: GLOBAL SETTINGS → Instant Responses
             // ════════════════════════════════════════════════════════════════════
-            personality: {
-                _wiredTo: 'HybridReceptionistLLM.js (system prompt construction)',
-                agentName: this.config.agentName,
-                companyName: this.config.companyName,
-                tone: this.config.tone,
-                maxWords: this.config.maxWords,
-                personality: this.config.personality,
+            instantResponses: {
+                _wiredTo: 'GreetingInterceptor.js, FrontDeskCoreRuntime.js, InstantAudioService.js',
+                _rawEvents: ['GREETING_INTERCEPTED', 'INPUT_TEXT_SELECTED'],
                 greetingRules: this.config.greetingRules || this.config.conversationStages?.greetingRules || []
             },
             
@@ -13620,11 +13196,10 @@ Sean → Shawn, Shaun`;
                     const tabKey = badge.dataset.subtab;
                     // Map verification keys to tab IDs
                     const tabMap = {
-                        'personality': 'personality',
                         'discoveryConsent': 'discovery', // V57: Discovery & Consent tab
                         'bookingSlots': 'booking',
                         'responses': 'fallbacks',
-                        'greeting': 'personality', // Greeting is in personality
+                        'greeting': 'global-settings', // Greeting Rules live in Global Settings
                         // ☢️ NUKED Feb 2026: 'dynamicFlows': 'flows' removed - V110 architecture replaces Dynamic Flows
                         'vocabulary': 'vocabulary',
                         'loopPrevention': 'loops'
@@ -13914,7 +13489,7 @@ Sean → Shawn, Shaun`;
 
         const renderRows = (rules, statusByIdx = {}) => {
             if (!rules || rules.length === 0) {
-                return `<div style="color:#8b949e; padding:10px 0;">No greeting rules found. Add some in the Personality tab first.</div>`;
+                return `<div style="color:#8b949e; padding:10px 0;">No greeting rules found. Add some under Global Settings → Instant Responses.</div>`;
             }
 
             const rows = rules.map((r, idx) => {

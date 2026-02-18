@@ -597,7 +597,7 @@ class FrontDeskCoreRuntime {
             // ═══════════════════════════════════════════════════════════════════════════
             // GREETING INTERCEPT - CHECK BEFORE SLOT EXTRACTION
             // ═══════════════════════════════════════════════════════════════════════════
-            // This handles instant responses from Personality tab:
+            // This handles instant responses from Global Settings → Instant Responses:
             // "good morning" → "Good morning! How can I help you today?"
             // Must happen BEFORE we run SlotExtractor or Discovery.
             // ═══════════════════════════════════════════════════════════════════════════
