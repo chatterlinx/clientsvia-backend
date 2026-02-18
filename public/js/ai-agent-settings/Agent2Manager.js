@@ -17,7 +17,7 @@
  */
 
 class Agent2Manager {
-  static UI_BUILD = 'AGENT2_UI_V0.7';
+  static UI_BUILD = 'AGENT2_UI_V0.8';
 
   constructor(companyId) {
     this.companyId = companyId;
@@ -244,14 +244,38 @@ class Agent2Manager {
   renderStyleCard() {
     const style = this.config.discovery?.style || {};
     const forbid = Array.isArray(style.forbidPhrases) ? style.forbidPhrases.join('\n') : '';
-    const bridgeLines = Array.isArray(style.bridge?.lines) ? style.bridge.lines.join('\n') : '';
+
+    // Build style lines array for table display
+    const styleLines = this._getStyleLines();
+
+    const tableRows = styleLines.map((line, idx) => {
+      const hasAudio = !!line.audioUrl;
+      const audioBadge = hasAudio
+        ? '<span style="background:#1f6feb; color:white; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:600;">AUDIO</span>'
+        : '<span style="background:#6e7681; color:#c9d1d9; padding:2px 8px; border-radius:6px; font-size:10px;">NO AUDIO</span>';
+      const enabledBadge = line.enabled
+        ? ''
+        : '<span style="background:#6e7681; color:#c9d1d9; padding:2px 8px; border-radius:6px; font-size:10px; margin-left:6px;">OFF</span>';
+      const textPreview = (line.text || '').length > 60 ? line.text.substring(0, 60) + '...' : (line.text || '(empty)');
+      const rowOpacity = line.enabled ? '1' : '0.5';
+
+      return `
+        <tr class="a2-style-row" data-line-id="${line.id}" style="cursor:pointer; opacity:${rowOpacity};">
+          <td style="padding:10px; border-bottom:1px solid #21262d; color:#7ee787; font-family:monospace; font-size:12px;">${this.escapeHtml(line.id)}</td>
+          <td style="padding:10px; border-bottom:1px solid #21262d; font-weight:600;">${this.escapeHtml(line.label)}${enabledBadge}</td>
+          <td style="padding:10px; border-bottom:1px solid #21262d; color:#8b949e; font-size:13px;">${this.escapeHtml(textPreview)}</td>
+          <td style="padding:10px; border-bottom:1px solid #21262d; text-align:center;">${audioBadge}</td>
+        </tr>
+      `;
+    }).join('');
+
     return this.renderCard(
       'Discovery Style & Safety',
-      'These are UI-controlled text blocks. Keep them short, human, and consistent (e.g., use "Ok", avoid "Got it").',
+      'Click a row to edit. These are spoken lines the agent uses for greetings, delays, and transfers.',
       `
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px;">
           <div>
-            <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Ack word (prefix)</label>
+            <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Ack word (prefix for responses)</label>
             <input id="a2-style-ackWord" value="${this.escapeHtml(style.ackWord || 'Ok.')}"
               style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px;" />
           </div>
@@ -262,55 +286,134 @@ class Agent2Manager {
           </div>
         </div>
 
-        <div style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
-            <label style="display:flex; align-items:center; gap:10px;">
-              <input id="a2-bridge-enabled" type="checkbox" ${style.bridge?.enabled ? 'checked' : ''} />
-              <div style="font-weight:700;">Bridge lines (dead-air filler)</div>
-            </label>
-            <div style="color:#8b949e; font-size:12px; margin-top:6px;">Phase 2 feature. Stored now; runtime wiring later.</div>
-            <textarea id="a2-bridge-lines" rows="3"
-              style="width:100%; margin-top:10px; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px; resize:vertical;"
-              placeholder="One per line">${this.escapeHtml(bridgeLines)}</textarea>
-          </div>
-          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
-            <label style="display:flex; align-items:center; gap:10px;">
-              <input id="a2-robot-enabled" type="checkbox" ${style.robotChallenge?.enabled ? 'checked' : ''} />
-              <div style="font-weight:700;">Robot challenge response</div>
-            </label>
-            <textarea id="a2-robot-line" rows="3"
-              style="width:100%; margin-top:10px; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px; resize:vertical;"
-              placeholder="Exact line">${this.escapeHtml(style.robotChallenge?.line || '')}</textarea>
-          </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:14px;">
+            <thead>
+              <tr style="background:#161b22; color:#8b949e; text-align:left;">
+                <th style="padding:10px; border-bottom:1px solid #30363d; width:140px;">Type</th>
+                <th style="padding:10px; border-bottom:1px solid #30363d;">Label</th>
+                <th style="padding:10px; border-bottom:1px solid #30363d;">Text Preview</th>
+                <th style="padding:10px; border-bottom:1px solid #30363d; width:80px; text-align:center;">Audio</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows}
+            </tbody>
+          </table>
         </div>
 
-        <div style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
-            <label style="display:flex; align-items:center; gap:10px;">
-              <input id="a2-delay-enabled" type="checkbox" ${style.systemDelay?.enabled ? 'checked' : ''} />
-              <div style="font-weight:700;">System delay scripts</div>
-            </label>
-            <label style="display:block; margin-top:10px; color:#cbd5e1; font-size:12px;">First delay line</label>
-            <textarea id="a2-delay-first" rows="2"
-              style="width:100%; margin-top:6px; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px; resize:vertical;"
-            >${this.escapeHtml(style.systemDelay?.firstLine || '')}</textarea>
-            <label style="display:block; margin-top:10px; color:#cbd5e1; font-size:12px;">Transfer fallback line</label>
-            <textarea id="a2-delay-transfer" rows="2"
-              style="width:100%; margin-top:6px; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px; resize:vertical;"
-            >${this.escapeHtml(style.systemDelay?.transferLine || '')}</textarea>
-          </div>
-          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
-            <label style="display:flex; align-items:center; gap:10px;">
-              <input id="a2-doubt-enabled" type="checkbox" ${style.whenInDoubt?.enabled ? 'checked' : ''} />
-              <div style="font-weight:700;">When in doubt -> transfer</div>
-            </label>
-            <textarea id="a2-doubt-line" rows="4"
-              style="width:100%; margin-top:10px; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px; resize:vertical;"
-              placeholder="Transfer line">${this.escapeHtml(style.whenInDoubt?.transferLine || '')}</textarea>
+        <div id="a2-style-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+          <div style="background:#0d1117; border:1px solid #30363d; border-radius:16px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto; padding:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #30363d; padding-bottom:16px;">
+              <h3 style="margin:0; color:#e5e7eb; font-size:1.25rem;">Edit Style Line</h3>
+              <button id="a2-style-modal-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:4px 8px;">X</button>
+            </div>
+            <div id="a2-style-modal-content"></div>
           </div>
         </div>
       `
     );
+  }
+
+  _getStyleLines() {
+    const style = this.config.discovery?.style || {};
+    return [
+      {
+        id: 'bridge',
+        label: 'Bridge line (dead-air filler)',
+        enabled: style.bridge?.enabled === true,
+        text: Array.isArray(style.bridge?.lines) ? style.bridge.lines[0] || '' : '',
+        audioUrl: style.bridge?.audioUrl || '',
+        configPath: 'bridge'
+      },
+      {
+        id: 'robot_challenge',
+        label: 'Robot challenge response',
+        enabled: style.robotChallenge?.enabled === true,
+        text: style.robotChallenge?.line || '',
+        audioUrl: style.robotChallenge?.audioUrl || '',
+        configPath: 'robotChallenge'
+      },
+      {
+        id: 'delay_first',
+        label: 'System delay - first line',
+        enabled: style.systemDelay?.enabled === true,
+        text: style.systemDelay?.firstLine || '',
+        audioUrl: style.systemDelay?.firstLineAudioUrl || '',
+        configPath: 'systemDelay.firstLine'
+      },
+      {
+        id: 'delay_transfer',
+        label: 'System delay - transfer fallback',
+        enabled: style.systemDelay?.enabled === true,
+        text: style.systemDelay?.transferLine || '',
+        audioUrl: style.systemDelay?.transferLineAudioUrl || '',
+        configPath: 'systemDelay.transferLine'
+      },
+      {
+        id: 'when_in_doubt',
+        label: 'When in doubt - transfer',
+        enabled: style.whenInDoubt?.enabled === true,
+        text: style.whenInDoubt?.transferLine || '',
+        audioUrl: style.whenInDoubt?.audioUrl || '',
+        configPath: 'whenInDoubt'
+      }
+    ];
+  }
+
+  renderStyleLineModal(lineId) {
+    const lines = this._getStyleLines();
+    const line = lines.find(l => l.id === lineId);
+    if (!line) return '<div style="color:#f85149;">Line not found</div>';
+
+    return `
+      <input type="hidden" id="a2-style-modal-lineId" value="${lineId}" />
+
+      <div style="margin-bottom:16px; padding:12px; background:#161b22; border:1px solid #30363d; border-radius:10px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input id="a2-style-modal-enabled" type="checkbox" ${line.enabled ? 'checked' : ''} />
+            <span style="color:#e5e7eb; font-weight:600;">Enabled</span>
+          </label>
+          <div style="flex:1;"></div>
+          <div style="color:#8b949e; font-size:12px;">${this.escapeHtml(line.id)}</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">${this.escapeHtml(line.label)}</label>
+        <textarea id="a2-style-modal-text" rows="4"
+          placeholder="Enter the line the agent will speak..."
+          style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:12px; resize:vertical;">${this.escapeHtml(line.text)}</textarea>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Audio URL (agent plays this instead of TTS if set)</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input id="a2-style-modal-audioUrl" value="${this.escapeHtml(line.audioUrl)}"
+            placeholder="Click 'Generate MP3' or paste a URL"
+            style="flex:1; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px 12px; font-family:monospace; font-size:12px;" />
+          <button id="a2-style-modal-play" style="padding:10px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap; display:${line.audioUrl ? 'block' : 'none'};">
+            ▶ Play
+          </button>
+          <button id="a2-style-modal-generate" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap;">
+            Generate MP3
+          </button>
+        </div>
+        <div id="a2-style-modal-audio-status" style="margin-top:6px; color:#6e7681; font-size:11px;">
+          ${line.audioUrl ? 'Audio URL set' : 'No audio yet — click Generate MP3'}
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:12px;">
+        <button id="a2-style-modal-cancel" style="padding:12px 20px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:10px; cursor:pointer;">
+          Cancel
+        </button>
+        <button id="a2-style-modal-save" style="padding:12px 20px; background:#238636; color:white; border:none; border-radius:10px; cursor:pointer; font-weight:600;">
+          Save Changes
+        </button>
+      </div>
+    `;
   }
 
   renderPlaybookCard() {
@@ -686,12 +789,27 @@ class Agent2Manager {
       }
     });
 
-    container.querySelectorAll('#a2-style-ackWord, #a2-style-forbid, #a2-bridge-enabled, #a2-bridge-lines, #a2-robot-enabled, #a2-robot-line, #a2-delay-enabled, #a2-delay-first, #a2-delay-transfer, #a2-doubt-enabled, #a2-doubt-line, #a2-allowed-types, #a2-min-score')
+    container.querySelectorAll('#a2-style-ackWord, #a2-style-forbid, #a2-allowed-types, #a2-min-score')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelectorAll('#a2-fallback-noMatchAnswer, #a2-fallback-afterAnswerQuestion')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelectorAll('#a2-fallback-noMatchWhenReasonCaptured, #a2-fallback-noMatchClarifierQuestion')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
+
+    // Style lines table - click row to open modal
+    container.querySelectorAll('.a2-style-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        const lineId = row.getAttribute('data-line-id');
+        this._openStyleModal(lineId);
+      });
+      row.addEventListener('mouseover', () => { row.style.background = '#161b22'; });
+      row.addEventListener('mouseout', () => { row.style.background = 'transparent'; });
+    });
+
+    container.querySelector('#a2-style-modal-close')?.addEventListener('click', () => this._closeStyleModal());
+    container.querySelector('#a2-style-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'a2-style-modal') this._closeStyleModal();
+    });
 
     container.querySelector('#a2-add-rule')?.addEventListener('click', () => {
       const rules = this.config.discovery.playbook.rules || [];
@@ -762,6 +880,198 @@ class Agent2Manager {
     });
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Style Line Modal
+  // ──────────────────────────────────────────────────────────────────────────
+  _openStyleModal(lineId) {
+    const modal = document.getElementById('a2-style-modal');
+    const content = document.getElementById('a2-style-modal-content');
+    if (!modal || !content) return;
+
+    content.innerHTML = this.renderStyleLineModal(lineId);
+    modal.style.display = 'flex';
+
+    document.getElementById('a2-style-modal-cancel')?.addEventListener('click', () => this._closeStyleModal());
+    document.getElementById('a2-style-modal-save')?.addEventListener('click', () => this._saveStyleModal());
+    document.getElementById('a2-style-modal-close')?.addEventListener('click', () => this._closeStyleModal());
+    document.getElementById('a2-style-modal-generate')?.addEventListener('click', () => this._generateStyleAudio());
+    document.getElementById('a2-style-modal-play')?.addEventListener('click', () => this._playStyleAudio());
+
+    // Show/hide play button when URL changes
+    document.getElementById('a2-style-modal-audioUrl')?.addEventListener('input', () => {
+      const playBtn = document.getElementById('a2-style-modal-play');
+      const audioUrl = (document.getElementById('a2-style-modal-audioUrl')?.value || '').trim();
+      if (playBtn) {
+        playBtn.style.display = audioUrl ? 'block' : 'none';
+      }
+    });
+  }
+
+  _closeStyleModal() {
+    const modal = document.getElementById('a2-style-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  _saveStyleModal() {
+    const lineIdEl = document.getElementById('a2-style-modal-lineId');
+    if (!lineIdEl) return;
+    const lineId = lineIdEl.value;
+
+    const enabled = document.getElementById('a2-style-modal-enabled')?.checked === true;
+    const text = (document.getElementById('a2-style-modal-text')?.value || '').trim();
+    const audioUrl = (document.getElementById('a2-style-modal-audioUrl')?.value || '').trim();
+
+    const style = this.config.discovery.style = this.config.discovery.style || {};
+
+    switch (lineId) {
+      case 'bridge':
+        style.bridge = style.bridge || {};
+        style.bridge.enabled = enabled;
+        style.bridge.lines = text ? [text] : [];
+        style.bridge.audioUrl = audioUrl;
+        break;
+      case 'robot_challenge':
+        style.robotChallenge = style.robotChallenge || {};
+        style.robotChallenge.enabled = enabled;
+        style.robotChallenge.line = text;
+        style.robotChallenge.audioUrl = audioUrl;
+        break;
+      case 'delay_first':
+        style.systemDelay = style.systemDelay || {};
+        style.systemDelay.enabled = enabled;
+        style.systemDelay.firstLine = text;
+        style.systemDelay.firstLineAudioUrl = audioUrl;
+        break;
+      case 'delay_transfer':
+        style.systemDelay = style.systemDelay || {};
+        style.systemDelay.enabled = enabled;
+        style.systemDelay.transferLine = text;
+        style.systemDelay.transferLineAudioUrl = audioUrl;
+        break;
+      case 'when_in_doubt':
+        style.whenInDoubt = style.whenInDoubt || {};
+        style.whenInDoubt.enabled = enabled;
+        style.whenInDoubt.transferLine = text;
+        style.whenInDoubt.audioUrl = audioUrl;
+        break;
+    }
+
+    this.isDirty = true;
+    this._closeStyleModal();
+    if (this._container) this.render(this._container);
+  }
+
+  async _generateStyleAudio() {
+    const generateBtn = document.getElementById('a2-style-modal-generate');
+    const statusEl = document.getElementById('a2-style-modal-audio-status');
+    const textEl = document.getElementById('a2-style-modal-text');
+    const lineIdEl = document.getElementById('a2-style-modal-lineId');
+    const text = (textEl?.value || '').trim();
+    const lineId = lineIdEl?.value || 'STYLE_LINE';
+
+    if (!text) {
+      alert('Enter text first');
+      return;
+    }
+
+    if (generateBtn) {
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
+    }
+    if (statusEl) {
+      statusEl.innerHTML = 'Generating audio...';
+    }
+
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/generate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          kind: `STYLE_${lineId.toUpperCase()}`,
+          text,
+          force: true
+        })
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        if (statusEl) {
+          statusEl.innerHTML = '<span style="color:#7ee787;">Audio generated!</span>';
+        }
+        if (generateBtn) {
+          generateBtn.textContent = 'Regenerate';
+          generateBtn.disabled = false;
+        }
+        const playBtn = document.getElementById('a2-style-modal-play');
+        if (playBtn && json.url) {
+          playBtn.style.display = 'block';
+        }
+        const audioUrlEl = document.getElementById('a2-style-modal-audioUrl');
+        if (audioUrlEl && json.url) {
+          audioUrlEl.value = json.url;
+        }
+      } else {
+        throw new Error(json.error || 'Generation failed');
+      }
+    } catch (e) {
+      console.error('Style audio generation failed:', e);
+      if (statusEl) {
+        statusEl.innerHTML = `<span style="color:#f85149;">Error: ${e.message || 'Generation failed'}</span>`;
+      }
+      if (generateBtn) {
+        generateBtn.textContent = 'Generate MP3';
+        generateBtn.disabled = false;
+      }
+    }
+  }
+
+  _playStyleAudio() {
+    const playBtn = document.getElementById('a2-style-modal-play');
+    const audioUrlEl = document.getElementById('a2-style-modal-audioUrl');
+    const audioUrl = (audioUrlEl?.value || '').trim();
+
+    if (!audioUrl) {
+      alert('No audio URL. Generate MP3 first or paste a URL.');
+      return;
+    }
+
+    if (this._currentAudio) {
+      this._currentAudio.pause();
+      this._currentAudio = null;
+      if (playBtn) playBtn.textContent = '▶ Play';
+      return;
+    }
+
+    const audio = new Audio(audioUrl);
+    this._currentAudio = audio;
+    if (playBtn) playBtn.textContent = '⏹ Stop';
+
+    audio.onended = () => {
+      this._currentAudio = null;
+      if (playBtn) playBtn.textContent = '▶ Play';
+    };
+
+    audio.onerror = () => {
+      this._currentAudio = null;
+      if (playBtn) playBtn.textContent = '▶ Play';
+      alert('Failed to play audio.');
+    };
+
+    audio.play().catch(err => {
+      console.error('Audio play failed:', err);
+      this._currentAudio = null;
+      if (playBtn) playBtn.textContent = '▶ Play';
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Trigger Card Modal
+  // ──────────────────────────────────────────────────────────────────────────
   _openModal(idx) {
     const modal = document.getElementById('a2-rule-modal');
     const content = document.getElementById('a2-modal-content');
@@ -1786,6 +2096,7 @@ class Agent2Manager {
     discovery.style = discovery.style || {};
     discovery.playbook = discovery.playbook || {};
 
+    // Inline style fields (not in modal)
     discovery.style.ackWord = (container.querySelector('#a2-style-ackWord')?.value || 'Ok.').trim() || 'Ok.';
 
     const forbidRaw = container.querySelector('#a2-style-forbid')?.value || '';
@@ -1794,24 +2105,8 @@ class Agent2Manager {
       .map(s => s.trim())
       .filter(Boolean);
 
-    discovery.style.bridge = discovery.style.bridge || {};
-    discovery.style.bridge.enabled = container.querySelector('#a2-bridge-enabled')?.checked === true;
-    const bridgeLinesRaw = container.querySelector('#a2-bridge-lines')?.value || '';
-    discovery.style.bridge.lines = bridgeLinesRaw.split('\n').map(s => s.trim()).filter(Boolean);
-    discovery.style.bridge.maxPerTurn = 1;
-
-    discovery.style.robotChallenge = discovery.style.robotChallenge || {};
-    discovery.style.robotChallenge.enabled = container.querySelector('#a2-robot-enabled')?.checked === true;
-    discovery.style.robotChallenge.line = (container.querySelector('#a2-robot-line')?.value || '').trim();
-
-    discovery.style.systemDelay = discovery.style.systemDelay || {};
-    discovery.style.systemDelay.enabled = container.querySelector('#a2-delay-enabled')?.checked === true;
-    discovery.style.systemDelay.firstLine = (container.querySelector('#a2-delay-first')?.value || '').trim();
-    discovery.style.systemDelay.transferLine = (container.querySelector('#a2-delay-transfer')?.value || '').trim();
-
-    discovery.style.whenInDoubt = discovery.style.whenInDoubt || {};
-    discovery.style.whenInDoubt.enabled = container.querySelector('#a2-doubt-enabled')?.checked === true;
-    discovery.style.whenInDoubt.transferLine = (container.querySelector('#a2-doubt-line')?.value || '').trim();
+    // NOTE: Style lines (bridge, robotChallenge, systemDelay, whenInDoubt) are now
+    // managed by the style modal (_saveStyleModal) - not read from inline form fields.
 
     const typesRaw = container.querySelector('#a2-allowed-types')?.value || '';
     discovery.playbook.allowedScenarioTypes = typesRaw.split(',').map(s => s.trim()).filter(Boolean);
