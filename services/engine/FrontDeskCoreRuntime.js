@@ -20,16 +20,17 @@
  * │ OPEN  Opener Engine (prepend micro-acknowledgment)                     │
  * └─────────────────────────────────────────────────────────────────────────┘
  * 
- * SPEAKER OWNERSHIP CONTRACT (V117 - ONE BRAIN):
+ * SPEAKER OWNERSHIP CONTRACT (V118 - AGENT 2.0 TAKEOVER):
  * Only these modules may generate final response text:
  * - GreetingInterceptor (instant greetings ONLY)
- * - DiscoveryFlowRunner (THE ONLY discovery speaker)
+ * - Agent2DiscoveryRunner (PRIMARY discovery speaker when enabled)
+ * - DiscoveryFlowRunner (LEGACY — only if Agent 2.0 is disabled)
  * - ConsentGate (ONLY after discovery complete)
  * - BookingFlowRunner (ONLY after consent)
  * - OpenerEngine (prepends micro-acks to responses)
  * 
- * V117 NUCLEAR CUT: Removed S4A Pipeline. No competing speakers.
- * DiscoveryFlowRunner is the ONLY speaker during DISCOVERY lane.
+ * V118: Agent 2.0 owns the mic. No fallback to legacy when enabled.
+ * Legacy DiscoveryFlowRunner only runs if Agent 2.0 is OFF.
  * 
  * RAW EVENTS:
  * Every section emits SECTION_* events for complete observability.
@@ -56,18 +57,16 @@ const GreetingInterceptor = require('./interceptors/GreetingInterceptor');
 // NOTE: S3.5 detection trigger block removed in V117 clean-sweep (unused + crash risk)
 
 // ═══════════════════════════════════════════════════════════════════════════
-// V117: NUCLEAR CUT - ONE BRAIN ARCHITECTURE
+// V118: AGENT 2.0 TAKEOVER - ONE MIC ARCHITECTURE
 // ═══════════════════════════════════════════════════════════════════════════
-// DECISION: DiscoveryFlowRunner is the ONLY speaker during DISCOVERY lane.
+// DECISION: Agent2DiscoveryRunner owns the mic when enabled. No fallback.
 // 
-// REMOVED (Feb 17, 2026):
-// - S4A Triage+Scenario pipeline (competing speaker)
-// - CallReasonExtractor acknowledgment hijack
-// - ScenarioEngine auto-responses
-// - Any module that could override DiscoveryFlowRunner
+// V117 (Feb 17, 2026): Removed S4A Pipeline, CallReasonExtractor hijack.
+// V118 (Feb 18, 2026): Agent 2.0 is the ONLY speaker when enabled.
+//                      Legacy DiscoveryFlowRunner only runs if Agent 2.0 OFF.
 // 
-// RATIONALE: Deterministic step-by-step discovery > "clever" chaos.
-// One brain. One truth. Line-by-line execution.
+// RATIONALE: One brain, one mic. Agent 2.0 Trigger Cards are deterministic.
+// No competing speakers. No fallback confusion.
 // ═══════════════════════════════════════════════════════════════════════════
 
 let BlackBoxLogger = null;
@@ -951,19 +950,28 @@ class FrontDeskCoreRuntime {
                         bufferEvent('A2_DISCOVERY_GATE', { enabled: false });
                     }
 
-                    // If Agent 2.0 produced a response, we stop here (Discovery only).
-                    // Otherwise, fall through to legacy DiscoveryFlowRunner.
-                    if (ownerResult) {
-                        checkpoint(bufferEvent, 'A2_DISCOVERY_RETURNED', {
-                            matchSource: ownerResult.matchSource,
-                            responsePreview: (ownerResult.response || '').substring(0, 80)
-                        });
-                    }
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    // AGENT 2.0 OWNS THE MIC — NO LEGACY FALLBACK
+                    // ═══════════════════════════════════════════════════════════════════════════
+                    // When Agent 2.0 is enabled, it is the ONLY speaker.
+                    // No fallback to DiscoveryFlowRunner — one brain, one truth.
+                    checkpoint(bufferEvent, 'A2_DISCOVERY_RETURNED', {
+                        matchSource: ownerResult?.matchSource || 'A2_NO_RESPONSE',
+                        responsePreview: (ownerResult?.response || '').substring(0, 80),
+                        hasResponse: !!ownerResult?.response
+                    });
                 }
 
-                if (!ownerResult) {
-                    // DISCOVERY MUST RUN LINE-BY-LINE UNTIL COMPLETE.
-                    // Consent is asked ONLY AFTER discovery is complete (million-dollar question).
+                // ═══════════════════════════════════════════════════════════════════════════
+                // LEGACY PATH: Only runs if Agent 2.0 is DISABLED
+                // ═══════════════════════════════════════════════════════════════════════════
+                const agent2WasEnabled =
+                    company?.aiAgentSettings?.agent2?.enabled === true &&
+                    company?.aiAgentSettings?.agent2?.discovery?.enabled === true;
+
+                if (!ownerResult && !agent2WasEnabled) {
+                    // Legacy DiscoveryFlowRunner — only if Agent 2.0 is OFF
+                    bufferEvent('LEGACY_DISCOVERY_FLOW_ENTER', { reason: 'agent2_disabled' });
                     ownerResult = DiscoveryFlowRunner.run({
                         company,
                         callSid,

@@ -1,9 +1,10 @@
 /**
  * ============================================================================
- * AGENT 2.0 DISCOVERY RUNNER
+ * AGENT 2.0 DISCOVERY RUNNER (V118 - ONE MIC)
  * ============================================================================
  *
  * Orchestrates the Discovery phase of Agent 2.0 calls.
+ * When enabled, Agent 2.0 OWNS THE MIC — no fallback to legacy.
  *
  * Flow Order (deterministic-first):
  * 1. Robot challenge detection (UI-controlled response)
@@ -13,14 +14,9 @@
  * 5. Generic fallback (last resort)
  *
  * Raw Events Emitted (for debugging via BlackBox):
- * - A2_DISCOVERY_TURN_START     : Turn context
- * - A2_DISCOVERY_SKIPPED        : Why discovery was skipped
- * - A2_DISCOVERY_PATH_SELECTED  : Robot challenge path
- * - A2_DISCOVERY_TRIGGER_MATCH  : Trigger card matching result (NEW)
- * - A2_DISCOVERY_RULE_MATCH     : Legacy rule matching (deprecated)
- * - A2_DISCOVERY_MATCH_DIAG     : Scenario engine diagnostics
- * - A2_DISCOVERY_SCENARIO_EVAL  : Scenario evaluation details
- * - A2_DISCOVERY_REPLY_COMPOSED : Final response assembly
+ * - A2_TURN           : Complete turn summary (input, match, response, audio)
+ * - A2_TRIGGER_EVAL   : Trigger card evaluation details
+ * - A2_SCENARIO_EVAL  : Scenario engine fallback details (when used)
  *
  * ============================================================================
  */
@@ -136,16 +132,27 @@ class Agent2DiscoveryRunner {
     nextState.agent2.discovery = safeObj(nextState.agent2.discovery, {});
     nextState.agent2.discovery.turnLastRan = typeof turn === 'number' ? turn : null;
 
-    emit('A2_DISCOVERY_TURN_START', {
+    // Collect turn data for final event
+    const turnData = {
       enabled,
       uiBuild: agent2?.meta?.uiBuild || null,
+      input: clip(input, 200),
       inputLength: input.length,
-      inputPreview: clip(input, 120),
-      capturedReasonPreview: clip(capturedReason, 140)
-    });
+      capturedReason: capturedReason ? clip(capturedReason, 140) : null,
+      path: null,
+      matchType: null,
+      matchedOn: null,
+      cardId: null,
+      cardLabel: null,
+      scenarioId: null,
+      response: null,
+      audioUrl: null,
+      error: null
+    };
 
     if (!enabled) {
-      emit('A2_DISCOVERY_SKIPPED', { reason: 'DISABLED' });
+      turnData.path = 'DISABLED';
+      emit('A2_TURN', turnData);
       return null;
     }
 
@@ -159,8 +166,12 @@ class Agent2DiscoveryRunner {
       const audioUrl = `${style.robotChallenge?.audioUrl || ''}`.trim();
       const response = line ? `${ack} ${line}`.trim() : `${ack} How can I help you today?`;
       nextState.agent2.discovery.lastPath = 'ROBOT_CHALLENGE';
-      emit('A2_DISCOVERY_PATH_SELECTED', { path: 'ROBOT_CHALLENGE', hasAudio: !!audioUrl });
-      emit('A2_DISCOVERY_REPLY_COMPOSED', { responsePreview: clip(response, 160), hasAudio: !!audioUrl });
+
+      turnData.path = 'ROBOT_CHALLENGE';
+      turnData.response = clip(response, 200);
+      turnData.audioUrl = audioUrl || null;
+      emit('A2_TURN', turnData);
+
       return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, audioUrl: audioUrl || null };
     }
 
@@ -171,18 +182,17 @@ class Agent2DiscoveryRunner {
     const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
     const triggerResult = TriggerCardMatcher.match(input, triggerCards);
 
-    emit('A2_DISCOVERY_TRIGGER_MATCH', {
-      inputPreview: clip(input, 120),
+    // Emit detailed trigger evaluation for debugging
+    emit('A2_TRIGGER_EVAL', {
       matched: triggerResult.matched,
       matchType: triggerResult.matchType,
       matchedOn: triggerResult.matchedOn,
       cardId: triggerResult.cardId,
       cardLabel: triggerResult.cardLabel,
-      poolStats: cardPoolStats,
       totalCards: triggerResult.totalCards,
       enabledCards: triggerResult.enabledCards,
       negativeBlocked: triggerResult.negativeBlocked,
-      evaluated: triggerResult.evaluated.slice(0, 10) // Cap for event size
+      evaluated: triggerResult.evaluated.slice(0, 10)
     });
 
     if (triggerResult.matched && triggerResult.card) {
@@ -208,30 +218,25 @@ class Agent2DiscoveryRunner {
           ? `${ack} ${answerText} ${afterQuestion}`.trim()
           : `${ack} ${answerText}`.trim();
       } else {
-        // Card matched but has no answer text — use audio URL or fallback
         response = afterQuestion
           ? `${ack} ${afterQuestion}`.trim()
           : `${ack} How can I help you with that?`;
       }
 
-      emit('A2_DISCOVERY_REPLY_COMPOSED', {
-        path: 'TRIGGER_CARD_ANSWER',
-        responsePreview: clip(response, 220),
-        ackWord: ack,
-        hasAnswer: !!answerText,
-        hasAudio: !!audioUrl,
-        hasFollowUp: !!afterQuestion,
-        cardId: card.id,
-        cardLabel: card.label,
-        matchType: triggerResult.matchType,
-        matchedOn: triggerResult.matchedOn
-      });
+      // Emit complete turn summary
+      turnData.path = 'TRIGGER_CARD';
+      turnData.matchType = triggerResult.matchType;
+      turnData.matchedOn = triggerResult.matchedOn;
+      turnData.cardId = card.id;
+      turnData.cardLabel = card.label;
+      turnData.response = clip(response, 200);
+      turnData.audioUrl = audioUrl || null;
+      emit('A2_TURN', turnData);
 
       return {
         response,
         matchSource: 'AGENT2_DISCOVERY',
         state: nextState,
-        // Expose audio URL for TTS/audio routing
         audioUrl: audioUrl || null,
         triggerCard: {
           id: card.id,
@@ -305,32 +310,19 @@ class Agent2DiscoveryRunner {
     else if (eligiblePool === 0 && totalPool > 0 && scenarioDebug?.enforcement?.enabled === true) zeroWhy = 'FILTERED_BY_ENTERPRISE_ENFORCEMENT';
     else if (scenarioConfidence < minScore) zeroWhy = 'TOP_SCORE_BELOW_MIN';
 
-    emit('A2_DISCOVERY_MATCH_DIAG', {
-      matchTextUsed: clip(input, 200),
-      matchTextLength: input.length,
-      capturedReasonAvailable: !!capturedReason,
-      capturedReasonPreview: capturedReason ? clip(capturedReason, 100) : null,
-      poolTotal: totalPool,
-      poolEligible: eligiblePool,
-      minScore,
-      tier1BestScore: scenarioDebug?.tier1BestScore || 0,
-      tier2BestScore: scenarioDebug?.tier2BestScore || 0,
-      selectionConfidence: scenarioConfidence,
-      zeroWhy,
-      templateMeta: scenarioDebug?.templateMeta || null,
-      engineError: scenarioDebug?.error || null,
-      engineMessage: scenarioDebug?.message || null
-    });
-
-    emit('A2_DISCOVERY_SCENARIO_EVAL', {
+    // Emit scenario evaluation for debugging (only if actually tried)
+    emit('A2_SCENARIO_EVAL', {
+      tried: true,
       minScore,
       confidence: scenarioConfidence,
       scoreAllowed,
       scenarioType,
-      typeAllowedByGlobal,
-      selectedScenarioId: scenarioPicked?._id?.toString?.() || scenarioPicked?.id || null,
-      enforcement: scenarioDebug?.enforcement || null,
-      candidates: scenarioCandidates
+      typeAllowed: typeAllowedByGlobal,
+      scenarioId: scenarioPicked?._id?.toString?.() || scenarioPicked?.id || null,
+      poolTotal: totalPool,
+      poolEligible: eligiblePool,
+      zeroWhy,
+      candidates: scenarioCandidates.slice(0, 3)
     });
 
     // Check if scenario is usable
@@ -360,6 +352,8 @@ class Agent2DiscoveryRunner {
         ? `${ack} ${answerText} ${afterQuestion}`.trim()
         : `${ack} ${answerText}`.trim();
       nextState.agent2.discovery.lastPath = 'SCENARIO_ANSWER';
+      turnData.path = 'SCENARIO';
+      turnData.scenarioId = scenarioPicked?._id?.toString?.() || scenarioPicked?.id || null;
     } else if (capturedReason) {
       // Path 4: We captured a call reason but couldn't match — acknowledge what they said
       const reasonAck = `${fallback.noMatchWhenReasonCaptured || ''}`.trim() || "I'm sorry to hear that.";
@@ -367,25 +361,20 @@ class Agent2DiscoveryRunner {
       const defaultFollowUp = `${fallback.afterAnswerQuestion || ''}`.trim() || 'Would you like to schedule a visit, or do you have a question I can help with?';
       const nextQ = clarifier || defaultFollowUp;
 
-      // Build natural response: "Ok. I'm sorry to hear that — it sounds like [reason]. [follow-up question]"
       response = `${ack} ${reasonAck} It sounds like ${capturedReason}. ${nextQ}`.replace(/\s+/g, ' ').trim();
       nextState.agent2.discovery.lastPath = 'FALLBACK_REASON_CAPTURED';
+      turnData.path = 'FALLBACK_REASON';
     } else {
       // Path 5: No trigger match, no scenario match, no captured reason — generic fallback
       const baseNoMatch = `${fallback.noMatchAnswer || ''}`.trim() || `${ack} How can I help you today?`;
       response = baseNoMatch;
       nextState.agent2.discovery.lastPath = 'FALLBACK_NO_MATCH';
+      turnData.path = 'FALLBACK_GENERIC';
     }
 
-    emit('A2_DISCOVERY_REPLY_COMPOSED', {
-      path: nextState.agent2.discovery.lastPath,
-      responsePreview: clip(response, 220),
-      ackWord: ack,
-      hasAnswer: !!answerText,
-      hasFollowUp: !!afterQuestion,
-      capturedReasonUsed: !!capturedReason && !answerText,
-      capturedReasonPreview: capturedReason ? clip(capturedReason, 100) : null
-    });
+    // Emit complete turn summary
+    turnData.response = clip(response, 200);
+    emit('A2_TURN', turnData);
 
     return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
   }
