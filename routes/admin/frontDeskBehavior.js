@@ -778,6 +778,10 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 styleAcknowledgments: config.styleAcknowledgments || null,
                 personality: config.personality,
                 
+                // 🎤 V116: Voice Settings (read-only from AI Voice Settings tab)
+                // Used by Instant Audio Generator to detect if voice is configured
+                voiceSettings: company.aiAgentSettings?.voiceSettings || null,
+                
                 // ═══════════════════════════════════════════════════════════════
                 // V110: SLOT REGISTRY + DISCOVERY/BOOKING FLOWS (CANONICAL)
                 // ═══════════════════════════════════════════════════════════════

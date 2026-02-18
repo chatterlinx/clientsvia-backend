@@ -13361,6 +13361,13 @@ Sean → Shawn, Shaun`;
      * ════════════════════════════════════════════════════════════════════
      */
     attachGlobalSettingsListeners(content) {
+        // ════════════════════════════════════════════════════════════════════════
+        // V116: INSTANT RESPONSES - Greeting Rules Management
+        // ════════════════════════════════════════════════════════════════════════
+        // The greeting rows use inline onclick handlers (window.frontDeskManager.addGreetingRow, etc.)
+        // These should work automatically once window.frontDeskManager is set in attachListeners().
+        // No need for additional event delegation here since the buttons use direct references.
+        
         // Tier 1 Slider - Real-time value update and impact preview
         const tier1Slider = content.querySelector('#global-tier1-slider');
         const tier1Value = content.querySelector('#global-tier1-value');
