@@ -121,11 +121,20 @@ function readSlotValue(slots, slotId) {
     return entry;
 }
 
+// Verbose events flag - set to false when Agent 2.0 owns the turn to suppress legacy noise
+let verboseEvents = true;
+
 function checkpoint(bufferEvent, name, data = {}) {
+    if (!verboseEvents) return; // Suppress when Agent 2.0 is active
     bufferEvent('FD_CHECKPOINT', {
         checkpoint: name,
         ...data
     });
+}
+
+function sectionEvent(bufferEvent, name, data = {}) {
+    if (!verboseEvents) return; // Suppress when Agent 2.0 is active
+    bufferEvent(name, data);
 }
 
 function buildPreExtractedBookingSlots(state = {}) {
@@ -300,12 +309,32 @@ class FrontDeskCoreRuntime {
         const companyId = context.companyId || company?._id?.toString?.() || null;
         const turn = callState?.turnCount || context.turnCount || 0;
 
+        // Reset verbose events at the start of each turn
+        verboseEvents = true;
+
         // ═══════════════════════════════════════════════════════════════════════════
         // TURN EVENT BUFFER
         // ═══════════════════════════════════════════════════════════════════════════
         const turnEventBuffer = [];
         
+        // Event types to suppress when Agent 2.0 is active (verboseEvents = false)
+        const suppressedEventTypes = new Set([
+            'SECTION_S1_RUNTIME_OWNER',
+            'SECTION_S1_5_CONNECTION_QUALITY_GATE',
+            'SECTION_S2_5_ESCALATION_DETECTION',
+            'SECTION_S3_SLOT_EXTRACTION',
+            'SECTION_S3_PENDING_SLOTS_STORED',
+            'SECTION_S3_CALL_REASON_OVERWRITE_BLOCKED',
+            'SECTION_OPENER_ENGINE',
+            'CORE_RUNTIME_TURN_START',
+            'CORE_RUNTIME_OWNER_RESULT',
+            'FD_OWNER_PROOF',
+            'TURN_CONTRACT'
+        ]);
+        
         const bufferEvent = (type, data) => {
+            // Suppress verbose legacy events when Agent 2.0 is active
+            if (!verboseEvents && suppressedEventTypes.has(type)) return;
             turnEventBuffer.push(createEvent({ callSid, companyId, turn, type, data }));
         };
 
@@ -933,6 +962,7 @@ class FrontDeskCoreRuntime {
                         company?.aiAgentSettings?.agent2?.discovery?.enabled === true;
                     if (agent2Enabled) {
                         currentSection = 'A2_DISCOVERY';
+                        verboseEvents = false; // Suppress legacy noise when Agent 2.0 active
                         bufferEvent('A2_DISCOVERY_GATE', {
                             enabled: true,
                             uiBuild: company?.aiAgentSettings?.agent2?.meta?.uiBuild || null

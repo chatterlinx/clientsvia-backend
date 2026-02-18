@@ -1718,7 +1718,7 @@ class Agent2Manager {
         enabled: true,
         priority: 20,
         label: 'Same-day appointment',
-        match: { keywords: ['today', 'same day', 'right now', 'as soon as possible', 'asap', 'immediately'], phrases: ['can you come today', 'available today'], negativeKeywords: ['cancel'] },
+        match: { keywords: ['today', 'same day', 'asap', 'immediately'], phrases: ['can you come today', 'available today', 'come out today', 'send someone today', 'need someone today', 'as soon as possible'], negativeKeywords: ['cancel', 'not today'] },
         answer: { answerText: 'Let me check our schedule for today. We do our best to accommodate same-day requests.', audioUrl: '' },
         followUp: { question: 'What time works best for you — morning or afternoon?', nextAction: 'CONTINUE' }
       },
