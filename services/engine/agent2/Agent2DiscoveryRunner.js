@@ -156,11 +156,12 @@ class Agent2DiscoveryRunner {
     // ──────────────────────────────────────────────────────────────────────
     if (style?.robotChallenge?.enabled === true && detectRobotChallenge(input)) {
       const line = `${style.robotChallenge?.line || ''}`.trim();
+      const audioUrl = `${style.robotChallenge?.audioUrl || ''}`.trim();
       const response = line ? `${ack} ${line}`.trim() : `${ack} How can I help you today?`;
       nextState.agent2.discovery.lastPath = 'ROBOT_CHALLENGE';
-      emit('A2_DISCOVERY_PATH_SELECTED', { path: 'ROBOT_CHALLENGE' });
-      emit('A2_DISCOVERY_REPLY_COMPOSED', { responsePreview: clip(response, 160) });
-      return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+      emit('A2_DISCOVERY_PATH_SELECTED', { path: 'ROBOT_CHALLENGE', hasAudio: !!audioUrl });
+      emit('A2_DISCOVERY_REPLY_COMPOSED', { responsePreview: clip(response, 160), hasAudio: !!audioUrl });
+      return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState, audioUrl: audioUrl || null };
     }
 
     // ──────────────────────────────────────────────────────────────────────

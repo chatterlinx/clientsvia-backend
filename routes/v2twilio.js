@@ -2953,6 +2953,38 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       // Never block voice output on cache logic.
       logger.warn('[V2 RESPOND] Instant audio cache check failed', { error: e.message });
     }
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // AGENT 2.0 FAST-PATH: Pre-generated instant audio (Trigger Card answers)
+    // ────────────────────────────────────────────────────────────────────────────
+    // If Agent 2.0 Discovery returned an audioUrl, use it directly (already cached MP3).
+    try {
+      const isAgent2Discovery = runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
+      const agent2AudioUrl = runtimeResult?.audioUrl;
+      if (!audioUrl && isAgent2Discovery && agent2AudioUrl) {
+        // audioUrl from Agent2DiscoveryRunner is a relative path like /audio/instant-lines/...
+        audioUrl = agent2AudioUrl.startsWith('http') 
+          ? agent2AudioUrl 
+          : `${getSecureBaseUrl(req)}${agent2AudioUrl}`;
+        voiceProviderUsed = 'instant_audio_agent2';
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'INSTANT_AUDIO_AGENT2_HIT',
+            turn: turnNumber,
+            data: {
+              triggerCardId: runtimeResult?.triggerCard?.id || null,
+              triggerCardLabel: runtimeResult?.triggerCard?.label || null,
+              audioUrl: agent2AudioUrl,
+              matchSource: runtimeResult?.matchSource || null
+            }
+          }).catch(() => {});
+        }
+      }
+    } catch (e) {
+      logger.warn('[V2 RESPOND] Agent2 instant audio check failed', { error: e.message });
+    }
     
     if (!audioUrl && elevenLabsVoice && responseText) {
       const ttsStartTime = Date.now();
