@@ -744,10 +744,16 @@ class Agent2Manager {
             <textarea id="a2-sim-output" rows="10" readonly
               style="width:100%; background:#0b1220; color:#cbd5e1; border:1px solid #1f2937; border-radius:12px; padding:10px; font-family:monospace; font-size:12px; resize:vertical;"
             ></textarea>
-            <button id="a2-sim-copy"
-              style="margin-top:10px; padding:10px 14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:10px; cursor:pointer;">
-              Copy JSON
-            </button>
+            <div style="display:flex; gap:8px; margin-top:10px;">
+              <button id="a2-sim-copy"
+                style="padding:10px 14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:10px; cursor:pointer;">
+                Copy JSON
+              </button>
+              <button id="a2-sim-play"
+                style="padding:10px 14px; background:#238636; color:white; border:none; border-radius:10px; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                <span style="font-size:14px;">&#9658;</span> Play Response
+              </button>
+            </div>
           </div>
         </div>
       `
@@ -878,6 +884,57 @@ class Agent2Manager {
       if (!text) return;
       await navigator.clipboard.writeText(text);
       alert('Copied simulator JSON.');
+    });
+
+    // Play Response button - uses browser TTS to speak the planned response
+    container.querySelector('#a2-sim-play')?.addEventListener('click', () => {
+      const out = container.querySelector('#a2-sim-output');
+      const text = out?.value || '';
+      if (!text) {
+        alert('Run the simulator first to generate a response.');
+        return;
+      }
+      
+      try {
+        const plan = JSON.parse(text);
+        const responseText = plan.response || plan.plannedResponse || '';
+        if (!responseText) {
+          alert('No response text to play.');
+          return;
+        }
+        
+        // Cancel any ongoing speech
+        window.speechSynthesis.cancel();
+        
+        const utterance = new SpeechSynthesisUtterance(responseText);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        
+        // Try to use a natural-sounding voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.name.includes('Samantha') || v.name.includes('Karen') || v.name.includes('Google')) 
+                           || voices.find(v => v.lang.startsWith('en'));
+        if (preferredVoice) utterance.voice = preferredVoice;
+        
+        // Update button state while playing
+        const btn = container.querySelector('#a2-sim-play');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<span style="font-size:14px;">&#9632;</span> Playing...';
+        btn.style.background = '#6e7681';
+        
+        utterance.onend = () => {
+          btn.innerHTML = originalHTML;
+          btn.style.background = '#238636';
+        };
+        utterance.onerror = () => {
+          btn.innerHTML = originalHTML;
+          btn.style.background = '#238636';
+        };
+        
+        window.speechSynthesis.speak(utterance);
+      } catch (e) {
+        alert('Could not parse response JSON.');
+      }
     });
   }
 
