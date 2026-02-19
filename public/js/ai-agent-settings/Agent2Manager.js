@@ -1621,7 +1621,7 @@ class Agent2Manager {
       
       try {
         const plan = JSON.parse(text);
-        const responseText = plan.response || plan.plannedResponse || '';
+        const responseText = plan.spokenPreview || plan.response || plan.plannedResponse || '';
         if (!responseText) {
           alert('No response text to play.');
           return;
