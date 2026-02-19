@@ -294,7 +294,7 @@ class Agent2Manager {
           Refresh
         </button>
       </div>
-      <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:12px;">
+      <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(450px, 1fr)); gap:12px; max-width:950px;">
         ${callCards}
       </div>
     `;
