@@ -255,6 +255,7 @@ class Agent2Manager {
     const enabled = callStart.enabled !== false;
     const text = callStart.text || "Thank you for calling. How can I help you today?";
     const audioUrl = callStart.audioUrl || '';
+    const hasAudio = audioUrl && audioUrl.trim();
 
     return `
       <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
@@ -276,7 +277,18 @@ class Agent2Manager {
         
         <div>
           <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Audio URL (optional — if provided, plays instead of TTS)</label>
-          <input type="text" id="a2-callstart-audioUrl" value="${this.escapeHtml(audioUrl)}" placeholder="https://example.com/greeting.mp3" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.95rem;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="text" id="a2-callstart-audioUrl" value="${this.escapeHtml(audioUrl)}" placeholder="Click 'Generate MP3' or paste a URL" style="flex:1; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.9rem; font-family:monospace;">
+            <button id="a2-callstart-play" style="padding:10px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap; ${hasAudio ? '' : 'display:none;'}" data-audio-url="${this.escapeHtml(audioUrl)}">
+              ▶ Play
+            </button>
+            <button id="a2-callstart-generate" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap;">
+              ${hasAudio ? 'Regenerate' : 'Generate MP3'}
+            </button>
+          </div>
+          <div id="a2-callstart-audio-status" style="margin-top:6px; color:#6e7681; font-size:0.8rem;">
+            ${hasAudio ? '<span style="color:#7ee787;">Audio ready</span>' : 'No audio generated yet. Click Generate MP3 to create audio from the text above.'}
+          </div>
         </div>
       </div>
     `;
@@ -451,7 +463,18 @@ class Agent2Manager {
       </div>
       <div>
         <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Audio URL (optional — if provided, plays instead of TTS)</label>
-        <input type="text" id="a2-greeting-modal-audioUrl" value="${this.escapeHtml(rule.audioUrl || '')}" placeholder="https://example.com/greeting.mp3" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9;">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="text" id="a2-greeting-modal-audioUrl" value="${this.escapeHtml(rule.audioUrl || '')}" placeholder="Click 'Generate MP3' or paste a URL" style="flex:1; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-family:monospace; font-size:0.85rem;">
+          <button id="a2-greeting-modal-play" style="padding:10px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap; ${rule.audioUrl ? '' : 'display:none;'}" data-audio-url="${this.escapeHtml(rule.audioUrl || '')}">
+            ▶ Play
+          </button>
+          <button id="a2-greeting-modal-generate" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; white-space:nowrap;">
+            ${rule.audioUrl ? 'Regenerate' : 'Generate MP3'}
+          </button>
+        </div>
+        <div id="a2-greeting-modal-audio-status" style="margin-top:6px; color:#6e7681; font-size:0.8rem;">
+          ${rule.audioUrl ? '<span style="color:#7ee787;">Audio ready</span>' : 'No audio generated yet.'}
+        </div>
       </div>
     `;
   }
@@ -2303,6 +2326,19 @@ class Agent2Manager {
       this.config.greetings.callStart = this.config.greetings.callStart || {};
       this.config.greetings.callStart.audioUrl = e.target.value.trim();
       onAnyChange();
+      // Show/hide play button based on URL
+      const playBtn = container.querySelector('#a2-callstart-play');
+      if (playBtn) {
+        playBtn.style.display = e.target.value.trim() ? '' : 'none';
+        playBtn.setAttribute('data-audio-url', e.target.value.trim());
+      }
+    });
+    container.querySelector('#a2-callstart-play')?.addEventListener('click', () => {
+      const url = container.querySelector('#a2-callstart-audioUrl')?.value?.trim();
+      if (url) this._playGreetingAudio(url, 'a2-callstart-play');
+    });
+    container.querySelector('#a2-callstart-generate')?.addEventListener('click', () => {
+      this._generateCallStartAudio();
     });
 
     // Greeting Interceptor settings
@@ -2690,6 +2726,22 @@ class Agent2Manager {
     this._greetingModalIdx = idx;
     content.innerHTML = this.renderGreetingRuleModal(idx);
     modal.style.display = 'flex';
+
+    // Wire up audio buttons in modal
+    document.getElementById('a2-greeting-modal-play')?.addEventListener('click', () => {
+      const url = document.getElementById('a2-greeting-modal-audioUrl')?.value?.trim();
+      if (url) this._playGreetingAudio(url, 'a2-greeting-modal-play');
+    });
+    document.getElementById('a2-greeting-modal-generate')?.addEventListener('click', () => {
+      this._generateGreetingRuleAudio();
+    });
+    document.getElementById('a2-greeting-modal-audioUrl')?.addEventListener('input', (e) => {
+      const playBtn = document.getElementById('a2-greeting-modal-play');
+      if (playBtn) {
+        playBtn.style.display = e.target.value.trim() ? '' : 'none';
+        playBtn.setAttribute('data-audio-url', e.target.value.trim());
+      }
+    });
   }
 
   _closeGreetingModal() {
@@ -2749,6 +2801,185 @@ class Agent2Manager {
     rules.splice(idx, 1);
 
     this._closeGreetingModal();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // GREETING AUDIO GENERATION & PLAYBACK
+  // ══════════════════════════════════════════════════════════════════════════
+  _greetingAudio = null;
+
+  _playGreetingAudio(url, btnId) {
+    if (!url) return;
+
+    // Stop any currently playing audio
+    if (this._greetingAudio) {
+      this._greetingAudio.pause();
+      this._greetingAudio = null;
+    }
+
+    const playBtn = document.getElementById(btnId);
+    if (playBtn) playBtn.textContent = '⏹ Stop';
+
+    const audio = new Audio(url);
+    this._greetingAudio = audio;
+
+    audio.addEventListener('ended', () => {
+      this._greetingAudio = null;
+      if (playBtn) playBtn.textContent = '▶ Play';
+    });
+
+    audio.addEventListener('error', () => {
+      this._greetingAudio = null;
+      if (playBtn) playBtn.textContent = '▶ Play';
+      alert('Failed to play audio. Check the URL.');
+    });
+
+    audio.play().catch(err => {
+      console.error('Audio play failed:', err);
+      this._greetingAudio = null;
+      if (playBtn) playBtn.textContent = '▶ Play';
+    });
+  }
+
+  async _generateCallStartAudio() {
+    const generateBtn = document.getElementById('a2-callstart-generate');
+    const statusEl = document.getElementById('a2-callstart-audio-status');
+    const textEl = document.getElementById('a2-callstart-text');
+    const audioUrlEl = document.getElementById('a2-callstart-audioUrl');
+    const playBtn = document.getElementById('a2-callstart-play');
+    const text = (textEl?.value || '').trim();
+
+    if (!text) {
+      alert('Enter greeting text first');
+      return;
+    }
+
+    if (generateBtn) {
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
+    }
+    if (statusEl) {
+      statusEl.innerHTML = '<span style="color:#58a6ff;">Generating audio...</span>';
+    }
+
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/generate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          kind: 'CONNECTION_GREETING',
+          text,
+          force: true
+        })
+      });
+
+      const json = await res.json();
+
+      if (json.success && json.url) {
+        if (statusEl) {
+          statusEl.innerHTML = `<span style="color:#7ee787;">Audio generated!</span>`;
+        }
+        if (generateBtn) {
+          generateBtn.textContent = 'Regenerate';
+          generateBtn.disabled = false;
+        }
+        if (audioUrlEl) {
+          audioUrlEl.value = json.url;
+        }
+        if (playBtn) {
+          playBtn.style.display = '';
+          playBtn.setAttribute('data-audio-url', json.url);
+        }
+        // Update config
+        this.config.greetings = this.config.greetings || {};
+        this.config.greetings.callStart = this.config.greetings.callStart || {};
+        this.config.greetings.callStart.audioUrl = json.url;
+        this._setDirty(true);
+      } else {
+        throw new Error(json.error || 'Generation failed');
+      }
+    } catch (e) {
+      console.error('Audio generation failed:', e);
+      if (statusEl) {
+        statusEl.innerHTML = `<span style="color:#f85149;">Error: ${e.message || 'Generation failed'}</span>`;
+      }
+      if (generateBtn) {
+        generateBtn.textContent = 'Generate MP3';
+        generateBtn.disabled = false;
+      }
+    }
+  }
+
+  async _generateGreetingRuleAudio() {
+    const generateBtn = document.getElementById('a2-greeting-modal-generate');
+    const statusEl = document.getElementById('a2-greeting-modal-audio-status');
+    const textEl = document.getElementById('a2-greeting-modal-responseText');
+    const audioUrlEl = document.getElementById('a2-greeting-modal-audioUrl');
+    const playBtn = document.getElementById('a2-greeting-modal-play');
+    const text = (textEl?.value || '').trim();
+
+    if (!text) {
+      alert('Enter response text first');
+      return;
+    }
+
+    if (generateBtn) {
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating...';
+    }
+    if (statusEl) {
+      statusEl.innerHTML = '<span style="color:#58a6ff;">Generating audio...</span>';
+    }
+
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/front-desk-behavior/${this.companyId}/instant-audio/generate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          kind: 'GREETING_RULE',
+          text,
+          force: true
+        })
+      });
+
+      const json = await res.json();
+
+      if (json.success && json.url) {
+        if (statusEl) {
+          statusEl.innerHTML = `<span style="color:#7ee787;">Audio generated!</span>`;
+        }
+        if (generateBtn) {
+          generateBtn.textContent = 'Regenerate';
+          generateBtn.disabled = false;
+        }
+        if (audioUrlEl) {
+          audioUrlEl.value = json.url;
+        }
+        if (playBtn) {
+          playBtn.style.display = '';
+          playBtn.setAttribute('data-audio-url', json.url);
+        }
+      } else {
+        throw new Error(json.error || 'Generation failed');
+      }
+    } catch (e) {
+      console.error('Audio generation failed:', e);
+      if (statusEl) {
+        statusEl.innerHTML = `<span style="color:#f85149;">Error: ${e.message || 'Generation failed'}</span>`;
+      }
+      if (generateBtn) {
+        generateBtn.textContent = 'Generate MP3';
+        generateBtn.disabled = false;
+      }
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
