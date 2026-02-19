@@ -129,6 +129,16 @@ class Agent2Manager {
         },
         updatedAt: null
       },
+      greetings: {
+        callStart: { enabled: true, text: "Thank you for calling. How can I help you today?", audioUrl: '' },
+        interceptor: {
+          enabled: true,
+          maxWordsToQualify: 2,
+          blockIfContainsIntentWords: true,
+          intentWords: ['repair', 'maintenance', 'tune-up', 'not cooling', 'price', 'cost', 'schedule', 'appointment'],
+          rules: []
+        }
+      },
       meta: { uiBuild: Agent2Manager.UI_BUILD }
     };
   }
@@ -2881,7 +2891,7 @@ class Agent2Manager {
 
       if (json.success && json.url) {
         if (statusEl) {
-          statusEl.innerHTML = `<span style="color:#7ee787;">Audio generated!</span>`;
+          statusEl.innerHTML = `<span style="color:#7ee787;">Audio generated! Click Save to keep it.</span>`;
         }
         if (generateBtn) {
           generateBtn.textContent = 'Regenerate';
@@ -2899,6 +2909,19 @@ class Agent2Manager {
         this.config.greetings.callStart = this.config.greetings.callStart || {};
         this.config.greetings.callStart.audioUrl = json.url;
         this._setDirty(true);
+        
+        // Auto-save after audio generation
+        try {
+          await this.save();
+          if (statusEl) {
+            statusEl.innerHTML = `<span style="color:#7ee787;">Audio generated and saved!</span>`;
+          }
+        } catch (saveErr) {
+          console.error('Auto-save failed:', saveErr);
+          if (statusEl) {
+            statusEl.innerHTML = `<span style="color:#7ee787;">Audio generated!</span> <span style="color:#f59e0b;">Click Save to keep it.</span>`;
+          }
+        }
       } else {
         throw new Error(json.error || 'Generation failed');
       }
@@ -2954,7 +2977,7 @@ class Agent2Manager {
 
       if (json.success && json.url) {
         if (statusEl) {
-          statusEl.innerHTML = `<span style="color:#7ee787;">Audio generated!</span>`;
+          statusEl.innerHTML = `<span style="color:#7ee787;">Audio generated! Click Save to apply.</span>`;
         }
         if (generateBtn) {
           generateBtn.textContent = 'Regenerate';
