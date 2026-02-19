@@ -2582,7 +2582,56 @@ router.get('/audio/:type/:callSid', async (req, res) => {
 // For optimization: use company profile → AI Voice Settings → Agent Performance Controls
 // NO HARDCODING - all tuning happens through the live dashboard
 
-// Add company-specific voice endpoint for Blueprint compliance
+// ════════════════════════════════════════════════════════════════════════════════
+// COMPANY VOICE ENDPOINT - /:companyId/voice format (matches <Redirect> in TwiML)
+// ════════════════════════════════════════════════════════════════════════════════
+// The /voice route uses <Redirect> to /:companyId/voice for continuation.
+// This route MUST exist or Twilio gets 404 after the initial greeting.
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/:companyID/voice', async (req, res) => {
+  const { companyID } = req.params;
+  logger.info(`[TWILIO] /:companyId/voice hit for company ${companyID}`);
+  
+  const twiml = new twilio.twiml.VoiceResponse();
+  
+  try {
+    const company = await Company.findById(companyID);
+    if (!company) {
+      logger.error(`[TWILIO] Company not found: ${companyID}`);
+      twiml.say('Sorry, there was a configuration error. Please try again later.');
+      twiml.hangup();
+      res.type('text/xml');
+      return res.send(twiml.toString());
+    }
+    
+    // Set up gather for continued conversation
+    const gather = twiml.gather({
+      input: 'speech',
+      action: `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`,
+      method: 'POST',
+      timeout: 5,
+      speechTimeout: '3',
+      enhanced: true,
+      speechModel: 'phone_call'
+    });
+    
+    // Silent gather - just listening for next input
+    gather.pause({ length: 1 });
+    
+    // If no input, redirect back to continue listening
+    twiml.redirect(`${getSecureBaseUrl(req)}/api/twilio/${companyID}/voice`);
+    
+  } catch (err) {
+    logger.error(`[TWILIO] /:companyId/voice error: ${err.message}`);
+    twiml.say('Sorry, there was a technical issue. Please try again.');
+    twiml.hangup();
+  }
+  
+  res.type('text/xml');
+  res.send(twiml.toString());
+});
+
+// Add company-specific voice endpoint for Blueprint compliance (legacy format)
 router.post('/voice/:companyID', async (req, res) => {
   const callStartTime = Date.now();
   const { companyID } = req.params;
