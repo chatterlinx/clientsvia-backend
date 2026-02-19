@@ -221,9 +221,9 @@ async function loadAllRoutes() {
         // 🗑️ DELETED: AI Agent Logic routes (tab removed)
         // 🗑️ DELETED: Instant Response Categories routes (tab removed)
         
-        // V2 Twilio Control Center & Connection Messages (AI Agent Settings tab)
+        // V2 Twilio Control Center (AI Agent Settings tab)
         routes.v2TwilioControlRoutes = await loadRouteWithTimeout('./routes/company/v2twilioControl', 'v2TwilioControlRoutes');
-        routes.v2ConnectionMessagesRoutes = await loadRouteWithTimeout('./routes/company/v2connectionMessages', 'v2ConnectionMessagesRoutes');
+        // NUKED: v2ConnectionMessagesRoutes - Agent 2.0 owns greetings now
         
         // 📅 Google Calendar Integration (V88 - Jan 2026)
         routes.googleCalendarRoutes = await loadRouteWithTimeout('./routes/company/googleCalendar', 'googleCalendarRoutes');
@@ -710,7 +710,7 @@ function registerRoutes(routes) {
     app.use('/api/company/:companyId', routes.companyOpsRouter); // V2: CompanyOps Console + Cheat Sheet Config (Contacts, Locations, Appointments, Call Traces, Usage, Customer DB, Notifications, Settings, Booking Rules, Role Contacts, Links, Calculator)
     app.use('/api/company/:companyId/trade-key', require('./routes/company/tradeKey')); // 🏷️ Trade Key (Onboarding) - explicit read/write
     app.use('/api/company', routes.v2TwilioControlRoutes); // V2: Twilio Control Center (AI Agent Settings - Dashboard tab)
-    app.use('/api/company', routes.v2ConnectionMessagesRoutes); // V2: Connection Messages (AI Agent Settings - Messages & Greetings tab)
+    // NUKED: v2ConnectionMessagesRoutes mount - Agent 2.0 owns greetings now
     
     // 📅 Google Calendar Integration (V88 - Jan 2026)
     app.use('/api/company/:companyId/google-calendar', routes.googleCalendarRoutes); // 📅 Google Calendar (OAuth, availability, events)

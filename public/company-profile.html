@@ -1824,10 +1824,7 @@
                                         <i class="fas fa-tachometer-alt"></i>
                                         Dashboard
                                     </button>
-                                    <button class="voicecore-tab" data-voicecore-tab="messages">
-                                        <i class="fas fa-comments"></i>
-                                        Messages & Greetings
-                                    </button>
+                                    <!-- NUKED: Messages & Greetings tab - Agent 2.0 owns greetings now -->
                                     <button class="voicecore-tab" data-voicecore-tab="logs" disabled style="opacity: 0.5; cursor: not-allowed;">
                                         <i class="fas fa-list"></i>
                                         Call Logs
@@ -1852,16 +1849,7 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Tab 2: Messages & Greetings -->
-                                <div class="voicecore-tab-content" id="tab-messages">
-                                    <div id="connection-messages-container">
-                                        <!-- Connection Messages UI will be loaded here by JavaScript -->
-                                        <div class="voicecore-loading">
-                                            <i class="fas fa-spinner fa-spin"></i>
-                                            <p>Loading Connection Messages...</p>
-                                        </div>
-                                    </div>
-                                </div>
+                                <!-- NUKED: Messages & Greetings tab content - Agent 2.0 owns greetings now -->
                                 
                                 <!-- Tab 3: Call Logs (Future) -->
                                 <div class="voicecore-tab-content" id="tab-logs">
@@ -2113,7 +2101,7 @@
                         <script src="/js/ai-agent-settings/SystemDiagnostics.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/VoiceCoreTabManager.js?v=7.0"></script>
                         <script src="/js/ai-agent-settings/TwilioControlCenter.js?v=5.0"></script>
-                        <script src="/js/ai-agent-settings/ConnectionMessagesManager.js?v=13.0"></script>
+                        <!-- NUKED: ConnectionMessagesManager.js - Agent 2.0 owns greetings now -->
                         <script src="/js/ai-agent-settings/SpamFilterManager.js?v=1.0"></script>
                         <script src="/js/ai-agent-settings/LLM0ControlsManager.js?v=1.0"></script>
                         <!-- V2 Navigator - for diagnostic "Fix Now" buttons -->
@@ -2566,118 +2554,7 @@
                 <!-- Tab Content: Lint Results -->
                 <div id="config-tab-lint" class="config-tab-content" style="padding: 20px; display: none;">
                     
-                    <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <!-- GREETING OPTIMIZER WIDGET (WIRED TO REAL PATHS) -->
-                    <!-- ═══════════════════════════════════════════════════════════════════ -->
-                    <div id="greeting-optimizer-panel" style="margin-bottom: 20px; padding: 16px; background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border-radius: 12px; border: 1px solid #334155;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <span style="font-size: 20px;">🎯</span>
-                                <div>
-                                    <div style="font-weight: 700; font-size: 14px; color: #e2e8f0;">Greeting Optimizer</div>
-                                    <div style="font-size: 11px; color: #94a3b8;">Target: 6-8 words (~2.5s TTS)</div>
-                                </div>
-                            </div>
-                            <div id="greeting-status-badge" style="padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #065f46; color: #10b981;">OK</div>
-                        </div>
-                        
-                        <!-- EFFECTIVE GREETING (What Runtime Actually Uses) -->
-                        <div style="margin-bottom: 12px; padding: 10px; background: #0f172a; border-radius: 8px; border-left: 3px solid #14b8a6;">
-                            <div style="font-size: 10px; color: #14b8a6; font-weight: 600; margin-bottom: 4px;">EFFECTIVE GREETING (what runtime uses):</div>
-                            <div id="greeting-effective-text" style="font-size: 13px; color: #e2e8f0; font-style: italic;">"Loading..."</div>
-                            <div id="greeting-effective-source" style="font-size: 10px; color: #64748b; margin-top: 4px;">Source: --</div>
-                        </div>
-                        
-                        <!-- WRITE TARGETS (Where saves go) -->
-                        <div style="margin-bottom: 12px; padding: 10px; background: #0f172a; border-radius: 8px;">
-                            <div style="font-size: 10px; color: #f59e0b; font-weight: 600; margin-bottom: 6px;">📝 WRITE TARGETS (where saves go):</div>
-                            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                                <span style="font-size: 10px; padding: 2px 8px; background: #334155; border-radius: 4px; color: #e2e8f0; font-family: monospace;">connectionMessages.voice.text</span>
-                                <span style="font-size: 10px; padding: 2px 8px; background: #334155; border-radius: 4px; color: #e2e8f0; font-family: monospace;">connectionMessages.voice.realtime.text</span>
-                            </div>
-                            <div id="greeting-mirror-targets" style="margin-top: 6px; font-size: 10px; color: #64748b; display: none;">
-                                Also mirrored to: <span id="greeting-mirror-list"></span>
-                            </div>
-                        </div>
-                        
-                        <!-- Stats Row -->
-                        <div style="display: flex; gap: 16px; margin-bottom: 12px; padding: 10px; background: #0f172a; border-radius: 8px;">
-                            <div style="text-align: center;">
-                                <div id="greeting-word-count" style="font-size: 24px; font-weight: 700; color: #14b8a6;">--</div>
-                                <div style="font-size: 10px; color: #94a3b8;">words</div>
-                            </div>
-                            <div style="text-align: center;">
-                                <div id="greeting-tts-seconds" style="font-size: 24px; font-weight: 700; color: #f59e0b;">--</div>
-                                <div style="font-size: 10px; color: #94a3b8;">seconds</div>
-                            </div>
-                            <div style="flex: 1; display: flex; align-items: center;">
-                                <div id="greeting-preview" style="font-size: 12px; color: #e2e8f0; font-style: italic; line-height: 1.4;">Loading...</div>
-                            </div>
-                        </div>
-                        
-                        <!-- PENDING CHANGE INDICATOR (shows when preset clicked but not saved) -->
-                        <div id="greeting-pending-panel" style="display: none; margin-bottom: 12px; padding: 10px; background: #422006; border-radius: 8px; border: 1px solid #f59e0b;">
-                            <div style="font-size: 10px; color: #fbbf24; font-weight: 600; margin-bottom: 4px;">⚠️ PENDING CHANGE (not saved yet):</div>
-                            <div id="greeting-pending-text" style="font-size: 13px; color: #fef3c7; font-style: italic;">"..."</div>
-                            <div style="margin-top: 8px; display: flex; gap: 8px;">
-                                <button onclick="saveGreetingNow()" 
-                                        style="padding: 6px 12px; font-size: 11px; background: #059669; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">
-                                    ✓ Save Greeting
-                                </button>
-                                <button onclick="cancelGreetingPending()" 
-                                        style="padding: 6px 12px; font-size: 11px; background: #475569; color: #e2e8f0; border: none; border-radius: 6px; cursor: pointer;">
-                                    ✕ Cancel
-                                </button>
-                                <button onclick="testResolveGreeting()" 
-                                        style="padding: 6px 12px; font-size: 11px; background: #1e40af; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                                    🔍 Test Resolve
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <!-- One-Click Presets (preview only, no auto-save) -->
-                        <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;">⚡ Click to preview (then Save):</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                            <!-- ULTRA-FAST (BEST) - 5 words, ~2s TTS -->
-                            <button onclick="previewGreetingPreset('{{companyName}} — how can I help?')" 
-                                    style="padding: 8px 12px; font-size: 11px; background: #065f46; color: #10b981; border: 2px solid #10b981; border-radius: 6px; cursor: pointer; transition: all 0.15s; position: relative;"
-                                    onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#065f46'"
-                                    title="ULTRA-FAST: 5 words, ~2s TTS, Penguin Air Gold Standard">
-                                ⭐ {{companyName}} — how can I help?
-                                <span style="position: absolute; top: -8px; right: -8px; background: #f59e0b; color: #0f172a; font-size: 8px; padding: 2px 4px; border-radius: 4px; font-weight: 700;">BEST</span>
-                            </button>
-                            <!-- WARMER (GOOD) - 8 words, ~2.5s TTS -->
-                            <button onclick="previewGreetingPreset('Thanks for calling {{companyName}} — how can I help?')" 
-                                    style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
-                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'"
-                                    title="WARMER: 8 words, ~2.5s TTS">
-                                Thanks for calling {{companyName}} — how can I help?
-                            </button>
-                            <!-- FRIENDLY (OK) - 7 words -->
-                            <button onclick="previewGreetingPreset('Hi — {{companyName}}. How can I help?')" 
-                                    style="padding: 8px 12px; font-size: 11px; background: #334155; color: #e2e8f0; border: 1px solid #475569; border-radius: 6px; cursor: pointer; transition: all 0.15s;"
-                                    onmouseover="this.style.background='#475569'" onmouseout="this.style.background='#334155'"
-                                    title="FRIENDLY: 7 words, ~2.5s TTS">
-                                Hi — {{companyName}}. How can I help?
-                            </button>
-                        </div>
-                        
-                        <!-- Why This Greeting Tooltip -->
-                        <div style="margin-top: 12px; padding: 10px; background: #0f172a; border-radius: 6px; border: 1px dashed #334155;">
-                            <div style="font-size: 10px; color: #64748b; display: flex; align-items: flex-start; gap: 8px;">
-                                <span>💡</span>
-                                <div>
-                                    <strong style="color: #94a3b8;">Why the ultra-short greeting?</strong>
-                                    <ul style="margin: 4px 0 0 12px; padding: 0; color: #64748b;">
-                                        <li>5 words = ~2s TTS (fastest response)</li>
-                                        <li>{{companyName}} auto-fills from placeholders</li>
-                                        <li>Ends with question = invites caller response</li>
-                                        <li>Penguin Air Gold Standard = proven conversion</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- NUKED: Greeting Optimizer Widget - Agent 2.0 owns greetings now -->
                     
                     <!-- ═══════════════════════════════════════════════════════════════════ -->
                     <!-- QUICKANSWERS DEDUPER (WITH ACTIONS) -->
@@ -5453,7 +5330,6 @@
                         // Extract relevant sections for display
                         const relevantSections = {
                             frontDeskBehavior: rawData.data?.company?.frontDeskBehavior,
-                            connectionMessages: rawData.data?.company?.connectionMessages,
                             aiAgentSettings: rawData.data?.company?.aiAgentSettings,
                             booking: rawData.data?.company?.booking,
                             // Add scope info
@@ -5493,10 +5369,7 @@
             const warnings = data.warnings || [];
             const effectiveConfig = data.effectiveConfig || {};
             
-            // ─────────────────────────────────────────────────────────────────────────
-            // UPDATE GREETING OPTIMIZER
-            // ─────────────────────────────────────────────────────────────────────────
-            updateGreetingOptimizer(effectiveConfig);
+            // NUKED: Greeting Optimizer call removed - Agent 2.0 owns greetings now
             
             // ─────────────────────────────────────────────────────────────────────────
             // UPDATE QUICKANSWERS DEDUPER
@@ -5547,202 +5420,7 @@
             }).join('');
         }
         
-        // ═══════════════════════════════════════════════════════════════════════════
-        // GREETING OPTIMIZER - State
-        // ═══════════════════════════════════════════════════════════════════════════
-        let pendingGreeting = null; // Stores pending greeting text before save
-        let currentEffectiveGreeting = null; // What runtime actually uses
-        let currentGreetingSource = null; // Where it came from
-        
-        // ═══════════════════════════════════════════════════════════════════════════
-        // GREETING OPTIMIZER - Update Stats (WIRED TO REAL PATHS)
-        // ═══════════════════════════════════════════════════════════════════════════
-        function updateGreetingOptimizer(config) {
-            const greeting = config.greeting?.standardized || config.greeting?.raw || '';
-            const source = config.greeting?.source || config._meta?.greetingSource || 'unknown';
-            
-            // Store for later use
-            currentEffectiveGreeting = greeting;
-            currentGreetingSource = source;
-            
-            const words = greeting.split(/\s+/).filter(w => w.length > 0).length;
-            const ttsSeconds = (words / 2.5).toFixed(1); // ~2.5 words per second
-            
-            // Update EFFECTIVE GREETING display
-            document.getElementById('greeting-effective-text').textContent = greeting ? `"${greeting}"` : '(No greeting configured)';
-            document.getElementById('greeting-effective-source').textContent = `Source: ${source}`;
-            
-            // Update stats
-            document.getElementById('greeting-word-count').textContent = words;
-            document.getElementById('greeting-tts-seconds').textContent = ttsSeconds;
-            document.getElementById('greeting-preview').textContent = greeting || '(No greeting configured)';
-            
-            // Check if callFlowEngine.style.greeting exists (for mirroring info)
-            const callFlowGreeting = config._rawPaths?.['callFlowEngine.style.greeting'];
-            if (callFlowGreeting) {
-                document.getElementById('greeting-mirror-targets').style.display = 'block';
-                document.getElementById('greeting-mirror-list').textContent = 'callFlowEngine.style.greeting';
-            } else {
-                document.getElementById('greeting-mirror-targets').style.display = 'none';
-            }
-            
-            // Update status badge
-            const badge = document.getElementById('greeting-status-badge');
-            const wordCountEl = document.getElementById('greeting-word-count');
-            const ttsEl = document.getElementById('greeting-tts-seconds');
-            
-            if (words <= 8) {
-                badge.textContent = 'OPTIMAL';
-                badge.style.background = '#065f46';
-                badge.style.color = '#10b981';
-                wordCountEl.style.color = '#10b981';
-                ttsEl.style.color = '#10b981';
-            } else if (words <= 15) {
-                badge.textContent = 'OK';
-                badge.style.background = '#78350f';
-                badge.style.color = '#fbbf24';
-                wordCountEl.style.color = '#fbbf24';
-                ttsEl.style.color = '#fbbf24';
-            } else {
-                badge.textContent = 'TOO LONG';
-                badge.style.background = '#7f1d1d';
-                badge.style.color = '#ef4444';
-                wordCountEl.style.color = '#ef4444';
-                ttsEl.style.color = '#ef4444';
-            }
-            
-            // Clear pending panel if no pending change
-            if (!pendingGreeting) {
-                document.getElementById('greeting-pending-panel').style.display = 'none';
-            }
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════════
-        // GREETING OPTIMIZER - Preview Preset (NO AUTO-SAVE)
-        // ═══════════════════════════════════════════════════════════════════════════
-        function previewGreetingPreset(greetingText) {
-            pendingGreeting = greetingText;
-            
-            // Show pending panel
-            const pendingPanel = document.getElementById('greeting-pending-panel');
-            const pendingText = document.getElementById('greeting-pending-text');
-            
-            pendingPanel.style.display = 'block';
-            pendingText.textContent = `"${greetingText}"`;
-            
-            showConfigCopyToast(true, '📝 Preview', 'Click "Save Greeting" to apply');
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════════
-        // GREETING OPTIMIZER - Save Greeting Now
-        // ═══════════════════════════════════════════════════════════════════════════
-        async function saveGreetingNow() {
-            if (!pendingGreeting) {
-                showConfigCopyToast(false, '⚠️ Nothing to save', 'Select a preset first');
-                return;
-            }
-            
-            const companyId = window.currentCompanyId || window.companyId || 
-                              new URLSearchParams(window.location.search).get('id') ||
-                              localStorage.getItem('currentCompanyId');
-            if (!companyId) {
-                showConfigCopyToast(false, '❌ Error', 'No company ID found');
-                return;
-            }
-            
-            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            
-            try {
-                // Save greeting via Control Plane endpoint (writes to MULTIPLE paths)
-                const response = await fetch(`/api/company/${companyId}/control-plane/save`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Authorization': `Bearer ${authToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        greeting: pendingGreeting,
-                        mirrorToRealtime: true // Also write to realtime path
-                    })
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    const writtenPaths = result.writtenTo || ['connectionMessages.voice.text'];
-                    
-                    showConfigCopyToast(true, '✅ Greeting Saved!', `Written to: ${writtenPaths.join(', ')}`);
-                    
-                    // Clear pending state
-                    pendingGreeting = null;
-                    document.getElementById('greeting-pending-panel').style.display = 'none';
-                    
-                    // Refresh to show new lint results
-                    await refreshConfigJson();
-                } else {
-                    const err = await response.json();
-                    showConfigCopyToast(false, '❌ Save Failed', err.error || 'Unknown error');
-                }
-            } catch (err) {
-                console.error('[GREETING] Save failed:', err);
-                showConfigCopyToast(false, '❌ Error', err.message);
-            }
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════════
-        // GREETING OPTIMIZER - Cancel Pending
-        // ═══════════════════════════════════════════════════════════════════════════
-        function cancelGreetingPending() {
-            pendingGreeting = null;
-            document.getElementById('greeting-pending-panel').style.display = 'none';
-            showConfigCopyToast(true, '↩ Cancelled', 'Pending change discarded');
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════════
-        // GREETING OPTIMIZER - Test Resolve (Verify what runtime will use)
-        // ═══════════════════════════════════════════════════════════════════════════
-        async function testResolveGreeting() {
-            const companyId = window.currentCompanyId || window.companyId || 
-                              new URLSearchParams(window.location.search).get('id') ||
-                              localStorage.getItem('currentCompanyId');
-            if (!companyId) {
-                showConfigCopyToast(false, '❌ Error', 'No company ID found');
-                return;
-            }
-            
-            const authToken = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            
-            try {
-                // Fetch fresh effective config
-                const response = await fetch(`/api/company/${companyId}/control-plane/effective`, {
-                    headers: { 'Authorization': `Bearer ${authToken}` }
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    const effectiveGreeting = data.data?.effectiveConfig?.greeting?.standardized || 
-                                              data.data?.effectiveConfig?.greeting?.raw || '';
-                    const source = data.data?.effectiveConfig?.greeting?.source || 'unknown';
-                    
-                    if (pendingGreeting && effectiveGreeting === pendingGreeting) {
-                        showConfigCopyToast(true, '✅ Verified!', `Effective greeting = "${effectiveGreeting.substring(0, 40)}..." from ${source}`);
-                    } else if (effectiveGreeting) {
-                        showConfigCopyToast(true, '🔍 Current Effective', `"${effectiveGreeting.substring(0, 40)}..." from ${source}`);
-                    } else {
-                        showConfigCopyToast(false, '⚠️ No greeting', 'Effective greeting is empty');
-                    }
-                } else {
-                    showConfigCopyToast(false, '❌ Resolve Failed', 'Could not fetch effective config');
-                }
-            } catch (err) {
-                console.error('[GREETING] Test resolve failed:', err);
-                showConfigCopyToast(false, '❌ Error', err.message);
-            }
-        }
-        
-        // Legacy function - now just calls preview
-        async function applyGreetingPreset(greetingText) {
-            previewGreetingPreset(greetingText);
-        }
+        // NUKED: Greeting Optimizer JS functions - Agent 2.0 owns greetings now
         
         // ═══════════════════════════════════════════════════════════════════════════
         // QUICKANSWERS DEDUPER - Show Duplicates (WITH ACTIONS)

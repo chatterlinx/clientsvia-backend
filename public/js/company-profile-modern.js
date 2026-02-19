@@ -4229,13 +4229,7 @@ class CompanyProfileManager {
                 logger.warn('⚠️ [AI-AGENT] TwilioControlCenter class not found');
             }
             
-            // Initialize Connection Messages Manager (Messages & Greetings tab)
-            if (typeof ConnectionMessagesManager !== 'undefined') {
-                window.connectionMessagesManager = new ConnectionMessagesManager(this.companyId);
-                logger.info('✅ [AI-AGENT] Connection Messages Manager ready');
-            } else {
-                logger.warn('⚠️ [AI-AGENT] ConnectionMessagesManager class not found');
-            }
+            // NUKED: ConnectionMessagesManager - Agent 2.0 owns greetings now
             
             logger.info('✅ [AI-AGENT] All managers initialized successfully');
             
