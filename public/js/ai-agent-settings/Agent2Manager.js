@@ -4479,6 +4479,10 @@ class Agent2Manager {
     discovery.playbook.fallback.noMatchClarifierQuestion = (container.querySelector('#a2-fallback-noMatchClarifierQuestion')?.value || '').trim();
 
     cfg.discovery = discovery;
+    
+    // Preserve greetings config (managed by Greetings tab event handlers)
+    cfg.greetings = cfg.greetings || {};
+    
     cfg.meta = cfg.meta || {};
     cfg.meta.uiBuild = Agent2Manager.UI_BUILD;
     this.config = cfg;

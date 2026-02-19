@@ -4231,7 +4231,16 @@ const companySchema = new mongoose.Schema({
                 // UI-driven playbook + style blocks (stored as structured JSON)
                 style: { type: mongoose.Schema.Types.Mixed, default: {} },
                 playbook: { type: mongoose.Schema.Types.Mixed, default: {} },
+                // Vocabulary system (HARD_NORMALIZE, SOFT_HINT)
+                vocabulary: { type: mongoose.Schema.Types.Mixed, default: {} },
+                // Clarifier system (disambiguation questions)
+                clarifiers: { type: mongoose.Schema.Types.Mixed, default: {} },
                 updatedAt: { type: Date, default: null }
+            },
+            // Greetings system (Agent 2.0 owned - completely isolated from legacy)
+            greetings: {
+                callStart: { type: mongoose.Schema.Types.Mixed, default: {} },
+                interceptor: { type: mongoose.Schema.Types.Mixed, default: {} }
             },
             meta: { type: mongoose.Schema.Types.Mixed, default: {} }
         },
