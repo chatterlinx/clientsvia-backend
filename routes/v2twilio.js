@@ -152,9 +152,33 @@ function validateGreetingText(text, fallback = 'Thank you for calling. How can I
     /\bclass\s+\w+\s*\{/,    // class declarations
   ];
   
+  // 🆕 DETECT BUSINESS/FILE IDENTIFIERS (prevents "connection greeting code" being read aloud)
+  const businessIdPatterns = [
+    /CONNECTION_GREETING/i,           // Business constant
+    /fd_CONNECTION_GREETING/i,        // File prefix
+    /^fd_[A-Z_]+_\d+$/,              // Generic file ID pattern
+    /\/audio\//i,                     // File path leak
+    /\.mp3/i,                         // Audio file extension
+    /\.wav/i,                         // Audio file extension
+    /\.ogg/i,                         // Audio file extension
+    /^https?:\/\//i,                  // URL leak
+    /^\/.*\.(mp3|wav|ogg)$/i         // Any audio file path
+  ];
+  
   for (const pattern of codePatterns) {
     if (pattern.test(trimmed)) {
       logger.error('[GREETING VALIDATOR] ❌ Text appears to be code', { preview: trimmed.substring(0, 100) });
+      return fallback;
+    }
+  }
+  
+  // 🆕 CHECK FOR BUSINESS/FILE IDENTIFIERS
+  for (const pattern of businessIdPatterns) {
+    if (pattern.test(trimmed)) {
+      logger.error('[GREETING VALIDATOR] ❌ Text contains internal identifier', { 
+        preview: trimmed.substring(0, 100),
+        pattern: pattern.toString()
+      });
       return fallback;
     }
   }

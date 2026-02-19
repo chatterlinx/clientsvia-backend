@@ -245,7 +245,28 @@ class V2AIAgentRuntime {
             // Detect if greetingText looks like JSON/code (common data corruption symptom)
             if (greetingText.startsWith('{') || greetingText.startsWith('[') || greetingText.includes('function') || greetingText.includes('const ') || greetingText.includes('module.exports')) {
                 logger.error(`[V2 GREETING] ❌ CRITICAL: callStart.text appears to be code/JSON!`, {
-                    preview: greetingText.substring(0, 200)
+                    preview: greetingText.substring(0, 200),
+                    companyId: company._id
+                });
+                greetingText = "Thank you for calling. How can I help you today?";
+            }
+            // 🆕 DETECT BUSINESS/FILE IDENTIFIERS (prevents "connection greeting code" being read aloud)
+            if (greetingText.includes('CONNECTION_GREETING') || 
+                greetingText.includes('fd_CONNECTION_GREETING') || 
+                greetingText.match(/^fd_[A-Z_]+_\d+$/) ||
+                greetingText.includes('/audio/') ||           // 🆕 File path leak
+                greetingText.includes('instant-lines') ||     // 🆕 Instant audio directory
+                greetingText.includes('.mp3') ||              // 🆕 Audio file extension
+                greetingText.includes('.wav') ||              // 🆕 Audio file extension
+                greetingText.startsWith('http') ||            // 🆕 URL leak
+                greetingText.match(/^\/.*\.(mp3|wav|ogg)$/i)) { // 🆕 Any audio file path pattern
+                logger.error(`[V2 GREETING] ❌ CRITICAL: callStart.text contains file path or identifier!`, {
+                    text: greetingText.substring(0, 200),
+                    companyId: company._id,
+                    detectedPattern: greetingText.includes('instant-lines') ? 'instant-lines_directory' :
+                                   greetingText.includes('/audio/') ? 'file_path' : 
+                                   greetingText.includes('.mp3') ? 'audio_extension' :
+                                   greetingText.startsWith('http') ? 'url' : 'identifier'
                 });
                 greetingText = "Thank you for calling. How can I help you today?";
             }
