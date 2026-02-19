@@ -41,6 +41,7 @@ const MATCH_MODES = {
 
 const BLOCK_REASONS = {
   DISABLED: 'DISABLED',
+  ALREADY_GREETED: 'ALREADY_GREETED',  // V124: One-shot guard
   TOO_LONG: 'TOO_LONG',
   INTENT_WORD_PRESENT: 'INTENT_WORD_PRESENT',
   NO_MATCH: 'NO_MATCH'
@@ -145,18 +146,22 @@ class Agent2GreetingInterceptor {
    * @param {string} params.input - Caller's utterance
    * @param {Object} params.config - Greetings config (agent2.greetings)
    * @param {number} params.turn - Current turn number
-   * @returns {Object} { intercepted, response, proof }
+   * @param {Object} params.state - Call state (optional, for one-shot guard)
+   * @returns {Object} { intercepted, response, proof, stateUpdate }
    */
-  static evaluate({ input, config, turn }) {
+  static evaluate({ input, config, turn, state }) {
     const inputText = `${input || ''}`.trim();
     const greetingsConfig = safeObj(config, {});
     const interceptorConfig = safeObj(greetingsConfig.interceptor, {});
+    const callState = safeObj(state, {});
+    const agent2State = safeObj(callState.agent2, {});
     
     // Result structure
     const result = {
       intercepted: false,
       response: null,
       responseSource: null,  // 'audio' or 'tts'
+      stateUpdate: null,     // V124: State changes to persist (greeted flag)
       proof: {
         event: 'A2_GREETING_EVALUATED',
         inputPreview: clip(inputText, 60),
@@ -167,9 +172,26 @@ class Agent2GreetingInterceptor {
         blockedReason: null,
         matchedRuleId: null,
         matchedTrigger: null,
-        turn
+        turn,
+        alreadyGreeted: false  // V124: Proof field for one-shot guard
       }
     };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GATE 0 (V124): ONE-SHOT GUARD — Never re-greet after first response
+    // ─────────────────────────────────────────────────────────────────────────
+    // If we've already greeted the caller, block ALL greeting cards on
+    // subsequent turns. This prevents "hi/yeah/ok" filler from triggering
+    // the same greeting response repeatedly.
+    // ─────────────────────────────────────────────────────────────────────────
+    const alreadyGreeted = agent2State.greeted === true;
+    result.proof.alreadyGreeted = alreadyGreeted;
+    
+    if (alreadyGreeted && typeof turn === 'number' && turn > 1) {
+      result.proof.blockedReason = BLOCK_REASONS.ALREADY_GREETED;
+      logger.debug('[Agent2GreetingInterceptor] Blocked: ALREADY_GREETED (one-shot guard)', { turn });
+      return result;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // GATE 1: Interceptor must be enabled
@@ -246,6 +268,9 @@ class Agent2GreetingInterceptor {
 
         result.proof.responseSource = result.responseSource;
         result.proof.responsePreview = clip(result.response, 60);
+
+        // V124: Set greeted flag to enable one-shot guard on future turns
+        result.stateUpdate = { greeted: true };
 
         logger.info('[Agent2GreetingInterceptor] INTERCEPTED', {
           ruleId: rule.id,

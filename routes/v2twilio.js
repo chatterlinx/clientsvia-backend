@@ -2739,6 +2739,19 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     let cachedTranscript = null;
     let cacheReadError = null;
     
+    // ─────────────────────────────────────────────────────────────────────────
+    // CACHE KEY FIX (V124): Prevent cross-turn text reuse
+    // ─────────────────────────────────────────────────────────────────────────
+    // The partial cache stores the "best" transcript from speech partials.
+    // Problem: If cache key doesn't include turn info, stale text from turn N
+    // can be reused in turn N+1, causing "repeat turn one" bugs.
+    //
+    // Solution: After using cached text, DELETE it immediately. The partial
+    // handler will write fresh data for the next turn. This is safer than
+    // keying by turn (which requires knowing turn number before state load).
+    // ─────────────────────────────────────────────────────────────────────────
+    let cacheWasUsed = false;
+    
     if (redis && callSid) {
       const cacheKey = `partial:${callSid}`;
       try {
@@ -2757,6 +2770,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     if (!hasSpeech && hasCached) {
       speechResult = cachedRaw;
       inputTextSource = 'partialCache';
+      cacheWasUsed = true;
       logger.info('[V2 RESPOND] Using cached partial transcript (SpeechResult missing)', {
         callSid: callSid?.slice(-8),
         textLength: speechResult.length
@@ -2773,6 +2787,7 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       if (cachedLooksLikeSuperset && cachedIsMeaningfullyLonger) {
         speechResult = cachedRaw;
         inputTextSource = 'partialCachePreferred';
+        cacheWasUsed = true;
         logger.info('[V2 RESPOND] Using cached partial transcript (preferred over truncated SpeechResult)', {
           callSid: callSid?.slice(-8),
           speechLen: speechRaw.length,
@@ -2780,6 +2795,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           speechLooksCutOff
         });
       }
+    }
+    
+    // V124 FIX: Clear cache after reading to prevent cross-turn reuse
+    // This ensures stale text from turn N cannot pollute turn N+1
+    if (redis && callSid && hasCached) {
+      const cacheKey = `partial:${callSid}`;
+      redis.del(cacheKey).catch(err => {
+        logger.warn('[V2 RESPOND] Failed to clear partial cache', { error: err.message });
+      });
+      logger.debug('[V2 RESPOND] Cleared partial cache after read', {
+        callSid: callSid?.slice(-8),
+        cacheWasUsed,
+        cachedLen: cachedRaw.length
+      });
     }
     
     // Proof event: what text we finalized for downstream extraction
@@ -2795,7 +2824,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           finalPreview: `${speechResult || ''}`.substring(0, 140),
           speechResultLen: speechRaw.length,
           cachedLen: cachedRaw.length,
-          cacheReadError
+          cacheReadError,
+          cacheCleared: hasCached  // V124: proves cache was cleared to prevent cross-turn reuse
         }
       }).catch(() => {});
     }

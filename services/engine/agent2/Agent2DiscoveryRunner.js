@@ -222,17 +222,19 @@ class Agent2DiscoveryRunner {
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
 
     // ══════════════════════════════════════════════════════════════════════════
-    // GREETING INTERCEPTOR (V122 - RUNS BEFORE TRIGGER CARDS)
+    // GREETING INTERCEPTOR (V122/V124 - RUNS BEFORE TRIGGER CARDS)
     // ══════════════════════════════════════════════════════════════════════════
     // Handles short greetings like "hi", "good morning" with strict gating.
     // SHORT-ONLY GATE: Only fires if input ≤ maxWordsToQualify AND no intent words.
+    // ONE-SHOT GUARD (V124): Once greeted, never re-greet on subsequent turns.
     // If it fires → returns immediately, ends the turn.
     // ══════════════════════════════════════════════════════════════════════════
     const greetingsConfig = safeObj(agent2.greetings, {});
     const greetingResult = Agent2GreetingInterceptor.evaluate({
       input: input,
       config: greetingsConfig,
-      turn: typeof turn === 'number' ? turn : 0
+      turn: typeof turn === 'number' ? turn : 0,
+      state: nextState  // V124: Pass state for one-shot guard check
     });
 
     // Always emit greeting evaluation proof
@@ -242,6 +244,11 @@ class Agent2DiscoveryRunner {
       // Greeting matched — return immediately, end the turn
       nextState.agent2.discovery.lastPath = 'GREETING_INTERCEPTED';
       nextState.agent2.discovery.lastGreetingRuleId = greetingResult.proof.matchedRuleId;
+      
+      // V124: Apply state update (sets greeted=true for one-shot guard)
+      if (greetingResult.stateUpdate) {
+        nextState.agent2 = { ...nextState.agent2, ...greetingResult.stateUpdate };
+      }
 
       emit('A2_PATH_SELECTED', {
         path: 'GREETING_INTERCEPTED',
@@ -283,6 +290,10 @@ class Agent2DiscoveryRunner {
     // 2. SOFT_HINT: Add hints for ambiguous phrases (e.g., "thingy on wall" → maybe_thermostat)
     // ══════════════════════════════════════════════════════════════════════════
     const vocabularyConfig = safeObj(discoveryCfg.vocabulary, {});
+    
+    // V124: Get vocab stats for visibility — shows exactly what was loaded
+    const vocabStats = Agent2VocabularyEngine.getStats(vocabularyConfig);
+    
     const vocabularyResult = Agent2VocabularyEngine.process({
       userInput: input,
       state: nextState,
@@ -297,7 +308,8 @@ class Agent2DiscoveryRunner {
     nextState.agent2.hints = vocabularyResult.hints;
     nextState.agent2.discovery.lastVocabApplied = vocabularyResult.applied;
     
-    // Emit vocabulary evaluation proof
+    // V124: Emit vocabulary evaluation proof with FULL config visibility
+    // This shows exactly what was loaded so you can diagnose "vocab not running" issues
     emit('A2_VOCAB_EVAL', {
       inputPreview: clip(input, 60),
       normalizedPreview: normalizedInput !== input ? clip(normalizedInput, 60) : null,
@@ -305,7 +317,15 @@ class Agent2DiscoveryRunner {
       appliedCount: vocabularyResult.applied.length,
       applied: vocabularyResult.applied.slice(0, 10),
       hintsAdded: vocabularyResult.hints,
-      stats: vocabularyResult.stats
+      stats: vocabularyResult.stats,
+      // V124: Config load proof — if these are 0 when you expect entries, check config path
+      configLoaded: {
+        vocabEnabled: vocabStats.enabled,
+        totalEntriesLoaded: vocabStats.totalEntries,
+        enabledEntries: vocabStats.enabledEntries,
+        hardNormalizeCount: vocabStats.hardNormalizeCount,
+        softHintCount: vocabStats.softHintCount
+      }
     });
     
     // Emit active hints if any
@@ -733,8 +753,19 @@ class Agent2DiscoveryRunner {
     const clarifiersConfig = safeObj(discoveryCfg.clarifiers, {});
     const clarifiersEnabled = clarifiersConfig.enabled === true;
     const clarifierEntries = safeArr(clarifiersConfig.entries);
+    const enabledClarifiers = clarifierEntries.filter(c => c.enabled !== false);
     const maxClarifiersPerCall = clarifiersConfig.maxAsksPerCall || 2;
     const clarifiersAskedThisCall = nextState.agent2.discovery.clarifiersAskedCount || 0;
+    
+    // V124: Emit clarifier config visibility (like vocab) so you can diagnose "clarifiers not running"
+    emit('A2_CLARIFIERS_CONFIG', {
+      clarifiersEnabled,
+      totalEntriesLoaded: clarifierEntries.length,
+      enabledEntries: enabledClarifiers.length,
+      maxAsksPerCall: maxClarifiersPerCall,
+      askedThisCall: clarifiersAskedThisCall,
+      activeHintsForClarification: activeHints.length
+    });
     
     // Check if we have active hints that need clarification
     if (clarifiersEnabled && activeHints.length > 0 && clarifiersAskedThisCall < maxClarifiersPerCall) {
