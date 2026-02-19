@@ -1225,15 +1225,21 @@ class FrontDeskCoreRuntime {
             });
             
             // Apply opener to response
+            // When Agent 2.0 returns audioUrl (pre-recorded greeting/trigger card audio),
+            // response is intentionally null — the audio IS the response.
+            const hasAgent2Audio = !!ownerResult?.audioUrl;
             let finalResponse = ownerResult.response || '';
             if (!finalResponse || `${finalResponse}`.trim() === '') {
-                // Safety: never emit empty speech. Should not happen, but avoid silent turns.
-                finalResponse = "One moment — I'm pulling up your account.";
-                bufferEvent('SECTION_EMPTY_RESPONSE_FALLBACK', {
-                    matchSource: ownerResult?.matchSource || null,
-                    lane,
-                    reason: 'OWNER_RETURNED_EMPTY_RESPONSE'
-                });
+                if (hasAgent2Audio) {
+                    finalResponse = '';
+                } else {
+                    finalResponse = "One moment — I'm pulling up your account.";
+                    bufferEvent('SECTION_EMPTY_RESPONSE_FALLBACK', {
+                        matchSource: ownerResult?.matchSource || null,
+                        lane,
+                        reason: 'OWNER_RETURNED_EMPTY_RESPONSE'
+                    });
+                }
             }
             // If we already crafted an empathy-style acknowledgment (consent ask turn),
             // skip micro-openers like "Understood." that make it sound robotic.
@@ -1295,6 +1301,8 @@ class FrontDeskCoreRuntime {
                 },
                 action: ownerResult.complete === true ? 'COMPLETE' : 'CONTINUE',
                 matchSource: ownerResult.matchSource,
+                audioUrl: ownerResult.audioUrl || null,
+                triggerCard: ownerResult.triggerCard || null,
                 turnEventBuffer
             };
             
