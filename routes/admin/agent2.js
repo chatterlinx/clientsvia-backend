@@ -238,6 +238,77 @@ function defaultAgent2Config() {
       },
       updatedAt: null
     },
+    // ═══════════════════════════════════════════════════════════════════════
+    // GREETINGS SYSTEM (Agent 2.0 owned — ignores legacy when enabled)
+    // ═══════════════════════════════════════════════════════════════════════
+    // When agent2.enabled && agent2.discovery.enabled:
+    //   - ONLY agent2.greetings is used
+    //   - Legacy greeting rules are IGNORED
+    // ═══════════════════════════════════════════════════════════════════════
+    greetings: {
+      // ─────────────────────────────────────────────────────────────────────
+      // CALL START GREETING (first thing agent says when call connects)
+      // ─────────────────────────────────────────────────────────────────────
+      callStart: {
+        enabled: true,
+        text: "Thank you for calling. How can I help you today?",
+        audioUrl: ''  // If present, play audio instead of TTS
+      },
+      // ─────────────────────────────────────────────────────────────────────
+      // GREETING INTERCEPTOR (reply when caller says "hi", "good morning")
+      // ─────────────────────────────────────────────────────────────────────
+      // Fires BEFORE trigger cards. Short-only gate prevents hijacking.
+      // ─────────────────────────────────────────────────────────────────────
+      interceptor: {
+        enabled: true,
+        maxWordsToQualify: 2,  // Greeting only fires if input ≤ this many words
+        blockIfContainsIntentWords: true,
+        intentWords: [
+          'repair', 'maintenance', 'tune-up', 'not cooling', 'no cool', 'no heat',
+          'leak', 'water', 'dripping', 'thermostat', 'blank', 'schedule',
+          'appointment', 'price', 'cost', 'how much', 'service call',
+          'diagnostic', 'emergency'
+        ],
+        rules: [
+          {
+            id: 'greeting.hi',
+            enabled: true,
+            priority: 10,
+            matchMode: 'EXACT',
+            triggers: ['hi', 'hello', 'hey'],
+            responseText: "Hi! How can I help you today?",
+            audioUrl: ''
+          },
+          {
+            id: 'greeting.morning',
+            enabled: true,
+            priority: 11,
+            matchMode: 'EXACT',
+            triggers: ['good morning'],
+            responseText: "Good morning! How can I help you today?",
+            audioUrl: ''
+          },
+          {
+            id: 'greeting.afternoon',
+            enabled: true,
+            priority: 12,
+            matchMode: 'EXACT',
+            triggers: ['good afternoon'],
+            responseText: "Good afternoon! How can I help you today?",
+            audioUrl: ''
+          },
+          {
+            id: 'greeting.evening',
+            enabled: true,
+            priority: 13,
+            matchMode: 'EXACT',
+            triggers: ['good evening'],
+            responseText: "Good evening! How can I help you today?",
+            audioUrl: ''
+          }
+        ]
+      }
+    },
     meta: { uiBuild: UI_BUILD }
   };
 }
@@ -291,6 +362,19 @@ function mergeAgent2Config(saved) {
         ...safeObject(src.discovery?.clarifiers, {})
       }
     },
+    // Greetings system (Agent 2.0 owned)
+    greetings: {
+      ...defaults.greetings,
+      ...safeObject(src.greetings, {}),
+      callStart: {
+        ...defaults.greetings.callStart,
+        ...safeObject(src.greetings?.callStart, {})
+      },
+      interceptor: {
+        ...defaults.greetings.interceptor,
+        ...safeObject(src.greetings?.interceptor, {})
+      }
+    },
     meta: { ...defaults.meta, ...safeObject(src.meta, {}) }
   };
 
@@ -318,6 +402,14 @@ function mergeAgent2Config(saved) {
   // Clarifiers guardrails
   if (!Array.isArray(merged.discovery.clarifiers.entries)) {
     merged.discovery.clarifiers.entries = defaults.discovery.clarifiers.entries;
+  }
+
+  // Greetings guardrails
+  if (!Array.isArray(merged.greetings.interceptor.rules)) {
+    merged.greetings.interceptor.rules = defaults.greetings.interceptor.rules;
+  }
+  if (!Array.isArray(merged.greetings.interceptor.intentWords)) {
+    merged.greetings.interceptor.intentWords = defaults.greetings.interceptor.intentWords;
   }
 
   return merged;
@@ -511,6 +603,119 @@ Respond ONLY with valid JSON, no markdown, no explanation:
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GREETINGS - SEED FROM GLOBAL
+// ═══════════════════════════════════════════════════════════════════════════
+/**
+ * POST /:companyId/greetings/seed-from-global
+ * Copies legacy greeting rules into agent2.greetings.interceptor.rules
+ * 
+ * Query params:
+ *   - mode: 'merge' (add to existing) or 'replace' (overwrite)
+ */
+router.post('/:companyId/greetings/seed-from-global',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const mode = req.query.mode === 'replace' ? 'replace' : 'merge';
+
+      const company = await v2Company.findById(companyId)
+        .select('aiAgentSettings connectionMessages')
+        .lean();
+
+      if (!company) {
+        return res.status(404).json({ success: false, message: 'Company not found' });
+      }
+
+      // Get current Agent 2.0 config
+      const current = mergeAgent2Config(company.aiAgentSettings?.agent2 || null);
+      
+      // Get legacy greeting rules
+      const legacyRules = company.aiAgentSettings?.frontDeskBehavior?.conversationStages?.greetingRules || [];
+      
+      // Get connection messages for call start greeting
+      const connectionMessages = company.connectionMessages?.voice || {};
+
+      // Convert legacy rules to Agent 2.0 format
+      const convertedRules = legacyRules
+        .filter(rule => rule && rule.trigger && rule.response)
+        .map((rule, idx) => ({
+          id: `greeting.seeded.${idx}`,
+          enabled: true,
+          priority: 20 + idx,  // Start after default rules
+          matchMode: rule.fuzzy === true ? 'FUZZY' : 'EXACT',
+          triggers: [rule.trigger.toLowerCase().trim()],
+          responseText: rule.response,
+          audioUrl: ''
+        }));
+
+      // Prepare updated greetings config
+      const updatedGreetings = { ...current.greetings };
+
+      // Seed call start from connection messages
+      if (connectionMessages.text) {
+        updatedGreetings.callStart = {
+          ...updatedGreetings.callStart,
+          text: connectionMessages.text,
+          audioUrl: connectionMessages.prerecorded?.activeFileUrl || ''
+        };
+      }
+
+      // Seed interceptor rules
+      if (mode === 'replace') {
+        updatedGreetings.interceptor.rules = convertedRules;
+      } else {
+        // Merge: add converted rules that don't duplicate existing triggers
+        const existingTriggers = new Set();
+        for (const rule of updatedGreetings.interceptor.rules) {
+          for (const t of (rule.triggers || [])) {
+            existingTriggers.add(t.toLowerCase().trim());
+          }
+        }
+        const newRules = convertedRules.filter(rule => {
+          return !rule.triggers.some(t => existingTriggers.has(t));
+        });
+        updatedGreetings.interceptor.rules = [
+          ...updatedGreetings.interceptor.rules,
+          ...newRules
+        ];
+      }
+
+      // Save
+      const next = { ...current, greetings: updatedGreetings };
+      next.meta.uiBuild = UI_BUILD;
+
+      await v2Company.updateOne(
+        { _id: companyId },
+        { $set: { 'aiAgentSettings.agent2': next } }
+      );
+
+      logger.info('[AGENT2] Greetings seeded from global', {
+        companyId,
+        mode,
+        legacyRulesCount: legacyRules.length,
+        convertedCount: convertedRules.length,
+        finalRulesCount: updatedGreetings.interceptor.rules.length
+      });
+
+      return res.json({
+        success: true,
+        data: updatedGreetings,
+        meta: {
+          mode,
+          legacyRulesImported: convertedRules.length,
+          totalRules: updatedGreetings.interceptor.rules.length
+        }
+      });
+    } catch (error) {
+      logger.error('[AGENT2] Seed greetings error', { error: error.message });
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CALL REVIEW ENDPOINTS (V119 - Enterprise Call Console)

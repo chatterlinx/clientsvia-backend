@@ -79,6 +79,17 @@ function isShortGreeting(text) {
 function tryIntercept(userText, company, state) {
     if (!userText) return null;
     
+    // ══════════════════════════════════════════════════════════════════════════
+    // V122: HARD GATE - When Agent 2.0 is enabled, this legacy interceptor is IGNORED.
+    // Agent 2.0 owns greetings via agent2.greetings.interceptor (handled in Agent2DiscoveryRunner).
+    // ══════════════════════════════════════════════════════════════════════════
+    const agent2 = company?.aiAgentSettings?.agent2 || {};
+    const agent2Enabled = agent2.enabled === true && agent2.discovery?.enabled === true;
+    if (agent2Enabled) {
+        // Agent 2.0 handles greetings — skip legacy
+        return null;
+    }
+    
     const userTextLower = userText.toLowerCase().trim();
     
     // Skip if this isn't a short greeting-like message

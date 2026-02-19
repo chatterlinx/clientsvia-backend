@@ -24,7 +24,7 @@ class Agent2Manager {
     this.config = null;
     this.isDirty = false;
     this._container = null;
-    this._activeTab = 'config'; // 'config' or 'callReview'
+    this._activeTab = 'config'; // 'config', 'greetings', or 'callReview'
     this._calls = [];
     this._callsLoading = false;
     this._selectedCall = null;
@@ -163,6 +163,7 @@ class Agent2Manager {
     this._container = container;
 
     const isConfigTab = this._activeTab === 'config';
+    const isGreetingsTab = this._activeTab === 'greetings';
     const isCallReviewTab = this._activeTab === 'callReview';
 
     container.innerHTML = `
@@ -179,7 +180,7 @@ class Agent2Manager {
               </span>
             </div>
             <div style="margin-top:6px; color:#8b949e; font-size:0.9rem;">
-              ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : 'Enterprise call review console. Click a call to see details, transcript, and raw events.'}
+              ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : isGreetingsTab ? 'Agent 2.0 owns greetings when enabled. Legacy greeting rules are ignored.' : 'Enterprise call review console. Click a call to see details, transcript, and raw events.'}
             </div>
           </div>
           <div style="display:flex; gap:10px; ${isCallReviewTab ? 'display:none;' : ''}">
@@ -200,6 +201,9 @@ class Agent2Manager {
           <button id="a2-tab-config" class="a2-tab-btn" style="padding:10px 20px; background:${isConfigTab ? '#0b1220' : 'transparent'}; color:${isConfigTab ? '#22d3ee' : '#8b949e'}; border:none; border-bottom:${isConfigTab ? '2px solid #22d3ee' : '2px solid transparent'}; cursor:pointer; font-weight:${isConfigTab ? '700' : '400'}; font-size:0.95rem;">
             Configuration
           </button>
+          <button id="a2-tab-greetings" class="a2-tab-btn" style="padding:10px 20px; background:${isGreetingsTab ? '#0b1220' : 'transparent'}; color:${isGreetingsTab ? '#22d3ee' : '#8b949e'}; border:none; border-bottom:${isGreetingsTab ? '2px solid #22d3ee' : '2px solid transparent'}; cursor:pointer; font-weight:${isGreetingsTab ? '700' : '400'}; font-size:0.95rem;">
+            Greetings
+          </button>
           <button id="a2-tab-callReview" class="a2-tab-btn" style="padding:10px 20px; background:${isCallReviewTab ? '#0b1220' : 'transparent'}; color:${isCallReviewTab ? '#22d3ee' : '#8b949e'}; border:none; border-bottom:${isCallReviewTab ? '2px solid #22d3ee' : '2px solid transparent'}; cursor:pointer; font-weight:${isCallReviewTab ? '700' : '400'}; font-size:0.95rem;">
             Call Review
           </button>
@@ -207,7 +211,7 @@ class Agent2Manager {
 
         <!-- TAB CONTENT -->
         <div id="a2-tab-content">
-          ${isConfigTab ? this.renderConfigTab() : this.renderCallReviewTab()}
+          ${isConfigTab ? this.renderConfigTab() : isGreetingsTab ? this.renderGreetingsTab() : this.renderCallReviewTab()}
         </div>
       </div>
 
@@ -231,6 +235,260 @@ class Agent2Manager {
       ${this.renderClarifiersCard()}
       ${this.renderPlaybookCard()}
       ${this.renderSimulatorCard()}
+    `;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // GREETINGS TAB (V122 - Agent 2.0 Owned)
+  // ══════════════════════════════════════════════════════════════════════════
+  renderGreetingsTab() {
+    return `
+      ${this.renderCallStartGreetingCard()}
+      ${this.renderGreetingInterceptorCard()}
+      ${this.renderBridgeSettingsCard()}
+    `;
+  }
+
+  renderCallStartGreetingCard() {
+    const greetings = this.config?.greetings || {};
+    const callStart = greetings.callStart || {};
+    const enabled = callStart.enabled !== false;
+    const text = callStart.text || "Thank you for calling. How can I help you today?";
+    const audioUrl = callStart.audioUrl || '';
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Call Start Greeting</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">First thing the agent says when the call connects (before caller speaks).</div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-callstart-enabled" ${enabled ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+            <span style="color:#c9d1d9; font-size:0.9rem;">Enabled</span>
+          </label>
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Greeting Text (TTS)</label>
+          <textarea id="a2-callstart-text" rows="2" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.95rem; resize:vertical;">${this.escapeHtml(text)}</textarea>
+        </div>
+        
+        <div>
+          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Audio URL (optional — if provided, plays instead of TTS)</label>
+          <input type="text" id="a2-callstart-audioUrl" value="${this.escapeHtml(audioUrl)}" placeholder="https://example.com/greeting.mp3" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.95rem;">
+        </div>
+      </div>
+    `;
+  }
+
+  renderGreetingInterceptorCard() {
+    const greetings = this.config?.greetings || {};
+    const interceptor = greetings.interceptor || {};
+    const enabled = interceptor.enabled !== false;
+    const maxWords = typeof interceptor.maxWordsToQualify === 'number' ? interceptor.maxWordsToQualify : 2;
+    const blockIntent = interceptor.blockIfContainsIntentWords !== false;
+    const intentWords = Array.isArray(interceptor.intentWords) ? interceptor.intentWords : [];
+    const rules = Array.isArray(interceptor.rules) ? interceptor.rules : [];
+
+    const rulesRows = rules.map((rule, idx) => {
+      const ruleEnabled = rule.enabled !== false;
+      const priority = rule.priority || 100;
+      const matchMode = rule.matchMode || 'EXACT';
+      const triggers = Array.isArray(rule.triggers) ? rule.triggers.join(', ') : '';
+      const responseText = rule.responseText || '';
+      const hasAudio = rule.audioUrl && rule.audioUrl.trim();
+
+      return `
+        <tr class="a2-greeting-rule-row" data-idx="${idx}" style="cursor:pointer; border-bottom:1px solid #21262d;">
+          <td style="padding:12px 8px; text-align:center;">
+            <input type="checkbox" class="a2-greeting-rule-enabled" data-idx="${idx}" ${ruleEnabled ? 'checked' : ''} style="width:16px; height:16px; accent-color:#22d3ee;">
+          </td>
+          <td style="padding:12px 8px; color:#c9d1d9; text-align:center;">${priority}</td>
+          <td style="padding:12px 8px;">
+            <span style="padding:3px 8px; background:${matchMode === 'EXACT' ? '#238636' : '#f59e0b'}22; color:${matchMode === 'EXACT' ? '#238636' : '#f59e0b'}; border-radius:4px; font-size:0.8rem;">${matchMode}</span>
+          </td>
+          <td style="padding:12px 8px; color:#c9d1d9; font-family:monospace; font-size:0.9rem;">${this.escapeHtml(triggers)}</td>
+          <td style="padding:12px 8px; color:#8b949e; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${this.escapeHtml(responseText.substring(0, 50))}${responseText.length > 50 ? '...' : ''}</td>
+          <td style="padding:12px 8px; text-align:center;">
+            ${hasAudio ? '<span style="color:#22d3ee;">🔊</span>' : '<span style="color:#6e7681;">—</span>'}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Greeting Interceptor</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Responds to short caller greetings like "hi", "good morning". Runs BEFORE trigger cards.</div>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <button id="a2-greeting-seed" style="padding:8px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-size:0.85rem;">
+              Seed From Global
+            </button>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="a2-interceptor-enabled" ${enabled ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+              <span style="color:#c9d1d9; font-size:0.9rem;">Enabled</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- SHORT-ONLY GATE SETTINGS -->
+        <div style="background:#161b22; border:1px solid #30363d; border-radius:12px; padding:16px; margin-bottom:16px;">
+          <div style="color:#f59e0b; font-size:0.85rem; font-weight:600; margin-bottom:12px;">⚠️ Short-Only Gate (prevents hijacking real intent)</div>
+          <div style="display:flex; gap:24px; flex-wrap:wrap;">
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Words to Qualify</label>
+              <input type="number" id="a2-interceptor-maxWords" value="${maxWords}" min="1" max="10" style="width:80px; background:#0d1117; border:1px solid #30363d; border-radius:6px; padding:8px; color:#c9d1d9; text-align:center;">
+              <div style="color:#6e7681; font-size:0.75rem; margin-top:4px;">Greeting only fires if input ≤ this many words</div>
+            </div>
+            <div style="flex:1; min-width:200px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:8px;">
+                <input type="checkbox" id="a2-interceptor-blockIntent" ${blockIntent ? 'checked' : ''} style="width:16px; height:16px; accent-color:#22d3ee;">
+                <span style="color:#c9d1d9; font-size:0.9rem;">Block if contains intent words</span>
+              </label>
+              <div style="color:#6e7681; font-size:0.75rem;">Prevents "hi my ac is broken" from triggering a greeting response</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- INTENT WORDS -->
+        <div style="margin-bottom:16px;">
+          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Intent Words (comma-separated)</label>
+          <textarea id="a2-interceptor-intentWords" rows="2" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.85rem; font-family:monospace; resize:vertical;">${this.escapeHtml(intentWords.join(', '))}</textarea>
+          <div style="color:#6e7681; font-size:0.75rem; margin-top:4px;">If input contains any of these words, greeting is blocked and falls through to trigger cards.</div>
+        </div>
+
+        <!-- RULES TABLE -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="color:#c9d1d9; font-weight:600;">Greeting Rules</div>
+          <button id="a2-greeting-add" style="padding:6px 14px; background:#238636; color:white; border:none; border-radius:6px; cursor:pointer; font-size:0.85rem;">
+            + Add Rule
+          </button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+            <thead>
+              <tr style="background:#161b22; border-bottom:1px solid #30363d;">
+                <th style="padding:10px 8px; text-align:center; color:#8b949e; font-weight:600; width:60px;">On</th>
+                <th style="padding:10px 8px; text-align:center; color:#8b949e; font-weight:600; width:70px;">Priority</th>
+                <th style="padding:10px 8px; text-align:left; color:#8b949e; font-weight:600; width:80px;">Match</th>
+                <th style="padding:10px 8px; text-align:left; color:#8b949e; font-weight:600;">Triggers</th>
+                <th style="padding:10px 8px; text-align:left; color:#8b949e; font-weight:600;">Response</th>
+                <th style="padding:10px 8px; text-align:center; color:#8b949e; font-weight:600; width:50px;">Audio</th>
+              </tr>
+            </thead>
+            <tbody id="a2-greeting-rules-tbody">
+              ${rulesRows || '<tr><td colspan="6" style="padding:20px; text-align:center; color:#6e7681;">No greeting rules configured.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- GREETING RULE MODAL -->
+      <div id="a2-greeting-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:10000; align-items:center; justify-content:center;">
+        <div style="background:#0d1117; border:1px solid #30363d; border-radius:16px; padding:24px; max-width:600px; width:90%; max-height:90vh; overflow-y:auto;">
+          <h3 style="margin:0 0 20px 0; color:#22d3ee;">Edit Greeting Rule</h3>
+          <div id="a2-greeting-modal-content"></div>
+          <div style="display:flex; gap:12px; margin-top:20px;">
+            <button id="a2-greeting-modal-save" style="flex:1; padding:12px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;">Save</button>
+            <button id="a2-greeting-modal-delete" style="padding:12px 20px; background:#da3633; color:white; border:none; border-radius:8px; cursor:pointer;">Delete</button>
+            <button id="a2-greeting-modal-cancel" style="padding:12px 20px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  renderGreetingRuleModal(idx) {
+    const greetings = this.config?.greetings || {};
+    const interceptor = greetings.interceptor || {};
+    const rules = Array.isArray(interceptor.rules) ? interceptor.rules : [];
+    const rule = idx >= 0 && idx < rules.length ? rules[idx] : {
+      id: `greeting.custom.${Date.now()}`,
+      enabled: true,
+      priority: 50,
+      matchMode: 'EXACT',
+      triggers: [],
+      responseText: '',
+      audioUrl: ''
+    };
+
+    const triggers = Array.isArray(rule.triggers) ? rule.triggers.join(', ') : '';
+
+    return `
+      <div style="margin-bottom:16px;">
+        <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Rule ID</label>
+        <input type="text" id="a2-greeting-modal-id" value="${this.escapeHtml(rule.id || '')}" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9;">
+      </div>
+      <div style="display:flex; gap:16px; margin-bottom:16px;">
+        <div style="flex:1;">
+          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Priority</label>
+          <input type="number" id="a2-greeting-modal-priority" value="${rule.priority || 50}" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9;">
+        </div>
+        <div style="flex:1;">
+          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Match Mode</label>
+          <select id="a2-greeting-modal-matchMode" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9;">
+            <option value="EXACT" ${rule.matchMode === 'EXACT' ? 'selected' : ''}>EXACT (full match)</option>
+            <option value="FUZZY" ${rule.matchMode === 'FUZZY' ? 'selected' : ''}>FUZZY (contains)</option>
+          </select>
+        </div>
+        <div>
+          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Enabled</label>
+          <input type="checkbox" id="a2-greeting-modal-enabled" ${rule.enabled !== false ? 'checked' : ''} style="width:20px; height:20px; accent-color:#22d3ee; margin-top:8px;">
+        </div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Triggers (comma-separated phrases)</label>
+        <input type="text" id="a2-greeting-modal-triggers" value="${this.escapeHtml(triggers)}" placeholder="hi, hello, hey" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9;">
+        <div style="color:#6e7681; font-size:0.75rem; margin-top:4px;">What the caller says to trigger this greeting response.</div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Response Text (TTS)</label>
+        <textarea id="a2-greeting-modal-responseText" rows="2" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; resize:vertical;">${this.escapeHtml(rule.responseText || '')}</textarea>
+      </div>
+      <div>
+        <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Audio URL (optional — if provided, plays instead of TTS)</label>
+        <input type="text" id="a2-greeting-modal-audioUrl" value="${this.escapeHtml(rule.audioUrl || '')}" placeholder="https://example.com/greeting.mp3" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9;">
+      </div>
+    `;
+  }
+
+  renderBridgeSettingsCard() {
+    const style = this.config?.discovery?.style || {};
+    const bridge = style.bridge || {};
+    const enabled = bridge.enabled === true;
+    const maxPerTurn = bridge.maxPerTurn || 1;
+    const lines = Array.isArray(bridge.lines) ? bridge.lines : ['Ok — one second.'];
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Bridge / Micro Filler</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Short phrases to fill latency gaps ("Ok — one second."). Edits existing config at discovery.style.bridge.</div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-bridge-enabled" ${enabled ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+            <span style="color:#c9d1d9; font-size:0.9rem;">Enabled</span>
+          </label>
+        </div>
+        
+        <div style="display:flex; gap:24px; margin-bottom:16px;">
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Per Turn</label>
+            <input type="number" id="a2-bridge-maxPerTurn" value="${maxPerTurn}" min="1" max="3" style="width:80px; background:#161b22; border:1px solid #30363d; border-radius:6px; padding:8px; color:#c9d1d9; text-align:center;">
+          </div>
+        </div>
+        
+        <div>
+          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Bridge Lines (one per line)</label>
+          <textarea id="a2-bridge-lines" rows="3" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.95rem; resize:vertical;">${this.escapeHtml(lines.join('\n'))}</textarea>
+          <div style="color:#6e7681; font-size:0.75rem; margin-top:4px;">One line per row. These are randomly selected when a bridge is needed.</div>
+        </div>
+      </div>
     `;
   }
 
@@ -2010,11 +2268,161 @@ class Agent2Manager {
         this.render(container);
       }
     });
+    container.querySelector('#a2-tab-greetings')?.addEventListener('click', () => {
+      if (this._activeTab !== 'greetings') {
+        this._activeTab = 'greetings';
+        this.render(container);
+      }
+    });
     container.querySelector('#a2-tab-callReview')?.addEventListener('click', () => {
       if (this._activeTab !== 'callReview') {
         this._activeTab = 'callReview';
         this.render(container);
       }
+    });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GREETINGS TAB HANDLERS
+    // ══════════════════════════════════════════════════════════════════════════
+    
+    // Call Start Greeting
+    container.querySelector('#a2-callstart-enabled')?.addEventListener('change', (e) => {
+      this.config.greetings = this.config.greetings || {};
+      this.config.greetings.callStart = this.config.greetings.callStart || {};
+      this.config.greetings.callStart.enabled = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-callstart-text')?.addEventListener('input', (e) => {
+      this.config.greetings = this.config.greetings || {};
+      this.config.greetings.callStart = this.config.greetings.callStart || {};
+      this.config.greetings.callStart.text = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-callstart-audioUrl')?.addEventListener('input', (e) => {
+      this.config.greetings = this.config.greetings || {};
+      this.config.greetings.callStart = this.config.greetings.callStart || {};
+      this.config.greetings.callStart.audioUrl = e.target.value.trim();
+      onAnyChange();
+    });
+
+    // Greeting Interceptor settings
+    container.querySelector('#a2-interceptor-enabled')?.addEventListener('change', (e) => {
+      this.config.greetings = this.config.greetings || {};
+      this.config.greetings.interceptor = this.config.greetings.interceptor || {};
+      this.config.greetings.interceptor.enabled = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-interceptor-maxWords')?.addEventListener('input', (e) => {
+      this.config.greetings = this.config.greetings || {};
+      this.config.greetings.interceptor = this.config.greetings.interceptor || {};
+      this.config.greetings.interceptor.maxWordsToQualify = parseInt(e.target.value, 10) || 2;
+      onAnyChange();
+    });
+    container.querySelector('#a2-interceptor-blockIntent')?.addEventListener('change', (e) => {
+      this.config.greetings = this.config.greetings || {};
+      this.config.greetings.interceptor = this.config.greetings.interceptor || {};
+      this.config.greetings.interceptor.blockIfContainsIntentWords = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-interceptor-intentWords')?.addEventListener('input', (e) => {
+      this.config.greetings = this.config.greetings || {};
+      this.config.greetings.interceptor = this.config.greetings.interceptor || {};
+      this.config.greetings.interceptor.intentWords = e.target.value.split(',').map(w => w.trim()).filter(Boolean);
+      onAnyChange();
+    });
+
+    // Greeting rules table row clicks
+    container.querySelectorAll('.a2-greeting-rule-row').forEach(row => {
+      row.addEventListener('click', (e) => {
+        if (e.target.type === 'checkbox') return;
+        const idx = parseInt(row.getAttribute('data-idx'), 10);
+        this._openGreetingModal(idx);
+      });
+      row.addEventListener('mouseover', () => { row.style.background = '#161b22'; });
+      row.addEventListener('mouseout', () => { row.style.background = 'transparent'; });
+    });
+
+    // Greeting rule enabled toggles
+    container.querySelectorAll('.a2-greeting-rule-enabled').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const idx = parseInt(cb.getAttribute('data-idx'), 10);
+        this.config.greetings = this.config.greetings || {};
+        this.config.greetings.interceptor = this.config.greetings.interceptor || {};
+        this.config.greetings.interceptor.rules = this.config.greetings.interceptor.rules || [];
+        if (this.config.greetings.interceptor.rules[idx]) {
+          this.config.greetings.interceptor.rules[idx].enabled = e.target.checked;
+          onAnyChange();
+        }
+      });
+    });
+
+    // Add greeting rule button
+    container.querySelector('#a2-greeting-add')?.addEventListener('click', () => {
+      this._openGreetingModal(-1);
+    });
+
+    // Seed From Global button
+    container.querySelector('#a2-greeting-seed')?.addEventListener('click', async () => {
+      const mode = confirm('Replace existing rules? (OK = Replace, Cancel = Merge)') ? 'replace' : 'merge';
+      try {
+        const token = this._getToken();
+        const res = await fetch(`/api/admin/agent2/${this.companyId}/greetings/seed-from-global?mode=${mode}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        const json = await res.json();
+        if (json.success) {
+          this.config.greetings = json.data;
+          onAnyChange();
+          this.render(container);
+          alert(`Seeded ${json.meta?.legacyRulesImported || 0} rules from global config.`);
+        } else {
+          alert('Seed failed: ' + (json.message || 'Unknown error'));
+        }
+      } catch (e) {
+        alert('Seed error: ' + e.message);
+      }
+    });
+
+    // Greeting modal buttons
+    container.querySelector('#a2-greeting-modal-save')?.addEventListener('click', () => {
+      this._saveGreetingModal();
+      onAnyChange();
+      this.render(container);
+    });
+    container.querySelector('#a2-greeting-modal-delete')?.addEventListener('click', () => {
+      this._deleteGreetingRule();
+      onAnyChange();
+      this.render(container);
+    });
+    container.querySelector('#a2-greeting-modal-cancel')?.addEventListener('click', () => {
+      this._closeGreetingModal();
+    });
+
+    // Bridge settings
+    container.querySelector('#a2-bridge-enabled')?.addEventListener('change', (e) => {
+      this.config.discovery = this.config.discovery || {};
+      this.config.discovery.style = this.config.discovery.style || {};
+      this.config.discovery.style.bridge = this.config.discovery.style.bridge || {};
+      this.config.discovery.style.bridge.enabled = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-bridge-maxPerTurn')?.addEventListener('input', (e) => {
+      this.config.discovery = this.config.discovery || {};
+      this.config.discovery.style = this.config.discovery.style || {};
+      this.config.discovery.style.bridge = this.config.discovery.style.bridge || {};
+      this.config.discovery.style.bridge.maxPerTurn = parseInt(e.target.value, 10) || 1;
+      onAnyChange();
+    });
+    container.querySelector('#a2-bridge-lines')?.addEventListener('input', (e) => {
+      this.config.discovery = this.config.discovery || {};
+      this.config.discovery.style = this.config.discovery.style || {};
+      this.config.discovery.style.bridge = this.config.discovery.style.bridge || {};
+      this.config.discovery.style.bridge.lines = e.target.value.split('\n').map(l => l.trim()).filter(Boolean);
+      onAnyChange();
     });
 
     // CALL REVIEW TAB HANDLERS
@@ -2267,6 +2675,80 @@ class Agent2Manager {
     container.querySelector('#a2-clarifier-modal')?.addEventListener('click', (e) => {
       if (e.target.id === 'a2-clarifier-modal') this._closeClarifierModal();
     });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // GREETING MODAL
+  // ══════════════════════════════════════════════════════════════════════════
+  _greetingModalIdx = -1;
+
+  _openGreetingModal(idx) {
+    const modal = document.getElementById('a2-greeting-modal');
+    const content = document.getElementById('a2-greeting-modal-content');
+    if (!modal || !content) return;
+
+    this._greetingModalIdx = idx;
+    content.innerHTML = this.renderGreetingRuleModal(idx);
+    modal.style.display = 'flex';
+  }
+
+  _closeGreetingModal() {
+    const modal = document.getElementById('a2-greeting-modal');
+    if (modal) modal.style.display = 'none';
+    this._greetingModalIdx = -1;
+  }
+
+  _saveGreetingModal() {
+    const idx = this._greetingModalIdx;
+
+    const rule = {
+      id: (document.getElementById('a2-greeting-modal-id')?.value || '').trim() || `greeting.custom.${Date.now()}`,
+      enabled: document.getElementById('a2-greeting-modal-enabled')?.checked !== false,
+      priority: parseInt(document.getElementById('a2-greeting-modal-priority')?.value, 10) || 50,
+      matchMode: document.getElementById('a2-greeting-modal-matchMode')?.value || 'EXACT',
+      triggers: (document.getElementById('a2-greeting-modal-triggers')?.value || '')
+        .split(',')
+        .map(t => t.trim().toLowerCase())
+        .filter(Boolean),
+      responseText: (document.getElementById('a2-greeting-modal-responseText')?.value || '').trim(),
+      audioUrl: (document.getElementById('a2-greeting-modal-audioUrl')?.value || '').trim()
+    };
+
+    if (!rule.triggers.length) {
+      alert('At least one trigger is required.');
+      return;
+    }
+    if (!rule.responseText && !rule.audioUrl) {
+      alert('Response text or audio URL is required.');
+      return;
+    }
+
+    this.config.greetings = this.config.greetings || {};
+    this.config.greetings.interceptor = this.config.greetings.interceptor || {};
+    this.config.greetings.interceptor.rules = this.config.greetings.interceptor.rules || [];
+
+    if (idx === -1) {
+      this.config.greetings.interceptor.rules.push(rule);
+    } else {
+      this.config.greetings.interceptor.rules[idx] = rule;
+    }
+
+    this._closeGreetingModal();
+  }
+
+  _deleteGreetingRule() {
+    const idx = this._greetingModalIdx;
+    if (idx === -1) {
+      this._closeGreetingModal();
+      return;
+    }
+
+    if (!confirm('Delete this greeting rule?')) return;
+
+    const rules = this.config.greetings?.interceptor?.rules || [];
+    rules.splice(idx, 1);
+
+    this._closeGreetingModal();
   }
 
   // ══════════════════════════════════════════════════════════════════════════

@@ -33,6 +33,7 @@
 const logger = require('../../../utils/logger');
 const { TriggerCardMatcher } = require('./TriggerCardMatcher');
 const { Agent2VocabularyEngine } = require('./Agent2VocabularyEngine');
+const { Agent2GreetingInterceptor } = require('./Agent2GreetingInterceptor');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -219,6 +220,61 @@ class Agent2DiscoveryRunner {
     }
 
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // GREETING INTERCEPTOR (V122 - RUNS BEFORE TRIGGER CARDS)
+    // ══════════════════════════════════════════════════════════════════════════
+    // Handles short greetings like "hi", "good morning" with strict gating.
+    // SHORT-ONLY GATE: Only fires if input ≤ maxWordsToQualify AND no intent words.
+    // If it fires → returns immediately, ends the turn.
+    // ══════════════════════════════════════════════════════════════════════════
+    const greetingsConfig = safeObj(agent2.greetings, {});
+    const greetingResult = Agent2GreetingInterceptor.evaluate({
+      input: input,
+      config: greetingsConfig,
+      turn: typeof turn === 'number' ? turn : 0
+    });
+
+    // Always emit greeting evaluation proof
+    emit('A2_GREETING_EVALUATED', greetingResult.proof);
+
+    if (greetingResult.intercepted) {
+      // Greeting matched — return immediately, end the turn
+      nextState.agent2.discovery.lastPath = 'GREETING_INTERCEPTED';
+      nextState.agent2.discovery.lastGreetingRuleId = greetingResult.proof.matchedRuleId;
+
+      emit('A2_PATH_SELECTED', {
+        path: 'GREETING_INTERCEPTED',
+        reason: `Matched greeting rule: ${greetingResult.proof.matchedRuleId}`,
+        matchedTrigger: greetingResult.proof.matchedTrigger,
+        responseSource: greetingResult.responseSource
+      });
+
+      emit('A2_RESPONSE_READY', {
+        path: 'GREETING_INTERCEPTED',
+        responsePreview: clip(greetingResult.response, 120),
+        responseLength: greetingResult.response?.length || 0,
+        hasAudio: greetingResult.responseSource === 'audio',
+        audioUrl: greetingResult.responseSource === 'audio' ? greetingResult.response : null,
+        source: `greeting:${greetingResult.proof.matchedRuleId}`
+      });
+
+      // Return audio URL if audio, otherwise TTS response
+      if (greetingResult.responseSource === 'audio') {
+        return {
+          response: null, // No TTS needed
+          matchSource: 'AGENT2_DISCOVERY',
+          state: nextState,
+          audioUrl: greetingResult.response
+        };
+      }
+
+      return {
+        response: greetingResult.response,
+        matchSource: 'AGENT2_DISCOVERY',
+        state: nextState
+      };
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // VOCABULARY PROCESSING (BEFORE trigger matching)
