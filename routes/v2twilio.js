@@ -898,6 +898,21 @@ async function getCompanyByPhoneNumber(phoneNumber) {
   return company;
 }
 
+// ════════════════════════════════════════════════════════════════════════════════
+// 🏓 PING ENDPOINT - Instant health check for Twilio webhook verification
+// ════════════════════════════════════════════════════════════════════════════════
+// Use: GET /api/twilio/ping → 200 "ok" (proves Render deploy is alive)
+// This is critical for diagnosing 11200 errors vs actual route issues.
+// ════════════════════════════════════════════════════════════════════════════════
+router.get('/ping', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    service: 'clientsvia-twilio-webhooks',
+    routes: ['/voice', '/:companyId/voice', '/v2-agent-respond/:companyId']
+  });
+});
+
 router.post('/voice', async (req, res) => {
   const callStartTime = Date.now();
   
@@ -1475,23 +1490,95 @@ router.post('/voice', async (req, res) => {
       logger.debug(`[V2 VOICE CHECK] ElevenLabs Voice ID: ${elevenLabsVoice || 'NOT SET'}`);
       
       // MODE: PRERECORDED AUDIO (Agent 2.0 or legacy)
+      // 🛡️ RENDER EPHEMERAL FIX: Check if audio file exists before using <Play>
+      // Instant-lines MP3s are stored on local disk which gets wiped on redeploy.
+      // If file doesn't exist, fall through to TTS instead of causing Twilio 404.
       if (greetingMode === 'prerecorded' && initResult.greetingConfig?.audioUrl) {
-        const audioUrl = toAbsoluteAudioUrl(req, initResult.greetingConfig.audioUrl);
-        logger.info(`[GREETING] 🎵 Playing pre-recorded audio (source: ${greetingSource}): ${audioUrl}`);
-        gather.play(audioUrl);
+        const rawAudioPath = initResult.greetingConfig.audioUrl;
+        let audioFileExists = false;
         
-        // 📼 BLACK BOX: Log prerecorded greeting played
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
-            callId: req.body.CallSid,
-            companyId: company._id,
-            type: 'GREETING_PRERECORDED',
-            turn: 0,
-            data: {
-              audioUrl,
-              source: greetingSource
+        // Check if this is a local file path we can verify
+        if (rawAudioPath.startsWith('/audio/')) {
+          const localFilePath = path.join(__dirname, '../public', rawAudioPath);
+          audioFileExists = fs.existsSync(localFilePath);
+          if (!audioFileExists) {
+            logger.warn(`[GREETING] ⚠️ Prerecorded audio file missing (ephemeral storage): ${localFilePath}`);
+          }
+        } else if (rawAudioPath.startsWith('http')) {
+          // External URL - assume it exists (can't check synchronously)
+          audioFileExists = true;
+        }
+        
+        if (audioFileExists) {
+          const audioUrl = toAbsoluteAudioUrl(req, rawAudioPath);
+          logger.info(`[GREETING] 🎵 Playing pre-recorded audio (source: ${greetingSource}): ${audioUrl}`);
+          gather.play(audioUrl);
+          
+          // 📼 BLACK BOX: Log prerecorded greeting played
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: req.body.CallSid,
+              companyId: company._id,
+              type: 'GREETING_PRERECORDED',
+              turn: 0,
+              data: {
+                audioUrl,
+                source: greetingSource
+              }
+            }).catch(() => {});
+          }
+        } else {
+          // 🛡️ FALLBACK: Audio file missing, use TTS instead
+          logger.warn(`[GREETING] 🔄 Prerecorded audio missing, falling back to TTS`);
+          if (BlackBoxLogger) {
+            BlackBoxLogger.logEvent({
+              callId: req.body.CallSid,
+              companyId: company._id,
+              type: 'GREETING_AUDIO_MISSING_TTS_FALLBACK',
+              turn: 0,
+              data: {
+                missingAudioPath: rawAudioPath,
+                source: greetingSource,
+                fallbackMode: elevenLabsVoice ? 'elevenlabs' : 'twilio_say'
+              }
+            }).catch(() => {});
+          }
+          
+          // Fall through to TTS logic below by NOT using the prerecorded branch
+          // We achieve this by re-checking TTS conditions
+          if (elevenLabsVoice && initResult.greeting) {
+            try {
+              logger.info(`[GREETING] 🎙️ TTS fallback for missing audio (ElevenLabs: ${elevenLabsVoice})`);
+              const ttsStartTime = Date.now();
+              const greetingText = cleanTextForTTS(stripMarkdown(initResult.greeting));
+              
+              const buffer = await synthesizeSpeech({
+                text: greetingText,
+                voiceId: elevenLabsVoice,
+                stability: company.aiAgentSettings?.voiceSettings?.stability,
+                similarity_boost: company.aiAgentSettings?.voiceSettings?.similarityBoost,
+                style: company.aiAgentSettings?.voiceSettings?.styleExaggeration,
+                model_id: company.aiAgentSettings?.voiceSettings?.aiModel,
+                company
+              });
+              
+              const ttsTime = Date.now() - ttsStartTime;
+              logger.info(`[GREETING] ✅ TTS fallback completed in ${ttsTime}ms`);
+              
+              const fileName = `ai_greet_fallback_${Date.now()}.mp3`;
+              const audioDir = path.join(__dirname, '../public/audio');
+              if (!fs.existsSync(audioDir)) { fs.mkdirSync(audioDir, { recursive: true }); }
+              fs.writeFileSync(path.join(audioDir, fileName), buffer);
+              gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
+            } catch (ttsErr) {
+              logger.error(`[GREETING] ❌ TTS fallback failed: ${ttsErr.message}`);
+              gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
             }
-          }).catch(() => {});
+          } else if (initResult.greeting) {
+            gather.say(escapeTwiML(cleanTextForTTS(stripMarkdown(initResult.greeting))));
+          } else {
+            gather.say('Thank you for calling. How may I help you today?');
+          }
         }
       }
       // MODE: DISABLED (skip greeting, go straight to listening)
