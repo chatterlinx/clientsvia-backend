@@ -382,65 +382,82 @@ class Agent2Manager {
   }
 
   renderCallModalContent(call, events, container) {
-    const date = new Date(call.startTime || call.createdAt);
+    const date = new Date(call.startTime || call.createdAt || call.startedAt);
     const from = call.from || call.callerPhone || 'Unknown';
     const to = call.to || call.toPhone || 'Unknown';
-    const duration = call.duration ? `${Math.round(call.duration)} seconds` : '--';
+    const duration = call.duration ? `${Math.round(call.duration)} seconds` : (call.durationMs ? `${Math.round(call.durationMs / 1000)} seconds` : '--');
     const recordingUrl = call.recordingUrl || null;
 
     // Build transcript from events
     const transcript = this.buildTranscript(events);
     
+    // Analyze call for problems and turn summaries
+    const { turnSummaries, problems } = this.analyzeCall(events);
+    
     // Key events for debugging
     const keyEvents = events.filter(e => 
-      ['CALL_START', 'A2_GATE', 'A2_TURN', 'A2_PATH_SELECTED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'CALL_END'].includes(e.type)
+      ['CALL_START', 'A2_GATE', 'A2_DISCOVERY_GATE', 'A2_TURN', 'A2_PATH_SELECTED', 'A2_SCENARIO_EVAL', 'A2_MIC_OWNER_PROOF', 'GREETING_EVALUATED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'SLOTS_EXTRACTED', 'CALL_END'].includes(e.type)
     );
 
     container.innerHTML = `
-      <!-- CALL INFO -->
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:20px;">
+      <!-- CALL INFO + ACTIONS ROW -->
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
         <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px;">
           <div style="color:#8b949e; font-size:0.8rem; margin-bottom:8px;">CALL INFO</div>
-          <div style="display:grid; gap:8px; font-size:0.9rem;">
+          <div style="display:grid; gap:6px; font-size:0.85rem;">
             <div><span style="color:#6e7681;">From:</span> <span style="color:#e5e7eb;">${this.escapeHtml(from)}</span></div>
             <div><span style="color:#6e7681;">To:</span> <span style="color:#e5e7eb;">${this.escapeHtml(to)}</span></div>
             <div><span style="color:#6e7681;">Time:</span> <span style="color:#e5e7eb;">${date.toLocaleString()}</span></div>
             <div><span style="color:#6e7681;">Duration:</span> <span style="color:#e5e7eb;">${duration}</span></div>
-            <div><span style="color:#6e7681;">CallSid:</span> <span style="color:#e5e7eb; font-family:monospace; font-size:0.8rem;">${this.escapeHtml(call.callSid || '')}</span></div>
+            <div><span style="color:#6e7681;">CallSid:</span> <span style="color:#e5e7eb; font-family:monospace; font-size:0.75rem;">${this.escapeHtml(call.callSid || '')}</span></div>
+            ${call.awHash ? `<div><span style="color:#6e7681;">Config:</span> <span style="color:#a5b4fc; font-family:monospace; font-size:0.75rem;">${this.escapeHtml(call.awHash.substring(0, 16))}...</span></div>` : ''}
           </div>
         </div>
         <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px;">
           <div style="color:#8b949e; font-size:0.8rem; margin-bottom:8px;">ACTIONS</div>
-          <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; flex-direction:column; gap:6px;">
             ${recordingUrl ? `
-              <a href="${this.escapeHtml(recordingUrl)}" target="_blank" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#238636; color:white; border-radius:8px; text-decoration:none; font-size:0.9rem;">
+              <a href="${this.escapeHtml(recordingUrl)}" target="_blank" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#238636; color:white; border-radius:8px; text-decoration:none; font-size:0.85rem;">
                 <span>🎧</span> Listen to Recording
               </a>
-            ` : `
-              <div style="padding:10px 14px; background:#21262d; color:#6e7681; border-radius:8px; font-size:0.9rem;">
-                No recording available
-              </div>
-            `}
-            <button id="a2-play-transcript" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-size:0.9rem;">
+            ` : ''}
+            <button id="a2-play-transcript" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-size:0.85rem;">
               <span>▶</span> Play Transcript (TTS)
             </button>
-            <button id="a2-export-events" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer; font-size:0.9rem;">
+            <button id="a2-export-events" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer; font-size:0.85rem;">
               <span>📋</span> Export Raw Events
             </button>
           </div>
         </div>
       </div>
 
+      <!-- PROBLEMS DETECTED (Top priority - what's wrong?) -->
+      <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:16px;">
+        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:10px;">PROBLEMS DETECTED (${problems.length})</div>
+        ${this.renderProblemsDetected(problems)}
+      </div>
+
+      <!-- TRUTH LINE (Turn-by-turn mic owner + path) -->
+      <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:16px;">
+        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:10px;">TURN-BY-TURN TRUTH LINE</div>
+        <div style="font-size:0.75rem; color:#6e7681; margin-bottom:8px;">
+          <span style="color:#4ade80;">● AGENT2</span> · 
+          <span style="color:#fbbf24;">● GREETING</span> · 
+          <span style="color:#f43f5e;">● LEGACY/OTHER</span>
+        </div>
+        ${this.renderTruthLine(turnSummaries)}
+      </div>
+
       <!-- TRANSCRIPT -->
-      <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:20px;">
+      <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:16px;">
         <div style="color:#8b949e; font-size:0.8rem; margin-bottom:12px;">TRANSCRIPT</div>
-        <div id="a2-transcript-container" style="max-height:300px; overflow:auto;">
+        <div id="a2-transcript-container" style="max-height:250px; overflow:auto;">
           ${transcript.length > 0 ? transcript.map(t => `
-            <div style="margin-bottom:12px; padding:10px; background:${t.role === 'caller' ? '#1a1f2e' : '#0d2818'}; border-radius:8px;">
-              <div style="font-size:0.75rem; color:${t.role === 'caller' ? '#60a5fa' : '#4ade80'}; margin-bottom:4px; font-weight:600;">
+            <div style="margin-bottom:10px; padding:10px; background:${t.role === 'caller' ? '#1a1f2e' : '#0d2818'}; border-radius:8px;">
+              <div style="font-size:0.7rem; color:${t.role === 'caller' ? '#60a5fa' : '#4ade80'}; margin-bottom:4px; font-weight:600;">
                 ${t.role === 'caller' ? '📞 CALLER' : '🤖 AGENT'} ${t.turn !== undefined ? `(Turn ${t.turn})` : ''}
               </div>
-              <div style="color:#e5e7eb; font-size:0.9rem; line-height:1.5;">${this.escapeHtml(t.text)}</div>
+              <div style="color:#e5e7eb; font-size:0.85rem; line-height:1.4;">${this.escapeHtml(t.text)}</div>
             </div>
           `).join('') : `
             <div style="color:#6e7681; text-align:center; padding:20px;">No transcript available</div>
@@ -456,18 +473,18 @@ class Agent2Manager {
             Show All
           </button>
         </div>
-        <div id="a2-events-container" style="max-height:300px; overflow:auto; font-family:monospace; font-size:0.8rem;">
+        <div id="a2-events-container" style="max-height:250px; overflow:auto; font-family:monospace; font-size:0.75rem;">
           ${keyEvents.map(e => `
-            <div style="margin-bottom:8px; padding:8px; background:#161b22; border-radius:6px; border-left:3px solid ${this.getEventColor(e.type)};">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <span style="color:${this.getEventColor(e.type)}; font-weight:600;">${e.type}</span>
-                <span style="color:#6e7681; font-size:0.7rem;">Turn ${e.turn ?? '--'}</span>
+            <div style="margin-bottom:6px; padding:6px 8px; background:#161b22; border-radius:6px; border-left:3px solid ${this.getEventColor(e.type)};">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+                <span style="color:${this.getEventColor(e.type)}; font-weight:600; font-size:0.75rem;">${e.type}</span>
+                <span style="color:#6e7681; font-size:0.65rem;">Turn ${e.turn ?? '--'}</span>
               </div>
-              <div style="color:#8b949e; font-size:0.75rem; white-space:pre-wrap; word-break:break-all;">${this.escapeHtml(JSON.stringify(e.data || {}, null, 2).substring(0, 300))}${JSON.stringify(e.data || {}).length > 300 ? '...' : ''}</div>
+              <div style="color:#8b949e; font-size:0.7rem; white-space:pre-wrap; word-break:break-all;">${this.escapeHtml(JSON.stringify(e.data || {}, null, 2).substring(0, 200))}${JSON.stringify(e.data || {}).length > 200 ? '...' : ''}</div>
             </div>
           `).join('')}
         </div>
-        <div id="a2-all-events-container" style="display:none; max-height:400px; overflow:auto; font-family:monospace; font-size:0.75rem; margin-top:12px;">
+        <div id="a2-all-events-container" style="display:none; max-height:400px; overflow:auto; font-family:monospace; font-size:0.7rem; margin-top:12px;">
           <pre style="color:#8b949e; white-space:pre-wrap; word-break:break-all;">${this.escapeHtml(JSON.stringify(events, null, 2))}</pre>
         </div>
       </div>
@@ -502,17 +519,273 @@ class Agent2Manager {
     return transcript;
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // CALL DIAGNOSTICS - Analyze events to detect problems
+  // ════════════════════════════════════════════════════════════════════════════
+
+  analyzeCall(events) {
+    const problems = [];
+    const turnSummaries = [];
+    
+    // Group events by turn
+    const turns = {};
+    events.forEach(e => {
+      const t = e.turn ?? 0;
+      if (!turns[t]) turns[t] = [];
+      turns[t].push(e);
+    });
+
+    // Analyze each turn
+    Object.keys(turns).sort((a, b) => Number(a) - Number(b)).forEach(turnNum => {
+      const turnEvents = turns[turnNum];
+      const turn = Number(turnNum);
+      
+      const summary = this.analyzeTurn(turn, turnEvents, events);
+      turnSummaries.push(summary);
+      
+      // Collect problems from this turn
+      if (summary.problems) {
+        summary.problems.forEach(p => problems.push({ turn, ...p }));
+      }
+    });
+
+    // Cross-turn analysis
+    this.analyzeCrossTurnProblems(turnSummaries, events, problems);
+
+    return { turnSummaries, problems };
+  }
+
+  analyzeTurn(turn, turnEvents, allEvents) {
+    const summary = {
+      turn,
+      micOwner: null,
+      path: null,
+      matchedCard: null,
+      matchedOn: null,
+      pendingQuestion: false,
+      scenarioTried: false,
+      latencyMs: null,
+      slowestSection: null,
+      problems: []
+    };
+
+    // Find key events for this turn
+    const a2Turn = turnEvents.find(e => e.type === 'A2_TURN');
+    const a2Gate = turnEvents.find(e => e.type === 'A2_GATE' || e.type === 'A2_DISCOVERY_GATE');
+    const a2Path = turnEvents.find(e => e.type === 'A2_PATH_SELECTED');
+    const a2Scenario = turnEvents.find(e => e.type === 'A2_SCENARIO_EVAL');
+    const greetingEval = turnEvents.find(e => e.type === 'GREETING_EVALUATED');
+    const micProof = turnEvents.find(e => e.type === 'A2_MIC_OWNER_PROOF');
+    const twimlSent = turnEvents.find(e => e.type === 'TWIML_SENT');
+    const coreResult = turnEvents.find(e => e.type === 'CORE_RUNTIME_OWNER_RESULT');
+
+    // Mic Owner
+    if (micProof) {
+      summary.micOwner = micProof.data?.finalResponder || (micProof.data?.agent2Ran ? 'AGENT2' : 'UNKNOWN');
+    } else if (a2Turn) {
+      summary.micOwner = 'AGENT2';
+    } else if (coreResult) {
+      summary.micOwner = coreResult.data?.matchSource || 'LEGACY';
+    }
+
+    // Path
+    if (a2Turn?.data?.path) {
+      summary.path = a2Turn.data.path;
+    } else if (a2Path?.data?.path) {
+      summary.path = a2Path.data.path;
+    }
+
+    // Matched card
+    if (a2Turn?.data?.cardId) {
+      summary.matchedCard = a2Turn.data.cardLabel || a2Turn.data.cardId;
+      summary.matchedOn = a2Turn.data.matchedOn;
+    }
+
+    // Scenario tried
+    if (a2Scenario) {
+      summary.scenarioTried = a2Scenario.data?.tried === true;
+      if (summary.scenarioTried && a2Scenario.data?.enabled === false) {
+        summary.problems.push({
+          type: 'SCENARIO_LEAK',
+          severity: 'warning',
+          message: 'ScenarioEngine tried while disabled'
+        });
+      }
+    }
+
+    // Latency
+    if (twimlSent?.data?.timings) {
+      const timings = twimlSent.data.timings;
+      summary.latencyMs = timings.totalMs || timings.total;
+      // Find slowest section
+      let slowest = { name: null, ms: 0 };
+      Object.entries(timings).forEach(([k, v]) => {
+        if (k !== 'totalMs' && k !== 'total' && typeof v === 'number' && v > slowest.ms) {
+          slowest = { name: k, ms: v };
+        }
+      });
+      summary.slowestSection = slowest.name;
+      
+      // Flag slow turns
+      if (summary.latencyMs > 1500) {
+        summary.problems.push({
+          type: 'SLOW_TURN',
+          severity: 'warning',
+          message: `Latency ${summary.latencyMs}ms (>${1500}ms threshold)`
+        });
+      }
+    }
+
+    // Double-ack detection
+    const response = a2Turn?.data?.response || coreResult?.data?.responsePreview || '';
+    if (/\bOk\.\s*Ok\b/i.test(response) || /\bAlright\.\s*Alright\b/i.test(response)) {
+      summary.problems.push({
+        type: 'DOUBLE_ACK',
+        severity: 'error',
+        message: `Double acknowledgment detected: "${response.substring(0, 50)}..."`
+      });
+    }
+
+    // Greeting hijack detection (long utterance but greeting fired)
+    if (greetingEval?.data?.matched && greetingEval?.data?.inputWordCount > 3) {
+      summary.problems.push({
+        type: 'GREETING_HIJACK',
+        severity: 'error',
+        message: `Greeting matched on ${greetingEval.data.inputWordCount}-word utterance`
+      });
+    }
+
+    // Name confidence missing
+    const slotsExtracted = turnEvents.find(e => e.type === 'SLOTS_EXTRACTED');
+    if (turn >= 2 && slotsExtracted?.data?.extractedSlots?.name && !slotsExtracted.data.extractedSlots.name.confidence) {
+      summary.problems.push({
+        type: 'NAME_NO_CONFIDENCE',
+        severity: 'info',
+        message: 'Name extracted but confidence not set'
+      });
+    }
+
+    return summary;
+  }
+
+  analyzeCrossTurnProblems(turnSummaries, events, problems) {
+    // Check for repeated follow-up questions
+    const responses = events
+      .filter(e => e.type === 'A2_TURN' || e.type === 'CORE_RUNTIME_OWNER_RESULT')
+      .map(e => e.data?.response || e.data?.responsePreview || '');
+    
+    const seen = new Set();
+    responses.forEach((r, idx) => {
+      // Extract questions (sentences ending with ?)
+      const questions = r.match(/[^.!?]*\?/g) || [];
+      questions.forEach(q => {
+        const normalized = q.toLowerCase().trim();
+        if (normalized.length > 20 && seen.has(normalized)) {
+          problems.push({
+            turn: idx,
+            type: 'REPEATED_QUESTION',
+            severity: 'warning',
+            message: `Same question asked twice: "${q.substring(0, 50)}..."`
+          });
+        }
+        seen.add(normalized);
+      });
+    });
+
+    // Check for name extracted but never used
+    const nameExtracted = events.find(e => 
+      e.type === 'SLOTS_EXTRACTED' && e.data?.extractedSlots?.name
+    );
+    const nameUsed = events.find(e => 
+      (e.type === 'A2_TURN' || e.type === 'A2_RESPONSE_READY') && e.data?.usedCallerName === true
+    );
+    if (nameExtracted && !nameUsed && turnSummaries.length > 2) {
+      problems.push({
+        turn: null,
+        type: 'NAME_NOT_USED',
+        severity: 'info',
+        message: 'Caller name extracted but never used in responses'
+      });
+    }
+  }
+
+  renderTruthLine(turnSummaries) {
+    if (turnSummaries.length === 0) {
+      return '<div style="color:#6e7681; text-align:center; padding:12px;">No turn data available</div>';
+    }
+
+    return turnSummaries.map(s => {
+      const micColor = s.micOwner === 'AGENT2' || s.micOwner === 'AGENT2_DISCOVERY' ? '#4ade80' : 
+                       s.micOwner === 'GREETING' ? '#fbbf24' : '#f43f5e';
+      const pathBadge = s.path ? `<span style="padding:2px 6px; background:#1f2937; border-radius:4px; font-size:0.7rem;">${s.path}</span>` : '';
+      const cardBadge = s.matchedCard ? `<span style="padding:2px 6px; background:#0d3320; color:#4ade80; border-radius:4px; font-size:0.7rem;">${this.escapeHtml(s.matchedCard)}</span>` : '';
+      const matchedOnBadge = s.matchedOn ? `<span style="color:#6e7681; font-size:0.7rem;">(on: ${this.escapeHtml(s.matchedOn)})</span>` : '';
+      const latencyBadge = s.latencyMs ? `<span style="color:${s.latencyMs > 1500 ? '#f43f5e' : s.latencyMs > 800 ? '#fbbf24' : '#4ade80'}; font-size:0.75rem;">${s.latencyMs}ms</span>` : '';
+      const scenarioBadge = s.scenarioTried ? '<span style="padding:2px 6px; background:#7c2d12; color:#fbbf24; border-radius:4px; font-size:0.65rem;">SCENARIO</span>' : '';
+
+      return `
+        <div style="display:flex; align-items:center; gap:8px; padding:8px; background:#0d1117; border-radius:6px; margin-bottom:4px; flex-wrap:wrap;">
+          <span style="color:#6e7681; font-weight:600; min-width:50px;">Turn ${s.turn}</span>
+          <span style="color:${micColor}; font-weight:600; font-size:0.8rem;">● ${s.micOwner || '?'}</span>
+          ${pathBadge}
+          ${cardBadge}
+          ${matchedOnBadge}
+          ${scenarioBadge}
+          <span style="flex:1;"></span>
+          ${latencyBadge}
+          ${s.slowestSection ? `<span style="color:#6e7681; font-size:0.65rem;">(${s.slowestSection})</span>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  renderProblemsDetected(problems) {
+    if (problems.length === 0) {
+      return `
+        <div style="display:flex; align-items:center; gap:8px; padding:12px; background:#0d2818; border:1px solid #166534; border-radius:8px; color:#4ade80;">
+          <span style="font-size:1.2rem;">✓</span>
+          <span>No problems detected</span>
+        </div>
+      `;
+    }
+
+    const severityColors = {
+      error: { bg: '#450a0a', border: '#991b1b', text: '#fca5a5', icon: '✗' },
+      warning: { bg: '#451a03', border: '#92400e', text: '#fcd34d', icon: '⚠' },
+      info: { bg: '#0c1929', border: '#1e40af', text: '#93c5fd', icon: 'ℹ' }
+    };
+
+    return problems.map(p => {
+      const style = severityColors[p.severity] || severityColors.info;
+      const turnLabel = p.turn !== null ? `Turn ${p.turn}: ` : '';
+      return `
+        <div style="display:flex; align-items:flex-start; gap:8px; padding:10px; background:${style.bg}; border:1px solid ${style.border}; border-radius:8px; margin-bottom:6px;">
+          <span style="color:${style.text}; font-size:1rem;">${style.icon}</span>
+          <div>
+            <div style="color:${style.text}; font-weight:600; font-size:0.85rem;">${p.type.replace(/_/g, ' ')}</div>
+            <div style="color:#9ca3af; font-size:0.8rem; margin-top:2px;">${turnLabel}${this.escapeHtml(p.message)}</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   getEventColor(type) {
     const colors = {
       'CALL_START': '#22d3ee',
       'CALL_END': '#f43f5e',
       'A2_GATE': '#a78bfa',
+      'A2_DISCOVERY_GATE': '#a78bfa',
       'A2_TURN': '#4ade80',
       'A2_PATH_SELECTED': '#60a5fa',
+      'A2_SCENARIO_EVAL': '#fbbf24',
+      'A2_MIC_OWNER_PROOF': '#c084fc',
+      'GREETING_EVALUATED': '#fb923c',
       'CORE_RUNTIME_OWNER_RESULT': '#fbbf24',
       'TWIML_SENT': '#6ee7b7',
       'INPUT_TEXT_FINALIZED': '#93c5fd',
-      'GREETING_SENT': '#c4b5fd'
+      'GREETING_SENT': '#c4b5fd',
+      'SLOTS_EXTRACTED': '#a5b4fc'
     };
     return colors[type] || '#6e7681';
   }
