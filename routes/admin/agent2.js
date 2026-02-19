@@ -26,7 +26,8 @@ const ConfigAuditService = require('../../services/ConfigAuditService');
 const BlackBoxLogger = require('../../services/BlackBoxLogger');
 const openaiClient = require('../../config/openai');
 
-const UI_BUILD = 'AGENT2_UI_V0.8';
+const UI_BUILD = 'AGENT2_UI_V0.9';
+const BlackBoxRecording = require('../../models/BlackBoxRecording');
 
 function defaultAgent2Config() {
   return {
@@ -430,6 +431,101 @@ Respond ONLY with valid JSON, no markdown, no explanation:
     return res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CALL REVIEW ENDPOINTS (V119 - Enterprise Call Console)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/calls/:companyId
+ * List recent calls for Call Review tab
+ */
+router.get('/calls/:companyId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const { limit = 50, skip = 0, source, fromDate, toDate } = req.query;
+
+    try {
+      const options = {
+        limit: Math.min(Number(limit) || 50, 100),
+        skip: Number(skip) || 0,
+        source: source || undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined
+      };
+
+      const result = await BlackBoxRecording.getCallList(companyId, options);
+
+      // Transform for UI
+      const calls = result.calls.map(call => ({
+        callSid: call.callId,
+        from: call.from,
+        to: call.to,
+        startTime: call.startedAt,
+        duration: call.durationMs ? Math.round(call.durationMs / 1000) : null,
+        turnCount: call.performance?.totalTurns || null,
+        status: call.callOutcome?.toLowerCase() || 'completed',
+        source: call.source || 'voice',
+        flags: call.flags || {},
+        bookingCompleted: call.booking?.completed === true,
+        primaryIntent: call.primaryIntent,
+        diagnosis: call.diagnosis
+      }));
+
+      return res.json({ success: true, data: calls, total: result.total });
+    } catch (error) {
+      logger.error('[AGENT2] Call list error', { companyId, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/calls/:companyId/:callSid/events
+ * Get raw events for a specific call
+ */
+router.get('/calls/:companyId/:callSid/events',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    const { companyId, callSid } = req.params;
+
+    try {
+      const recording = await BlackBoxRecording.getCallDetail(companyId, callSid);
+
+      if (!recording) {
+        return res.status(404).json({ success: false, error: 'Call not found' });
+      }
+
+      // Return events with call metadata
+      return res.json({
+        success: true,
+        data: recording.events || [],
+        meta: {
+          callSid: recording.callId,
+          from: recording.from,
+          to: recording.to,
+          startedAt: recording.startedAt,
+          endedAt: recording.endedAt,
+          durationMs: recording.durationMs,
+          source: recording.source,
+          callOutcome: recording.callOutcome,
+          transcript: recording.transcript,
+          flags: recording.flags,
+          diagnosis: recording.diagnosis,
+          performance: recording.performance,
+          awHash: recording.awHash,
+          traceRunId: recording.traceRunId
+        }
+      });
+    } catch (error) {
+      logger.error('[AGENT2] Call events error', { companyId, callSid, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
 
 module.exports = router;
 

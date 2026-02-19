@@ -17,13 +17,17 @@
  */
 
 class Agent2Manager {
-  static UI_BUILD = 'AGENT2_UI_V0.8';
+  static UI_BUILD = 'AGENT2_UI_V0.9';
 
   constructor(companyId) {
     this.companyId = companyId;
     this.config = null;
     this.isDirty = false;
     this._container = null;
+    this._activeTab = 'config'; // 'config' or 'callReview'
+    this._calls = [];
+    this._callsLoading = false;
+    this._selectedCall = null;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -158,13 +162,16 @@ class Agent2Manager {
     if (!this.config) this.config = this.getDefaultConfig();
     this._container = container;
 
+    const isConfigTab = this._activeTab === 'config';
+    const isCallReviewTab = this._activeTab === 'callReview';
+
     container.innerHTML = `
       <div style="padding: 20px; background: #0d1117; color: #e6edf3;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid #30363d; padding-bottom:12px;">
           <div>
             <div style="display:flex; align-items:center; gap:10px;">
               <h2 style="margin:0; font-size:1.5rem; color:#22d3ee;">Agent 2.0</h2>
-              <span id="a2-dirty-badge" style="font-size:0.75rem; padding:3px 8px; border-radius:999px; background:${this.isDirty ? '#f59e0b' : '#238636'}; color:white;">
+              <span id="a2-dirty-badge" style="font-size:0.75rem; padding:3px 8px; border-radius:999px; background:${this.isDirty ? '#f59e0b' : '#238636'}; color:white; ${isCallReviewTab ? 'display:none;' : ''}">
                 ${this.isDirty ? 'UNSAVED' : 'SAVED'}
               </span>
               <span style="font-size:0.7rem; padding:3px 8px; background:#21262d; border:1px solid #30363d; border-radius:999px; color:#c9d1d9;">
@@ -172,10 +179,10 @@ class Agent2Manager {
               </span>
             </div>
             <div style="margin-top:6px; color:#8b949e; font-size:0.9rem;">
-              Clean, isolated config surface. Discovery is built and locked before Booking.
+              ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : 'Enterprise call review console. Click a call to see details, transcript, and raw events.'}
             </div>
           </div>
-          <div style="display:flex; gap:10px;">
+          <div style="display:flex; gap:10px; ${isCallReviewTab ? 'display:none;' : ''}">
             <button id="a2-export-json" style="padding:8px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer;">
               Export JSON
             </button>
@@ -188,14 +195,427 @@ class Agent2Manager {
           </div>
         </div>
 
-        ${this.renderStatusCard()}
-        ${this.renderStyleCard()}
-        ${this.renderPlaybookCard()}
-        ${this.renderSimulatorCard()}
+        <!-- TAB NAVIGATION -->
+        <div style="display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid #30363d;">
+          <button id="a2-tab-config" class="a2-tab-btn" style="padding:10px 20px; background:${isConfigTab ? '#0b1220' : 'transparent'}; color:${isConfigTab ? '#22d3ee' : '#8b949e'}; border:none; border-bottom:${isConfigTab ? '2px solid #22d3ee' : '2px solid transparent'}; cursor:pointer; font-weight:${isConfigTab ? '700' : '400'}; font-size:0.95rem;">
+            Configuration
+          </button>
+          <button id="a2-tab-callReview" class="a2-tab-btn" style="padding:10px 20px; background:${isCallReviewTab ? '#0b1220' : 'transparent'}; color:${isCallReviewTab ? '#22d3ee' : '#8b949e'}; border:none; border-bottom:${isCallReviewTab ? '2px solid #22d3ee' : '2px solid transparent'}; cursor:pointer; font-weight:${isCallReviewTab ? '700' : '400'}; font-size:0.95rem;">
+            Call Review
+          </button>
+        </div>
+
+        <!-- TAB CONTENT -->
+        <div id="a2-tab-content">
+          ${isConfigTab ? this.renderConfigTab() : this.renderCallReviewTab()}
+        </div>
       </div>
+
+      <!-- CALL DETAIL MODAL -->
+      ${this.renderCallDetailModal()}
     `;
 
     this.attach(container);
+    
+    // If on call review tab, load calls
+    if (isCallReviewTab && this._calls.length === 0 && !this._callsLoading) {
+      this.loadCalls();
+    }
+  }
+
+  renderConfigTab() {
+    return `
+      ${this.renderStatusCard()}
+      ${this.renderStyleCard()}
+      ${this.renderPlaybookCard()}
+      ${this.renderSimulatorCard()}
+    `;
+  }
+
+  renderCallReviewTab() {
+    if (this._callsLoading) {
+      return `
+        <div style="text-align:center; padding:60px; color:#8b949e;">
+          <div style="font-size:2rem; margin-bottom:12px;">⏳</div>
+          <div>Loading calls...</div>
+        </div>
+      `;
+    }
+
+    if (this._calls.length === 0) {
+      return `
+        <div style="text-align:center; padding:60px; color:#8b949e;">
+          <div style="font-size:2rem; margin-bottom:12px;">📞</div>
+          <div>No calls found. Make a test call to see it here.</div>
+          <button id="a2-refresh-calls" style="margin-top:16px; padding:10px 20px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer;">
+            Refresh
+          </button>
+        </div>
+      `;
+    }
+
+    const callCards = this._calls.map((call, idx) => {
+      const date = new Date(call.startTime || call.createdAt);
+      const timeStr = date.toLocaleString();
+      const duration = call.duration ? `${Math.round(call.duration)}s` : '--';
+      const turns = call.turnCount || call.turns || '--';
+      const from = call.from || call.callerPhone || 'Unknown';
+      const status = call.status || 'completed';
+      const statusColor = status === 'completed' ? '#238636' : (status === 'in-progress' ? '#f59e0b' : '#6e7681');
+      
+      return `
+        <div class="a2-call-card" data-call-idx="${idx}" style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.15s;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-weight:700; color:#e5e7eb; font-size:1rem;">${this.escapeHtml(from)}</div>
+              <div style="color:#8b949e; font-size:0.85rem; margin-top:4px;">${timeStr}</div>
+            </div>
+            <div style="text-align:right;">
+              <span style="padding:4px 10px; background:${statusColor}22; color:${statusColor}; border-radius:999px; font-size:0.75rem; font-weight:600;">
+                ${status.toUpperCase()}
+              </span>
+            </div>
+          </div>
+          <div style="display:flex; gap:20px; margin-top:12px; color:#8b949e; font-size:0.85rem;">
+            <div><span style="color:#6e7681;">Duration:</span> ${duration}</div>
+            <div><span style="color:#6e7681;">Turns:</span> ${turns}</div>
+            <div><span style="color:#6e7681;">CallSid:</span> ${this.escapeHtml((call.callSid || '').substring(0, 12))}...</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div style="color:#8b949e; font-size:0.9rem;">
+          Showing ${this._calls.length} recent calls
+        </div>
+        <button id="a2-refresh-calls" style="padding:8px 16px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer;">
+          Refresh
+        </button>
+      </div>
+      <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:12px;">
+        ${callCards}
+      </div>
+    `;
+  }
+
+  renderCallDetailModal() {
+    return `
+      <div id="a2-call-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; overflow:auto;">
+        <div style="max-width:900px; margin:40px auto; background:#0d1117; border:1px solid #30363d; border-radius:16px; overflow:hidden;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:#161b22; border-bottom:1px solid #30363d;">
+            <div style="font-weight:700; color:#e5e7eb; font-size:1.1rem;">Call Details</div>
+            <button id="a2-call-modal-close" style="background:none; border:none; color:#8b949e; font-size:1.5rem; cursor:pointer; padding:4px 8px;">&times;</button>
+          </div>
+          <div id="a2-call-modal-content" style="padding:20px; max-height:70vh; overflow:auto;">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  async loadCalls() {
+    this._callsLoading = true;
+    this.render(this._container);
+
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/agent2/calls/${this.companyId}?limit=50`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const json = await res.json();
+        this._calls = json.data || json.calls || [];
+      } else {
+        this._calls = [];
+      }
+    } catch (e) {
+      console.error('Failed to load calls:', e);
+      this._calls = [];
+    }
+
+    this._callsLoading = false;
+    this.render(this._container);
+  }
+
+  async loadCallDetails(callSid) {
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/agent2/calls/${this.companyId}/${callSid}/events`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (res.ok) {
+        const json = await res.json();
+        return { events: json.data || [], meta: json.meta || {} };
+      }
+    } catch (e) {
+      console.error('Failed to load call events:', e);
+    }
+    return { events: [], meta: {} };
+  }
+
+  openCallModal(call) {
+    this._selectedCall = call;
+    const modal = document.getElementById('a2-call-modal');
+    const content = document.getElementById('a2-call-modal-content');
+    if (!modal || !content) return;
+
+    // Show loading state
+    content.innerHTML = `
+      <div style="text-align:center; padding:40px; color:#8b949e;">
+        <div style="font-size:1.5rem; margin-bottom:12px;">⏳</div>
+        <div>Loading call details...</div>
+      </div>
+    `;
+    modal.style.display = 'block';
+
+    // Load events
+    this.loadCallDetails(call.callSid).then(({ events, meta }) => {
+      // Merge meta into call for richer display
+      const enrichedCall = { ...call, ...meta };
+      this.renderCallModalContent(enrichedCall, events, content);
+    });
+  }
+
+  renderCallModalContent(call, events, container) {
+    const date = new Date(call.startTime || call.createdAt);
+    const from = call.from || call.callerPhone || 'Unknown';
+    const to = call.to || call.toPhone || 'Unknown';
+    const duration = call.duration ? `${Math.round(call.duration)} seconds` : '--';
+    const recordingUrl = call.recordingUrl || null;
+
+    // Build transcript from events
+    const transcript = this.buildTranscript(events);
+    
+    // Key events for debugging
+    const keyEvents = events.filter(e => 
+      ['CALL_START', 'A2_GATE', 'A2_TURN', 'A2_PATH_SELECTED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'CALL_END'].includes(e.type)
+    );
+
+    container.innerHTML = `
+      <!-- CALL INFO -->
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:20px;">
+        <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px;">
+          <div style="color:#8b949e; font-size:0.8rem; margin-bottom:8px;">CALL INFO</div>
+          <div style="display:grid; gap:8px; font-size:0.9rem;">
+            <div><span style="color:#6e7681;">From:</span> <span style="color:#e5e7eb;">${this.escapeHtml(from)}</span></div>
+            <div><span style="color:#6e7681;">To:</span> <span style="color:#e5e7eb;">${this.escapeHtml(to)}</span></div>
+            <div><span style="color:#6e7681;">Time:</span> <span style="color:#e5e7eb;">${date.toLocaleString()}</span></div>
+            <div><span style="color:#6e7681;">Duration:</span> <span style="color:#e5e7eb;">${duration}</span></div>
+            <div><span style="color:#6e7681;">CallSid:</span> <span style="color:#e5e7eb; font-family:monospace; font-size:0.8rem;">${this.escapeHtml(call.callSid || '')}</span></div>
+          </div>
+        </div>
+        <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px;">
+          <div style="color:#8b949e; font-size:0.8rem; margin-bottom:8px;">ACTIONS</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            ${recordingUrl ? `
+              <a href="${this.escapeHtml(recordingUrl)}" target="_blank" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#238636; color:white; border-radius:8px; text-decoration:none; font-size:0.9rem;">
+                <span>🎧</span> Listen to Recording
+              </a>
+            ` : `
+              <div style="padding:10px 14px; background:#21262d; color:#6e7681; border-radius:8px; font-size:0.9rem;">
+                No recording available
+              </div>
+            `}
+            <button id="a2-play-transcript" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer; font-size:0.9rem;">
+              <span>▶</span> Play Transcript (TTS)
+            </button>
+            <button id="a2-export-events" style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer; font-size:0.9rem;">
+              <span>📋</span> Export Raw Events
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRANSCRIPT -->
+      <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:20px;">
+        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:12px;">TRANSCRIPT</div>
+        <div id="a2-transcript-container" style="max-height:300px; overflow:auto;">
+          ${transcript.length > 0 ? transcript.map(t => `
+            <div style="margin-bottom:12px; padding:10px; background:${t.role === 'caller' ? '#1a1f2e' : '#0d2818'}; border-radius:8px;">
+              <div style="font-size:0.75rem; color:${t.role === 'caller' ? '#60a5fa' : '#4ade80'}; margin-bottom:4px; font-weight:600;">
+                ${t.role === 'caller' ? '📞 CALLER' : '🤖 AGENT'} ${t.turn !== undefined ? `(Turn ${t.turn})` : ''}
+              </div>
+              <div style="color:#e5e7eb; font-size:0.9rem; line-height:1.5;">${this.escapeHtml(t.text)}</div>
+            </div>
+          `).join('') : `
+            <div style="color:#6e7681; text-align:center; padding:20px;">No transcript available</div>
+          `}
+        </div>
+      </div>
+
+      <!-- RAW EVENTS -->
+      <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="color:#8b949e; font-size:0.8rem;">RAW EVENTS (${events.length} total, ${keyEvents.length} key)</div>
+          <button id="a2-toggle-all-events" style="padding:4px 10px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; cursor:pointer; font-size:0.75rem;">
+            Show All
+          </button>
+        </div>
+        <div id="a2-events-container" style="max-height:300px; overflow:auto; font-family:monospace; font-size:0.8rem;">
+          ${keyEvents.map(e => `
+            <div style="margin-bottom:8px; padding:8px; background:#161b22; border-radius:6px; border-left:3px solid ${this.getEventColor(e.type)};">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="color:${this.getEventColor(e.type)}; font-weight:600;">${e.type}</span>
+                <span style="color:#6e7681; font-size:0.7rem;">Turn ${e.turn ?? '--'}</span>
+              </div>
+              <div style="color:#8b949e; font-size:0.75rem; white-space:pre-wrap; word-break:break-all;">${this.escapeHtml(JSON.stringify(e.data || {}, null, 2).substring(0, 300))}${JSON.stringify(e.data || {}).length > 300 ? '...' : ''}</div>
+            </div>
+          `).join('')}
+        </div>
+        <div id="a2-all-events-container" style="display:none; max-height:400px; overflow:auto; font-family:monospace; font-size:0.75rem; margin-top:12px;">
+          <pre style="color:#8b949e; white-space:pre-wrap; word-break:break-all;">${this.escapeHtml(JSON.stringify(events, null, 2))}</pre>
+        </div>
+      </div>
+    `;
+
+    // Attach modal event handlers
+    this.attachCallModalHandlers(call, events, transcript);
+  }
+
+  buildTranscript(events) {
+    const transcript = [];
+    
+    // Get greeting
+    const greeting = events.find(e => e.type === 'GREETING_SENT');
+    if (greeting?.data?.text) {
+      transcript.push({ role: 'agent', text: greeting.data.text, turn: 0 });
+    }
+
+    // Get caller inputs and agent responses
+    events.forEach(e => {
+      if (e.type === 'INPUT_TEXT_FINALIZED' && e.data?.finalPreview) {
+        transcript.push({ role: 'caller', text: e.data.finalPreview, turn: e.turn });
+      }
+      if (e.type === 'A2_TURN' && e.data?.response) {
+        transcript.push({ role: 'agent', text: e.data.response, turn: e.turn });
+      }
+      if (e.type === 'CORE_RUNTIME_OWNER_RESULT' && e.data?.responsePreview && !events.find(ev => ev.type === 'A2_TURN' && ev.turn === e.turn)) {
+        transcript.push({ role: 'agent', text: e.data.responsePreview, turn: e.turn });
+      }
+    });
+
+    return transcript;
+  }
+
+  getEventColor(type) {
+    const colors = {
+      'CALL_START': '#22d3ee',
+      'CALL_END': '#f43f5e',
+      'A2_GATE': '#a78bfa',
+      'A2_TURN': '#4ade80',
+      'A2_PATH_SELECTED': '#60a5fa',
+      'CORE_RUNTIME_OWNER_RESULT': '#fbbf24',
+      'TWIML_SENT': '#6ee7b7',
+      'INPUT_TEXT_FINALIZED': '#93c5fd',
+      'GREETING_SENT': '#c4b5fd'
+    };
+    return colors[type] || '#6e7681';
+  }
+
+  attachCallModalHandlers(call, events, transcript) {
+    const modal = document.getElementById('a2-call-modal');
+    
+    // Close modal
+    document.getElementById('a2-call-modal-close')?.addEventListener('click', () => {
+      modal.style.display = 'none';
+      window.speechSynthesis.cancel();
+    });
+    modal?.addEventListener('click', (e) => {
+      if (e.target.id === 'a2-call-modal') {
+        modal.style.display = 'none';
+        window.speechSynthesis.cancel();
+      }
+    });
+
+    // Play transcript TTS
+    document.getElementById('a2-play-transcript')?.addEventListener('click', () => {
+      this.playTranscript(transcript);
+    });
+
+    // Export events
+    document.getElementById('a2-export-events')?.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(events, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `raw-events-${call.callSid}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // Toggle all events
+    document.getElementById('a2-toggle-all-events')?.addEventListener('click', (e) => {
+      const allContainer = document.getElementById('a2-all-events-container');
+      const keyContainer = document.getElementById('a2-events-container');
+      if (allContainer.style.display === 'none') {
+        allContainer.style.display = 'block';
+        keyContainer.style.display = 'none';
+        e.target.textContent = 'Show Key Only';
+      } else {
+        allContainer.style.display = 'none';
+        keyContainer.style.display = 'block';
+        e.target.textContent = 'Show All';
+      }
+    });
+  }
+
+  playTranscript(transcript) {
+    if (transcript.length === 0) {
+      alert('No transcript to play.');
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const btn = document.getElementById('a2-play-transcript');
+    const originalHTML = btn?.innerHTML || '';
+    
+    let idx = 0;
+    const playNext = () => {
+      if (idx >= transcript.length) {
+        if (btn) {
+          btn.innerHTML = originalHTML;
+          btn.style.background = '#1f6feb';
+        }
+        return;
+      }
+
+      const item = transcript[idx];
+      const utterance = new SpeechSynthesisUtterance(item.text);
+      utterance.rate = 1.0;
+      
+      // Different voice/pitch for caller vs agent
+      if (item.role === 'caller') {
+        utterance.pitch = 1.2;
+      } else {
+        utterance.pitch = 0.9;
+      }
+
+      // Try to get voices
+      const voices = window.speechSynthesis.getVoices();
+      if (item.role === 'agent') {
+        const agentVoice = voices.find(v => v.name.includes('Samantha') || v.name.includes('Karen')) || voices.find(v => v.lang.startsWith('en'));
+        if (agentVoice) utterance.voice = agentVoice;
+      }
+
+      utterance.onend = () => {
+        idx++;
+        setTimeout(playNext, 500); // Small pause between turns
+      };
+
+      if (btn) {
+        btn.innerHTML = `<span>⏹</span> Playing... (${idx + 1}/${transcript.length})`;
+        btn.style.background = '#6e7681';
+      }
+
+      window.speechSynthesis.speak(utterance);
+    };
+
+    playNext();
   }
 
   renderCard(title, subtitle, bodyHtml) {
@@ -766,6 +1186,37 @@ class Agent2Manager {
   attach(container) {
     const onAnyChange = () => this._setDirty(true);
 
+    // TAB NAVIGATION
+    container.querySelector('#a2-tab-config')?.addEventListener('click', () => {
+      if (this._activeTab !== 'config') {
+        this._activeTab = 'config';
+        this.render(container);
+      }
+    });
+    container.querySelector('#a2-tab-callReview')?.addEventListener('click', () => {
+      if (this._activeTab !== 'callReview') {
+        this._activeTab = 'callReview';
+        this.render(container);
+      }
+    });
+
+    // CALL REVIEW TAB HANDLERS
+    container.querySelector('#a2-refresh-calls')?.addEventListener('click', () => {
+      this._calls = [];
+      this.loadCalls();
+    });
+
+    container.querySelectorAll('.a2-call-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const idx = Number(card.getAttribute('data-call-idx'));
+        const call = this._calls[idx];
+        if (call) this.openCallModal(call);
+      });
+      card.addEventListener('mouseover', () => { card.style.borderColor = '#30363d'; card.style.background = '#161b22'; });
+      card.addEventListener('mouseout', () => { card.style.borderColor = '#1f2937'; card.style.background = '#0b1220'; });
+    });
+
+    // CONFIG TAB HANDLERS (existing)
     const enabled = container.querySelector('#a2-enabled');
     const dEnabled = container.querySelector('#a2-discovery-enabled');
     enabled?.addEventListener('change', (e) => { this.config.enabled = e.target.checked; onAnyChange(); });
