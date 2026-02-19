@@ -57,12 +57,19 @@ function defaultAgent2Config() {
       },
       playbook: {
         version: 'v2',
+        // V119: ScenarioEngine is OFF by default. Trigger Cards are the primary path.
+        useScenarioFallback: false,
         allowedScenarioTypes: ['FAQ', 'TROUBLESHOOT', 'PRICING', 'SERVICE', 'UNKNOWN'],
         minScenarioScore: 0.72,
         fallback: {
+          // V119: DISTINCT FALLBACK PATHS
+          // noMatchAnswer: Used when NO reason captured (OK to ask "how can I help?")
           noMatchAnswer: "Ok. How can I help you today?",
-          noMatchWhenReasonCaptured: "Ok. I'm sorry about that.",
+          // noMatchWhenReasonCaptured: Used when reason IS captured (NEVER restart conversation)
+          noMatchWhenReasonCaptured: "Ok. I'm sorry to hear that.",
+          // noMatchClarifierQuestion: Optional clarifying question when reason captured
           noMatchClarifierQuestion: "Just so I help you the right way — is the system not running at all right now, or is it running but not cooling?",
+          // afterAnswerQuestion: Append after successful card/scenario answer
           afterAnswerQuestion: "Would you like to schedule a visit, or do you have a question I can help with?"
         },
         rules: [
@@ -84,6 +91,86 @@ function defaultAgent2Config() {
             followUp: {
               question: 'Would you like to schedule a repair visit, or were you looking for a maintenance tune-up?',
               nextAction: 'OFFER_REPAIR_VS_MAINTENANCE'
+            }
+          },
+          {
+            id: 'problem.water_leak',
+            enabled: true,
+            priority: 15,
+            label: 'Water leak / dripping',
+            match: {
+              keywords: ['water leak', 'leaking water', 'dripping', 'water dripping', 'water in garage', 'water on floor', 'puddle', 'condensation leak', 'drain line', 'overflow'],
+              phrases: ['water coming from', 'dripping from ceiling', 'water in my'],
+              negativeKeywords: [],
+              scenarioTypeAllowlist: ['TROUBLESHOOT', 'EMERGENCY']
+            },
+            answer: {
+              answerText: 'Water leaking from an AC unit is often caused by a clogged drain line or a frozen evaporator coil. If you see a lot of water, turn the system off to prevent damage.',
+              audioUrl: ''
+            },
+            followUp: {
+              question: 'Is the water actively dripping right now, or have you noticed it pooling over time?',
+              nextAction: 'DIAGNOSE_WATER_LEAK'
+            }
+          },
+          {
+            id: 'problem.not_cooling',
+            enabled: true,
+            priority: 12,
+            label: 'AC not cooling',
+            match: {
+              keywords: ['not cooling', 'not cold', 'blowing warm', 'warm air', 'hot air', 'no cold air', 'system running but'],
+              phrases: ['running but not cooling', 'blowing but not cold'],
+              negativeKeywords: [],
+              scenarioTypeAllowlist: ['TROUBLESHOOT']
+            },
+            answer: {
+              answerText: 'If your system is running but not cooling, it could be a refrigerant issue, a dirty filter, or a problem with the compressor. Check your filter first — a clogged filter can restrict airflow.',
+              audioUrl: ''
+            },
+            followUp: {
+              question: 'When did you last change the filter?',
+              nextAction: 'DIAGNOSE_NOT_COOLING'
+            }
+          },
+          {
+            id: 'problem.system_not_running',
+            enabled: true,
+            priority: 14,
+            label: 'System not running',
+            match: {
+              keywords: ['not running', 'wont turn on', 'wont start', 'dead', 'nothing happening', 'not working', 'stopped working'],
+              phrases: ['system is not', 'ac is not', 'wont come on'],
+              negativeKeywords: [],
+              scenarioTypeAllowlist: ['TROUBLESHOOT', 'EMERGENCY']
+            },
+            answer: {
+              answerText: 'If your system is not running at all, check your thermostat batteries and make sure the breaker has not tripped. Sometimes a simple reset fixes the issue.',
+              audioUrl: ''
+            },
+            followUp: {
+              question: 'Is your thermostat screen on, or is it completely blank?',
+              nextAction: 'DIAGNOSE_SYSTEM_DOWN'
+            }
+          },
+          {
+            id: 'problem.thermostat',
+            enabled: true,
+            priority: 11,
+            label: 'Thermostat issue',
+            match: {
+              keywords: ['thermostat', 'thermostat blank', 'thermostat not working', 'display blank', 'screen blank'],
+              phrases: ['thermostat is', 'thermostat shows'],
+              negativeKeywords: [],
+              scenarioTypeAllowlist: ['TROUBLESHOOT']
+            },
+            answer: {
+              answerText: 'Thermostat issues can be as simple as dead batteries or as complex as wiring problems. Check the batteries first — if that doesn\'t help, we can send someone out.',
+              audioUrl: ''
+            },
+            followUp: {
+              question: 'Is the thermostat screen blank, or is it showing something but the system is not responding?',
+              nextAction: 'DIAGNOSE_THERMOSTAT'
             }
           }
         ]

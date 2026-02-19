@@ -81,7 +81,17 @@ class StateStore {
     static load(callState = {}) {
         const slotsBag = clone(callState.slots || {});
         const plainSlots = extractPlainSlots(slotsBag);
-        const slotMeta = extractSlotMeta(slotsBag);
+        
+        // V119: Load slotMeta from persisted state, merge with any inline metadata from slots
+        // Priority: persisted slotMeta (has nameLocked, extractedInTurn) > inline slot metadata
+        const inlineSlotMeta = extractSlotMeta(slotsBag);
+        const persistedSlotMeta = clone(callState.slotMeta || {});
+        const slotMeta = { ...inlineSlotMeta };
+        // Merge persisted metadata on top (it has the richer fields)
+        Object.entries(persistedSlotMeta).forEach(([key, meta]) => {
+            slotMeta[key] = { ...(slotMeta[key] || {}), ...meta };
+        });
+        
         const lane = callState.sessionMode === 'BOOKING' ? 'BOOKING' : 'DISCOVERY';
         const pendingSlots = clone(callState.pendingSlots || {});
         const presenceFlags = derivePresenceFlags(slotsBag, pendingSlots);
@@ -160,6 +170,13 @@ class StateStore {
         // ═══════════════════════════════════════════════════════════════════════════
         next.pendingSlots = clone(state.pendingSlots || {});      // V116: Unconfirmed slots
         next.confirmedSlots = clone(state.confirmedSlots || {});  // V116: Confirmed slots
+
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V119: Persist slotMeta (confidence, source, nameLocked, extractedInTurn)
+        // ═══════════════════════════════════════════════════════════════════════════
+        // CRITICAL: Without this, name confidence is lost on subsequent turns,
+        // causing Agent 2.0 to not use the caller's name in responses.
+        next.slotMeta = clone(state.slotMeta || {});
 
         next.discoveryCurrentStepId = state.discovery?.currentStepId || null;
         next.discoveryCurrentSlotId = state.discovery?.currentSlotId || null;
