@@ -194,11 +194,20 @@ class V2AIAgentRuntime {
         const agent2 = company?.aiAgentSettings?.agent2 || {};
         const agent2Enabled = agent2.enabled === true && agent2.discovery?.enabled === true;
         
+        // 🔍 DEBUG: Log Agent 2.0 state for troubleshooting
+        logger.info(`[V2 GREETING] 🔍 DEBUG: agent2.enabled=${agent2.enabled}, agent2.discovery?.enabled=${agent2.discovery?.enabled}`);
+        logger.info(`[V2 GREETING] 🔍 DEBUG: agent2Enabled=${agent2Enabled}`);
+        logger.info(`[V2 GREETING] 🔍 DEBUG: agent2.greetings exists=${Boolean(agent2.greetings)}`);
+        if (agent2.greetings) {
+            logger.info(`[V2 GREETING] 🔍 DEBUG: agent2.greetings.callStart=${JSON.stringify(agent2.greetings.callStart)}`);
+        }
+        
         if (agent2Enabled) {
             const callStart = agent2.greetings?.callStart || {};
             const callStartEnabled = callStart.enabled !== false;
             
             logger.info(`[V2 GREETING] 🚀 Agent 2.0 ENABLED — using Agent 2.0 callStart greeting`);
+            logger.info(`[V2 GREETING] 🔍 DEBUG: callStart=${JSON.stringify(callStart)}, callStartEnabled=${callStartEnabled}`);
             
             if (!callStartEnabled) {
                 // Agent 2.0 greeting disabled — skip greeting entirely
