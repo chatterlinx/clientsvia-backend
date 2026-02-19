@@ -2631,170 +2631,26 @@ router.post('/:companyID/voice', async (req, res) => {
   res.send(twiml.toString());
 });
 
-// Add company-specific voice endpoint for Blueprint compliance (legacy format)
-router.post('/voice/:companyID', async (req, res) => {
-  const callStartTime = Date.now();
+// ════════════════════════════════════════════════════════════════════════════════
+// LEGACY ALIAS: /voice/:companyID → redirects to canonical /:companyId/voice
+// ════════════════════════════════════════════════════════════════════════════════
+// This is a legacy URL format that some old TwiML or configs may still use.
+// Instead of duplicating logic, we redirect to the canonical route.
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/voice/:companyID', (req, res) => {
   const { companyID } = req.params;
   
-  // 🚨 HIGH-VISIBILITY LOG: This route should be deprecated - watch for traffic
-  logger.warn('⚠️ [TWILIO] DEPRECATED ROUTE USED: /voice/:companyID', {
+  logger.info(`[TWILIO] Legacy /voice/:companyId hit - redirecting to canonical /:companyId/voice`, {
     companyId: companyID,
-    fromNumber: req.body.From,
-    toNumber: req.body.To,
-    callSid: req.body.CallSid,
-    timestamp: new Date().toISOString(),
-    message: 'This route is deprecated. If you see this log, investigate why traffic is still using this endpoint.'
+    callSid: req.body.CallSid
   });
   
-  // 🚨 CRITICAL CHECKPOINT: Log EVERYTHING at company-specific webhook entry
-  logger.info('='.repeat(80));
-  logger.info(`🚨 COMPANY WEBHOOK HIT: /api/twilio/voice/${companyID} at ${new Date().toISOString()}`);
-  logger.info(`🚨 FULL REQUEST BODY:`, JSON.stringify(req.body, null, 2));
-  logger.info(`🚨 HEADERS:`, JSON.stringify(req.headers, null, 2));
-  logger.info(`🚨 URL:`, req.url);
-  logger.info(`🚨 METHOD:`, req.method);
-  logger.debug(`🚨 IP:`, req.ip || req.connection.remoteAddress);
-  logger.debug('='.repeat(80));
+  // Redirect via TwiML to canonical route
+  const twiml = new twilio.twiml.VoiceResponse();
+  twiml.redirect(`${getSecureBaseUrl(req)}/api/twilio/${companyID}/voice`);
   
-  logger.debug(`[AI AGENT VOICE] [CALL] New call for company ${companyID} at: ${new Date().toISOString()}`);
-  logger.debug(`[AI AGENT DEBUG] From: ${req.body.From} → CallSid: ${req.body.CallSid}`);
-  
-  try {
-    const twiml = new twilio.twiml.VoiceResponse();
-    
-    // Normalize phone numbers
-    const callerNumber = normalizePhoneNumber(req.body.From);
-    const calledNumber = normalizePhoneNumber(req.body.To);
-    
-    // Load company by ID
-    const company = await Company.findById(companyID);
-    if (!company) {
-      logger.error(`[ERROR] Company not found: ${companyID}`);
-      
-      // 🚨 CRITICAL ALERT: Send to Notification Center
-      await AdminNotificationService.sendAlert({
-        code: 'TWILIO_COMPANY_NOT_FOUND',
-        severity: 'CRITICAL',
-        companyId: companyID,
-        companyName: `Company ${companyID}`,
-        message: `🔴 CRITICAL: Twilio call failed - Company ${companyID} not found in database`,
-        details: {
-          endpoint: `/api/twilio/voice/${companyID}`,
-          callSid: req.body.CallSid,
-          from: req.body.From,
-          to: req.body.To,
-          error: `Company ${companyID} does not exist in database`,
-          impact: 'Caller hears error message and call disconnects. All calls to this company fail.',
-          action: 'Check if company was deleted, verify Twilio webhook URL, ensure company exists in database.',
-          timestamp: new Date().toISOString()
-        }
-      }).catch(notifErr => logger.error('Failed to send company not found alert:', notifErr));
-      
-      // Use configurable response instead of hardcoded message [[memory:8276820]]
-      const companyNotFoundResponse = `Configuration error: Company ${companyID} not found. Each company must be properly configured in the platform.`;
-      twiml.say(companyNotFoundResponse);
-      twiml.hangup();
-      res.type('text/xml');
-      return res.send(twiml.toString());
-    }
-
-    logger.info(`[AI AGENT COMPANY] ${company.businessName || company.companyName} (ID: ${companyID})`);
-    
-    // 🚫 SPAM FILTER - SECURED 2025-11-27
-    // This deprecated route was bypassing spam filter - now secured with same logic as /voice
-    const SmartCallFilter = require('../services/SmartCallFilter');
-    const filterResult = await SmartCallFilter.checkCall({
-      callerPhone: callerNumber,
-      companyId: company._id.toString(),
-      companyPhone: calledNumber,
-      twilioCallSid: req.body.CallSid
-    });
-    
-    // 📊 STRUCTURED SPAM LOG - For traceability
-    logger.info('[SPAM-FIREWALL] decision', {
-      route: '/voice/:companyID',
-      companyId: company._id.toString(),
-      fromNumber: callerNumber,
-      toNumber: calledNumber,
-      decision: filterResult.shouldBlock ? 'BLOCK' : 'ALLOW',
-      reason: filterResult.reason || null,
-      spamScore: filterResult.spamScore || 0,
-      spamFlags: filterResult.flags || [],
-      callSid: req.body.CallSid,
-      timestamp: new Date().toISOString()
-    });
-
-    if (filterResult.shouldBlock) {
-      logger.security(`🚫 [SPAM BLOCKED] Call from ${callerNumber} blocked on deprecated route. Reason: ${filterResult.reason}`);
-      
-      // Play rejection message and hangup
-      twiml.say('This call has been blocked. Goodbye.');
-      twiml.hangup();
-      
-      res.type('text/xml');
-      res.send(twiml.toString());
-      return;
-    }
-
-    logger.security(`✅ [SPAM FILTER] Call from ${callerNumber} passed all security checks on deprecated route`);
-    
-    // ────────────────────────────────────────────────────────────────
-    // 🛡️ SPAM CONTEXT: Attach spam data to session for edge case bridge
-    // ────────────────────────────────────────────────────────────────
-    const spamContext = {
-      spamScore: filterResult.spamScore || 0,
-      spamReason: filterResult.reason || null,
-      spamFlags: filterResult.flags || []
-    };
-    
-    req.session = req.session || {};
-    req.session.spamContext = spamContext;
-    
-    // ☠️ REMOVED: aiAgentSettings.enabled block (legacy nuked 2025-11-20)
-    // This endpoint is now deprecated - V2 Agent handles all calls via /v2-agent-init/
-    // NOTE: This route returns empty TwiML - if still in use, needs full implementation
-    
-    const twimlString = twiml.toString();
-    logger.info('📤 CHECKPOINT 10: Sending final TwiML response');
-    logger.info('📋 COMPLETE TwiML CONTENT:');
-    logger.info(twimlString);
-    logger.info('🚨 CRITICAL: If a "woman takes over" after this TwiML, it\'s NOT our code!');
-    
-    res.type('text/xml');
-    res.send(twimlString);
-    
-  } catch (error) {
-    logger.error(`[ERROR] AI Agent Voice error for company ${companyID}:`, error);
-    
-    // 🚨 CRITICAL ALERT: Send to Notification Center
-    await AdminNotificationService.sendAlert({
-      code: 'TWILIO_WEBHOOK_ERROR',
-      severity: 'CRITICAL',
-      companyId: companyID,
-      companyName: `Company ${companyID}`,
-      message: `🔴 CRITICAL: Twilio webhook /voice/${companyID} crashed`,
-      details: {
-        endpoint: `/api/twilio/voice/${companyID}`,
-        callSid: req.body?.CallSid,
-        from: req.body?.From,
-        to: req.body?.To,
-        error: error.message,
-        stack: error.stack,
-        impact: 'Caller hears error message and call disconnects. All incoming calls to this company fail until resolved.',
-        action: 'Check error logs, verify company configuration, ensure AI Agent Logic is properly configured, check database connectivity.',
-        timestamp: new Date().toISOString()
-      },
-      stackTrace: error.stack
-    }).catch(notifErr => logger.error('Failed to send webhook error alert:', notifErr));
-    
-    const twiml = new twilio.twiml.VoiceResponse();
-    // Use configurable response instead of hardcoded message [[memory:8276820]]
-    const voiceErrorResponse = `Configuration error: Company ${companyID} must configure voice error responses in AI Agent Logic. Each company must have their own protocol.`;
-    twiml.say(voiceErrorResponse);
-    twiml.hangup();
-    res.type('text/xml');
-    res.send(twiml.toString());
-  }
+  res.type('text/xml');
+  res.send(twiml.toString());
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
