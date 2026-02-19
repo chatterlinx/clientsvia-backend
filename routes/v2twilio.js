@@ -1450,17 +1450,57 @@ router.post('/voice', async (req, res) => {
         }).catch(() => {});
       }
 
-      // Use V2 Voice Settings for TTS
+      // ═══════════════════════════════════════════════════════════════════════
+      // GREETING PLAYBACK: Handle prerecorded audio vs TTS
+      // ═══════════════════════════════════════════════════════════════════════
+      const greetingMode = initResult.greetingConfig?.mode;
+      const greetingSource = initResult.greetingConfig?.source || 'legacy';
       const elevenLabsVoice = initResult.voiceSettings?.voiceId;
-      logger.debug(`🔍 [CALL-7] Extracted voice ID from initResult: ${elevenLabsVoice || 'NOT SET'}`);
-      logger.debug(`🔍 [CALL-8] Has greeting: ${Boolean(initResult.greeting)}`);
-      logger.debug(`🔍 [CALL-9] Will use ElevenLabs: ${Boolean(elevenLabsVoice && initResult.greeting)}`);
-      logger.debug(`[V2 VOICE CHECK] ElevenLabs Voice ID: ${elevenLabsVoice || 'NOT SET'}`);
-      logger.debug(`[V2 VOICE CHECK] Has greeting: ${Boolean(initResult.greeting)}`);
       
-      if (elevenLabsVoice && initResult.greeting) {
+      logger.debug(`🔍 [CALL-7] Greeting mode: ${greetingMode}, source: ${greetingSource}`);
+      logger.debug(`🔍 [CALL-8] Has greeting text: ${Boolean(initResult.greeting)}`);
+      logger.debug(`🔍 [CALL-9] Has audioUrl: ${Boolean(initResult.greetingConfig?.audioUrl)}`);
+      logger.debug(`[V2 VOICE CHECK] ElevenLabs Voice ID: ${elevenLabsVoice || 'NOT SET'}`);
+      
+      // MODE: PRERECORDED AUDIO (Agent 2.0 or legacy)
+      if (greetingMode === 'prerecorded' && initResult.greetingConfig?.audioUrl) {
+        const audioUrl = initResult.greetingConfig.audioUrl;
+        logger.info(`[GREETING] 🎵 Playing pre-recorded audio (source: ${greetingSource}): ${audioUrl}`);
+        gather.play(audioUrl);
+        
+        // 📼 BLACK BOX: Log prerecorded greeting played
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: req.body.CallSid,
+            companyId: company._id,
+            type: 'GREETING_PRERECORDED',
+            turn: 0,
+            data: {
+              audioUrl,
+              source: greetingSource
+            }
+          }).catch(() => {});
+        }
+      }
+      // MODE: DISABLED (skip greeting, go straight to listening)
+      else if (greetingMode === 'disabled') {
+        logger.info(`[GREETING] ⏭️ Greeting disabled (source: ${greetingSource}) — going straight to AI listening`);
+        // No greeting played, just the gather will listen
+        
+        if (BlackBoxLogger) {
+          BlackBoxLogger.logEvent({
+            callId: req.body.CallSid,
+            companyId: company._id,
+            type: 'GREETING_SKIPPED',
+            turn: 0,
+            data: { source: greetingSource, reason: 'disabled' }
+          }).catch(() => {});
+        }
+      }
+      // MODE: REALTIME TTS (ElevenLabs)
+      else if (elevenLabsVoice && initResult.greeting) {
         try {
-          logger.debug(`[TTS START] ✅ Using ElevenLabs voice ${elevenLabsVoice} for initial greeting`);
+          logger.debug(`[TTS START] ✅ Using ElevenLabs voice ${elevenLabsVoice} for initial greeting (source: ${greetingSource})`);
           const ttsStartTime = Date.now();
           const greetingText = cleanTextForTTS(stripMarkdown(initResult.greeting));
           
@@ -1486,7 +1526,7 @@ router.post('/voice', async (req, res) => {
           });
           
           const ttsTime = Date.now() - ttsStartTime;
-          logger.info(`[TTS COMPLETE] [OK] AI Agent Logic greeting TTS completed in ${ttsTime}ms`);
+          logger.info(`[TTS COMPLETE] [OK] AI Agent Logic greeting TTS completed in ${ttsTime}ms (source: ${greetingSource})`);
           
           // 📼 BLACK BOX: Log TTS completed
           if (BlackBoxLogger) {

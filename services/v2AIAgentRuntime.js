@@ -188,6 +188,53 @@ class V2AIAgentRuntime {
     static generateV2Greeting(company) {
         logger.info(`[V2 GREETING] 🎭 Generating greeting for ${company.businessName || company.companyName}`);
         
+        // ═══════════════════════════════════════════════════════════════════════
+        // AGENT 2.0 HARD GATE: If Agent 2.0 is enabled, use Agent 2.0 greetings
+        // ═══════════════════════════════════════════════════════════════════════
+        const agent2 = company?.aiAgentSettings?.agent2 || {};
+        const agent2Enabled = agent2.enabled === true && agent2.discovery?.enabled === true;
+        
+        if (agent2Enabled) {
+            const callStart = agent2.greetings?.callStart || {};
+            const callStartEnabled = callStart.enabled !== false;
+            
+            logger.info(`[V2 GREETING] 🚀 Agent 2.0 ENABLED — using Agent 2.0 callStart greeting`);
+            
+            if (!callStartEnabled) {
+                // Agent 2.0 greeting disabled — skip greeting entirely
+                logger.info(`[V2 GREETING] Agent 2.0 callStart greeting is disabled — going straight to AI`);
+                return {
+                    mode: 'disabled',
+                    text: null,
+                    source: 'agent2'
+                };
+            }
+            
+            // Check if audio URL is configured (takes priority over TTS)
+            if (callStart.audioUrl && callStart.audioUrl.trim()) {
+                logger.info(`[V2 GREETING] ✅ Agent 2.0 using pre-recorded audio: ${callStart.audioUrl}`);
+                return {
+                    mode: 'prerecorded',
+                    audioUrl: callStart.audioUrl.trim(),
+                    source: 'agent2'
+                };
+            }
+            
+            // Fall back to TTS text
+            const greetingText = callStart.text || "Thank you for calling. How can I help you today?";
+            const processedText = this.buildPureResponse(greetingText, company);
+            logger.info(`[V2 GREETING] ✅ Agent 2.0 using TTS: "${processedText}"`);
+            return {
+                mode: 'realtime',
+                text: processedText,
+                voiceId: company.voiceSettings?.selectedVoiceId,
+                source: 'agent2'
+            };
+        }
+        // ═══════════════════════════════════════════════════════════════════════
+        // END AGENT 2.0 HARD GATE — Legacy flow continues below
+        // ═══════════════════════════════════════════════════════════════════════
+        
         // ✅ FIX: Use ROOT LEVEL connectionMessages (AI Agent Settings tab)
         // NOT aiAgentSettings.connectionMessages (deleted legacy tab)
         const connectionMessages = company.connectionMessages;
