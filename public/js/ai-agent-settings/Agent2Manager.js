@@ -496,6 +496,7 @@ class Agent2Manager {
 
   buildTranscript(events) {
     const transcript = [];
+    const agentResponsesByTurn = new Map();
     
     // Get greeting
     const greeting = events.find(e => e.type === 'GREETING_SENT');
@@ -503,17 +504,59 @@ class Agent2Manager {
       transcript.push({ role: 'agent', text: greeting.data.text, turn: 0 });
     }
 
-    // Get caller inputs and agent responses
+    // First pass: collect all agent responses by turn (prefer most complete)
     events.forEach(e => {
-      if (e.type === 'INPUT_TEXT_FINALIZED' && e.data?.finalPreview) {
-        transcript.push({ role: 'caller', text: e.data.finalPreview, turn: e.turn });
-      }
+      const turn = e.turn ?? 0;
+      let responseText = null;
+      
+      // Priority order: A2_TURN.response > CORE_RUNTIME_OWNER_RESULT.responsePreview > TWIML_SENT with text
       if (e.type === 'A2_TURN' && e.data?.response) {
-        transcript.push({ role: 'agent', text: e.data.response, turn: e.turn });
+        responseText = e.data.response;
+      } else if (e.type === 'CORE_RUNTIME_OWNER_RESULT' && e.data?.responsePreview) {
+        if (!agentResponsesByTurn.has(turn)) {
+          responseText = e.data.responsePreview;
+        }
+      } else if (e.type === 'AGENT_RESPONSE_BUILT' && e.data?.text) {
+        if (!agentResponsesByTurn.has(turn)) {
+          responseText = e.data.text;
+        }
+      } else if (e.type === 'TTS_GENERATED' && e.data?.text) {
+        if (!agentResponsesByTurn.has(turn)) {
+          responseText = e.data.text;
+        }
       }
-      if (e.type === 'CORE_RUNTIME_OWNER_RESULT' && e.data?.responsePreview && !events.find(ev => ev.type === 'A2_TURN' && ev.turn === e.turn)) {
-        transcript.push({ role: 'agent', text: e.data.responsePreview, turn: e.turn });
+      
+      if (responseText && turn > 0) {
+        agentResponsesByTurn.set(turn, responseText);
       }
+    });
+
+    // Second pass: build transcript in order
+    events.forEach(e => {
+      if (e.type === 'INPUT_TEXT_FINALIZED') {
+        const text = e.data?.finalPreview || e.data?.text || e.data?.speechResult || '';
+        if (text) {
+          transcript.push({ role: 'caller', text, turn: e.turn ?? 0 });
+        }
+        
+        // Add agent response for this turn if we have one
+        const turn = e.turn ?? 0;
+        if (agentResponsesByTurn.has(turn)) {
+          transcript.push({ role: 'agent', text: agentResponsesByTurn.get(turn), turn });
+          agentResponsesByTurn.delete(turn); // Don't add twice
+        }
+      }
+    });
+
+    // Add any remaining agent responses that weren't paired with caller input
+    agentResponsesByTurn.forEach((text, turn) => {
+      transcript.push({ role: 'agent', text, turn });
+    });
+
+    // Sort by turn
+    transcript.sort((a, b) => {
+      if (a.turn !== b.turn) return a.turn - b.turn;
+      return a.role === 'caller' ? -1 : 1; // Caller before agent in same turn
     });
 
     return transcript;
