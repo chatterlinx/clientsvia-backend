@@ -227,7 +227,7 @@ class V2AIAgentRuntime {
             return {
                 mode: 'realtime',
                 text: processedText,
-                voiceId: company.voiceSettings?.selectedVoiceId,
+                voiceId: company.aiAgentSettings?.voiceSettings?.voiceId,
                 source: 'agent2'
             };
         }
