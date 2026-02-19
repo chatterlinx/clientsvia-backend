@@ -631,7 +631,21 @@ class FrontDeskCoreRuntime {
             // Must happen BEFORE we run SlotExtractor or Discovery.
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'GREETING_INTERCEPT';
+            
+            // V119: Check if utterance passes the short-greeting gate BEFORE trying to match
+            const isShortEnough = GreetingInterceptor.isShortGreeting(inputText);
             const greetingMatch = GreetingInterceptor.tryIntercept(inputText, company, state);
+            
+            // V119: ALWAYS emit greeting evaluation proof (whether it matched or not)
+            bufferEvent('GREETING_EVALUATED', {
+                inputPreview: inputText.substring(0, 60),
+                inputWordCount: (inputText || '').split(/\s+/).filter(w => w.length > 0).length,
+                isShortGreeting: isShortEnough,
+                matched: !!greetingMatch,
+                matchedTrigger: greetingMatch?.matchedTrigger || null,
+                blockedReason: !isShortEnough ? 'UTTERANCE_TOO_LONG_FOR_GREETING' : (greetingMatch ? null : 'NO_RULE_MATCHED'),
+                turn
+            });
             
             if (greetingMatch) {
                 // Log the intercept
@@ -642,13 +656,39 @@ class FrontDeskCoreRuntime {
                     sectionTrail: tracer.getTrailString()
                 });
                 
+                // V119: Emit MIC_OWNER_PROOF for greeting intercept path
+                // This proves Agent 2.0 was BYPASSED because greeting matched
+                const agent2Enabled =
+                    company?.aiAgentSettings?.agent2?.enabled === true &&
+                    company?.aiAgentSettings?.agent2?.discovery?.enabled === true;
+                    
+                bufferEvent('A2_MIC_OWNER_PROOF', {
+                    agent2Enabled,
+                    agent2Ran: false,
+                    agent2Responded: false,
+                    finalResponder: 'GREETING_INTERCEPTOR',
+                    // PROOF: Greeting intercepted BEFORE Agent 2.0 could run
+                    greetingInterceptorRan: true,
+                    greetingMatched: greetingMatch.matchedTrigger,
+                    legacyDiscoveryRan: false,
+                    scenarioEngineAutoRan: false,
+                    callReasonExtractorAckRan: false,
+                    consentGateRan: false,
+                    bookingFlowRan: false,
+                    openerEngineRan: false,
+                    // Why Agent 2.0 didn't run
+                    bypassReason: 'GREETING_INTERCEPTED_EARLY_RETURN',
+                    turn,
+                    inputPreview: inputText.substring(0, 40)
+                });
+                
                 logger.info('[FRONT_DESK_CORE_RUNTIME] Greeting intercepted', {
                     callSid,
                     trigger: greetingMatch.matchedTrigger,
                     matchType: greetingMatch.matchType
                 });
                 
-                // Return immediately - no need for Discovery Flow
+                // HARD RETURN: Greeting owns this turn, nothing else runs
                 return {
                     response: greetingMatch.response,
                     state: state,
@@ -665,6 +705,21 @@ class FrontDeskCoreRuntime {
             // ═══════════════════════════════════════════════════════════════════════════
             currentSection = 'S3_SLOT_EXTRACTION';
             
+            // V120: Check if there's a pending question from Agent 2.0
+            // If so, we should NOT extract call_reason_detail (prevents "yes please" poisoning)
+            const hasPendingQuestion = state.agent2?.discovery?.pendingQuestion && 
+                                       state.agent2?.discovery?.pendingQuestionTurn === (turn - 1);
+            
+            // V120: Emit event when pending question guard is active
+            if (hasPendingQuestion) {
+                bufferEvent('PENDING_QUESTION_SLOT_GUARD', {
+                    blockedSlots: ['call_reason_detail'],
+                    reason: 'User is responding to yes/no question - do not poison call_reason',
+                    pendingQuestion: state.agent2.discovery.pendingQuestion?.substring(0, 60),
+                    pendingQuestionTurn: state.agent2.discovery.pendingQuestionTurn
+                });
+            }
+            
             let extractedMeta = {};
             try {
                 extractedMeta = SlotExtractor.extractAll(inputText, {
@@ -677,7 +732,10 @@ class FrontDeskCoreRuntime {
                     slotMeta: state.slotMeta || {},
                     turnCount: turn,
                     currentBookingStep: null,
-                    sessionMode: state.sessionMode || 'DISCOVERY'
+                    sessionMode: state.sessionMode || 'DISCOVERY',
+                    // V120: Block call_reason extraction when pending question exists
+                    hasPendingQuestion: hasPendingQuestion,
+                    pendingQuestionText: hasPendingQuestion ? state.agent2.discovery.pendingQuestion : null
                 }) || {};
             } catch (extractError) {
                 logger.error('[FRONT_DESK_CORE_RUNTIME] S3 extractAll FAILED', {
@@ -953,20 +1011,32 @@ class FrontDeskCoreRuntime {
                     // ───────────────────────────────────────────────────────────────────────────
                     // AGENT 2.0 (DISCOVERY ONLY) — Single mic owner, UI-gated
                     // ───────────────────────────────────────────────────────────────────────────
-                    // IMPORTANT:
-                    // - This path is explicitly enabled via company.aiAgentSettings.agent2.*
-                    // - Discovery only (no booking build yet)
-                    // - Emits A2_DISCOVERY_* events for BlackBox proof
+                    // V119: HARD ISOLATION - When Agent 2.0 is enabled:
+                    // - It is the ONLY speaker
+                    // - Legacy owners are BLOCKED (not just skipped)
+                    // - We emit proof of blocking
                     const agent2Enabled =
                         company?.aiAgentSettings?.agent2?.enabled === true &&
                         company?.aiAgentSettings?.agent2?.discovery?.enabled === true;
+                    
                     if (agent2Enabled) {
                         currentSection = 'A2_DISCOVERY';
                         verboseEvents = false; // Suppress legacy noise when Agent 2.0 active
-                        bufferEvent('A2_DISCOVERY_GATE', {
-                            enabled: true,
+                        
+                        // V119: Emit legacy blocked proof BEFORE running Agent 2.0
+                        bufferEvent('A2_LEGACY_BLOCKED', {
+                            blocked: true,
+                            blockedOwners: [
+                                'DiscoveryFlowRunner',
+                                'ScenarioEngine_auto',
+                                'CallReasonExtractor_ack',
+                                'S4A_Pipeline'
+                            ],
+                            reason: 'Agent 2.0 enabled - legacy owners will NOT be evaluated',
+                            turn,
                             uiBuild: company?.aiAgentSettings?.agent2?.meta?.uiBuild || null
                         });
+                        
                         ownerResult = await Agent2DiscoveryRunner.run({
                             company,
                             companyId,
@@ -976,20 +1046,49 @@ class FrontDeskCoreRuntime {
                             emitEvent: bufferEvent,
                             turn
                         });
+                        
+                        // ═══════════════════════════════════════════════════════════════════════════
+                        // V119: A2_MIC_OWNER_PROOF — CONSOLIDATED PROOF OF WHAT RAN AND WHAT DIDN'T
+                        // ═══════════════════════════════════════════════════════════════════════════
+                        // This is the SINGLE event that proves hard isolation.
+                        // Check this event to verify no other speaker executed.
+                        // 
+                        // NOTE: greetingEvaluated is TRUE because GREETING_EVALUATED event fired above.
+                        // If greeting had matched, we would have returned early and never reached here.
+                        bufferEvent('A2_MIC_OWNER_PROOF', {
+                            agent2Enabled: true,
+                            agent2Ran: true,
+                            agent2Responded: !!ownerResult?.response,
+                            finalResponder: ownerResult?.matchSource || 'AGENT2_DISCOVERY',
+                            // PROOF: Greeting was evaluated but did NOT match (otherwise we wouldn't be here)
+                            greetingInterceptorRan: false,  // Would have returned early if it fired
+                            greetingEvaluated: true,        // See GREETING_EVALUATED event above
+                            greetingBlocked: !isShortEnough, // True if blocked by short-greeting gate
+                            greetingBlockReason: !isShortEnough ? 'UTTERANCE_TOO_LONG' : 'NO_RULE_MATCHED',
+                            // PROOF: Legacy engines did NOT run
+                            legacyDiscoveryRan: false,
+                            scenarioEngineAutoRan: false,   // Only runs if useScenarioFallback=true inside Agent2
+                            callReasonExtractorAckRan: false,
+                            consentGateRan: false,
+                            bookingFlowRan: false,
+                            openerEngineRan: false,  // Skipped for Agent 2.0 responses
+                            // Meta
+                            turn,
+                            inputPreview: (userInput || '').substring(0, 60),
+                            responsePreview: (ownerResult?.response || '').substring(0, 80),
+                            configHash: company?.aiAgentSettings?.agent2?.meta?.uiBuild || null
+                        });
+                        
+                        // HARD RETURN: Do not evaluate any other speakers
+                        // ownerResult is set, legacy path will be skipped by the agent2WasEnabled check
                     } else {
-                        bufferEvent('A2_DISCOVERY_GATE', { enabled: false });
+                        // Legacy path - emit that Agent 2.0 is OFF
+                        bufferEvent('A2_LEGACY_BLOCKED', {
+                            blocked: false,
+                            reason: 'Agent 2.0 disabled - legacy owners may run',
+                            turn
+                        });
                     }
-
-                    // ═══════════════════════════════════════════════════════════════════════════
-                    // AGENT 2.0 OWNS THE MIC — NO LEGACY FALLBACK
-                    // ═══════════════════════════════════════════════════════════════════════════
-                    // When Agent 2.0 is enabled, it is the ONLY speaker.
-                    // No fallback to DiscoveryFlowRunner — one brain, one truth.
-                    checkpoint(bufferEvent, 'A2_DISCOVERY_RETURNED', {
-                        matchSource: ownerResult?.matchSource || 'A2_NO_RESPONSE',
-                        responsePreview: (ownerResult?.response || '').substring(0, 80),
-                        hasResponse: !!ownerResult?.response
-                    });
                 }
 
                 // ═══════════════════════════════════════════════════════════════════════════

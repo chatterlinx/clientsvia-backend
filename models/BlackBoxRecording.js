@@ -535,6 +535,7 @@ BlackBoxRecordingSchema.statics.getCallList = async function(companyId, options 
       'booking.completed': 1,
       'performance.totalTurns': 1,
       'performance.avgTurnTimeMs': 1,
+      'performance.llmCalls': 1,
       flags: 1,
       'diagnosis.severity': 1,
       'diagnosis.primaryBottleneck': 1,

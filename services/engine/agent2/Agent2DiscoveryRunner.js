@@ -219,98 +219,199 @@ class Agent2DiscoveryRunner {
 
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
 
-    // ──────────────────────────────────────────────────────────────────────
-    // V119: PENDING QUESTION STATE MACHINE
-    // ──────────────────────────────────────────────────────────────────────
-    // If we asked a follow-up question last turn, the user's response should
-    // be interpreted as an answer to that question, not as a new topic.
-    // This prevents the agent from getting lost and asking the same question again.
+    // ══════════════════════════════════════════════════════════════════════════
+    // V120: PENDING QUESTION STATE MACHINE (BULLETPROOF VERSION)
+    // ══════════════════════════════════════════════════════════════════════════
+    // If we asked a follow-up question last turn, the user's response MUST be
+    // interpreted as an answer to that question. Only 3 outcomes allowed:
+    //   1. YES → transition to booking/next step
+    //   2. NO → offer alternatives
+    //   3. REPROMPT → if input is garbage/unclear, ask again cleanly
+    // 
+    // NO "continue normal processing" — that's how we get lost.
+    // ══════════════════════════════════════════════════════════════════════════
     
     const pendingQuestion = nextState.agent2.discovery.pendingQuestion || null;
     const pendingQuestionTurn = nextState.agent2.discovery.pendingQuestionTurn || null;
+    const pendingQuestionSource = nextState.agent2.discovery.pendingQuestionSource || null;
     const hasPendingQuestion = pendingQuestion && typeof pendingQuestionTurn === 'number';
+    const isRespondingToPending = hasPendingQuestion && pendingQuestionTurn === (turn - 1);
     
-    // Check if user is responding to our pending question
-    if (hasPendingQuestion && pendingQuestionTurn === (turn - 1)) {
-      // User is responding to our follow-up question
-      // Clear the pending question state
-      nextState.agent2.discovery.pendingQuestion = null;
-      nextState.agent2.discovery.pendingQuestionTurn = null;
-      nextState.agent2.discovery.pendingQuestionResolved = true;
+    // Check if this is a scheduling-related pending question
+    const isSchedulingQuestion = pendingQuestion && (
+      /schedule|book|appointment|service today/i.test(pendingQuestion) ||
+      pendingQuestionSource?.includes('card:') ||
+      pendingQuestionSource === 'fallback.clarifier'
+    );
+    
+    if (isRespondingToPending) {
+      // ────────────────────────────────────────────────────────────────────────
+      // STEP 1: Classify the user's response as YES / NO / MICRO / OTHER
+      // ────────────────────────────────────────────────────────────────────────
+      const inputLowerClean = inputLower.replace(/[^a-z\s]/g, '').trim();
+      const inputWords = inputLowerClean.split(/\s+/).filter(Boolean);
+      const inputLength = input.trim().length;
+      
+      // V120: EXPANDED YES PATTERNS (aggressive matching)
+      // Matches: "yes", "yeah please", "yes uh please", "let's do it", "sure thing", etc.
+      const YES_WORDS = new Set(['yes', 'yeah', 'yep', 'yea', 'sure', 'ok', 'okay', 'please', 'absolutely', 'definitely', 'certainly']);
+      const YES_PHRASES = ['go ahead', 'do it', 'lets do it', 'let us do it', 'sounds good', 'that works', 'works for me', 'schedule', 'book', 'book it', 'set it up', 'im ready', 'i am ready', 'i would', 'i do', 'that would be great', 'perfect', 'great'];
+      
+      // Check if any word is a yes-word OR input contains a yes-phrase
+      const hasYesWord = inputWords.some(w => YES_WORDS.has(w));
+      const hasYesPhrase = YES_PHRASES.some(phrase => inputLowerClean.includes(phrase));
+      
+      // V120: EXPANDED NO PATTERNS
+      const NO_WORDS = new Set(['no', 'nope', 'nah', 'negative']);
+      const NO_PHRASES = ['not yet', 'not now', 'not today', 'maybe later', 'ill call', 'i will call', 'ill think', 'i will think', 'just asking', 'just a question', 'dont schedule', 'do not schedule', 'not right now', 'another time', 'later'];
+      
+      const hasNoWord = inputWords.some(w => NO_WORDS.has(w));
+      const hasNoPhrase = NO_PHRASES.some(phrase => inputLowerClean.includes(phrase));
+      
+      // V120: MICRO-UTTERANCE DETECTION (garbage/partial STT)
+      // If input is very short and doesn't clearly match yes/no, it's likely garbage
+      const isMicroUtterance = inputLength <= 8 && !hasYesWord && !hasNoWord;
+      const looksLikeName = inputLength <= 15 && /^[a-z]+,?$/i.test(input.trim()); // "mark," pattern
+      
+      // Final classification
+      const isYes = (hasYesWord || hasYesPhrase) && !hasNoWord && !hasNoPhrase;
+      const isNo = (hasNoWord || hasNoPhrase) && !hasYesWord && !hasYesPhrase;
+      const needsReprompt = isMicroUtterance || looksLikeName || (!isYes && !isNo && inputLength <= 15);
+      
+      // ────────────────────────────────────────────────────────────────────────
+      // STEP 2: Handle each outcome
+      // ────────────────────────────────────────────────────────────────────────
       
       emit('A2_PENDING_QUESTION_RESOLVED', {
         question: clip(pendingQuestion, 80),
         askedInTurn: pendingQuestionTurn,
         resolvedInTurn: turn,
-        userResponse: clip(input, 80)
+        userResponse: clip(input, 80),
+        classification: isYes ? 'YES' : isNo ? 'NO' : needsReprompt ? 'REPROMPT' : 'COMPLEX',
+        isSchedulingQuestion
       });
       
-      // If the response seems like a simple yes/no or confirmation, 
-      // check if we should transition to booking
-      const inputLowerClean = inputLower.replace(/[^a-z\s]/g, '').trim();
-      const isYes = /^(yes|yeah|yep|sure|ok|okay|please|go ahead|schedule|book|do it)$/i.test(inputLowerClean) ||
-                    /^(yes|yeah|yep|sure)\s+(please|i would|i do|that would)/.test(inputLowerClean);
-      const isNo = /^(no|nope|nah|not yet|not now|maybe later|i('ll| will) (call|think))/.test(inputLowerClean);
-      
       if (isYes) {
-        // User wants to proceed — this could trigger booking transition
-        // For now, acknowledge and ask about scheduling
-        const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
-        nextState.agent2.discovery.usedNameThisTurn = usedName;
+        // ══════════════════════════════════════════════════════════════════════
+        // PATH: PENDING_QUESTION_YES — User confirmed, transition to booking
+        // ══════════════════════════════════════════════════════════════════════
+        nextState.agent2.discovery.pendingQuestion = null;
+        nextState.agent2.discovery.pendingQuestionTurn = null;
+        nextState.agent2.discovery.pendingQuestionResolved = true;
         nextState.agent2.discovery.lastPath = 'PENDING_YES';
         
-        const response = `${personalAck} Great, let's get you scheduled. What day works best for you?`;
+        const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
+        nextState.agent2.discovery.usedNameThisTurn = usedName;
+        
+        // For scheduling questions, ask for address/time
+        const response = isSchedulingQuestion
+          ? `${personalAck} Great, let's get you scheduled. What's the best address for the service call?`
+          : `${personalAck} Great! Let me help you with that.`;
         
         emit('A2_PATH_SELECTED', { 
           path: 'PENDING_QUESTION_YES', 
-          reason: 'User confirmed to pending follow-up question'
+          reason: `User confirmed: detected YES markers`,
+          markers: { hasYesWord, hasYesPhrase, inputPreview: clip(inputLowerClean, 40) }
         });
         emit('A2_RESPONSE_READY', {
           path: 'PENDING_QUESTION_YES',
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
-          source: 'pendingQuestion.yesPath'
+          source: 'pendingQuestion.yesPath',
+          usedCallerName: usedName
         });
         
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
       }
       
       if (isNo) {
-        // User declined — offer alternatives or close gracefully
-        const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
-        nextState.agent2.discovery.usedNameThisTurn = usedName;
+        // ══════════════════════════════════════════════════════════════════════
+        // PATH: PENDING_QUESTION_NO — User declined
+        // ══════════════════════════════════════════════════════════════════════
+        nextState.agent2.discovery.pendingQuestion = null;
+        nextState.agent2.discovery.pendingQuestionTurn = null;
+        nextState.agent2.discovery.pendingQuestionResolved = true;
         nextState.agent2.discovery.lastPath = 'PENDING_NO';
         
-        const response = `${personalAck} No problem. Is there anything else I can help you with?`;
+        const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
+        nextState.agent2.discovery.usedNameThisTurn = usedName;
+        
+        const response = `${personalAck} No problem. Is there anything else I can help you with today?`;
         
         emit('A2_PATH_SELECTED', { 
           path: 'PENDING_QUESTION_NO', 
-          reason: 'User declined pending follow-up question'
+          reason: `User declined: detected NO markers`,
+          markers: { hasNoWord, hasNoPhrase, inputPreview: clip(inputLowerClean, 40) }
         });
         emit('A2_RESPONSE_READY', {
           path: 'PENDING_QUESTION_NO',
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
-          source: 'pendingQuestion.noPath'
+          source: 'pendingQuestion.noPath',
+          usedCallerName: usedName
         });
         
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
       }
       
-      // User gave a more complex response — fall through to normal processing
-      // but remember we just resolved a pending question
+      if (needsReprompt) {
+        // ══════════════════════════════════════════════════════════════════════
+        // PATH: PENDING_QUESTION_REPROMPT — Garbage/unclear input, ask again
+        // ══════════════════════════════════════════════════════════════════════
+        // DON'T clear pendingQuestion — we're re-asking
+        nextState.agent2.discovery.lastPath = 'PENDING_REPROMPT';
+        
+        const response = isSchedulingQuestion
+          ? `Sorry, I didn't catch that. Would you like to schedule service today? Just say yes or no.`
+          : `I'm sorry, I didn't quite get that. Could you say yes or no?`;
+        
+        emit('A2_PATH_SELECTED', { 
+          path: 'PENDING_QUESTION_REPROMPT', 
+          reason: `Micro-utterance or unclear response`,
+          inputLength,
+          isMicroUtterance,
+          looksLikeName,
+          inputPreview: clip(input, 40)
+        });
+        emit('A2_RESPONSE_READY', {
+          path: 'PENDING_QUESTION_REPROMPT',
+          responsePreview: clip(response, 120),
+          responseLength: response.length,
+          hasAudio: false,
+          source: 'pendingQuestion.reprompt'
+        });
+        
+        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+      }
+      
+      // ══════════════════════════════════════════════════════════════════════
+      // PATH: PENDING_QUESTION_COMPLEX — User gave a substantive but unclear response
+      // ══════════════════════════════════════════════════════════════════════
+      // This should be RARE. Only for genuinely complex responses (15+ chars, not yes/no).
+      // We clear the pending question but mark it so downstream doesn't re-ask.
+      nextState.agent2.discovery.pendingQuestion = null;
+      nextState.agent2.discovery.pendingQuestionTurn = null;
+      nextState.agent2.discovery.pendingQuestionResolved = true;
+      nextState.agent2.discovery.pendingQuestionWasComplex = true;
+      
       emit('A2_PENDING_QUESTION_COMPLEX_RESPONSE', {
         question: clip(pendingQuestion, 80),
         userResponse: clip(input, 80),
-        action: 'CONTINUE_NORMAL_PROCESSING'
+        action: 'FALL_THROUGH_TO_TRIGGER_CARDS',
+        reason: 'Response was substantive (15+ chars) but not clear yes/no'
       });
+      
+      // Fall through to trigger card matching, but DON'T let it ask the same question again
     } else if (hasPendingQuestion) {
       // Pending question exists but from a different turn — clear stale state
       nextState.agent2.discovery.pendingQuestion = null;
       nextState.agent2.discovery.pendingQuestionTurn = null;
     }
+    
+    // V120: Flag if we just resolved a pending question (for downstream logic)
+    const justResolvedPending = nextState.agent2.discovery.pendingQuestionResolved === true;
 
     // ──────────────────────────────────────────────────────────────────────
     // PATH 1: ROBOT CHALLENGE
@@ -598,10 +699,17 @@ class Agent2DiscoveryRunner {
       const reasonAck = `${fallback.noMatchWhenReasonCaptured || ''}`.trim() || "I'm sorry to hear that.";
       const clarifier = `${fallback.noMatchClarifierQuestion || ''}`.trim();
       
+      // V120: If we just resolved a pending question (complex response), DON'T ask another one
+      // Just acknowledge and let them continue the conversation naturally
+      const skipClarifierQuestion = justResolvedPending || nextState.agent2.discovery.pendingQuestionWasComplex;
+      
       // V119: If we have a clarifier question, use it. Otherwise, DON'T ask "how can I help?"
       // The clarifier should help narrow down the problem, not restart.
       let nextQ;
-      if (clarifier) {
+      if (skipClarifierQuestion) {
+        // Don't ask another question — they just gave us a complex response
+        nextQ = '';
+      } else if (clarifier) {
         nextQ = clarifier;
       } else {
         // Default clarifier based on the fact we HAVE a reason
@@ -615,20 +723,36 @@ class Agent2DiscoveryRunner {
                                        reasonAck.toLowerCase().startsWith('i\'m sorry');
       const finalAck = reasonAckStartsWithAck ? reasonAck : `${personalAck} ${reasonAck}`.trim();
       
-      response = `${finalAck} It sounds like ${capturedReason}. ${nextQ}`.replace(/\s+/g, ' ').trim();
+      // V120: Build response — omit trailing question if we're skipping it
+      if (nextQ) {
+        response = `${finalAck} It sounds like ${capturedReason}. ${nextQ}`.replace(/\s+/g, ' ').trim();
+      } else {
+        response = `${finalAck} It sounds like ${capturedReason}. How can I help with that?`.replace(/\s+/g, ' ').trim();
+      }
+      
       nextState.agent2.discovery.lastPath = 'FALLBACK_REASON_CAPTURED';
       pathSelected = 'FALLBACK_WITH_REASON';
-      pathReason = 'No card/scenario match but call_reason_detail captured';
+      pathReason = skipClarifierQuestion 
+        ? 'No card/scenario match, reason captured, clarifier skipped (just resolved pending)'
+        : 'No card/scenario match but call_reason_detail captured';
       
-      // V119: Track pending question for state machine
-      nextState.agent2.discovery.pendingQuestion = nextQ;
-      nextState.agent2.discovery.pendingQuestionTurn = typeof turn === 'number' ? turn : null;
-      nextState.agent2.discovery.pendingQuestionSource = 'fallback.clarifier';
+      // V120: Only track pending question if we actually asked one
+      if (nextQ && !skipClarifierQuestion) {
+        nextState.agent2.discovery.pendingQuestion = nextQ;
+        nextState.agent2.discovery.pendingQuestionTurn = typeof turn === 'number' ? turn : null;
+        nextState.agent2.discovery.pendingQuestionSource = 'fallback.clarifier';
+      }
+      
+      // V120: Clear the complex flag after using it
+      if (nextState.agent2.discovery.pendingQuestionWasComplex) {
+        delete nextState.agent2.discovery.pendingQuestionWasComplex;
+      }
       
       emit('A2_PATH_SELECTED', { 
         path: 'FALLBACK_WITH_REASON', 
         reason: pathReason,
-        capturedReasonPreview: clip(capturedReason, 60)
+        capturedReasonPreview: clip(capturedReason, 60),
+        skippedClarifier: skipClarifierQuestion
       });
       emit('A2_RESPONSE_READY', {
         path: 'FALLBACK_WITH_REASON',
@@ -637,14 +761,24 @@ class Agent2DiscoveryRunner {
         hasAudio: false,
         source: 'fallback.noMatchWhenReasonCaptured',
         usedCallerName: usedName,
-        hadClarifier: !!clarifier,
-        pendingQuestion: nextQ
+        hadClarifier: !!clarifier && !skipClarifierQuestion,
+        pendingQuestion: nextQ || null,
+        skippedClarifier: skipClarifierQuestion
       });
       
     } else {
       // Path 5: No trigger match, no scenario match, no captured reason — true generic fallback
-      // V119: This is "noMatch_noReason" — it's OK to ask "how can I help?" here
-      const baseNoMatch = `${fallback.noMatchAnswer || ''}`.trim() || `${personalAck} How can I help you today?`;
+      // V120: If we just resolved a pending question, don't ask "how can I help?" — that's a restart
+      const skipGenericQuestion = justResolvedPending || nextState.agent2.discovery.pendingQuestionWasComplex;
+      
+      let baseNoMatch;
+      if (skipGenericQuestion) {
+        // They gave us a complex response to our question — acknowledge and wait for more info
+        baseNoMatch = `${personalAck} I see. Could you tell me more about what you're experiencing?`;
+      } else {
+        // V119: This is "noMatch_noReason" — it's OK to ask "how can I help?" here
+        baseNoMatch = `${fallback.noMatchAnswer || ''}`.trim() || `${personalAck} How can I help you today?`;
+      }
       
       // V119: If noMatchAnswer already starts with ack, don't double-ack
       if (baseNoMatch.toLowerCase().startsWith('ok') || baseNoMatch.toLowerCase().startsWith(personalAck.toLowerCase().replace('.', ''))) {
@@ -653,21 +787,30 @@ class Agent2DiscoveryRunner {
         response = `${personalAck} ${baseNoMatch}`.trim();
       }
       
+      // V120: Clear the complex flag after using it
+      if (nextState.agent2.discovery.pendingQuestionWasComplex) {
+        delete nextState.agent2.discovery.pendingQuestionWasComplex;
+      }
+      
       nextState.agent2.discovery.lastPath = 'FALLBACK_NO_MATCH';
       pathSelected = 'FALLBACK_NO_REASON';
-      pathReason = 'No card/scenario match and no call_reason_detail';
+      pathReason = skipGenericQuestion 
+        ? 'No card/scenario match, no reason, but just resolved pending (asking for more info)'
+        : 'No card/scenario match and no call_reason_detail';
       
       emit('A2_PATH_SELECTED', { 
         path: 'FALLBACK_NO_REASON', 
-        reason: pathReason 
+        reason: pathReason,
+        skippedGenericQuestion: skipGenericQuestion
       });
       emit('A2_RESPONSE_READY', {
         path: 'FALLBACK_NO_REASON',
         responsePreview: clip(response, 120),
         responseLength: response.length,
         hasAudio: false,
-        source: 'fallback.noMatchAnswer',
-        usedCallerName: usedName
+        source: skipGenericQuestion ? 'fallback.pendingComplexFollowup' : 'fallback.noMatchAnswer',
+        usedCallerName: usedName,
+        skippedGenericQuestion: skipGenericQuestion
       });
     }
 

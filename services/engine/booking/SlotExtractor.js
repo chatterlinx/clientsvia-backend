@@ -453,12 +453,28 @@ class SlotExtractor {
         const sessionMode = context.sessionMode || 'DISCOVERY';
         const isBookingActive = bookingModeLocked || sessionMode === 'BOOKING';
         
+        // ═══════════════════════════════════════════════════════════════════════════
+        // V120: PENDING QUESTION GUARD — Don't poison call_reason with "yes please"
+        // ═══════════════════════════════════════════════════════════════════════════
+        // When Agent 2.0 has asked a yes/no question, the user's response should NOT
+        // be captured as call_reason_detail. "Yes please" is NOT a call reason.
+        // ═══════════════════════════════════════════════════════════════════════════
+        const hasPendingQuestion = context.hasPendingQuestion === true;
+        
         const slotRegistry = context.slotRegistry || company?.aiAgentSettings?.frontDeskBehavior?.slotRegistry;
         const slots = slotRegistry?.slots || [];
         const slotConfigMap = new Map(slots.map(s => [s.id, s]));
         
         const shouldExtract = (slotKey) => {
             if (confirmedSlots[slotKey] === true) {
+                return false;
+            }
+            
+            // V120: Block call_reason_detail extraction when pending question exists
+            if (slotKey === 'call_reason_detail' && hasPendingQuestion) {
+                logger.debug('[SLOT EXTRACTOR] Skipping call_reason_detail (pending question active)', {
+                    pendingQuestion: context.pendingQuestionText?.substring(0, 60)
+                });
                 return false;
             }
             

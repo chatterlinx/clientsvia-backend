@@ -263,6 +263,16 @@ class Agent2Manager {
       const status = call.status || 'completed';
       const statusColor = status === 'completed' ? '#238636' : (status === 'in-progress' ? '#f59e0b' : '#6e7681');
       
+      // LLM usage
+      const llmCalls = call.llmCalls || 0;
+      const llmCost = call.llmCostUsd || 0;
+      const hasLlmUsage = llmCalls > 0 || llmCost > 0;
+      const costFormatted = llmCost > 0 ? `$${llmCost.toFixed(4)}` : '$0';
+      const cost1000 = llmCost > 0 ? `$${(llmCost * 1000).toFixed(2)}` : '$0';
+      
+      // Color based on cost (green=cheap/none, yellow=moderate, red=expensive)
+      const costColor = llmCost === 0 ? '#4ade80' : llmCost < 0.01 ? '#fbbf24' : '#f43f5e';
+      
       return `
         <div class="a2-call-card" data-call-idx="${idx}" style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.15s;">
           <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -276,11 +286,27 @@ class Agent2Manager {
               </span>
             </div>
           </div>
-          <div style="display:flex; gap:20px; margin-top:12px; color:#8b949e; font-size:0.85rem;">
+          <div style="display:flex; gap:16px; margin-top:12px; color:#8b949e; font-size:0.85rem; flex-wrap:wrap;">
             <div><span style="color:#6e7681;">Duration:</span> ${duration}</div>
             <div><span style="color:#6e7681;">Turns:</span> ${turns}</div>
-            <div><span style="color:#6e7681;">CallSid:</span> ${this.escapeHtml((call.callSid || '').substring(0, 12))}...</div>
+            ${hasLlmUsage ? `
+              <div style="display:flex; align-items:center; gap:4px;">
+                <span style="color:#6e7681;">LLM:</span>
+                <span style="color:${costColor}; font-weight:600;">${llmCalls}×</span>
+                <span style="color:${costColor};">${costFormatted}</span>
+              </div>
+            ` : `
+              <div style="color:#4ade80;">
+                <span style="font-size:0.75rem;">✓ No LLM</span>
+              </div>
+            `}
           </div>
+          ${hasLlmUsage ? `
+            <div style="margin-top:8px; padding:8px 12px; background:#1a1f2e; border-radius:8px; font-size:0.75rem;">
+              <span style="color:#6e7681;">Cost projection:</span>
+              <span style="color:${costColor}; font-weight:600; margin-left:6px;">1K calls = ${cost1000}</span>
+            </div>
+          ` : ''}
         </div>
       `;
     }).join('');
@@ -388,15 +414,18 @@ class Agent2Manager {
     const duration = call.duration ? `${Math.round(call.duration)} seconds` : (call.durationMs ? `${Math.round(call.durationMs / 1000)} seconds` : '--');
     const recordingUrl = call.recordingUrl || null;
 
-    // Build transcript from events
-    const transcript = this.buildTranscript(events);
+    // Build transcript from events (pass call meta which may have pre-built transcript)
+    const transcript = this.buildTranscript(events, call);
     
     // Analyze call for problems and turn summaries
     const { turnSummaries, problems } = this.analyzeCall(events);
     
+    // Calculate LLM usage from events if not in meta
+    const llmStats = this.calculateLlmUsage(events, call);
+    
     // Key events for debugging
     const keyEvents = events.filter(e => 
-      ['CALL_START', 'A2_GATE', 'A2_DISCOVERY_GATE', 'A2_TURN', 'A2_PATH_SELECTED', 'A2_SCENARIO_EVAL', 'A2_MIC_OWNER_PROOF', 'GREETING_EVALUATED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'SLOTS_EXTRACTED', 'CALL_END'].includes(e.type)
+      ['CALL_START', 'A2_GATE', 'A2_DISCOVERY_GATE', 'A2_PATH_SELECTED', 'A2_RESPONSE_READY', 'A2_TRIGGER_EVAL', 'A2_SCENARIO_EVAL', 'A2_MIC_OWNER_PROOF', 'GREETING_EVALUATED', 'GREETING_INTERCEPTED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'SLOTS_EXTRACTED', 'CALL_END'].includes(e.type)
     );
 
     container.innerHTML = `
@@ -429,6 +458,50 @@ class Agent2Manager {
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- LLM COST ANALYSIS -->
+      <div style="background:#0b1220; border:1px solid ${llmStats.totalCalls > 0 ? '#92400e' : '#166534'}; border-radius:12px; padding:16px; margin-bottom:16px;">
+        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:10px;">LLM TOKEN USAGE</div>
+        ${llmStats.totalCalls > 0 ? `
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+            <div style="background:#1a1f2e; padding:12px; border-radius:8px;">
+              <div style="color:#6e7681; font-size:0.7rem; margin-bottom:4px;">LLM CALLS</div>
+              <div style="color:#fbbf24; font-size:1.4rem; font-weight:700;">${llmStats.totalCalls}</div>
+            </div>
+            <div style="background:#1a1f2e; padding:12px; border-radius:8px;">
+              <div style="color:#6e7681; font-size:0.7rem; margin-bottom:4px;">THIS CALL</div>
+              <div style="color:#f43f5e; font-size:1.4rem; font-weight:700;">$${llmStats.totalCost.toFixed(4)}</div>
+            </div>
+            <div style="background:#1a1f2e; padding:12px; border-radius:8px;">
+              <div style="color:#6e7681; font-size:0.7rem; margin-bottom:4px;">1,000 CALLS</div>
+              <div style="color:#f43f5e; font-size:1.4rem; font-weight:700;">$${(llmStats.totalCost * 1000).toFixed(2)}</div>
+            </div>
+            <div style="background:#1a1f2e; padding:12px; border-radius:8px;">
+              <div style="color:#6e7681; font-size:0.7rem; margin-bottom:4px;">LLM LATENCY</div>
+              <div style="color:#60a5fa; font-size:1.4rem; font-weight:700;">${llmStats.totalMs}ms</div>
+            </div>
+          </div>
+          ${llmStats.events.length > 0 ? `
+            <div style="margin-top:12px; padding-top:12px; border-top:1px solid #1f2937;">
+              <div style="color:#6e7681; font-size:0.75rem; margin-bottom:8px;">LLM Events:</div>
+              ${llmStats.events.map(e => `
+                <div style="display:flex; justify-content:space-between; padding:6px 10px; background:#0d1117; border-radius:6px; margin-bottom:4px; font-size:0.8rem;">
+                  <span style="color:#fbbf24;">${this.escapeHtml(e.type)}</span>
+                  <span style="color:#8b949e;">Turn ${e.turn || '?'} · ${e.model || 'unknown'} · ${e.tokens || '?'} tokens · $${(e.cost || 0).toFixed(4)}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        ` : `
+          <div style="display:flex; align-items:center; gap:12px; padding:12px; background:#0d2818; border:1px solid #166534; border-radius:8px;">
+            <span style="color:#4ade80; font-size:1.5rem;">✓</span>
+            <div>
+              <div style="color:#4ade80; font-weight:600;">Zero LLM Usage</div>
+              <div style="color:#6e7681; font-size:0.8rem;">This call used only deterministic responses (trigger cards, greetings, booking flow)</div>
+            </div>
+          </div>
+        `}
       </div>
 
       <!-- PROBLEMS DETECTED (Top priority - what's wrong?) -->
@@ -494,69 +567,120 @@ class Agent2Manager {
     this.attachCallModalHandlers(call, events, transcript);
   }
 
-  buildTranscript(events) {
+  buildTranscript(events, meta = {}) {
     const transcript = [];
-    const agentResponsesByTurn = new Map();
     
-    // Get greeting
+    // If BlackBox has pre-built transcript, use it (has full text, not previews)
+    if (meta?.transcript?.callerTurns?.length || meta?.transcript?.agentTurns?.length) {
+      const callerTurns = meta.transcript.callerTurns || [];
+      const agentTurns = meta.transcript.agentTurns || [];
+      
+      // Add greeting (turn 0 agent)
+      const greeting = events.find(e => e.type === 'GREETING_SENT');
+      if (greeting?.data?.text) {
+        transcript.push({ role: 'agent', text: greeting.data.text, turn: 0 });
+      }
+      
+      // Merge caller and agent turns
+      callerTurns.forEach(t => {
+        if (t.text) transcript.push({ role: 'caller', text: t.text, turn: t.turn ?? 1 });
+      });
+      agentTurns.forEach(t => {
+        if (t.text && t.turn > 0) transcript.push({ role: 'agent', text: t.text, turn: t.turn ?? 1 });
+      });
+      
+      // Sort by turn, caller before agent
+      transcript.sort((a, b) => {
+        if (a.turn !== b.turn) return a.turn - b.turn;
+        return a.role === 'caller' ? -1 : 1;
+      });
+      
+      return transcript;
+    }
+    
+    // Fallback: build from events by processing chronologically
+    // Events are already sorted by time (t field)
+    
+    // Step 1: Add greeting as Turn 0 agent response
     const greeting = events.find(e => e.type === 'GREETING_SENT');
     if (greeting?.data?.text) {
-      transcript.push({ role: 'agent', text: greeting.data.text, turn: 0 });
+      transcript.push({ role: 'agent', text: greeting.data.text, turn: 0, order: 0 });
     }
-
-    // First pass: collect all agent responses by turn (prefer most complete)
+    
+    // Step 2: Collect all caller inputs and agent responses with timestamps
+    const callerInputs = [];
+    const agentResponses = [];
+    
     events.forEach(e => {
-      const turn = e.turn ?? 0;
-      let responseText = null;
+      const t = e.t || 0;
       
-      // Priority order: A2_TURN.response > CORE_RUNTIME_OWNER_RESULT.responsePreview > TWIML_SENT with text
-      if (e.type === 'A2_TURN' && e.data?.response) {
-        responseText = e.data.response;
+      // Caller input events
+      if (e.type === 'GATHER_FINAL' || e.type === 'INPUT_TEXT_FINALIZED') {
+        const text = e.data?.text || e.data?.finalPreview || e.data?.speechResult || '';
+        if (text && text.length > 0) {
+          callerInputs.push({ text, t, eventTurn: e.turn });
+        }
+      }
+      
+      // Agent response events (prefer A2_RESPONSE_READY, fallback to others)
+      if (e.type === 'A2_RESPONSE_READY' && e.data?.responsePreview) {
+        agentResponses.push({ text: e.data.responsePreview, t, eventTurn: e.turn, priority: 1 });
       } else if (e.type === 'CORE_RUNTIME_OWNER_RESULT' && e.data?.responsePreview) {
-        if (!agentResponsesByTurn.has(turn)) {
-          responseText = e.data.responsePreview;
-        }
+        agentResponses.push({ text: e.data.responsePreview, t, eventTurn: e.turn, priority: 2 });
       } else if (e.type === 'AGENT_RESPONSE_BUILT' && e.data?.text) {
-        if (!agentResponsesByTurn.has(turn)) {
-          responseText = e.data.text;
-        }
-      } else if (e.type === 'TTS_GENERATED' && e.data?.text) {
-        if (!agentResponsesByTurn.has(turn)) {
-          responseText = e.data.text;
+        agentResponses.push({ text: e.data.text, t, eventTurn: e.turn, priority: 3 });
+      }
+    });
+    
+    // Step 3: Dedupe caller inputs (same text within short window = duplicate)
+    const uniqueCallerInputs = [];
+    callerInputs.forEach(input => {
+      const isDupe = uniqueCallerInputs.some(existing => 
+        existing.text === input.text && Math.abs(existing.t - input.t) < 2000
+      );
+      if (!isDupe) {
+        uniqueCallerInputs.push(input);
+      }
+    });
+    
+    // Step 4: Assign turn numbers based on chronological order
+    uniqueCallerInputs.sort((a, b) => a.t - b.t);
+    uniqueCallerInputs.forEach((input, idx) => {
+      const turn = idx + 1; // Turn 1, 2, 3...
+      transcript.push({ role: 'caller', text: input.text, turn, order: input.t });
+    });
+    
+    // Step 5: For each agent response, find which turn it belongs to
+    // (the agent response comes AFTER the caller input in the same turn)
+    const usedTurns = new Set();
+    agentResponses.sort((a, b) => a.priority - b.priority); // Process higher priority first
+    
+    agentResponses.forEach(resp => {
+      // Find the caller turn this response follows
+      let matchedTurn = null;
+      for (let i = uniqueCallerInputs.length - 1; i >= 0; i--) {
+        const callerInput = uniqueCallerInputs[i];
+        if (resp.t > callerInput.t) {
+          matchedTurn = i + 1;
+          break;
         }
       }
       
-      if (responseText && turn > 0) {
-        agentResponsesByTurn.set(turn, responseText);
+      if (matchedTurn && !usedTurns.has(matchedTurn)) {
+        transcript.push({ role: 'agent', text: resp.text, turn: matchedTurn, order: resp.t });
+        usedTurns.add(matchedTurn);
       }
     });
 
-    // Second pass: build transcript in order
-    events.forEach(e => {
-      if (e.type === 'INPUT_TEXT_FINALIZED') {
-        const text = e.data?.finalPreview || e.data?.text || e.data?.speechResult || '';
-        if (text) {
-          transcript.push({ role: 'caller', text, turn: e.turn ?? 0 });
-        }
-        
-        // Add agent response for this turn if we have one
-        const turn = e.turn ?? 0;
-        if (agentResponsesByTurn.has(turn)) {
-          transcript.push({ role: 'agent', text: agentResponsesByTurn.get(turn), turn });
-          agentResponsesByTurn.delete(turn); // Don't add twice
-        }
-      }
-    });
-
-    // Add any remaining agent responses that weren't paired with caller input
-    agentResponsesByTurn.forEach((text, turn) => {
-      transcript.push({ role: 'agent', text, turn });
-    });
-
-    // Sort by turn
+    // Step 6: Sort by order (timestamp), with greeting first
     transcript.sort((a, b) => {
+      // Greeting (turn 0) always first
+      if (a.turn === 0 && b.turn !== 0) return -1;
+      if (b.turn === 0 && a.turn !== 0) return 1;
+      // Then by turn number
       if (a.turn !== b.turn) return a.turn - b.turn;
-      return a.role === 'caller' ? -1 : 1; // Caller before agent in same turn
+      // Within same turn: caller before agent
+      return a.role === 'caller' ? -1 : 1;
     });
 
     return transcript;
@@ -570,18 +694,36 @@ class Agent2Manager {
     const problems = [];
     const turnSummaries = [];
     
-    // Group events by turn
-    const turns = {};
-    events.forEach(e => {
-      const t = e.turn ?? 0;
-      if (!turns[t]) turns[t] = [];
-      turns[t].push(e);
+    // Group events by turn - infer turn numbers from event sequence if not set
+    const turns = { 0: [] };
+    let inferredTurn = 0;
+    
+    events.forEach((e, idx) => {
+      // Caller input events mark start of a new turn (1, 2, 3...)
+      if (e.type === 'GATHER_FINAL' || e.type === 'INPUT_TEXT_FINALIZED') {
+        inferredTurn++;
+        if (!turns[inferredTurn]) turns[inferredTurn] = [];
+      }
+      
+      // Use event's turn if valid and reasonable, otherwise use inferred
+      const eventTurn = (e.turn && e.turn > 0 && e.turn <= inferredTurn + 1) ? e.turn : inferredTurn;
+      
+      // Turn 0 events: greeting, call start (before any caller input)
+      if (e.type === 'GREETING_SENT' || e.type === 'CALL_START') {
+        turns[0].push(e);
+      } else {
+        if (!turns[eventTurn]) turns[eventTurn] = [];
+        turns[eventTurn].push(e);
+      }
     });
 
     // Analyze each turn
     Object.keys(turns).sort((a, b) => Number(a) - Number(b)).forEach(turnNum => {
       const turnEvents = turns[turnNum];
       const turn = Number(turnNum);
+      
+      // Skip empty turns
+      if (turnEvents.length === 0) return;
       
       const summary = this.analyzeTurn(turn, turnEvents, events);
       turnSummaries.push(summary);
@@ -613,35 +755,51 @@ class Agent2Manager {
     };
 
     // Find key events for this turn
-    const a2Turn = turnEvents.find(e => e.type === 'A2_TURN');
     const a2Gate = turnEvents.find(e => e.type === 'A2_GATE' || e.type === 'A2_DISCOVERY_GATE');
     const a2Path = turnEvents.find(e => e.type === 'A2_PATH_SELECTED');
+    const a2Response = turnEvents.find(e => e.type === 'A2_RESPONSE_READY');
+    const a2Trigger = turnEvents.find(e => e.type === 'A2_TRIGGER_EVAL');
     const a2Scenario = turnEvents.find(e => e.type === 'A2_SCENARIO_EVAL');
     const greetingEval = turnEvents.find(e => e.type === 'GREETING_EVALUATED');
+    const greetingIntercept = turnEvents.find(e => e.type === 'GREETING_INTERCEPTED');
     const micProof = turnEvents.find(e => e.type === 'A2_MIC_OWNER_PROOF');
     const twimlSent = turnEvents.find(e => e.type === 'TWIML_SENT');
     const coreResult = turnEvents.find(e => e.type === 'CORE_RUNTIME_OWNER_RESULT');
 
-    // Mic Owner
+    // Mic Owner - determine who actually responded
     if (micProof) {
-      summary.micOwner = micProof.data?.finalResponder || (micProof.data?.agent2Ran ? 'AGENT2' : 'UNKNOWN');
-    } else if (a2Turn) {
+      if (micProof.data?.agent2Ran && micProof.data?.agent2Responded) {
+        summary.micOwner = 'AGENT2';
+      } else if (micProof.data?.greetingIntercepted) {
+        summary.micOwner = 'GREETING';
+      } else {
+        summary.micOwner = micProof.data?.finalResponder || 'UNKNOWN';
+      }
+    } else if (a2Path || a2Response) {
       summary.micOwner = 'AGENT2';
+    } else if (greetingIntercept) {
+      summary.micOwner = 'GREETING';
     } else if (coreResult) {
-      summary.micOwner = coreResult.data?.matchSource || 'LEGACY';
+      const src = coreResult.data?.matchSource || '';
+      if (src.includes('Agent2') || src === 'AGENT2') {
+        summary.micOwner = 'AGENT2';
+      } else {
+        summary.micOwner = src || 'LEGACY';
+      }
     }
 
-    // Path
-    if (a2Turn?.data?.path) {
-      summary.path = a2Turn.data.path;
-    } else if (a2Path?.data?.path) {
+    // Path - from A2_PATH_SELECTED event
+    if (a2Path?.data?.path) {
       summary.path = a2Path.data.path;
     }
 
-    // Matched card
-    if (a2Turn?.data?.cardId) {
-      summary.matchedCard = a2Turn.data.cardLabel || a2Turn.data.cardId;
-      summary.matchedOn = a2Turn.data.matchedOn;
+    // Matched card - from A2_TRIGGER_EVAL or A2_PATH_SELECTED
+    if (a2Trigger?.data?.matched && a2Trigger?.data?.cardId) {
+      summary.matchedCard = a2Trigger.data.cardLabel || a2Trigger.data.cardId;
+      summary.matchedOn = a2Trigger.data.matchedOn;
+    } else if (a2Path?.data?.path === 'TRIGGER_CARD') {
+      summary.matchedCard = a2Path.data.reason?.replace('Matched card: ', '') || 'trigger';
+      summary.matchedOn = a2Path.data.matchedOn;
     }
 
     // Scenario tried
@@ -679,8 +837,8 @@ class Agent2Manager {
       }
     }
 
-    // Double-ack detection
-    const response = a2Turn?.data?.response || coreResult?.data?.responsePreview || '';
+    // Double-ack detection - use A2_RESPONSE_READY or CORE_RUNTIME_OWNER_RESULT
+    const response = a2Response?.data?.responsePreview || coreResult?.data?.responsePreview || '';
     if (/\bOk\.\s*Ok\b/i.test(response) || /\bAlright\.\s*Alright\b/i.test(response)) {
       summary.problems.push({
         type: 'DOUBLE_ACK',
@@ -690,7 +848,7 @@ class Agent2Manager {
     }
 
     // Greeting hijack detection (long utterance but greeting fired)
-    if (greetingEval?.data?.matched && greetingEval?.data?.inputWordCount > 3) {
+    if (greetingIntercept && greetingEval?.data?.inputWordCount > 3) {
       summary.problems.push({
         type: 'GREETING_HIJACK',
         severity: 'error',
@@ -714,8 +872,8 @@ class Agent2Manager {
   analyzeCrossTurnProblems(turnSummaries, events, problems) {
     // Check for repeated follow-up questions
     const responses = events
-      .filter(e => e.type === 'A2_TURN' || e.type === 'CORE_RUNTIME_OWNER_RESULT')
-      .map(e => e.data?.response || e.data?.responsePreview || '');
+      .filter(e => e.type === 'A2_RESPONSE_READY' || e.type === 'CORE_RUNTIME_OWNER_RESULT')
+      .map(e => e.data?.responsePreview || '');
     
     const seen = new Set();
     responses.forEach((r, idx) => {
@@ -750,6 +908,55 @@ class Agent2Manager {
         message: 'Caller name extracted but never used in responses'
       });
     }
+  }
+
+  calculateLlmUsage(events, call) {
+    // First check if we have pre-computed stats from BlackBox
+    if (call.llmCalls > 0 || call.llmCostUsd > 0) {
+      return {
+        totalCalls: call.llmCalls || 0,
+        totalCost: call.llmCostUsd || 0,
+        totalMs: call.llmTotalMs || 0,
+        events: []
+      };
+    }
+    
+    // Fall back to calculating from events
+    const llmEvents = events.filter(e => 
+      e.type === 'LLM_RESPONSE' || 
+      e.type === 'TIER3_FALLBACK' || 
+      e.type === 'TIER3_LLM_FALLBACK_CALLED'
+    );
+    
+    let totalCost = 0;
+    let totalMs = 0;
+    const llmDetails = [];
+    
+    llmEvents.forEach(e => {
+      const cost = e.data?.costUsd || e.data?.cost || 0;
+      const ms = e.data?.latencyMs || e.data?.ms || 0;
+      const tokens = e.data?.tokens || e.data?.tokensUsed || 0;
+      const model = e.data?.model || e.data?.llmModel || e.data?.brain || 'unknown';
+      
+      totalCost += cost;
+      totalMs += ms;
+      
+      llmDetails.push({
+        type: e.type,
+        turn: e.turn,
+        model,
+        tokens,
+        cost,
+        ms
+      });
+    });
+    
+    return {
+      totalCalls: llmEvents.length,
+      totalCost,
+      totalMs,
+      events: llmDetails
+    };
   }
 
   renderTruthLine(turnSummaries) {
@@ -819,11 +1026,13 @@ class Agent2Manager {
       'CALL_END': '#f43f5e',
       'A2_GATE': '#a78bfa',
       'A2_DISCOVERY_GATE': '#a78bfa',
-      'A2_TURN': '#4ade80',
       'A2_PATH_SELECTED': '#60a5fa',
+      'A2_RESPONSE_READY': '#4ade80',
+      'A2_TRIGGER_EVAL': '#34d399',
       'A2_SCENARIO_EVAL': '#fbbf24',
       'A2_MIC_OWNER_PROOF': '#c084fc',
       'GREETING_EVALUATED': '#fb923c',
+      'GREETING_INTERCEPTED': '#fbbf24',
       'CORE_RUNTIME_OWNER_RESULT': '#fbbf24',
       'TWIML_SENT': '#6ee7b7',
       'INPUT_TEXT_FINALIZED': '#93c5fd',

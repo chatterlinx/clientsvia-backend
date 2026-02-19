@@ -471,7 +471,11 @@ router.get('/calls/:companyId',
         flags: call.flags || {},
         bookingCompleted: call.booking?.completed === true,
         primaryIntent: call.primaryIntent,
-        diagnosis: call.diagnosis
+        diagnosis: call.diagnosis,
+        // LLM usage stats
+        llmCalls: call.performance?.llmCalls?.count || 0,
+        llmCostUsd: call.performance?.llmCalls?.totalCostUsd || 0,
+        llmTotalMs: call.performance?.llmCalls?.totalMs || 0
       }));
 
       return res.json({ success: true, data: calls, total: result.total });
