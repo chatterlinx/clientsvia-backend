@@ -176,17 +176,37 @@ function matchesSubstring(input, phrase) {
 // TRIGGER CARD MATCHER CLASS
 // ────────────────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────────────────
+// HINT-TO-CARD MAPPING (for vocabulary boost system)
+// ────────────────────────────────────────────────────────────────────────────
+// Maps vocabulary hints (e.g., "maybe_thermostat") to card categories that
+// should be boosted in priority when those hints are active.
+// This allows soft hints to influence matching without forcing wrong matches.
+const HINT_TO_CARD_BOOST_MAP = {
+  'maybe_thermostat': ['thermostat', 'tstat', 'display', 'screen', 'temperature'],
+  'maybe_outdoor_unit': ['outdoor', 'outside', 'condenser', 'compressor', 'unit outside'],
+  'maybe_air_handler': ['air handler', 'indoor unit', 'attic', 'blower', 'furnace']
+};
+
+// Priority boost applied when a hint matches (lower = higher priority)
+const HINT_BOOST_AMOUNT = -5;
+
 class TriggerCardMatcher {
   /**
    * Match caller input against a list of trigger cards.
    *
    * @param {string} inputText - The caller's utterance
    * @param {Array} cards - Array of trigger card objects
+   * @param {Object} options - Optional matching options
+   * @param {Array<string>} options.hints - Active vocabulary hints (e.g., ["maybe_thermostat"])
+   * @param {Object} options.locks - Active component locks (e.g., { component: "thermostat" })
    * @returns {TriggerMatchResult}
    */
-  static match(inputText, cards) {
+  static match(inputText, cards, options = {}) {
     const input = normalizeText(inputText);
     const cardList = safeArr(cards);
+    const hints = safeArr(options.hints || []);
+    const locks = options.locks && typeof options.locks === 'object' ? options.locks : {};
 
     const result = {
       matched: false,
@@ -198,7 +218,9 @@ class TriggerCardMatcher {
       evaluated: [],
       totalCards: cardList.length,
       enabledCards: 0,
-      negativeBlocked: 0
+      negativeBlocked: 0,
+      hintBoostApplied: false,
+      lockBoostApplied: false
     };
 
     if (!input) {
@@ -211,11 +233,59 @@ class TriggerCardMatcher {
       return result;
     }
 
-    // Sort by priority (lower number = higher priority, default 100)
-    const sorted = [...cardList].sort((a, b) => {
-      const pA = typeof a.priority === 'number' ? a.priority : 100;
-      const pB = typeof b.priority === 'number' ? b.priority : 100;
-      return pA - pB;
+    // ─────────────────────────────────────────────────────────────────────────
+    // PRIORITY ADJUSTMENT: Apply hint/lock boosts before sorting
+    // ─────────────────────────────────────────────────────────────────────────
+    // If hints are active (e.g., "maybe_thermostat"), boost priority of cards
+    // that match those hint categories. This makes them more likely to match.
+    // If a lock is active (user confirmed via clarifier), boost even more.
+    const boostedCards = cardList.map(card => {
+      let effectivePriority = typeof card.priority === 'number' ? card.priority : 100;
+      let boostReasons = [];
+      
+      // Check for lock-based boost (strongest)
+      if (locks.component) {
+        const cardIdLower = (card.id || '').toLowerCase();
+        const cardLabelLower = (card.label || '').toLowerCase();
+        const lockLower = locks.component.toLowerCase();
+        
+        if (cardIdLower.includes(lockLower) || cardLabelLower.includes(lockLower)) {
+          effectivePriority += HINT_BOOST_AMOUNT * 2; // Double boost for locked
+          boostReasons.push(`lock:${locks.component}`);
+          result.lockBoostApplied = true;
+        }
+      }
+      
+      // Check for hint-based boost
+      for (const hint of hints) {
+        const boostKeywords = HINT_TO_CARD_BOOST_MAP[hint] || [];
+        const cardIdLower = (card.id || '').toLowerCase();
+        const cardLabelLower = (card.label || '').toLowerCase();
+        const cardKeywords = safeArr(card.match?.keywords).map(k => normalizeText(k));
+        
+        const matchesHint = boostKeywords.some(bk => 
+          cardIdLower.includes(bk) || 
+          cardLabelLower.includes(bk) ||
+          cardKeywords.some(ck => ck.includes(bk))
+        );
+        
+        if (matchesHint) {
+          effectivePriority += HINT_BOOST_AMOUNT;
+          boostReasons.push(`hint:${hint}`);
+          result.hintBoostApplied = true;
+        }
+      }
+      
+      return {
+        ...card,
+        _effectivePriority: effectivePriority,
+        _boostReasons: boostReasons
+      };
+    });
+
+    // Sort by effective priority (lower number = higher priority)
+    const sorted = [...boostedCards].sort((a, b) => {
+      return a._effectivePriority - b._effectivePriority;
     });
 
     for (const card of sorted) {
@@ -223,6 +293,8 @@ class TriggerCardMatcher {
         cardId: card.id || null,
         cardLabel: card.label || null,
         priority: typeof card.priority === 'number' ? card.priority : 100,
+        effectivePriority: card._effectivePriority || (typeof card.priority === 'number' ? card.priority : 100),
+        boostReasons: card._boostReasons || [],
         enabled: card.enabled !== false,
         skipped: false,
         skipReason: null,

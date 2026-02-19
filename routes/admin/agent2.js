@@ -56,6 +56,66 @@ function defaultAgent2Config() {
           transferLine: "Ok, to ensure you get the best help, I’m transferring you to a service advisor who can assist with your service needs. Please hold."
         }
       },
+      // ═══════════════════════════════════════════════════════════════════════
+      // VOCABULARY SYSTEM (UI-controlled normalization + hints)
+      // ═══════════════════════════════════════════════════════════════════════
+      // Types:
+      //   HARD_NORMALIZE: Replace mishears/misspellings (e.g., "acee" → "ac")
+      //   SOFT_HINT: Add hints without modifying text (e.g., "thingy on wall" → maybe_thermostat)
+      // Match modes:
+      //   EXACT: Word boundary match
+      //   CONTAINS: Substring match (default)
+      // ═══════════════════════════════════════════════════════════════════════
+      vocabulary: {
+        enabled: false,
+        entries: [
+          // Example HARD_NORMALIZE entries (common mishears)
+          { enabled: true, priority: 10, type: 'HARD_NORMALIZE', matchMode: 'EXACT', from: 'acee', to: 'ac', notes: 'Common STT mishear' },
+          { enabled: true, priority: 11, type: 'HARD_NORMALIZE', matchMode: 'EXACT', from: 'a/c', to: 'ac', notes: 'Normalize spelling' },
+          { enabled: true, priority: 12, type: 'HARD_NORMALIZE', matchMode: 'EXACT', from: 'tstat', to: 'thermostat', notes: 'Abbreviation' },
+          { enabled: true, priority: 13, type: 'HARD_NORMALIZE', matchMode: 'EXACT', from: 'thermo stat', to: 'thermostat', notes: 'Spaced version' },
+          // Example SOFT_HINT entries (ambiguous phrases)
+          { enabled: true, priority: 50, type: 'SOFT_HINT', matchMode: 'CONTAINS', from: 'thingy on the wall', to: 'maybe_thermostat', notes: 'Ambiguous thermostat reference' },
+          { enabled: true, priority: 51, type: 'SOFT_HINT', matchMode: 'CONTAINS', from: 'box outside', to: 'maybe_outdoor_unit', notes: 'Ambiguous outdoor unit reference' },
+          { enabled: true, priority: 52, type: 'SOFT_HINT', matchMode: 'CONTAINS', from: 'thing in the attic', to: 'maybe_air_handler', notes: 'Ambiguous air handler reference' }
+        ]
+      },
+      // ═══════════════════════════════════════════════════════════════════════
+      // CLARIFIER SYSTEM (UI-controlled disambiguation questions)
+      // ═══════════════════════════════════════════════════════════════════════
+      // Used when SOFT_HINT is triggered but no strong trigger card match.
+      // Asks a clarifying question instead of guessing wrong.
+      // ═══════════════════════════════════════════════════════════════════════
+      clarifiers: {
+        enabled: true,
+        maxAsksPerCall: 2,
+        entries: [
+          {
+            id: 'clarify.thermostat',
+            enabled: true,
+            hintTrigger: 'maybe_thermostat',
+            question: "Ok. When you say the thing on the wall, do you mean the thermostat screen where you set the temperature?",
+            locksTo: 'thermostat',
+            priority: 10
+          },
+          {
+            id: 'clarify.outdoor_unit',
+            enabled: true,
+            hintTrigger: 'maybe_outdoor_unit',
+            question: "Ok. When you say the box outside, do you mean the outdoor AC unit — the big unit with the fan?",
+            locksTo: 'outdoor_unit',
+            priority: 11
+          },
+          {
+            id: 'clarify.air_handler',
+            enabled: true,
+            hintTrigger: 'maybe_air_handler',
+            question: "Ok. When you say the thing in the attic, do you mean the air handler — the indoor unit that blows the air?",
+            locksTo: 'air_handler',
+            priority: 12
+          }
+        ]
+      },
       playbook: {
         version: 'v2',
         // V119: ScenarioEngine is OFF by default. Trigger Cards are the primary path.
@@ -219,6 +279,16 @@ function mergeAgent2Config(saved) {
       playbook: {
         ...defaults.discovery.playbook,
         ...safeObject(src.discovery?.playbook, {})
+      },
+      // Vocabulary system
+      vocabulary: {
+        ...defaults.discovery.vocabulary,
+        ...safeObject(src.discovery?.vocabulary, {})
+      },
+      // Clarifier system
+      clarifiers: {
+        ...defaults.discovery.clarifiers,
+        ...safeObject(src.discovery?.clarifiers, {})
       }
     },
     meta: { ...defaults.meta, ...safeObject(src.meta, {}) }
@@ -238,6 +308,16 @@ function mergeAgent2Config(saved) {
   }
   if (!Array.isArray(merged.discovery.playbook.rules)) {
     merged.discovery.playbook.rules = defaults.discovery.playbook.rules;
+  }
+  
+  // Vocabulary guardrails
+  if (!Array.isArray(merged.discovery.vocabulary.entries)) {
+    merged.discovery.vocabulary.entries = defaults.discovery.vocabulary.entries;
+  }
+  
+  // Clarifiers guardrails
+  if (!Array.isArray(merged.discovery.clarifiers.entries)) {
+    merged.discovery.clarifiers.entries = defaults.discovery.clarifiers.entries;
   }
 
   return merged;

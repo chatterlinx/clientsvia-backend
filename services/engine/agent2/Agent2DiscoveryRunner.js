@@ -32,6 +32,7 @@
 
 const logger = require('../../../utils/logger');
 const { TriggerCardMatcher } = require('./TriggerCardMatcher');
+const { Agent2VocabularyEngine } = require('./Agent2VocabularyEngine');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -218,6 +219,118 @@ class Agent2DiscoveryRunner {
     }
 
     const ack = `${style.ackWord || 'Ok.'}`.trim() || 'Ok.';
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // VOCABULARY PROCESSING (BEFORE trigger matching)
+    // ══════════════════════════════════════════════════════════════════════════
+    // 1. HARD_NORMALIZE: Replace mishears (e.g., "acee" → "ac")
+    // 2. SOFT_HINT: Add hints for ambiguous phrases (e.g., "thingy on wall" → maybe_thermostat)
+    // ══════════════════════════════════════════════════════════════════════════
+    const vocabularyConfig = safeObj(discoveryCfg.vocabulary, {});
+    const vocabularyResult = Agent2VocabularyEngine.process({
+      userInput: input,
+      state: nextState,
+      config: vocabularyConfig
+    });
+    
+    // Use normalized text for downstream processing
+    const normalizedInput = vocabularyResult.normalizedText;
+    const normalizedInputLower = normalizedInput.toLowerCase();
+    
+    // Store hints in state for downstream use (TriggerCardMatcher boosts, clarifier logic)
+    nextState.agent2.hints = vocabularyResult.hints;
+    nextState.agent2.discovery.lastVocabApplied = vocabularyResult.applied;
+    
+    // Emit vocabulary evaluation proof
+    emit('A2_VOCAB_EVAL', {
+      inputPreview: clip(input, 60),
+      normalizedPreview: normalizedInput !== input ? clip(normalizedInput, 60) : null,
+      wasNormalized: normalizedInput !== input,
+      appliedCount: vocabularyResult.applied.length,
+      applied: vocabularyResult.applied.slice(0, 10),
+      hintsAdded: vocabularyResult.hints,
+      stats: vocabularyResult.stats
+    });
+    
+    // Emit active hints if any
+    if (vocabularyResult.hints.length > 0) {
+      emit('A2_HINTS_ACTIVE', {
+        hints: vocabularyResult.hints,
+        locks: nextState.agent2.locks || {}
+      });
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════════
+    // CLARIFIER RESOLUTION CHECK
+    // ══════════════════════════════════════════════════════════════════════════
+    // If we asked a clarifier question last turn, check if user answered YES/NO
+    // YES → lock the component and boost matching
+    // NO → fall through normally
+    // ══════════════════════════════════════════════════════════════════════════
+    const pendingClarifier = nextState.agent2.discovery.pendingClarifier || null;
+    const pendingClarifierTurn = nextState.agent2.discovery.pendingClarifierTurn || null;
+    const isRespondingToClarifier = pendingClarifier && typeof pendingClarifierTurn === 'number' && pendingClarifierTurn === (turn - 1);
+    
+    if (isRespondingToClarifier) {
+      const inputLowerClean = normalizedInputLower.replace(/[^a-z\s]/g, '').trim();
+      const inputWords = inputLowerClean.split(/\s+/).filter(Boolean);
+      
+      const YES_WORDS = new Set(['yes', 'yeah', 'yep', 'yea', 'sure', 'ok', 'okay', 'correct', 'right', 'exactly', 'thats it', 'that is it']);
+      const NO_WORDS = new Set(['no', 'nope', 'nah', 'negative', 'not really', 'not exactly']);
+      
+      const hasYesWord = inputWords.some(w => YES_WORDS.has(w)) || inputLowerClean.includes('thats it') || inputLowerClean.includes('yes');
+      const hasNoWord = inputWords.some(w => NO_WORDS.has(w));
+      
+      if (hasYesWord && !hasNoWord) {
+        // User confirmed the clarifier — set lock
+        nextState.agent2.locks = nextState.agent2.locks || {};
+        nextState.agent2.locks.component = pendingClarifier.locksTo || null;
+        nextState.agent2.discovery.clarifierResolved = { id: pendingClarifier.id, resolvedAs: 'YES', turn };
+        
+        emit('A2_CLARIFIER_RESOLVED', {
+          clarifierId: pendingClarifier.id,
+          resolvedAs: 'YES',
+          lockedTo: pendingClarifier.locksTo,
+          locks: nextState.agent2.locks
+        });
+        
+        // Clear pending clarifier
+        nextState.agent2.discovery.pendingClarifier = null;
+        nextState.agent2.discovery.pendingClarifierTurn = null;
+        
+        // Now continue to trigger card matching with the lock in place
+      } else if (hasNoWord) {
+        // User said no — clear hints related to this clarifier and continue
+        const hintToRemove = pendingClarifier.hintTrigger;
+        nextState.agent2.hints = (nextState.agent2.hints || []).filter(h => h !== hintToRemove);
+        nextState.agent2.discovery.clarifierResolved = { id: pendingClarifier.id, resolvedAs: 'NO', turn };
+        
+        emit('A2_CLARIFIER_RESOLVED', {
+          clarifierId: pendingClarifier.id,
+          resolvedAs: 'NO',
+          removedHint: hintToRemove,
+          locks: nextState.agent2.locks || {}
+        });
+        
+        // Clear pending clarifier
+        nextState.agent2.discovery.pendingClarifier = null;
+        nextState.agent2.discovery.pendingClarifierTurn = null;
+        
+        // Continue to trigger card matching without the lock
+      } else {
+        // Unclear response — keep the clarifier pending but don't re-ask immediately
+        // Fall through to normal processing
+        nextState.agent2.discovery.pendingClarifier = null;
+        nextState.agent2.discovery.pendingClarifierTurn = null;
+        
+        emit('A2_CLARIFIER_RESOLVED', {
+          clarifierId: pendingClarifier.id,
+          resolvedAs: 'UNCLEAR',
+          inputPreview: clip(normalizedInput, 40),
+          action: 'FALL_THROUGH'
+        });
+      }
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // V120: PENDING QUESTION STATE MACHINE (BULLETPROOF VERSION)
@@ -445,9 +558,19 @@ class Agent2DiscoveryRunner {
     // ──────────────────────────────────────────────────────────────────────
     // PATH 2: TRIGGER CARD MATCHING (PRIMARY — DETERMINISTIC)
     // ──────────────────────────────────────────────────────────────────────
+    // Uses NORMALIZED input from vocabulary processing
+    // Passes hints for optional card boosting (if TriggerCardMatcher supports it)
+    // ──────────────────────────────────────────────────────────────────────
     const triggerCards = safeArr(playbook.rules);
     const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
-    const triggerResult = TriggerCardMatcher.match(input, triggerCards);
+    const activeHints = nextState.agent2.hints || [];
+    const activeLocks = nextState.agent2.locks || {};
+    
+    // Use normalized input for matching (vocabulary engine may have corrected mishears)
+    const triggerResult = TriggerCardMatcher.match(normalizedInput, triggerCards, {
+      hints: activeHints,
+      locks: activeLocks
+    });
 
     // Emit detailed trigger evaluation for debugging
     emit('A2_TRIGGER_EVAL', {
@@ -459,7 +582,13 @@ class Agent2DiscoveryRunner {
       totalCards: triggerResult.totalCards,
       enabledCards: triggerResult.enabledCards,
       negativeBlocked: triggerResult.negativeBlocked,
-      evaluated: triggerResult.evaluated.slice(0, 10)
+      evaluated: triggerResult.evaluated.slice(0, 10),
+      // Vocabulary integration info
+      usedNormalizedInput: normalizedInput !== input,
+      normalizedPreview: normalizedInput !== input ? clip(normalizedInput, 60) : null,
+      activeHints: activeHints.length > 0 ? activeHints : null,
+      activeLocks: Object.keys(activeLocks).length > 0 ? activeLocks : null,
+      hintBoostApplied: triggerResult.hintBoostApplied || false
     });
 
     if (triggerResult.matched && triggerResult.card) {
@@ -536,6 +665,84 @@ class Agent2DiscoveryRunner {
           nextAction
         }
       };
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PATH 2.5: CLARIFIER QUESTIONS (when hints exist but no trigger match)
+    // ══════════════════════════════════════════════════════════════════════════
+    // If vocabulary added SOFT_HINTs (e.g., "maybe_thermostat") but no trigger card
+    // matched, ask a clarifying question BEFORE guessing wrong.
+    // This prevents the agent from assuming "thingy on the wall" means thermostat.
+    // ══════════════════════════════════════════════════════════════════════════
+    const clarifiersConfig = safeObj(discoveryCfg.clarifiers, {});
+    const clarifiersEnabled = clarifiersConfig.enabled === true;
+    const clarifierEntries = safeArr(clarifiersConfig.entries);
+    const maxClarifiersPerCall = clarifiersConfig.maxAsksPerCall || 2;
+    const clarifiersAskedThisCall = nextState.agent2.discovery.clarifiersAskedCount || 0;
+    
+    // Check if we have active hints that need clarification
+    if (clarifiersEnabled && activeHints.length > 0 && clarifiersAskedThisCall < maxClarifiersPerCall) {
+      // Find a clarifier that matches one of our active hints
+      const sortedClarifiers = [...clarifierEntries]
+        .filter(c => c.enabled !== false)
+        .sort((a, b) => (a.priority || 100) - (b.priority || 100));
+      
+      for (const clarifier of sortedClarifiers) {
+        const hintTrigger = clarifier.hintTrigger;
+        if (activeHints.includes(hintTrigger)) {
+          // Found a clarifier for one of our hints
+          const clarifierQuestion = `${clarifier.question || ''}`.trim();
+          
+          if (clarifierQuestion) {
+            // Build personalized ack
+            const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
+            nextState.agent2.discovery.usedNameThisTurn = usedName;
+            
+            // Store clarifier state
+            nextState.agent2.discovery.pendingClarifier = {
+              id: clarifier.id,
+              hintTrigger: hintTrigger,
+              locksTo: clarifier.locksTo || null
+            };
+            nextState.agent2.discovery.pendingClarifierTurn = typeof turn === 'number' ? turn : null;
+            nextState.agent2.discovery.clarifiersAskedCount = clarifiersAskedThisCall + 1;
+            nextState.agent2.discovery.lastPath = 'CLARIFIER_ASKED';
+            
+            const response = clarifierQuestion;
+            
+            emit('A2_PATH_SELECTED', {
+              path: 'CLARIFIER',
+              reason: `Hint "${hintTrigger}" needs clarification before matching`,
+              hint: hintTrigger,
+              clarifierId: clarifier.id
+            });
+            
+            emit('A2_CLARIFIER_ASKED', {
+              clarifierId: clarifier.id,
+              hintTrigger: hintTrigger,
+              questionPreview: clip(clarifierQuestion, 80),
+              locksTo: clarifier.locksTo,
+              askNumber: clarifiersAskedThisCall + 1,
+              maxAllowed: maxClarifiersPerCall
+            });
+            
+            emit('A2_RESPONSE_READY', {
+              path: 'CLARIFIER',
+              responsePreview: clip(response, 120),
+              responseLength: response.length,
+              hasAudio: false,
+              source: `clarifier:${clarifier.id}`,
+              usedCallerName: usedName
+            });
+            
+            return {
+              response,
+              matchSource: 'AGENT2_DISCOVERY',
+              state: nextState
+            };
+          }
+        }
+      }
     }
 
     // ──────────────────────────────────────────────────────────────────────

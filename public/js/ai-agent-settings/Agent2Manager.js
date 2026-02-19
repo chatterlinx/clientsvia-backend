@@ -227,6 +227,8 @@ class Agent2Manager {
     return `
       ${this.renderStatusCard()}
       ${this.renderStyleCard()}
+      ${this.renderVocabularyCard()}
+      ${this.renderClarifiersCard()}
       ${this.renderPlaybookCard()}
       ${this.renderSimulatorCard()}
     `;
@@ -1260,6 +1262,296 @@ class Agent2Manager {
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // VOCABULARY CARD (HARD_NORMALIZE + SOFT_HINT)
+  // ══════════════════════════════════════════════════════════════════════════
+  renderVocabularyCard() {
+    const vocab = this.config.discovery?.vocabulary || {};
+    const entries = Array.isArray(vocab.entries) ? vocab.entries : [];
+    
+    const tableRows = entries.map((entry, idx) => {
+      const typeColor = entry.type === 'HARD_NORMALIZE' ? '#22c55e' : '#8b5cf6';
+      const typeBadge = entry.type === 'HARD_NORMALIZE' 
+        ? '<span style="background:#22c55e22; color:#22c55e; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:600;">NORMALIZE</span>'
+        : '<span style="background:#8b5cf622; color:#8b5cf6; padding:2px 8px; border-radius:6px; font-size:10px; font-weight:600;">HINT</span>';
+      const matchBadge = entry.matchMode === 'EXACT'
+        ? '<span style="background:#3b82f622; color:#3b82f6; padding:2px 6px; border-radius:4px; font-size:10px;">EXACT</span>'
+        : '<span style="background:#6b728022; color:#9ca3af; padding:2px 6px; border-radius:4px; font-size:10px;">CONTAINS</span>';
+      const enabledBadge = entry.enabled !== false ? '' : '<span style="background:#6e7681; color:#c9d1d9; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:6px;">OFF</span>';
+      const rowOpacity = entry.enabled !== false ? '1' : '0.5';
+      
+      return `
+        <tr class="a2-vocab-row" data-vocab-idx="${idx}" style="cursor:pointer; opacity:${rowOpacity};">
+          <td style="padding:8px; border-bottom:1px solid #21262d;">${entry.priority || 100}</td>
+          <td style="padding:8px; border-bottom:1px solid #21262d;">${typeBadge}${enabledBadge}</td>
+          <td style="padding:8px; border-bottom:1px solid #21262d;">${matchBadge}</td>
+          <td style="padding:8px; border-bottom:1px solid #21262d; font-family:monospace; color:#f59e0b;">"${this.escapeHtml(entry.from || '')}"</td>
+          <td style="padding:8px; border-bottom:1px solid #21262d; font-family:monospace; color:#22d3ee;">"${this.escapeHtml(entry.to || '')}"</td>
+          <td style="padding:8px; border-bottom:1px solid #21262d; color:#6b7280; font-size:12px;">${this.escapeHtml(entry.notes || '')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return this.renderCard(
+      'Vocabulary (Normalization + Hints)',
+      'HARD_NORMALIZE corrects mishears before matching. SOFT_HINT adds contextual hints without changing text.',
+      `
+        <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px; padding:12px; background:#161b22; border:1px solid #30363d; border-radius:10px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input id="a2-vocab-enabled" type="checkbox" ${vocab.enabled === true ? 'checked' : ''} />
+            <span style="color:#e5e7eb; font-weight:600;">Enable Vocabulary Processing</span>
+          </label>
+          <div style="flex:1;"></div>
+          <button id="a2-vocab-add" style="padding:6px 14px; background:#238636; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">+ Add Entry</button>
+        </div>
+
+        ${entries.length === 0 ? `
+          <div style="text-align:center; padding:40px; color:#8b949e; background:#0d1117; border:1px dashed #30363d; border-radius:10px;">
+            <div style="font-size:1.5rem; margin-bottom:8px;">📝</div>
+            <div>No vocabulary entries yet. Click "+ Add Entry" to create one.</div>
+          </div>
+        ` : `
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+              <thead>
+                <tr style="background:#161b22; color:#8b949e; text-align:left;">
+                  <th style="padding:8px; border-bottom:1px solid #30363d; width:60px;">Priority</th>
+                  <th style="padding:8px; border-bottom:1px solid #30363d; width:100px;">Type</th>
+                  <th style="padding:8px; border-bottom:1px solid #30363d; width:80px;">Match</th>
+                  <th style="padding:8px; border-bottom:1px solid #30363d;">From</th>
+                  <th style="padding:8px; border-bottom:1px solid #30363d;">To</th>
+                  <th style="padding:8px; border-bottom:1px solid #30363d;">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+          </div>
+        `}
+
+        <div id="a2-vocab-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+          <div style="background:#0d1117; border:1px solid #30363d; border-radius:16px; width:90%; max-width:550px; max-height:90vh; overflow-y:auto; padding:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #30363d; padding-bottom:16px;">
+              <h3 style="margin:0; color:#e5e7eb; font-size:1.25rem;">Edit Vocabulary Entry</h3>
+              <button id="a2-vocab-modal-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:4px 8px;">X</button>
+            </div>
+            <div id="a2-vocab-modal-content"></div>
+          </div>
+        </div>
+      `
+    );
+  }
+
+  renderVocabularyEntryModal(idx) {
+    const vocab = this.config.discovery?.vocabulary || {};
+    const entries = Array.isArray(vocab.entries) ? vocab.entries : [];
+    const entry = idx === -1 ? { enabled: true, priority: 100, type: 'HARD_NORMALIZE', matchMode: 'EXACT', from: '', to: '', notes: '' } : entries[idx];
+    const isNew = idx === -1;
+
+    return `
+      <input type="hidden" id="a2-vocab-modal-idx" value="${idx}" />
+
+      <div style="margin-bottom:16px; padding:12px; background:#161b22; border:1px solid #30363d; border-radius:10px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input id="a2-vocab-modal-enabled" type="checkbox" ${entry.enabled !== false ? 'checked' : ''} />
+          <span style="color:#e5e7eb; font-weight:600;">Enabled</span>
+        </label>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div>
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Type</label>
+          <select id="a2-vocab-modal-type" style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;">
+            <option value="HARD_NORMALIZE" ${entry.type === 'HARD_NORMALIZE' ? 'selected' : ''}>HARD_NORMALIZE (replace text)</option>
+            <option value="SOFT_HINT" ${entry.type === 'SOFT_HINT' ? 'selected' : ''}>SOFT_HINT (add hint only)</option>
+          </select>
+        </div>
+        <div>
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Match Mode</label>
+          <select id="a2-vocab-modal-matchMode" style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;">
+            <option value="EXACT" ${entry.matchMode === 'EXACT' ? 'selected' : ''}>EXACT (word boundary)</option>
+            <option value="CONTAINS" ${entry.matchMode !== 'EXACT' ? 'selected' : ''}>CONTAINS (substring)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Priority (lower = higher priority)</label>
+        <input id="a2-vocab-modal-priority" type="number" value="${entry.priority || 100}"
+          style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;" />
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">From (pattern to match)</label>
+        <input id="a2-vocab-modal-from" value="${this.escapeHtml(entry.from || '')}"
+          placeholder="e.g., acee, thingy on the wall"
+          style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;" />
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">To (replacement or hint token)</label>
+        <input id="a2-vocab-modal-to" value="${this.escapeHtml(entry.to || '')}"
+          placeholder="e.g., ac, maybe_thermostat"
+          style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;" />
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Notes (optional)</label>
+        <input id="a2-vocab-modal-notes" value="${this.escapeHtml(entry.notes || '')}"
+          placeholder="e.g., Common STT mishear"
+          style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;" />
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        ${!isNew ? `
+          <button id="a2-vocab-modal-delete" style="padding:10px 16px; background:#da3633; color:white; border:none; border-radius:8px; cursor:pointer;">Delete</button>
+        ` : ''}
+        <div style="flex:1;"></div>
+        <button id="a2-vocab-modal-cancel" style="padding:10px 16px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer;">Cancel</button>
+        <button id="a2-vocab-modal-save" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;">${isNew ? 'Add' : 'Save'}</button>
+      </div>
+    `;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CLARIFIERS CARD (disambiguation questions)
+  // ══════════════════════════════════════════════════════════════════════════
+  renderClarifiersCard() {
+    const clarifiers = this.config.discovery?.clarifiers || {};
+    const entries = Array.isArray(clarifiers.entries) ? clarifiers.entries : [];
+    
+    const tableRows = entries.map((entry, idx) => {
+      const enabledBadge = entry.enabled !== false ? '' : '<span style="background:#6e7681; color:#c9d1d9; padding:2px 6px; border-radius:4px; font-size:10px; margin-left:6px;">OFF</span>';
+      const rowOpacity = entry.enabled !== false ? '1' : '0.5';
+      const questionPreview = (entry.question || '').length > 50 ? entry.question.substring(0, 50) + '...' : (entry.question || '(empty)');
+      
+      return `
+        <tr class="a2-clarifier-row" data-clarifier-idx="${idx}" style="cursor:pointer; opacity:${rowOpacity};">
+          <td style="padding:8px; border-bottom:1px solid #21262d; font-family:monospace; color:#7ee787; font-size:12px;">${this.escapeHtml(entry.id || '')}</td>
+          <td style="padding:8px; border-bottom:1px solid #21262d; font-family:monospace; color:#8b5cf6;">${this.escapeHtml(entry.hintTrigger || '')}</td>
+          <td style="padding:8px; border-bottom:1px solid #21262d; color:#8b949e; font-size:13px;">${this.escapeHtml(questionPreview)}${enabledBadge}</td>
+          <td style="padding:8px; border-bottom:1px solid #21262d; font-family:monospace; color:#22d3ee;">${this.escapeHtml(entry.locksTo || '-')}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return this.renderCard(
+      'Clarifiers (Disambiguation Questions)',
+      'When a SOFT_HINT is triggered but no card matches, ask a clarifying question before guessing wrong.',
+      `
+        <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px; padding:12px; background:#161b22; border:1px solid #30363d; border-radius:10px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input id="a2-clarifiers-enabled" type="checkbox" ${clarifiers.enabled === true ? 'checked' : ''} />
+            <span style="color:#e5e7eb; font-weight:600;">Enable Clarifier Questions</span>
+          </label>
+          <div style="display:flex; align-items:center; gap:8px; margin-left:20px;">
+            <label style="color:#8b949e; font-size:12px;">Max asks/call:</label>
+            <input id="a2-clarifiers-maxAsks" type="number" min="1" max="5" value="${clarifiers.maxAsksPerCall || 2}"
+              style="width:60px; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:6px; padding:6px; text-align:center;" />
+          </div>
+          <div style="flex:1;"></div>
+          <button id="a2-clarifier-add" style="padding:6px 14px; background:#238636; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">+ Add Clarifier</button>
+        </div>
+
+        ${entries.length === 0 ? `
+          <div style="text-align:center; padding:40px; color:#8b949e; background:#0d1117; border:1px dashed #30363d; border-radius:10px;">
+            <div style="font-size:1.5rem; margin-bottom:8px;">❓</div>
+            <div>No clarifiers yet. Click "+ Add Clarifier" to create one.</div>
+          </div>
+        ` : `
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+              <thead>
+                <tr style="background:#161b22; color:#8b949e; text-align:left;">
+                  <th style="padding:8px; border-bottom:1px solid #30363d; width:150px;">ID</th>
+                  <th style="padding:8px; border-bottom:1px solid #30363d; width:150px;">Hint Trigger</th>
+                  <th style="padding:8px; border-bottom:1px solid #30363d;">Question</th>
+                  <th style="padding:8px; border-bottom:1px solid #30363d; width:100px;">Locks To</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${tableRows}
+              </tbody>
+            </table>
+          </div>
+        `}
+
+        <div id="a2-clarifier-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+          <div style="background:#0d1117; border:1px solid #30363d; border-radius:16px; width:90%; max-width:600px; max-height:90vh; overflow-y:auto; padding:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #30363d; padding-bottom:16px;">
+              <h3 style="margin:0; color:#e5e7eb; font-size:1.25rem;">Edit Clarifier</h3>
+              <button id="a2-clarifier-modal-close" style="background:transparent; border:none; color:#8b949e; font-size:24px; cursor:pointer; padding:4px 8px;">X</button>
+            </div>
+            <div id="a2-clarifier-modal-content"></div>
+          </div>
+        </div>
+      `
+    );
+  }
+
+  renderClarifierModal(idx) {
+    const clarifiers = this.config.discovery?.clarifiers || {};
+    const entries = Array.isArray(clarifiers.entries) ? clarifiers.entries : [];
+    const entry = idx === -1 ? { id: '', enabled: true, hintTrigger: '', question: '', locksTo: '', priority: 100 } : entries[idx];
+    const isNew = idx === -1;
+
+    return `
+      <input type="hidden" id="a2-clarifier-modal-idx" value="${idx}" />
+
+      <div style="margin-bottom:16px; padding:12px; background:#161b22; border:1px solid #30363d; border-radius:10px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input id="a2-clarifier-modal-enabled" type="checkbox" ${entry.enabled !== false ? 'checked' : ''} />
+          <span style="color:#e5e7eb; font-weight:600;">Enabled</span>
+        </label>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div>
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Clarifier ID</label>
+          <input id="a2-clarifier-modal-id" value="${this.escapeHtml(entry.id || '')}"
+            placeholder="e.g., clarify.thermostat"
+            style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;" />
+        </div>
+        <div>
+          <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Priority</label>
+          <input id="a2-clarifier-modal-priority" type="number" value="${entry.priority || 100}"
+            style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;" />
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Hint Trigger (vocabulary SOFT_HINT token)</label>
+        <input id="a2-clarifier-modal-hintTrigger" value="${this.escapeHtml(entry.hintTrigger || '')}"
+          placeholder="e.g., maybe_thermostat"
+          style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;" />
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Question (what the agent asks to clarify)</label>
+        <textarea id="a2-clarifier-modal-question" rows="3"
+          placeholder="e.g., Ok. When you say the thing on the wall, do you mean the thermostat?"
+          style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px; resize:vertical;">${this.escapeHtml(entry.question || '')}</textarea>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Locks To (component name if user confirms)</label>
+        <input id="a2-clarifier-modal-locksTo" value="${this.escapeHtml(entry.locksTo || '')}"
+          placeholder="e.g., thermostat"
+          style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:10px;" />
+      </div>
+
+      <div style="display:flex; gap:10px;">
+        ${!isNew ? `
+          <button id="a2-clarifier-modal-delete" style="padding:10px 16px; background:#da3633; color:white; border:none; border-radius:8px; cursor:pointer;">Delete</button>
+        ` : ''}
+        <div style="flex:1;"></div>
+        <button id="a2-clarifier-modal-cancel" style="padding:10px 16px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer;">Cancel</button>
+        <button id="a2-clarifier-modal-save" style="padding:10px 16px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;">${isNew ? 'Add' : 'Save'}</button>
+      </div>
+    `;
+  }
+
   _getStyleLines() {
     const style = this.config.discovery?.style || {};
     return [
@@ -1912,6 +2204,214 @@ class Agent2Manager {
         alert('Could not parse response JSON.');
       }
     });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // VOCABULARY HANDLERS
+    // ══════════════════════════════════════════════════════════════════════════
+    container.querySelector('#a2-vocab-enabled')?.addEventListener('change', (e) => {
+      this.config.discovery = this.config.discovery || {};
+      this.config.discovery.vocabulary = this.config.discovery.vocabulary || {};
+      this.config.discovery.vocabulary.enabled = e.target.checked;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-vocab-add')?.addEventListener('click', () => {
+      this._openVocabModal(-1);
+    });
+
+    container.querySelectorAll('.a2-vocab-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        const idx = Number(row.getAttribute('data-vocab-idx'));
+        this._openVocabModal(idx);
+      });
+      row.addEventListener('mouseover', () => { row.style.background = '#161b22'; });
+      row.addEventListener('mouseout', () => { row.style.background = 'transparent'; });
+    });
+
+    container.querySelector('#a2-vocab-modal-close')?.addEventListener('click', () => this._closeVocabModal());
+    container.querySelector('#a2-vocab-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'a2-vocab-modal') this._closeVocabModal();
+    });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // CLARIFIERS HANDLERS
+    // ══════════════════════════════════════════════════════════════════════════
+    container.querySelector('#a2-clarifiers-enabled')?.addEventListener('change', (e) => {
+      this.config.discovery = this.config.discovery || {};
+      this.config.discovery.clarifiers = this.config.discovery.clarifiers || {};
+      this.config.discovery.clarifiers.enabled = e.target.checked;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-clarifiers-maxAsks')?.addEventListener('input', (e) => {
+      this.config.discovery = this.config.discovery || {};
+      this.config.discovery.clarifiers = this.config.discovery.clarifiers || {};
+      this.config.discovery.clarifiers.maxAsksPerCall = Number(e.target.value) || 2;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-clarifier-add')?.addEventListener('click', () => {
+      this._openClarifierModal(-1);
+    });
+
+    container.querySelectorAll('.a2-clarifier-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        const idx = Number(row.getAttribute('data-clarifier-idx'));
+        this._openClarifierModal(idx);
+      });
+      row.addEventListener('mouseover', () => { row.style.background = '#161b22'; });
+      row.addEventListener('mouseout', () => { row.style.background = 'transparent'; });
+    });
+
+    container.querySelector('#a2-clarifier-modal-close')?.addEventListener('click', () => this._closeClarifierModal());
+    container.querySelector('#a2-clarifier-modal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'a2-clarifier-modal') this._closeClarifierModal();
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VOCABULARY MODAL
+  // ══════════════════════════════════════════════════════════════════════════
+  _openVocabModal(idx) {
+    const modal = document.getElementById('a2-vocab-modal');
+    const content = document.getElementById('a2-vocab-modal-content');
+    if (!modal || !content) return;
+
+    content.innerHTML = this.renderVocabularyEntryModal(idx);
+    modal.style.display = 'flex';
+
+    document.getElementById('a2-vocab-modal-cancel')?.addEventListener('click', () => this._closeVocabModal());
+    document.getElementById('a2-vocab-modal-save')?.addEventListener('click', () => this._saveVocabModal());
+    document.getElementById('a2-vocab-modal-delete')?.addEventListener('click', () => this._deleteVocabEntry());
+    document.getElementById('a2-vocab-modal-close')?.addEventListener('click', () => this._closeVocabModal());
+  }
+
+  _closeVocabModal() {
+    const modal = document.getElementById('a2-vocab-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  _saveVocabModal() {
+    const idxEl = document.getElementById('a2-vocab-modal-idx');
+    if (!idxEl) return;
+    const idx = Number(idxEl.value);
+
+    const entry = {
+      enabled: document.getElementById('a2-vocab-modal-enabled')?.checked !== false,
+      priority: Number(document.getElementById('a2-vocab-modal-priority')?.value) || 100,
+      type: document.getElementById('a2-vocab-modal-type')?.value || 'HARD_NORMALIZE',
+      matchMode: document.getElementById('a2-vocab-modal-matchMode')?.value || 'EXACT',
+      from: (document.getElementById('a2-vocab-modal-from')?.value || '').trim(),
+      to: (document.getElementById('a2-vocab-modal-to')?.value || '').trim(),
+      notes: (document.getElementById('a2-vocab-modal-notes')?.value || '').trim()
+    };
+
+    if (!entry.from || !entry.to) {
+      alert('From and To fields are required.');
+      return;
+    }
+
+    this.config.discovery = this.config.discovery || {};
+    this.config.discovery.vocabulary = this.config.discovery.vocabulary || {};
+    this.config.discovery.vocabulary.entries = this.config.discovery.vocabulary.entries || [];
+
+    if (idx === -1) {
+      this.config.discovery.vocabulary.entries.push(entry);
+    } else {
+      this.config.discovery.vocabulary.entries[idx] = entry;
+    }
+
+    this.isDirty = true;
+    this._closeVocabModal();
+    if (this._container) this.render(this._container);
+  }
+
+  _deleteVocabEntry() {
+    const idxEl = document.getElementById('a2-vocab-modal-idx');
+    if (!idxEl) return;
+    const idx = Number(idxEl.value);
+
+    if (idx === -1) return;
+    if (!confirm('Delete this vocabulary entry?')) return;
+
+    const entries = this.config.discovery?.vocabulary?.entries || [];
+    entries.splice(idx, 1);
+
+    this.isDirty = true;
+    this._closeVocabModal();
+    if (this._container) this.render(this._container);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CLARIFIER MODAL
+  // ══════════════════════════════════════════════════════════════════════════
+  _openClarifierModal(idx) {
+    const modal = document.getElementById('a2-clarifier-modal');
+    const content = document.getElementById('a2-clarifier-modal-content');
+    if (!modal || !content) return;
+
+    content.innerHTML = this.renderClarifierModal(idx);
+    modal.style.display = 'flex';
+
+    document.getElementById('a2-clarifier-modal-cancel')?.addEventListener('click', () => this._closeClarifierModal());
+    document.getElementById('a2-clarifier-modal-save')?.addEventListener('click', () => this._saveClarifierModal());
+    document.getElementById('a2-clarifier-modal-delete')?.addEventListener('click', () => this._deleteClarifierEntry());
+    document.getElementById('a2-clarifier-modal-close')?.addEventListener('click', () => this._closeClarifierModal());
+  }
+
+  _closeClarifierModal() {
+    const modal = document.getElementById('a2-clarifier-modal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  _saveClarifierModal() {
+    const idxEl = document.getElementById('a2-clarifier-modal-idx');
+    if (!idxEl) return;
+    const idx = Number(idxEl.value);
+
+    const entry = {
+      id: (document.getElementById('a2-clarifier-modal-id')?.value || '').trim(),
+      enabled: document.getElementById('a2-clarifier-modal-enabled')?.checked !== false,
+      priority: Number(document.getElementById('a2-clarifier-modal-priority')?.value) || 100,
+      hintTrigger: (document.getElementById('a2-clarifier-modal-hintTrigger')?.value || '').trim(),
+      question: (document.getElementById('a2-clarifier-modal-question')?.value || '').trim(),
+      locksTo: (document.getElementById('a2-clarifier-modal-locksTo')?.value || '').trim()
+    };
+
+    if (!entry.id || !entry.hintTrigger || !entry.question) {
+      alert('ID, Hint Trigger, and Question are required.');
+      return;
+    }
+
+    this.config.discovery = this.config.discovery || {};
+    this.config.discovery.clarifiers = this.config.discovery.clarifiers || {};
+    this.config.discovery.clarifiers.entries = this.config.discovery.clarifiers.entries || [];
+
+    if (idx === -1) {
+      this.config.discovery.clarifiers.entries.push(entry);
+    } else {
+      this.config.discovery.clarifiers.entries[idx] = entry;
+    }
+
+    this.isDirty = true;
+    this._closeClarifierModal();
+    if (this._container) this.render(this._container);
+  }
+
+  _deleteClarifierEntry() {
+    const idxEl = document.getElementById('a2-clarifier-modal-idx');
+    if (!idxEl) return;
+    const idx = Number(idxEl.value);
+
+    if (idx === -1) return;
+    if (!confirm('Delete this clarifier?')) return;
+
+    const entries = this.config.discovery?.clarifiers?.entries || [];
+    entries.splice(idx, 1);
+
+    this.isDirty = true;
+    this._closeClarifierModal();
+    if (this._container) this.render(this._container);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
