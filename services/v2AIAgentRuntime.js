@@ -230,7 +230,25 @@ class V2AIAgentRuntime {
             }
             
             // Fall back to TTS text
-            const greetingText = callStart.text || "Thank you for calling. How can I help you today?";
+            // 🛡️ DEFENSIVE: Ensure greetingText is a plain string, not an object/array/JSON
+            let greetingText = callStart.text;
+            if (typeof greetingText !== 'string') {
+                logger.error(`[V2 GREETING] ❌ CRITICAL: callStart.text is not a string!`, {
+                    type: typeof greetingText,
+                    value: JSON.stringify(greetingText)?.substring(0, 200)
+                });
+                greetingText = "Thank you for calling. How can I help you today?";
+            }
+            if (!greetingText.trim()) {
+                greetingText = "Thank you for calling. How can I help you today?";
+            }
+            // Detect if greetingText looks like JSON/code (common data corruption symptom)
+            if (greetingText.startsWith('{') || greetingText.startsWith('[') || greetingText.includes('function') || greetingText.includes('const ') || greetingText.includes('module.exports')) {
+                logger.error(`[V2 GREETING] ❌ CRITICAL: callStart.text appears to be code/JSON!`, {
+                    preview: greetingText.substring(0, 200)
+                });
+                greetingText = "Thank you for calling. How can I help you today?";
+            }
             const processedText = this.buildPureResponse(greetingText, company);
             logger.info(`[V2 GREETING] ✅ Agent 2.0 using TTS: "${processedText}"`);
             return {

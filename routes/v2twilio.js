@@ -114,6 +114,61 @@ async function getRedis() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 🛡️ GREETING TEXT VALIDATOR - Prevents code/JSON from being read aloud
+// ═══════════════════════════════════════════════════════════════════════════
+// Data corruption can cause greeting text to contain code, JSON, or objects.
+// This validator ensures only plain human-readable text reaches TTS/Say.
+// ═══════════════════════════════════════════════════════════════════════════
+function validateGreetingText(text, fallback = 'Thank you for calling. How can I help you today?') {
+  // Must be a string
+  if (typeof text !== 'string') {
+    logger.error('[GREETING VALIDATOR] ❌ Text is not a string', { type: typeof text });
+    return fallback;
+  }
+  
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  
+  // Detect JSON objects/arrays
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    logger.error('[GREETING VALIDATOR] ❌ Text appears to be JSON', { preview: trimmed.substring(0, 100) });
+    return fallback;
+  }
+  
+  // Detect JavaScript code patterns
+  const codePatterns = [
+    /^function\s/,           // function declarations
+    /^const\s/,              // const declarations
+    /^let\s/,                // let declarations
+    /^var\s/,                // var declarations
+    /^module\.exports/,      // module exports
+    /^require\(/,            // require statements
+    /^import\s/,             // import statements
+    /^export\s/,             // export statements
+    /=>\s*\{/,               // arrow functions
+    /\bclass\s+\w+\s*\{/,    // class declarations
+  ];
+  
+  for (const pattern of codePatterns) {
+    if (pattern.test(trimmed)) {
+      logger.error('[GREETING VALIDATOR] ❌ Text appears to be code', { preview: trimmed.substring(0, 100) });
+      return fallback;
+    }
+  }
+  
+  // Detect excessive brackets/braces (likely code or config)
+  const bracketCount = (trimmed.match(/[{}\[\]]/g) || []).length;
+  if (bracketCount > 5 && bracketCount / trimmed.length > 0.02) {
+    logger.error('[GREETING VALIDATOR] ❌ Text has excessive brackets (likely code)', { preview: trimmed.substring(0, 100), bracketCount });
+    return fallback;
+  }
+  
+  return trimmed;
+}
+
 function slotBagValue(slots, slotId) {
   const entry = slots?.[slotId];
   if (entry == null) return null;
@@ -1483,6 +1538,10 @@ router.post('/voice', async (req, res) => {
       const greetingMode = initResult.greetingConfig?.mode;
       const greetingSource = initResult.greetingConfig?.source || 'legacy';
       const elevenLabsVoice = initResult.voiceSettings?.voiceId;
+      
+      // 🛡️ CRITICAL: Validate greeting text before use (prevents code/JSON being read aloud)
+      const validatedGreeting = validateGreetingText(initResult.greeting);
+      initResult.greeting = validatedGreeting;
       
       logger.debug(`🔍 [CALL-7] Greeting mode: ${greetingMode}, source: ${greetingSource}`);
       logger.debug(`🔍 [CALL-8] Has greeting text: ${Boolean(initResult.greeting)}`);
