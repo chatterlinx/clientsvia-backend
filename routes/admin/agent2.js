@@ -455,7 +455,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
     const updates = safeObject(req.body, {});
 
     const beforeCompany = await v2Company.findById(companyId)
-      .select('aiAgentSettings agentSettings')
+      .select('aiAgentSettings agentSettings twilioConfig')
       .lean();
 
     if (!beforeCompany) {
@@ -471,6 +471,38 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
     };
 
     await v2Company.updateOne({ _id: companyId }, { $set: updateObj });
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // CRITICAL: Invalidate Redis cache so Twilio picks up new config
+    // ═══════════════════════════════════════════════════════════════════════
+    try {
+      const { redisClient } = require('../../db');
+      if (redisClient) {
+        // Get all phone numbers associated with this company
+        const phoneNumbers = [];
+        if (beforeCompany.twilioConfig?.phoneNumber) {
+          phoneNumbers.push(beforeCompany.twilioConfig.phoneNumber);
+        }
+        if (beforeCompany.twilioConfig?.phoneNumbers?.length) {
+          beforeCompany.twilioConfig.phoneNumbers.forEach(p => {
+            if (p.phoneNumber) phoneNumbers.push(p.phoneNumber);
+          });
+        }
+        
+        // Delete cache for each phone number
+        for (const phone of phoneNumbers) {
+          const cacheKey = `company-phone:${phone}`;
+          await redisClient.del(cacheKey);
+          logger.info(`[AGENT2] 🗑️ Cache invalidated for ${cacheKey}`);
+        }
+        
+        if (phoneNumbers.length === 0) {
+          logger.warn(`[AGENT2] No phone numbers found for company ${companyId} - cache not invalidated`);
+        }
+      }
+    } catch (cacheErr) {
+      logger.warn('[AGENT2] Cache invalidation failed (non-blocking)', { error: cacheErr.message });
+    }
 
     const afterCompany = await v2Company.findById(companyId)
       .select('aiAgentSettings agentSettings')
