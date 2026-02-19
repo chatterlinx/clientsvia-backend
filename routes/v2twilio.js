@@ -304,6 +304,18 @@ function getSecureBaseUrl(req) {
   return `${protocol}://${host}`;
 }
 
+/**
+ * Normalize audio URL for Twilio <Play>.
+ * Twilio needs a publicly resolvable absolute URL; Agent 2.0 often stores relative paths.
+ */
+function toAbsoluteAudioUrl(req, rawUrl) {
+  const url = `${rawUrl || ''}`.trim();
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return `${getSecureBaseUrl(req)}${url}`;
+  return `${getSecureBaseUrl(req)}/${url}`;
+}
+
 // ============================================================================
 // 🧠 3-TIER SELF-IMPROVEMENT SYSTEM CONFIGURATION
 // ============================================================================
@@ -1464,7 +1476,7 @@ router.post('/voice', async (req, res) => {
       
       // MODE: PRERECORDED AUDIO (Agent 2.0 or legacy)
       if (greetingMode === 'prerecorded' && initResult.greetingConfig?.audioUrl) {
-        const audioUrl = initResult.greetingConfig.audioUrl;
+        const audioUrl = toAbsoluteAudioUrl(req, initResult.greetingConfig.audioUrl);
         logger.info(`[GREETING] 🎵 Playing pre-recorded audio (source: ${greetingSource}): ${audioUrl}`);
         gather.play(audioUrl);
         
