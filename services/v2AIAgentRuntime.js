@@ -283,11 +283,17 @@ class V2AIAgentRuntime {
                     fileName: voiceConfig.prerecorded.activeFileName,
                     duration: voiceConfig.prerecorded.activeDuration
                 };
-            } 
-                logger.warn(`⚠️ V2 GREETING: Pre-recorded mode selected but no file uploaded`);
-                // Trigger fallback
-                return this.triggerFallback(company, 'Pre-recorded audio file missing');
-            
+            }
+            logger.warn(`⚠️ V2 GREETING: Pre-recorded mode selected but no file uploaded; falling back to safe default TTS`);
+            const safeText = this.buildPureResponse(
+                "Thank you for calling. How can I help you today?",
+                company
+            );
+            return {
+                mode: 'realtime',
+                text: safeText,
+                voiceId: company.aiAgentSettings?.voiceSettings?.voiceId
+            };
         }
 
         // MODE 2: REAL-TIME TTS (ELEVENLABS)
@@ -300,13 +306,19 @@ class V2AIAgentRuntime {
                 return {
                     mode: 'realtime',
                     text: processedText,
-                    voiceId: voiceConfig.realtime?.voiceId || company.voiceSettings?.selectedVoiceId
+                    voiceId: voiceConfig.realtime?.voiceId || company.aiAgentSettings?.voiceSettings?.voiceId
                 };
-            } 
-                logger.warn(`⚠️ V2 GREETING: Real-time mode selected but no text configured`);
-                // Trigger fallback
-                return this.triggerFallback(company, 'Real-time TTS text missing');
-            
+            }
+            logger.warn(`⚠️ V2 GREETING: Real-time mode selected but no text configured; falling back to safe default TTS`);
+            const safeText = this.buildPureResponse(
+                "Thank you for calling. How can I help you today?",
+                company
+            );
+            return {
+                mode: 'realtime',
+                text: safeText,
+                voiceId: company.aiAgentSettings?.voiceSettings?.voiceId
+            };
         }
 
         // MODE 3: DISABLED (SKIP GREETING - GO STRAIGHT TO AI)
@@ -319,8 +331,12 @@ class V2AIAgentRuntime {
         }
 
         // MODE 4: FALLBACK (EMERGENCY BACKUP)
-        logger.warn(`⚠️ V2 GREETING: Invalid or missing mode - triggering fallback`);
-        return this.triggerFallback(company, 'Invalid greeting mode');
+        logger.warn(`⚠️ V2 GREETING: Invalid or missing mode; using safe default TTS`);
+        return {
+            mode: 'realtime',
+            text: this.buildPureResponse("Thank you for calling. How can I help you today?", company),
+            voiceId: company.aiAgentSettings?.voiceSettings?.voiceId
+        };
     }
 
     /**
