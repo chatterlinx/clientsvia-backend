@@ -139,7 +139,9 @@ class V2AIAgentRuntime {
 
             return {
                 greetingConfig, // NEW: Full greeting configuration with mode
-                greeting: greetingConfig.text || greetingConfig.audioUrl || '', // LEGACY: For backwards compatibility
+                // V126 FIX: greeting should ALWAYS be TTS text, never the audio URL
+                // The old code used audioUrl as fallback which then got rejected by validation
+                greeting: greetingConfig.text || '', 
                 callState: {
                     callId,
                     from,
@@ -245,9 +247,15 @@ class V2AIAgentRuntime {
             // Check if audio URL is configured (takes priority over TTS)
             if (callStart.audioUrl && callStart.audioUrl.trim()) {
                 logger.info(`[V2 GREETING] ✅ Agent 2.0 using pre-recorded audio: ${callStart.audioUrl}`);
+                // V126 FIX: Include TTS text as fallback in case audio file is missing (ephemeral storage)
+                // Without this, when audio fails we fall through to hardcoded "Thank you for calling..."
+                const fallbackText = callStart.text && typeof callStart.text === 'string' && callStart.text.trim()
+                    ? callStart.text.trim()
+                    : null;
                 return {
                     mode: 'prerecorded',
                     audioUrl: callStart.audioUrl.trim(),
+                    text: fallbackText,  // CRITICAL: TTS fallback when audio file missing
                     source: 'agent2'
                 };
             }
