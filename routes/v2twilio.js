@@ -1609,6 +1609,26 @@ router.post('/voice', async (req, res) => {
                 source: greetingSource
               }
             }).catch(() => {});
+            
+            // V126: SPEAK_PROVENANCE for complete UI traceability
+            BlackBoxLogger.logEvent({
+              callId: req.body.CallSid,
+              companyId: company._id,
+              type: 'SPEAK_PROVENANCE',
+              turn: 0,
+              data: {
+                sourceId: greetingSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting',
+                uiPath: greetingSource === 'agent2' 
+                  ? 'aiAgentSettings.agent2.greetings.callStart' 
+                  : 'connectionMessages (legacy)',
+                uiTab: greetingSource === 'agent2' ? 'Greetings' : 'Connection Messages',
+                configPath: greetingSource === 'agent2' ? 'agent2.greetings.callStart.audioUrl' : 'connectionMessages.greeting',
+                spokenTextPreview: null,
+                audioUrl,
+                reason: 'Call start greeting (prerecorded audio)',
+                isFromUiConfig: true
+              }
+            }).catch(() => {});
           }
         } else {
           // 🛡️ FALLBACK: Audio file missing, use TTS instead
@@ -1736,6 +1756,26 @@ router.post('/voice', async (req, res) => {
               greetingText,
               ttsTime
             ).catch(() => {}); // Fire and forget
+            
+            // V126: SPEAK_PROVENANCE for complete UI traceability
+            BlackBoxLogger.logEvent({
+              callId: req.body.CallSid,
+              companyId: company._id,
+              type: 'SPEAK_PROVENANCE',
+              turn: 0,
+              data: {
+                sourceId: greetingSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting',
+                uiPath: greetingSource === 'agent2' 
+                  ? 'aiAgentSettings.agent2.greetings.callStart' 
+                  : 'connectionMessages (legacy)',
+                uiTab: greetingSource === 'agent2' ? 'Greetings' : 'Connection Messages',
+                configPath: greetingSource === 'agent2' ? 'agent2.greetings.callStart.text' : 'connectionMessages.greeting',
+                spokenTextPreview: greetingText.substring(0, 120),
+                audioUrl: null,
+                reason: 'Call start greeting (TTS)',
+                isFromUiConfig: true
+              }
+            }).catch(() => {});
           }
         } catch (err) {
           logger.error('❌ AI Agent Logic TTS failed, using Say:', err);

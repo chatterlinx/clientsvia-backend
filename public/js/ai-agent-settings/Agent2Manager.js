@@ -205,9 +205,12 @@ class Agent2Manager {
               ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : isGreetingsTab ? 'Agent 2.0 owns greetings when enabled. Legacy greeting rules are ignored.' : 'Enterprise call review console. Click a call to see details, transcript, and raw events.'}
             </div>
           </div>
-          <div style="display:flex; gap:10px; ${isCallReviewTab ? 'display:none;' : ''}">
-            <button id="a2-export-json" style="padding:8px 14px; background:${this.isDirty ? '#f59e0b' : '#1f6feb'}; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;" title="Download complete Agent 2.0 wiring report with all configuration, runtime integration, and validation${this.isDirty ? ' (includes unsaved changes)' : ''}">
-              📥 Download Complete Wiring Report
+          <div style="display:flex; gap:10px; flex-wrap:wrap; ${isCallReviewTab ? 'display:none;' : ''}">
+            <button id="a2-export-json" style="padding:8px 14px; background:${this.isDirty ? '#f59e0b' : '#1f6feb'}; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;" title="Download COMPLETE runtime wiring report including Agent 2.0 + all runtime dependencies${this.isDirty ? ' (includes unsaved changes)' : ''}">
+              📥 Complete Wiring Report
+            </button>
+            <button id="a2-export-agent2-only" style="padding:8px 14px; background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px; cursor:pointer; font-size:0.85rem;" title="Export Agent 2.0 namespace only (dev/debug)">
+              Agent2 Only
             </button>
             <button id="a2-reset" style="padding:8px 14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer;">
               Reset
@@ -2056,6 +2059,21 @@ class Agent2Manager {
               placeholder="Just so I help you the right way...">${this.escapeHtml(fallback.noMatchClarifierQuestion || '')}</textarea>
           </div>
         </div>
+        
+        <!-- V126: Emergency Fallback Line - REQUIRED for No-UI-No-Speak Guard -->
+        <div style="margin-top:16px; padding:16px; background:#1f1007; border:1px solid #f59e0b; border-radius:12px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <span style="font-size:18px;">🛡️</span>
+            <label style="color:#f59e0b; font-size:13px; font-weight:600;">Emergency Fallback Line (Required for Production)</label>
+          </div>
+          <p style="color:#9ca3af; font-size:11px; margin-bottom:10px;">
+            This is the LAST RESORT response when all other speech sources fail validation. 
+            Without this, the system will speak only "One moment please" in emergencies.
+          </p>
+          <textarea id="a2-emergency-fallback" rows="2"
+            style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #f59e0b; border-radius:10px; padding:10px; resize:vertical;"
+            placeholder="How can I help you today?">${this.escapeHtml(this.agent2Config?.emergencyFallbackLine?.text || '')}</textarea>
+        </div>
 
         <div style="margin-top:16px; border:1px solid #1f2937; border-radius:12px; overflow:hidden;">
           <table style="width:100%; border-collapse:collapse;">
@@ -2512,29 +2530,59 @@ class Agent2Manager {
       this.render(container);
     });
 
+    // PRIMARY EXPORT: Complete Runtime Wiring Report
     container.querySelector('#a2-export-json')?.addEventListener('click', async () => {
       try {
-        // Read current form state into config to capture any unsaved changes
-        this._readFormIntoConfig(container);
+        const report = await this._generateCompleteRuntimeWiringReport();
+        const payload = JSON.stringify(report, null, 2);
         
-        const comprehensive = await this._generateComprehensiveWiringReport();
-        const payload = JSON.stringify(comprehensive, null, 2);
-        
-        // Download as file instead of just copying to clipboard
+        // Download as file
         const blob = new Blob([payload], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `agent2-wiring-complete-${this.companyId}-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `complete-wiring-report-${this.companyId}-${new Date().toISOString().split('T')[0]}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        // Also copy to clipboard for convenience
+        // Also copy to clipboard
         await navigator.clipboard.writeText(payload);
         
-        alert('✅ Complete Agent 2.0 wiring report downloaded and copied to clipboard!\n\nIncludes:\n- All configuration tabs\n- Runtime wiring status\n- Integration points\n- Validation results\n- Current state snapshot');
+        // Show completion status
+        const status = report.manifest.completeness.status;
+        const failedChecks = report.manifest.completeness.failedChecks || [];
+        
+        if (status === 'PASS') {
+          alert('✅ COMPLETE WIRING REPORT downloaded!\n\nCompleteness: PASS\n\nIncludes:\n- Agent 2.0 config + UI/Persisted diff\n- Runtime dependencies (Connection Recovery, DTMF)\n- Execution model (who speaks first)\n- Audio reachability verification\n- Conflict detection\n- Call Review evidence');
+        } else {
+          alert(`⚠️ COMPLETE WIRING REPORT downloaded!\n\nCompleteness: FAIL\n\nFailed checks:\n${failedChecks.slice(0, 5).map(c => '• ' + c).join('\n')}${failedChecks.length > 5 ? `\n... and ${failedChecks.length - 5} more` : ''}\n\nReview the JSON for details.`);
+        }
+      } catch (e) {
+        console.error('Export failed:', e);
+        alert(`Export failed: ${e.message || e}`);
+      }
+    });
+    
+    // SECONDARY EXPORT: Agent2 Only (Dev/Debug)
+    container.querySelector('#a2-export-agent2-only')?.addEventListener('click', async () => {
+      try {
+        const report = await this._generateAgent2OnlyExport();
+        const payload = JSON.stringify(report, null, 2);
+        
+        const blob = new Blob([payload], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `agent2-only-${this.companyId}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        await navigator.clipboard.writeText(payload);
+        alert('✅ Agent2-only export downloaded (dev/debug mode)');
       } catch (e) {
         console.error('Export failed:', e);
         alert(`Export failed: ${e.message || e}`);
@@ -2559,6 +2607,8 @@ class Agent2Manager {
       .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelectorAll('#a2-fallback-noMatchWhenReasonCaptured, #a2-fallback-noMatchClarifierQuestion')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
+    // V126: Emergency fallback line
+    container.querySelector('#a2-emergency-fallback')?.addEventListener('input', onAnyChange);
 
     // Style lines table - click row to open modal
     container.querySelectorAll('.a2-style-row').forEach((row) => {
@@ -4515,6 +4565,11 @@ class Agent2Manager {
 
     cfg.discovery = discovery;
     
+    // V126: Emergency Fallback Line - REQUIRED for No-UI-No-Speak Guard
+    cfg.emergencyFallbackLine = cfg.emergencyFallbackLine || {};
+    cfg.emergencyFallbackLine.text = (container.querySelector('#a2-emergency-fallback')?.value || '').trim();
+    cfg.emergencyFallbackLine.enabled = true;
+    
     // Preserve greetings config (managed by Greetings tab event handlers)
     cfg.greetings = cfg.greetings || {};
     
@@ -4523,422 +4578,801 @@ class Agent2Manager {
     this.config = cfg;
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // COMPREHENSIVE WIRING REPORT - Complete Agent 2.0 Truth Export
-  // ──────────────────────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // UI REGISTRY - Prevents ghost settings (all Agent2 panels must register)
+  // ══════════════════════════════════════════════════════════════════════════
+  static UI_REGISTRY = {
+    tabs: ['config', 'greetings', 'callReview'],
+    panels: {
+      config: [
+        'agent2Master',
+        'discoveryMaster', 
+        'discoveryStyle',
+        'vocabularySystem',
+        'clarifierSystem',
+        'playbook',
+        'triggerCards',
+        'fallbackResponses'
+      ],
+      greetings: [
+        'callStartGreeting',
+        'greetingInterceptor',
+        'intentWordBlocking'
+      ],
+      callReview: [
+        'callList',
+        'callDetail'
+      ]
+    },
+    runtimeDependencies: [
+      'agent2',
+      'frontDeskBehavior.connectionQualityGate',
+      'frontDeskBehavior.recoveryMessages',
+      'frontDeskBehavior.conversationStages.greetingRules',
+      'instantResponses'
+    ]
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // COMPLETE RUNTIME WIRING REPORT (Primary Export)
+  // ══════════════════════════════════════════════════════════════════════════
   /**
-   * Generates a complete wiring report including:
-   * - All configuration from all tabs (Config, Greetings, etc.)
-   * - Runtime integration status
-   * - Validation results
-   * - Statistics and metadata
-   * - Current active state
+   * Generates the COMPLETE runtime wiring report including:
+   * - Agent 2.0 config (all tabs)
+   * - Runtime dependencies (connection recovery, DTMF fallback, greeting rules)
+   * - UI snapshot vs Persisted snapshot + Diff
+   * - UI coverage manifest with FAIL detection
+   * - Audio reachability verification
+   * - Conflict detection between speech sources
+   * - Call Review evidence (last 10 calls + coverage summary)
    * 
-   * This is the TRUTH of what Agent 2.0 is configured to do.
+   * PRIME DIRECTIVE: If it's not in the UI, it does not exist.
+   * Any spoken line must be UI-mapped, or it's a FAIL.
    */
-  async _generateComprehensiveWiringReport() {
+  async _generateCompleteRuntimeWiringReport() {
     const timestamp = new Date().toISOString();
-    const config = this.config || this.getDefaultConfig();
+    const failedChecks = [];
+    const missingSections = [];
     
     // ═══════════════════════════════════════════════════════════════════════
-    // SECTION 1: Configuration Snapshot (All Tabs)
+    // STEP 1: Capture UI Snapshot (current form state, even if unsaved)
     // ═══════════════════════════════════════════════════════════════════════
-    const configurationSnapshot = {
+    this._readFormIntoConfig(this._container);
+    const uiSnapshot = JSON.parse(JSON.stringify(this.config || this.getDefaultConfig()));
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 2: Fetch Persisted Snapshot (fresh GET from backend)
+    // ═══════════════════════════════════════════════════════════════════════
+    let persistedSnapshot = null;
+    let frontDeskConfig = null;
+    let persistedFetchError = null;
+    
+    try {
+      const token = this._getToken();
+      
+      // Fetch Agent2 persisted config
+      const agent2Res = await fetch(`/api/admin/agent2/${this.companyId}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (agent2Res.ok) {
+        const agent2Json = await agent2Res.json();
+        persistedSnapshot = agent2Json?.data || null;
+      }
+      
+      // Fetch FrontDesk config (connection recovery, DTMF, greeting rules)
+      const fdRes = await fetch(`/api/company/${this.companyId}/front-desk-config`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (fdRes.ok) {
+        const fdJson = await fdRes.json();
+        frontDeskConfig = fdJson?.data || fdJson || null;
+      }
+    } catch (err) {
+      persistedFetchError = err.message;
+      failedChecks.push(`PERSISTED_FETCH_FAILED: ${err.message}`);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 3: Calculate Diff (UI vs Persisted)
+    // ═══════════════════════════════════════════════════════════════════════
+    const diff = this._calculateConfigDiff(uiSnapshot, persistedSnapshot);
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 4: UI Coverage Manifest
+    // ═══════════════════════════════════════════════════════════════════════
+    const uiCoverage = {
+      registeredTabs: Agent2Manager.UI_REGISTRY.tabs,
+      registeredPanels: Agent2Manager.UI_REGISTRY.panels,
+      exportedSections: [],
+      missingFromExport: [],
+      status: 'PASS'
+    };
+    
+    // Check what we're actually exporting
+    const exportedSections = ['agent2Master', 'discoveryMaster', 'discoveryStyle', 
+      'vocabularySystem', 'clarifierSystem', 'playbook', 'triggerCards', 'fallbackResponses',
+      'callStartGreeting', 'greetingInterceptor', 'intentWordBlocking', 'callList'];
+    uiCoverage.exportedSections = exportedSections;
+    
+    // Find any registered panels not in export
+    const allRegisteredPanels = Object.values(Agent2Manager.UI_REGISTRY.panels).flat();
+    const missingPanels = allRegisteredPanels.filter(p => !exportedSections.includes(p));
+    if (missingPanels.length > 0) {
+      uiCoverage.missingFromExport = missingPanels;
+      uiCoverage.status = 'FAIL';
+      failedChecks.push(`UI_COVERAGE_INCOMPLETE: Missing panels: ${missingPanels.join(', ')}`);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 5: Runtime Dependencies (Connection Recovery, DTMF, etc.)
+    // ═══════════════════════════════════════════════════════════════════════
+    const runtimeDependencies = {
+      _description: 'Config surfaces outside Agent 2.0 that can override/interrupt calls',
+      
+      connectionQualityGate: {
+        uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate',
+        canOverrideAgent2: true,
+        executesAt: 'S1.5 (before Agent2 greeting)',
+        config: frontDeskConfig?.connectionQualityGate || null,
+        _extracted: {
+          enabled: frontDeskConfig?.connectionQualityGate?.enabled ?? true,
+          clarificationPrompt: frontDeskConfig?.connectionQualityGate?.clarificationPrompt || 
+                              frontDeskConfig?.connectionQualityGate?.reGreeting || 
+                              "I'm sorry, I didn't quite catch that. Could you please repeat what you said?",
+          dtmfEscapeMessage: frontDeskConfig?.connectionQualityGate?.dtmfEscapeMessage || 
+                            "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.",
+          transferDestination: frontDeskConfig?.connectionQualityGate?.transferDestination || '',
+          maxRetries: frontDeskConfig?.connectionQualityGate?.maxRetries || 3
+        }
+      },
+      
+      connectionRecoveryMessages: {
+        uiPath: 'aiAgentSettings.frontDeskBehavior.recoveryMessages',
+        canOverrideAgent2: true,
+        executesAt: 'Any turn (on STT failure/unclear audio)',
+        config: frontDeskConfig?.recoveryMessages || null,
+        _extracted: {
+          audioUnclear: frontDeskConfig?.recoveryMessages?.audioUnclear || [],
+          connectionCutOut: frontDeskConfig?.recoveryMessages?.connectionCutOut || [],
+          silenceRecovery: frontDeskConfig?.recoveryMessages?.silenceRecovery || [],
+          generalError: frontDeskConfig?.recoveryMessages?.generalError || [],
+          technicalTransfer: frontDeskConfig?.recoveryMessages?.technicalTransfer || []
+        }
+      },
+      
+      legacyGreetingRules: {
+        uiPath: 'aiAgentSettings.frontDeskBehavior.conversationStages.greetingRules',
+        canOverrideAgent2: false,
+        executesAt: 'Only when Agent2 greetings disabled',
+        note: 'These are bypassed when Agent 2.0 is enabled',
+        config: frontDeskConfig?.conversationStages?.greetingRules || [],
+        count: (frontDeskConfig?.conversationStages?.greetingRules || []).length
+      },
+      
+      instantResponses: {
+        uiPath: 'aiAgentSettings.instantResponses',
+        canOverrideAgent2: true,
+        executesAt: 'Before discovery (instant match layer)',
+        config: frontDeskConfig?.instantResponses || [],
+        _extracted: {
+          total: (frontDeskConfig?.instantResponses || []).length,
+          enabled: (frontDeskConfig?.instantResponses || []).filter(r => r.enabled !== false).length,
+          greetingCategory: (frontDeskConfig?.instantResponses || []).filter(r => r.category === 'greeting').length
+        }
+      }
+    };
+    
+    // Check for required runtime dependencies
+    if (!frontDeskConfig) {
+      missingSections.push('frontDeskBehavior');
+      failedChecks.push('RUNTIME_DEPENDENCY_MISSING: Could not fetch frontDeskBehavior config');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 6: Execution Model (Who Can Speak + Priority Order)
+    // ═══════════════════════════════════════════════════════════════════════
+    const config = uiSnapshot;
+    const executionModel = {
+      _description: 'Deterministic order of speech sources - first match wins',
+      speechSources: [
+        {
+          sourceId: 'catastrophicFallback.dtmfMenu',
+          uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
+          priority: 1,
+          canOverride: ['*'],
+          triggerCondition: 'maxRetries exceeded on connection quality issues',
+          enabled: runtimeDependencies.connectionQualityGate._extracted.enabled,
+          textPreview: runtimeDependencies.connectionQualityGate._extracted.dtmfEscapeMessage?.substring(0, 80)
+        },
+        {
+          sourceId: 'connectionQualityGate.clarification',
+          uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.clarificationPrompt',
+          priority: 2,
+          canOverride: ['agent2.greetings', 'agent2.discovery'],
+          triggerCondition: 'STT confidence below threshold OR trouble phrases detected',
+          enabled: runtimeDependencies.connectionQualityGate._extracted.enabled,
+          textPreview: runtimeDependencies.connectionQualityGate._extracted.clarificationPrompt?.substring(0, 80)
+        },
+        {
+          sourceId: 'connectionRecovery.audioUnclear',
+          uiPath: 'aiAgentSettings.frontDeskBehavior.recoveryMessages.audioUnclear',
+          priority: 3,
+          canOverride: ['agent2.discovery'],
+          triggerCondition: 'Audio quality issues detected mid-call',
+          enabled: true,
+          textPreview: (runtimeDependencies.connectionRecoveryMessages._extracted.audioUnclear[0] || '').substring(0, 80)
+        },
+        {
+          sourceId: 'agent2.greetings.callStart',
+          uiPath: 'aiAgentSettings.agent2.greetings.callStart',
+          priority: 10,
+          canOverride: [],
+          triggerCondition: 'Turn 0 (call start) when Agent2 enabled',
+          enabled: config.enabled && config.greetings?.callStart?.enabled,
+          textPreview: (config.greetings?.callStart?.text || '').substring(0, 80),
+          audioUrl: config.greetings?.callStart?.audioUrl || null
+        },
+        {
+          sourceId: 'agent2.greetings.interceptor',
+          uiPath: 'aiAgentSettings.agent2.greetings.interceptor.rules',
+          priority: 11,
+          canOverride: [],
+          triggerCondition: 'Caller says short greeting (hi/hello) when Agent2 enabled',
+          enabled: config.enabled && config.greetings?.interceptor?.enabled,
+          rulesCount: (config.greetings?.interceptor?.rules || []).length
+        },
+        {
+          sourceId: 'agent2.discovery.triggerCards',
+          uiPath: 'aiAgentSettings.agent2.discovery.playbook.rules',
+          priority: 20,
+          canOverride: [],
+          triggerCondition: 'Caller input matches trigger card keywords/phrases',
+          enabled: config.enabled && config.discovery?.enabled,
+          cardsCount: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length
+        },
+        {
+          sourceId: 'agent2.discovery.fallback',
+          uiPath: 'aiAgentSettings.agent2.discovery.playbook.fallback',
+          priority: 30,
+          canOverride: [],
+          triggerCondition: 'No trigger card match, no scenario match',
+          enabled: config.enabled && config.discovery?.enabled,
+          textPreview: (config.discovery?.playbook?.fallback?.noMatchAnswer || '').substring(0, 80)
+        },
+        {
+          sourceId: 'legacy.greetingRules',
+          uiPath: 'aiAgentSettings.frontDeskBehavior.conversationStages.greetingRules',
+          priority: 100,
+          canOverride: [],
+          triggerCondition: 'Only when Agent2 greetings DISABLED',
+          enabled: !(config.enabled && config.greetings?.interceptor?.enabled),
+          rulesCount: runtimeDependencies.legacyGreetingRules.count
+        }
+      ]
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 7: Audio Assets + Reachability Verification
+    // ═══════════════════════════════════════════════════════════════════════
+    const audioAssets = {
+      _description: 'All configured audio URLs with reachability status (Twilio perspective)',
+      overallStatus: 'CHECKING',
+      assets: [],
+      unreachableCount: 0,
+      totalCount: 0,
+      verificationMethod: 'Client-side fetch (HEAD request with 5s timeout)',
+      note: 'If an audio file is UNREACHABLE, Twilio will timeout and the call may fail or use TTS fallback'
+    };
+    
+    // Collect all audio URLs
+    const allAudioUrls = [];
+    
+    // Agent2 call start greeting
+    if (config.greetings?.callStart?.audioUrl) {
+      allAudioUrls.push({
+        sourceId: 'agent2.greetings.callStart',
+        uiPath: 'Agent 2.0 > Greetings > Call Start Greeting',
+        url: config.greetings.callStart.audioUrl,
+        fallbackText: config.greetings?.callStart?.text || '[no fallback text]'
+      });
+    }
+    
+    // Agent2 greeting interceptor rules
+    (config.greetings?.interceptor?.rules || []).forEach((rule, idx) => {
+      if (rule.audioUrl) {
+        allAudioUrls.push({
+          sourceId: `agent2.greetings.interceptor.rules[${idx}]`,
+          uiPath: `Agent 2.0 > Greetings > Interceptor Rule: ${rule.id || idx}`,
+          url: rule.audioUrl,
+          fallbackText: rule.responseText || '[no fallback text]'
+        });
+      }
+    });
+    
+    // Agent2 trigger cards
+    (config.discovery?.playbook?.rules || []).forEach((rule, idx) => {
+      if (rule.answer?.audioUrl) {
+        allAudioUrls.push({
+          sourceId: `agent2.discovery.triggerCard[${idx}]`,
+          uiPath: `Agent 2.0 > Configuration > Trigger Card: ${rule.label || rule.id || idx}`,
+          url: rule.answer.audioUrl,
+          fallbackText: rule.answer?.answerText || '[no fallback text]'
+        });
+      }
+    });
+    
+    // Verify reachability for each audio URL
+    for (const asset of allAudioUrls) {
+      let reachable = false;
+      let error = null;
+      
+      try {
+        // Use HEAD request with timeout to check reachability
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(asset.url, { 
+          method: 'HEAD', 
+          signal: controller.signal 
+        });
+        clearTimeout(timeoutId);
+        
+        reachable = response.ok;
+        if (!reachable) {
+          error = `HTTP ${response.status}`;
+        }
+      } catch (err) {
+        reachable = false;
+        error = err.name === 'AbortError' ? 'TIMEOUT' : err.message;
+      }
+      
+      audioAssets.assets.push({
+        ...asset,
+        status: reachable ? 'OK' : 'MISSING',
+        reachable,
+        error,
+        lastChecked: timestamp,
+        fallbackBehavior: reachable ? 'N/A' : 'TTS with fallback text',
+        hasFallbackText: !!(asset.fallbackText && asset.fallbackText !== '[no fallback text]')
+      });
+      
+      if (!reachable) {
+        audioAssets.unreachableCount++;
+        // If no fallback text, this is CRITICAL - call will fail
+        const severity = asset.fallbackText && asset.fallbackText !== '[no fallback text]' ? 'WARNING' : 'CRITICAL';
+        failedChecks.push(`AUDIO_${severity}: ${asset.sourceId} - ${asset.url} (${error})${severity === 'CRITICAL' ? ' - NO FALLBACK TEXT' : ''}`);
+      }
+    }
+    
+    // Update overall status
+    audioAssets.totalCount = allAudioUrls.length;
+    audioAssets.overallStatus = audioAssets.unreachableCount === 0 ? 'OK' : 
+      (audioAssets.unreachableCount === audioAssets.totalCount ? 'CRITICAL' : 'PARTIAL');
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 8: Conflict Detection
+    // ═══════════════════════════════════════════════════════════════════════
+    const conflicts = [];
+    
+    // Check: Connection Quality Gate can override Agent2 Call Start
+    if (runtimeDependencies.connectionQualityGate._extracted.enabled && 
+        config.enabled && config.greetings?.callStart?.enabled) {
+      conflicts.push({
+        type: 'GREETING_SOURCE_COMPETITION',
+        severity: 'WARNING',
+        sources: ['connectionQualityGate.clarification', 'agent2.greetings.callStart'],
+        description: 'Connection Quality Gate can speak BEFORE Agent 2.0 Call Start greeting on turn 0 if STT confidence is low',
+        recommendation: 'Review if this is intended behavior. The gate\'s clarification prompt may fire instead of your configured greeting.',
+        affectedPaths: [
+          'aiAgentSettings.frontDeskBehavior.connectionQualityGate.clarificationPrompt',
+          'aiAgentSettings.agent2.greetings.callStart.text'
+        ]
+      });
+    }
+    
+    // Check: Vocabulary enabled entries but system disabled
+    const vocabEntries = config.discovery?.vocabulary?.entries || [];
+    const enabledVocabEntries = vocabEntries.filter(e => e.enabled);
+    if (!config.discovery?.vocabulary?.enabled && enabledVocabEntries.length > 0) {
+      conflicts.push({
+        type: 'DISABLED_PARENT_WITH_ENABLED_CHILDREN',
+        severity: 'WARNING',
+        sources: ['agent2.discovery.vocabulary'],
+        description: `Vocabulary system is DISABLED but has ${enabledVocabEntries.length} enabled entries that will NEVER run`,
+        recommendation: 'Either enable the vocabulary system or remove the entries to avoid confusion',
+        affectedPaths: ['aiAgentSettings.agent2.discovery.vocabulary.enabled']
+      });
+    }
+    
+    // Check: Clarifiers enabled entries but system disabled
+    const clarifierEntries = config.discovery?.clarifiers?.entries || [];
+    const enabledClarifierEntries = clarifierEntries.filter(e => e.enabled);
+    if (!config.discovery?.clarifiers?.enabled && enabledClarifierEntries.length > 0) {
+      conflicts.push({
+        type: 'DISABLED_PARENT_WITH_ENABLED_CHILDREN',
+        severity: 'WARNING',
+        sources: ['agent2.discovery.clarifiers'],
+        description: `Clarifier system is DISABLED but has ${enabledClarifierEntries.length} enabled entries that will NEVER run`,
+        recommendation: 'Either enable the clarifier system or remove the entries to avoid confusion',
+        affectedPaths: ['aiAgentSettings.agent2.discovery.clarifiers.enabled']
+      });
+    }
+    
+    // Check: DTMF fallback enabled but no transfer destination
+    if (runtimeDependencies.connectionQualityGate._extracted.enabled && 
+        !runtimeDependencies.connectionQualityGate._extracted.transferDestination) {
+      conflicts.push({
+        type: 'INCOMPLETE_FALLBACK_CONFIG',
+        severity: 'CRITICAL',
+        sources: ['connectionQualityGate.dtmfMenu'],
+        description: 'DTMF escape menu is enabled but no transfer destination configured for Press 1',
+        recommendation: 'Configure a phone number for transferDestination or disable the connection quality gate',
+        affectedPaths: ['aiAgentSettings.frontDeskBehavior.connectionQualityGate.transferDestination']
+      });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 9: Call Review Evidence (Last 10 calls)
+    // ═══════════════════════════════════════════════════════════════════════
+    let callReviewEvidence = {
+      _description: 'Evidence from Call Review showing actual runtime decisions',
+      status: 'unavailable',
+      sampleSize: 0,
+      calls: [],
+      coverageSummary: {},
+      fetchError: null
+    };
+    
+    try {
+      const token = this._getToken();
+      const callsRes = await fetch(`/api/admin/agent2/calls/${this.companyId}?limit=10`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      
+      if (callsRes.ok) {
+        const callsJson = await callsRes.json();
+        const calls = callsJson?.data || [];
+        
+        if (calls.length > 0) {
+          callReviewEvidence.status = 'available';
+          callReviewEvidence.sampleSize = calls.length;
+          
+          // Summarize each call
+          callReviewEvidence.calls = calls.map(call => ({
+            callSid: call.callSid,
+            timestamp: call.startTime,
+            duration: call.duration,
+            status: call.status,
+            primaryIntent: call.primaryIntent,
+            bookingCompleted: call.bookingCompleted,
+            flags: call.flags || {}
+          }));
+          
+          // Calculate coverage summary
+          callReviewEvidence.coverageSummary = {
+            totalCalls: calls.length,
+            bookingCompleted: calls.filter(c => c.bookingCompleted).length,
+            withFlags: calls.filter(c => Object.keys(c.flags || {}).length > 0).length
+          };
+        } else {
+          callReviewEvidence.status = 'no_calls';
+          failedChecks.push('EVIDENCE_UNAVAILABLE: No calls found in Call Review');
+        }
+      }
+    } catch (err) {
+      callReviewEvidence.fetchError = err.message;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // STEP 10: Agent2 Configuration (Full Detail)
+    // ═══════════════════════════════════════════════════════════════════════
+    const agent2Config = {
       enabled: config.enabled || false,
       
-      // Discovery Tab - Complete Configuration
       discovery: {
         enabled: config.discovery?.enabled || false,
-        
-        // Style Configuration
-        style: {
-          ackWord: config.discovery?.style?.ackWord || 'Ok.',
-          forbidPhrases: config.discovery?.style?.forbidPhrases || [],
-          
-          // Bridge Lines (thinking time)
-          bridge: {
-            enabled: config.discovery?.style?.bridge?.enabled || false,
-            maxPerTurn: config.discovery?.style?.bridge?.maxPerTurn || 1,
-            lines: config.discovery?.style?.bridge?.lines || [],
-            _count: (config.discovery?.style?.bridge?.lines || []).length
-          },
-          
-          // System Delay Handling
-          systemDelay: {
-            enabled: config.discovery?.style?.systemDelay?.enabled || false,
-            firstLine: config.discovery?.style?.systemDelay?.firstLine || '',
-            transferLine: config.discovery?.style?.systemDelay?.transferLine || '',
-            _isConfigured: !!(config.discovery?.style?.systemDelay?.firstLine && config.discovery?.style?.systemDelay?.transferLine)
-          },
-          
-          // Robot Challenge Response
-          robotChallenge: {
-            enabled: config.discovery?.style?.robotChallenge?.enabled || false,
-            line: config.discovery?.style?.robotChallenge?.line || '',
-            _isConfigured: !!(config.discovery?.style?.robotChallenge?.line)
-          },
-          
-          // When In Doubt (fallback transfer)
-          whenInDoubt: {
-            enabled: config.discovery?.style?.whenInDoubt?.enabled || false,
-            transferLine: config.discovery?.style?.whenInDoubt?.transferLine || '',
-            _isConfigured: !!(config.discovery?.style?.whenInDoubt?.transferLine)
-          }
-        },
-        
-        // Vocabulary System (V119+)
+        style: config.discovery?.style || {},
         vocabulary: {
           enabled: config.discovery?.vocabulary?.enabled || false,
           entries: config.discovery?.vocabulary?.entries || [],
           _stats: {
-            total: (config.discovery?.vocabulary?.entries || []).length,
-            enabled: (config.discovery?.vocabulary?.entries || []).filter(e => e.enabled).length,
-            hardNormalize: (config.discovery?.vocabulary?.entries || []).filter(e => e.type === 'HARD_NORMALIZE').length,
-            softHint: (config.discovery?.vocabulary?.entries || []).filter(e => e.type === 'SOFT_HINT').length
+            total: vocabEntries.length,
+            enabled: enabledVocabEntries.length,
+            hardNormalize: vocabEntries.filter(e => e.type === 'HARD_NORMALIZE').length,
+            softHint: vocabEntries.filter(e => e.type === 'SOFT_HINT').length
           }
         },
-        
-        // Clarifier System (V119+)
         clarifiers: {
           enabled: config.discovery?.clarifiers?.enabled || false,
           maxAsksPerCall: config.discovery?.clarifiers?.maxAsksPerCall || 2,
           entries: config.discovery?.clarifiers?.entries || [],
           _stats: {
-            total: (config.discovery?.clarifiers?.entries || []).length,
-            enabled: (config.discovery?.clarifiers?.entries || []).filter(e => e.enabled).length
+            total: clarifierEntries.length,
+            enabled: enabledClarifierEntries.length
           }
         },
-        
-        // Playbook (Trigger Cards + Scenario Fallback)
         playbook: {
           version: config.discovery?.playbook?.version || 'v1',
           useScenarioFallback: config.discovery?.playbook?.useScenarioFallback || false,
           allowedScenarioTypes: config.discovery?.playbook?.allowedScenarioTypes || [],
           minScenarioScore: config.discovery?.playbook?.minScenarioScore || 0.72,
-          
-          // Fallback responses
-          fallback: {
-            noMatchAnswer: config.discovery?.playbook?.fallback?.noMatchAnswer || '',
-            noMatchWhenReasonCaptured: config.discovery?.playbook?.fallback?.noMatchWhenReasonCaptured || '',
-            noMatchClarifierQuestion: config.discovery?.playbook?.fallback?.noMatchClarifierQuestion || '',
-            afterAnswerQuestion: config.discovery?.playbook?.fallback?.afterAnswerQuestion || ''
-          },
-          
-          // Trigger Cards (Primary Intelligence)
-          triggerCards: {
-            rules: config.discovery?.playbook?.rules || [],
-            _stats: {
-              total: (config.discovery?.playbook?.rules || []).length,
-              enabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length,
-              disabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled === false).length,
-              withAudio: (config.discovery?.playbook?.rules || []).filter(r => r.answer?.audioUrl).length,
-              withFollowUp: (config.discovery?.playbook?.rules || []).filter(r => r.followUp?.question).length,
-              byPriority: this._groupByPriority(config.discovery?.playbook?.rules || [])
-            }
+          fallback: config.discovery?.playbook?.fallback || {},
+          rules: config.discovery?.playbook?.rules || [],
+          _stats: {
+            total: (config.discovery?.playbook?.rules || []).length,
+            enabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length
           }
         },
-        
         updatedAt: config.discovery?.updatedAt || null
       },
       
-      // Greetings Tab - Complete Configuration
       greetings: {
-        // Call Start Greeting (first thing agent says)
-        callStart: {
-          enabled: config.greetings?.callStart?.enabled || false,
-          text: config.greetings?.callStart?.text || '',
-          audioUrl: config.greetings?.callStart?.audioUrl || '',
-          _hasAudio: !!(config.greetings?.callStart?.audioUrl),
-          _hasText: !!(config.greetings?.callStart?.text)
-        },
-        
-        // Greeting Interceptor (hi/hello responses)
-        interceptor: {
-          enabled: config.greetings?.interceptor?.enabled || false,
-          maxWordsToQualify: config.greetings?.interceptor?.maxWordsToQualify || 2,
-          blockIfContainsIntentWords: config.greetings?.interceptor?.blockIfContainsIntentWords || false,
-          intentWords: config.greetings?.interceptor?.intentWords || [],
-          rules: config.greetings?.interceptor?.rules || [],
-          _stats: {
-            totalRules: (config.greetings?.interceptor?.rules || []).length,
-            enabledRules: (config.greetings?.interceptor?.rules || []).filter(r => r.enabled !== false).length,
-            intentWordsCount: (config.greetings?.interceptor?.intentWords || []).length,
-            rulesWithAudio: (config.greetings?.interceptor?.rules || []).filter(r => r.audioUrl).length
-          }
-        }
+        callStart: config.greetings?.callStart || {},
+        interceptor: config.greetings?.interceptor || {}
       },
       
-      // Metadata
       meta: config.meta || {}
     };
     
     // ═══════════════════════════════════════════════════════════════════════
-    // SECTION 2: Runtime Integration Status
-    // ═══════════════════════════════════════════════════════════════════════
-    const runtimeIntegration = {
-      _description: 'Shows how Agent 2.0 is wired into the live call runtime',
-      
-      // Primary Speaker Ownership
-      speakerOwnership: {
-        primaryDiscoverySpeaker: config.enabled && config.discovery?.enabled 
-          ? 'Agent2DiscoveryRunner' 
-          : 'DiscoveryFlowRunner (legacy)',
-        greetingSpeaker: config.enabled && config.greetings?.interceptor?.enabled
-          ? 'Agent2GreetingInterceptor'
-          : 'GreetingInterceptor (legacy)',
-        isAgent2Primary: config.enabled && config.discovery?.enabled,
-        _note: 'When Agent 2.0 is enabled, it owns the mic. Legacy systems are bypassed.'
-      },
-      
-      // Service Layer Wiring
-      services: {
-        Agent2DiscoveryRunner: {
-          active: config.enabled && config.discovery?.enabled,
-          file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
-          purpose: 'Main discovery orchestrator - processes caller input, matches trigger cards, runs vocabulary/clarifiers',
-          triggers: config.discovery?.playbook?.rules?.length || 0
-        },
-        
-        Agent2GreetingInterceptor: {
-          active: config.enabled && config.greetings?.interceptor?.enabled,
-          file: 'services/engine/agent2/Agent2GreetingInterceptor.js',
-          purpose: 'Handles caller greetings (hi/hello) before trigger card matching',
-          greetingRules: config.greetings?.interceptor?.rules?.length || 0
-        },
-        
-        Agent2VocabularyEngine: {
-          active: config.enabled && config.discovery?.vocabulary?.enabled,
-          file: 'services/engine/agent2/Agent2VocabularyEngine.js',
-          purpose: 'Normalizes mishears and adds semantic hints before matching',
-          entries: config.discovery?.vocabulary?.entries?.length || 0
-        },
-        
-        TriggerCardMatcher: {
-          active: config.enabled && config.discovery?.enabled,
-          file: 'services/engine/agent2/TriggerCardMatcher.js',
-          purpose: 'Matches caller input against trigger cards (keywords + phrases)',
-          cardsToMatch: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length
-        },
-        
-        ScenarioEngine: {
-          active: config.discovery?.playbook?.useScenarioFallback || false,
-          file: 'services/ScenarioEngine.js',
-          purpose: 'Fallback to global scenarios if no trigger card matches',
-          minScore: config.discovery?.playbook?.minScenarioScore || 0.72,
-          allowedTypes: config.discovery?.playbook?.allowedScenarioTypes || []
-        }
-      },
-      
-      // FrontDeskCoreRuntime Integration
-      coreRuntimeIntegration: {
-        file: 'services/engine/FrontDeskCoreRuntime.js',
-        flowPosition: 'S4 - Discovery Flow',
-        executionOrder: [
-          'S1: Runtime Ownership',
-          'S1.5: Connection Quality Gate',
-          'S2: Input Text Truth',
-          'S2.5: Escalation Detection',
-          'GREET: Greeting Intercept (Agent2GreetingInterceptor if enabled)',
-          'S3: Slot Extraction',
-          'S4: Discovery Flow (Agent2DiscoveryRunner if enabled, else legacy)',
-          'S5: Consent Gate',
-          'S6: Booking Flow',
-          'S7: Voice Provider'
-        ],
-        agent2Position: 'GREET + S4',
-        _note: 'Agent 2.0 owns GREET and S4 when enabled. One mic architecture - no fallback.'
-      },
-      
-      // API Endpoints
-      apiEndpoints: {
-        config: {
-          get: `/api/admin/agent2/${this.companyId}`,
-          patch: `/api/admin/agent2/${this.companyId}`,
-          file: 'routes/admin/agent2.js'
-        },
-        gptPrefill: {
-          post: `/api/admin/agent2/${this.companyId}/gpt-prefill`,
-          purpose: 'AI-powered trigger card generation'
-        },
-        greetingSeed: {
-          post: `/api/admin/agent2/${this.companyId}/greetings/seed-from-global`,
-          purpose: 'Import legacy greeting rules'
-        },
-        callReview: {
-          getCalls: `/api/admin/agent2/calls/${this.companyId}`,
-          getEvents: `/api/admin/agent2/calls/${this.companyId}/:callSid/events`,
-          purpose: 'Call Review tab data'
-        }
-      },
-      
-      // Cache Invalidation
-      cacheInvalidation: {
-        enabled: true,
-        mechanism: 'Redis cache key deletion on config save',
-        keys: [`company-phone:{phoneNumber}`],
-        _note: 'Config changes invalidate Redis cache immediately so Twilio picks up new settings'
-      }
-    };
-    
-    // ═══════════════════════════════════════════════════════════════════════
-    // SECTION 3: Validation & Health Checks
+    // STEP 11: Validation (Comprehensive)
     // ═══════════════════════════════════════════════════════════════════════
     const validation = {
-      _description: 'Validates Agent 2.0 configuration for completeness and potential issues',
-      
       criticalIssues: [],
       warnings: [],
       recommendations: [],
-      
-      checks: {
-        agent2Enabled: config.enabled === true,
-        discoveryEnabled: config.discovery?.enabled === true,
-        greetingsConfigured: !!(config.greetings?.callStart?.text || config.greetings?.callStart?.audioUrl),
-        hasTriggerCards: (config.discovery?.playbook?.rules || []).length > 0,
-        hasEnabledTriggerCards: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length > 0,
-        fallbackConfigured: !!(config.discovery?.playbook?.fallback?.noMatchAnswer),
-        greetingInterceptorEnabled: config.greetings?.interceptor?.enabled === true,
-        vocabularySystemActive: config.discovery?.vocabulary?.enabled === true,
-        clarifiersActive: config.discovery?.clarifiers?.enabled === true
-      }
+      checks: {}
     };
     
-    // Run validation checks
-    if (!config.enabled) {
-      validation.warnings.push('Agent 2.0 is DISABLED - legacy system is active');
-    }
-    
+    // Critical checks
     if (config.enabled && !config.discovery?.enabled) {
       validation.criticalIssues.push('Agent 2.0 is enabled but Discovery is DISABLED - no discovery flow will run');
     }
     
-    if (config.enabled && config.discovery?.enabled && (config.discovery?.playbook?.rules || []).length === 0) {
+    if (audioAssets.unreachableCount > 0) {
+      validation.criticalIssues.push(`${audioAssets.unreachableCount} audio file(s) are UNREACHABLE - will fallback to TTS`);
+    }
+    
+    // Add conflicts as critical/warning based on severity
+    conflicts.forEach(c => {
+      if (c.severity === 'CRITICAL') {
+        validation.criticalIssues.push(c.description);
+      } else {
+        validation.warnings.push(c.description);
+      }
+    });
+    
+    // Warnings
+    if (!config.enabled) {
+      validation.warnings.push('Agent 2.0 is DISABLED - legacy system is active');
+    }
+    
+    if (config.enabled && (config.discovery?.playbook?.rules || []).length === 0) {
       validation.warnings.push('No trigger cards configured - agent will only use fallback responses');
     }
     
     if (config.enabled && !config.greetings?.callStart?.text && !config.greetings?.callStart?.audioUrl) {
-      validation.warnings.push('Call start greeting is empty - no greeting will be played');
-    }
-    
-    if (config.discovery?.playbook?.useScenarioFallback && !config.discovery?.playbook?.allowedScenarioTypes?.length) {
-      validation.warnings.push('Scenario fallback enabled but no scenario types allowed');
-    }
-    
-    const enabledCards = (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false);
-    const cardsWithNoKeywords = enabledCards.filter(r => 
-      (!r.match?.keywords?.length && !r.match?.phrases?.length)
-    );
-    if (cardsWithNoKeywords.length > 0) {
-      validation.warnings.push(`${cardsWithNoKeywords.length} trigger card(s) have no keywords or phrases - they will never match`);
-    }
-    
-    const cardsWithNoAnswer = enabledCards.filter(r => !r.answer?.answerText && !r.answer?.audioUrl);
-    if (cardsWithNoAnswer.length > 0) {
-      validation.warnings.push(`${cardsWithNoAnswer.length} trigger card(s) have no answer text or audio`);
+      validation.warnings.push('Call start greeting is empty - connection quality gate may speak first');
     }
     
     // Recommendations
     if (!config.discovery?.vocabulary?.enabled) {
-      validation.recommendations.push('Enable Vocabulary System to normalize common STT mishears (e.g., "acee" → "ac")');
+      validation.recommendations.push('Enable Vocabulary System to normalize common STT mishears');
     }
     
     if (!config.discovery?.clarifiers?.enabled) {
-      validation.recommendations.push('Enable Clarifiers to disambiguate vague phrases (e.g., "thing on wall" → thermostat clarification)');
+      validation.recommendations.push('Enable Clarifiers to disambiguate vague phrases');
     }
     
-    if (enabledCards.length > 0 && enabledCards.filter(r => r.answer?.audioUrl).length === 0) {
-      validation.recommendations.push('Consider adding audio files to some trigger cards for more natural responses');
-    }
+    // Checks object
+    validation.checks = {
+      agent2Enabled: config.enabled === true,
+      discoveryEnabled: config.discovery?.enabled === true,
+      greetingsConfigured: !!(config.greetings?.callStart?.text || config.greetings?.callStart?.audioUrl),
+      hasTriggerCards: (config.discovery?.playbook?.rules || []).length > 0,
+      hasEnabledTriggerCards: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length > 0,
+      vocabularyEnabled: config.discovery?.vocabulary?.enabled === true,
+      clarifiersEnabled: config.discovery?.clarifiers?.enabled === true,
+      allAudioReachable: audioAssets.unreachableCount === 0,
+      noConflicts: conflicts.filter(c => c.severity === 'CRITICAL').length === 0,
+      evidenceAvailable: callReviewEvidence.status === 'available'
+    };
     
     // ═══════════════════════════════════════════════════════════════════════
-    // SECTION 4: Statistics & Insights
+    // STEP 12: Runtime Fallback Audit (Hidden Text Disclosure)
     // ═══════════════════════════════════════════════════════════════════════
-    const statistics = {
-      discovery: {
-        triggerCards: {
-          total: (config.discovery?.playbook?.rules || []).length,
-          enabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length,
-          disabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled === false).length,
-          withAudio: (config.discovery?.playbook?.rules || []).filter(r => r.answer?.audioUrl).length,
-          withFollowUp: (config.discovery?.playbook?.rules || []).filter(r => r.followUp?.question).length
+    // PRIME DIRECTIVE: Any spoken line must be UI-mapped.
+    // These are hardcoded fallbacks that may speak when config is missing.
+    // They exist for robustness but are NOT UI-controlled.
+    // Look for SPEECH_SOURCE_SELECTED events with hasUiPath: false
+    validation.runtimeFallbackAudit = {
+      _description: 'Hardcoded fallback responses that may fire when UI-configured values are missing',
+      knownFallbacks: [
+        { source: 'connectionQualityGate.clarification', fallbackText: "I'm sorry, I didn't quite catch that. Could you please repeat what you said?", uiPath: 'frontDeskBehavior.connectionQualityGate.clarificationPrompt' },
+        { source: 'connectionQualityGate.dtmfEscape', fallbackText: "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.", uiPath: 'frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage' },
+        { source: 'agent2.discovery.fallback.noMatchAnswer', fallbackText: "How can I help you today?", uiPath: 'agent2.discovery.playbook.fallback.noMatchAnswer' },
+        { source: 'agent2.discovery.fallback.noMatchWhenReasonCaptured', fallbackText: "I'm sorry to hear that.", uiPath: 'agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured' },
+        { source: 'agent2.greetings.interceptor.rules[].responseText', fallbackText: "Hi! How can I help you?", uiPath: 'agent2.greetings.interceptor.rules[].responseText' },
+        { source: 'agent2.greetings.callStart.text', fallbackText: "Thank you for calling. How can I help you today?", uiPath: 'agent2.greetings.callStart.text' }
+      ],
+      howToVerify: 'In Call Review, look for SPEECH_SOURCE_SELECTED events with hasUiPath: false - these indicate a hardcoded fallback was used instead of UI-configured text.'
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // FINAL: Assemble Complete Report
+    // ═══════════════════════════════════════════════════════════════════════
+    const completenessStatus = failedChecks.length === 0 ? 'PASS' : 'FAIL';
+    
+    return {
+      manifest: {
+        reportType: 'COMPLETE_RUNTIME_WIRING_REPORT',
+        title: 'Complete Runtime Wiring Report (Agent 2.0 + Dependencies)',
+        companyId: this.companyId,
+        uiBuild: Agent2Manager.UI_BUILD,
+        generatedAt: timestamp,
+        schemaVersion: '2.0.0',
+        completeness: {
+          status: completenessStatus,
+          failedChecks,
+          missingSections
         },
-        
-        keywords: {
-          total: (config.discovery?.playbook?.rules || []).reduce((sum, r) => 
-            sum + (r.match?.keywords?.length || 0), 0),
-          unique: new Set(
-            (config.discovery?.playbook?.rules || [])
-              .flatMap(r => r.match?.keywords || [])
-              .map(k => k.toLowerCase())
-          ).size
-        },
-        
-        phrases: {
-          total: (config.discovery?.playbook?.rules || []).reduce((sum, r) => 
-            sum + (r.match?.phrases?.length || 0), 0),
-          unique: new Set(
-            (config.discovery?.playbook?.rules || [])
-              .flatMap(r => r.match?.phrases || [])
-              .map(p => p.toLowerCase())
-          ).size
-        },
-        
-        vocabulary: {
-          total: (config.discovery?.vocabulary?.entries || []).length,
-          hardNormalize: (config.discovery?.vocabulary?.entries || []).filter(e => e.type === 'HARD_NORMALIZE').length,
-          softHint: (config.discovery?.vocabulary?.entries || []).filter(e => e.type === 'SOFT_HINT').length
-        },
-        
-        clarifiers: {
-          total: (config.discovery?.clarifiers?.entries || []).length,
-          enabled: (config.discovery?.clarifiers?.entries || []).filter(e => e.enabled).length
+        primeDirective: 'If it is not in the UI, it does not exist. Any spoken line must be UI-mapped.'
+      },
+      
+      uiCoverage,
+      
+      configSnapshots: {
+        uiSnapshot,
+        persistedSnapshot,
+        diff,
+        isDirty: this.isDirty,
+        diffSummary: {
+          hasChanges: diff.hasChanges,
+          changedPaths: diff.changedPaths || [],
+          addedPaths: diff.addedPaths || [],
+          removedPaths: diff.removedPaths || []
         }
       },
       
-      greetings: {
-        interceptorRules: (config.greetings?.interceptor?.rules || []).length,
-        intentWords: (config.greetings?.interceptor?.intentWords || []).length,
-        callStartConfigured: !!(config.greetings?.callStart?.text || config.greetings?.callStart?.audioUrl)
+      executionModel,
+      
+      agent2Config,
+      
+      runtimeDependencies,
+      
+      audioAssets,
+      
+      conflicts,
+      
+      callReviewEvidence,
+      
+      validation,
+      
+      runtimeFallbackAudit: validation.runtimeFallbackAudit
+    };
+  }
+  
+  /**
+   * Calculate diff between UI snapshot and persisted snapshot
+   */
+  _calculateConfigDiff(uiSnapshot, persistedSnapshot) {
+    if (!persistedSnapshot) {
+      return { hasChanges: true, error: 'No persisted snapshot available', changedPaths: [], addedPaths: [], removedPaths: [] };
+    }
+    
+    const changedPaths = [];
+    const addedPaths = [];
+    const removedPaths = [];
+    
+    // Deep compare helper
+    const compareObjects = (ui, persisted, path = '') => {
+      if (ui === persisted) return;
+      
+      if (typeof ui !== typeof persisted) {
+        changedPaths.push({ path, ui, persisted });
+        return;
       }
+      
+      if (typeof ui !== 'object' || ui === null || persisted === null) {
+        if (ui !== persisted) {
+          changedPaths.push({ path, ui, persisted });
+        }
+        return;
+      }
+      
+      if (Array.isArray(ui) !== Array.isArray(persisted)) {
+        changedPaths.push({ path, ui, persisted });
+        return;
+      }
+      
+      if (Array.isArray(ui)) {
+        if (ui.length !== persisted.length) {
+          changedPaths.push({ path, ui: `[${ui.length} items]`, persisted: `[${persisted.length} items]` });
+        }
+        return;
+      }
+      
+      const uiKeys = Object.keys(ui);
+      const persistedKeys = Object.keys(persisted);
+      
+      // Check for added keys
+      uiKeys.forEach(key => {
+        if (!persistedKeys.includes(key)) {
+          addedPaths.push(`${path}.${key}`);
+        }
+      });
+      
+      // Check for removed keys
+      persistedKeys.forEach(key => {
+        if (!uiKeys.includes(key)) {
+          removedPaths.push(`${path}.${key}`);
+        }
+      });
+      
+      // Recurse on common keys
+      uiKeys.filter(k => persistedKeys.includes(k)).forEach(key => {
+        compareObjects(ui[key], persisted[key], path ? `${path}.${key}` : key);
+      });
     };
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // SECTION 5: Export Metadata
-    // ═══════════════════════════════════════════════════════════════════════
-    const exportMetadata = {
-      exportedAt: timestamp,
-      exportVersion: '1.0.0',
-      uiBuild: Agent2Manager.UI_BUILD,
-      companyId: this.companyId,
-      isDirty: this.isDirty,
-      activeTab: this._activeTab,
-      _description: 'Complete Agent 2.0 wiring truth - includes all tabs, runtime integration, and validation'
-    };
+    try {
+      compareObjects(uiSnapshot, persistedSnapshot);
+    } catch (err) {
+      return { hasChanges: true, error: err.message, changedPaths, addedPaths, removedPaths };
+    }
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // ASSEMBLE FINAL REPORT
-    // ═══════════════════════════════════════════════════════════════════════
     return {
-      _README: {
-        title: 'Agent 2.0 Complete Wiring Report',
-        description: 'This is the TRUTH of how Agent 2.0 is configured and wired into the runtime. It includes all configuration from all tabs, runtime integration status, validation results, and statistics.',
-        purpose: 'Use this to understand exactly what Agent 2.0 will do when it processes a call, what services are active, and what issues need attention.',
-        sections: {
-          metadata: 'Export metadata and current state',
-          configuration: 'Complete configuration from all tabs (Discovery, Greetings, etc.)',
-          runtimeIntegration: 'How Agent 2.0 is wired into the live call processing runtime',
-          validation: 'Health checks, issues, warnings, and recommendations',
-          statistics: 'Statistics and insights about the current configuration'
-        },
-        autoUpdate: 'This export is dynamically generated from the current UI state. Any unsaved changes are included.',
-        lastExported: timestamp
+      hasChanges: changedPaths.length > 0 || addedPaths.length > 0 || removedPaths.length > 0,
+      changedPaths,
+      addedPaths,
+      removedPaths
+    };
+  }
+  
+  /**
+   * Agent2-only export (for dev/debugging)
+   */
+  async _generateAgent2OnlyExport() {
+    const timestamp = new Date().toISOString();
+    this._readFormIntoConfig(this._container);
+    const config = this.config || this.getDefaultConfig();
+    
+    // Fetch persisted for diff
+    let persistedSnapshot = null;
+    try {
+      const token = this._getToken();
+      const res = await fetch(`/api/admin/agent2/${this.companyId}`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        const json = await res.json();
+        persistedSnapshot = json?.data || null;
+      }
+    } catch (err) {
+      // Ignore
+    }
+    
+    const diff = this._calculateConfigDiff(config, persistedSnapshot);
+    
+    return {
+      manifest: {
+        reportType: 'AGENT2_ONLY_EXPORT',
+        title: 'Agent 2.0 Configuration Export (Dev/Debug)',
+        companyId: this.companyId,
+        uiBuild: Agent2Manager.UI_BUILD,
+        generatedAt: timestamp,
+        schemaVersion: '2.0.0',
+        note: 'This export contains ONLY Agent 2.0 namespace. For complete runtime truth, use Complete Wiring Report.'
       },
       
-      metadata: exportMetadata,
-      configuration: configurationSnapshot,
-      runtimeIntegration: runtimeIntegration,
-      validation: validation,
-      statistics: statistics
+      configSnapshots: {
+        uiSnapshot: config,
+        persistedSnapshot,
+        diff,
+        isDirty: this.isDirty
+      },
+      
+      agent2Config: config
     };
   }
   

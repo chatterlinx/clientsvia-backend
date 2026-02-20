@@ -4242,6 +4242,14 @@ const companySchema = new mongoose.Schema({
                 callStart: { type: mongoose.Schema.Types.Mixed, default: {} },
                 interceptor: { type: mongoose.Schema.Types.Mixed, default: {} }
             },
+            // V126: Emergency Fallback Line - UI-OWNED LAST RESORT
+            // This is the ONLY hardcoded-looking fallback allowed in the system.
+            // It's used when all other speech sources fail validation.
+            // MUST be configured in UI to work. If empty, system will log CRITICAL.
+            emergencyFallbackLine: {
+                text: { type: String, default: '', trim: true },
+                enabled: { type: Boolean, default: true }
+            },
             meta: { type: mongoose.Schema.Types.Mixed, default: {} }
         },
         

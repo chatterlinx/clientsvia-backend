@@ -462,6 +462,19 @@ class FrontDeskCoreRuntime {
                         dtmfMessage: cqDtmfMessage.substring(0, 100)
                     });
                     
+                    // V125/V126: SPEAK_PROVENANCE for complete UI traceability
+                    bufferEvent('SPEAK_PROVENANCE', {
+                        sourceId: 'connectionQualityGate.dtmfEscape',
+                        uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
+                        uiTab: 'LLM-0 Behavior',
+                        configPath: 'frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
+                        spokenTextPreview: cqDtmfMessage.substring(0, 120),
+                        audioUrl: null,
+                        reason: `DTMF escape after ${callState._connectionTroubleCount} connection troubles (max: ${cqMaxRetries})`,
+                        isFromUiConfig: true,
+                        turn: turn
+                    });
+                    
                     logger.warn('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: DTMF escape triggered', {
                         callSid,
                         troubleCount: callState._connectionTroubleCount,
@@ -487,6 +500,19 @@ class FrontDeskCoreRuntime {
                         troubleReason: troubleReason,
                         action: 'REGREET',
                         clarificationPrompt: cqClarificationPrompt.substring(0, 100)
+                    });
+                    
+                    // V125/V126: SPEAK_PROVENANCE for complete UI traceability
+                    bufferEvent('SPEAK_PROVENANCE', {
+                        sourceId: 'connectionQualityGate.clarification',
+                        uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.clarificationPrompt',
+                        uiTab: 'LLM-0 Behavior',
+                        configPath: 'frontDeskBehavior.connectionQualityGate.clarificationPrompt',
+                        spokenTextPreview: cqClarificationPrompt.substring(0, 120),
+                        audioUrl: null,
+                        reason: `Connection trouble detected (${troubleReason}), retry ${callState._connectionTroubleCount}/${cqMaxRetries}`,
+                        isFromUiConfig: true,
+                        turn: turn
                     });
                     
                     logger.info('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: re-greeting', {

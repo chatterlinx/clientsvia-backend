@@ -95,6 +95,121 @@ function normalizeScenarioType(scenario) {
 }
 
 /**
+ * V125: Build SPEECH_SOURCE_SELECTED event payload
+ * Every spoken line must be traceable to a UI path.
+ * If uiPath is null → that source is invalid and must be UI-wired.
+ */
+function buildSpeechSourceEvent(sourceId, uiPath, textPreview, audioUrl, reason) {
+  return {
+    sourceId,
+    uiPath: uiPath || null,
+    textPreview: clip(textPreview, 80),
+    audioUrl: audioUrl || null,
+    reason,
+    hasUiPath: !!uiPath
+  };
+}
+
+/**
+ * V126: SPEECH PROVENANCE - Complete traceability for every spoken line
+ * This is the single source of truth for "what spoke and why"
+ */
+function buildSpeakProvenance(sourceId, uiPath, uiTab, configPath, spokenText, audioUrl, reason, isFromUiConfig) {
+  return {
+    sourceId,
+    uiPath,
+    uiTab,
+    configPath,
+    spokenTextPreview: clip(spokenText, 120),
+    audioUrl: audioUrl || null,
+    reason,
+    isFromUiConfig,
+    timestamp: new Date().toISOString()
+  };
+}
+
+/**
+ * V126: NO-UI-NO-SPEAK GUARD
+ * If a response cannot be mapped to a UI-owned config path, block it.
+ * Returns the validated response or an emergency fallback (which MUST also be UI-owned).
+ * 
+ * @param {Object} params
+ * @param {string} params.response - The text/audio to speak
+ * @param {string} params.sourceId - Source identifier
+ * @param {string} params.uiPath - UI config path (null = not UI-owned)
+ * @param {Object} params.emergencyFallback - UI-owned emergency line
+ * @param {Function} params.emit - Event emitter
+ * @returns {{ response: string, blocked: boolean, provenance: Object }}
+ */
+function validateSpeechSource({ response, sourceId, uiPath, configPath, uiTab, audioUrl, reason, emergencyFallback, emit }) {
+  const isFromUiConfig = !!uiPath && uiPath !== 'HARDCODED_FALLBACK';
+  
+  const provenance = buildSpeakProvenance(
+    sourceId,
+    uiPath || 'UNMAPPED',
+    uiTab || 'UNKNOWN',
+    configPath || 'UNMAPPED',
+    response,
+    audioUrl,
+    reason,
+    isFromUiConfig
+  );
+  
+  // If response IS from UI config, allow it
+  if (isFromUiConfig) {
+    emit('SPEAK_PROVENANCE', provenance);
+    return { response, blocked: false, provenance };
+  }
+  
+  // Response is NOT from UI config - this is a violation
+  // Log CRITICAL and use emergency fallback (which MUST be UI-owned)
+  emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+    blockedSourceId: sourceId,
+    blockedText: clip(response, 80),
+    reason: 'No UI path mapped - Prime Directive violation',
+    severity: 'CRITICAL'
+  });
+  
+  if (emergencyFallback?.text && emergencyFallback?.uiPath) {
+    // Emergency fallback is UI-owned, use it
+    const fallbackProvenance = buildSpeakProvenance(
+      'emergencyFallback',
+      emergencyFallback.uiPath,
+      emergencyFallback.uiTab || 'Configuration',
+      emergencyFallback.configPath,
+      emergencyFallback.text,
+      null,
+      `FALLBACK: Original source "${sourceId}" was blocked (no UI path)`,
+      true
+    );
+    emit('SPEAK_PROVENANCE', fallbackProvenance);
+    return { response: emergencyFallback.text, blocked: true, provenance: fallbackProvenance };
+  }
+  
+  // No valid emergency fallback - this is a critical system failure
+  // We MUST speak something, so log double CRITICAL and use minimal safe text
+  emit('EMERGENCY_FALLBACK_ALSO_UNMAPPED', {
+    severity: 'CRITICAL',
+    message: 'Both primary response and emergency fallback lack UI paths - system misconfiguration'
+  });
+  
+  // Last resort: speak nothing meaningful, just acknowledge
+  const lastResort = 'One moment please.';
+  const lastResortProvenance = buildSpeakProvenance(
+    'SYSTEM_LAST_RESORT',
+    'NONE - CRITICAL SYSTEM ERROR',
+    'NONE',
+    'NONE',
+    lastResort,
+    null,
+    'CRITICAL: All speech sources failed UI validation',
+    false
+  );
+  emit('SPEAK_PROVENANCE', lastResortProvenance);
+  return { response: lastResort, blocked: true, provenance: lastResortProvenance };
+}
+
+/**
  * V119: Compute a short hash of the agent2 config for proof trail.
  * This lets us verify which config version was active during a turn.
  */
@@ -171,6 +286,27 @@ class Agent2DiscoveryRunner {
     const style = safeObj(discoveryCfg.style, {});
     const playbook = safeObj(discoveryCfg.playbook, {});
     const fallback = safeObj(playbook.fallback, {});
+    
+    // V126: EMERGENCY FALLBACK LINE - UI-OWNED LAST RESORT
+    // This is the ONLY acceptable fallback when other sources fail validation.
+    // If not configured, log CRITICAL - system should never use hardcoded text.
+    const emergencyFallbackConfig = agent2.emergencyFallbackLine || {};
+    const emergencyFallback = emergencyFallbackConfig.enabled !== false && emergencyFallbackConfig.text
+      ? {
+          text: emergencyFallbackConfig.text,
+          uiPath: 'aiAgentSettings.agent2.emergencyFallbackLine.text',
+          uiTab: 'Configuration',
+          configPath: 'agent2.emergencyFallbackLine.text'
+        }
+      : null;
+    
+    if (!emergencyFallback) {
+      emit('EMERGENCY_FALLBACK_NOT_CONFIGURED', {
+        severity: 'WARNING',
+        message: 'agent2.emergencyFallbackLine is not configured. If other sources fail, system will use minimal acknowledgment.',
+        configPath: 'aiAgentSettings.agent2.emergencyFallbackLine'
+      });
+    }
 
     // V119: ScenarioEngine is OFF by default
     const useScenarioFallback = playbook.useScenarioFallback === true;
@@ -257,12 +393,20 @@ class Agent2DiscoveryRunner {
         responseSource: greetingResult.responseSource
       });
 
+      const greetingAudioUrl = greetingResult.responseSource === 'audio' ? greetingResult.response : null;
+      emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+        `agent2.greetings.interceptor.rules[${greetingResult.ruleIndex || 0}]`,
+        'aiAgentSettings.agent2.greetings.interceptor.rules',
+        greetingResult.response,
+        greetingAudioUrl,
+        `Greeting rule matched: ${greetingResult.matchedTrigger || 'unknown'}`
+      ));
       emit('A2_RESPONSE_READY', {
         path: 'GREETING_INTERCEPTED',
         responsePreview: clip(greetingResult.response, 120),
         responseLength: greetingResult.response?.length || 0,
-        hasAudio: greetingResult.responseSource === 'audio',
-        audioUrl: greetingResult.responseSource === 'audio' ? greetingResult.response : null,
+        hasAudio: !!greetingAudioUrl,
+        audioUrl: greetingAudioUrl,
         source: `greeting:${greetingResult.proof.matchedRuleId}`
       });
 
@@ -492,16 +636,37 @@ class Agent2DiscoveryRunner {
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
         
-        // For scheduling questions, ask for address/time
+        // V126: Pending question YES response
+        // TODO: These need UI fields in fallback config: pendingYesScheduling, pendingYesGeneric
+        // For now, use afterAnswerQuestion or emergencyFallback as the continuation
+        const yesFollowUp = `${fallback.afterAnswerQuestion || ''}`.trim() || emergencyFallback?.text || '';
         const response = isSchedulingQuestion
-          ? `${personalAck} Great, let's get you scheduled. What's the best address for the service call?`
-          : `${personalAck} Great! Let me help you with that.`;
+          ? `${personalAck} Great! ${yesFollowUp}`.trim()
+          : `${personalAck} ${yesFollowUp}`.trim();
+        
+        // Log if we're missing UI config
+        if (!fallback.afterAnswerQuestion && !emergencyFallback?.text) {
+          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+            blockedSourceId: 'agent2.discovery.pendingQuestion.yesPath',
+            blockedText: 'No afterAnswerQuestion or emergencyFallback configured for YES response',
+            reason: 'Pending question YES needs UI-configured response',
+            severity: 'WARNING'
+          });
+        }
         
         emit('A2_PATH_SELECTED', { 
           path: 'PENDING_QUESTION_YES', 
           reason: `User confirmed: detected YES markers`,
           markers: { hasYesWord, hasYesPhrase, inputPreview: clip(inputLowerClean, 40) }
         });
+        // V125: SPEECH_SOURCE_SELECTED - pendingQuestion paths are system-generated from trigger cards
+        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+          'agent2.discovery.pendingQuestion.yesPath',
+          'aiAgentSettings.agent2.discovery.playbook.rules (follow-up)',
+          response,
+          null,
+          `User confirmed YES to pending question from card: ${pendingInfo?.cardId || 'unknown'}`
+        ));
         emit('A2_RESPONSE_READY', {
           path: 'PENDING_QUESTION_YES',
           responsePreview: clip(response, 120),
@@ -526,13 +691,34 @@ class Agent2DiscoveryRunner {
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
         
-        const response = `${personalAck} No problem. Is there anything else I can help you with today?`;
+        // V126: Pending question NO response
+        // TODO: Need UI field: pendingNoResponse
+        // Use noMatchAnswer as the "what else can I help with" or emergencyFallback
+        const noFollowUp = `${fallback.noMatchAnswer || ''}`.trim() || emergencyFallback?.text || '';
+        const response = noFollowUp ? `${personalAck} No problem. ${noFollowUp}`.trim() : personalAck;
+        
+        if (!fallback.noMatchAnswer && !emergencyFallback?.text) {
+          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+            blockedSourceId: 'agent2.discovery.pendingQuestion.noPath',
+            blockedText: 'No noMatchAnswer or emergencyFallback configured for NO response',
+            reason: 'Pending question NO needs UI-configured response',
+            severity: 'WARNING'
+          });
+        }
         
         emit('A2_PATH_SELECTED', { 
           path: 'PENDING_QUESTION_NO', 
           reason: `User declined: detected NO markers`,
           markers: { hasNoWord, hasNoPhrase, inputPreview: clip(inputLowerClean, 40) }
         });
+        // V125: SPEECH_SOURCE_SELECTED
+        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+          'agent2.discovery.pendingQuestion.noPath',
+          'aiAgentSettings.agent2.discovery.playbook.rules (follow-up)',
+          response,
+          null,
+          `User said NO to pending question from card: ${pendingInfo?.cardId || 'unknown'}`
+        ));
         emit('A2_RESPONSE_READY', {
           path: 'PENDING_QUESTION_NO',
           responsePreview: clip(response, 120),
@@ -552,9 +738,25 @@ class Agent2DiscoveryRunner {
         // DON'T clear pendingQuestion — we're re-asking
         nextState.agent2.discovery.lastPath = 'PENDING_REPROMPT';
         
-        const response = isSchedulingQuestion
-          ? `Sorry, I didn't catch that. Would you like to schedule service today? Just say yes or no.`
-          : `I'm sorry, I didn't quite get that. Could you say yes or no?`;
+        // V126: Pending question REPROMPT response
+        // TODO: Need UI field: pendingRepromptScheduling, pendingRepromptGeneric
+        // Use the pending question itself to re-ask, or emergencyFallback
+        const pendingQ = pendingInfo?.question || '';
+        let response;
+        if (pendingQ) {
+          // Re-ask the original question
+          response = `Sorry, I missed that. ${pendingQ}`;
+        } else if (emergencyFallback?.text) {
+          response = `Sorry, I missed that. ${emergencyFallback.text}`;
+        } else {
+          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+            blockedSourceId: 'agent2.discovery.pendingQuestion.reprompt',
+            blockedText: 'No pending question text or emergencyFallback for reprompt',
+            reason: 'Pending question reprompt needs UI-configured response',
+            severity: 'WARNING'
+          });
+          response = 'Sorry, I missed that.';
+        }
         
         emit('A2_PATH_SELECTED', { 
           path: 'PENDING_QUESTION_REPROMPT', 
@@ -564,6 +766,14 @@ class Agent2DiscoveryRunner {
           looksLikeName,
           inputPreview: clip(input, 40)
         });
+        // V125: SPEECH_SOURCE_SELECTED
+        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+          'agent2.discovery.pendingQuestion.reprompt',
+          'aiAgentSettings.agent2.discovery.playbook.rules (follow-up)',
+          response,
+          null,
+          'Reprompting after unclear response to pending question'
+        ));
         emit('A2_RESPONSE_READY', {
           path: 'PENDING_QUESTION_REPROMPT',
           responsePreview: clip(response, 120),
@@ -608,7 +818,29 @@ class Agent2DiscoveryRunner {
     if (style?.robotChallenge?.enabled === true && detectRobotChallenge(input)) {
       const line = `${style.robotChallenge?.line || ''}`.trim();
       const audioUrl = `${style.robotChallenge?.audioUrl || ''}`.trim();
-      const response = line ? `${ack} ${line}`.trim() : `${ack} How can I help you today?`;
+      // V126: Robot challenge MUST have a UI-configured line. If missing, use fallback.noMatchAnswer or emergencyFallback.
+      let response;
+      let responseUiPath;
+      if (line) {
+        response = `${ack} ${line}`.trim();
+        responseUiPath = 'aiAgentSettings.agent2.discovery.style.robotChallenge.line';
+      } else if (fallback.noMatchAnswer) {
+        response = `${ack} ${fallback.noMatchAnswer}`.trim();
+        responseUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchAnswer';
+      } else if (emergencyFallback?.text) {
+        response = `${ack} ${emergencyFallback.text}`.trim();
+        responseUiPath = emergencyFallback.uiPath;
+      } else {
+        // CRITICAL: No UI-configured text available
+        emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+          blockedSourceId: 'agent2.discovery.robotChallenge',
+          blockedText: 'robotChallenge.line is empty and no fallback configured',
+          reason: 'No UI path mapped - Prime Directive violation',
+          severity: 'CRITICAL'
+        });
+        response = ack; // Speak only the ack word, nothing else
+        responseUiPath = 'UNMAPPED - CRITICAL';
+      }
       nextState.agent2.discovery.lastPath = 'ROBOT_CHALLENGE';
 
       // V119: Emit path selection proof
@@ -619,6 +851,14 @@ class Agent2DiscoveryRunner {
       });
 
       // V119: Emit response ready proof
+      // V125: SPEECH_SOURCE_SELECTED for UI traceability
+      emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+        'agent2.discovery.robotChallenge',
+        'aiAgentSettings.agent2.discovery.style.robotChallenge',
+        response,
+        audioUrl,
+        'Robot/human challenge detected - custom response triggered'
+      ));
       emit('A2_RESPONSE_READY', {
         path: 'ROBOT_CHALLENGE',
         responsePreview: clip(response, 120),
@@ -694,16 +934,33 @@ class Agent2DiscoveryRunner {
         nextState.agent2.discovery.pendingQuestionSource = `card:${card.id}`;
       }
 
-      // Build response
+      // Build response - V126: No hardcoded text allowed
       let response;
       if (answerText) {
         response = afterQuestion
           ? `${personalAck} ${answerText} ${afterQuestion}`.trim()
           : `${personalAck} ${answerText}`.trim();
+      } else if (afterQuestion) {
+        // Card has no answerText but has a follow-up question
+        response = `${personalAck} ${afterQuestion}`.trim();
+      } else if (emergencyFallback?.text) {
+        // Card has no answerText and no follow-up - use emergency fallback
+        response = `${personalAck} ${emergencyFallback.text}`.trim();
+        emit('TRIGGER_CARD_EMPTY_ANSWER', {
+          cardId: card.id,
+          cardLabel: card.label,
+          severity: 'WARNING',
+          message: 'Trigger card matched but has no answerText or followUp - using emergencyFallback'
+        });
       } else {
-        response = afterQuestion
-          ? `${personalAck} ${afterQuestion}`.trim()
-          : `${personalAck} How can I help you with that?`;
+        // CRITICAL: Card matched but has nothing to say
+        emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+          blockedSourceId: `agent2.discovery.triggerCard[${card.id}]`,
+          blockedText: `Card ${card.label || card.id} has no answerText or followUp`,
+          reason: 'Trigger card matched but has no UI-configured response',
+          severity: 'CRITICAL'
+        });
+        response = personalAck; // Speak only the ack word
       }
 
       // V119: Emit path selection proof
@@ -717,6 +974,14 @@ class Agent2DiscoveryRunner {
       });
 
       // V119: Emit response ready proof
+      // V125: SPEECH_SOURCE_SELECTED for UI traceability
+      emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+        `agent2.discovery.triggerCard[${card.id}]`,
+        `aiAgentSettings.agent2.discovery.playbook.rules[id=${card.id}]`,
+        response,
+        audioUrl,
+        `Trigger card matched: ${card.label || card.id} (${triggerResult.matchType}: ${triggerResult.matchedOn})`
+      ));
       emit('A2_RESPONSE_READY', {
         path: 'TRIGGER_CARD',
         responsePreview: clip(response, 120),
@@ -813,6 +1078,14 @@ class Agent2DiscoveryRunner {
               maxAllowed: maxClarifiersPerCall
             });
             
+            // V125: SPEECH_SOURCE_SELECTED
+            emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+              `agent2.discovery.clarifiers[${clarifier.id}]`,
+              `aiAgentSettings.agent2.discovery.clarifiers.entries[id=${clarifier.id}]`,
+              response,
+              null,
+              `Clarifier question triggered by hint: ${hintTrigger}`
+            ));
             emit('A2_RESPONSE_READY', {
               path: 'CLARIFIER',
               responsePreview: clip(response, 120),
@@ -978,6 +1251,14 @@ class Agent2DiscoveryRunner {
       pathReason = 'ScenarioEngine matched with sufficient score';
       
       emit('A2_PATH_SELECTED', { path: 'SCENARIO', reason: pathReason });
+      // V125: SPEECH_SOURCE_SELECTED - ScenarioEngine is a global fallback
+      emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+        'scenarioEngine.fallback',
+        'aiAgentSettings.agent2.discovery.playbook.useScenarioFallback (global scenarios)',
+        response,
+        null,
+        `ScenarioEngine matched: ${scenarioText?.substring(0, 40)}...`
+      ));
       emit('A2_RESPONSE_READY', {
         path: 'SCENARIO',
         responsePreview: clip(response, 120),
@@ -1048,6 +1329,14 @@ class Agent2DiscoveryRunner {
         capturedReasonPreview: clip(capturedReason, 60),
         skippedClarifier: skipClarifierQuestion
       });
+      // V125: SPEECH_SOURCE_SELECTED
+      emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+        'agent2.discovery.fallback.noMatchWhenReasonCaptured',
+        'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured',
+        response,
+        null,
+        'No trigger matched but caller provided a reason - acknowledging'
+      ));
       emit('A2_RESPONSE_READY', {
         path: 'FALLBACK_WITH_REASON',
         responsePreview: clip(response, 120),
@@ -1065,13 +1354,49 @@ class Agent2DiscoveryRunner {
       // V120: If we just resolved a pending question, don't ask "how can I help?" — that's a restart
       const skipGenericQuestion = justResolvedPending || nextState.agent2.discovery.pendingQuestionWasComplex;
       
+      // V126: All fallback text MUST come from UI config - no hardcoded strings
       let baseNoMatch;
+      let noMatchUiPath;
       if (skipGenericQuestion) {
-        // They gave us a complex response to our question — acknowledge and wait for more info
-        baseNoMatch = `${personalAck} I see. Could you tell me more about what you're experiencing?`;
+        // Complex response follow-up - use noMatchClarifierQuestion or emergencyFallback
+        const clarifierQ = `${fallback.noMatchClarifierQuestion || ''}`.trim();
+        if (clarifierQ) {
+          baseNoMatch = clarifierQ;
+          noMatchUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchClarifierQuestion';
+        } else if (emergencyFallback?.text) {
+          baseNoMatch = emergencyFallback.text;
+          noMatchUiPath = emergencyFallback.uiPath;
+        } else {
+          // CRITICAL: No UI-configured follow-up text
+          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+            blockedSourceId: 'agent2.discovery.fallback.complexFollowup',
+            blockedText: 'No noMatchClarifierQuestion or emergencyFallback configured',
+            reason: 'No UI path mapped for complex response follow-up',
+            severity: 'CRITICAL'
+          });
+          baseNoMatch = '';
+          noMatchUiPath = 'UNMAPPED - CRITICAL';
+        }
       } else {
-        // V119: This is "noMatch_noReason" — it's OK to ask "how can I help?" here
-        baseNoMatch = `${fallback.noMatchAnswer || ''}`.trim() || `${personalAck} How can I help you today?`;
+        // True generic fallback - use noMatchAnswer or emergencyFallback
+        const noMatchAnswer = `${fallback.noMatchAnswer || ''}`.trim();
+        if (noMatchAnswer) {
+          baseNoMatch = noMatchAnswer;
+          noMatchUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchAnswer';
+        } else if (emergencyFallback?.text) {
+          baseNoMatch = emergencyFallback.text;
+          noMatchUiPath = emergencyFallback.uiPath;
+        } else {
+          // CRITICAL: No UI-configured fallback text
+          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+            blockedSourceId: 'agent2.discovery.fallback.noMatchAnswer',
+            blockedText: 'No noMatchAnswer or emergencyFallback configured',
+            reason: 'No UI path mapped for generic fallback',
+            severity: 'CRITICAL'
+          });
+          baseNoMatch = '';
+          noMatchUiPath = 'UNMAPPED - CRITICAL';
+        }
       }
       
       // V119: If noMatchAnswer already starts with ack, don't double-ack
@@ -1097,6 +1422,20 @@ class Agent2DiscoveryRunner {
         reason: pathReason,
         skippedGenericQuestion: skipGenericQuestion
       });
+      // V125: SPEECH_SOURCE_SELECTED
+      const fallbackSourceId = skipGenericQuestion 
+        ? 'agent2.discovery.fallback.pendingComplexFollowup'
+        : 'agent2.discovery.fallback.noMatchAnswer';
+      const fallbackUiPath = skipGenericQuestion
+        ? 'aiAgentSettings.agent2.discovery.playbook.fallback (implicit followup)'
+        : 'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchAnswer';
+      emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+        fallbackSourceId,
+        fallbackUiPath,
+        response,
+        null,
+        skipGenericQuestion ? 'Following up after complex pending question response' : 'No trigger/scenario match, no reason captured - generic fallback'
+      ));
       emit('A2_RESPONSE_READY', {
         path: 'FALLBACK_NO_REASON',
         responsePreview: clip(response, 120),
