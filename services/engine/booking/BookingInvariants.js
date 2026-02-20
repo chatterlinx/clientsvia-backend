@@ -18,12 +18,12 @@
 const logger = require('../../../utils/logger');
 const { validateSlotValue } = require('./BookingSlotValidator');
 
-// BlackBoxLogger for trace events
-let BlackBoxLogger;
+// Agent 2.0 uses CallLogger for trace events
+let CallLogger;
 try {
-    BlackBoxLogger = require('../../BlackBoxLogger');
+    CallLogger = require('../../CallLogger');
 } catch (e) {
-    logger.warn('[BOOKING INVARIANTS] BlackBoxLogger not available');
+    logger.warn('[BOOKING INVARIANTS] CallLogger not available');
 }
 
 /**
@@ -73,8 +73,8 @@ function checkConfirmationInvariant(state, flow) {
             });
             
             // Emit BOOKING_STATE_INVALID event
-            if (BlackBoxLogger && callSid && companyId) {
-                BlackBoxLogger.logEvent({
+            if (CallLogger && callSid && companyId) {
+                CallLogger.logEvent({
                     callId: callSid,
                     companyId,
                     turn,

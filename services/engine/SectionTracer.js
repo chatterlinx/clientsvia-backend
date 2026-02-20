@@ -33,11 +33,12 @@
 
 const logger = require('../../utils/logger');
 
-let BlackBoxLogger = null;
+// Agent 2.0 uses CallLogger
+let CallLogger = null;
 try {
-    BlackBoxLogger = require('../BlackBoxLogger');
+    CallLogger = require('../CallLogger');
 } catch (err) {
-    BlackBoxLogger = null;
+    CallLogger = null;
 }
 
 /**
@@ -176,13 +177,13 @@ class SectionTracer {
      * Emit event to BlackBox with section context
      */
     emit(eventType, data = {}) {
-        if (!BlackBoxLogger?.logEvent || !this.callId) {
+        if (!CallLogger?.logEvent || !this.callId) {
             return;
         }
         
         const turn = this.callState?.turnCount || 0;
         
-        BlackBoxLogger.logEvent({
+        CallLogger.logEvent({
             callId: this.callId,
             companyId: this.companyId,
             turn,

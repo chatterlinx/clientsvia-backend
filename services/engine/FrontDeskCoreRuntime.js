@@ -69,11 +69,12 @@ const GreetingInterceptor = require('./interceptors/GreetingInterceptor');
 // No competing speakers. No fallback confusion.
 // ═══════════════════════════════════════════════════════════════════════════
 
-let BlackBoxLogger = null;
+// Agent 2.0 uses CallLogger (not legacy BlackBox name)
+let CallLogger = null;
 try {
-    BlackBoxLogger = require('../BlackBoxLogger');
+    CallLogger = require('../CallLogger');
 } catch (err) {
-    BlackBoxLogger = null;
+    CallLogger = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1385,14 +1386,14 @@ class FrontDeskCoreRuntime {
      * Awaits CRITICAL events, fire-and-forget for non-critical.
      */
     static async flushEventBuffer(turnEventBuffer) {
-        if (!BlackBoxLogger?.logEvent || !Array.isArray(turnEventBuffer)) {
+        if (!CallLogger?.logEvent || !Array.isArray(turnEventBuffer)) {
             return;
         }
         
         const criticalPromises = [];
         
         for (const event of turnEventBuffer) {
-            const promise = BlackBoxLogger.logEvent({
+            const promise = CallLogger.logEvent({
                 callId: event.callId,
                 companyId: event.companyId,
                 turn: event.turn,

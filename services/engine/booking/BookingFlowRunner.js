@@ -48,12 +48,12 @@ try {
     logger.warn('[BOOKING FLOW RUNNER] AWConfigReader not available');
 }
 
-// 🔌 BlackBoxLogger for ADDRESS_VALIDATION_RESULT events (V93)
-let BlackBoxLogger;
+// Agent 2.0 uses CallLogger for ADDRESS_VALIDATION_RESULT events
+let CallLogger;
 try {
-    BlackBoxLogger = require('../../BlackBoxLogger');
+    CallLogger = require('../../CallLogger');
 } catch (e) {
-    logger.warn('[BOOKING FLOW RUNNER] BlackBoxLogger not available');
+    logger.warn('[BOOKING FLOW RUNNER] CallLogger not available');
 }
 
 // 🔌 V96j: IdentitySlotFirewall for unified identity slot protection
@@ -97,8 +97,8 @@ function getV110Prompt(promptType, { step, slotOptions, slotRegistry, slotId, ca
         callSid
     });
     
-    if (BlackBoxLogger && callSid) {
-        BlackBoxLogger.logEvent({
+    if (CallLogger && callSid) {
+        CallLogger.logEvent({
             callId: callSid,
             type: 'V110_PROMPT_MISSING',
             data: {
@@ -243,8 +243,8 @@ function safeSetSlot(state, slotName, value, options = {}) {
         });
         
         // Emit SLOT_WRITE_TRACE for type validation failure
-        if (BlackBoxLogger && traceCallSid && traceCompanyId) {
-            BlackBoxLogger.logEvent({
+        if (CallLogger && traceCallSid && traceCompanyId) {
+            CallLogger.logEvent({
                 callId: traceCallSid,
                 companyId: traceCompanyId,
                 turn: traceTurn,
@@ -376,8 +376,8 @@ function safeSetSlot(state, slotName, value, options = {}) {
             });
             
             // Log to BlackBox for auditing
-            if (BlackBoxLogger && traceCallSid && traceCompanyId) {
-                BlackBoxLogger.logEvent({
+            if (CallLogger && traceCallSid && traceCompanyId) {
+                CallLogger.logEvent({
                     callId: traceCallSid,
                     companyId: traceCompanyId,
                     turn: traceTurn,
@@ -450,8 +450,8 @@ function safeSetSlot(state, slotName, value, options = {}) {
             });
 
             // Emit SLOT_WRITE_TRACE for firewall rejection
-            if (BlackBoxLogger && traceCallSid && traceCompanyId) {
-                BlackBoxLogger.logEvent({
+            if (CallLogger && traceCallSid && traceCompanyId) {
+                CallLogger.logEvent({
                     callId: traceCallSid,
                     companyId: traceCompanyId,
                     turn: traceTurn,
@@ -497,8 +497,8 @@ function safeSetSlot(state, slotName, value, options = {}) {
         state.bookingCollected[slotName] = finalValue;
 
         // Emit SLOT_WRITE_TRACE event for debugging
-        if (BlackBoxLogger && traceCallSid && traceCompanyId) {
-            BlackBoxLogger.logEvent({
+        if (CallLogger && traceCallSid && traceCompanyId) {
+            CallLogger.logEvent({
                 callId: traceCallSid,
                 companyId: traceCompanyId,
                 turn: traceTurn,
@@ -2025,8 +2025,8 @@ class BookingFlowRunner {
         const traceCompanyId = state?._traceContext?.companyId;
         const traceTurn = state?._traceContext?.turn || 0;
 
-        if (BlackBoxLogger && traceCallSid && traceCompanyId) {
-            BlackBoxLogger.logEvent({
+        if (CallLogger && traceCallSid && traceCompanyId) {
+            CallLogger.logEvent({
                 callId: traceCallSid,
                 companyId: traceCompanyId,
                 turn: traceTurn,
@@ -2194,7 +2194,7 @@ class BookingFlowRunner {
         // This ends the "ghost legacy" debugging problem - you can now see in raw
         // events exactly where the booking prompts came from.
         // ═══════════════════════════════════════════════════════════════════════════
-        if (!state.flowResolutionEmitted && BlackBoxLogger && callSid && company?._id) {
+        if (!state.flowResolutionEmitted && CallLogger && callSid && company?._id) {
             state.flowResolutionEmitted = true;
             
             const resolution = flow.resolution || {};
@@ -2205,7 +2205,7 @@ class BookingFlowRunner {
                 required: step.required
             }));
             
-            BlackBoxLogger.logEvent({
+            CallLogger.logEvent({
                 callId: callSid,
                 companyId: company._id.toString(),
                 type: 'BOOKING_PROMPT_RESOLVED',
@@ -2557,14 +2557,14 @@ class BookingFlowRunner {
         // This event shows exactly which step was selected, which slots are present/missing,
         // and the order of steps in the flow. Critical for debugging step selection logic.
         // ═══════════════════════════════════════════════════════════════════════════
-        if (BlackBoxLogger && callSid) {
+        if (CallLogger && callSid) {
             const slotsPresent = Object.keys(state.bookingCollected || {}).filter(k => state.bookingCollected[k]);
             const slotsMissing = flow.steps
                 .filter(s => s.required !== false)
                 .map(s => s.fieldKey || s.id)
                 .filter(k => !slotsPresent.includes(k));
             
-            BlackBoxLogger.logEvent({
+            CallLogger.logEvent({
                 callId: callSid,
                 companyId: company?._id?.toString(),
                 type: 'BOOKING_NEXT_STEP_SELECTED',
@@ -4736,8 +4736,8 @@ class BookingFlowRunner {
                     };
                     
                     // Emit ADDRESS_VALIDATION_RESULT for debugging (V93)
-                    if (BlackBoxLogger?.logEvent && callSid) {
-                        BlackBoxLogger.logEvent({
+                    if (CallLogger?.logEvent && callSid) {
+                        CallLogger.logEvent({
                             callId: callSid,
                             companyId: companyId,
                             type: 'ADDRESS_VALIDATION_RESULT',
@@ -4888,8 +4888,8 @@ class BookingFlowRunner {
                         skipReason: addressValidation.skipReason || addressValidation.failReason || null
                     };
                     
-                    if (BlackBoxLogger?.logEvent && callSid) {
-                        BlackBoxLogger.logEvent({
+                    if (CallLogger?.logEvent && callSid) {
+                        CallLogger.logEvent({
                             callId: callSid,
                             companyId: companyId,
                             type: 'ADDRESS_VALIDATION_RESULT',
@@ -6167,8 +6167,8 @@ class BookingFlowRunner {
             });
             
             // Emit BOOKING_PRECONFIRM_SELECTED event
-            if (BlackBoxLogger && callSid) {
-                BlackBoxLogger.logEvent({
+            if (CallLogger && callSid) {
+                CallLogger.logEvent({
                     callId: callSid,
                     companyId: company?._id?.toString(),
                     type: 'BOOKING_PRECONFIRM_SELECTED',
@@ -7111,8 +7111,8 @@ class BookingFlowRunner {
         const timeValue = collected.time || state.slots?.time?.v || null;
         const timeValid = !rewindInfo || rewindInfo.invalidSlot !== 'time';
         
-        if (BlackBoxLogger?.logEvent) {
-            BlackBoxLogger.logEvent({
+        if (CallLogger?.logEvent) {
+            CallLogger.logEvent({
                 callId: state.callId || 'unknown',
                 companyId: state.companyId || 'unknown',
                 type: 'BOOKING_CONFIRMATION_GUARD',

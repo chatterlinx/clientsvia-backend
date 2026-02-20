@@ -23,11 +23,13 @@ const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
 const ConfigAuditService = require('../../services/ConfigAuditService');
-const BlackBoxLogger = require('../../services/BlackBoxLogger');
 const openaiClient = require('../../config/openai');
 
+// Agent 2.0 uses CallLogger/CallRecording (not legacy BlackBox names)
+const CallLogger = require('../../services/CallLogger');
+const CallRecording = require('../../models/CallRecording');
+
 const UI_BUILD = 'AGENT2_UI_V0.9';
-const BlackBoxRecording = require('../../models/BlackBoxRecording');
 
 function defaultAgent2Config() {
   return {
@@ -524,7 +526,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
 
     // BlackBox proof event (CONFIG_WRITE)
     try {
-      await BlackBoxLogger.logEvent('CONFIG_WRITE', {
+      await CallLogger.logEvent('CONFIG_WRITE', {
         companyId,
         module: 'AGENT2',
         uiBuild: UI_BUILD,
@@ -533,7 +535,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         ts: new Date().toISOString()
       });
     } catch (e) {
-      logger.warn('[AGENT2] BlackBoxLogger CONFIG_WRITE failed (non-blocking)', { error: e.message });
+      logger.warn('[AGENT2] CallLogger CONFIG_WRITE failed (non-blocking)', { error: e.message });
     }
 
     return res.json({ success: true, data: next, meta: { uiBuild: UI_BUILD } });
@@ -773,7 +775,7 @@ router.get('/calls/:companyId',
         toDate: toDate || undefined
       };
 
-      const result = await BlackBoxRecording.getCallList(companyId, options);
+      const result = await CallRecording.getCallList(companyId, options);
 
       // Transform for UI
       const calls = result.calls.map(call => ({
@@ -814,7 +816,7 @@ router.get('/calls/:companyId/:callSid/events',
     const { companyId, callSid } = req.params;
 
     try {
-      const recording = await BlackBoxRecording.getCallDetail(companyId, callSid);
+      const recording = await CallRecording.getCallDetail(companyId, callSid);
 
       if (!recording) {
         return res.status(404).json({ success: false, error: 'Call not found' });

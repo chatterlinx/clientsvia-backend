@@ -19,12 +19,12 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../../utils/logger');
 
-// V103: Import BlackBoxLogger for CONFIG_READ event tracing
-let BlackBoxLogger;
+// Agent 2.0 uses CallLogger for CONFIG_READ event tracing
+let CallLogger;
 try {
-    BlackBoxLogger = require('./BlackBoxLogger');
+    CallLogger = require('./CallLogger');
 } catch (err) {
-    logger.warn('[CONTROL_PLANE_ENFORCER] BlackBoxLogger not available - tracing disabled');
+    logger.warn('[CONTROL_PLANE_ENFORCER] CallLogger not available - tracing disabled');
 }
 
 // Load the contract at module init
@@ -297,8 +297,8 @@ function cfgGet(effectiveConfig, key, options = {}) {
     
     // V103: Emit CONFIG_READ event to BlackBox for trace visibility
     // This shows config reads from FrontDeskRuntime in the same format as AWConfigReader
-    if (BlackBoxLogger?.logEvent && callId && callId !== 'unknown') {
-        BlackBoxLogger.logEvent({
+    if (CallLogger?.logEvent && callId && callId !== 'unknown') {
+        CallLogger.logEvent({
             callId,
             companyId: effectiveConfig?.companyId || 'unknown',
             type: 'CONFIG_READ',

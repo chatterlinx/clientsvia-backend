@@ -28,10 +28,25 @@
  *   await BlackBoxLogger.finalizeCall({ callId, companyId, summary: {...} });
  * 
  * ============================================================================
+ * 
+ * ⚠️ DEPRECATION NOTICE:
+ * This file is being replaced by CallLogger.js for Agent 2.0.
+ * New code should import from '../services/CallLogger' instead.
+ * This file will be removed once all legacy code is migrated.
+ * ============================================================================
  */
 
 const BlackBoxRecording = require('../models/BlackBoxRecording');
 const logger = require('../utils/logger');
+
+// Log deprecation warning once per process
+let deprecationWarningLogged = false;
+function logDeprecationWarning() {
+  if (!deprecationWarningLogged) {
+    logger.warn('[DEPRECATION] BlackBoxLogger is deprecated. Use CallLogger instead.');
+    deprecationWarningLogged = true;
+  }
+}
 
 // ============================================================================
 // HELPER: Truncate text for display

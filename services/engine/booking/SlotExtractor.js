@@ -44,12 +44,12 @@ try {
     logger.warn('[SLOT EXTRACTOR] AWConfigReader not available - direct config access');
 }
 
-// V96g: BlackBoxLogger for slot extraction tracing
-let BlackBoxLogger;
+// Agent 2.0 uses CallLogger for slot extraction tracing
+let CallLogger;
 try {
-    BlackBoxLogger = require('../../BlackBoxLogger');
+    CallLogger = require('../../CallLogger');
 } catch (e) {
-    logger.warn('[SLOT EXTRACTOR] BlackBoxLogger not available - tracing disabled');
+    logger.warn('[SLOT EXTRACTOR] CallLogger not available - tracing disabled');
 }
 
 /**
@@ -624,7 +624,7 @@ class SlotExtractor {
         // This provides deep visibility into WHY slots were/weren't extracted.
         // Every slot extraction decision is now visible in raw-events.
         // ═══════════════════════════════════════════════════════════════════════════
-        if (BlackBoxLogger && context.callId && context.companyId) {
+        if (CallLogger && context.callId && context.companyId) {
             const extractionTrace = {
                 utterance: text.substring(0, 100),
                 turnCount,
@@ -652,7 +652,7 @@ class SlotExtractor {
                 confirmedSlotsProtected: Object.keys(confirmedSlots).filter(k => confirmedSlots[k] === true)
             };
             
-            BlackBoxLogger.logEvent({
+            CallLogger.logEvent({
                 callId: context.callId,
                 companyId: context.companyId,
                 type: 'SLOTS_EXTRACTED',

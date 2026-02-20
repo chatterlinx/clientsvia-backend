@@ -19,12 +19,12 @@
 const logger = require('../../../utils/logger');
 const { validateSlotValue } = require('./BookingSlotValidator');
 
-// BlackBoxLogger for trace events
-let BlackBoxLogger;
+// Agent 2.0 uses CallLogger for trace events
+let CallLogger;
 try {
-    BlackBoxLogger = require('../../BlackBoxLogger');
+    CallLogger = require('../../CallLogger');
 } catch (e) {
-    logger.warn('[BOOKING SLOT SANITIZER] BlackBoxLogger not available');
+    logger.warn('[BOOKING SLOT SANITIZER] CallLogger not available');
 }
 
 /**
@@ -97,8 +97,8 @@ function sanitizeBookingState(state, flow) {
             }
             
             // Emit trace event
-            if (BlackBoxLogger && callSid && companyId) {
-                BlackBoxLogger.logEvent({
+            if (CallLogger && callSid && companyId) {
+                CallLogger.logEvent({
                     callId: callSid,
                     companyId,
                     turn,

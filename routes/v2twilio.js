@@ -324,13 +324,14 @@ const { stripMarkdown, cleanTextForTTS, enforceVoiceResponseLength } = require('
 // Records every decision point for debugging. No more Render log archaeology.
 // See: black-box.html for visualization and analysis.
 // ============================================================================
-let BlackBoxLogger;
+// Agent 2.0 uses CallLogger (not legacy BlackBox name)
+let CallLogger;
 try {
-    BlackBoxLogger = require('../services/BlackBoxLogger');
-    logger.info('[V2TWILIO] ✅ Black Box Recorder loaded successfully');
+    CallLogger = require('../services/CallLogger');
+    logger.info('[V2TWILIO] ✅ Call Logger loaded successfully');
 } catch (err) {
     logger.warn('[V2TWILIO] ⚠️ Black Box Recorder not available', { error: err.message });
-    BlackBoxLogger = null;
+    CallLogger = null;
 }
 
 // ============================================================================
@@ -1403,9 +1404,9 @@ router.post('/voice', async (req, res) => {
     req.session.effectiveConfigVersion = awProof.effectiveConfigVersion;
     req.session.traceRunId = traceRunId;
     
-    if (BlackBoxLogger) {
+    if (CallLogger) {
       try {
-        await BlackBoxLogger.initCall({
+        await CallLogger.initCall({
           callId: req.body.CallSid,
           companyId: company._id,
           from: req.body.From,
@@ -1540,8 +1541,8 @@ router.post('/voice', async (req, res) => {
       const gather = twiml.gather(gatherConfig);
       
       // 📼 BLACK BOX: Log gather configuration for debugging
-      if (BlackBoxLogger) {
-        BlackBoxLogger.logEvent({
+      if (CallLogger) {
+        CallLogger.logEvent({
           callId: req.body.CallSid,
           companyId: company._id,
           type: 'GATHER_CONFIGURED',
@@ -1598,8 +1599,8 @@ router.post('/voice', async (req, res) => {
           gather.play(audioUrl);
           
           // 📼 BLACK BOX: Log prerecorded greeting played
-          if (BlackBoxLogger) {
-            BlackBoxLogger.logEvent({
+          if (CallLogger) {
+            CallLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
               type: 'GREETING_PRERECORDED',
@@ -1611,7 +1612,7 @@ router.post('/voice', async (req, res) => {
             }).catch(() => {});
             
             // V126: SPEAK_PROVENANCE for complete UI traceability
-            BlackBoxLogger.logEvent({
+            CallLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
               type: 'SPEAK_PROVENANCE',
@@ -1638,9 +1639,9 @@ router.post('/voice', async (req, res) => {
           const fallbackText = initResult.greeting || 'Thank you for calling. How may I help you today?';
           const hasUiConfiguredText = Boolean(initResult.greeting);
           
-          if (BlackBoxLogger) {
+          if (CallLogger) {
             // Log the audio missing event
-            BlackBoxLogger.logEvent({
+            CallLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
               type: 'GREETING_AUDIO_MISSING_TTS_FALLBACK',
@@ -1655,7 +1656,7 @@ router.post('/voice', async (req, res) => {
             }).catch(() => {});
             
             // V126: SPEAK_PROVENANCE for TTS fallback - this is KEY for Call Review visibility
-            BlackBoxLogger.logEvent({
+            CallLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
               type: 'SPEAK_PROVENANCE',
@@ -1721,8 +1722,8 @@ router.post('/voice', async (req, res) => {
         logger.info(`[GREETING] ⏭️ Greeting disabled (source: ${greetingSource}) — going straight to AI listening`);
         // No greeting played, just the gather will listen
         
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
+        if (CallLogger) {
+          CallLogger.logEvent({
             callId: req.body.CallSid,
             companyId: company._id,
             type: 'GREETING_SKIPPED',
@@ -1739,8 +1740,8 @@ router.post('/voice', async (req, res) => {
           const greetingText = cleanTextForTTS(stripMarkdown(initResult.greeting));
           
           // 📼 BLACK BOX: Log TTS started
-          if (BlackBoxLogger) {
-            BlackBoxLogger.QuickLog.ttsStarted(
+          if (CallLogger) {
+            CallLogger.QuickLog.ttsStarted(
               req.body.CallSid,
               company._id,
               0,
@@ -1763,8 +1764,8 @@ router.post('/voice', async (req, res) => {
           logger.info(`[TTS COMPLETE] [OK] AI Agent Logic greeting TTS completed in ${ttsTime}ms (source: ${greetingSource})`);
           
           // 📼 BLACK BOX: Log TTS completed
-          if (BlackBoxLogger) {
-            BlackBoxLogger.QuickLog.ttsCompleted(
+          if (CallLogger) {
+            CallLogger.QuickLog.ttsCompleted(
               req.body.CallSid,
               company._id,
               0,
@@ -1781,8 +1782,8 @@ router.post('/voice', async (req, res) => {
           gather.play(`${getSecureBaseUrl(req)}/audio/${fileName}`);
           
           // 📼 BLACK BOX: Log greeting sent
-          if (BlackBoxLogger) {
-            BlackBoxLogger.QuickLog.greetingSent(
+          if (CallLogger) {
+            CallLogger.QuickLog.greetingSent(
               req.body.CallSid,
               company._id,
               greetingText,
@@ -1792,7 +1793,7 @@ router.post('/voice', async (req, res) => {
             // V126: SPEAK_PROVENANCE for complete UI traceability
             const usedFallback = initResult.greetingConfig?.usedHardcodedFallback === true;
             const fallbackReason = initResult.greetingConfig?.fallbackReason || null;
-            BlackBoxLogger.logEvent({
+            CallLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
               type: 'SPEAK_PROVENANCE',
@@ -1821,8 +1822,8 @@ router.post('/voice', async (req, res) => {
           logger.error('❌ AI Agent Logic TTS failed, using Say:', err);
           
           // 📼 BLACK BOX: Log TTS failure
-          if (BlackBoxLogger) {
-            BlackBoxLogger.QuickLog.ttsFailed(
+          if (CallLogger) {
+            CallLogger.QuickLog.ttsFailed(
               req.body.CallSid,
               company._id,
               0,
@@ -1851,8 +1852,8 @@ router.post('/voice', async (req, res) => {
       logger.debug(`[FALLBACK] Using simple fallback for call`);
       
       // 📼 BLACK BOX: Log V2 Agent initialization failure
-      if (BlackBoxLogger) {
-        BlackBoxLogger.logEvent({
+      if (CallLogger) {
+        CallLogger.logEvent({
           callId: req.body.CallSid,
           companyId: company._id,
           type: 'V2_AGENT_INIT_FAILED',
@@ -1888,8 +1889,8 @@ router.post('/voice', async (req, res) => {
     const twimlString = twiml.toString();
     
     // 📼 BLACK BOX: Log TwiML sent - this is the last thing we control before Twilio takes over
-    if (BlackBoxLogger) {
-      BlackBoxLogger.logEvent({
+    if (CallLogger) {
+      CallLogger.logEvent({
         callId: req.body.CallSid,
         companyId: company._id,
         type: 'TWIML_SENT',
@@ -2088,9 +2089,9 @@ router.post('/handle-speech', async (req, res) => {
           logger.info(`[DEEPGRAM] 🎯 Triggering Deepgram fallback (Twilio: ${confidencePercent.toFixed(1)}% < ${dgThreshold}%)`);
           
           // Log start of Deepgram attempt
-          if (lcSettings.logToBlackBox && BlackBoxLogger) {
+          if (lcSettings.logToBlackBox && CallLogger) {
             try {
-              await BlackBoxLogger.logEvent({
+              await CallLogger.logEvent({
                 callId: callSid,
                 companyId,
                 type: 'DEEPGRAM_FALLBACK_STARTED',
@@ -2127,9 +2128,9 @@ router.post('/handle-speech', async (req, res) => {
                   const vocabSuggestions = DeepgramFallback.generateVocabularySuggestions(speechText, dgResult.transcript);
                   
                   // Log success with comparison for vocabulary learning
-                  if (lcSettings.logToBlackBox && BlackBoxLogger) {
+                  if (lcSettings.logToBlackBox && CallLogger) {
                     try {
-                      await BlackBoxLogger.logEvent({
+                      await CallLogger.logEvent({
                         callId: callSid,
                         companyId,
                         type: 'DEEPGRAM_FALLBACK_SUCCESS',
@@ -2151,9 +2152,9 @@ router.post('/handle-speech', async (req, res) => {
                   // Deepgram confidence also low - log but don't use
                   logger.info(`[DEEPGRAM] ⚠️ Deepgram confidence ${dgResult.confidencePercent}% below accept threshold ${dgAcceptThreshold}%`);
                   
-                  if (lcSettings.logToBlackBox && BlackBoxLogger) {
+                  if (lcSettings.logToBlackBox && CallLogger) {
                     try {
-                      await BlackBoxLogger.logEvent({
+                      await CallLogger.logEvent({
                         callId: callSid,
                         companyId,
                         type: 'DEEPGRAM_FALLBACK_DISCARDED',
@@ -2174,9 +2175,9 @@ router.post('/handle-speech', async (req, res) => {
               } else {
                 logger.warn('[DEEPGRAM] No result returned from Deepgram');
                 
-                if (lcSettings.logToBlackBox && BlackBoxLogger) {
+                if (lcSettings.logToBlackBox && CallLogger) {
                   try {
-                    await BlackBoxLogger.logEvent({
+                    await CallLogger.logEvent({
                       callId: callSid,
                       companyId,
                       type: 'DEEPGRAM_FALLBACK_NO_RESULT',
@@ -2193,9 +2194,9 @@ router.post('/handle-speech', async (req, res) => {
           } catch (dgError) {
             logger.error('[DEEPGRAM] Fallback error:', dgError.message);
             
-            if (lcSettings.logToBlackBox && BlackBoxLogger) {
+            if (lcSettings.logToBlackBox && CallLogger) {
               try {
-                await BlackBoxLogger.logEvent({
+                await CallLogger.logEvent({
                   callId: callSid,
                   companyId,
                   type: 'DEEPGRAM_FALLBACK_ERROR',
@@ -2229,9 +2230,9 @@ router.post('/handle-speech', async (req, res) => {
         }
         
         // 📦 Log to Black Box for vocabulary training
-        if (lcSettings.logToBlackBox && BlackBoxLogger) {
+        if (lcSettings.logToBlackBox && CallLogger) {
           try {
-            await BlackBoxLogger.logEvent({
+            await CallLogger.logEvent({
               callId: callSid,
               companyId,
               type: 'LOW_CONFIDENCE_HIT',
@@ -2254,9 +2255,9 @@ router.post('/handle-speech', async (req, res) => {
           logger.warn(`[LOW CONFIDENCE] 🚨 Max repeats exceeded (${repeats} > ${lcSettings.maxRepeatsBeforeEscalation}) - escalating to human`);
           
           // Log escalation to Black Box
-          if (lcSettings.logToBlackBox && BlackBoxLogger) {
+          if (lcSettings.logToBlackBox && CallLogger) {
             try {
-              await BlackBoxLogger.logEvent({
+              await CallLogger.logEvent({
                 callId: callSid,
                 companyId,
                 type: 'LOW_CONFIDENCE_ESCALATION',
@@ -2573,8 +2574,8 @@ router.post('/handle-speech', async (req, res) => {
         gather.play(audioUrl);
         
         // 📼 BLACK BOX: Log TTS generation
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
+        if (CallLogger) {
+          CallLogger.logEvent({
             callId: callSid,
             companyId,
             type: 'TTS_GENERATED',
@@ -2892,8 +2893,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     }
     
     // Proof event: what text we finalized for downstream extraction
-    if (BlackBoxLogger && callSid) {
-      await BlackBoxLogger.logEvent({
+    if (CallLogger && callSid) {
+      await CallLogger.logEvent({
         callId: callSid,
         companyId: companyID,
         type: 'INPUT_TEXT_FINALIZED',
@@ -2957,8 +2958,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     const stateFound = !!callState;
     
     // EMIT S0 STATE LOAD EVENT (CRITICAL - exposes state drift)
-    if (BlackBoxLogger && callSid) {
-      await BlackBoxLogger.logEvent({
+    if (CallLogger && callSid) {
+      await CallLogger.logEvent({
         callId: callSid,
         companyId: companyID,
         type: 'SECTION_S0_STATE_LOAD',
@@ -2993,8 +2994,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         currentKey: redisKey
       });
       
-      if (BlackBoxLogger && callSid) {
-        await BlackBoxLogger.logEvent({
+      if (CallLogger && callSid) {
+        await CallLogger.logEvent({
           callId: callSid,
           companyId: companyID,
           type: 'SECTION_S0_STATE_KEY_CHANGED',
@@ -3012,8 +3013,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     if (!callSid) {
       logger.error('[V2TWILIO] MISSING CALLSID - state will not persist correctly');
       
-      if (BlackBoxLogger) {
-        await BlackBoxLogger.logEvent({
+      if (CallLogger) {
+        await CallLogger.logEvent({
           callId: 'MISSING',
           companyId: companyID,
           type: 'SECTION_S0_MISSING_CALLSID',
@@ -3118,8 +3119,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     req.session.callState = persistedState;
     
     // EMIT S0 STATE SAVE EVENT (CRITICAL - confirms state persistence)
-    if (BlackBoxLogger && callSid) {
-      await BlackBoxLogger.logEvent({
+    if (CallLogger && callSid) {
+      await CallLogger.logEvent({
         callId: callSid,
         companyId: companyID,
         type: 'SECTION_S0_STATE_SAVE',
@@ -3174,8 +3175,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         if (status.exists) {
           audioUrl = `${getSecureBaseUrl(req)}${status.url}`;
           voiceProviderUsed = 'instant_audio_cache';
-          if (BlackBoxLogger) {
-            BlackBoxLogger.logEvent({
+          if (CallLogger) {
+            CallLogger.logEvent({
               callId: callSid,
               companyId: companyID,
               type: 'INSTANT_AUDIO_CACHE_HIT',
@@ -3188,8 +3189,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
               }
             }).catch(() => {});
           }
-        } else if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
+        } else if (CallLogger) {
+          CallLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'INSTANT_AUDIO_CACHE_MISS',
@@ -3216,8 +3217,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           ? agent2AudioUrl 
           : `${getSecureBaseUrl(req)}${agent2AudioUrl}`;
         voiceProviderUsed = 'instant_audio_agent2';
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
+        if (CallLogger) {
+          CallLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'INSTANT_AUDIO_AGENT2_HIT',
@@ -3240,8 +3241,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       
       try {
         // TTS started (fire-and-forget, not critical)
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
+        if (CallLogger) {
+          CallLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'TTS_STARTED',
@@ -3274,8 +3275,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         voiceProviderUsed = 'elevenlabs';
         
         // TTS completed (fire-and-forget, not critical)
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
+        if (CallLogger) {
+          CallLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'TTS_COMPLETED',
@@ -3289,8 +3290,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           error: ttsError.message
         });
         
-        if (BlackBoxLogger) {
-          BlackBoxLogger.logEvent({
+        if (CallLogger) {
+          CallLogger.logEvent({
             callId: callSid,
             companyId: companyID,
             type: 'TTS_FAILED',
@@ -3333,8 +3334,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     timings.ttsMs = ttsLatencyMs || 0;
     timings.totalMs = Date.now() - T0;
     
-    if (BlackBoxLogger) {
-      await BlackBoxLogger.logEvent({
+    if (CallLogger) {
+      await CallLogger.logEvent({
         callId: callSid,
         companyId: companyID,
         type: 'TWIML_SENT',
@@ -3379,9 +3380,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // ═══════════════════════════════════════════════════════════════════════════
     // ROUTE_ERROR + FALLBACK TWIML_SENT - CRITICAL - MUST AWAIT
     // ═══════════════════════════════════════════════════════════════════════════
-    if (BlackBoxLogger && callSid) {
+    if (CallLogger && callSid) {
       // Log the error
-      await BlackBoxLogger.logEvent({
+      await CallLogger.logEvent({
         callId: callSid,
         companyId: companyID,
         type: 'ROUTE_ERROR',
@@ -3400,8 +3401,8 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     twimlString = twiml.toString();
     
     // Log fallback TWIML_SENT
-    if (BlackBoxLogger && callSid) {
-      await BlackBoxLogger.logEvent({
+    if (CallLogger && callSid) {
+      await CallLogger.logEvent({
         callId: callSid,
         companyId: companyID,
         type: 'TWIML_SENT',
@@ -3466,8 +3467,8 @@ router.post('/v2-agent-partial/:companyId', async (req, res) => {
       });
       
       // 📼 BLACK BOX: Log partial speech (useful for STT debugging)
-      if (BlackBoxLogger) {
-        BlackBoxLogger.logEvent({
+      if (CallLogger) {
+        CallLogger.logEvent({
           callId: CallSid,
           companyId,
           type: 'GATHER_PARTIAL',
@@ -4831,8 +4832,8 @@ router.post('/catastrophic-dtmf/:companyId', async (req, res) => {
     });
     
     // Log to BlackBox (fire-and-forget but BEFORE twiml generation)
-    const BlackBoxLogger = require('../services/BlackBoxLogger');
-    BlackBoxLogger.logEvent({
+    const CallLogger = require('../services/CallLogger');
+    CallLogger.logEvent({
       callId: CallSid,
       companyId,
       type: 'CATASTROPHIC_DTMF_RECEIVED',

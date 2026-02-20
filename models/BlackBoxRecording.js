@@ -19,6 +19,12 @@
  * - black-box-detail.html (detail view with visualizations)
  * 
  * ============================================================================
+ * 
+ * ⚠️ DEPRECATION NOTICE:
+ * This file is being replaced by CallRecording.js for Agent 2.0.
+ * New code should import from '../models/CallRecording' instead.
+ * This file will be removed once all legacy code is migrated.
+ * ============================================================================
  */
 
 const mongoose = require('mongoose');
