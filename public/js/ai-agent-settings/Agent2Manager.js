@@ -1708,6 +1708,13 @@ class Agent2Manager {
               labelColor = '#fb923c';
               icon = '🔄';
               statusBadge = '<span style="background:#78350f; color:#fed7aa; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">CHANGED</span>';
+            } else if (t.hadAudioIssue) {
+              // Audio issue - TwiML sent but audio may have failed
+              bgColor = '#1c1917';
+              borderColor = '#7c2d12';
+              labelColor = '#fb923c';
+              icon = '🔇';
+              statusBadge = '<span style="background:#7c2d12; color:#fed7aa; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">AUDIO ISSUE</span>';
             } else if (t.onlyPlanned) {
               // Only planned available - gray/uncertain styling
               bgColor = '#1f2937';
@@ -1741,6 +1748,7 @@ class Agent2Manager {
               </div>
               <div style="color:#e5e7eb; font-size:0.85rem; line-height:1.4;">${this.escapeHtml(t.text)}</div>
               ${t.fallbackReason ? `<div style="color:#fbbf24; font-size:0.7rem; margin-top:6px;">Reason: ${this.escapeHtml(t.fallbackReason)}</div>` : ''}
+              ${t.hadAudioIssue ? `<div style="color:#fb923c; font-size:0.7rem; margin-top:6px;">⚠️ Audio issue: ${this.escapeHtml(t.audioIssueReason || 'file not found')} - May not have been played</div>` : ''}
               ${comparisonHtml}
             </div>
           `}).join('') : `
@@ -1822,6 +1830,10 @@ class Agent2Manager {
     const callerInputs = [];
     const agentResponses = [];
     
+    // Track audio issues per turn (for detecting delivery failures)
+    let audioPreflightFailed = null;
+    let fellBackToTts = null;
+    
     events.forEach(e => {
       const t = e.t || 0;
       
@@ -1836,29 +1848,63 @@ class Agent2Manager {
       // Agent response events - collect BOTH planned and actual
       // PLANNED: A2_RESPONSE_READY, CORE_RUNTIME_OWNER_RESULT, AGENT_RESPONSE_BUILT
       // ACTUAL: TWIML_SENT (what Twilio received), ROUTE_ERROR (crash)
+      // AUDIO FAILURES: AUDIO_URL_PREFLIGHT_FAILED, FELL_BACK_TO_TTS (audio issues)
+      
+      // Track audio preflight failures for this turn
+      if (e.type === 'AUDIO_URL_PREFLIGHT_FAILED') {
+        if (!audioPreflightFailed) audioPreflightFailed = {};
+        audioPreflightFailed[e.turn] = {
+          reason: e.data?.reason || 'unknown',
+          audioUrl: e.data?.audioUrl || null,
+          t
+        };
+      }
+      
+      // Track TTS fallback (means audio was missing)
+      if (e.type === 'FELL_BACK_TO_TTS') {
+        if (!fellBackToTts) fellBackToTts = {};
+        fellBackToTts[e.turn] = {
+          reason: e.data?.reason || 'audio_missing',
+          missingUrl: e.data?.missingAudioUrl || null,
+          t
+        };
+      }
       
       // Actual responses (what was really sent/happened)
       if (e.type === 'TWIML_SENT' && e.data?.responsePreview) {
         const text = e.data.responsePreview;
         const isFallback = e.data.isFallback === true;
         const fallbackReason = e.data.fallbackReason || null;
+        const hasPlay = e.data.hasPlay === true;
+        const playUrl = e.data.playUrl || null;
+        
+        // Check if this turn had audio issues
+        const hadAudioIssue = (audioPreflightFailed && audioPreflightFailed[e.turn]) || 
+                             (fellBackToTts && fellBackToTts[e.turn]);
+        
         agentResponses.push({ 
           text, 
           t, 
           eventTurn: e.turn, 
           source: 'actual',
           isFallback,
-          fallbackReason
+          fallbackReason,
+          hasPlay,
+          playUrl,
+          hadAudioIssue,
+          audioIssueReason: hadAudioIssue ? 
+            (audioPreflightFailed?.[e.turn]?.reason || fellBackToTts?.[e.turn]?.reason) : null
         });
       }
       if (e.type === 'ROUTE_ERROR') {
-        const errorText = `${e.data?.error || 'Unknown error occurred'}`;
+        const errorText = `[ERROR] ${e.data?.error || 'Unknown error occurred'}`;
         agentResponses.push({ 
           text: errorText, 
           t, 
           eventTurn: e.turn, 
           source: 'actual',
-          isError: true
+          isError: true,
+          errorDetails: e.data?.error
         });
       }
       
@@ -1940,6 +1986,12 @@ class Agent2Manager {
         entry.isError = actualResp.isError || false;
         entry.isFallback = actualResp.isFallback || false;
         entry.fallbackReason = actualResp.fallbackReason || null;
+        
+        // Track audio issues (means TwiML was sent but audio may have failed)
+        entry.hadAudioIssue = actualResp.hadAudioIssue || false;
+        entry.audioIssueReason = actualResp.audioIssueReason || null;
+        entry.hasPlay = actualResp.hasPlay || false;
+        entry.playUrl = actualResp.playUrl || null;
         
         // If planned exists and differs from actual, include it
         if (plannedResp && plannedResp.text !== actualResp.text) {
