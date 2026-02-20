@@ -128,7 +128,10 @@ const EVENT_TYPES = [
   'FELL_BACK_TO_TTS',           // Fell back to TTS from audio
   
   // V4: Route Events
-  'ROUTE_ERROR'                 // Route handler error
+  'ROUTE_ERROR',                // Route handler error
+  
+  // Legacy events (kept for backward compatibility)
+  'SPEAK_PROVENANCE'            // Legacy: Speech source info (replaced by SPEECH_SOURCE_SELECTED)
 ];
 
 // ============================================================================

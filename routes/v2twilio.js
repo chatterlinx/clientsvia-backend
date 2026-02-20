@@ -1790,31 +1790,29 @@ router.post('/voice', async (req, res) => {
               ttsTime
             ).catch(() => {}); // Fire and forget
             
-            // V126: SPEAK_PROVENANCE for complete UI traceability
+            // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
             const usedFallback = initResult.greetingConfig?.usedHardcodedFallback === true;
             const fallbackReason = initResult.greetingConfig?.fallbackReason || null;
             CallLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
-              type: 'SPEAK_PROVENANCE',
+              type: 'SPEECH_SOURCE_SELECTED',
               turn: 0,
               data: {
                 sourceId: greetingSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting',
                 uiPath: usedFallback 
-                  ? 'HARDCODED_FALLBACK - Prime Directive Violation' 
+                  ? 'UNMAPPED - HARDCODED_FALLBACK' 
                   : (greetingSource === 'agent2' 
-                    ? 'aiAgentSettings.agent2.greetings.callStart' 
-                    : 'connectionMessages (legacy)'),
+                    ? 'aiAgentSettings.agent2.greetings.callStart.text' 
+                    : 'aiAgentSettings.connectionMessages.greeting'),
                 uiTab: greetingSource === 'agent2' ? 'Greetings' : 'Connection Messages',
                 configPath: greetingSource === 'agent2' ? 'agent2.greetings.callStart.text' : 'connectionMessages.greeting',
                 spokenTextPreview: greetingText.substring(0, 120),
-                audioUrl: null,
-                reason: usedFallback 
+                note: usedFallback 
                   ? `FALLBACK: ${fallbackReason}` 
-                  : 'Call start greeting (TTS)',
+                  : 'Call start greeting',
                 isFromUiConfig: !usedFallback,
-                usedHardcodedFallback: usedFallback,
-                fallbackReason: fallbackReason
+                usedHardcodedFallback: usedFallback
               }
             }).catch(() => {});
           }

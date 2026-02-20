@@ -699,6 +699,18 @@ class FrontDeskCoreRuntime {
                     sectionTrail: tracer.getTrailString()
                 });
                 
+                // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
+                // This is a LEGACY greeting interceptor path (not Agent 2.0)
+                bufferEvent('SPEECH_SOURCE_SELECTED', {
+                    sourceId: 'legacy.greetingInterceptor',
+                    uiPath: 'aiAgentSettings.frontDeskBehavior.greetingResponses',
+                    uiTab: 'Global Settings → Instant Responses',
+                    configPath: `greetingResponses.${greetingMatch.matchedTrigger || 'generic'}`,
+                    spokenTextPreview: greetingMatch.response?.substring(0, 120),
+                    note: `Legacy greeting interceptor matched: "${greetingMatch.matchedTrigger}" (${greetingMatch.matchType})`,
+                    isLegacy: true
+                });
+                
                 // V119: Emit MIC_OWNER_PROOF for greeting intercept path
                 // This proves Agent 2.0 was BYPASSED because greeting matched
                 const agent2Enabled =

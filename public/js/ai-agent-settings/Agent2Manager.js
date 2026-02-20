@@ -2645,6 +2645,8 @@ class Agent2Manager {
       
       // Legacy/unknown
       'legacy': '⚠️ Legacy System',
+      'legacy.greeting': '⚠️ Legacy → Greeting',
+      'legacy.greetingInterceptor': '⚠️ Legacy → Greeting Interceptor',
       'unknown': '❓ Unknown'
     };
     
