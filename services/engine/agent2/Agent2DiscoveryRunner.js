@@ -1094,6 +1094,37 @@ class Agent2DiscoveryRunner {
         cardId: card.id,
         cardLabel: card.label
       });
+      
+      // ════════════════════════════════════════════════════════════════════════
+      // A2_LLM_FALLBACK_DECISION - Log that LLM was blocked due to trigger card
+      // This provides complete audit trail even when LLM code path is never reached
+      // ════════════════════════════════════════════════════════════════════════
+      emit('A2_LLM_FALLBACK_DECISION', {
+        call: false,
+        blocked: true,
+        blockedBy: 'TRIGGER_CARD_MATCH',
+        reason: `Trigger card matched: ${card.label || card.id}`,
+        details: {
+          triggerCardMatched: true,
+          cardId: card.id,
+          cardLabel: card.label,
+          matchType: triggerResult.matchType
+        },
+        stateSnapshot: {
+          triggerCardMatched: true,
+          hasPendingQuestion: false,
+          hasCapturedReasonFlow: false,
+          hasAfterHoursFlow: false,
+          hasTransferFlow: false,
+          hasSpeakSourceSelected: true,
+          bookingModeLocked: !!nextState.bookingModeLocked,
+          inBookingFlow: false,
+          inDiscoveryCriticalStep: false,
+          llmTurnsThisCall: nextState.agent2?.discovery?.llmTurnsThisCall || 0
+        },
+        llmTurnsThisCall: nextState.agent2?.discovery?.llmTurnsThisCall || 0,
+        maxTurns: agent2?.llmFallback?.triggers?.maxLLMFallbackTurnsPerCall ?? 1
+      });
 
       // V119: Emit response ready proof
       // V125: SPEECH_SOURCE_SELECTED for UI traceability
@@ -1449,6 +1480,7 @@ class Agent2DiscoveryRunner {
       );
       
       // Try LLM fallback (passes all blocking conditions)
+      // By definition, if we reached this point, no trigger card matched
       const llmResult = await runLLMFallback({
         config: agent2,
         input,
@@ -1465,7 +1497,10 @@ class Agent2DiscoveryRunner {
           callSid,
           companyId: companyId || company?._id?.toString?.() || null,
           turn,
-          capturedReason
+          capturedReason,
+          sessionMode: nextState.sessionMode || 'DISCOVERY',
+          triggerCardMatched: false, // By definition - we only reach here if no card matched
+          bookingModeLocked: !!nextState.bookingModeLocked
         },
         emit
       });
