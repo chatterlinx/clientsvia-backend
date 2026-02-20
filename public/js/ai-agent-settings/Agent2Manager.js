@@ -404,8 +404,8 @@ class Agent2Manager {
   // LLM FALLBACK: Master Switch Card
   // ─────────────────────────────────────────────────────────────────────────
   renderLLMMasterSwitchCard() {
-    const llm = this.config?.llmFallback || {};
-    const enabled = llm.enabled === true;
+    // Read from discovery.llmFallback.enabled (canonical location)
+    const enabled = this.config?.discovery?.llmFallback?.enabled === true;
 
     return `
       <div class="a2-card" style="background:#0b1220; border:1px solid ${enabled ? '#22d3ee' : '#30363d'}; border-radius:16px; padding:24px; margin-bottom:20px;">
