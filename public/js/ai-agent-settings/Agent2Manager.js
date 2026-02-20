@@ -871,12 +871,37 @@ class Agent2Manager {
               labelColor = '#fbbf24';
               icon = '⚠️';
               statusBadge = '<span style="background:#92400e; color:#fde68a; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">FALLBACK</span>';
+            } else if (t.mismatch) {
+              // Mismatch between planned and actual - orange styling
+              bgColor = '#1c1917';
+              borderColor = '#78350f';
+              labelColor = '#fb923c';
+              icon = '🔄';
+              statusBadge = '<span style="background:#78350f; color:#fed7aa; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">CHANGED</span>';
+            } else if (t.onlyPlanned) {
+              // Only planned available - gray/uncertain styling
+              bgColor = '#1f2937';
+              borderColor = '#374151';
+              labelColor = '#9ca3af';
+              icon = '📝';
+              statusBadge = '<span style="background:#374151; color:#d1d5db; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">PLANNED</span>';
             } else {
-              // Normal agent response - green styling
+              // Normal agent response - green styling (confirmed actual)
               bgColor = '#0d2818';
               borderColor = '#166534';
               labelColor = '#4ade80';
               icon = '🤖';
+            }
+            
+            // Build the planned vs actual comparison if there's a mismatch
+            let comparisonHtml = '';
+            if (t.mismatch && t.plannedText) {
+              comparisonHtml = `
+                <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #374151;">
+                  <div style="font-size:0.65rem; color:#9ca3af; margin-bottom:4px;">📝 PLANNED (not delivered):</div>
+                  <div style="color:#6b7280; font-size:0.8rem; font-style:italic; line-height:1.3;">"${this.escapeHtml(t.plannedText)}"</div>
+                </div>
+              `;
             }
             
             return `
@@ -886,6 +911,7 @@ class Agent2Manager {
               </div>
               <div style="color:#e5e7eb; font-size:0.85rem; line-height:1.4;">${this.escapeHtml(t.text)}</div>
               ${t.fallbackReason ? `<div style="color:#fbbf24; font-size:0.7rem; margin-top:6px;">Reason: ${this.escapeHtml(t.fallbackReason)}</div>` : ''}
+              ${comparisonHtml}
             </div>
           `}).join('') : `
             <div style="color:#6e7681; text-align:center; padding:20px;">No transcript available</div>
@@ -977,16 +1003,12 @@ class Agent2Manager {
         }
       }
       
-      // Agent response events - PRIORITY ORDER:
-      // 1. TWIML_SENT (highest) - what was ACTUALLY sent to Twilio (truth)
-      // 2. A2_RESPONSE_READY - what Agent 2.0 planned to say
-      // 3. CORE_RUNTIME_OWNER_RESULT - what core runtime planned
-      // 4. AGENT_RESPONSE_BUILT - legacy response builder
-      // 
-      // CRITICAL: TWIML_SENT is the TRUTH. If an error occurred, it will show
-      // the fallback message, not the planned response.
+      // Agent response events - collect BOTH planned and actual
+      // PLANNED: A2_RESPONSE_READY, CORE_RUNTIME_OWNER_RESULT, AGENT_RESPONSE_BUILT
+      // ACTUAL: TWIML_SENT (what Twilio received), ROUTE_ERROR (crash)
+      
+      // Actual responses (what was really sent/happened)
       if (e.type === 'TWIML_SENT' && e.data?.responsePreview) {
-        // This is what was ACTUALLY sent to Twilio
         const text = e.data.responsePreview;
         const isFallback = e.data.isFallback === true;
         const fallbackReason = e.data.fallbackReason || null;
@@ -994,28 +1016,29 @@ class Agent2Manager {
           text, 
           t, 
           eventTurn: e.turn, 
-          priority: 0, // Highest priority - this is truth
+          source: 'actual',
           isFallback,
           fallbackReason
         });
-      } else if (e.type === 'A2_RESPONSE_READY' && e.data?.responsePreview) {
-        agentResponses.push({ text: e.data.responsePreview, t, eventTurn: e.turn, priority: 1 });
-      } else if (e.type === 'CORE_RUNTIME_OWNER_RESULT' && e.data?.responsePreview) {
-        agentResponses.push({ text: e.data.responsePreview, t, eventTurn: e.turn, priority: 2 });
-      } else if (e.type === 'AGENT_RESPONSE_BUILT' && e.data?.text) {
-        agentResponses.push({ text: e.data.text, t, eventTurn: e.turn, priority: 3 });
       }
-      
-      // Also check for ROUTE_ERROR - this means something crashed
       if (e.type === 'ROUTE_ERROR') {
-        const errorText = `[ERROR] ${e.data?.error || 'Unknown error occurred'}`;
+        const errorText = `${e.data?.error || 'Unknown error occurred'}`;
         agentResponses.push({ 
           text: errorText, 
           t, 
           eventTurn: e.turn, 
-          priority: 0, // Same as TWIML_SENT - this is truth
+          source: 'actual',
           isError: true
         });
+      }
+      
+      // Planned responses (what was intended before delivery)
+      if (e.type === 'A2_RESPONSE_READY' && e.data?.responsePreview) {
+        agentResponses.push({ text: e.data.responsePreview, t, eventTurn: e.turn, source: 'planned' });
+      } else if (e.type === 'CORE_RUNTIME_OWNER_RESULT' && e.data?.responsePreview) {
+        agentResponses.push({ text: e.data.responsePreview, t, eventTurn: e.turn, source: 'planned' });
+      } else if (e.type === 'AGENT_RESPONSE_BUILT' && e.data?.text) {
+        agentResponses.push({ text: e.data.text, t, eventTurn: e.turn, source: 'planned' });
       }
     });
     
@@ -1037,11 +1060,9 @@ class Agent2Manager {
       transcript.push({ role: 'caller', text: input.text, turn, order: input.t });
     });
     
-    // Step 5: For each agent response, find which turn it belongs to
-    // (the agent response comes AFTER the caller input in the same turn)
-    // CRITICAL: Lower priority number = higher priority (TWIML_SENT is 0, A2_RESPONSE_READY is 1, etc.)
-    const usedTurns = new Set();
-    agentResponses.sort((a, b) => a.priority - b.priority); // Process highest priority (lowest number) first
+    // Step 5: Group responses by turn, keeping both planned and actual
+    // This allows us to show "Agent planned X but actually said Y"
+    const turnResponses = {}; // { turn: { planned: [], actual: [] } }
     
     agentResponses.forEach(resp => {
       // Find the caller turn this response follows
@@ -1054,23 +1075,55 @@ class Agent2Manager {
         }
       }
       
-      if (matchedTurn && !usedTurns.has(matchedTurn)) {
-        const entry = { 
-          role: 'agent', 
-          text: resp.text, 
-          turn: matchedTurn, 
-          order: resp.t 
-        };
-        // Mark errors and fallbacks so UI can display them differently
-        if (resp.isError) {
-          entry.isError = true;
+      if (matchedTurn) {
+        if (!turnResponses[matchedTurn]) {
+          turnResponses[matchedTurn] = { planned: [], actual: [] };
         }
-        if (resp.isFallback) {
-          entry.isFallback = true;
-          entry.fallbackReason = resp.fallbackReason;
+        if (resp.source === 'actual') {
+          turnResponses[matchedTurn].actual.push(resp);
+        } else {
+          turnResponses[matchedTurn].planned.push(resp);
         }
+      }
+    });
+    
+    // Step 6: Build transcript entries, showing both planned and actual when different
+    Object.keys(turnResponses).forEach(turnStr => {
+      const turn = parseInt(turnStr, 10);
+      const { planned, actual } = turnResponses[turn];
+      
+      // Get best planned response (first one)
+      const plannedResp = planned[0];
+      // Get best actual response (first one)
+      const actualResp = actual[0];
+      
+      // Determine what to show
+      const entry = { 
+        role: 'agent', 
+        turn, 
+        order: (actualResp?.t || plannedResp?.t || 0)
+      };
+      
+      if (actualResp) {
+        // We have actual response - this is truth
+        entry.text = actualResp.text;
+        entry.isError = actualResp.isError || false;
+        entry.isFallback = actualResp.isFallback || false;
+        entry.fallbackReason = actualResp.fallbackReason || null;
+        
+        // If planned exists and differs from actual, include it
+        if (plannedResp && plannedResp.text !== actualResp.text) {
+          entry.plannedText = plannedResp.text;
+          entry.mismatch = true;
+        }
+      } else if (plannedResp) {
+        // Only planned available (TWIML_SENT not logged for this turn)
+        entry.text = plannedResp.text;
+        entry.onlyPlanned = true; // Mark that we only have planned, not confirmed actual
+      }
+      
+      if (entry.text) {
         transcript.push(entry);
-        usedTurns.add(matchedTurn);
       }
     });
 
