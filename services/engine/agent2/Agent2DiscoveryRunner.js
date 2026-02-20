@@ -480,9 +480,27 @@ class Agent2DiscoveryRunner {
     // Use preprocessed input for downstream processing
     const preprocessedInput = preprocessResult.cleaned;
     
+    // V4: INPUT_TEXT_FINALIZED - Raw input captured (for audit trail)
+    emit('INPUT_TEXT_FINALIZED', {
+      raw: clip(input, 120),
+      turn,
+      charCount: (input || '').length,
+      timestamp: new Date().toISOString()
+    });
+    
     // Emit preprocessing proof for Call Review debugging
     if (preprocessResult.changed || preprocessResult.appliedRules?.length > 0) {
       emit('A2_PREPROCESSING_APPLIED', Agent2SpeechPreprocessor.buildPreprocessingEvent(preprocessResult));
+      
+      // V4: A2_INPUT_NORMALIZED - Shows exact normalization for debugging
+      emit('A2_INPUT_NORMALIZED', {
+        rawPreview: clip(input, 60),
+        normalizedPreview: clip(preprocessedInput, 60),
+        removedTokens: preprocessResult.removedTokens || [],
+        appliedRules: (preprocessResult.appliedRules || []).slice(0, 10),
+        wasChanged: preprocessResult.changed,
+        note: 'Preprocessing applied BEFORE trigger matching. Cleaned text never spoken.'
+      });
     }
     
     // ══════════════════════════════════════════════════════════════════════════
@@ -1102,6 +1120,40 @@ class Agent2DiscoveryRunner {
       activeHints: activeHints.length > 0 ? activeHints : null,
       activeLocks: Object.keys(activeLocks).length > 0 ? activeLocks : null,
       hintBoostApplied: triggerResult.hintBoostApplied || false
+    });
+    
+    // V4: TRIGGER_CARDS_EVALUATED - Show all candidates and single winner
+    // This proves exactly one card was selected (or none)
+    const matchedCards = triggerResult.evaluated.filter(e => e.matched);
+    const candidateCards = triggerResult.evaluated.filter(e => 
+      !e.skipped && (e.keywordHit || e.phraseHit)
+    );
+    emit('TRIGGER_CARDS_EVALUATED', {
+      inputPreview: clip(normalizedInput, 60),
+      totalCardsInPool: triggerResult.totalCards,
+      enabledCards: triggerResult.enabledCards,
+      candidatesFound: candidateCards.length,
+      winnersSelected: matchedCards.length,
+      winner: triggerResult.matched ? {
+        cardId: triggerResult.cardId,
+        cardLabel: triggerResult.cardLabel,
+        matchType: triggerResult.matchType,
+        matchedOn: triggerResult.matchedOn
+      } : null,
+      candidates: candidateCards.map(c => ({
+        cardId: c.cardId,
+        cardLabel: c.cardLabel,
+        effectivePriority: c.effectivePriority,
+        keywordHit: c.keywordHit,
+        phraseHit: c.phraseHit
+      })),
+      blocked: {
+        byNegativeKeywords: triggerResult.negativeBlocked,
+        byIntentGate: triggerResult.intentGateBlocked || 0,
+        byGlobalNegative: triggerResult.globalNegativeBlocked ? triggerResult.globalNegativeHit : null
+      },
+      singleWinnerEnforced: true,
+      rule: 'First match by priority wins. Only ONE card can be selected per turn.'
     });
 
     if (triggerResult.matched && triggerResult.card) {
@@ -1784,7 +1836,7 @@ class Agent2DiscoveryRunner {
         responsePreview: clip(response, 120),
         responseLength: response.length,
         hasAudio: false,
-        source: empathyConfig.enabled !== false ? 'empathyLayer' : 'fallback.noMatchWhenReasonCaptured',
+        source: humanToneConfig.enabled !== false ? 'empathyLayer' : 'fallback.noMatchWhenReasonCaptured',
         usedCallerName: usedName,
         hadClarifier: !!nextQ && !skipClarifierQuestion,
         pendingQuestion: nextQ || null,

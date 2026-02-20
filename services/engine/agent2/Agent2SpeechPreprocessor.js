@@ -74,6 +74,7 @@ function preprocess(text, config = {}, options = {}) {
     const original = text;
     let cleaned = text.toLowerCase().trim();
     const appliedRules = [];
+    const removedTokens = [];  // V4: Track what was removed for debugging
 
     // ─────────────────────────────────────────────────────────────────────
     // STEP 1: Strip company name if provided (often misheard as greeting)
@@ -82,6 +83,7 @@ function preprocess(text, config = {}, options = {}) {
         const companyLower = options.companyName.toLowerCase();
         const companyRegex = new RegExp(`\\b${escapeRegex(companyLower)}\\b`, 'gi');
         if (companyRegex.test(cleaned)) {
+            removedTokens.push(options.companyName);
             cleaned = cleaned.replace(companyRegex, '').trim();
             appliedRules.push({ type: 'strip_company_name', value: options.companyName });
         }
@@ -93,6 +95,7 @@ function preprocess(text, config = {}, options = {}) {
     for (const greeting of DEFAULT_GREETING_PHRASES) {
         const greetingRegex = new RegExp(`^${escapeRegex(greeting)}[.,!?\\s]*`, 'i');
         if (greetingRegex.test(cleaned)) {
+            removedTokens.push(greeting);
             cleaned = cleaned.replace(greetingRegex, '').trim();
             appliedRules.push({ type: 'strip_greeting', value: greeting });
         }
@@ -106,6 +109,7 @@ function preprocess(text, config = {}, options = {}) {
         if (!phrase || typeof phrase !== 'string') continue;
         const phraseRegex = new RegExp(`\\b${escapeRegex(phrase.toLowerCase())}\\b`, 'gi');
         if (phraseRegex.test(cleaned)) {
+            removedTokens.push(phrase);
             cleaned = cleaned.replace(phraseRegex, '').trim();
             appliedRules.push({ type: 'ignore_phrase', value: phrase });
         }
@@ -125,6 +129,7 @@ function preprocess(text, config = {}, options = {}) {
             const before = cleaned;
             cleaned = cleaned.replace(fillerRegex, ' ').trim();
             if (cleaned !== before) {
+                removedTokens.push(filler);
                 appliedRules.push({ type: 'strip_filler', value: filler });
             }
         }
@@ -183,6 +188,7 @@ function preprocess(text, config = {}, options = {}) {
         original,
         cleaned,
         appliedRules,
+        removedTokens,  // V4: List of removed tokens for debugging
         enabled: true,
         changed: cleaned !== original.toLowerCase().trim()
     };
@@ -210,7 +216,8 @@ function buildPreprocessingEvent(result) {
         cleanedPreview: result.cleaned?.substring(0, 80),
         changed: result.changed,
         rulesApplied: result.appliedRules?.length || 0,
-        rules: result.appliedRules?.slice(0, 10) // Limit to first 10 for event size
+        rules: result.appliedRules?.slice(0, 10), // Limit to first 10 for event size
+        removedTokens: result.removedTokens?.slice(0, 15) || []  // V4: Show what was removed
     };
 }
 
