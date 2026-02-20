@@ -411,6 +411,21 @@ class Agent2Manager {
     }
 
     return `
+      <!-- ARCHITECTURE REMINDER FOR DEVELOPERS -->
+      <div style="background:#1e1b4b; border:1px solid #6366f1; border-radius:12px; padding:16px; margin-bottom:20px;">
+        <div style="display:flex; align-items:flex-start; gap:12px;">
+          <span style="font-size:1.4rem;">📋</span>
+          <div>
+            <div style="color:#a5b4fc; font-size:0.95rem; font-weight:600; margin-bottom:8px;">How These Modes Are Configured</div>
+            <div style="color:#c7d2fe; font-size:0.85rem; line-height:1.5;">
+              <strong style="color:#22d3ee;">Answer + Return</strong> is the <strong>system default</strong> — always active when LLM is enabled. No opt-in required.<br>
+              <strong style="color:#f59e0b;">Guided Fallback</strong> is an <strong>optional upgrade</strong> — must be explicitly selected for customers who want booking push.<br><br>
+              <span style="color:#8b949e;">Both modes are <strong>assist-only</strong>. Deterministic (trigger cards) always owns the conversation. LLM never takes over.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:20px; margin-bottom:20px;">
         <div style="margin-bottom:16px;">
           <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">LLM Mode</h3>
@@ -423,7 +438,7 @@ class Agent2Manager {
           <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:16px; background:${mode === 'guided' ? '#052e16' : '#161b22'}; border:2px solid ${mode === 'guided' ? '#22d3ee' : '#30363d'}; border-radius:12px; transition:all 0.2s;">
             <input type="radio" name="a2-llm-mode" value="guided" ${mode === 'guided' ? 'checked' : ''} style="margin-top:3px; accent-color:#22d3ee; width:18px; height:18px;">
             <div>
-              <div style="color:${mode === 'guided' ? '#22d3ee' : '#c9d1d9'}; font-size:1rem; font-weight:600;">Guided Fallback</div>
+              <div style="color:${mode === 'guided' ? '#22d3ee' : '#c9d1d9'}; font-size:1rem; font-weight:600;">Guided Fallback <span style="background:#f59e0b; color:#0b1220; padding:2px 6px; border-radius:4px; font-size:0.7rem; margin-left:6px;">OPT-IN</span></div>
               <div style="color:#8b949e; font-size:0.8rem; margin-top:4px;">
                 LLM responds with empathy + guidance, then asks a <strong>UI-owned handoff question</strong> to funnel caller toward booking.
               </div>
@@ -436,7 +451,7 @@ class Agent2Manager {
           <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:16px; background:${mode === 'answer_return' ? '#052e16' : '#161b22'}; border:2px solid ${mode === 'answer_return' ? '#22d3ee' : '#30363d'}; border-radius:12px; transition:all 0.2s;">
             <input type="radio" name="a2-llm-mode" value="answer_return" ${mode === 'answer_return' ? 'checked' : ''} style="margin-top:3px; accent-color:#22d3ee; width:18px; height:18px;">
             <div>
-              <div style="color:${mode === 'answer_return' ? '#22d3ee' : '#c9d1d9'}; font-size:1rem; font-weight:600;">Answer + Return</div>
+              <div style="color:${mode === 'answer_return' ? '#22d3ee' : '#c9d1d9'}; font-size:1rem; font-weight:600;">Answer + Return <span style="background:#22d3ee; color:#0b1220; padding:2px 6px; border-radius:4px; font-size:0.7rem; margin-left:6px;">DEFAULT</span></div>
               <div style="color:#8b949e; font-size:0.8rem; margin-top:4px;">
                 LLM gives a <strong>short answer only</strong>, then control returns to deterministic pipeline. No handoff question.
               </div>
