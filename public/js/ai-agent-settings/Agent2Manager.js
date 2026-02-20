@@ -162,6 +162,18 @@ class Agent2Manager {
       badge.textContent = this.isDirty ? 'UNSAVED' : 'SAVED';
       badge.style.background = this.isDirty ? '#f59e0b' : '#238636';
     }
+    
+    // Update export button to show changes are ready to export
+    const exportBtn = document.getElementById('a2-export-json');
+    if (exportBtn) {
+      if (this.isDirty) {
+        exportBtn.style.background = '#f59e0b';
+        exportBtn.title = 'Configuration has unsaved changes - export will include current state';
+      } else {
+        exportBtn.style.background = '#1f6feb';
+        exportBtn.title = 'Download complete Agent 2.0 wiring report with all configuration, runtime integration, and validation';
+      }
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -194,8 +206,8 @@ class Agent2Manager {
             </div>
           </div>
           <div style="display:flex; gap:10px; ${isCallReviewTab ? 'display:none;' : ''}">
-            <button id="a2-export-json" style="padding:8px 14px; background:#1f6feb; color:white; border:none; border-radius:8px; cursor:pointer;">
-              Export JSON
+            <button id="a2-export-json" style="padding:8px 14px; background:${this.isDirty ? '#f59e0b' : '#1f6feb'}; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;" title="Download complete Agent 2.0 wiring report with all configuration, runtime integration, and validation${this.isDirty ? ' (includes unsaved changes)' : ''}">
+              📥 Download Complete Wiring Report
             </button>
             <button id="a2-reset" style="padding:8px 14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer;">
               Reset
@@ -2501,9 +2513,32 @@ class Agent2Manager {
     });
 
     container.querySelector('#a2-export-json')?.addEventListener('click', async () => {
-      const payload = JSON.stringify(this.config || {}, null, 2);
-      await navigator.clipboard.writeText(payload);
-      alert('Copied Agent 2.0 JSON to clipboard.');
+      try {
+        // Read current form state into config to capture any unsaved changes
+        this._readFormIntoConfig(container);
+        
+        const comprehensive = await this._generateComprehensiveWiringReport();
+        const payload = JSON.stringify(comprehensive, null, 2);
+        
+        // Download as file instead of just copying to clipboard
+        const blob = new Blob([payload], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `agent2-wiring-complete-${this.companyId}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Also copy to clipboard for convenience
+        await navigator.clipboard.writeText(payload);
+        
+        alert('✅ Complete Agent 2.0 wiring report downloaded and copied to clipboard!\n\nIncludes:\n- All configuration tabs\n- Runtime wiring status\n- Integration points\n- Validation results\n- Current state snapshot');
+      } catch (e) {
+        console.error('Export failed:', e);
+        alert(`Export failed: ${e.message || e}`);
+      }
     });
 
     container.querySelector('#a2-save')?.addEventListener('click', async () => {
@@ -4486,6 +4521,438 @@ class Agent2Manager {
     cfg.meta = cfg.meta || {};
     cfg.meta.uiBuild = Agent2Manager.UI_BUILD;
     this.config = cfg;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // COMPREHENSIVE WIRING REPORT - Complete Agent 2.0 Truth Export
+  // ──────────────────────────────────────────────────────────────────────────
+  /**
+   * Generates a complete wiring report including:
+   * - All configuration from all tabs (Config, Greetings, etc.)
+   * - Runtime integration status
+   * - Validation results
+   * - Statistics and metadata
+   * - Current active state
+   * 
+   * This is the TRUTH of what Agent 2.0 is configured to do.
+   */
+  async _generateComprehensiveWiringReport() {
+    const timestamp = new Date().toISOString();
+    const config = this.config || this.getDefaultConfig();
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // SECTION 1: Configuration Snapshot (All Tabs)
+    // ═══════════════════════════════════════════════════════════════════════
+    const configurationSnapshot = {
+      enabled: config.enabled || false,
+      
+      // Discovery Tab - Complete Configuration
+      discovery: {
+        enabled: config.discovery?.enabled || false,
+        
+        // Style Configuration
+        style: {
+          ackWord: config.discovery?.style?.ackWord || 'Ok.',
+          forbidPhrases: config.discovery?.style?.forbidPhrases || [],
+          
+          // Bridge Lines (thinking time)
+          bridge: {
+            enabled: config.discovery?.style?.bridge?.enabled || false,
+            maxPerTurn: config.discovery?.style?.bridge?.maxPerTurn || 1,
+            lines: config.discovery?.style?.bridge?.lines || [],
+            _count: (config.discovery?.style?.bridge?.lines || []).length
+          },
+          
+          // System Delay Handling
+          systemDelay: {
+            enabled: config.discovery?.style?.systemDelay?.enabled || false,
+            firstLine: config.discovery?.style?.systemDelay?.firstLine || '',
+            transferLine: config.discovery?.style?.systemDelay?.transferLine || '',
+            _isConfigured: !!(config.discovery?.style?.systemDelay?.firstLine && config.discovery?.style?.systemDelay?.transferLine)
+          },
+          
+          // Robot Challenge Response
+          robotChallenge: {
+            enabled: config.discovery?.style?.robotChallenge?.enabled || false,
+            line: config.discovery?.style?.robotChallenge?.line || '',
+            _isConfigured: !!(config.discovery?.style?.robotChallenge?.line)
+          },
+          
+          // When In Doubt (fallback transfer)
+          whenInDoubt: {
+            enabled: config.discovery?.style?.whenInDoubt?.enabled || false,
+            transferLine: config.discovery?.style?.whenInDoubt?.transferLine || '',
+            _isConfigured: !!(config.discovery?.style?.whenInDoubt?.transferLine)
+          }
+        },
+        
+        // Vocabulary System (V119+)
+        vocabulary: {
+          enabled: config.discovery?.vocabulary?.enabled || false,
+          entries: config.discovery?.vocabulary?.entries || [],
+          _stats: {
+            total: (config.discovery?.vocabulary?.entries || []).length,
+            enabled: (config.discovery?.vocabulary?.entries || []).filter(e => e.enabled).length,
+            hardNormalize: (config.discovery?.vocabulary?.entries || []).filter(e => e.type === 'HARD_NORMALIZE').length,
+            softHint: (config.discovery?.vocabulary?.entries || []).filter(e => e.type === 'SOFT_HINT').length
+          }
+        },
+        
+        // Clarifier System (V119+)
+        clarifiers: {
+          enabled: config.discovery?.clarifiers?.enabled || false,
+          maxAsksPerCall: config.discovery?.clarifiers?.maxAsksPerCall || 2,
+          entries: config.discovery?.clarifiers?.entries || [],
+          _stats: {
+            total: (config.discovery?.clarifiers?.entries || []).length,
+            enabled: (config.discovery?.clarifiers?.entries || []).filter(e => e.enabled).length
+          }
+        },
+        
+        // Playbook (Trigger Cards + Scenario Fallback)
+        playbook: {
+          version: config.discovery?.playbook?.version || 'v1',
+          useScenarioFallback: config.discovery?.playbook?.useScenarioFallback || false,
+          allowedScenarioTypes: config.discovery?.playbook?.allowedScenarioTypes || [],
+          minScenarioScore: config.discovery?.playbook?.minScenarioScore || 0.72,
+          
+          // Fallback responses
+          fallback: {
+            noMatchAnswer: config.discovery?.playbook?.fallback?.noMatchAnswer || '',
+            noMatchWhenReasonCaptured: config.discovery?.playbook?.fallback?.noMatchWhenReasonCaptured || '',
+            noMatchClarifierQuestion: config.discovery?.playbook?.fallback?.noMatchClarifierQuestion || '',
+            afterAnswerQuestion: config.discovery?.playbook?.fallback?.afterAnswerQuestion || ''
+          },
+          
+          // Trigger Cards (Primary Intelligence)
+          triggerCards: {
+            rules: config.discovery?.playbook?.rules || [],
+            _stats: {
+              total: (config.discovery?.playbook?.rules || []).length,
+              enabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length,
+              disabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled === false).length,
+              withAudio: (config.discovery?.playbook?.rules || []).filter(r => r.answer?.audioUrl).length,
+              withFollowUp: (config.discovery?.playbook?.rules || []).filter(r => r.followUp?.question).length,
+              byPriority: this._groupByPriority(config.discovery?.playbook?.rules || [])
+            }
+          }
+        },
+        
+        updatedAt: config.discovery?.updatedAt || null
+      },
+      
+      // Greetings Tab - Complete Configuration
+      greetings: {
+        // Call Start Greeting (first thing agent says)
+        callStart: {
+          enabled: config.greetings?.callStart?.enabled || false,
+          text: config.greetings?.callStart?.text || '',
+          audioUrl: config.greetings?.callStart?.audioUrl || '',
+          _hasAudio: !!(config.greetings?.callStart?.audioUrl),
+          _hasText: !!(config.greetings?.callStart?.text)
+        },
+        
+        // Greeting Interceptor (hi/hello responses)
+        interceptor: {
+          enabled: config.greetings?.interceptor?.enabled || false,
+          maxWordsToQualify: config.greetings?.interceptor?.maxWordsToQualify || 2,
+          blockIfContainsIntentWords: config.greetings?.interceptor?.blockIfContainsIntentWords || false,
+          intentWords: config.greetings?.interceptor?.intentWords || [],
+          rules: config.greetings?.interceptor?.rules || [],
+          _stats: {
+            totalRules: (config.greetings?.interceptor?.rules || []).length,
+            enabledRules: (config.greetings?.interceptor?.rules || []).filter(r => r.enabled !== false).length,
+            intentWordsCount: (config.greetings?.interceptor?.intentWords || []).length,
+            rulesWithAudio: (config.greetings?.interceptor?.rules || []).filter(r => r.audioUrl).length
+          }
+        }
+      },
+      
+      // Metadata
+      meta: config.meta || {}
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // SECTION 2: Runtime Integration Status
+    // ═══════════════════════════════════════════════════════════════════════
+    const runtimeIntegration = {
+      _description: 'Shows how Agent 2.0 is wired into the live call runtime',
+      
+      // Primary Speaker Ownership
+      speakerOwnership: {
+        primaryDiscoverySpeaker: config.enabled && config.discovery?.enabled 
+          ? 'Agent2DiscoveryRunner' 
+          : 'DiscoveryFlowRunner (legacy)',
+        greetingSpeaker: config.enabled && config.greetings?.interceptor?.enabled
+          ? 'Agent2GreetingInterceptor'
+          : 'GreetingInterceptor (legacy)',
+        isAgent2Primary: config.enabled && config.discovery?.enabled,
+        _note: 'When Agent 2.0 is enabled, it owns the mic. Legacy systems are bypassed.'
+      },
+      
+      // Service Layer Wiring
+      services: {
+        Agent2DiscoveryRunner: {
+          active: config.enabled && config.discovery?.enabled,
+          file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+          purpose: 'Main discovery orchestrator - processes caller input, matches trigger cards, runs vocabulary/clarifiers',
+          triggers: config.discovery?.playbook?.rules?.length || 0
+        },
+        
+        Agent2GreetingInterceptor: {
+          active: config.enabled && config.greetings?.interceptor?.enabled,
+          file: 'services/engine/agent2/Agent2GreetingInterceptor.js',
+          purpose: 'Handles caller greetings (hi/hello) before trigger card matching',
+          greetingRules: config.greetings?.interceptor?.rules?.length || 0
+        },
+        
+        Agent2VocabularyEngine: {
+          active: config.enabled && config.discovery?.vocabulary?.enabled,
+          file: 'services/engine/agent2/Agent2VocabularyEngine.js',
+          purpose: 'Normalizes mishears and adds semantic hints before matching',
+          entries: config.discovery?.vocabulary?.entries?.length || 0
+        },
+        
+        TriggerCardMatcher: {
+          active: config.enabled && config.discovery?.enabled,
+          file: 'services/engine/agent2/TriggerCardMatcher.js',
+          purpose: 'Matches caller input against trigger cards (keywords + phrases)',
+          cardsToMatch: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length
+        },
+        
+        ScenarioEngine: {
+          active: config.discovery?.playbook?.useScenarioFallback || false,
+          file: 'services/ScenarioEngine.js',
+          purpose: 'Fallback to global scenarios if no trigger card matches',
+          minScore: config.discovery?.playbook?.minScenarioScore || 0.72,
+          allowedTypes: config.discovery?.playbook?.allowedScenarioTypes || []
+        }
+      },
+      
+      // FrontDeskCoreRuntime Integration
+      coreRuntimeIntegration: {
+        file: 'services/engine/FrontDeskCoreRuntime.js',
+        flowPosition: 'S4 - Discovery Flow',
+        executionOrder: [
+          'S1: Runtime Ownership',
+          'S1.5: Connection Quality Gate',
+          'S2: Input Text Truth',
+          'S2.5: Escalation Detection',
+          'GREET: Greeting Intercept (Agent2GreetingInterceptor if enabled)',
+          'S3: Slot Extraction',
+          'S4: Discovery Flow (Agent2DiscoveryRunner if enabled, else legacy)',
+          'S5: Consent Gate',
+          'S6: Booking Flow',
+          'S7: Voice Provider'
+        ],
+        agent2Position: 'GREET + S4',
+        _note: 'Agent 2.0 owns GREET and S4 when enabled. One mic architecture - no fallback.'
+      },
+      
+      // API Endpoints
+      apiEndpoints: {
+        config: {
+          get: `/api/admin/agent2/${this.companyId}`,
+          patch: `/api/admin/agent2/${this.companyId}`,
+          file: 'routes/admin/agent2.js'
+        },
+        gptPrefill: {
+          post: `/api/admin/agent2/${this.companyId}/gpt-prefill`,
+          purpose: 'AI-powered trigger card generation'
+        },
+        greetingSeed: {
+          post: `/api/admin/agent2/${this.companyId}/greetings/seed-from-global`,
+          purpose: 'Import legacy greeting rules'
+        },
+        callReview: {
+          getCalls: `/api/admin/agent2/calls/${this.companyId}`,
+          getEvents: `/api/admin/agent2/calls/${this.companyId}/:callSid/events`,
+          purpose: 'Call Review tab data'
+        }
+      },
+      
+      // Cache Invalidation
+      cacheInvalidation: {
+        enabled: true,
+        mechanism: 'Redis cache key deletion on config save',
+        keys: [`company-phone:{phoneNumber}`],
+        _note: 'Config changes invalidate Redis cache immediately so Twilio picks up new settings'
+      }
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // SECTION 3: Validation & Health Checks
+    // ═══════════════════════════════════════════════════════════════════════
+    const validation = {
+      _description: 'Validates Agent 2.0 configuration for completeness and potential issues',
+      
+      criticalIssues: [],
+      warnings: [],
+      recommendations: [],
+      
+      checks: {
+        agent2Enabled: config.enabled === true,
+        discoveryEnabled: config.discovery?.enabled === true,
+        greetingsConfigured: !!(config.greetings?.callStart?.text || config.greetings?.callStart?.audioUrl),
+        hasTriggerCards: (config.discovery?.playbook?.rules || []).length > 0,
+        hasEnabledTriggerCards: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length > 0,
+        fallbackConfigured: !!(config.discovery?.playbook?.fallback?.noMatchAnswer),
+        greetingInterceptorEnabled: config.greetings?.interceptor?.enabled === true,
+        vocabularySystemActive: config.discovery?.vocabulary?.enabled === true,
+        clarifiersActive: config.discovery?.clarifiers?.enabled === true
+      }
+    };
+    
+    // Run validation checks
+    if (!config.enabled) {
+      validation.warnings.push('Agent 2.0 is DISABLED - legacy system is active');
+    }
+    
+    if (config.enabled && !config.discovery?.enabled) {
+      validation.criticalIssues.push('Agent 2.0 is enabled but Discovery is DISABLED - no discovery flow will run');
+    }
+    
+    if (config.enabled && config.discovery?.enabled && (config.discovery?.playbook?.rules || []).length === 0) {
+      validation.warnings.push('No trigger cards configured - agent will only use fallback responses');
+    }
+    
+    if (config.enabled && !config.greetings?.callStart?.text && !config.greetings?.callStart?.audioUrl) {
+      validation.warnings.push('Call start greeting is empty - no greeting will be played');
+    }
+    
+    if (config.discovery?.playbook?.useScenarioFallback && !config.discovery?.playbook?.allowedScenarioTypes?.length) {
+      validation.warnings.push('Scenario fallback enabled but no scenario types allowed');
+    }
+    
+    const enabledCards = (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false);
+    const cardsWithNoKeywords = enabledCards.filter(r => 
+      (!r.match?.keywords?.length && !r.match?.phrases?.length)
+    );
+    if (cardsWithNoKeywords.length > 0) {
+      validation.warnings.push(`${cardsWithNoKeywords.length} trigger card(s) have no keywords or phrases - they will never match`);
+    }
+    
+    const cardsWithNoAnswer = enabledCards.filter(r => !r.answer?.answerText && !r.answer?.audioUrl);
+    if (cardsWithNoAnswer.length > 0) {
+      validation.warnings.push(`${cardsWithNoAnswer.length} trigger card(s) have no answer text or audio`);
+    }
+    
+    // Recommendations
+    if (!config.discovery?.vocabulary?.enabled) {
+      validation.recommendations.push('Enable Vocabulary System to normalize common STT mishears (e.g., "acee" → "ac")');
+    }
+    
+    if (!config.discovery?.clarifiers?.enabled) {
+      validation.recommendations.push('Enable Clarifiers to disambiguate vague phrases (e.g., "thing on wall" → thermostat clarification)');
+    }
+    
+    if (enabledCards.length > 0 && enabledCards.filter(r => r.answer?.audioUrl).length === 0) {
+      validation.recommendations.push('Consider adding audio files to some trigger cards for more natural responses');
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // SECTION 4: Statistics & Insights
+    // ═══════════════════════════════════════════════════════════════════════
+    const statistics = {
+      discovery: {
+        triggerCards: {
+          total: (config.discovery?.playbook?.rules || []).length,
+          enabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled !== false).length,
+          disabled: (config.discovery?.playbook?.rules || []).filter(r => r.enabled === false).length,
+          withAudio: (config.discovery?.playbook?.rules || []).filter(r => r.answer?.audioUrl).length,
+          withFollowUp: (config.discovery?.playbook?.rules || []).filter(r => r.followUp?.question).length
+        },
+        
+        keywords: {
+          total: (config.discovery?.playbook?.rules || []).reduce((sum, r) => 
+            sum + (r.match?.keywords?.length || 0), 0),
+          unique: new Set(
+            (config.discovery?.playbook?.rules || [])
+              .flatMap(r => r.match?.keywords || [])
+              .map(k => k.toLowerCase())
+          ).size
+        },
+        
+        phrases: {
+          total: (config.discovery?.playbook?.rules || []).reduce((sum, r) => 
+            sum + (r.match?.phrases?.length || 0), 0),
+          unique: new Set(
+            (config.discovery?.playbook?.rules || [])
+              .flatMap(r => r.match?.phrases || [])
+              .map(p => p.toLowerCase())
+          ).size
+        },
+        
+        vocabulary: {
+          total: (config.discovery?.vocabulary?.entries || []).length,
+          hardNormalize: (config.discovery?.vocabulary?.entries || []).filter(e => e.type === 'HARD_NORMALIZE').length,
+          softHint: (config.discovery?.vocabulary?.entries || []).filter(e => e.type === 'SOFT_HINT').length
+        },
+        
+        clarifiers: {
+          total: (config.discovery?.clarifiers?.entries || []).length,
+          enabled: (config.discovery?.clarifiers?.entries || []).filter(e => e.enabled).length
+        }
+      },
+      
+      greetings: {
+        interceptorRules: (config.greetings?.interceptor?.rules || []).length,
+        intentWords: (config.greetings?.interceptor?.intentWords || []).length,
+        callStartConfigured: !!(config.greetings?.callStart?.text || config.greetings?.callStart?.audioUrl)
+      }
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // SECTION 5: Export Metadata
+    // ═══════════════════════════════════════════════════════════════════════
+    const exportMetadata = {
+      exportedAt: timestamp,
+      exportVersion: '1.0.0',
+      uiBuild: Agent2Manager.UI_BUILD,
+      companyId: this.companyId,
+      isDirty: this.isDirty,
+      activeTab: this._activeTab,
+      _description: 'Complete Agent 2.0 wiring truth - includes all tabs, runtime integration, and validation'
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // ASSEMBLE FINAL REPORT
+    // ═══════════════════════════════════════════════════════════════════════
+    return {
+      _README: {
+        title: 'Agent 2.0 Complete Wiring Report',
+        description: 'This is the TRUTH of how Agent 2.0 is configured and wired into the runtime. It includes all configuration from all tabs, runtime integration status, validation results, and statistics.',
+        purpose: 'Use this to understand exactly what Agent 2.0 will do when it processes a call, what services are active, and what issues need attention.',
+        sections: {
+          metadata: 'Export metadata and current state',
+          configuration: 'Complete configuration from all tabs (Discovery, Greetings, etc.)',
+          runtimeIntegration: 'How Agent 2.0 is wired into the live call processing runtime',
+          validation: 'Health checks, issues, warnings, and recommendations',
+          statistics: 'Statistics and insights about the current configuration'
+        },
+        autoUpdate: 'This export is dynamically generated from the current UI state. Any unsaved changes are included.',
+        lastExported: timestamp
+      },
+      
+      metadata: exportMetadata,
+      configuration: configurationSnapshot,
+      runtimeIntegration: runtimeIntegration,
+      validation: validation,
+      statistics: statistics
+    };
+  }
+  
+  /**
+   * Helper: Group trigger cards by priority for statistics
+   */
+  _groupByPriority(rules) {
+    const groups = {};
+    for (const rule of rules) {
+      const priority = rule.priority || 0;
+      if (!groups[priority]) groups[priority] = 0;
+      groups[priority]++;
+    }
+    return groups;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
