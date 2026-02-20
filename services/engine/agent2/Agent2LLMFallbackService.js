@@ -223,17 +223,9 @@ function shouldCallLLMFallback({
     };
   }
   
-  // V5: Mode-specific enable check
-  if (isAnswerReturnMode && answerReturnConfig.enabled !== true) {
-    return {
-      call: false,
-      mode,
-      reason: 'Answer+Return mode not enabled',
-      blockedBy: 'MODE_DISABLED',
-      details: { mode, modeEnabled: false },
-      stateSnapshot
-    };
-  }
+  // V5: Answer+Return is the DEFAULT mode - always enabled when LLM master switch is on
+  // No separate enable check needed for Answer+Return
+  // (Guided Fallback would need explicit opt-in check here if we add one later)
   
   // V5: Answer+Return cooldown check (BEFORE other checks)
   if (isAnswerReturnMode && cooldownRemaining > 0) {

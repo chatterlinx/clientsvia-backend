@@ -477,7 +477,6 @@ class Agent2Manager {
   // ─────────────────────────────────────────────────────────────────────────
   renderAnswerReturnCards() {
     const ar = this.config?.llmFallback?.answerReturn || {};
-    const enabled = ar.enabled !== false;
     const model = ar.model || 'gpt-4.1-mini';
     const customOverride = ar.customModelOverride || '';
     const maxSentences = ar.maxSentences ?? 2;
@@ -492,33 +491,26 @@ class Agent2Manager {
     const models = this._llmModels?.allowedModels || [];
 
     return `
-      <!-- Answer+Return Enable -->
-      <div class="a2-card" style="background:#0b1220; border:1px solid ${enabled ? '#22d3ee' : '#30363d'}; border-radius:16px; padding:24px; margin-bottom:20px;">
+      <!-- Answer+Return Info (DEFAULT MODE - always active when LLM enabled) -->
+      <div class="a2-card" style="background:#052e16; border:1px solid #22d3ee; border-radius:16px; padding:24px; margin-bottom:20px;">
         <div style="display:flex; justify-content:space-between; align-items:center;">
           <div>
-            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Answer + Return Mode</h3>
-            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">
+            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Answer + Return Mode <span style="background:#22d3ee; color:#0b1220; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-left:8px;">DEFAULT</span></h3>
+            <div style="color:#86efac; font-size:0.85rem; margin-top:4px;">
               LLM gives a short, helpful answer. No handoff question. Control returns to deterministic next turn.
             </div>
           </div>
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="a2-ar-enabled" ${enabled ? 'checked' : ''} style="width:20px; height:20px; accent-color:#22d3ee;">
-            <span style="color:${enabled ? '#22d3ee' : '#6e7681'}; font-size:0.9rem; font-weight:600;">${enabled ? 'Active' : 'Inactive'}</span>
-          </label>
+          <div style="color:#22d3ee; font-size:0.9rem; font-weight:600; display:flex; align-items:center; gap:6px;">
+            <span style="font-size:1.2rem;">✓</span> Active
+          </div>
         </div>
         
-        ${enabled ? `
-          <div style="margin-top:16px; padding:12px; background:#052e16; border:1px solid #166534; border-radius:8px; color:#86efac; font-size:0.85rem;">
-            <strong>Behavior:</strong> LLM answers → Gather → Next turn starts at Trigger Cards (deterministic) → LLM only fires again if deterministic fails AND cooldown expired.
-          </div>
-        ` : `
-          <div style="margin-top:16px; padding:12px; background:#1c1917; border:1px solid #78350f; border-radius:8px; color:#fbbf24; font-size:0.85rem;">
-            <strong>Inactive:</strong> Switch to Guided Fallback mode, or enable this mode to configure.
-          </div>
-        `}
+        <div style="margin-top:16px; padding:12px; background:#0b1220; border:1px solid #166534; border-radius:8px; color:#86efac; font-size:0.85rem;">
+          <strong>Behavior:</strong> LLM answers → Gather → Next turn starts at Trigger Cards (deterministic) → LLM only fires again if deterministic fails AND cooldown expired.
+        </div>
       </div>
 
-      ${enabled ? `
+      
       <!-- Model Selection (Answer+Return) -->
       <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
         <div style="margin-bottom:16px;">
@@ -640,7 +632,6 @@ class Agent2Manager {
 
       <!-- Emergency Fallback (shared) -->
       ${this.renderLLMEmergencyFallbackCard()}
-      ` : ''}
     `;
   }
 
@@ -4403,14 +4394,8 @@ class Agent2Manager {
 
     // ──────────────────────────────────────────────────────────────────────────
     // ANSWER + RETURN MODE HANDLERS
+    // Answer+Return is the DEFAULT mode - always enabled when LLM is on, no checkbox needed
     // ──────────────────────────────────────────────────────────────────────────
-    container.querySelector('#a2-ar-enabled')?.addEventListener('change', (e) => {
-      this.config.llmFallback = this.config.llmFallback || {};
-      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
-      this.config.llmFallback.answerReturn.enabled = e.target.checked;
-      onAnyChange();
-      this.render(container);
-    });
 
     container.querySelector('#a2-ar-model')?.addEventListener('change', (e) => {
       this.config.llmFallback = this.config.llmFallback || {};
