@@ -206,7 +206,7 @@ class Agent2Manager {
               </span>
             </div>
             <div style="margin-top:6px; color:#8b949e; font-size:0.9rem;">
-              ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : isGreetingsTab ? 'Agent 2.0 owns greetings when enabled. Legacy greeting rules are ignored.' : 'Enterprise call review console. Click a call to see details, transcript, and raw events.'}
+              ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : isGreetingsTab ? 'Agent 2.0 owns greetings when enabled. Legacy greeting rules are ignored.' : 'Enterprise call review console. Click a call to see details, transcript, and decision trail.'}
             </div>
           </div>
           <div style="display:flex; gap:10px; flex-wrap:wrap; ${isCallReviewTab ? 'display:none;' : ''}">
@@ -766,7 +766,7 @@ class Agent2Manager {
               <span>▶</span> Play Transcript (TTS)
             </button>
             <button id="a2-export-events" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer; font-size:0.85rem;">
-              <span>📋</span> Export Raw Events
+              <span>📋</span> Download Call Review
             </button>
           </div>
         </div>
@@ -861,10 +861,10 @@ class Agent2Manager {
         </div>
       </div>
 
-      <!-- RAW EVENTS -->
+      <!-- CALL EVENTS -->
       <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <div style="color:#8b949e; font-size:0.8rem;">RAW EVENTS (${events.length} total, ${keyEvents.length} key)</div>
+          <div style="color:#8b949e; font-size:0.8rem;">CALL EVENTS (${events.length} total, ${keyEvents.length} key)</div>
           <button id="a2-toggle-all-events" style="padding:4px 10px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; cursor:pointer; font-size:0.75rem;">
             Show All
           </button>
@@ -1506,7 +1506,7 @@ class Agent2Manager {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `raw-events-${call.callSid}.json`;
+      a.download = `call-review-${call.callSid}.json`;
       a.click();
       URL.revokeObjectURL(url);
     });
