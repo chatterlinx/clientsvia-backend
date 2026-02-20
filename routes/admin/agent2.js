@@ -365,9 +365,18 @@ function defaultAgent2Config() {
         blockTimeSlots: true,          // NEVER offer times/dates/scheduling windows
         forbidBookingTimes: true,      // Hard block booking time language until Booking tab exists
         forbiddenBookingPatterns: [    // UI-configurable list of forbidden booking patterns
-          'morning', 'afternoon', '8-10', '8–10', '10-12', '10–12', 
-          '12-2', '12–2', '2-4', '2–4', 'time slot', 'appointment time',
-          'schedule you for', 'what time works', 'morning or afternoon'
+          // Time windows
+          'morning', 'afternoon', 'evening', 'this morning', 'this afternoon',
+          '8-10', '8–10', '10-12', '10–12', '12-2', '12–2', '2-4', '2–4',
+          // Scheduling language
+          'time slot', 'appointment time', 'schedule you for', 'what time works',
+          'morning or afternoon', 'today or tomorrow',
+          // Availability language
+          'when would you like', 'what time is good', 'when works for you',
+          'earliest available', 'next available', 'soonest available',
+          // Scheduling verbs
+          'i can schedule', 'let me schedule', 'we can schedule',
+          'i can book', 'let me book', 'we can book'
         ],
         allowedTasks: {
           clarifyProblem: true,
@@ -620,8 +629,15 @@ function mergeAgent2Config(saved) {
   if (!Array.isArray(merged.llmFallback.callForwarding.numbers)) {
     merged.llmFallback.callForwarding.numbers = defaults.llmFallback.callForwarding.numbers;
   }
-  if (!Array.isArray(merged.llmFallback.constraints.forbiddenBookingPatterns)) {
+  
+  // CRITICAL: If forbidBookingTimes=true but patterns array is empty, auto-fill defaults
+  // Empty patterns with forbidBookingTimes=true is dangerous - must enforce UI truth
+  const patterns = merged.llmFallback.constraints.forbiddenBookingPatterns;
+  const forbidBookingTimes = merged.llmFallback.constraints.forbidBookingTimes;
+  if (!Array.isArray(patterns) || (forbidBookingTimes !== false && patterns.length === 0)) {
     merged.llmFallback.constraints.forbiddenBookingPatterns = defaults.llmFallback.constraints.forbiddenBookingPatterns;
+    // Flag that we auto-applied defaults (can be logged in runtime)
+    merged.llmFallback.constraints._autoAppliedDefaultPatterns = true;
   }
 
   return merged;

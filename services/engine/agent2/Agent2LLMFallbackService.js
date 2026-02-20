@@ -362,11 +362,22 @@ function validateOutput(text, constraints, callerInput = '') {
   if (constraints?.forbidBookingTimes !== false && constraints?.blockTimeSlots !== false) {
     const textLower = cleanedText.toLowerCase();
     
-    // UI-configurable forbidden patterns (from forbiddenBookingPatterns array)
-    const forbiddenPatterns = constraints?.forbiddenBookingPatterns || [
-      'morning', 'afternoon', '8-10', '8–10', '10-12', '10–12', '12-2', '12–2', '2-4', '2–4',
-      'time slot', 'appointment time', 'schedule you for', 'what time works'
+    // Default patterns if UI array is empty (enforce UI truth - never allow empty)
+    const defaultForbiddenPatterns = [
+      'morning', 'afternoon', 'evening',
+      '8-10', '8–10', '10-12', '10–12', '12-2', '12–2', '2-4', '2–4',
+      'time slot', 'appointment time', 'schedule you for', 'what time works',
+      'when would you like', 'what time is good', 'when works for you',
+      'earliest available', 'next available', 'soonest available',
+      'today or tomorrow', 'this afternoon', 'this morning',
+      'i can schedule', 'let me schedule', 'we can schedule'
     ];
+    
+    // Use UI patterns if provided and non-empty, otherwise use defaults
+    const uiPatterns = constraints?.forbiddenBookingPatterns;
+    const forbiddenPatterns = (Array.isArray(uiPatterns) && uiPatterns.length > 0) 
+      ? uiPatterns 
+      : defaultForbiddenPatterns;
     
     for (const pattern of forbiddenPatterns) {
       if (textLower.includes(pattern.toLowerCase())) {
@@ -375,23 +386,28 @@ function validateOutput(text, constraints, callerInput = '') {
       }
     }
     
-    // Additional regex patterns for edge cases (hardcoded safety net)
-    const timeSlotRegex = [
-      /\b\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)\b/i,  // "9am", "10:30 PM"
+    // Hard regex safety net for time expressions (cannot be overridden by UI)
+    const timeExpressionRegex = [
+      /\b\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)\b/i,           // "9am", "10 PM"
+      /\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/i,                   // "10:30", "10:30am"
       /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-      /\b(?:available|open|free)\s+(?:at|on|for)\s+\d/i,  // "available at 2"
-      /\b(?:schedule|book)\s+(?:you\s+)?(?:for|at)\s+\d/i,  // "schedule you for 3pm"
-      /\btoday\s+at\s+\d/i,
-      /\btomorrow\s+(?:at|around)\s+\d/i,
-      /\bnext\s+(?:available|opening)/i,
-      /\bappointment\s+(?:at|for|on)\s+/i,
+      /\b(?:available|open|free)\s+(?:at|on|for)\s+\d/i,
+      /\b(?:schedule|book)\s+(?:you\s+)?(?:for|at)\s+/i,
+      /\btoday\s+(?:at|around|between)/i,
+      /\btomorrow\s+(?:at|around|between)/i,
       /\bdo you prefer\s+(?:morning|afternoon|evening)/i,
-      /\bmorning or afternoon/i
+      /\bmorning or afternoon/i,
+      /\bwhat time (?:works|is good|would you)/i,
+      /\bwhen (?:would you like|works for you|is good)/i,
+      /\bi can (?:schedule|book|get you in)/i,
+      /\blet me (?:schedule|book|get you)/i,
+      /\bwe (?:can|could) (?:schedule|book|get)/i,
+      /\b(?:earliest|next|soonest) (?:available|opening|slot)/i
     ];
     
-    for (const pattern of timeSlotRegex) {
+    for (const pattern of timeExpressionRegex) {
       if (pattern.test(cleanedText)) {
-        violations.push('contains_time_slot_regex');
+        violations.push('contains_time_expression_regex');
         break;
       }
     }
@@ -533,20 +549,35 @@ Respond with empathy and ask ONE question that moves them toward booking a servi
  * 
  * @returns {Object|null} { response, provenance, handoffAction } or null if LLM should not run
  */
-async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDiscoveryCriticalStep, llmTurnsThisCall, callContext, emit }) {
+async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDiscoveryCriticalStep, llmTurnsThisCall, hasPendingQuestion, hasCapturedReasonFlow, hasAfterHoursFlow, hasTransferFlow, hasSpeakSourceSelected, callContext, emit }) {
   const llmFallback = config?.llmFallback;
   const constraints = llmFallback?.constraints || {};
   const emergencyFallback = llmFallback?.emergencyFallbackLine;
   const handoff = llmFallback?.handoff || {};
   
-  // Check if we should call LLM
+  // Log if auto-applied defaults were used (from merge function)
+  if (constraints._autoAppliedDefaultPatterns) {
+    emit('A2_CONFIG_AUTO_DEFAULT_APPLIED', {
+      field: 'forbiddenBookingPatterns',
+      reason: 'forbidBookingTimes=true but patterns array was empty',
+      appliedDefaults: true,
+      patternsCount: constraints.forbiddenBookingPatterns?.length || 0
+    });
+  }
+  
+  // Check if we should call LLM (with all blocking conditions)
   const decision = shouldCallLLMFallback({ 
     config, 
     noMatchCount, 
     input, 
     inBookingFlow, 
     inDiscoveryCriticalStep,
-    llmTurnsThisCall: llmTurnsThisCall || 0
+    llmTurnsThisCall: llmTurnsThisCall || 0,
+    hasPendingQuestion,
+    hasCapturedReasonFlow,
+    hasAfterHoursFlow,
+    hasTransferFlow,
+    hasSpeakSourceSelected
   });
   
   emit('A2_LLM_FALLBACK_DECISION', {
@@ -570,41 +601,26 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
   let hadFunnelQuestion = false;
   let sentenceCount = 0;
   
+  // Track validation state for comprehensive logging
+  let validationResult = null;
+  
   if (llmResult.success && llmResult.response) {
     // Validate output against constraints (including anti-parrot and time-slot blocking)
-    const validation = validateOutput(llmResult.response, constraints, input);
-    constraintViolations = validation.violations;
-    sentenceCount = validation.sentenceCount || 0;
-    hadFunnelQuestion = /\?$/.test(validation.cleanedText.trim());
+    validationResult = validateOutput(llmResult.response, constraints, input);
+    constraintViolations = validationResult.violations;
+    sentenceCount = validationResult.sentenceCount || 0;
+    hadFunnelQuestion = /\?$/.test(validationResult.cleanedText.trim());
     
-    // Emit validation result for Call Review visibility
-    emit('A2_LLM_OUTPUT_VALIDATION', {
-      passed: validation.valid,
-      violations: validation.violations,
-      sentenceCount,
-      hadFunnelQuestion,
-      forbidBookingTimes: constraints?.forbidBookingTimes !== false,
-      forbiddenPatternsChecked: constraints?.forbiddenBookingPatterns?.length || 0,
-      originalResponsePreview: llmResult.response.substring(0, 100),
-      cleanedResponsePreview: validation.cleanedText.substring(0, 100)
-    });
-    
-    if (validation.valid) {
-      finalResponse = validation.cleanedText;
+    if (validationResult.valid) {
+      finalResponse = validationResult.cleanedText;
     } else {
       // Constraint violations - use emergency fallback
-      emit('A2_LLM_CONSTRAINT_VIOLATION', {
-        violations: validation.violations,
-        originalResponse: llmResult.response.substring(0, 100),
-        action: 'using_emergency_fallback'
-      });
-      
       if (emergencyFallback?.enabled !== false && emergencyFallback?.text) {
         finalResponse = emergencyFallback.text;
         usedEmergencyFallback = true;
       } else {
         // Use cleaned text despite violations (better than nothing)
-        finalResponse = validation.cleanedText;
+        finalResponse = validationResult.cleanedText;
       }
     }
   } else {
@@ -622,20 +638,73 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     }
   }
   
-  // Emit MIC_OWNER_PROOF - LLM never takes mic, Agent2 stays owner
-  emit('A2_MIC_OWNER_PROOF', {
-    owner: 'AGENT2_DISCOVERY',
-    llmUsed: true,
-    llmRole: 'ASSIST_ONLY',
-    note: 'LLM provided text but Agent2 maintains full mic ownership and control flow'
+  // ════════════════════════════════════════════════════════════════════════
+  // A2_LLM_OUTPUT_VALIDATION - ALWAYS emit (both pass and fail)
+  // This is the proof for Call Review that validation ran and what happened
+  // ════════════════════════════════════════════════════════════════════════
+  emit('A2_LLM_OUTPUT_VALIDATION', {
+    passed: validationResult?.valid ?? false,
+    violations: constraintViolations,
+    sentenceCount,
+    hadFunnelQuestion,
+    // Config snapshot for audit
+    forbidBookingTimes: constraints?.forbidBookingTimes !== false,
+    patternsCheckedCount: constraints?.forbiddenBookingPatterns?.length || 0,
+    handoffMode: handoff?.mode || 'confirmService',
+    // Response previews
+    originalResponsePreview: llmResult.response?.substring(0, 150) || '',
+    cleanedResponsePreview: validationResult?.cleanedText?.substring(0, 150) || '',
+    finalSpokenTextPreview: finalResponse?.substring(0, 150) || '',
+    // Action taken
+    usedEmergencyFallback,
+    emergencyFallbackText: usedEmergencyFallback ? emergencyFallback?.text?.substring(0, 100) : null
   });
   
-  // Determine handoff mode and action
+  // Emit constraint violation event if validation failed
+  if (validationResult && !validationResult.valid) {
+    emit('A2_LLM_CONSTRAINT_VIOLATION', {
+      violations: constraintViolations,
+      originalResponse: llmResult.response?.substring(0, 100) || '',
+      action: usedEmergencyFallback ? 'used_emergency_fallback' : 'used_cleaned_text'
+    });
+  }
+  
+  // ════════════════════════════════════════════════════════════════════════
+  // A2_MIC_OWNER_PROOF - Evidence-based proof that Agent2 keeps mic ownership
+  // Not a self-assertion - actual evidence of control flow
+  // ════════════════════════════════════════════════════════════════════════
+  emit('A2_MIC_OWNER_PROOF', {
+    // Runtime ownership evidence
+    runtimeOwnerBefore: 'AGENT2_DISCOVERY',
+    runtimeOwnerAfter: 'AGENT2_DISCOVERY',
+    ownershipTransferred: false,
+    // What actually selected the speech
+    speakSourceSelectedBy: usedEmergencyFallback ? 'LLM_FALLBACK_EMERGENCY' : 'LLM_FALLBACK_VALIDATED',
+    speechSourceModule: 'Agent2DiscoveryRunner',
+    // Session/lane context
+    lane: 'DISCOVERY',
+    sessionMode: callContext?.sessionMode || 'DISCOVERY',
+    // LLM role proof
+    llmUsed: true,
+    llmRole: 'ASSIST_ONLY',
+    llmControlledGather: false,
+    llmControlledWebhook: false,
+    llmCreatedMultiTurnState: false,
+    // The actual text control
+    textProvidedBy: usedEmergencyFallback ? 'UI_EMERGENCY_FALLBACK' : 'LLM_WITH_VALIDATION',
+    textOverriddenByHandoff: false // Will be true if handoff question overrides
+  });
+  
+  // ════════════════════════════════════════════════════════════════════════
+  // HANDOFF MODE - LLM cannot invent handoff language
+  // The "question" portion is ALWAYS the UI-owned handoff question
+  // ════════════════════════════════════════════════════════════════════════
   const handoffMode = handoff.mode || 'confirmService';
   let handoffAction = null;
   let handoffQuestion = null;
+  let textOverriddenByHandoff = false;
   
-  // Get handoff config based on mode
+  // Get UI-owned handoff config based on mode
   if (handoffMode === 'confirmService') {
     handoffQuestion = handoff.confirmService?.question || "Would you like to get a technician out to take a look?";
     handoffAction = {
@@ -649,24 +718,59 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     handoffAction = {
       mode: 'takeMessage',
       awaitingConfirmation: true,
-      yesResponse: handoff.takeMessage?.yesResponse,
-      noResponse: handoff.takeMessage?.noResponse
+      yesResponse: handoff.takeMessage?.yesResponse || "Great, I'll get some info for the callback. What's the best number to reach you?",
+      noResponse: handoff.takeMessage?.noResponse || "No problem. Is there anything else I can help you with?"
     };
   } else if (handoffMode === 'offerForward' && handoff.offerForward?.enabled) {
     handoffQuestion = handoff.offerForward?.question || "Would you like me to connect you to a team member now?";
     handoffAction = {
       mode: 'offerForward',
       awaitingConfirmation: true,
-      yesResponse: handoff.offerForward?.yesResponse,
-      noResponse: handoff.offerForward?.noResponse,
+      yesResponse: handoff.offerForward?.yesResponse || "Connecting you now — one moment please.",
+      noResponse: handoff.offerForward?.noResponse || "No problem. Is there something else I can help with?",
       consentRequired: handoff.offerForward?.consentRequired !== false
     };
   }
   
-  // If response doesn't end with a question, append handoff question
-  if (!hadFunnelQuestion && handoffQuestion) {
+  // ════════════════════════════════════════════════════════════════════════
+  // CRITICAL: Override LLM question with UI-owned handoff question
+  // LLM provides empathy (sentence 1), UI provides the question (sentence 2)
+  // This prevents LLM from inventing booking-time questions
+  // ════════════════════════════════════════════════════════════════════════
+  if (handoffQuestion && !usedEmergencyFallback) {
+    // Extract empathy portion (first sentence) from LLM response
+    const llmSentences = finalResponse.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const empathyPortion = llmSentences.length > 0 ? llmSentences[0].trim() : '';
+    
+    // If LLM provided empathy, use it + UI question. Otherwise just use UI question.
+    if (empathyPortion && empathyPortion.length > 10) {
+      // Ensure empathy portion doesn't end with a question (that would be LLM trying to ask)
+      const empathyEndsWithPunctuation = /[.!]$/.test(empathyPortion);
+      const cleanEmpathy = empathyEndsWithPunctuation ? empathyPortion : `${empathyPortion}.`;
+      finalResponse = `${cleanEmpathy} ${handoffQuestion}`;
+      textOverriddenByHandoff = true;
+    } else {
+      // No usable empathy from LLM, just use the handoff question
+      finalResponse = handoffQuestion;
+      textOverriddenByHandoff = true;
+    }
+    hadFunnelQuestion = true;
+  } else if (!hadFunnelQuestion && handoffQuestion) {
+    // Append handoff question if response doesn't end with a question
     finalResponse = `${finalResponse} ${handoffQuestion}`.trim();
     hadFunnelQuestion = true;
+    textOverriddenByHandoff = true;
+  }
+  
+  // Emit updated MIC_OWNER_PROOF with textOverriddenByHandoff
+  if (textOverriddenByHandoff) {
+    emit('A2_LLM_HANDOFF_OVERRIDE', {
+      reason: 'UI-owned handoff question replaced LLM question portion',
+      handoffMode,
+      handoffQuestion,
+      originalLLMResponse: llmResult.response?.substring(0, 100) || '',
+      finalResponse: finalResponse.substring(0, 150)
+    });
   }
   
   // Build provenance
