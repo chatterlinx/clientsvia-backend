@@ -349,6 +349,8 @@ class Agent2Manager {
       ${this.renderLLMModelSelectionCard()}
       ${this.renderLLMTriggerRulesCard()}
       ${this.renderLLMOutputConstraintsCard()}
+      ${this.renderLLMHandoffModeCard()}
+      ${this.renderLLMCallForwardingCard()}
       ${this.renderLLMPromptsCard()}
       ${this.renderLLMEmergencyFallbackCard()}
       ${this.renderLLMUsageDashboardCard()}
@@ -463,16 +465,18 @@ class Agent2Manager {
     const triggers = llm.triggers || {};
     const noMatchThreshold = triggers.noMatchCountThreshold ?? 2;
     const complexityThreshold = triggers.complexityThreshold ?? 0.65;
+    const maxTurnsPerCall = triggers.maxLLMFallbackTurnsPerCall ?? 1;
     const enableOnNoMatch = triggers.enableOnNoTriggerCardMatch !== false;
     const enableOnComplex = triggers.enableOnComplexQuestions !== false;
     const blockedWhileBooking = triggers.blockedWhileBooking !== false;
+    const blockedWhileDiscovery = triggers.blockedWhileDiscoveryCriticalStep !== false;
     const keywords = (triggers.complexQuestionKeywords || []).join(', ');
 
     return `
       <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
         <div style="margin-bottom:16px;">
-          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Trigger Rules</h3>
-          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">When should LLM fallback be called? These are hard gates — all must pass.</div>
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Trigger Rules — Only When All Else Fails</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">LLM is ASSIST-ONLY. These are hard gates — all must pass. LLM gets ONE shot, then funnels.</div>
         </div>
 
         <div style="display:grid; gap:16px;">
@@ -482,7 +486,7 @@ class Agent2Manager {
               <input type="checkbox" id="a2-llm-trigger-nomatch" ${enableOnNoMatch ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
               <div>
                 <div style="color:#c9d1d9; font-size:0.95rem;">Trigger when no trigger card matches</div>
-                <div style="color:#6e7681; font-size:0.8rem;">LLM called when trigger cards fail to match</div>
+                <div style="color:#6e7681; font-size:0.8rem;">LLM called only when trigger cards fail to match</div>
               </div>
             </label>
             
@@ -501,19 +505,32 @@ class Agent2Manager {
                 <div style="color:#8b949e; font-size:0.8rem;">NEVER call LLM during name/address/time capture. <strong>Keep booking sacred.</strong></div>
               </div>
             </label>
+            
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:${blockedWhileDiscovery ? '#052e16' : '#7f1d1d'}; border:1px solid ${blockedWhileDiscovery ? '#166534' : '#991b1b'}; border-radius:8px;">
+              <input type="checkbox" id="a2-llm-blocked-discovery-critical" ${blockedWhileDiscovery ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+              <div>
+                <div style="color:${blockedWhileDiscovery ? '#86efac' : '#f87171'}; font-size:0.95rem; font-weight:600;">Block during discovery slot-filling</div>
+                <div style="color:#8b949e; font-size:0.8rem;">NEVER call LLM when collecting address/phone during discovery.</div>
+              </div>
+            </label>
           </div>
 
           <!-- Threshold inputs -->
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;">
             <div>
               <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">No-Match Count Threshold</label>
               <input type="number" id="a2-llm-nomatch-threshold" value="${noMatchThreshold}" min="1" max="5" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
-              <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Call LLM after N failed matches (default: 2)</div>
+              <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Call LLM after N failed matches</div>
             </div>
             <div>
               <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Complexity Score Threshold</label>
               <input type="number" id="a2-llm-complexity-threshold" value="${complexityThreshold}" min="0" max="1" step="0.05" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
-              <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Call LLM when score >= threshold (0-1)</div>
+              <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Complexity score >= threshold (0-1)</div>
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max LLM Turns Per Call</label>
+              <input type="number" id="a2-llm-max-turns" value="${maxTurnsPerCall}" min="1" max="3" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+              <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;"><strong>LLM gets ONE shot</strong></div>
             </div>
           </div>
 
@@ -538,6 +555,9 @@ class Agent2Manager {
     const mustEndWithFunnel = constraints.mustEndWithFunnelQuestion !== false;
     const maxTokens = constraints.maxOutputTokens ?? 160;
     const temperature = constraints.temperature ?? 0.2;
+    const antiParrotGuard = constraints.antiParrotGuard !== false;
+    const antiParrotMaxWords = constraints.antiParrotMaxWords ?? 8;
+    const blockTimeSlots = constraints.blockTimeSlots !== false;
     const tasks = constraints.allowedTasks || {};
 
     return `
@@ -549,7 +569,7 @@ class Agent2Manager {
 
         <div style="display:grid; gap:16px;">
           <!-- Hard constraints -->
-          <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;">
             <div>
               <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Sentences</label>
               <input type="number" id="a2-llm-max-sentences" value="${maxSentences}" min="1" max="5" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
@@ -561,8 +581,12 @@ class Agent2Manager {
             <div>
               <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Temperature</label>
               <input type="number" id="a2-llm-temperature" value="${temperature}" min="0" max="1" step="0.1" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
-              <div style="color:#6e7681; font-size:0.75rem; margin-top:2px;">Low = deterministic, High = creative</div>
+              <div style="color:#6e7681; font-size:0.75rem; margin-top:2px;">Low = deterministic</div>
             </div>
+          </div>
+
+          <!-- Boolean constraints row -->
+          <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
             <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:#052e16; border:1px solid #166534; border-radius:8px;">
               <input type="checkbox" id="a2-llm-must-funnel" ${mustEndWithFunnel ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
               <div>
@@ -570,12 +594,34 @@ class Agent2Manager {
                 <div style="color:#6e7681; font-size:0.75rem;">Every response must advance booking</div>
               </div>
             </label>
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:${blockTimeSlots ? '#052e16' : '#7f1d1d'}; border:1px solid ${blockTimeSlots ? '#166534' : '#991b1b'}; border-radius:8px;">
+              <input type="checkbox" id="a2-llm-block-time-slots" ${blockTimeSlots ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+              <div>
+                <div style="color:${blockTimeSlots ? '#86efac' : '#f87171'}; font-size:0.9rem; font-weight:600;">Block time slots</div>
+                <div style="color:#6e7681; font-size:0.75rem;">LLM NEVER offers times/dates/windows</div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Anti-parrot guard -->
+          <div style="display:grid; grid-template-columns:2fr 1fr; gap:12px; align-items:center;">
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:#161b22; border-radius:8px;">
+              <input type="checkbox" id="a2-llm-anti-parrot" ${antiParrotGuard ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+              <div>
+                <div style="color:#c9d1d9; font-size:0.9rem;">Anti-parrot guard</div>
+                <div style="color:#6e7681; font-size:0.75rem;">Don't repeat caller input verbatim</div>
+              </div>
+            </label>
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max consecutive words</label>
+              <input type="number" id="a2-llm-anti-parrot-words" value="${antiParrotMaxWords}" min="3" max="20" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;" ${!antiParrotGuard ? 'disabled' : ''}>
+            </div>
           </div>
 
           <!-- Allowed tasks -->
           <div style="padding:16px; background:#161b22; border-radius:8px;">
             <div style="color:#8b949e; font-size:0.9rem; margin-bottom:12px; font-weight:600;">Allowed Tasks (what LLM can do)</div>
-            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                 <input type="checkbox" id="a2-llm-task-clarify" ${tasks.clarifyProblem !== false ? 'checked' : ''} style="width:16px; height:16px; accent-color:#22d3ee;">
                 <span style="color:#c9d1d9; font-size:0.9rem;">Clarify problem</span>
@@ -585,12 +631,16 @@ class Agent2Manager {
                 <span style="color:#c9d1d9; font-size:0.9rem;">Basic safe guidance</span>
               </label>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="a2-llm-task-deescalation" ${tasks.deescalation !== false ? 'checked' : ''} style="width:16px; height:16px; accent-color:#22d3ee;">
+                <span style="color:#c9d1d9; font-size:0.9rem;">De-escalation/empathy</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                 <input type="checkbox" id="a2-llm-task-pricing" ${tasks.pricing === true ? 'checked' : ''} style="width:16px; height:16px; accent-color:#f87171;">
                 <span style="color:#f87171; font-size:0.9rem;">Pricing/quotes (risky)</span>
               </label>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                 <input type="checkbox" id="a2-llm-task-guarantees" ${tasks.guarantees === true ? 'checked' : ''} style="width:16px; height:16px; accent-color:#f87171;">
-                <span style="color:#f87171; font-size:0.9rem;">Guarantees/promises (risky)</span>
+                <span style="color:#f87171; font-size:0.9rem;">Guarantees (risky)</span>
               </label>
               <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                 <input type="checkbox" id="a2-llm-task-legal" ${tasks.legal === true ? 'checked' : ''} style="width:16px; height:16px; accent-color:#f87171;">
@@ -604,6 +654,220 @@ class Agent2Manager {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Handoff Mode Card
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM confirms service intent, then hands off — NEVER schedules itself
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMHandoffModeCard() {
+    const llm = this.config?.llmFallback || {};
+    const handoff = llm.handoff || {};
+    const mode = handoff.mode || 'confirmService';
+    const confirmService = handoff.confirmService || {};
+    const takeMessage = handoff.takeMessage || {};
+    const offerForward = handoff.offerForward || {};
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #22d3ee; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Handoff Strategy</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">LLM confirms service intent → hands off to deterministic flow. <strong>LLM NEVER offers time slots.</strong></div>
+        </div>
+
+        <div style="display:grid; gap:16px;">
+          <!-- Mode selection -->
+          <div style="padding:16px; background:#161b22; border-radius:8px;">
+            <div style="color:#8b949e; font-size:0.9rem; margin-bottom:12px; font-weight:600;">After LLM Response → Next Step</div>
+            <div style="display:grid; gap:10px;">
+              <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; padding:12px; background:${mode === 'confirmService' ? '#052e16' : '#0b1220'}; border:1px solid ${mode === 'confirmService' ? '#166534' : '#30363d'}; border-radius:8px;">
+                <input type="radio" name="a2-llm-handoff-mode" value="confirmService" ${mode === 'confirmService' ? 'checked' : ''} style="margin-top:3px; accent-color:#22d3ee;">
+                <div>
+                  <div style="color:${mode === 'confirmService' ? '#86efac' : '#c9d1d9'}; font-size:0.95rem; font-weight:600;">Confirm Service Request → Return to Discovery (Recommended)</div>
+                  <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">LLM asks "Would you like a technician?" → If YES, sets bookingIntentConfirmed and hands to deterministic flow.</div>
+                </div>
+              </label>
+              
+              <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; padding:12px; background:${mode === 'takeMessage' ? '#052e16' : '#0b1220'}; border:1px solid ${mode === 'takeMessage' ? '#166534' : '#30363d'}; border-radius:8px;">
+                <input type="radio" name="a2-llm-handoff-mode" value="takeMessage" ${mode === 'takeMessage' ? 'checked' : ''} style="margin-top:3px; accent-color:#22d3ee;">
+                <div>
+                  <div style="color:${mode === 'takeMessage' ? '#86efac' : '#c9d1d9'}; font-size:0.95rem; font-weight:600;">Take a Message</div>
+                  <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">LLM asks if caller wants to leave a message → routes to message workflow.</div>
+                </div>
+              </label>
+              
+              <label style="display:flex; align-items:flex-start; gap:10px; cursor:pointer; padding:12px; background:${mode === 'offerForward' ? '#052e16' : '#0b1220'}; border:1px solid ${mode === 'offerForward' ? '#166534' : '#30363d'}; border-radius:8px; opacity:${offerForward.enabled !== false ? 1 : 0.6};">
+                <input type="radio" name="a2-llm-handoff-mode" value="offerForward" ${mode === 'offerForward' ? 'checked' : ''} style="margin-top:3px; accent-color:#22d3ee;">
+                <div>
+                  <div style="color:${mode === 'offerForward' ? '#86efac' : '#c9d1d9'}; font-size:0.95rem; font-weight:600;">Offer Call Forward</div>
+                  <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">LLM asks consent to transfer → only if caller says YES. Requires call forwarding enabled below.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Mode-specific scripts -->
+          ${mode === 'confirmService' ? `
+          <div style="padding:16px; background:#161b22; border-radius:8px;">
+            <div style="color:#22d3ee; font-size:0.9rem; margin-bottom:12px; font-weight:600;">Confirm Service Scripts (UI-owned)</div>
+            <div style="display:grid; gap:12px;">
+              <div>
+                <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Service Confirmation Question</label>
+                <input type="text" id="a2-llm-handoff-confirm-question" value="${this.escapeHtml(confirmService.question || "Would you like to get a technician out to take a look?")}" style="width:100%; background:#0b1220; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.9rem;">
+              </div>
+              <div>
+                <label style="color:#86efac; font-size:0.85rem; display:block; margin-bottom:6px;">If YES → Handoff Line</label>
+                <input type="text" id="a2-llm-handoff-confirm-yes" value="${this.escapeHtml(confirmService.yesResponse || "Perfect — I'm going to grab a few details so we can get this scheduled.")}" style="width:100%; background:#0b1220; border:1px solid #166534; border-radius:8px; padding:10px; color:#86efac; font-size:0.9rem;">
+              </div>
+              <div>
+                <label style="color:#f87171; font-size:0.85rem; display:block; margin-bottom:6px;">If NO → Alternative</label>
+                <input type="text" id="a2-llm-handoff-confirm-no" value="${this.escapeHtml(confirmService.noResponse || "No problem. Is there anything else I can help you with today?")}" style="width:100%; background:#0b1220; border:1px solid #991b1b; border-radius:8px; padding:10px; color:#f87171; font-size:0.9rem;">
+              </div>
+            </div>
+          </div>
+          ` : mode === 'takeMessage' ? `
+          <div style="padding:16px; background:#161b22; border-radius:8px;">
+            <div style="color:#22d3ee; font-size:0.9rem; margin-bottom:12px; font-weight:600;">Take Message Scripts (UI-owned)</div>
+            <div style="display:grid; gap:12px;">
+              <div>
+                <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Message Offer Question</label>
+                <input type="text" id="a2-llm-handoff-message-question" value="${this.escapeHtml(takeMessage.question || "Would you like me to take a message for a callback?")}" style="width:100%; background:#0b1220; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.9rem;">
+              </div>
+              <div>
+                <label style="color:#86efac; font-size:0.85rem; display:block; margin-bottom:6px;">If YES</label>
+                <input type="text" id="a2-llm-handoff-message-yes" value="${this.escapeHtml(takeMessage.yesResponse || "Great, I'll get some info for the callback. What's the best number to reach you?")}" style="width:100%; background:#0b1220; border:1px solid #166534; border-radius:8px; padding:10px; color:#86efac; font-size:0.9rem;">
+              </div>
+              <div>
+                <label style="color:#f87171; font-size:0.85rem; display:block; margin-bottom:6px;">If NO</label>
+                <input type="text" id="a2-llm-handoff-message-no" value="${this.escapeHtml(takeMessage.noResponse || "No problem. Is there anything else I can help you with?")}" style="width:100%; background:#0b1220; border:1px solid #991b1b; border-radius:8px; padding:10px; color:#f87171; font-size:0.9rem;">
+              </div>
+            </div>
+          </div>
+          ` : `
+          <div style="padding:16px; background:#161b22; border-radius:8px;">
+            <div style="color:#22d3ee; font-size:0.9rem; margin-bottom:12px; font-weight:600;">Offer Forward Scripts (UI-owned)</div>
+            <div style="display:grid; gap:12px;">
+              <div>
+                <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Forward Consent Question</label>
+                <input type="text" id="a2-llm-handoff-forward-question" value="${this.escapeHtml(offerForward.question || "Would you like me to connect you to a team member now?")}" style="width:100%; background:#0b1220; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.9rem;">
+              </div>
+              <div>
+                <label style="color:#86efac; font-size:0.85rem; display:block; margin-bottom:6px;">If YES → Connecting</label>
+                <input type="text" id="a2-llm-handoff-forward-yes" value="${this.escapeHtml(offerForward.yesResponse || "Connecting you now — one moment please.")}" style="width:100%; background:#0b1220; border:1px solid #166534; border-radius:8px; padding:10px; color:#86efac; font-size:0.9rem;">
+              </div>
+              <div>
+                <label style="color:#f87171; font-size:0.85rem; display:block; margin-bottom:6px;">If NO</label>
+                <input type="text" id="a2-llm-handoff-forward-no" value="${this.escapeHtml(offerForward.noResponse || "No problem. Is there something else I can help with?")}" style="width:100%; background:#0b1220; border:1px solid #991b1b; border-radius:8px; padding:10px; color:#f87171; font-size:0.9rem;">
+              </div>
+            </div>
+          </div>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Call Forwarding Card
+  // ─────────────────────────────────────────────────────────────────────────
+  // UI-owned, no hidden code. LLM must ask consent before forwarding.
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMCallForwardingCard() {
+    const llm = this.config?.llmFallback || {};
+    const fwd = llm.callForwarding || {};
+    const enabled = fwd.enabled === true;
+    const numbers = fwd.numbers || [];
+    const whenAllowed = fwd.whenAllowed || 'businessHours';
+    const hours = fwd.businessHours || {};
+    const consentScript = fwd.consentScript || "Would you like me to connect you to a team member now?";
+    const failureScript = fwd.failureScript || "I wasn't able to connect you — would you like me to take a message instead?";
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid ${enabled ? '#22d3ee' : '#30363d'}; border-radius:16px; padding:24px; margin-bottom:20px; opacity:${enabled ? 1 : 0.7};">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Call Forwarding Settings</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">LLM must ask consent. No "just forward" — must receive explicit YES.</div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-llm-fwd-enabled" ${enabled ? 'checked' : ''} style="width:20px; height:20px; accent-color:#22d3ee;">
+            <span style="color:${enabled ? '#22d3ee' : '#6e7681'}; font-size:0.9rem; font-weight:600;">${enabled ? 'Enabled' : 'Disabled'}</span>
+          </label>
+        </div>
+
+        ${enabled ? `
+        <div style="display:grid; gap:16px;">
+          <!-- When allowed -->
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">When is forwarding allowed?</label>
+            <select id="a2-llm-fwd-when" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+              <option value="always" ${whenAllowed === 'always' ? 'selected' : ''}>Always</option>
+              <option value="businessHours" ${whenAllowed === 'businessHours' ? 'selected' : ''}>Business Hours Only</option>
+              <option value="afterHours" ${whenAllowed === 'afterHours' ? 'selected' : ''}>After Hours Only</option>
+            </select>
+          </div>
+
+          ${whenAllowed === 'businessHours' || whenAllowed === 'afterHours' ? `
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Start Time</label>
+              <input type="time" id="a2-llm-fwd-start" value="${hours.start || '08:00'}" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">End Time</label>
+              <input type="time" id="a2-llm-fwd-end" value="${hours.end || '17:00'}" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Timezone</label>
+              <select id="a2-llm-fwd-tz" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+                <option value="America/New_York" ${hours.timezone === 'America/New_York' ? 'selected' : ''}>Eastern</option>
+                <option value="America/Chicago" ${hours.timezone === 'America/Chicago' ? 'selected' : ''}>Central</option>
+                <option value="America/Denver" ${hours.timezone === 'America/Denver' ? 'selected' : ''}>Mountain</option>
+                <option value="America/Los_Angeles" ${hours.timezone === 'America/Los_Angeles' ? 'selected' : ''}>Pacific</option>
+              </select>
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- Forward numbers -->
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Forward Numbers</label>
+            <div id="a2-llm-fwd-numbers-container" style="display:grid; gap:8px;">
+              ${numbers.length === 0 ? `
+              <div style="color:#6e7681; font-size:0.9rem; padding:12px; background:#161b22; border-radius:8px; text-align:center;">
+                No forward numbers configured. Add one below.
+              </div>
+              ` : numbers.map((n, i) => `
+              <div style="display:grid; grid-template-columns:1fr 2fr auto; gap:8px; align-items:center;">
+                <input type="text" value="${this.escapeHtml(n.label || '')}" placeholder="Label" data-fwd-idx="${i}" data-fwd-field="label" style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:8px; color:#c9d1d9; font-size:0.9rem;">
+                <input type="tel" value="${this.escapeHtml(n.number || '')}" placeholder="+1234567890" data-fwd-idx="${i}" data-fwd-field="number" style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:8px; color:#c9d1d9; font-size:0.9rem;">
+                <button data-remove-fwd="${i}" style="background:#7f1d1d; border:none; border-radius:8px; padding:8px 12px; color:#f87171; cursor:pointer;">✕</button>
+              </div>
+              `).join('')}
+            </div>
+            <button id="a2-llm-fwd-add-number" style="margin-top:8px; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:8px 16px; color:#22d3ee; cursor:pointer; font-size:0.9rem;">+ Add Number</button>
+          </div>
+
+          <!-- Scripts -->
+          <div style="display:grid; gap:12px;">
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Consent Script</label>
+              <input type="text" id="a2-llm-fwd-consent" value="${this.escapeHtml(consentScript)}" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.9rem;">
+            </div>
+            <div>
+              <label style="color:#f87171; font-size:0.85rem; display:block; margin-bottom:6px;">Failure Script</label>
+              <input type="text" id="a2-llm-fwd-failure" value="${this.escapeHtml(failureScript)}" style="width:100%; background:#161b22; border:1px solid #991b1b; border-radius:8px; padding:10px; color:#f87171; font-size:0.9rem;">
+            </div>
+          </div>
+        </div>
+        ` : `
+        <div style="text-align:center; padding:20px; color:#6e7681;">
+          Enable call forwarding to configure numbers and scripts.
+        </div>
+        `}
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // LLM FALLBACK: Prompts Card
   // ─────────────────────────────────────────────────────────────────────────
   renderLLMPromptsCard() {
@@ -612,6 +876,7 @@ class Agent2Manager {
     const system = prompts.system || '';
     const format = prompts.format || '';
     const safety = prompts.safety || '';
+    const introLine = prompts.introLine || '';
 
     return `
       <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
@@ -621,6 +886,11 @@ class Agent2Manager {
         </div>
 
         <div style="display:grid; gap:20px;">
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Optional Intro Line (spoken before LLM response)</label>
+            <input type="text" id="a2-llm-prompt-intro" value="${this.escapeHtml(introLine)}" placeholder="Give me one second — I'm going to help you get this handled quickly." style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.9rem;">
+          </div>
+
           <div>
             <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">System Prompt</label>
             <textarea id="a2-llm-prompt-system" rows="5" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.9rem; resize:vertical; font-family:monospace;">${this.escapeHtml(system)}</textarea>
@@ -3332,6 +3602,219 @@ class Agent2Manager {
       this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
       this.config.llmFallback.constraints.allowedTasks = this.config.llmFallback.constraints.allowedTasks || {};
       this.config.llmFallback.constraints.allowedTasks.legal = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-task-deescalation')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.allowedTasks = this.config.llmFallback.constraints.allowedTasks || {};
+      this.config.llmFallback.constraints.allowedTasks.deescalation = e.target.checked;
+      onAnyChange();
+    });
+
+    // New trigger settings
+    container.querySelector('#a2-llm-blocked-discovery-critical')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.triggers = this.config.llmFallback.triggers || {};
+      this.config.llmFallback.triggers.blockedWhileDiscoveryCriticalStep = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-max-turns')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.triggers = this.config.llmFallback.triggers || {};
+      this.config.llmFallback.triggers.maxLLMFallbackTurnsPerCall = parseInt(e.target.value, 10) || 1;
+      onAnyChange();
+    });
+
+    // New constraint settings
+    container.querySelector('#a2-llm-block-time-slots')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.blockTimeSlots = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-anti-parrot')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.antiParrotGuard = e.target.checked;
+      onAnyChange();
+      this.render(container);
+    });
+    container.querySelector('#a2-llm-anti-parrot-words')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.antiParrotMaxWords = parseInt(e.target.value, 10) || 8;
+      onAnyChange();
+    });
+
+    // Handoff mode
+    container.querySelectorAll('input[name="a2-llm-handoff-mode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        this.config.llmFallback = this.config.llmFallback || {};
+        this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+        this.config.llmFallback.handoff.mode = e.target.value;
+        onAnyChange();
+        this.render(container);
+      });
+    });
+    
+    // Handoff scripts - Confirm Service
+    container.querySelector('#a2-llm-handoff-confirm-question')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.confirmService = this.config.llmFallback.handoff.confirmService || {};
+      this.config.llmFallback.handoff.confirmService.question = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-handoff-confirm-yes')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.confirmService = this.config.llmFallback.handoff.confirmService || {};
+      this.config.llmFallback.handoff.confirmService.yesResponse = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-handoff-confirm-no')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.confirmService = this.config.llmFallback.handoff.confirmService || {};
+      this.config.llmFallback.handoff.confirmService.noResponse = e.target.value;
+      onAnyChange();
+    });
+    
+    // Handoff scripts - Take Message
+    container.querySelector('#a2-llm-handoff-message-question')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.takeMessage = this.config.llmFallback.handoff.takeMessage || {};
+      this.config.llmFallback.handoff.takeMessage.question = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-handoff-message-yes')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.takeMessage = this.config.llmFallback.handoff.takeMessage || {};
+      this.config.llmFallback.handoff.takeMessage.yesResponse = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-handoff-message-no')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.takeMessage = this.config.llmFallback.handoff.takeMessage || {};
+      this.config.llmFallback.handoff.takeMessage.noResponse = e.target.value;
+      onAnyChange();
+    });
+    
+    // Handoff scripts - Offer Forward
+    container.querySelector('#a2-llm-handoff-forward-question')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.offerForward = this.config.llmFallback.handoff.offerForward || {};
+      this.config.llmFallback.handoff.offerForward.question = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-handoff-forward-yes')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.offerForward = this.config.llmFallback.handoff.offerForward || {};
+      this.config.llmFallback.handoff.offerForward.yesResponse = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-handoff-forward-no')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.offerForward = this.config.llmFallback.handoff.offerForward || {};
+      this.config.llmFallback.handoff.offerForward.noResponse = e.target.value;
+      onAnyChange();
+    });
+
+    // Call forwarding
+    container.querySelector('#a2-llm-fwd-enabled')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.callForwarding = this.config.llmFallback.callForwarding || {};
+      this.config.llmFallback.callForwarding.enabled = e.target.checked;
+      // Also update offer forward enabled
+      this.config.llmFallback.handoff = this.config.llmFallback.handoff || {};
+      this.config.llmFallback.handoff.offerForward = this.config.llmFallback.handoff.offerForward || {};
+      this.config.llmFallback.handoff.offerForward.enabled = e.target.checked;
+      onAnyChange();
+      this.render(container);
+    });
+    container.querySelector('#a2-llm-fwd-when')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.callForwarding = this.config.llmFallback.callForwarding || {};
+      this.config.llmFallback.callForwarding.whenAllowed = e.target.value;
+      onAnyChange();
+      this.render(container);
+    });
+    container.querySelector('#a2-llm-fwd-start')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.callForwarding = this.config.llmFallback.callForwarding || {};
+      this.config.llmFallback.callForwarding.businessHours = this.config.llmFallback.callForwarding.businessHours || {};
+      this.config.llmFallback.callForwarding.businessHours.start = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-fwd-end')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.callForwarding = this.config.llmFallback.callForwarding || {};
+      this.config.llmFallback.callForwarding.businessHours = this.config.llmFallback.callForwarding.businessHours || {};
+      this.config.llmFallback.callForwarding.businessHours.end = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-fwd-tz')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.callForwarding = this.config.llmFallback.callForwarding || {};
+      this.config.llmFallback.callForwarding.businessHours = this.config.llmFallback.callForwarding.businessHours || {};
+      this.config.llmFallback.callForwarding.businessHours.timezone = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-fwd-consent')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.callForwarding = this.config.llmFallback.callForwarding || {};
+      this.config.llmFallback.callForwarding.consentScript = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-fwd-failure')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.callForwarding = this.config.llmFallback.callForwarding || {};
+      this.config.llmFallback.callForwarding.failureScript = e.target.value;
+      onAnyChange();
+    });
+    
+    // Forward numbers management
+    container.querySelector('#a2-llm-fwd-add-number')?.addEventListener('click', () => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.callForwarding = this.config.llmFallback.callForwarding || {};
+      this.config.llmFallback.callForwarding.numbers = this.config.llmFallback.callForwarding.numbers || [];
+      this.config.llmFallback.callForwarding.numbers.push({ label: '', number: '', priority: 1 });
+      onAnyChange();
+      this.render(container);
+    });
+    container.querySelectorAll('[data-remove-fwd]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.target.dataset.removeFwd, 10);
+        if (this.config.llmFallback?.callForwarding?.numbers) {
+          this.config.llmFallback.callForwarding.numbers.splice(idx, 1);
+          onAnyChange();
+          this.render(container);
+        }
+      });
+    });
+    container.querySelectorAll('[data-fwd-idx]').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const idx = parseInt(e.target.dataset.fwdIdx, 10);
+        const field = e.target.dataset.fwdField;
+        if (this.config.llmFallback?.callForwarding?.numbers?.[idx]) {
+          this.config.llmFallback.callForwarding.numbers[idx][field] = e.target.value;
+          onAnyChange();
+        }
+      });
+    });
+
+    // Intro line prompt
+    container.querySelector('#a2-llm-prompt-intro')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.prompts = this.config.llmFallback.prompts || {};
+      this.config.llmFallback.prompts.introLine = e.target.value;
       onAnyChange();
     });
 

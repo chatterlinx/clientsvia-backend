@@ -903,6 +903,97 @@ class Agent2DiscoveryRunner {
     }
 
     // ──────────────────────────────────────────────────────────────────────
+    // PATH 1.5: LLM HANDOFF CONFIRMATION CHECK
+    // ──────────────────────────────────────────────────────────────────────
+    // If LLM asked a service-confirm question last turn, check for YES/NO response.
+    // If YES → set bookingIntentConfirmed, emit event, respond with UI-owned handoff line.
+    // If NO → offer alternative (message/forward if enabled) or continue discovery.
+    // ──────────────────────────────────────────────────────────────────────
+    const llmHandoffPending = state?.agent2?.discovery?.llmHandoffPending;
+    
+    if (llmHandoffPending && typeof llmHandoffPending === 'object') {
+      const inputLower = (input || '').toLowerCase().trim();
+      
+      // Simple YES detection
+      const isYes = /^(yes|yeah|yep|sure|ok|okay|absolutely|definitely|please|go ahead|let's do it|sounds good|that works)/.test(inputLower);
+      // Simple NO detection
+      const isNo = /^(no|nope|nah|not|i don't|i'm not|never mind|cancel|forget|actually)/.test(inputLower);
+      
+      if (isYes) {
+        // Caller confirmed service intent — hand off to deterministic flow
+        nextState.agent2.discovery.bookingIntentConfirmed = true;
+        nextState.agent2.discovery.llmHandoffPending = null; // Clear pending state
+        nextState.agent2.discovery.lastPath = 'LLM_HANDOFF_CONFIRMED';
+        
+        emit('A2_LLM_HANDOFF_CONFIRMED_SERVICE', {
+          mode: llmHandoffPending.mode,
+          turn,
+          response: 'yes'
+        });
+        
+        // Use UI-owned response
+        const handoffResponse = llmHandoffPending.yesResponse || "Perfect — I'm going to grab a few details so we can get this scheduled.";
+        
+        emit('A2_PATH_SELECTED', {
+          path: 'LLM_HANDOFF_CONFIRMED',
+          reason: 'Caller confirmed service intent after LLM assist',
+          handoffMode: llmHandoffPending.mode,
+          bookingIntentConfirmed: true
+        });
+        
+        emit('A2_RESPONSE_READY', {
+          path: 'LLM_HANDOFF_CONFIRMED',
+          responsePreview: clip(handoffResponse, 120),
+          responseLength: handoffResponse.length,
+          hasAudio: false,
+          source: 'llmFallback.handoff.confirmService.yesResponse'
+        });
+        
+        return {
+          response: handoffResponse,
+          matchSource: 'AGENT2_DISCOVERY',
+          state: nextState
+        };
+      } else if (isNo) {
+        // Caller declined — clear pending, offer alternative
+        nextState.agent2.discovery.llmHandoffPending = null;
+        nextState.agent2.discovery.lastPath = 'LLM_HANDOFF_DECLINED';
+        
+        emit('A2_LLM_HANDOFF_DECLINED', {
+          mode: llmHandoffPending.mode,
+          turn,
+          response: 'no'
+        });
+        
+        // Use UI-owned response
+        const declineResponse = llmHandoffPending.noResponse || "No problem. Is there anything else I can help you with today?";
+        
+        emit('A2_PATH_SELECTED', {
+          path: 'LLM_HANDOFF_DECLINED',
+          reason: 'Caller declined service intent after LLM assist',
+          handoffMode: llmHandoffPending.mode
+        });
+        
+        emit('A2_RESPONSE_READY', {
+          path: 'LLM_HANDOFF_DECLINED',
+          responsePreview: clip(declineResponse, 120),
+          responseLength: declineResponse.length,
+          hasAudio: false,
+          source: 'llmFallback.handoff.confirmService.noResponse'
+        });
+        
+        return {
+          response: declineResponse,
+          matchSource: 'AGENT2_DISCOVERY',
+          state: nextState
+        };
+      }
+      // If neither YES nor NO, clear pending and fall through to normal processing
+      // (Caller might have asked a different question)
+      nextState.agent2.discovery.llmHandoffPending = null;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
     // PATH 2: TRIGGER CARD MATCHING (PRIMARY — DETERMINISTIC)
     // ──────────────────────────────────────────────────────────────────────
     // Uses NORMALIZED input from vocabulary processing
@@ -1301,14 +1392,17 @@ class Agent2DiscoveryRunner {
       
     } else {
       // ──────────────────────────────────────────────────────────────────────
-      // PATH 4+: LLM FALLBACK (Hybrid Assist - UI-Controlled)
+      // PATH 4+: LLM FALLBACK (ASSIST-ONLY - UI-Controlled)
       // ──────────────────────────────────────────────────────────────────────
-      // Try LLM fallback BEFORE generic fallback paths
-      // LLM is UI-controlled and only runs when conditions are met
+      // LLM is NOT a responder — it's a helper. Gets ONE shot, then funnels.
+      // LLM NEVER offers time slots — only confirms service intent + hands off.
       
       // Track no-match count for this call
       const noMatchCount = (nextState.agent2.discovery.noMatchCount || 0) + 1;
       nextState.agent2.discovery.noMatchCount = noMatchCount;
+      
+      // Track LLM turns this call (max 1 by default)
+      const llmTurnsThisCall = nextState.agent2.discovery.llmTurnsThisCall || 0;
       
       // Compute complexity score for logging
       const complexityResult = computeComplexityScore(input);
@@ -1324,8 +1418,13 @@ class Agent2DiscoveryRunner {
         nextState.booking?.step === 'NAME' ||
         nextState.booking?.step === 'ADDRESS' ||
         nextState.booking?.step === 'TIME' ||
-        nextState.booking?.step === 'CONFIRM' ||
-        nextState.slotFilling?.activeSlot
+        nextState.booking?.step === 'CONFIRM'
+      );
+      
+      // Check if we're in discovery-critical step (slot filling)
+      const inDiscoveryCriticalStep = !!(
+        nextState.slotFilling?.activeSlot ||
+        nextState.agent2?.discovery?.pendingQuestion
       );
       
       // Try LLM fallback
@@ -1334,6 +1433,8 @@ class Agent2DiscoveryRunner {
         input,
         noMatchCount,
         inBookingFlow,
+        inDiscoveryCriticalStep,
+        llmTurnsThisCall,
         callContext: {
           callSid,
           companyId: companyId || company?._id?.toString?.() || null,
@@ -1344,15 +1445,26 @@ class Agent2DiscoveryRunner {
       });
       
       if (llmResult) {
-        // LLM fallback provided a response
+        // LLM fallback provided a response — increment turn counter
+        nextState.agent2.discovery.llmTurnsThisCall = llmTurnsThisCall + 1;
         nextState.agent2.discovery.lastPath = 'LLM_FALLBACK';
+        
+        // Store handoff state if awaiting confirmation
+        if (llmResult.handoffAction?.awaitingConfirmation) {
+          nextState.agent2.discovery.llmHandoffPending = {
+            mode: llmResult.handoffAction.mode,
+            yesResponse: llmResult.handoffAction.yesResponse,
+            noResponse: llmResult.handoffAction.noResponse,
+            turn: turn
+          };
+        }
         
         // Use personalized ack if appropriate  
         const { ack: llmAck, usedName: llmUsedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = llmUsedName;
         
         // Don't double-ack if LLM response already sounds complete
-        const llmStartsWithAck = /^(ok|okay|i'm sorry|i understand|that sounds)/i.test(llmResult.response);
+        const llmStartsWithAck = /^(ok|okay|i'm sorry|i understand|that sounds|give me)/i.test(llmResult.response);
         response = llmStartsWithAck 
           ? llmResult.response 
           : `${llmAck} ${llmResult.response}`.trim();
@@ -1367,7 +1479,9 @@ class Agent2DiscoveryRunner {
           tokensUsed: llmResult.llmMeta?.tokensInput + llmResult.llmMeta?.tokensOutput,
           costUsd: llmResult.llmMeta?.costUsd,
           usedEmergencyFallback: llmResult.llmMeta?.usedEmergencyFallback,
-          constraintViolations: llmResult.llmMeta?.constraintViolations
+          constraintViolations: llmResult.llmMeta?.constraintViolations,
+          handoffMode: llmResult.llmMeta?.handoffMode,
+          awaitingConfirmation: llmResult.llmMeta?.awaitingConfirmation
         });
         
         emit('A2_RESPONSE_READY', {
@@ -1377,7 +1491,8 @@ class Agent2DiscoveryRunner {
           hasAudio: false,
           source: llmResult.llmMeta?.usedEmergencyFallback ? 'llmFallback.emergencyFallback' : 'llmFallback.llm',
           usedCallerName: llmUsedName,
-          isLLMAssist: !llmResult.llmMeta?.usedEmergencyFallback
+          isLLMAssist: !llmResult.llmMeta?.usedEmergencyFallback,
+          handoffMode: llmResult.llmMeta?.handoffMode
         });
         
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };

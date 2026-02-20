@@ -313,16 +313,19 @@ function defaultAgent2Config() {
       }
     },
     // ═══════════════════════════════════════════════════════════════════════
-    // LLM FALLBACK SETTINGS (UI-controlled hybrid assist)
+    // LLM FALLBACK SETTINGS (UI-controlled ASSIST-ONLY mode)
     // ═══════════════════════════════════════════════════════════════════════
-    // When enabled, LLM fallback is called ONLY when:
-    //   - No trigger card match AND
-    //   - Not in booking-critical step AND
-    //   - Trigger conditions met (noMatchCount, complexity, complex keywords)
-    // LLM's job: short empathy + one booking funnel question
+    // LLM is NOT a responder — it's a helper. Decision order:
+    //   1. Greetings (turn 0)
+    //   2. Greeting Interceptor (short hi/hello only)
+    //   3. Trigger Cards (PRIMARY)
+    //   4. Deterministic Discovery / Booking
+    //   5. LLM Fallback (ONLY if 2-4 failed, max 1 turn)
+    //   6. Emergency Fallback Line (if LLM fails/blocked)
+    // LLM NEVER offers time slots — only confirms service intent + hands off
     // ═══════════════════════════════════════════════════════════════════════
     llmFallback: {
-      enabled: false,  // Master kill switch - if OFF, LLM fallback NEVER runs
+      enabled: false,  // Master kill switch - if OFF, LLM NEVER runs
       
       // ─────────────────────────────────────────────────────────────────────
       // MODEL SELECTION
@@ -332,7 +335,7 @@ function defaultAgent2Config() {
       customModelOverride: '',  // Advanced: override with custom model string
       
       // ─────────────────────────────────────────────────────────────────────
-      // TRIGGER CONDITIONS (when to call LLM)
+      // TRIGGER CONDITIONS (ONLY WHEN ALL ELSE FAILS)
       // ─────────────────────────────────────────────────────────────────────
       triggers: {
         noMatchCountThreshold: 2,      // Call LLM after N failed matches
@@ -340,6 +343,8 @@ function defaultAgent2Config() {
         enableOnNoTriggerCardMatch: true,
         enableOnComplexQuestions: true,
         blockedWhileBooking: true,     // NEVER call LLM during booking steps
+        blockedWhileDiscoveryCriticalStep: true,  // Block during name/address/phone capture
+        maxLLMFallbackTurnsPerCall: 1, // LLM gets ONE shot, then funnel
         complexQuestionKeywords: [
           'why', 'how', 'warranty', 'covered', 'dangerous', 'safe',
           'thermostat blank', 'is it normal', 'should i', 'can i',
@@ -355,44 +360,89 @@ function defaultAgent2Config() {
         mustEndWithFunnelQuestion: true,
         maxOutputTokens: 160,
         temperature: 0.2,
+        antiParrotGuard: true,         // Don't repeat caller input >8 consecutive words
+        antiParrotMaxWords: 8,
+        blockTimeSlots: true,          // NEVER offer times/dates/scheduling windows
         allowedTasks: {
           clarifyProblem: true,
           basicSafeGuidance: true,
+          deescalation: true,
           pricing: false,
           guarantees: false,
-          legal: false
+          legal: false,
+          timeSlots: false             // Explicitly blocked
         }
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // HANDOFF MODE (how LLM returns control to deterministic flow)
+      // ─────────────────────────────────────────────────────────────────────
+      // LLM confirms service intent, then hands off — NEVER schedules itself
+      handoff: {
+        mode: 'confirmService',  // 'confirmService' | 'takeMessage' | 'offerForward'
+        
+        // Mode A: Confirm Service Request → Return to Discovery
+        confirmService: {
+          question: "Would you like to get a technician out to take a look?",
+          yesResponse: "Perfect — I'm going to grab a few details so we can get this scheduled.",
+          noResponse: "No problem. Is there anything else I can help you with today?"
+        },
+        
+        // Mode B: Take a Message
+        takeMessage: {
+          question: "Would you like me to take a message for a callback?",
+          yesResponse: "Great, I'll get some info for the callback. What's the best number to reach you?",
+          noResponse: "No problem. Is there anything else I can help you with?"
+        },
+        
+        // Mode C: Offer Call Forward (requires explicit consent)
+        offerForward: {
+          enabled: false,  // Must be explicitly enabled
+          question: "Would you like me to connect you to a team member now?",
+          yesResponse: "Connecting you now — one moment please.",
+          noResponse: "No problem. Is there something else I can help with?",
+          consentRequired: true
+        }
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // CALL FORWARDING SETTINGS (UI-owned, no hidden code)
+      // ─────────────────────────────────────────────────────────────────────
+      callForwarding: {
+        enabled: false,
+        numbers: [],  // Array of { label, number, priority }
+        whenAllowed: 'businessHours',  // 'always' | 'businessHours' | 'afterHours'
+        businessHours: { start: '08:00', end: '17:00', timezone: 'America/New_York' },
+        consentScript: "Would you like me to connect you to a team member now?",
+        failureScript: "I wasn't able to connect you — would you like me to take a message instead?"
       },
       
       // ─────────────────────────────────────────────────────────────────────
       // UI-OWNED PROMPTS (editable in UI)
       // ─────────────────────────────────────────────────────────────────────
       prompts: {
-        system: `You are a calm, professional HVAC service coordinator. Your ONLY job is to:
-1. Acknowledge the caller's concern with brief empathy (NO parroting their words back)
-2. Ask ONE question that moves them toward scheduling a service visit
-
-Rules:
-- Maximum 2 sentences
-- Never make promises about pricing, warranties, or guarantees
-- Never give troubleshooting advice that could be unsafe
-- Always end with a booking-focused question
-- Be warm but efficient`,
+        system: `You are a calm HVAC service coordinator. Your goal is to keep the caller informed and in control, and guide them to service intake. Do not provide pricing, guarantees, or scheduling times.`,
         
-        format: 'Write exactly 2 sentences. Sentence 1: brief empathy (do NOT repeat what they said). Sentence 2: one booking funnel question.',
+        format: `Write max 2 sentences.
+Sentence 1: empathy + reassurance.
+Sentence 2: ask one question to confirm service intent or clarify one missing detail.
+Never offer appointment times or time windows. Never repeat the caller's wording verbatim.`,
         
         safety: `SAFETY OVERRIDE: If the caller mentions burning smell, smoke, electrical sparks, gas smell, or carbon monoxide:
 1. Tell them to shut off the system immediately
 2. If gas/CO: tell them to leave the house and call 911
-3. Offer emergency same-day booking
-Do NOT troubleshoot electrical or gas issues over the phone.`
+3. Offer emergency service
+Do NOT troubleshoot electrical or gas issues over the phone.`,
+        
+        // Optional intro line before LLM response
+        introLine: "Give me one second — I'm going to help you get this handled quickly."
       },
       
       // ─────────────────────────────────────────────────────────────────────
       // EMERGENCY FALLBACK LINE (last resort if LLM fails)
       // ─────────────────────────────────────────────────────────────────────
       emergencyFallbackLine: {
-        text: "I'm here with you — I can get this scheduled fast. Do you prefer morning or afternoon?",
+        text: "Sorry — I'm having trouble for a moment. Are you calling to request service?",
         enabled: true
       },
       
@@ -472,7 +522,7 @@ function mergeAgent2Config(saved) {
       }
     },
     meta: { ...defaults.meta, ...safeObject(src.meta, {}) },
-    // LLM Fallback settings (UI-controlled hybrid assist)
+    // LLM Fallback settings (UI-controlled ASSIST-ONLY mode)
     llmFallback: {
       ...defaults.llmFallback,
       ...safeObject(src.llmFallback, {}),
@@ -487,6 +537,26 @@ function mergeAgent2Config(saved) {
           ...defaults.llmFallback.constraints.allowedTasks,
           ...safeObject(src.llmFallback?.constraints?.allowedTasks, {})
         }
+      },
+      handoff: {
+        ...defaults.llmFallback.handoff,
+        ...safeObject(src.llmFallback?.handoff, {}),
+        confirmService: {
+          ...defaults.llmFallback.handoff.confirmService,
+          ...safeObject(src.llmFallback?.handoff?.confirmService, {})
+        },
+        takeMessage: {
+          ...defaults.llmFallback.handoff.takeMessage,
+          ...safeObject(src.llmFallback?.handoff?.takeMessage, {})
+        },
+        offerForward: {
+          ...defaults.llmFallback.handoff.offerForward,
+          ...safeObject(src.llmFallback?.handoff?.offerForward, {})
+        }
+      },
+      callForwarding: {
+        ...defaults.llmFallback.callForwarding,
+        ...safeObject(src.llmFallback?.callForwarding, {})
       },
       prompts: {
         ...defaults.llmFallback.prompts,
@@ -540,6 +610,9 @@ function mergeAgent2Config(saved) {
   // LLM Fallback guardrails
   if (!Array.isArray(merged.llmFallback.triggers.complexQuestionKeywords)) {
     merged.llmFallback.triggers.complexQuestionKeywords = defaults.llmFallback.triggers.complexQuestionKeywords;
+  }
+  if (!Array.isArray(merged.llmFallback.callForwarding.numbers)) {
+    merged.llmFallback.callForwarding.numbers = defaults.llmFallback.callForwarding.numbers;
   }
 
   return merged;

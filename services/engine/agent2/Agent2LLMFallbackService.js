@@ -157,7 +157,7 @@ function computeComplexityScore(text) {
  * Determine if LLM fallback should be called
  * Returns { call: boolean, reason: string, details: Object }
  */
-function shouldCallLLMFallback({ config, noMatchCount, input, inBookingFlow }) {
+function shouldCallLLMFallback({ config, noMatchCount, input, inBookingFlow, inDiscoveryCriticalStep, llmTurnsThisCall }) {
   const llmFallback = config?.llmFallback;
   
   // Hard gate: must be enabled
@@ -167,9 +167,20 @@ function shouldCallLLMFallback({ config, noMatchCount, input, inBookingFlow }) {
   
   const triggers = llmFallback.triggers || {};
   
-  // Blocked during booking
+  // Blocked during booking-critical steps (name/address/time capture)
   if (triggers.blockedWhileBooking !== false && inBookingFlow) {
     return { call: false, reason: 'blocked_during_booking', details: { inBookingFlow: true } };
+  }
+  
+  // Blocked during discovery-critical steps (slot filling)
+  if (triggers.blockedWhileDiscoveryCriticalStep !== false && inDiscoveryCriticalStep) {
+    return { call: false, reason: 'blocked_during_discovery_critical', details: { inDiscoveryCriticalStep: true } };
+  }
+  
+  // Max LLM turns per call (default 1 - LLM gets ONE shot)
+  const maxTurns = triggers.maxLLMFallbackTurnsPerCall ?? 1;
+  if (llmTurnsThisCall >= maxTurns) {
+    return { call: false, reason: 'max_llm_turns_reached', details: { llmTurnsThisCall, maxTurns } };
   }
   
   // Compute complexity score
@@ -242,16 +253,37 @@ function shouldCallLLMFallback({ config, noMatchCount, input, inBookingFlow }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Check if LLM output is parroting caller input (>N consecutive words)
+ */
+function checkParroting(llmOutput, callerInput, maxConsecutiveWords = 8) {
+  if (!llmOutput || !callerInput) return false;
+  
+  const llmWords = llmOutput.toLowerCase().split(/\s+/).filter(Boolean);
+  const callerWords = callerInput.toLowerCase().split(/\s+/).filter(Boolean);
+  
+  if (callerWords.length < maxConsecutiveWords) return false;
+  
+  // Sliding window check
+  for (let i = 0; i <= callerWords.length - maxConsecutiveWords; i++) {
+    const phrase = callerWords.slice(i, i + maxConsecutiveWords).join(' ');
+    if (llmOutput.toLowerCase().includes(phrase)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Validate LLM output against constraints
  * Returns { valid: boolean, violations: string[], cleanedText: string }
  */
-function validateOutput(text, constraints) {
+function validateOutput(text, constraints, callerInput = '') {
   const violations = [];
   let cleanedText = (text || '').trim();
   
   if (!cleanedText) {
     violations.push('empty_output');
-    return { valid: false, violations, cleanedText: '' };
+    return { valid: false, violations, cleanedText: '', sentenceCount: 0 };
   }
   
   // Count sentences (rough: split by . ! ?)
@@ -271,6 +303,37 @@ function validateOutput(text, constraints) {
     const endsWithQuestion = /\?$/.test(cleanedText.trim());
     if (!endsWithQuestion) {
       violations.push('missing_funnel_question');
+    }
+  }
+  
+  // Anti-parrot guard: don't repeat caller input >N consecutive words
+  if (constraints?.antiParrotGuard !== false) {
+    const maxWords = constraints?.antiParrotMaxWords ?? 8;
+    if (checkParroting(cleanedText, callerInput, maxWords)) {
+      violations.push('parroting_caller_input');
+    }
+  }
+  
+  // Block time slots: LLM must NEVER offer times/dates/scheduling windows
+  if (constraints?.blockTimeSlots !== false) {
+    const timeSlotPatterns = [
+      /\b\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)\b/i,  // "9am", "10:30 PM"
+      /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+      /\b(?:morning|afternoon|evening)\s+(?:slot|appointment|time|window)/i,
+      /\b(?:available|open|free)\s+(?:at|on|for)\s+\d/i,  // "available at 2"
+      /\b(?:schedule|book)\s+(?:you\s+)?(?:for|at)\s+\d/i,  // "schedule you for 3pm"
+      /\btoday\s+at\s+\d/i,
+      /\btomorrow\s+(?:at|around)\s+\d/i,
+      /\bnext\s+(?:available|opening)/i,
+      /\btime\s+slot/i,
+      /\bappointment\s+(?:at|for|on)\s+/i
+    ];
+    
+    for (const pattern of timeSlotPatterns) {
+      if (pattern.test(cleanedText)) {
+        violations.push('contains_time_slot');
+        break;
+      }
     }
   }
   
@@ -296,6 +359,11 @@ function validateOutput(text, constraints) {
     if (legalPatterns.test(cleanedText)) {
       violations.push('contains_legal');
     }
+  }
+  
+  // Check for time slots in allowedTasks too (explicit block)
+  if (allowedTasks.timeSlots === false) {
+    // Already checked above with blockTimeSlots
   }
   
   return {
@@ -398,23 +466,35 @@ Respond with empathy and ask ONE question that moves them toward booking a servi
  * @param {string} params.input - Caller's input
  * @param {number} params.noMatchCount - How many times trigger cards failed
  * @param {boolean} params.inBookingFlow - Are we in booking-critical steps?
+ * @param {boolean} params.inDiscoveryCriticalStep - Are we in slot-filling?
+ * @param {number} params.llmTurnsThisCall - How many LLM turns already this call
  * @param {Object} params.callContext - { callSid, companyId, turn, capturedReason }
  * @param {Function} params.emit - Event emitter
  * 
- * @returns {Object|null} { response, provenance } or null if LLM should not run
+ * @returns {Object|null} { response, provenance, handoffAction } or null if LLM should not run
  */
-async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, callContext, emit }) {
+async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDiscoveryCriticalStep, llmTurnsThisCall, callContext, emit }) {
   const llmFallback = config?.llmFallback;
   const constraints = llmFallback?.constraints || {};
   const emergencyFallback = llmFallback?.emergencyFallbackLine;
+  const handoff = llmFallback?.handoff || {};
   
   // Check if we should call LLM
-  const decision = shouldCallLLMFallback({ config, noMatchCount, input, inBookingFlow });
+  const decision = shouldCallLLMFallback({ 
+    config, 
+    noMatchCount, 
+    input, 
+    inBookingFlow, 
+    inDiscoveryCriticalStep,
+    llmTurnsThisCall: llmTurnsThisCall || 0
+  });
   
   emit('A2_LLM_FALLBACK_DECISION', {
     call: decision.call,
     reason: decision.reason,
-    details: decision.details
+    details: decision.details,
+    llmTurnsThisCall: llmTurnsThisCall || 0,
+    maxTurns: llmFallback?.triggers?.maxLLMFallbackTurnsPerCall ?? 1
   });
   
   if (!decision.call) {
@@ -431,10 +511,10 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, call
   let sentenceCount = 0;
   
   if (llmResult.success && llmResult.response) {
-    // Validate output against constraints
-    const validation = validateOutput(llmResult.response, constraints);
+    // Validate output against constraints (including anti-parrot and time-slot blocking)
+    const validation = validateOutput(llmResult.response, constraints, input);
     constraintViolations = validation.violations;
-    sentenceCount = validation.sentenceCount;
+    sentenceCount = validation.sentenceCount || 0;
     hadFunnelQuestion = /\?$/.test(validation.cleanedText.trim());
     
     if (validation.valid) {
@@ -470,6 +550,45 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, call
     }
   }
   
+  // Determine handoff mode and action
+  const handoffMode = handoff.mode || 'confirmService';
+  let handoffAction = null;
+  let handoffQuestion = null;
+  
+  // Get handoff config based on mode
+  if (handoffMode === 'confirmService') {
+    handoffQuestion = handoff.confirmService?.question || "Would you like to get a technician out to take a look?";
+    handoffAction = {
+      mode: 'confirmService',
+      awaitingConfirmation: true,
+      yesResponse: handoff.confirmService?.yesResponse || "Perfect — I'm going to grab a few details so we can get this scheduled.",
+      noResponse: handoff.confirmService?.noResponse || "No problem. Is there anything else I can help you with today?"
+    };
+  } else if (handoffMode === 'takeMessage') {
+    handoffQuestion = handoff.takeMessage?.question || "Would you like me to take a message for a callback?";
+    handoffAction = {
+      mode: 'takeMessage',
+      awaitingConfirmation: true,
+      yesResponse: handoff.takeMessage?.yesResponse,
+      noResponse: handoff.takeMessage?.noResponse
+    };
+  } else if (handoffMode === 'offerForward' && handoff.offerForward?.enabled) {
+    handoffQuestion = handoff.offerForward?.question || "Would you like me to connect you to a team member now?";
+    handoffAction = {
+      mode: 'offerForward',
+      awaitingConfirmation: true,
+      yesResponse: handoff.offerForward?.yesResponse,
+      noResponse: handoff.offerForward?.noResponse,
+      consentRequired: handoff.offerForward?.consentRequired !== false
+    };
+  }
+  
+  // If response doesn't end with a question, append handoff question
+  if (!hadFunnelQuestion && handoffQuestion) {
+    finalResponse = `${finalResponse} ${handoffQuestion}`.trim();
+    hadFunnelQuestion = true;
+  }
+  
   // Build provenance
   const provenance = {
     sourceId: usedEmergencyFallback ? 'agent2.llmFallback.emergencyFallback' : 'agent2.llmFallback',
@@ -481,6 +600,7 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, call
     spokenTextPreview: finalResponse.substring(0, 120),
     isFromUiConfig: true,
     isLLMAssist: !usedEmergencyFallback,
+    handoffMode,
     llmMeta: {
       model: llmResult.model,
       tokensInput: llmResult.tokens.input,
@@ -491,7 +611,9 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, call
       constraintViolations,
       usedEmergencyFallback,
       hadFunnelQuestion,
-      sentenceCount
+      sentenceCount,
+      handoffMode,
+      awaitingConfirmation: handoffAction?.awaitingConfirmation || false
     }
   };
   
@@ -518,7 +640,8 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, call
         sentenceCount,
         constraintViolations,
         usedEmergencyFallback,
-        responseTimeMs: llmResult.responseTimeMs
+        responseTimeMs: llmResult.responseTimeMs,
+        handoffMode
       },
       provenance: {
         uiPath: provenance.uiPath,
@@ -542,10 +665,21 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, call
     timestamp: new Date().toISOString()
   });
   
+  // Emit handoff event if awaiting confirmation
+  if (handoffAction?.awaitingConfirmation) {
+    emit('A2_LLM_HANDOFF_AWAITING_CONFIRMATION', {
+      mode: handoffMode,
+      question: handoffQuestion,
+      yesResponse: handoffAction.yesResponse,
+      noResponse: handoffAction.noResponse
+    });
+  }
+  
   return {
     response: finalResponse,
     provenance,
-    llmMeta: provenance.llmMeta
+    llmMeta: provenance.llmMeta,
+    handoffAction
   };
 }
 
