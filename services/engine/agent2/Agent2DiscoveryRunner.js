@@ -636,22 +636,32 @@ class Agent2DiscoveryRunner {
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
         
-        // V126: Pending question YES response
-        // TODO: These need UI fields in fallback config: pendingYesScheduling, pendingYesGeneric
-        // For now, use afterAnswerQuestion or emergencyFallback as the continuation
-        const yesFollowUp = `${fallback.afterAnswerQuestion || ''}`.trim() || emergencyFallback?.text || '';
-        const response = isSchedulingQuestion
-          ? `${personalAck} Great! ${yesFollowUp}`.trim()
-          : `${personalAck} ${yesFollowUp}`.trim();
+        // V126: Pending question YES response - UI-configured field
+        const pendingYes = `${fallback.pendingYesResponse || ''}`.trim();
+        let response;
+        let responseUiPath;
         
-        // Log if we're missing UI config
-        if (!fallback.afterAnswerQuestion && !emergencyFallback?.text) {
-          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
-            blockedSourceId: 'agent2.discovery.pendingQuestion.yesPath',
-            blockedText: 'No afterAnswerQuestion or emergencyFallback configured for YES response',
-            reason: 'Pending question YES needs UI-configured response',
+        if (pendingYes) {
+          response = `${personalAck} ${pendingYes}`.trim();
+          responseUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingYesResponse';
+        } else if (emergencyFallback?.text) {
+          response = `${personalAck} ${emergencyFallback.text}`.trim();
+          responseUiPath = emergencyFallback.uiPath;
+          emit('SPEECH_USING_EMERGENCY_FALLBACK', {
+            originalSourceId: 'agent2.discovery.pendingQuestion.yes',
+            reason: 'pendingYesResponse not configured',
             severity: 'WARNING'
           });
+        } else {
+          // CRITICAL: No UI-configured response
+          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+            blockedSourceId: 'agent2.discovery.pendingQuestion.yes',
+            blockedText: 'No pendingYesResponse or emergencyFallback configured',
+            reason: 'Pending question YES needs UI-configured response',
+            severity: 'CRITICAL'
+          });
+          response = personalAck;
+          responseUiPath = 'UNMAPPED - CRITICAL';
         }
         
         emit('A2_PATH_SELECTED', { 
@@ -691,19 +701,32 @@ class Agent2DiscoveryRunner {
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
         
-        // V126: Pending question NO response
-        // TODO: Need UI field: pendingNoResponse
-        // Use noMatchAnswer as the "what else can I help with" or emergencyFallback
-        const noFollowUp = `${fallback.noMatchAnswer || ''}`.trim() || emergencyFallback?.text || '';
-        const response = noFollowUp ? `${personalAck} No problem. ${noFollowUp}`.trim() : personalAck;
+        // V126: Pending question NO response - UI-configured field
+        const pendingNo = `${fallback.pendingNoResponse || ''}`.trim();
+        let response;
+        let noResponseUiPath;
         
-        if (!fallback.noMatchAnswer && !emergencyFallback?.text) {
-          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
-            blockedSourceId: 'agent2.discovery.pendingQuestion.noPath',
-            blockedText: 'No noMatchAnswer or emergencyFallback configured for NO response',
-            reason: 'Pending question NO needs UI-configured response',
+        if (pendingNo) {
+          response = `${personalAck} ${pendingNo}`.trim();
+          noResponseUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingNoResponse';
+        } else if (emergencyFallback?.text) {
+          response = `${personalAck} ${emergencyFallback.text}`.trim();
+          noResponseUiPath = emergencyFallback.uiPath;
+          emit('SPEECH_USING_EMERGENCY_FALLBACK', {
+            originalSourceId: 'agent2.discovery.pendingQuestion.no',
+            reason: 'pendingNoResponse not configured',
             severity: 'WARNING'
           });
+        } else {
+          // CRITICAL: No UI-configured response
+          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+            blockedSourceId: 'agent2.discovery.pendingQuestion.no',
+            blockedText: 'No pendingNoResponse or emergencyFallback configured',
+            reason: 'Pending question NO needs UI-configured response',
+            severity: 'CRITICAL'
+          });
+          response = personalAck;
+          noResponseUiPath = 'UNMAPPED - CRITICAL';
         }
         
         emit('A2_PATH_SELECTED', { 
@@ -738,24 +761,38 @@ class Agent2DiscoveryRunner {
         // DON'T clear pendingQuestion — we're re-asking
         nextState.agent2.discovery.lastPath = 'PENDING_REPROMPT';
         
-        // V126: Pending question REPROMPT response
-        // TODO: Need UI field: pendingRepromptScheduling, pendingRepromptGeneric
-        // Use the pending question itself to re-ask, or emergencyFallback
+        // V126: Pending question REPROMPT - UI-configured field
+        const pendingRepromptConfig = `${fallback.pendingReprompt || ''}`.trim();
         const pendingQ = pendingInfo?.question || '';
         let response;
-        if (pendingQ) {
-          // Re-ask the original question
+        let repromptUiPath;
+        
+        if (pendingRepromptConfig) {
+          // Use the configured reprompt message
+          response = pendingRepromptConfig;
+          repromptUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingReprompt';
+        } else if (pendingQ) {
+          // Re-ask the original pending question (from the card)
           response = `Sorry, I missed that. ${pendingQ}`;
+          repromptUiPath = `aiAgentSettings.agent2.discovery.playbook.rules[id=${pendingInfo?.cardId}].followUp.question`;
         } else if (emergencyFallback?.text) {
           response = `Sorry, I missed that. ${emergencyFallback.text}`;
-        } else {
-          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
-            blockedSourceId: 'agent2.discovery.pendingQuestion.reprompt',
-            blockedText: 'No pending question text or emergencyFallback for reprompt',
-            reason: 'Pending question reprompt needs UI-configured response',
+          repromptUiPath = emergencyFallback.uiPath;
+          emit('SPEECH_USING_EMERGENCY_FALLBACK', {
+            originalSourceId: 'agent2.discovery.pendingQuestion.reprompt',
+            reason: 'pendingReprompt not configured and no pending question',
             severity: 'WARNING'
           });
+        } else {
+          // CRITICAL: No UI-configured reprompt
+          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
+            blockedSourceId: 'agent2.discovery.pendingQuestion.reprompt',
+            blockedText: 'No pendingReprompt, pending question, or emergencyFallback',
+            reason: 'Pending question reprompt needs UI-configured response',
+            severity: 'CRITICAL'
+          });
           response = 'Sorry, I missed that.';
+          repromptUiPath = 'UNMAPPED - CRITICAL';
         }
         
         emit('A2_PATH_SELECTED', { 

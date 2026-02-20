@@ -123,7 +123,11 @@ class Agent2Manager {
             noMatchAnswer: 'Ok. How can I help you today?',
             noMatchWhenReasonCaptured: "Ok. I'm sorry about that.",
             noMatchClarifierQuestion: "Just so I help you the right way — is the system not running at all right now, or is it running but not cooling?",
-            afterAnswerQuestion: 'Would you like to schedule a visit, or do you have a question I can help with?'
+            afterAnswerQuestion: 'Would you like to schedule a visit, or do you have a question I can help with?',
+            // V126: Pending question responses - UI-configured, not hardcoded
+            pendingYesResponse: "Great! Let me help you with that.",
+            pendingNoResponse: "No problem. Is there anything else I can help you with?",
+            pendingReprompt: "Sorry, I missed that. Could you say yes or no?"
           },
           rules: []
         },
@@ -818,6 +822,17 @@ class Agent2Manager {
         ${this.renderProblemsDetected(problems)}
       </div>
 
+      <!-- SPEAK PROVENANCE (What spoke + where it came from) -->
+      <div style="background:#0b1220; border:1px solid #22d3ee; border-radius:12px; padding:16px; margin-bottom:16px;">
+        <div style="color:#22d3ee; font-size:0.8rem; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+          <span>🎯</span> SPEAK PROVENANCE (WHO SPOKE & WHY)
+        </div>
+        <div style="font-size:0.75rem; color:#6e7681; margin-bottom:8px;">
+          Every spoken line is traced to its UI source. <span style="color:#f43f5e;">Red = BLOCKED/UNMAPPED</span>
+        </div>
+        ${this.renderSpeakProvenance(events)}
+      </div>
+
       <!-- TRUTH LINE (Turn-by-turn mic owner + path) -->
       <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:16px;">
         <div style="color:#8b949e; font-size:0.8rem; margin-bottom:10px;">TURN-BY-TURN TRUTH LINE</div>
@@ -1292,6 +1307,89 @@ class Agent2Manager {
           <span style="flex:1;"></span>
           ${latencyBadge}
           ${s.slowestSection ? `<span style="color:#6e7681; font-size:0.65rem;">(${s.slowestSection})</span>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  /**
+   * V126: Render SPEAK_PROVENANCE events in a clear, human-readable format.
+   * This shows exactly what spoke, where it came from (UI path), and why.
+   */
+  renderSpeakProvenance(events) {
+    // Find all provenance events
+    const provenanceEvents = events.filter(e => 
+      e.type === 'SPEAK_PROVENANCE' || 
+      e.type === 'SPEECH_SOURCE_SELECTED' || 
+      e.type === 'SPOKEN_TEXT_UNMAPPED_BLOCKED' ||
+      e.type === 'ROUTING_PROVENANCE'
+    );
+    
+    if (provenanceEvents.length === 0) {
+      return `
+        <div style="color:#6e7681; text-align:center; padding:16px; background:#161b22; border-radius:8px;">
+          <div style="margin-bottom:4px;">No SPEAK_PROVENANCE events found</div>
+          <div style="font-size:0.7rem;">This call may predate V126 provenance logging</div>
+        </div>
+      `;
+    }
+    
+    return provenanceEvents.map((e, idx) => {
+      const d = e.data || {};
+      const turn = e.turn !== undefined ? e.turn : '?';
+      const isBlocked = e.type === 'SPOKEN_TEXT_UNMAPPED_BLOCKED' || d.blocked === true;
+      const isRouting = e.type === 'ROUTING_PROVENANCE';
+      
+      // Color based on status
+      const borderColor = isBlocked ? '#f43f5e' : (d.isFromUiConfig === false ? '#fbbf24' : '#4ade80');
+      const bgColor = isBlocked ? '#450a0a' : '#0d1117';
+      const statusIcon = isBlocked ? '🚫' : (isRouting ? '🔀' : '🎙️');
+      const statusText = isBlocked ? 'BLOCKED' : (d.isFromUiConfig ? 'UI-OWNED' : 'FALLBACK');
+      
+      // Extract key info
+      const sourceId = d.sourceId || d.blockedSourceId || 'unknown';
+      const uiPath = d.uiPath || 'UNMAPPED';
+      const uiTab = d.uiTab || '?';
+      const textPreview = d.spokenTextPreview || d.textPreview || d.blockedText || '[no text]';
+      const reason = d.reason || '?';
+      
+      return `
+        <div style="background:${bgColor}; border:1px solid ${borderColor}; border-radius:8px; padding:12px; margin-bottom:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:1.1rem;">${statusIcon}</span>
+              <span style="color:#6e7681; font-weight:600;">Turn ${turn}</span>
+              <span style="padding:2px 8px; background:${borderColor}22; color:${borderColor}; border-radius:4px; font-size:0.7rem; font-weight:600;">
+                ${statusText}
+              </span>
+            </div>
+            <span style="color:#6e7681; font-size:0.7rem;">${isRouting ? 'ROUTING' : 'SPEECH'}</span>
+          </div>
+          
+          <div style="display:grid; gap:6px; font-size:0.8rem;">
+            <div style="display:flex; gap:8px;">
+              <span style="color:#6e7681; min-width:70px;">Source:</span>
+              <span style="color:#a5b4fc; font-family:monospace; font-size:0.75rem;">${this.escapeHtml(sourceId)}</span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <span style="color:#6e7681; min-width:70px;">UI Path:</span>
+              <span style="color:${uiPath === 'UNMAPPED' ? '#f43f5e' : '#4ade80'}; font-family:monospace; font-size:0.75rem; word-break:break-all;">
+                ${this.escapeHtml(uiPath)}
+              </span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <span style="color:#6e7681; min-width:70px;">UI Tab:</span>
+              <span style="color:#e5e7eb;">${this.escapeHtml(uiTab)}</span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <span style="color:#6e7681; min-width:70px;">Text:</span>
+              <span style="color:#e5e7eb; font-style:italic;">"${this.escapeHtml(textPreview.substring(0, 100))}${textPreview.length > 100 ? '...' : ''}"</span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <span style="color:#6e7681; min-width:70px;">Reason:</span>
+              <span style="color:#94a3b8;">${this.escapeHtml(reason)}</span>
+            </div>
+          </div>
         </div>
       `;
     }).join('');
@@ -2060,6 +2158,37 @@ class Agent2Manager {
           </div>
         </div>
         
+        <!-- V126: Pending Question Responses - UI-configured, not hardcoded -->
+        <div style="margin-top:16px; padding:16px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <span style="font-size:16px;">💬</span>
+            <label style="color:#cbd5e1; font-size:13px; font-weight:600;">Pending Question Responses</label>
+          </div>
+          <p style="color:#6b7280; font-size:11px; margin-bottom:12px;">
+            What the AI says when a caller responds YES, NO, or is unclear to a follow-up question.
+          </p>
+          <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px;">
+            <div>
+              <label style="display:block; color:#94a3b8; font-size:11px; margin-bottom:4px;">When caller says YES</label>
+              <textarea id="a2-fallback-pendingYesResponse" rows="2"
+                style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
+                placeholder="Great! Let me help you with that.">${this.escapeHtml(fallback.pendingYesResponse || '')}</textarea>
+            </div>
+            <div>
+              <label style="display:block; color:#94a3b8; font-size:11px; margin-bottom:4px;">When caller says NO</label>
+              <textarea id="a2-fallback-pendingNoResponse" rows="2"
+                style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
+                placeholder="No problem. Is there anything else I can help you with?">${this.escapeHtml(fallback.pendingNoResponse || '')}</textarea>
+            </div>
+            <div>
+              <label style="display:block; color:#94a3b8; font-size:11px; margin-bottom:4px;">When response is unclear (reprompt)</label>
+              <textarea id="a2-fallback-pendingReprompt" rows="2"
+                style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
+                placeholder="Sorry, I missed that. Could you say yes or no?">${this.escapeHtml(fallback.pendingReprompt || '')}</textarea>
+            </div>
+          </div>
+        </div>
+
         <!-- V126: Emergency Fallback Line - REQUIRED for No-UI-No-Speak Guard -->
         <div style="margin-top:16px; padding:16px; background:#1f1007; border:1px solid #f59e0b; border-radius:12px;">
           <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
@@ -2607,7 +2736,9 @@ class Agent2Manager {
       .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelectorAll('#a2-fallback-noMatchWhenReasonCaptured, #a2-fallback-noMatchClarifierQuestion')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
-    // V126: Emergency fallback line
+    // V126: Pending question responses + Emergency fallback line
+    container.querySelectorAll('#a2-fallback-pendingYesResponse, #a2-fallback-pendingNoResponse, #a2-fallback-pendingReprompt')
+      .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelector('#a2-emergency-fallback')?.addEventListener('input', onAnyChange);
 
     // Style lines table - click row to open modal
@@ -4562,6 +4693,10 @@ class Agent2Manager {
     discovery.playbook.fallback.afterAnswerQuestion = (container.querySelector('#a2-fallback-afterAnswerQuestion')?.value || '').trim();
     discovery.playbook.fallback.noMatchWhenReasonCaptured = (container.querySelector('#a2-fallback-noMatchWhenReasonCaptured')?.value || '').trim();
     discovery.playbook.fallback.noMatchClarifierQuestion = (container.querySelector('#a2-fallback-noMatchClarifierQuestion')?.value || '').trim();
+    // V126: Pending question responses - UI-configured, not hardcoded
+    discovery.playbook.fallback.pendingYesResponse = (container.querySelector('#a2-fallback-pendingYesResponse')?.value || '').trim();
+    discovery.playbook.fallback.pendingNoResponse = (container.querySelector('#a2-fallback-pendingNoResponse')?.value || '').trim();
+    discovery.playbook.fallback.pendingReprompt = (container.querySelector('#a2-fallback-pendingReprompt')?.value || '').trim();
 
     cfg.discovery = discovery;
     
@@ -4609,7 +4744,10 @@ class Agent2Manager {
       'frontDeskBehavior.connectionQualityGate',
       'frontDeskBehavior.recoveryMessages',
       'frontDeskBehavior.conversationStages.greetingRules',
-      'instantResponses'
+      'instantResponses',
+      'afterHoursSettings',
+      'transferSettings',
+      'voicemailSettings'
     ]
   };
 
@@ -4759,6 +4897,47 @@ class Agent2Manager {
           enabled: (frontDeskConfig?.instantResponses || []).filter(r => r.enabled !== false).length,
           greetingCategory: (frontDeskConfig?.instantResponses || []).filter(r => r.category === 'greeting').length
         }
+      },
+      
+      // V126: After-hours routing (can override all Agent2 behavior)
+      afterHoursSettings: {
+        uiPath: 'aiAgentSettings.afterHoursSettings',
+        canOverrideAgent2: true,
+        executesAt: 'Call start (before any greeting)',
+        config: frontDeskConfig?.afterHoursSettings || null,
+        _extracted: {
+          enabled: frontDeskConfig?.afterHoursSettings?.enabled ?? false,
+          action: frontDeskConfig?.afterHoursSettings?.action || 'voicemail',
+          message: frontDeskConfig?.afterHoursSettings?.message || '',
+          forwardNumber: frontDeskConfig?.afterHoursSettings?.forwardNumber || ''
+        }
+      },
+      
+      // V126: Transfer settings (who gets transferred where)
+      transferSettings: {
+        uiPath: 'aiAgentSettings.transferSettings',
+        canOverrideAgent2: true,
+        executesAt: 'On escalation/transfer decision',
+        config: frontDeskConfig?.transferSettings || null,
+        _extracted: {
+          enabled: frontDeskConfig?.transferSettings?.enabled ?? true,
+          transferNumber: frontDeskConfig?.transferSettings?.transferNumber || '',
+          transferMessage: frontDeskConfig?.transferSettings?.transferMessage || "I'm connecting you to our team.",
+          voicemailEnabled: frontDeskConfig?.voicemailSettings?.enabled ?? false,
+          voicemailNumber: frontDeskConfig?.voicemailSettings?.voicemailNumber || ''
+        }
+      },
+      
+      // V126: Voicemail settings
+      voicemailSettings: {
+        uiPath: 'aiAgentSettings.voicemailSettings',
+        canOverrideAgent2: false,
+        executesAt: 'On transfer to voicemail decision',
+        config: frontDeskConfig?.voicemailSettings || null,
+        _extracted: {
+          enabled: frontDeskConfig?.voicemailSettings?.enabled ?? false,
+          greeting: frontDeskConfig?.voicemailSettings?.voicemailGreeting || ''
+        }
       }
     };
     
@@ -4847,6 +5026,38 @@ class Agent2Manager {
           triggerCondition: 'Only when Agent2 greetings DISABLED',
           enabled: !(config.enabled && config.greetings?.interceptor?.enabled),
           rulesCount: runtimeDependencies.legacyGreetingRules.count
+        },
+        // V126: After-hours (highest priority - overrides everything)
+        {
+          sourceId: 'afterHours.routing',
+          uiPath: 'aiAgentSettings.afterHoursSettings',
+          priority: 0,
+          canOverride: ['*'],
+          triggerCondition: 'Outside business hours (per schedule)',
+          enabled: runtimeDependencies.afterHoursSettings._extracted.enabled,
+          action: runtimeDependencies.afterHoursSettings._extracted.action,
+          textPreview: (runtimeDependencies.afterHoursSettings._extracted.message || '').substring(0, 80)
+        },
+        // V126: Transfer/Escalation
+        {
+          sourceId: 'transfer.humanAgent',
+          uiPath: 'aiAgentSettings.transferSettings',
+          priority: 50,
+          canOverride: [],
+          triggerCondition: 'Escalation requested OR trigger card with transfer action',
+          enabled: runtimeDependencies.transferSettings._extracted.enabled,
+          transferNumber: runtimeDependencies.transferSettings._extracted.transferNumber ? '✓ Configured' : '✗ Missing',
+          textPreview: (runtimeDependencies.transferSettings._extracted.transferMessage || '').substring(0, 80)
+        },
+        // V126: Voicemail fallback
+        {
+          sourceId: 'voicemail.fallback',
+          uiPath: 'aiAgentSettings.voicemailSettings',
+          priority: 60,
+          canOverride: [],
+          triggerCondition: 'Transfer unavailable OR DTMF option 2 selected',
+          enabled: runtimeDependencies.voicemailSettings._extracted.enabled,
+          textPreview: (runtimeDependencies.voicemailSettings._extracted.greeting || '').substring(0, 80)
         }
       ]
     };
@@ -4901,46 +5112,84 @@ class Agent2Manager {
       }
     });
     
-    // Verify reachability for each audio URL
+    // Verify reachability for each audio URL (Twilio perspective)
     for (const asset of allAudioUrls) {
       let reachable = false;
       let error = null;
+      let httpStatus = null;
+      let contentType = null;
+      let contentLength = null;
+      let latencyMs = null;
+      
+      // Resolve to absolute URL (what Twilio would see)
+      let absoluteUrl = asset.url;
+      if (asset.url && !asset.url.startsWith('http')) {
+        // Relative URL - resolve to absolute
+        absoluteUrl = new URL(asset.url, window.location.origin).href;
+      }
+      
+      const startTime = performance.now();
       
       try {
-        // Use HEAD request with timeout to check reachability
+        // Use HEAD request with timeout to check reachability (same as Twilio would do)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout like Twilio
         
-        const response = await fetch(asset.url, { 
+        const response = await fetch(absoluteUrl, { 
           method: 'HEAD', 
-          signal: controller.signal 
+          signal: controller.signal,
+          cache: 'no-store' // Don't use browser cache - Twilio won't have it
         });
         clearTimeout(timeoutId);
         
-        reachable = response.ok;
+        latencyMs = Math.round(performance.now() - startTime);
+        httpStatus = response.status;
+        contentType = response.headers.get('content-type');
+        contentLength = response.headers.get('content-length');
+        
+        // Check if it's actually audio
+        const isAudio = contentType && (
+          contentType.includes('audio/') || 
+          contentType.includes('mpeg') || 
+          contentType.includes('wav') ||
+          contentType.includes('ogg')
+        );
+        
+        reachable = response.ok && isAudio;
         if (!reachable) {
-          error = `HTTP ${response.status}`;
+          if (!response.ok) {
+            error = `HTTP ${response.status}`;
+          } else if (!isAudio) {
+            error = `Not audio: ${contentType || 'unknown type'}`;
+          }
         }
       } catch (err) {
+        latencyMs = Math.round(performance.now() - startTime);
         reachable = false;
-        error = err.name === 'AbortError' ? 'TIMEOUT' : err.message;
+        error = err.name === 'AbortError' ? 'TIMEOUT (>8s)' : err.message;
       }
       
       audioAssets.assets.push({
         ...asset,
+        absoluteUrlResolved: absoluteUrl,
         status: reachable ? 'OK' : 'MISSING',
         reachable,
+        httpStatus,
+        contentType,
+        bytes: contentLength ? parseInt(contentLength) : null,
+        latencyMs,
         error,
         lastChecked: timestamp,
         fallbackBehavior: reachable ? 'N/A' : 'TTS with fallback text',
-        hasFallbackText: !!(asset.fallbackText && asset.fallbackText !== '[no fallback text]')
+        hasFallbackText: !!(asset.fallbackText && asset.fallbackText !== '[no fallback text]'),
+        twilioNote: reachable ? 'Twilio can fetch this URL' : 'Twilio may fail to fetch - will fall back to TTS'
       });
       
       if (!reachable) {
         audioAssets.unreachableCount++;
         // If no fallback text, this is CRITICAL - call will fail
         const severity = asset.fallbackText && asset.fallbackText !== '[no fallback text]' ? 'WARNING' : 'CRITICAL';
-        failedChecks.push(`AUDIO_${severity}: ${asset.sourceId} - ${asset.url} (${error})${severity === 'CRITICAL' ? ' - NO FALLBACK TEXT' : ''}`);
+        failedChecks.push(`AUDIO_${severity}: ${asset.sourceId} - ${absoluteUrl} (${error}, ${latencyMs}ms)${severity === 'CRITICAL' ? ' - NO FALLBACK TEXT' : ''}`);
       }
     }
     

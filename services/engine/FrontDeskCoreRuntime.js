@@ -481,6 +481,22 @@ class FrontDeskCoreRuntime {
                         maxRetries: cqMaxRetries
                     });
                     
+                    // V126: ROUTING_PROVENANCE - Log routing decision for No-UI-No-Execute compliance
+                    bufferEvent('ROUTING_PROVENANCE', {
+                        routingId: 'dtmf.catastrophicMenu',
+                        uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfOptions',
+                        uiTab: 'LLM-0 Behavior',
+                        configPath: 'frontDeskBehavior.connectionQualityGate',
+                        action: 'DTMF_ESCAPE',
+                        reason: `Connection quality gate triggered DTMF menu after ${callState._connectionTroubleCount} troubles`,
+                        isFromUiConfig: true,
+                        dtmfOptions: {
+                          option1: 'Transfer to agent',
+                          option2: 'Leave voicemail'
+                        },
+                        turn: turn
+                    });
+                    
                     // Return DTMF escape response
                     // Note: The actual DTMF handling (Gather with numDigits) happens in v2twilio.js
                     return {
