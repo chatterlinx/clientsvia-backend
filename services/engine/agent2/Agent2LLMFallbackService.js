@@ -156,7 +156,11 @@ function computeComplexityScore(text) {
 /**
  * Determine if LLM fallback should be called
  * LLM runs ONLY when ALL deterministic paths fail.
- * Returns { call: boolean, reason: string, details: Object }
+ * Returns { call: boolean, reason: string, details: Object, mode: string }
+ * 
+ * V5: Supports two modes:
+ * - "guided": Empathy + UI-owned handoff question (funnels to booking)
+ * - "answer_return": Short answer only, no question, returns to deterministic
  */
 function shouldCallLLMFallback({ 
   config, 
@@ -172,12 +176,24 @@ function shouldCallLLMFallback({
   hasTransferFlow,         // Transfer to advisor active
   hasSpeakSourceSelected,  // Another system already selected speak source
   triggerCardMatched,      // A trigger card matched this turn
-  bookingModeLocked        // Booking mode is locked
+  bookingModeLocked,       // Booking mode is locked
+  // V5: Answer+Return state tracking
+  llmAssistState           // { usesThisCall, cooldownRemaining }
 }) {
   const llmFallback = config?.llmFallback;
   
+  // V5: Determine active mode
+  const mode = llmFallback?.mode || 'guided';
+  const isAnswerReturnMode = mode === 'answer_return';
+  const answerReturnConfig = llmFallback?.answerReturn || {};
+  
+  // V5: Get mode-specific config
+  const usesThisCall = llmAssistState?.usesThisCall || 0;
+  const cooldownRemaining = llmAssistState?.cooldownRemaining || 0;
+  
   // Build snapshot for audit (always included in response)
   const stateSnapshot = {
+    mode,
     hasPendingQuestion: !!hasPendingQuestion,
     hasCapturedReasonFlow: !!hasCapturedReasonFlow,
     hasAfterHoursFlow: !!hasAfterHoursFlow,
@@ -187,18 +203,63 @@ function shouldCallLLMFallback({
     bookingModeLocked: !!bookingModeLocked,
     inBookingFlow: !!inBookingFlow,
     inDiscoveryCriticalStep: !!inDiscoveryCriticalStep,
-    llmTurnsThisCall: llmTurnsThisCall || 0
+    llmTurnsThisCall: llmTurnsThisCall || 0,
+    // V5: Answer+Return state
+    usesThisCall,
+    cooldownRemaining
   };
   
-  // Hard gate: must be enabled
-  if (!llmFallback?.enabled) {
+  // Hard gate: master switch must be enabled
+  // Check discovery.llmFallback.enabled (canonical location) first
+  const masterEnabled = config?.discovery?.llmFallback?.enabled === true || llmFallback?.enabled === true;
+  if (!masterEnabled) {
     return { 
       call: false, 
+      mode,
       reason: 'LLM_FALLBACK_DISABLED', 
       blockedBy: 'CONFIG_DISABLED',
       details: { enabled: false },
       stateSnapshot 
     };
+  }
+  
+  // V5: Mode-specific enable check
+  if (isAnswerReturnMode && answerReturnConfig.enabled !== true) {
+    return {
+      call: false,
+      mode,
+      reason: 'Answer+Return mode not enabled',
+      blockedBy: 'MODE_DISABLED',
+      details: { mode, modeEnabled: false },
+      stateSnapshot
+    };
+  }
+  
+  // V5: Answer+Return cooldown check (BEFORE other checks)
+  if (isAnswerReturnMode && cooldownRemaining > 0) {
+    return {
+      call: false,
+      mode,
+      reason: `Cooldown active (${cooldownRemaining} turns remaining)`,
+      blockedBy: 'COOLDOWN',
+      details: { cooldownRemaining, mode },
+      stateSnapshot
+    };
+  }
+  
+  // V5: Answer+Return max uses check
+  if (isAnswerReturnMode) {
+    const maxUsesPerCall = answerReturnConfig.maxUsesPerCall ?? 2;
+    if (usesThisCall >= maxUsesPerCall) {
+      return {
+        call: false,
+        mode,
+        reason: `Max uses per call reached (${usesThisCall}/${maxUsesPerCall})`,
+        blockedBy: 'MAX_USES',
+        details: { usesThisCall, maxUsesPerCall, mode },
+        stateSnapshot
+      };
+    }
   }
   
   const triggers = llmFallback.triggers || {};
@@ -212,6 +273,7 @@ function shouldCallLLMFallback({
   if (triggerCardMatched) {
     return { 
       call: false, 
+      mode,
       reason: 'Deterministic trigger card matched - LLM not needed', 
       blockedBy: 'TRIGGER_CARD_MATCH',
       details: { triggerCardMatched: true },
@@ -223,6 +285,7 @@ function shouldCallLLMFallback({
   if (hasSpeakSourceSelected) {
     return { 
       call: false, 
+      mode,
       reason: 'Another module already selected speak source', 
       blockedBy: 'SPEAK_SOURCE_ALREADY_SELECTED',
       details: { hasSpeakSourceSelected: true },
@@ -234,6 +297,7 @@ function shouldCallLLMFallback({
   if (triggers.blockedWhileBooking !== false && (inBookingFlow || bookingModeLocked)) {
     return { 
       call: false, 
+      mode,
       reason: 'Blocked during booking flow', 
       blockedBy: 'BOOKING_LOCKED',
       details: { inBookingFlow, bookingModeLocked },
@@ -245,6 +309,7 @@ function shouldCallLLMFallback({
   if (triggers.blockedWhileDiscoveryCriticalStep !== false && inDiscoveryCriticalStep) {
     return { 
       call: false, 
+      mode,
       reason: 'Blocked during discovery-critical step', 
       blockedBy: 'DISCOVERY_CRITICAL_STEP',
       details: { inDiscoveryCriticalStep: true },
@@ -256,6 +321,7 @@ function shouldCallLLMFallback({
   if (hasPendingQuestion) {
     return { 
       call: false, 
+      mode,
       reason: 'Pending question active - awaiting YES/NO/REPROMPT', 
       blockedBy: 'PENDING_QUESTION',
       details: { hasPendingQuestion: true },
@@ -267,6 +333,7 @@ function shouldCallLLMFallback({
   if (hasCapturedReasonFlow) {
     return { 
       call: false, 
+      mode,
       reason: 'Captured reason clarifier flow active', 
       blockedBy: 'CAPTURED_REASON_FLOW',
       details: { hasCapturedReasonFlow: true },
@@ -278,6 +345,7 @@ function shouldCallLLMFallback({
   if (hasAfterHoursFlow) {
     return { 
       call: false, 
+      mode,
       reason: 'After-hours or catastrophic fallback active', 
       blockedBy: 'AFTER_HOURS_FLOW',
       details: { hasAfterHoursFlow: true },
@@ -289,6 +357,7 @@ function shouldCallLLMFallback({
   if (hasTransferFlow) {
     return { 
       call: false, 
+      mode,
       reason: 'Transfer to advisor flow active', 
       blockedBy: 'TRANSFER_FLOW',
       details: { hasTransferFlow: true },
@@ -296,16 +365,20 @@ function shouldCallLLMFallback({
     };
   }
   
-  // Max LLM turns per call (default 1 - LLM gets ONE shot)
-  const maxTurns = triggers.maxLLMFallbackTurnsPerCall ?? 1;
-  if (llmTurnsThisCall >= maxTurns) {
-    return { 
-      call: false, 
-      reason: `Max LLM turns reached (${llmTurnsThisCall}/${maxTurns})`, 
-      blockedBy: 'MAX_LLM_TURNS_REACHED',
-      details: { llmTurnsThisCall, maxTurns },
-      stateSnapshot 
-    };
+  // Max LLM turns per call (default 1 - LLM gets ONE shot) - for GUIDED mode
+  // Answer+Return uses its own maxUsesPerCall (checked earlier)
+  if (!isAnswerReturnMode) {
+    const maxTurns = triggers.maxLLMFallbackTurnsPerCall ?? 1;
+    if (llmTurnsThisCall >= maxTurns) {
+      return { 
+        call: false, 
+        mode,
+        reason: `Max LLM turns reached (${llmTurnsThisCall}/${maxTurns})`, 
+        blockedBy: 'MAX_LLM_TURNS_REACHED',
+        details: { llmTurnsThisCall, maxTurns },
+        stateSnapshot 
+      };
+    }
   }
   
   // Compute complexity score
@@ -351,6 +424,7 @@ function shouldCallLLMFallback({
   if (triggersMatched.length === 0) {
     return { 
       call: false, 
+      mode,
       reason: 'No trigger conditions met', 
       blockedBy: 'NO_TRIGGERS_MATCHED',
       details: { 
@@ -365,6 +439,7 @@ function shouldCallLLMFallback({
   
   return {
     call: true,
+    mode,
     reason: triggersMatched.join('+'),
     blockedBy: null,
     stateSnapshot,
@@ -405,14 +480,19 @@ function checkParroting(llmOutput, callerInput, maxConsecutiveWords = 8) {
 /**
  * Validate LLM output against constraints
  * Returns { valid: boolean, violations: string[], cleanedText: string }
+ * 
+ * V5: Mode-aware validation
+ * - Guided mode: May require funnel question
+ * - Answer+Return mode: MUST NOT end with question
  */
-function validateOutput(text, constraints, callerInput = '') {
+function validateOutput(text, constraints, callerInput = '', mode = 'guided') {
   const violations = [];
   let cleanedText = (text || '').trim();
+  const isAnswerReturnMode = mode === 'answer_return';
   
   if (!cleanedText) {
     violations.push('empty_output');
-    return { valid: false, violations, cleanedText: '', sentenceCount: 0 };
+    return { valid: false, violations, cleanedText: '', sentenceCount: 0, mode };
   }
   
   // Count sentences (rough: split by . ! ?)
@@ -427,10 +507,25 @@ function validateOutput(text, constraints, callerInput = '') {
     }
   }
   
-  // Check for funnel question
-  if (constraints?.mustEndWithFunnelQuestion !== false) {
-    const endsWithQuestion = /\?$/.test(cleanedText.trim());
-    if (!endsWithQuestion) {
+  // V5: Mode-specific question handling
+  const endsWithQuestion = /\?$/.test(cleanedText.trim());
+  
+  if (isAnswerReturnMode) {
+    // Answer+Return: MUST NOT end with question
+    if (endsWithQuestion) {
+      violations.push('answer_return_must_not_end_with_question');
+      // Remove the question - take only the declarative portion
+      const nonQuestionSentences = sentences.filter(s => !s.trim().endsWith('?') && !/\?\s*$/.test(s));
+      if (nonQuestionSentences.length > 0) {
+        cleanedText = nonQuestionSentences.slice(0, maxSentences).join('. ').trim();
+        if (!cleanedText.endsWith('.') && !cleanedText.endsWith('!')) {
+          cleanedText += '.';
+        }
+      }
+    }
+  } else {
+    // Guided mode: May require funnel question
+    if (constraints?.mustEndWithFunnelQuestion !== false && !endsWithQuestion) {
       violations.push('missing_funnel_question');
     }
   }
@@ -541,7 +636,8 @@ function validateOutput(text, constraints, callerInput = '') {
     valid: violations.length === 0,
     violations,
     cleanedText,
-    sentenceCount: sentences.length
+    sentenceCount: sentences.length,
+    mode
   };
 }
 
@@ -551,32 +647,81 @@ function validateOutput(text, constraints, callerInput = '') {
 
 /**
  * Call LLM for fallback response
+ * V5: Supports mode-specific prompts for guided vs answer_return
  * @returns {{ success: boolean, response: string, tokens: Object, error?: string }}
  */
-async function callLLM({ config, input, callContext }) {
+async function callLLM({ config, input, callContext, mode = 'guided' }) {
   const llmFallback = config?.llmFallback;
-  const prompts = llmFallback?.prompts || {};
-  const constraints = llmFallback?.constraints || {};
+  const isAnswerReturnMode = mode === 'answer_return';
+  const answerReturnConfig = llmFallback?.answerReturn || {};
   
-  // Build model name
-  let model = llmFallback?.model || 'gpt-4.1-mini';
-  if (llmFallback?.customModelOverride) {
-    model = llmFallback.customModelOverride;
+  // V5: Mode-specific config
+  let prompts, constraints, model;
+  
+  if (isAnswerReturnMode) {
+    // Answer+Return mode: Use answerReturn config
+    prompts = {}; // Answer+Return has its own systemPrompt field
+    constraints = {
+      maxSentences: answerReturnConfig.maxSentences ?? 2,
+      maxOutputTokens: answerReturnConfig.maxOutputTokens ?? 140,
+      temperature: answerReturnConfig.temperature ?? 0.2,
+      forbidBookingTimes: answerReturnConfig.forbidBookingTimes !== false,
+      forbiddenBookingPatterns: answerReturnConfig.forbiddenBookingPatterns || []
+    };
+    model = answerReturnConfig.model || 'gpt-4.1-mini';
+    if (answerReturnConfig.customModelOverride) {
+      model = answerReturnConfig.customModelOverride;
+    }
+  } else {
+    // Guided mode: Use existing prompts config
+    prompts = llmFallback?.prompts || {};
+    constraints = llmFallback?.constraints || {};
+    model = llmFallback?.model || 'gpt-4.1-mini';
+    if (llmFallback?.customModelOverride) {
+      model = llmFallback.customModelOverride;
+    }
   }
   
-  // Build system prompt
-  const systemPrompt = [
-    prompts.system || 'You are a calm, professional HVAC service coordinator.',
-    prompts.format || 'Write exactly 2 sentences. Sentence 1: brief empathy. Sentence 2: one booking question.',
-    prompts.safety || ''
-  ].filter(Boolean).join('\n\n');
+  // Build system prompt based on mode
+  let systemPrompt;
+  if (isAnswerReturnMode) {
+    // Answer+Return: Short helpful answer, NO question, NO booking language
+    const userSystemPrompt = answerReturnConfig.systemPrompt || '';
+    systemPrompt = userSystemPrompt || [
+      'You are a calm, professional service coordinator.',
+      'Provide a brief, helpful answer to the caller\'s question.',
+      'RULES:',
+      '- Maximum 2 short sentences',
+      '- Do NOT ask any questions',
+      '- Do NOT mention scheduling, booking, appointments, or time slots',
+      '- Do NOT offer to schedule anything',
+      '- Do NOT mention specific times, days, or availability',
+      '- Just provide helpful information and stop'
+    ].join('\n');
+  } else {
+    // Guided mode: Empathy + booking question
+    systemPrompt = [
+      prompts.system || 'You are a calm, professional HVAC service coordinator.',
+      prompts.format || 'Write exactly 2 sentences. Sentence 1: brief empathy. Sentence 2: one booking question.',
+      prompts.safety || ''
+    ].filter(Boolean).join('\n\n');
+  }
   
   // Build user message with context
-  const userMessage = `Caller said: "${input}"
+  let userMessage;
+  if (isAnswerReturnMode) {
+    userMessage = `Caller said: "${input}"
+
+${callContext?.capturedReason ? `Context: They mentioned ${callContext.capturedReason}` : ''}
+
+Provide a brief, helpful answer. Do NOT ask any questions. Do NOT mention scheduling or appointments.`;
+  } else {
+    userMessage = `Caller said: "${input}"
   
 ${callContext?.capturedReason ? `Context: They mentioned ${callContext.capturedReason}` : ''}
 
 Respond with empathy and ask ONE question that moves them toward booking a service visit.`;
+  }
 
   const startTime = Date.now();
   
@@ -632,6 +777,10 @@ Respond with empathy and ask ONE question that moves them toward booking a servi
 /**
  * Run LLM fallback and return response with full provenance
  * 
+ * V5: Supports two modes:
+ * - "guided": Empathy + UI-owned handoff question (funnels to booking)
+ * - "answer_return": Short answer only, no question, returns to deterministic
+ * 
  * @param {Object} params
  * @param {Object} params.config - Agent 2.0 config (includes llmFallback)
  * @param {string} params.input - Caller's input
@@ -639,14 +788,29 @@ Respond with empathy and ask ONE question that moves them toward booking a servi
  * @param {boolean} params.inBookingFlow - Are we in booking-critical steps?
  * @param {boolean} params.inDiscoveryCriticalStep - Are we in slot-filling?
  * @param {number} params.llmTurnsThisCall - How many LLM turns already this call
+ * @param {Object} params.llmAssistState - { usesThisCall, cooldownRemaining } for Answer+Return
  * @param {Object} params.callContext - { callSid, companyId, turn, capturedReason }
  * @param {Function} params.emit - Event emitter
  * 
- * @returns {Object|null} { response, provenance, handoffAction } or null if LLM should not run
+ * @returns {Object|null} { response, provenance, handoffAction, stateUpdate } or null if LLM should not run
  */
-async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDiscoveryCriticalStep, llmTurnsThisCall, hasPendingQuestion, hasCapturedReasonFlow, hasAfterHoursFlow, hasTransferFlow, hasSpeakSourceSelected, callContext, emit }) {
+async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDiscoveryCriticalStep, llmTurnsThisCall, llmAssistState, hasPendingQuestion, hasCapturedReasonFlow, hasAfterHoursFlow, hasTransferFlow, hasSpeakSourceSelected, callContext, emit }) {
   const llmFallback = config?.llmFallback;
-  const constraints = llmFallback?.constraints || {};
+  const mode = llmFallback?.mode || 'guided';
+  const isAnswerReturnMode = mode === 'answer_return';
+  const answerReturnConfig = llmFallback?.answerReturn || {};
+  
+  // V5: Mode-specific config
+  const constraints = isAnswerReturnMode 
+    ? {
+        maxSentences: answerReturnConfig.maxSentences ?? 2,
+        maxOutputTokens: answerReturnConfig.maxOutputTokens ?? 140,
+        forbidBookingTimes: answerReturnConfig.forbidBookingTimes !== false,
+        forbiddenBookingPatterns: answerReturnConfig.forbiddenBookingPatterns || [],
+        mustEndWithFunnelQuestion: false // Answer+Return never requires question
+      }
+    : llmFallback?.constraints || {};
+  
   const emergencyFallback = llmFallback?.emergencyFallbackLine;
   const handoff = llmFallback?.handoff || {};
   
@@ -674,29 +838,34 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     hasTransferFlow,
     hasSpeakSourceSelected,
     triggerCardMatched: callContext?.triggerCardMatched,
-    bookingModeLocked: callContext?.bookingModeLocked
+    bookingModeLocked: callContext?.bookingModeLocked,
+    llmAssistState: llmAssistState || { usesThisCall: 0, cooldownRemaining: 0 }
   });
   
   // ════════════════════════════════════════════════════════════════════════
   // A2_LLM_FALLBACK_DECISION - Must include blockedBy and stateSnapshot
+  // V5: Also includes mode for Call Review clarity
   // ════════════════════════════════════════════════════════════════════════
   emit('A2_LLM_FALLBACK_DECISION', {
     call: decision.call,
+    mode: decision.mode,
     blocked: !decision.call,
     blockedBy: decision.blockedBy || null,
     reason: decision.reason,
     details: decision.details,
     stateSnapshot: decision.stateSnapshot,
     llmTurnsThisCall: llmTurnsThisCall || 0,
-    maxTurns: llmFallback?.triggers?.maxLLMFallbackTurnsPerCall ?? 1
+    maxTurns: isAnswerReturnMode 
+      ? answerReturnConfig.maxUsesPerCall ?? 2
+      : llmFallback?.triggers?.maxLLMFallbackTurnsPerCall ?? 1
   });
   
   if (!decision.call) {
     return null;
   }
   
-  // Call LLM
-  const llmResult = await callLLM({ config, input, callContext });
+  // Call LLM with mode-specific prompts
+  const llmResult = await callLLM({ config, input, callContext, mode });
   
   let finalResponse;
   let usedEmergencyFallback = false;
@@ -709,7 +878,8 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
   
   if (llmResult.success && llmResult.response) {
     // Validate output against constraints (including anti-parrot and time-slot blocking)
-    validationResult = validateOutput(llmResult.response, constraints, input);
+    // V5: Pass mode to validateOutput for mode-specific rules
+    validationResult = validateOutput(llmResult.response, constraints, input, mode);
     constraintViolations = validationResult.violations;
     sentenceCount = validationResult.sentenceCount || 0;
     hadFunnelQuestion = /\?$/.test(validationResult.cleanedText.trim());
@@ -744,16 +914,18 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
   // ════════════════════════════════════════════════════════════════════════
   // A2_LLM_OUTPUT_VALIDATION - ALWAYS emit (both pass and fail)
   // This is the proof for Call Review that validation ran and what happened
+  // V5: Includes mode for clarity
   // ════════════════════════════════════════════════════════════════════════
   emit('A2_LLM_OUTPUT_VALIDATION', {
     passed: validationResult?.valid ?? false,
+    mode,
     violations: constraintViolations,
     sentenceCount,
     hadFunnelQuestion,
     // Config snapshot for audit
     forbidBookingTimes: constraints?.forbidBookingTimes !== false,
     patternsCheckedCount: constraints?.forbiddenBookingPatterns?.length || 0,
-    handoffMode: handoff?.mode || 'confirmService',
+    handoffMode: isAnswerReturnMode ? 'answer_return' : (handoff?.mode || 'confirmService'),
     // Response previews
     originalResponsePreview: llmResult.response?.substring(0, 150) || '',
     cleanedResponsePreview: validationResult?.cleanedText?.substring(0, 150) || '',
@@ -810,46 +982,53 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
   // ════════════════════════════════════════════════════════════════════════
   // HANDOFF MODE - LLM cannot invent handoff language
   // The "question" portion is ALWAYS the UI-owned handoff question
+  // V5: Answer+Return mode SKIPS handoff entirely (no question, just answer)
   // ════════════════════════════════════════════════════════════════════════
-  const handoffMode = handoff.mode || 'confirmService';
+  let handoffMode = null;
   let handoffAction = null;
   let handoffQuestion = null;
   let textOverriddenByHandoff = false;
   
-  // Get UI-owned handoff config based on mode
-  if (handoffMode === 'confirmService') {
-    handoffQuestion = handoff.confirmService?.question || "Would you like to get a technician out to take a look?";
-    handoffAction = {
-      mode: 'confirmService',
-      awaitingConfirmation: true,
-      yesResponse: handoff.confirmService?.yesResponse || "Perfect — I'm going to grab a few details so we can get this scheduled.",
-      noResponse: handoff.confirmService?.noResponse || "No problem. Is there anything else I can help you with today?"
-    };
-  } else if (handoffMode === 'takeMessage') {
-    handoffQuestion = handoff.takeMessage?.question || "Would you like me to take a message for a callback?";
-    handoffAction = {
-      mode: 'takeMessage',
-      awaitingConfirmation: true,
-      yesResponse: handoff.takeMessage?.yesResponse || "Great, I'll get some info for the callback. What's the best number to reach you?",
-      noResponse: handoff.takeMessage?.noResponse || "No problem. Is there anything else I can help you with?"
-    };
-  } else if (handoffMode === 'offerForward' && handoff.offerForward?.enabled) {
-    handoffQuestion = handoff.offerForward?.question || "Would you like me to connect you to a team member now?";
-    handoffAction = {
-      mode: 'offerForward',
-      awaitingConfirmation: true,
-      yesResponse: handoff.offerForward?.yesResponse || "Connecting you now — one moment please.",
-      noResponse: handoff.offerForward?.noResponse || "No problem. Is there something else I can help with?",
-      consentRequired: handoff.offerForward?.consentRequired !== false
-    };
+  // V5: Answer+Return mode does NOT use handoff - answer only, no question
+  if (!isAnswerReturnMode) {
+    handoffMode = handoff.mode || 'confirmService';
+    
+    // Get UI-owned handoff config based on mode
+    if (handoffMode === 'confirmService') {
+      handoffQuestion = handoff.confirmService?.question || "Would you like to get a technician out to take a look?";
+      handoffAction = {
+        mode: 'confirmService',
+        awaitingConfirmation: true,
+        yesResponse: handoff.confirmService?.yesResponse || "Perfect — I'm going to grab a few details so we can get this scheduled.",
+        noResponse: handoff.confirmService?.noResponse || "No problem. Is there anything else I can help you with today?"
+      };
+    } else if (handoffMode === 'takeMessage') {
+      handoffQuestion = handoff.takeMessage?.question || "Would you like me to take a message for a callback?";
+      handoffAction = {
+        mode: 'takeMessage',
+        awaitingConfirmation: true,
+        yesResponse: handoff.takeMessage?.yesResponse || "Great, I'll get some info for the callback. What's the best number to reach you?",
+        noResponse: handoff.takeMessage?.noResponse || "No problem. Is there anything else I can help you with?"
+      };
+    } else if (handoffMode === 'offerForward' && handoff.offerForward?.enabled) {
+      handoffQuestion = handoff.offerForward?.question || "Would you like me to connect you to a team member now?";
+      handoffAction = {
+        mode: 'offerForward',
+        awaitingConfirmation: true,
+        yesResponse: handoff.offerForward?.yesResponse || "Connecting you now — one moment please.",
+        noResponse: handoff.offerForward?.noResponse || "No problem. Is there something else I can help with?",
+        consentRequired: handoff.offerForward?.consentRequired !== false
+      };
+    }
   }
   
   // ════════════════════════════════════════════════════════════════════════
   // CRITICAL: Override LLM question with UI-owned handoff question
   // LLM provides empathy (sentence 1), UI provides the question (sentence 2)
   // This prevents LLM from inventing booking-time questions
+  // V5: Answer+Return mode SKIPS this - just the answer, no question
   // ════════════════════════════════════════════════════════════════════════
-  if (handoffQuestion && !usedEmergencyFallback) {
+  if (!isAnswerReturnMode && handoffQuestion && !usedEmergencyFallback) {
     // Extract empathy portion (first sentence) from LLM response
     const llmSentences = finalResponse.split(/[.!?]+/).filter(s => s.trim().length > 0);
     const empathyPortion = llmSentences.length > 0 ? llmSentences[0].trim() : '';
@@ -867,7 +1046,7 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
       textOverriddenByHandoff = true;
     }
     hadFunnelQuestion = true;
-  } else if (!hadFunnelQuestion && handoffQuestion) {
+  } else if (!isAnswerReturnMode && !hadFunnelQuestion && handoffQuestion) {
     // Append handoff question if response doesn't end with a question
     finalResponse = `${finalResponse} ${handoffQuestion}`.trim();
     hadFunnelQuestion = true;
@@ -877,9 +1056,10 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
   // ════════════════════════════════════════════════════════════════════════
   // POST-OVERRIDE VALIDATION: Check ENTIRE finalResponse for forbidden content
   // This catches sentence 1 (empathy) sneaking in scheduling language
+  // V5: Always run for both modes - Answer+Return also needs validation
   // ════════════════════════════════════════════════════════════════════════
   if (!usedEmergencyFallback) {
-    const postOverrideValidation = validateOutput(finalResponse, constraints, input);
+    const postOverrideValidation = validateOutput(finalResponse, constraints, input, mode);
     
     if (!postOverrideValidation.valid) {
       emit('A2_LLM_POST_OVERRIDE_VALIDATION_FAILED', {
@@ -910,18 +1090,37 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     });
   }
   
+  // V5: Build state update for Answer+Return mode (cooldown + uses tracking)
+  let stateUpdate = null;
+  if (isAnswerReturnMode) {
+    const currentUses = llmAssistState?.usesThisCall || 0;
+    const cooldownTurns = answerReturnConfig.cooldownTurns ?? 1;
+    stateUpdate = {
+      usesThisCall: currentUses + 1,
+      cooldownRemaining: cooldownTurns,
+      lastModeUsed: 'answer_return'
+    };
+  }
+  
   // Build provenance
+  // V5: Include mode in sourceId and uiPath for precise tracing
+  const modeLabel = isAnswerReturnMode ? 'answerReturn' : 'guided';
   const provenance = {
-    sourceId: usedEmergencyFallback ? 'agent2.llmFallback.emergencyFallback' : 'agent2.llmFallback',
+    sourceId: usedEmergencyFallback 
+      ? 'agent2.llmFallback.emergencyFallback' 
+      : `agent2.llmFallback.${modeLabel}`,
     uiPath: usedEmergencyFallback 
       ? 'aiAgentSettings.agent2.llmFallback.emergencyFallbackLine.text'
-      : 'aiAgentSettings.agent2.llmFallback',
+      : `aiAgentSettings.agent2.llmFallback.${modeLabel}`,
     uiTab: 'LLM Fallback',
-    configPath: usedEmergencyFallback ? 'llmFallback.emergencyFallbackLine' : 'llmFallback.prompts',
+    configPath: usedEmergencyFallback 
+      ? 'llmFallback.emergencyFallbackLine' 
+      : `llmFallback.${modeLabel}`,
     spokenTextPreview: finalResponse.substring(0, 120),
     isFromUiConfig: true,
     isLLMAssist: !usedEmergencyFallback,
-    handoffMode,
+    mode,
+    handoffMode: isAnswerReturnMode ? null : handoffMode,
     llmMeta: {
       model: llmResult.model,
       tokensInput: llmResult.tokens.input,
@@ -933,8 +1132,11 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
       usedEmergencyFallback,
       hadFunnelQuestion,
       sentenceCount,
-      handoffMode,
-      awaitingConfirmation: handoffAction?.awaitingConfirmation || false
+      mode,
+      handoffMode: isAnswerReturnMode ? null : handoffMode,
+      awaitingConfirmation: handoffAction?.awaitingConfirmation || false,
+      // V5: Answer+Return state info
+      stateUpdate: isAnswerReturnMode ? stateUpdate : null
     }
   };
   
@@ -987,13 +1189,15 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
   });
   
   // V4: Emit SPEECH_SOURCE_SELECTED for Call Review attribution
-  // This ensures the Call Review UI can display where this response came from
+  // V5: Include mode in sourceId for precise tracing
   const llmSourceId = usedEmergencyFallback 
     ? 'agent2.llmFallback.emergencyFallback'
-    : 'agent2.llmFallback.validated';
+    : isAnswerReturnMode 
+      ? 'LLM_ANSWER_RETURN'
+      : 'LLM_GUIDED';
   const llmUiPath = usedEmergencyFallback
     ? 'aiAgentSettings.agent2.emergencyFallbackLine.text'
-    : 'aiAgentSettings.agent2.discovery.llmFallback';
+    : `aiAgentSettings.agent2.llmFallback.${modeLabel}`;
   
   emit('SPEECH_SOURCE_SELECTED', {
     sourceId: llmSourceId,
@@ -1001,12 +1205,15 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     spokenTextPreview: (finalResponse || '').substring(0, 80),
     note: usedEmergencyFallback 
       ? 'LLM output failed validation - used emergency fallback' 
-      : `LLM fallback response (mode: ${handoffMode || 'default'})`,
+      : `LLM fallback response (mode: ${mode})`,
     metadata: {
+      mode,
       usedEmergencyFallback,
-      handoffMode: handoffMode || null,
+      handoffMode: isAnswerReturnMode ? null : handoffMode,
       sentenceCount,
-      validationPassed: validationResult?.valid ?? false
+      validationPassed: validationResult?.valid ?? false,
+      // V5: Answer+Return state tracking
+      stateUpdate: isAnswerReturnMode ? stateUpdate : null
     }
   });
   
@@ -1024,7 +1231,10 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     response: finalResponse,
     provenance,
     llmMeta: provenance.llmMeta,
-    handoffAction
+    handoffAction: isAnswerReturnMode ? null : handoffAction,
+    // V5: State update for Answer+Return mode (caller must apply to state)
+    stateUpdate: isAnswerReturnMode ? stateUpdate : null,
+    mode
   };
 }
 

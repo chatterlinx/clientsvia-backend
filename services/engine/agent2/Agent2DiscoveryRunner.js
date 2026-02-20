@@ -366,6 +366,25 @@ class Agent2DiscoveryRunner {
     nextState.agent2 = safeObj(nextState.agent2, {});
     nextState.agent2.discovery = safeObj(nextState.agent2.discovery, {});
     nextState.agent2.discovery.turnLastRan = typeof turn === 'number' ? turn : null;
+    
+    // ══════════════════════════════════════════════════════════════════════════
+    // V5: LLM ASSIST STATE INITIALIZATION & COOLDOWN MANAGEMENT
+    // Tracks uses per call and cooldown remaining for Answer+Return mode
+    // ══════════════════════════════════════════════════════════════════════════
+    nextState.agent2.llmAssist = safeObj(nextState.agent2.llmAssist, {
+      usesThisCall: 0,
+      cooldownRemaining: 0,
+      lastModeUsed: null
+    });
+    
+    // Decrement cooldown at start of each turn
+    if (nextState.agent2.llmAssist.cooldownRemaining > 0) {
+      nextState.agent2.llmAssist.cooldownRemaining -= 1;
+      emit('A2_LLM_COOLDOWN_DECREMENTED', {
+        newCooldownRemaining: nextState.agent2.llmAssist.cooldownRemaining,
+        usesThisCall: nextState.agent2.llmAssist.usesThisCall
+      });
+    }
 
     // ──────────────────────────────────────────────────────────────────────
     // V119: A2_GATE — MANDATORY ENTRY PROOF
@@ -1608,6 +1627,7 @@ class Agent2DiscoveryRunner {
       
       // Try LLM fallback (passes all blocking conditions)
       // By definition, if we reached this point, no trigger card matched
+      // V5: Pass llmAssist state for Answer+Return mode tracking
       const llmResult = await runLLMFallback({
         config: agent2,
         input,
@@ -1615,6 +1635,7 @@ class Agent2DiscoveryRunner {
         inBookingFlow,
         inDiscoveryCriticalStep,
         llmTurnsThisCall,
+        llmAssistState: nextState.agent2.llmAssist, // V5: Pass state for cooldown/uses tracking
         hasPendingQuestion,
         hasCapturedReasonFlow,
         hasAfterHoursFlow,
@@ -1636,8 +1657,22 @@ class Agent2DiscoveryRunner {
         // LLM fallback provided a response — increment turn counter
         nextState.agent2.discovery.llmTurnsThisCall = llmTurnsThisCall + 1;
         nextState.agent2.discovery.lastPath = 'LLM_FALLBACK';
+        nextState.agent2.discovery.lastLLMMode = llmResult.mode || 'guided';
         
-        // Store handoff state if awaiting confirmation
+        // V5: Apply state updates from Answer+Return mode
+        if (llmResult.stateUpdate) {
+          nextState.agent2.llmAssist = {
+            ...nextState.agent2.llmAssist,
+            ...llmResult.stateUpdate
+          };
+          emit('A2_LLM_ASSIST_STATE_UPDATED', {
+            mode: llmResult.mode,
+            newState: nextState.agent2.llmAssist,
+            reason: 'LLM assist completed - cooldown and uses updated'
+          });
+        }
+        
+        // Store handoff state if awaiting confirmation (Guided mode only)
         if (llmResult.handoffAction?.awaitingConfirmation) {
           nextState.agent2.discovery.llmHandoffPending = {
             mode: llmResult.handoffAction.mode,
@@ -1663,13 +1698,17 @@ class Agent2DiscoveryRunner {
         emit('A2_PATH_SELECTED', {
           path: 'LLM_FALLBACK',
           reason: pathReason,
+          // V5: Include mode for clarity
+          llmMode: llmResult.mode || 'guided',
           llmModel: llmResult.llmMeta?.model,
           tokensUsed: llmResult.llmMeta?.tokensInput + llmResult.llmMeta?.tokensOutput,
           costUsd: llmResult.llmMeta?.costUsd,
           usedEmergencyFallback: llmResult.llmMeta?.usedEmergencyFallback,
           constraintViolations: llmResult.llmMeta?.constraintViolations,
           handoffMode: llmResult.llmMeta?.handoffMode,
-          awaitingConfirmation: llmResult.llmMeta?.awaitingConfirmation
+          awaitingConfirmation: llmResult.llmMeta?.awaitingConfirmation,
+          // V5: Answer+Return state info
+          llmAssistState: llmResult.mode === 'answer_return' ? nextState.agent2.llmAssist : null
         });
         
         emit('A2_RESPONSE_READY', {
