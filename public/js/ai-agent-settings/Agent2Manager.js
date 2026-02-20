@@ -24,10 +24,14 @@ class Agent2Manager {
     this.config = null;
     this.isDirty = false;
     this._container = null;
-    this._activeTab = 'config'; // 'config', 'greetings', or 'callReview'
+    this._activeTab = 'config'; // 'config', 'greetings', 'llmFallback', or 'callReview'
     this._calls = [];
     this._callsLoading = false;
     this._selectedCall = null;
+    // LLM Fallback tab state
+    this._llmModels = null;
+    this._llmUsageStats = null;
+    this._llmUsageLoading = false;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -143,6 +147,47 @@ class Agent2Manager {
           rules: []
         }
       },
+      llmFallback: {
+        enabled: false,
+        provider: 'openai',
+        model: 'gpt-4.1-mini',
+        customModelOverride: '',
+        triggers: {
+          noMatchCountThreshold: 2,
+          complexityThreshold: 0.65,
+          enableOnNoTriggerCardMatch: true,
+          enableOnComplexQuestions: true,
+          blockedWhileBooking: true,
+          complexQuestionKeywords: ['why', 'how', 'warranty', 'covered', 'dangerous', 'safe', 'thermostat blank', 'is it normal', 'should i', 'can i']
+        },
+        constraints: {
+          maxSentences: 2,
+          mustEndWithFunnelQuestion: true,
+          maxOutputTokens: 160,
+          temperature: 0.2,
+          allowedTasks: {
+            clarifyProblem: true,
+            basicSafeGuidance: true,
+            pricing: false,
+            guarantees: false,
+            legal: false
+          }
+        },
+        prompts: {
+          system: 'You are a calm, professional HVAC service coordinator. Your ONLY job is to: 1) Acknowledge the caller\'s concern with brief empathy (NO parroting their words back), 2) Ask ONE question that moves them toward scheduling a service visit. Rules: Maximum 2 sentences. Never make promises. Always end with a booking-focused question.',
+          format: 'Write exactly 2 sentences. Sentence 1: brief empathy. Sentence 2: one booking funnel question.',
+          safety: 'SAFETY OVERRIDE: If burning smell, smoke, electrical sparks, gas smell, or carbon monoxide mentioned: Tell them to shut off the system. If gas/CO: leave house and call 911. Offer emergency booking.'
+        },
+        emergencyFallbackLine: {
+          text: "I'm here with you — I can get this scheduled fast. Do you prefer morning or afternoon?",
+          enabled: true
+        },
+        usage: {
+          trackTokens: true,
+          showCost: true,
+          currency: 'USD'
+        }
+      },
       meta: { uiBuild: Agent2Manager.UI_BUILD }
     };
   }
@@ -190,6 +235,7 @@ class Agent2Manager {
 
     const isConfigTab = this._activeTab === 'config';
     const isGreetingsTab = this._activeTab === 'greetings';
+    const isLLMFallbackTab = this._activeTab === 'llmFallback';
     const isCallReviewTab = this._activeTab === 'callReview';
 
     container.innerHTML = `
@@ -206,10 +252,10 @@ class Agent2Manager {
               </span>
             </div>
             <div style="margin-top:6px; color:#8b949e; font-size:0.9rem;">
-              ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : isGreetingsTab ? 'Agent 2.0 owns greetings when enabled. Legacy greeting rules are ignored.' : 'Enterprise call review console. Click a call to see details, transcript, and decision trail.'}
+              ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : isGreetingsTab ? 'Agent 2.0 owns greetings when enabled. Legacy greeting rules are ignored.' : isLLMFallbackTab ? 'LLM hybrid assist for complex questions. Deterministic first, LLM only when needed.' : 'Enterprise call review console. Click a call to see details, transcript, and decision trail.'}
             </div>
           </div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap; ${isCallReviewTab ? 'display:none;' : ''}">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; ${isCallReviewTab || isLLMFallbackTab ? 'display:none;' : ''}">
             <button id="a2-export-json" style="padding:8px 14px; background:${this.isDirty ? '#f59e0b' : '#1f6feb'}; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;" title="Download COMPLETE runtime wiring report including Agent 2.0 + all runtime dependencies${this.isDirty ? ' (includes unsaved changes)' : ''}">
               📥 Complete Wiring Report
             </button>
@@ -233,6 +279,9 @@ class Agent2Manager {
           <button id="a2-tab-greetings" class="a2-tab-btn" style="padding:10px 20px; background:${isGreetingsTab ? '#0b1220' : 'transparent'}; color:${isGreetingsTab ? '#22d3ee' : '#8b949e'}; border:none; border-bottom:${isGreetingsTab ? '2px solid #22d3ee' : '2px solid transparent'}; cursor:pointer; font-weight:${isGreetingsTab ? '700' : '400'}; font-size:0.95rem;">
             Greetings
           </button>
+          <button id="a2-tab-llmFallback" class="a2-tab-btn" style="padding:10px 20px; background:${isLLMFallbackTab ? '#0b1220' : 'transparent'}; color:${isLLMFallbackTab ? '#22d3ee' : '#8b949e'}; border:none; border-bottom:${isLLMFallbackTab ? '2px solid #22d3ee' : '2px solid transparent'}; cursor:pointer; font-weight:${isLLMFallbackTab ? '700' : '400'}; font-size:0.95rem;">
+            LLM Fallback
+          </button>
           <button id="a2-tab-callReview" class="a2-tab-btn" style="padding:10px 20px; background:${isCallReviewTab ? '#0b1220' : 'transparent'}; color:${isCallReviewTab ? '#22d3ee' : '#8b949e'}; border:none; border-bottom:${isCallReviewTab ? '2px solid #22d3ee' : '2px solid transparent'}; cursor:pointer; font-weight:${isCallReviewTab ? '700' : '400'}; font-size:0.95rem;">
             Call Review
           </button>
@@ -240,7 +289,7 @@ class Agent2Manager {
 
         <!-- TAB CONTENT -->
         <div id="a2-tab-content">
-          ${isConfigTab ? this.renderConfigTab() : isGreetingsTab ? this.renderGreetingsTab() : this.renderCallReviewTab()}
+          ${isConfigTab ? this.renderConfigTab() : isGreetingsTab ? this.renderGreetingsTab() : isLLMFallbackTab ? this.renderLLMFallbackTab() : this.renderCallReviewTab()}
         </div>
       </div>
 
@@ -253,6 +302,16 @@ class Agent2Manager {
     // If on call review tab, load calls
     if (isCallReviewTab && this._calls.length === 0 && !this._callsLoading) {
       this.loadCalls();
+    }
+    
+    // If on LLM Fallback tab, load models and usage stats
+    if (isLLMFallbackTab) {
+      if (!this._llmModels) {
+        this.loadLLMModels();
+      }
+      if (!this._llmUsageStats && !this._llmUsageLoading) {
+        this.loadLLMUsageStats();
+      }
     }
   }
 
@@ -276,6 +335,507 @@ class Agent2Manager {
       ${this.renderGreetingInterceptorCard()}
       ${this.renderBridgeSettingsCard()}
     `;
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // LLM FALLBACK TAB (Hybrid Assist - UI-Controlled)
+  // ══════════════════════════════════════════════════════════════════════════
+  // Deterministic first (trigger cards), LLM only when needed.
+  // Every setting must be UI-owned. No hidden behaviors.
+  // ══════════════════════════════════════════════════════════════════════════
+  renderLLMFallbackTab() {
+    return `
+      ${this.renderLLMMasterSwitchCard()}
+      ${this.renderLLMModelSelectionCard()}
+      ${this.renderLLMTriggerRulesCard()}
+      ${this.renderLLMOutputConstraintsCard()}
+      ${this.renderLLMPromptsCard()}
+      ${this.renderLLMEmergencyFallbackCard()}
+      ${this.renderLLMUsageDashboardCard()}
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Master Switch Card
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMMasterSwitchCard() {
+    const llm = this.config?.llmFallback || {};
+    const enabled = llm.enabled === true;
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid ${enabled ? '#22d3ee' : '#30363d'}; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; font-size:1.25rem; color:#22d3ee;">LLM Fallback</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">
+              When enabled, LLM assists with complex questions that trigger cards can't handle.
+              <span style="color:#f59e0b;">Deterministic first, LLM only when needed.</span>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span id="a2-llm-status-pill" style="padding:6px 14px; border-radius:999px; font-size:0.85rem; font-weight:600; background:${enabled ? '#064e3b' : '#7f1d1d'}; color:${enabled ? '#34d399' : '#f87171'};">
+              ${enabled ? 'ENABLED' : 'DISABLED'}
+            </span>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="a2-llm-enabled" ${enabled ? 'checked' : ''} style="width:22px; height:22px; accent-color:#22d3ee;">
+            </label>
+          </div>
+        </div>
+        ${!enabled ? `
+          <div style="margin-top:16px; padding:12px; background:#1c1917; border:1px solid #78350f; border-radius:8px; color:#fbbf24; font-size:0.9rem;">
+            <strong>When OFF:</strong> Agent 2.0 never calls LLM fallback. Only trigger cards, clarifiers, and UI-owned fallback lines speak.
+          </div>
+        ` : `
+          <div style="margin-top:16px; padding:12px; background:#052e16; border:1px solid #166534; border-radius:8px; color:#86efac; font-size:0.9rem;">
+            <strong>When ON:</strong> LLM assists when trigger cards fail and conditions are met. Output is constrained (2 sentences, must end with booking question).
+          </div>
+        `}
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Model Selection Card
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMModelSelectionCard() {
+    const llm = this.config?.llmFallback || {};
+    const provider = llm.provider || 'openai';
+    const model = llm.model || 'gpt-4.1-mini';
+    const customOverride = llm.customModelOverride || '';
+    const models = this._llmModels?.allowedModels || [];
+    const pricing = this._llmModels?.pricingTable || {};
+    const currentPricing = pricing[model] || { input: '?', output: '?' };
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Model Selection</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Choose the LLM model for fallback responses. Curated list for stability.</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-bottom:16px;">
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Provider</label>
+            <select id="a2-llm-provider" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+              <option value="openai" ${provider === 'openai' ? 'selected' : ''}>OpenAI</option>
+            </select>
+          </div>
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Model</label>
+            <select id="a2-llm-model" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+              ${models.length > 0 ? models.map(m => `
+                <option value="${this.escapeHtml(m.id)}" ${model === m.id ? 'selected' : ''}>${this.escapeHtml(m.name)} — ${this.escapeHtml(m.description)}</option>
+              `).join('') : `
+                <option value="gpt-4.1-mini" ${model === 'gpt-4.1-mini' ? 'selected' : ''}>GPT-4.1 Mini (recommended)</option>
+                <option value="gpt-4.1-nano" ${model === 'gpt-4.1-nano' ? 'selected' : ''}>GPT-4.1 Nano (economy)</option>
+                <option value="gpt-4.1" ${model === 'gpt-4.1' ? 'selected' : ''}>GPT-4.1 (premium)</option>
+                <option value="gpt-4o-mini" ${model === 'gpt-4o-mini' ? 'selected' : ''}>GPT-4o Mini</option>
+                <option value="gpt-4o" ${model === 'gpt-4o' ? 'selected' : ''}>GPT-4o (premium)</option>
+              `}
+            </select>
+          </div>
+        </div>
+
+        <div style="padding:12px; background:#161b22; border-radius:8px; margin-bottom:16px;">
+          <div style="color:#8b949e; font-size:0.85rem; margin-bottom:8px;">Current Model Pricing (per 1M tokens)</div>
+          <div style="display:flex; gap:24px;">
+            <div><span style="color:#6e7681;">Input:</span> <span style="color:#34d399; font-weight:600;">$${typeof currentPricing.input === 'number' ? currentPricing.input.toFixed(2) : '?'}</span></div>
+            <div><span style="color:#6e7681;">Output:</span> <span style="color:#f87171; font-weight:600;">$${typeof currentPricing.output === 'number' ? currentPricing.output.toFixed(2) : '?'}</span></div>
+          </div>
+        </div>
+
+        <details style="margin-top:12px;">
+          <summary style="color:#6e7681; font-size:0.85rem; cursor:pointer;">Advanced: Custom Model Override</summary>
+          <div style="margin-top:12px;">
+            <input type="text" id="a2-llm-custom-model" value="${this.escapeHtml(customOverride)}" placeholder="e.g., gpt-4-turbo-2024-04-09" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.9rem;">
+            <div style="color:#f59e0b; font-size:0.8rem; margin-top:6px;">Warning: Custom models may have unknown pricing. Cost tracking will use default rates.</div>
+          </div>
+        </details>
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Trigger Rules Card
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMTriggerRulesCard() {
+    const llm = this.config?.llmFallback || {};
+    const triggers = llm.triggers || {};
+    const noMatchThreshold = triggers.noMatchCountThreshold ?? 2;
+    const complexityThreshold = triggers.complexityThreshold ?? 0.65;
+    const enableOnNoMatch = triggers.enableOnNoTriggerCardMatch !== false;
+    const enableOnComplex = triggers.enableOnComplexQuestions !== false;
+    const blockedWhileBooking = triggers.blockedWhileBooking !== false;
+    const keywords = (triggers.complexQuestionKeywords || []).join(', ');
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Trigger Rules</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">When should LLM fallback be called? These are hard gates — all must pass.</div>
+        </div>
+
+        <div style="display:grid; gap:16px;">
+          <!-- Checkbox triggers -->
+          <div style="display:grid; gap:12px;">
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:#161b22; border-radius:8px;">
+              <input type="checkbox" id="a2-llm-trigger-nomatch" ${enableOnNoMatch ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+              <div>
+                <div style="color:#c9d1d9; font-size:0.95rem;">Trigger when no trigger card matches</div>
+                <div style="color:#6e7681; font-size:0.8rem;">LLM called when trigger cards fail to match</div>
+              </div>
+            </label>
+            
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:#161b22; border-radius:8px;">
+              <input type="checkbox" id="a2-llm-trigger-complex" ${enableOnComplex ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+              <div>
+                <div style="color:#c9d1d9; font-size:0.95rem;">Trigger on complex questions</div>
+                <div style="color:#6e7681; font-size:0.8rem;">LLM called when caller asks why/how/warranty/covered etc.</div>
+              </div>
+            </label>
+            
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:${blockedWhileBooking ? '#052e16' : '#7f1d1d'}; border:1px solid ${blockedWhileBooking ? '#166534' : '#991b1b'}; border-radius:8px;">
+              <input type="checkbox" id="a2-llm-blocked-booking" ${blockedWhileBooking ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+              <div>
+                <div style="color:${blockedWhileBooking ? '#86efac' : '#f87171'}; font-size:0.95rem; font-weight:600;">Block during booking steps</div>
+                <div style="color:#8b949e; font-size:0.8rem;">NEVER call LLM during name/address/time capture. <strong>Keep booking sacred.</strong></div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Threshold inputs -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">No-Match Count Threshold</label>
+              <input type="number" id="a2-llm-nomatch-threshold" value="${noMatchThreshold}" min="1" max="5" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+              <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Call LLM after N failed matches (default: 2)</div>
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Complexity Score Threshold</label>
+              <input type="number" id="a2-llm-complexity-threshold" value="${complexityThreshold}" min="0" max="1" step="0.05" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+              <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Call LLM when score >= threshold (0-1)</div>
+            </div>
+          </div>
+
+          <!-- Complex question keywords -->
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Complex Question Keywords</label>
+            <textarea id="a2-llm-complex-keywords" rows="2" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.9rem; resize:vertical;" placeholder="why, how, warranty, covered, dangerous...">${this.escapeHtml(keywords)}</textarea>
+            <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Comma-separated. If caller input contains these, eligible for LLM.</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Output Constraints Card
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMOutputConstraintsCard() {
+    const llm = this.config?.llmFallback || {};
+    const constraints = llm.constraints || {};
+    const maxSentences = constraints.maxSentences ?? 2;
+    const mustEndWithFunnel = constraints.mustEndWithFunnelQuestion !== false;
+    const maxTokens = constraints.maxOutputTokens ?? 160;
+    const temperature = constraints.temperature ?? 0.2;
+    const tasks = constraints.allowedTasks || {};
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Output Constraints</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Hard enforcement rules. If LLM violates these, output is discarded and emergency fallback used.</div>
+        </div>
+
+        <div style="display:grid; gap:16px;">
+          <!-- Hard constraints -->
+          <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px;">
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Sentences</label>
+              <input type="number" id="a2-llm-max-sentences" value="${maxSentences}" min="1" max="5" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Output Tokens</label>
+              <input type="number" id="a2-llm-max-tokens" value="${maxTokens}" min="50" max="500" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Temperature</label>
+              <input type="number" id="a2-llm-temperature" value="${temperature}" min="0" max="1" step="0.1" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+              <div style="color:#6e7681; font-size:0.75rem; margin-top:2px;">Low = deterministic, High = creative</div>
+            </div>
+            <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:#052e16; border:1px solid #166534; border-radius:8px;">
+              <input type="checkbox" id="a2-llm-must-funnel" ${mustEndWithFunnel ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+              <div>
+                <div style="color:#86efac; font-size:0.9rem; font-weight:600;">Must end with funnel question</div>
+                <div style="color:#6e7681; font-size:0.75rem;">Every response must advance booking</div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Allowed tasks -->
+          <div style="padding:16px; background:#161b22; border-radius:8px;">
+            <div style="color:#8b949e; font-size:0.9rem; margin-bottom:12px; font-weight:600;">Allowed Tasks (what LLM can do)</div>
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="a2-llm-task-clarify" ${tasks.clarifyProblem !== false ? 'checked' : ''} style="width:16px; height:16px; accent-color:#22d3ee;">
+                <span style="color:#c9d1d9; font-size:0.9rem;">Clarify problem</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="a2-llm-task-guidance" ${tasks.basicSafeGuidance !== false ? 'checked' : ''} style="width:16px; height:16px; accent-color:#22d3ee;">
+                <span style="color:#c9d1d9; font-size:0.9rem;">Basic safe guidance</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="a2-llm-task-pricing" ${tasks.pricing === true ? 'checked' : ''} style="width:16px; height:16px; accent-color:#f87171;">
+                <span style="color:#f87171; font-size:0.9rem;">Pricing/quotes (risky)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="a2-llm-task-guarantees" ${tasks.guarantees === true ? 'checked' : ''} style="width:16px; height:16px; accent-color:#f87171;">
+                <span style="color:#f87171; font-size:0.9rem;">Guarantees/promises (risky)</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="a2-llm-task-legal" ${tasks.legal === true ? 'checked' : ''} style="width:16px; height:16px; accent-color:#f87171;">
+                <span style="color:#f87171; font-size:0.9rem;">Legal/warranty (risky)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Prompts Card
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMPromptsCard() {
+    const llm = this.config?.llmFallback || {};
+    const prompts = llm.prompts || {};
+    const system = prompts.system || '';
+    const format = prompts.format || '';
+    const safety = prompts.safety || '';
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">UI-Owned Prompts</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">These prompts control LLM behavior. Edit here = truth. No hidden hardcode.</div>
+        </div>
+
+        <div style="display:grid; gap:20px;">
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">System Prompt</label>
+            <textarea id="a2-llm-prompt-system" rows="5" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.9rem; resize:vertical; font-family:monospace;">${this.escapeHtml(system)}</textarea>
+            <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Defines the LLM's role and rules. Keep it short and focused on booking.</div>
+          </div>
+
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Response Format</label>
+            <textarea id="a2-llm-prompt-format" rows="2" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.9rem; resize:vertical; font-family:monospace;">${this.escapeHtml(format)}</textarea>
+            <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Enforces output structure (2 sentences, empathy + funnel question).</div>
+          </div>
+
+          <div>
+            <label style="color:#f87171; font-size:0.85rem; display:block; margin-bottom:6px;">Safety Override</label>
+            <textarea id="a2-llm-prompt-safety" rows="3" style="width:100%; background:#1c1917; border:1px solid #78350f; border-radius:8px; padding:12px; color:#fbbf24; font-size:0.9rem; resize:vertical; font-family:monospace;">${this.escapeHtml(safety)}</textarea>
+            <div style="color:#f59e0b; font-size:0.8rem; margin-top:4px;">Critical safety rules (burning smell, gas, CO). Takes precedence over all other prompts.</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Emergency Fallback Card
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMEmergencyFallbackCard() {
+    const llm = this.config?.llmFallback || {};
+    const fallback = llm.emergencyFallbackLine || {};
+    const text = fallback.text || "I'm here with you — I can get this scheduled fast. Do you prefer morning or afternoon?";
+    const enabled = fallback.enabled !== false;
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #78350f; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#f59e0b;">Emergency Fallback Line</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Used if LLM fails, times out, or violates constraints. This is your last resort.</div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-llm-emergency-enabled" ${enabled ? 'checked' : ''} style="width:18px; height:18px; accent-color:#f59e0b;">
+            <span style="color:#c9d1d9; font-size:0.9rem;">Enabled</span>
+          </label>
+        </div>
+        
+        <textarea id="a2-llm-emergency-text" rows="2" style="width:100%; background:#1c1917; border:1px solid #78350f; border-radius:8px; padding:12px; color:#fbbf24; font-size:0.95rem; resize:vertical;">${this.escapeHtml(text)}</textarea>
+        <div style="color:#f59e0b; font-size:0.8rem; margin-top:6px;">This line is 100% UI-owned. No LLM generates this — it speaks exactly as written.</div>
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Usage Dashboard Card
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMUsageDashboardCard() {
+    const stats = this._llmUsageStats || {};
+    const today = stats.today || {};
+    const mtd = stats.mtd || {};
+    const loading = this._llmUsageLoading;
+
+    const formatCost = (cost) => {
+      if (typeof cost !== 'number') return '$0.00';
+      return '$' + cost.toFixed(4);
+    };
+
+    const formatTokens = (tokens) => {
+      if (typeof tokens !== 'number') return '0';
+      if (tokens >= 1000000) return (tokens / 1000000).toFixed(2) + 'M';
+      if (tokens >= 1000) return (tokens / 1000).toFixed(1) + 'K';
+      return tokens.toString();
+    };
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Usage Dashboard</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Token usage and cost tracking. Updated on tab load.</div>
+          </div>
+          <button id="a2-llm-refresh-usage" style="padding:8px 14px; background:#21262d; border:1px solid #30363d; border-radius:8px; color:#c9d1d9; cursor:pointer; font-size:0.85rem;">
+            ${loading ? '⏳ Loading...' : '🔄 Refresh'}
+          </button>
+        </div>
+
+        ${loading ? `
+          <div style="text-align:center; padding:40px; color:#6e7681;">
+            <div style="font-size:2rem; margin-bottom:8px;">⏳</div>
+            <div>Loading usage stats...</div>
+          </div>
+        ` : `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+            <!-- Today -->
+            <div style="padding:20px; background:#161b22; border-radius:12px; border-left:4px solid #22d3ee;">
+              <div style="color:#22d3ee; font-size:0.9rem; font-weight:600; margin-bottom:12px;">TODAY</div>
+              <div style="display:grid; gap:8px;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:#6e7681;">LLM Calls</span>
+                  <span style="color:#c9d1d9; font-weight:600;">${today.calls || 0}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:#6e7681;">Input Tokens</span>
+                  <span style="color:#c9d1d9;">${formatTokens(today.inputTokens)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:#6e7681;">Output Tokens</span>
+                  <span style="color:#c9d1d9;">${formatTokens(today.outputTokens)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding-top:8px; border-top:1px solid #30363d;">
+                  <span style="color:#8b949e; font-weight:600;">Cost</span>
+                  <span style="color:#34d399; font-weight:700; font-size:1.1rem;">${formatCost(today.totalCost)}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Month to Date -->
+            <div style="padding:20px; background:#161b22; border-radius:12px; border-left:4px solid #a855f7;">
+              <div style="color:#a855f7; font-size:0.9rem; font-weight:600; margin-bottom:12px;">MONTH TO DATE</div>
+              <div style="display:grid; gap:8px;">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:#6e7681;">LLM Calls</span>
+                  <span style="color:#c9d1d9; font-weight:600;">${mtd.calls || 0}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:#6e7681;">Input Tokens</span>
+                  <span style="color:#c9d1d9;">${formatTokens(mtd.inputTokens)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="color:#6e7681;">Output Tokens</span>
+                  <span style="color:#c9d1d9;">${formatTokens(mtd.outputTokens)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding-top:8px; border-top:1px solid #30363d;">
+                  <span style="color:#8b949e; font-weight:600;">Cost</span>
+                  <span style="color:#34d399; font-weight:700; font-size:1.1rem;">${formatCost(mtd.totalCost)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          ${stats.last7Days && stats.last7Days.length > 0 ? `
+            <div style="margin-top:20px; padding:16px; background:#161b22; border-radius:8px;">
+              <div style="color:#8b949e; font-size:0.85rem; margin-bottom:12px;">Last 7 Days</div>
+              <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:8px; text-align:center;">
+                ${stats.last7Days.map(day => `
+                  <div style="padding:8px 4px; background:#0b1220; border-radius:6px;">
+                    <div style="color:#6e7681; font-size:0.7rem;">${day._id?.split('-').slice(1).join('/')}</div>
+                    <div style="color:#c9d1d9; font-size:0.85rem; font-weight:600;">${day.calls}</div>
+                    <div style="color:#34d399; font-size:0.75rem;">${formatCost(day.totalCost)}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+        `}
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Data Loading Methods
+  // ─────────────────────────────────────────────────────────────────────────
+  async loadLLMModels() {
+    const token = this._getToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch('/api/admin/agent2/llmFallback/models', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        this._llmModels = json.data;
+        // Re-render to show models in dropdown
+        if (this._activeTab === 'llmFallback' && this._container) {
+          this.render(this._container);
+        }
+      }
+    } catch (err) {
+      console.error('[Agent2Manager] Failed to load LLM models:', err);
+    }
+  }
+
+  async loadLLMUsageStats(forceRefresh = false) {
+    const token = this._getToken();
+    if (!token) return;
+
+    this._llmUsageLoading = true;
+    if (this._activeTab === 'llmFallback' && this._container) {
+      const dashboard = this._container.querySelector('#a2-llm-refresh-usage');
+      if (dashboard) dashboard.textContent = '⏳ Loading...';
+    }
+
+    try {
+      const url = `/api/admin/agent2/llmFallback/usage/${this.companyId}${forceRefresh ? '?refresh=true' : ''}`;
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        this._llmUsageStats = json.data;
+      }
+    } catch (err) {
+      console.error('[Agent2Manager] Failed to load LLM usage stats:', err);
+    } finally {
+      this._llmUsageLoading = false;
+      if (this._activeTab === 'llmFallback' && this._container) {
+        this.render(this._container);
+      }
+    }
   }
 
   renderCallStartGreetingCard() {
@@ -2630,11 +3190,188 @@ class Agent2Manager {
         this.render(container);
       }
     });
+    container.querySelector('#a2-tab-llmFallback')?.addEventListener('click', () => {
+      if (this._activeTab !== 'llmFallback') {
+        this._activeTab = 'llmFallback';
+        this.render(container);
+      }
+    });
     container.querySelector('#a2-tab-callReview')?.addEventListener('click', () => {
       if (this._activeTab !== 'callReview') {
         this._activeTab = 'callReview';
         this.render(container);
       }
+    });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // LLM FALLBACK TAB HANDLERS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Master switch
+    container.querySelector('#a2-llm-enabled')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.enabled = e.target.checked;
+      onAnyChange();
+      this.render(container);
+    });
+
+    // Model selection
+    container.querySelector('#a2-llm-provider')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.provider = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-model')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.model = e.target.value;
+      onAnyChange();
+      this.render(container);
+    });
+    container.querySelector('#a2-llm-custom-model')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.customModelOverride = e.target.value.trim();
+      onAnyChange();
+    });
+
+    // Trigger rules
+    container.querySelector('#a2-llm-trigger-nomatch')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.triggers = this.config.llmFallback.triggers || {};
+      this.config.llmFallback.triggers.enableOnNoTriggerCardMatch = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-trigger-complex')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.triggers = this.config.llmFallback.triggers || {};
+      this.config.llmFallback.triggers.enableOnComplexQuestions = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-blocked-booking')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.triggers = this.config.llmFallback.triggers || {};
+      this.config.llmFallback.triggers.blockedWhileBooking = e.target.checked;
+      onAnyChange();
+      this.render(container);
+    });
+    container.querySelector('#a2-llm-nomatch-threshold')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.triggers = this.config.llmFallback.triggers || {};
+      this.config.llmFallback.triggers.noMatchCountThreshold = parseInt(e.target.value, 10) || 2;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-complexity-threshold')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.triggers = this.config.llmFallback.triggers || {};
+      this.config.llmFallback.triggers.complexityThreshold = parseFloat(e.target.value) || 0.65;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-complex-keywords')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.triggers = this.config.llmFallback.triggers || {};
+      this.config.llmFallback.triggers.complexQuestionKeywords = e.target.value.split(',').map(w => w.trim()).filter(Boolean);
+      onAnyChange();
+    });
+
+    // Output constraints
+    container.querySelector('#a2-llm-max-sentences')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.maxSentences = parseInt(e.target.value, 10) || 2;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-max-tokens')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.maxOutputTokens = parseInt(e.target.value, 10) || 160;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-temperature')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.temperature = parseFloat(e.target.value) || 0.2;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-must-funnel')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.mustEndWithFunnelQuestion = e.target.checked;
+      onAnyChange();
+    });
+
+    // Allowed tasks
+    container.querySelector('#a2-llm-task-clarify')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.allowedTasks = this.config.llmFallback.constraints.allowedTasks || {};
+      this.config.llmFallback.constraints.allowedTasks.clarifyProblem = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-task-guidance')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.allowedTasks = this.config.llmFallback.constraints.allowedTasks || {};
+      this.config.llmFallback.constraints.allowedTasks.basicSafeGuidance = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-task-pricing')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.allowedTasks = this.config.llmFallback.constraints.allowedTasks || {};
+      this.config.llmFallback.constraints.allowedTasks.pricing = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-task-guarantees')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.allowedTasks = this.config.llmFallback.constraints.allowedTasks || {};
+      this.config.llmFallback.constraints.allowedTasks.guarantees = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-task-legal')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.constraints = this.config.llmFallback.constraints || {};
+      this.config.llmFallback.constraints.allowedTasks = this.config.llmFallback.constraints.allowedTasks || {};
+      this.config.llmFallback.constraints.allowedTasks.legal = e.target.checked;
+      onAnyChange();
+    });
+
+    // Prompts
+    container.querySelector('#a2-llm-prompt-system')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.prompts = this.config.llmFallback.prompts || {};
+      this.config.llmFallback.prompts.system = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-prompt-format')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.prompts = this.config.llmFallback.prompts || {};
+      this.config.llmFallback.prompts.format = e.target.value;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-prompt-safety')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.prompts = this.config.llmFallback.prompts || {};
+      this.config.llmFallback.prompts.safety = e.target.value;
+      onAnyChange();
+    });
+
+    // Emergency fallback
+    container.querySelector('#a2-llm-emergency-enabled')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.emergencyFallbackLine = this.config.llmFallback.emergencyFallbackLine || {};
+      this.config.llmFallback.emergencyFallbackLine.enabled = e.target.checked;
+      onAnyChange();
+    });
+    container.querySelector('#a2-llm-emergency-text')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.emergencyFallbackLine = this.config.llmFallback.emergencyFallbackLine || {};
+      this.config.llmFallback.emergencyFallbackLine.text = e.target.value;
+      onAnyChange();
+    });
+
+    // Usage dashboard refresh
+    container.querySelector('#a2-llm-refresh-usage')?.addEventListener('click', () => {
+      this.loadLLMUsageStats(true);
     });
 
     // ══════════════════════════════════════════════════════════════════════════

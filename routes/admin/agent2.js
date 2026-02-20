@@ -28,6 +28,7 @@ const openaiClient = require('../../config/openai');
 // Agent 2.0 uses CallLogger/CallRecording (not legacy BlackBox names)
 const CallLogger = require('../../services/CallLogger');
 const CallRecording = require('../../models/CallRecording');
+const LLMFallbackUsage = require('../../models/LLMFallbackUsage');
 
 const UI_BUILD = 'AGENT2_UI_V0.9';
 
@@ -311,6 +312,99 @@ function defaultAgent2Config() {
         ]
       }
     },
+    // ═══════════════════════════════════════════════════════════════════════
+    // LLM FALLBACK SETTINGS (UI-controlled hybrid assist)
+    // ═══════════════════════════════════════════════════════════════════════
+    // When enabled, LLM fallback is called ONLY when:
+    //   - No trigger card match AND
+    //   - Not in booking-critical step AND
+    //   - Trigger conditions met (noMatchCount, complexity, complex keywords)
+    // LLM's job: short empathy + one booking funnel question
+    // ═══════════════════════════════════════════════════════════════════════
+    llmFallback: {
+      enabled: false,  // Master kill switch - if OFF, LLM fallback NEVER runs
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // MODEL SELECTION
+      // ─────────────────────────────────────────────────────────────────────
+      provider: 'openai',
+      model: 'gpt-4.1-mini',
+      customModelOverride: '',  // Advanced: override with custom model string
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // TRIGGER CONDITIONS (when to call LLM)
+      // ─────────────────────────────────────────────────────────────────────
+      triggers: {
+        noMatchCountThreshold: 2,      // Call LLM after N failed matches
+        complexityThreshold: 0.65,     // Call LLM when complexity score >= X
+        enableOnNoTriggerCardMatch: true,
+        enableOnComplexQuestions: true,
+        blockedWhileBooking: true,     // NEVER call LLM during booking steps
+        complexQuestionKeywords: [
+          'why', 'how', 'warranty', 'covered', 'dangerous', 'safe',
+          'thermostat blank', 'is it normal', 'should i', 'can i',
+          'is this covered', 'how long', 'how much longer'
+        ]
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // OUTPUT CONSTRAINTS (hard enforcement)
+      // ─────────────────────────────────────────────────────────────────────
+      constraints: {
+        maxSentences: 2,
+        mustEndWithFunnelQuestion: true,
+        maxOutputTokens: 160,
+        temperature: 0.2,
+        allowedTasks: {
+          clarifyProblem: true,
+          basicSafeGuidance: true,
+          pricing: false,
+          guarantees: false,
+          legal: false
+        }
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // UI-OWNED PROMPTS (editable in UI)
+      // ─────────────────────────────────────────────────────────────────────
+      prompts: {
+        system: `You are a calm, professional HVAC service coordinator. Your ONLY job is to:
+1. Acknowledge the caller's concern with brief empathy (NO parroting their words back)
+2. Ask ONE question that moves them toward scheduling a service visit
+
+Rules:
+- Maximum 2 sentences
+- Never make promises about pricing, warranties, or guarantees
+- Never give troubleshooting advice that could be unsafe
+- Always end with a booking-focused question
+- Be warm but efficient`,
+        
+        format: 'Write exactly 2 sentences. Sentence 1: brief empathy (do NOT repeat what they said). Sentence 2: one booking funnel question.',
+        
+        safety: `SAFETY OVERRIDE: If the caller mentions burning smell, smoke, electrical sparks, gas smell, or carbon monoxide:
+1. Tell them to shut off the system immediately
+2. If gas/CO: tell them to leave the house and call 911
+3. Offer emergency same-day booking
+Do NOT troubleshoot electrical or gas issues over the phone.`
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // EMERGENCY FALLBACK LINE (last resort if LLM fails)
+      // ─────────────────────────────────────────────────────────────────────
+      emergencyFallbackLine: {
+        text: "I'm here with you — I can get this scheduled fast. Do you prefer morning or afternoon?",
+        enabled: true
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // USAGE TRACKING SETTINGS
+      // ─────────────────────────────────────────────────────────────────────
+      usage: {
+        trackTokens: true,
+        showCost: true,
+        currency: 'USD'
+      }
+    },
     meta: { uiBuild: UI_BUILD }
   };
 }
@@ -377,7 +471,36 @@ function mergeAgent2Config(saved) {
         ...safeObject(src.greetings?.interceptor, {})
       }
     },
-    meta: { ...defaults.meta, ...safeObject(src.meta, {}) }
+    meta: { ...defaults.meta, ...safeObject(src.meta, {}) },
+    // LLM Fallback settings (UI-controlled hybrid assist)
+    llmFallback: {
+      ...defaults.llmFallback,
+      ...safeObject(src.llmFallback, {}),
+      triggers: {
+        ...defaults.llmFallback.triggers,
+        ...safeObject(src.llmFallback?.triggers, {})
+      },
+      constraints: {
+        ...defaults.llmFallback.constraints,
+        ...safeObject(src.llmFallback?.constraints, {}),
+        allowedTasks: {
+          ...defaults.llmFallback.constraints.allowedTasks,
+          ...safeObject(src.llmFallback?.constraints?.allowedTasks, {})
+        }
+      },
+      prompts: {
+        ...defaults.llmFallback.prompts,
+        ...safeObject(src.llmFallback?.prompts, {})
+      },
+      emergencyFallbackLine: {
+        ...defaults.llmFallback.emergencyFallbackLine,
+        ...safeObject(src.llmFallback?.emergencyFallbackLine, {})
+      },
+      usage: {
+        ...defaults.llmFallback.usage,
+        ...safeObject(src.llmFallback?.usage, {})
+      }
+    }
   };
 
   // Guardrails: ensure arrays are arrays (UI expects stable types).
@@ -412,6 +535,11 @@ function mergeAgent2Config(saved) {
   }
   if (!Array.isArray(merged.greetings.interceptor.intentWords)) {
     merged.greetings.interceptor.intentWords = defaults.greetings.interceptor.intentWords;
+  }
+
+  // LLM Fallback guardrails
+  if (!Array.isArray(merged.llmFallback.triggers.complexQuestionKeywords)) {
+    merged.llmFallback.triggers.complexQuestionKeywords = defaults.llmFallback.triggers.complexQuestionKeywords;
   }
 
   return merged;
@@ -845,6 +973,154 @@ router.get('/calls/:companyId/:callSid/events',
       });
     } catch (error) {
       logger.error('[AGENT2] Call events error', { companyId, callSid, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LLM FALLBACK SETTINGS - MODEL LIST & PRICING
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /api/admin/agent2/llmFallback/models
+ * Returns curated allowed models + pricing table (NO live OpenAI API calls)
+ */
+router.get('/llmFallback/models',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      // Curated model list - stable, no live API calls
+      const allowedModels = [
+        { id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', description: 'Fast, cost-effective (recommended)', tier: 'standard' },
+        { id: 'gpt-4.1-nano', name: 'GPT-4.1 Nano', description: 'Ultra-fast, lowest cost', tier: 'economy' },
+        { id: 'gpt-4.1', name: 'GPT-4.1', description: 'Most capable, higher cost', tier: 'premium' },
+        { id: 'gpt-4o-mini', name: 'GPT-4o Mini', description: 'Fast multimodal', tier: 'standard' },
+        { id: 'gpt-4o', name: 'GPT-4o', description: 'Premium multimodal', tier: 'premium' }
+      ];
+
+      // Pricing per 1M tokens (USD)
+      const pricingTable = {
+        'gpt-4.1-mini': { input: 0.40, output: 1.60 },
+        'gpt-4.1-nano': { input: 0.10, output: 0.40 },
+        'gpt-4.1': { input: 2.00, output: 8.00 },
+        'gpt-4o-mini': { input: 0.15, output: 0.60 },
+        'gpt-4o': { input: 2.50, output: 10.00 }
+      };
+
+      return res.json({
+        success: true,
+        data: {
+          allowedModels,
+          pricingTable,
+          defaultModel: 'gpt-4.1-mini',
+          customOverrideWarning: 'Custom models may have unknown pricing. Cost tracking will use default rates.'
+        }
+      });
+    } catch (error) {
+      logger.error('[AGENT2] LLM models endpoint error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LLM FALLBACK USAGE STATS (Today + MTD)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// In-memory cache for usage stats (per companyId)
+const usageStatsCache = new Map();
+const CACHE_TTL_MS = 60 * 1000; // 60 seconds
+
+/**
+ * GET /api/admin/agent2/llmFallback/usage/:companyId
+ * Returns Today + MTD token/cost stats with caching
+ */
+router.get('/llmFallback/usage/:companyId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const { refresh } = req.query;
+
+    try {
+      const cacheKey = `usage_${companyId}`;
+      const cached = usageStatsCache.get(cacheKey);
+      const now = Date.now();
+
+      // Return cached if valid and not forcing refresh
+      if (cached && (now - cached.timestamp) < CACHE_TTL_MS && refresh !== 'true') {
+        return res.json({
+          success: true,
+          data: cached.data,
+          cached: true,
+          cacheAge: Math.round((now - cached.timestamp) / 1000)
+        });
+      }
+
+      // Fetch fresh stats
+      const stats = await LLMFallbackUsage.getUsageStats(companyId);
+
+      // Update cache
+      usageStatsCache.set(cacheKey, {
+        data: stats,
+        timestamp: now
+      });
+
+      return res.json({
+        success: true,
+        data: stats,
+        cached: false
+      });
+    } catch (error) {
+      logger.error('[AGENT2] LLM usage stats error', { companyId, error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/agent2/llmFallback/usage/:companyId/calls
+ * Returns recent LLM fallback calls for detailed review
+ */
+router.get('/llmFallback/usage/:companyId/calls',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.VIEW_COMPANY),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const { limit = 50, skip = 0 } = req.query;
+
+    try {
+      const calls = await LLMFallbackUsage.find({ companyId })
+        .sort({ createdAt: -1 })
+        .skip(Number(skip) || 0)
+        .limit(Math.min(Number(limit) || 50, 100))
+        .lean();
+
+      const total = await LLMFallbackUsage.countDocuments({ companyId });
+
+      return res.json({
+        success: true,
+        data: calls.map(c => ({
+          callSid: c.callSid,
+          model: c.model,
+          tokens: c.tokens,
+          costUsd: c.costUsd,
+          trigger: c.trigger,
+          result: {
+            success: c.result?.success,
+            responsePreview: c.result?.responsePreview,
+            hadFunnelQuestion: c.result?.hadFunnelQuestion,
+            constraintViolations: c.result?.constraintViolations,
+            usedEmergencyFallback: c.result?.usedEmergencyFallback
+          },
+          createdAt: c.createdAt
+        })),
+        total
+      });
+    } catch (error) {
+      logger.error('[AGENT2] LLM calls list error', { companyId, error: error.message });
       return res.status(500).json({ success: false, error: error.message });
     }
   }

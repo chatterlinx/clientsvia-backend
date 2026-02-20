@@ -34,6 +34,7 @@ const logger = require('../../../utils/logger');
 const { TriggerCardMatcher } = require('./TriggerCardMatcher');
 const { Agent2VocabularyEngine } = require('./Agent2VocabularyEngine');
 const { Agent2GreetingInterceptor } = require('./Agent2GreetingInterceptor');
+const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -1298,8 +1299,103 @@ class Agent2DiscoveryRunner {
         usedCallerName: usedName
       });
       
+    } else {
+      // ──────────────────────────────────────────────────────────────────────
+      // PATH 4+: LLM FALLBACK (Hybrid Assist - UI-Controlled)
+      // ──────────────────────────────────────────────────────────────────────
+      // Try LLM fallback BEFORE generic fallback paths
+      // LLM is UI-controlled and only runs when conditions are met
+      
+      // Track no-match count for this call
+      const noMatchCount = (nextState.agent2.discovery.noMatchCount || 0) + 1;
+      nextState.agent2.discovery.noMatchCount = noMatchCount;
+      
+      // Compute complexity score for logging
+      const complexityResult = computeComplexityScore(input);
+      emit('A2_COMPLEXITY_SCORE', {
+        score: complexityResult.score,
+        factors: complexityResult.factors,
+        wordCount: complexityResult.wordCount,
+        inputPreview: clip(input, 60)
+      });
+      
+      // Check if we're in booking flow (block LLM during booking-critical steps)
+      const inBookingFlow = !!(
+        nextState.booking?.step === 'NAME' ||
+        nextState.booking?.step === 'ADDRESS' ||
+        nextState.booking?.step === 'TIME' ||
+        nextState.booking?.step === 'CONFIRM' ||
+        nextState.slotFilling?.activeSlot
+      );
+      
+      // Try LLM fallback
+      const llmResult = await runLLMFallback({
+        config: agent2,
+        input,
+        noMatchCount,
+        inBookingFlow,
+        callContext: {
+          callSid,
+          companyId: companyId || company?._id?.toString?.() || null,
+          turn,
+          capturedReason
+        },
+        emit
+      });
+      
+      if (llmResult) {
+        // LLM fallback provided a response
+        nextState.agent2.discovery.lastPath = 'LLM_FALLBACK';
+        
+        // Use personalized ack if appropriate  
+        const { ack: llmAck, usedName: llmUsedName } = buildAck(ack, callerName, state);
+        nextState.agent2.discovery.usedNameThisTurn = llmUsedName;
+        
+        // Don't double-ack if LLM response already sounds complete
+        const llmStartsWithAck = /^(ok|okay|i'm sorry|i understand|that sounds)/i.test(llmResult.response);
+        response = llmStartsWithAck 
+          ? llmResult.response 
+          : `${llmAck} ${llmResult.response}`.trim();
+        
+        pathSelected = 'LLM_FALLBACK';
+        pathReason = `LLM assist triggered: ${llmResult.llmMeta?.whyCalledLLM || 'unknown'}`;
+        
+        emit('A2_PATH_SELECTED', {
+          path: 'LLM_FALLBACK',
+          reason: pathReason,
+          llmModel: llmResult.llmMeta?.model,
+          tokensUsed: llmResult.llmMeta?.tokensInput + llmResult.llmMeta?.tokensOutput,
+          costUsd: llmResult.llmMeta?.costUsd,
+          usedEmergencyFallback: llmResult.llmMeta?.usedEmergencyFallback,
+          constraintViolations: llmResult.llmMeta?.constraintViolations
+        });
+        
+        emit('A2_RESPONSE_READY', {
+          path: 'LLM_FALLBACK',
+          responsePreview: clip(response, 120),
+          responseLength: response.length,
+          hasAudio: false,
+          source: llmResult.llmMeta?.usedEmergencyFallback ? 'llmFallback.emergencyFallback' : 'llmFallback.llm',
+          usedCallerName: llmUsedName,
+          isLLMAssist: !llmResult.llmMeta?.usedEmergencyFallback
+        });
+        
+        return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
+      }
+      
+      // LLM fallback didn't run or failed - fall through to deterministic fallback paths
+      // (the code continues in the else-if chain below)
+    }
+    
+    // ──────────────────────────────────────────────────────────────────────
+    // PATH 5: DETERMINISTIC FALLBACK (when scenario + LLM don't provide response)
+    // ──────────────────────────────────────────────────────────────────────
+    // These paths execute if we haven't returned yet (no scenario, no LLM success)
+    
+    if (response) {
+      // Response already set by scenario path - skip fallback
     } else if (capturedReason) {
-      // Path 4: We captured a call reason but couldn't match — acknowledge what they said
+      // Path 5a: We captured a call reason but couldn't match — acknowledge what they said
       // V119: This is the "noMatch_withReason" path — NEVER restart conversation
       const reasonAck = `${fallback.noMatchWhenReasonCaptured || ''}`.trim() || "I'm sorry to hear that.";
       const clarifier = `${fallback.noMatchClarifierQuestion || ''}`.trim();
