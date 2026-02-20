@@ -1322,7 +1322,8 @@ class Agent2Manager {
       e.type === 'SPEAK_PROVENANCE' || 
       e.type === 'SPEECH_SOURCE_SELECTED' || 
       e.type === 'SPOKEN_TEXT_UNMAPPED_BLOCKED' ||
-      e.type === 'ROUTING_PROVENANCE'
+      e.type === 'ROUTING_PROVENANCE' ||
+      e.type === 'GREETING_AUDIO_MISSING_TTS_FALLBACK'
     );
     
     if (provenanceEvents.length === 0) {
@@ -1339,12 +1340,31 @@ class Agent2Manager {
       const turn = e.turn !== undefined ? e.turn : '?';
       const isBlocked = e.type === 'SPOKEN_TEXT_UNMAPPED_BLOCKED' || d.blocked === true;
       const isRouting = e.type === 'ROUTING_PROVENANCE';
+      const isAudioFallback = d.audioMissing === true;
       
       // Color based on status
-      const borderColor = isBlocked ? '#f43f5e' : (d.isFromUiConfig === false ? '#fbbf24' : '#4ade80');
-      const bgColor = isBlocked ? '#450a0a' : '#0d1117';
-      const statusIcon = isBlocked ? '🚫' : (isRouting ? '🔀' : '🎙️');
-      const statusText = isBlocked ? 'BLOCKED' : (d.isFromUiConfig ? 'UI-OWNED' : 'FALLBACK');
+      let borderColor, bgColor, statusIcon, statusText;
+      if (isBlocked) {
+        borderColor = '#f43f5e';
+        bgColor = '#450a0a';
+        statusIcon = '🚫';
+        statusText = 'BLOCKED';
+      } else if (isAudioFallback) {
+        borderColor = '#f59e0b';
+        bgColor = '#1c1408';
+        statusIcon = '🔄';
+        statusText = 'AUDIO FALLBACK → TTS';
+      } else if (d.isFromUiConfig === false) {
+        borderColor = '#fbbf24';
+        bgColor = '#0d1117';
+        statusIcon = '⚠️';
+        statusText = 'FALLBACK';
+      } else {
+        borderColor = '#4ade80';
+        bgColor = '#0d1117';
+        statusIcon = isRouting ? '🔀' : '🎙️';
+        statusText = 'UI-OWNED';
+      }
       
       // Extract key info
       const sourceId = d.sourceId || d.blockedSourceId || 'unknown';
@@ -1352,6 +1372,17 @@ class Agent2Manager {
       const uiTab = d.uiTab || '?';
       const textPreview = d.spokenTextPreview || d.textPreview || d.blockedText || '[no text]';
       const reason = d.reason || '?';
+      const originalAudioPath = d.originalAudioPath || null;
+      
+      // Build audio fallback info line if applicable
+      const audioFallbackInfo = isAudioFallback && originalAudioPath ? `
+        <div style="display:flex; gap:8px; margin-top:4px; padding-top:6px; border-top:1px solid #374151;">
+          <span style="color:#f59e0b; min-width:70px;">⚠️ Audio:</span>
+          <span style="color:#fbbf24; font-family:monospace; font-size:0.7rem; word-break:break-all;">
+            ${this.escapeHtml(originalAudioPath)} <span style="color:#f43f5e;">(FILE MISSING)</span>
+          </span>
+        </div>
+      ` : '';
       
       return `
         <div style="background:${bgColor}; border:1px solid ${borderColor}; border-radius:8px; padding:12px; margin-bottom:8px;">
@@ -1373,7 +1404,7 @@ class Agent2Manager {
             </div>
             <div style="display:flex; gap:8px;">
               <span style="color:#6e7681; min-width:70px;">UI Path:</span>
-              <span style="color:${uiPath === 'UNMAPPED' ? '#f43f5e' : '#4ade80'}; font-family:monospace; font-size:0.75rem; word-break:break-all;">
+              <span style="color:${uiPath === 'UNMAPPED' || uiPath.includes('HARDCODED') ? '#f43f5e' : '#4ade80'}; font-family:monospace; font-size:0.75rem; word-break:break-all;">
                 ${this.escapeHtml(uiPath)}
               </span>
             </div>
@@ -1389,6 +1420,7 @@ class Agent2Manager {
               <span style="color:#6e7681; min-width:70px;">Reason:</span>
               <span style="color:#94a3b8;">${this.escapeHtml(reason)}</span>
             </div>
+            ${audioFallbackInfo}
           </div>
         </div>
       `;

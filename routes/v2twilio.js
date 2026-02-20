@@ -1633,7 +1633,13 @@ router.post('/voice', async (req, res) => {
         } else {
           // 🛡️ FALLBACK: Audio file missing, use TTS instead
           logger.warn(`[GREETING] 🔄 Prerecorded audio missing, falling back to TTS`);
+          
+          // Determine what text will be spoken
+          const fallbackText = initResult.greeting || 'Thank you for calling. How may I help you today?';
+          const hasUiConfiguredText = Boolean(initResult.greeting);
+          
           if (BlackBoxLogger) {
+            // Log the audio missing event
             BlackBoxLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
@@ -1642,7 +1648,33 @@ router.post('/voice', async (req, res) => {
               data: {
                 missingAudioPath: rawAudioPath,
                 source: greetingSource,
-                fallbackMode: elevenLabsVoice ? 'elevenlabs' : 'twilio_say'
+                fallbackMode: elevenLabsVoice ? 'elevenlabs' : 'twilio_say',
+                fallbackText: fallbackText.substring(0, 100),
+                hasUiConfiguredText
+              }
+            }).catch(() => {});
+            
+            // V126: SPEAK_PROVENANCE for TTS fallback - this is KEY for Call Review visibility
+            BlackBoxLogger.logEvent({
+              callId: req.body.CallSid,
+              companyId: company._id,
+              type: 'SPEAK_PROVENANCE',
+              turn: 0,
+              data: {
+                sourceId: hasUiConfiguredText 
+                  ? 'agent2.greetings.callStart.text' 
+                  : 'HARDCODED_FALLBACK',
+                uiPath: hasUiConfiguredText 
+                  ? 'aiAgentSettings.agent2.greetings.callStart.text' 
+                  : 'HARDCODED_FALLBACK - Prime Directive Violation',
+                uiTab: 'Greetings',
+                configPath: 'agent2.greetings.callStart.text',
+                spokenTextPreview: fallbackText.substring(0, 100),
+                audioUrl: null,
+                reason: `Audio file missing (${rawAudioPath}), using TTS fallback from text field`,
+                isFromUiConfig: hasUiConfiguredText,
+                audioMissing: true,
+                originalAudioPath: rawAudioPath
               }
             }).catch(() => {});
           }
