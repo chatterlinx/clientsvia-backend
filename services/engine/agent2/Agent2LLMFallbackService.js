@@ -986,6 +986,30 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     timestamp: new Date().toISOString()
   });
   
+  // V4: Emit SPEECH_SOURCE_SELECTED for Call Review attribution
+  // This ensures the Call Review UI can display where this response came from
+  const llmSourceId = usedEmergencyFallback 
+    ? 'agent2.llmFallback.emergencyFallback'
+    : 'agent2.llmFallback.validated';
+  const llmUiPath = usedEmergencyFallback
+    ? 'aiAgentSettings.agent2.emergencyFallbackLine.text'
+    : 'aiAgentSettings.agent2.discovery.llmFallback';
+  
+  emit('SPEECH_SOURCE_SELECTED', {
+    sourceId: llmSourceId,
+    uiPath: llmUiPath,
+    spokenTextPreview: (finalResponse || '').substring(0, 80),
+    note: usedEmergencyFallback 
+      ? 'LLM output failed validation - used emergency fallback' 
+      : `LLM fallback response (mode: ${handoffMode || 'default'})`,
+    metadata: {
+      usedEmergencyFallback,
+      handoffMode: handoffMode || null,
+      sentenceCount,
+      validationPassed: validationResult?.valid ?? false
+    }
+  });
+  
   // Emit handoff event if awaiting confirmation
   if (handoffAction?.awaitingConfirmation) {
     emit('A2_LLM_HANDOFF_AWAITING_CONFIRMATION', {

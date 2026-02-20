@@ -124,8 +124,11 @@ class Agent2Manager {
           allowedScenarioTypes: ['FAQ', 'TROUBLESHOOT', 'PRICING', 'SERVICE', 'UNKNOWN'],
           minScenarioScore: 0.72,
           fallback: {
+            // V4: Generic fallback - NO placeholders, NO caller text
             noMatchAnswer: 'Ok. How can I help you today?',
-            noMatchWhenReasonCaptured: "Ok. I'm sorry about that.",
+            // V4: UPDATED - No placeholders! Generic empathy + discovery question
+            // NEVER echo caller text. This is pure UI-owned text.
+            noMatchWhenReasonCaptured: "Got it — I can help with that. Are you calling about your AC, heating, or something else?",
             noMatchClarifierQuestion: "Just so I help you the right way — is the system not running at all right now, or is it running but not cooling?",
             afterAnswerQuestion: 'Would you like to schedule a visit, or do you have a question I can help with?',
             // V126: Pending question responses - UI-configured, not hardcoded

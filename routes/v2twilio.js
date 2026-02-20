@@ -1899,7 +1899,9 @@ router.post('/voice', async (req, res) => {
           hasPlay: twimlString.includes('<Play'),
           hasSay: twimlString.includes('<Say'),
           actionUrl: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
-          twimlPreview: twimlString.substring(0, 500)
+          twimlPreview: twimlString.substring(0, 500),
+          // V4: responsePreview for Turn-0 greeting (Call Review needs this)
+          responsePreview: initResult?.greeting?.substring(0, 80) || null
         }
       }).catch(() => {});
     }

@@ -39,6 +39,7 @@ const { Agent2IntentPriorityGate } = require('./Agent2IntentPriorityGate');
 const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
 const Agent2SpeechPreprocessor = require('./Agent2SpeechPreprocessor');
+const Agent2EchoGuard = require('./Agent2EchoGuard');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -1887,6 +1888,65 @@ class Agent2DiscoveryRunner {
         usedCallerName: usedName,
         skippedGenericQuestion: skipGenericQuestion
       });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // V4: ECHO GUARD - FINAL CHECK BEFORE SPEAKING
+    // ══════════════════════════════════════════════════════════════════════════
+    // HARD RULE: The agent must NEVER echo raw caller text.
+    // If the response contains suspicious overlap with caller input, BLOCK it
+    // and replace with UI-owned emergency fallback.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (response && input) {
+      const echoCheck = Agent2EchoGuard.checkForEcho(input, response);
+      
+      if (echoCheck.blocked) {
+        // CRITICAL: Response echoes caller text - this is a Prime Directive violation
+        const emergencyText = agent2.emergencyFallbackLine?.text || '';
+        const blockedEvent = Agent2EchoGuard.buildBlockedEvent(
+          echoCheck,
+          input,
+          response,
+          nextState.agent2?.discovery?.lastPath || 'unknown',
+          turn
+        );
+        
+        emit('A2_SPOKEN_ECHO_BLOCKED', blockedEvent);
+        
+        logger.error('[Agent2DiscoveryRunner] ECHO BLOCKED - Response contained caller text', {
+          reason: echoCheck.reason,
+          details: echoCheck.details,
+          turn,
+          responsePreview: clip(response, 60)
+        });
+        
+        if (emergencyText) {
+          // Use emergency fallback
+          response = emergencyText;
+          emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+            'agent2.echoGuard.emergencyFallback',
+            'aiAgentSettings.agent2.emergencyFallbackLine.text',
+            response,
+            null,
+            `Echo blocked (${echoCheck.reason}) - using emergency fallback`
+          ));
+        } else {
+          // No emergency fallback configured - use minimal safe acknowledgment
+          response = 'I can help you with that.';
+          emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
+            'agent2.echoGuard.minimalSafe',
+            'UNMAPPED - Echo blocked, no emergency fallback configured',
+            response,
+            null,
+            `Echo blocked (${echoCheck.reason}) - no emergency fallback, using minimal safe response`
+          ));
+          emit('EMERGENCY_FALLBACK_NOT_CONFIGURED', {
+            severity: 'CRITICAL',
+            message: 'Echo was blocked but no emergency fallback is configured',
+            configPath: 'aiAgentSettings.agent2.emergencyFallbackLine.text'
+          });
+        }
+      }
     }
 
     return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
