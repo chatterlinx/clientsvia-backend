@@ -38,6 +38,7 @@ const { Agent2CallReasonSanitizer } = require('./Agent2CallReasonSanitizer');
 const { Agent2IntentPriorityGate } = require('./Agent2IntentPriorityGate');
 const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
+const Agent2SpeechPreprocessor = require('./Agent2SpeechPreprocessor');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
 let ScenarioEngine = null;
@@ -462,6 +463,28 @@ class Agent2DiscoveryRunner {
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    // SPEECH PREPROCESSING (V4 - BEFORE vocabulary and matching)
+    // ══════════════════════════════════════════════════════════════════════════
+    // Cleans raw caller input BEFORE trigger-card matching and call-reason capture.
+    // Strips greetings, filler words, company name, applies canonical rewrites.
+    // CRITICAL: Cleaned text is for INTERNAL USE ONLY - never spoken to caller.
+    // ══════════════════════════════════════════════════════════════════════════
+    const preprocessingConfig = safeObj(discoveryCfg.preprocessing, { enabled: true });
+    const companyName = company?.name || company?.businessName || '';
+    
+    const preprocessResult = Agent2SpeechPreprocessor.preprocess(input, preprocessingConfig, {
+      companyName
+    });
+    
+    // Use preprocessed input for downstream processing
+    const preprocessedInput = preprocessResult.cleaned;
+    
+    // Emit preprocessing proof for Call Review debugging
+    if (preprocessResult.changed || preprocessResult.appliedRules?.length > 0) {
+      emit('A2_PREPROCESSING_APPLIED', Agent2SpeechPreprocessor.buildPreprocessingEvent(preprocessResult));
+    }
+    
+    // ══════════════════════════════════════════════════════════════════════════
     // VOCABULARY PROCESSING (BEFORE trigger matching)
     // ══════════════════════════════════════════════════════════════════════════
     // 1. HARD_NORMALIZE: Replace mishears (e.g., "acee" → "ac")
@@ -473,7 +496,7 @@ class Agent2DiscoveryRunner {
     const vocabStats = Agent2VocabularyEngine.getStats(vocabularyConfig);
     
     const vocabularyResult = Agent2VocabularyEngine.process({
-      userInput: input,
+      userInput: preprocessedInput,  // V4: Use preprocessed input (stripped greetings/fillers)
       state: nextState,
       config: vocabularyConfig
     });

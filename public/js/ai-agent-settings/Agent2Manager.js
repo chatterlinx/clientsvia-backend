@@ -1607,7 +1607,7 @@ class Agent2Manager {
     
     // Key events for debugging
     const keyEvents = events.filter(e => 
-      ['CALL_START', 'A2_GATE', 'A2_DISCOVERY_GATE', 'A2_PATH_SELECTED', 'A2_RESPONSE_READY', 'A2_TRIGGER_EVAL', 'A2_SCENARIO_EVAL', 'A2_MIC_OWNER_PROOF', 'GREETING_EVALUATED', 'GREETING_INTERCEPTED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'SLOTS_EXTRACTED', 'SPEECH_SOURCE_SELECTED', 'SPOKEN_TEXT_UNMAPPED_BLOCKED', 'CALL_END'].includes(e.type)
+      ['CALL_START', 'A2_GATE', 'A2_DISCOVERY_GATE', 'A2_PATH_SELECTED', 'A2_RESPONSE_READY', 'A2_TRIGGER_EVAL', 'A2_SCENARIO_EVAL', 'A2_MIC_OWNER_PROOF', 'GREETING_EVALUATED', 'GREETING_INTERCEPTED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'SLOTS_EXTRACTED', 'SPEECH_SOURCE_SELECTED', 'SPEAK_PROVENANCE', 'SPOKEN_TEXT_UNMAPPED_BLOCKED', 'CALL_END'].includes(e.type)
     );
 
     container.innerHTML = `
@@ -1805,13 +1805,14 @@ class Agent2Manager {
                 </div>
               `;
             } else if (t.role === 'agent' && !t.speechSource) {
-              // No source info - likely legacy or missing event
+              // No source info - likely legacy call or missing provenance event
               sourceAttrHtml = `
                 <div style="margin-top:8px; padding:6px 8px; background:#1c1917; border:1px solid #78350f; border-radius:6px;">
                   <div style="display:flex; align-items:center; gap:6px;">
                     <span style="font-size:0.7rem;">❓</span>
-                    <span style="color:#fbbf24; font-size:0.65rem;">Source unknown (no SPEECH_SOURCE_SELECTED event)</span>
+                    <span style="color:#fbbf24; font-size:0.65rem;">Source unknown (no provenance event for this turn)</span>
                   </div>
+                  <div style="color:#92400e; font-size:0.6rem; margin-top:2px;">Check raw events for SPEAK_PROVENANCE or SPEECH_SOURCE_SELECTED</div>
                 </div>
               `;
             }
@@ -1899,8 +1900,12 @@ class Agent2Manager {
     // Step 1: Add greeting as Turn 0 agent response
     const greeting = events.find(e => e.type === 'GREETING_SENT');
     if (greeting?.data?.text) {
-      // V4: Look for SPEECH_SOURCE_SELECTED at turn 0 for greeting source
-      const greetingSource = events.find(e => e.type === 'SPEECH_SOURCE_SELECTED' && e.turn === 0);
+      // V4: Look for SPEECH_SOURCE_SELECTED or SPEAK_PROVENANCE at turn 0 for greeting source
+      // Check both event types - SPEECH_SOURCE_SELECTED preferred
+      const greetingSource = events.find(e => 
+        (e.type === 'SPEECH_SOURCE_SELECTED' || e.type === 'SPEAK_PROVENANCE') && 
+        (e.turn === 0 || e.turn === undefined)
+      );
       transcript.push({ 
         role: 'agent', 
         text: greeting.data.text, 
@@ -1909,12 +1914,13 @@ class Agent2Manager {
         speechSource: greetingSource ? {
           sourceId: greetingSource.data?.sourceId || 'agent2.greetings.callStart',
           uiPath: greetingSource.data?.uiPath || 'aiAgentSettings.agent2.greetings.callStart.text',
-          uiTab: greetingSource.data?.uiTab || 'greetings',
-          note: greetingSource.data?.note || null
+          uiTab: greetingSource.data?.uiTab || 'Greetings',
+          note: greetingSource.data?.note || greetingSource.data?.reason || null,
+          eventType: greetingSource.type
         } : {
           sourceId: 'agent2.greetings.callStart',
           uiPath: 'aiAgentSettings.agent2.greetings.callStart.text',
-          uiTab: 'greetings'
+          uiTab: 'Greetings'
         }
       });
     }
@@ -1993,18 +1999,25 @@ class Agent2Manager {
         });
       }
       
-      // V4: Capture SPEECH_SOURCE_SELECTED for source attribution
-      if (e.type === 'SPEECH_SOURCE_SELECTED') {
+      // V4: Capture SPEECH_SOURCE_SELECTED or SPEAK_PROVENANCE for source attribution
+      // Both event types contain the same source info (uiPath, sourceId, etc.)
+      // SPEECH_SOURCE_SELECTED is preferred, but fall back to SPEAK_PROVENANCE if not present
+      if (e.type === 'SPEECH_SOURCE_SELECTED' || e.type === 'SPEAK_PROVENANCE') {
         if (!speechSources) speechSources = {};
-        speechSources[e.turn] = {
-          sourceId: e.data?.sourceId || 'unknown',
-          uiPath: e.data?.uiPath || 'UNMAPPED',
-          uiTab: e.data?.uiTab || null,
-          cardId: e.data?.cardId || null,
-          configPath: e.data?.configPath || null,
-          note: e.data?.note || null,
-          t
-        };
+        // Only set if not already set (SPEECH_SOURCE_SELECTED takes precedence)
+        const turnKey = e.turn ?? 0;
+        if (!speechSources[turnKey] || e.type === 'SPEECH_SOURCE_SELECTED') {
+          speechSources[turnKey] = {
+            sourceId: e.data?.sourceId || 'unknown',
+            uiPath: e.data?.uiPath || 'UNMAPPED',
+            uiTab: e.data?.uiTab || null,
+            cardId: e.data?.cardId || null,
+            configPath: e.data?.configPath || null,
+            note: e.data?.note || e.data?.reason || null,
+            eventType: e.type,
+            t
+          };
+        }
       }
       if (e.type === 'ROUTE_ERROR') {
         const errorText = `[ERROR] ${e.data?.error || 'Unknown error occurred'}`;
@@ -3708,59 +3721,70 @@ class Agent2Manager {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // V4: NORMALIZATION SECTION (Filler/greeting cleanup for matching)
+  // V4: SPEECH PREPROCESSING SECTION (Clean input BEFORE matching)
   // ──────────────────────────────────────────────────────────────────────────
   _renderNormalizationSection() {
-    const normalization = this.config?.discovery?.normalization || {};
-    const enabled = normalization.enabled !== false;
-    const fillerWords = Array.isArray(normalization.fillerWords) 
-      ? normalization.fillerWords 
-      : ['uh', 'um', 'like', 'you know', 'kinda', 'sorta', 'basically'];
-    const stripGreetings = Array.isArray(normalization.stripGreetings)
-      ? normalization.stripGreetings
-      : ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening'];
-    const collapseWhitespace = normalization.collapseWhitespace !== false;
-    const preserveTranscript = normalization.preserveTranscript !== false;
+    const preprocessing = this.config?.discovery?.preprocessing || {};
+    const enabled = preprocessing.enabled !== false;
+    const fillerWords = Array.isArray(preprocessing.fillerWords) 
+      ? preprocessing.fillerWords 
+      : [];
+    const ignorePhrases = Array.isArray(preprocessing.ignorePhrases)
+      ? preprocessing.ignorePhrases
+      : [];
+    const canonicalRewrites = Array.isArray(preprocessing.canonicalRewrites)
+      ? preprocessing.canonicalRewrites
+      : [];
+    
+    const rewritesText = canonicalRewrites.map(r => `${r.from || ''} → ${r.to || ''}`).join('\n');
     
     return `
       <div style="margin-top:20px; padding:16px; background:#0b1220; border:1px solid #1e3a5f; border-radius:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <div style="display:flex; align-items:center; gap:8px;">
             <span style="font-size:18px;">🧹</span>
-            <label style="color:#8b5cf6; font-size:14px; font-weight:600;">Normalization</label>
+            <label style="color:#8b5cf6; font-size:14px; font-weight:600;">Speech Preprocessing</label>
             <span style="font-size:10px; background:#4c1d95; color:#c4b5fd; padding:2px 6px; border-radius:4px;">V4</span>
           </div>
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="a2-normalization-enabled" ${enabled ? 'checked' : ''} 
+            <input type="checkbox" id="a2-preprocessing-enabled" ${enabled ? 'checked' : ''} 
               style="width:16px; height:16px; cursor:pointer;"/>
             <span style="color:#94a3b8; font-size:12px;">Enabled</span>
           </label>
         </div>
         
         <p style="color:#6b7280; font-size:11px; margin-bottom:12px;">
-          Cleans caller input BEFORE trigger card matching. Removes filler words and greetings for more accurate matching. Preserves raw transcript for review.
+          Cleans caller input BEFORE trigger card matching. Removes noise for more accurate matching. <strong>Cleaned text is never spoken</strong> — only used internally.
         </p>
         
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
           <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
             <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Filler Words to Strip</label>
-            <textarea id="a2-normalization-fillers" rows="2"
+            <textarea id="a2-preprocessing-fillers" rows="2"
               style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:11px;"
-              placeholder="uh, um, like, you know">${this.escapeHtml(fillerWords.join(', '))}</textarea>
-            <div style="color:#64748b; font-size:10px; margin-top:4px;">Comma-separated. These words are removed before matching.</div>
+              placeholder="uh, um, like, you know, basically">${this.escapeHtml(fillerWords.join(', '))}</textarea>
+            <div style="color:#64748b; font-size:10px; margin-top:4px;">Comma-separated. Added to built-in defaults (uh, um, like, you know, etc.)</div>
           </div>
           <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
-            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Greetings to Strip</label>
-            <textarea id="a2-normalization-greetings" rows="2"
+            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Ignore Phrases (Complete Removal)</label>
+            <textarea id="a2-preprocessing-ignore" rows="2"
               style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:11px;"
-              placeholder="hi, hello, hey, good morning">${this.escapeHtml(stripGreetings.join(', '))}</textarea>
-            <div style="color:#64748b; font-size:10px; margin-top:4px;">Comma-separated. These greetings are removed from start of input.</div>
+              placeholder="my name is, long time customer, first time caller">${this.escapeHtml(ignorePhrases.join(', '))}</textarea>
+            <div style="color:#64748b; font-size:10px; margin-top:4px;">Comma-separated. These phrases are completely removed.</div>
           </div>
         </div>
         
+        <div style="margin-top:12px; padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+          <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Canonical Rewrites (one per line: from → to)</label>
+          <textarea id="a2-preprocessing-rewrites" rows="3"
+            style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:11px; font-family:monospace;"
+            placeholder="air condition → ac&#10;not cooling → ac not cooling&#10;thermostat blank → thermostat blank">${this.escapeHtml(rewritesText)}</textarea>
+          <div style="color:#64748b; font-size:10px; margin-top:4px;">Normalizes variations to canonical forms for better matching. Format: "from → to" (one per line)</div>
+        </div>
+        
         <div style="display:flex; gap:16px; margin-top:12px;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="a2-normalization-collapse" ${collapseWhitespace ? 'checked' : ''} 
+          <label style="display:flex; align-items:center; gap:8px; cursor:not-allowed; opacity:0.6;">
+            <input type="checkbox" checked disabled 
               style="width:14px; height:14px; cursor:pointer;"/>
             <span style="color:#94a3b8; font-size:12px;">Collapse whitespace</span>
           </label>
@@ -6784,23 +6808,36 @@ class Agent2Manager {
     discovery.callReasonCapture.stripFillerWords = true;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // V4: NORMALIZATION (filler/greeting cleanup for matching)
+    // V4: SPEECH PREPROCESSING (clean input BEFORE matching)
     // ═══════════════════════════════════════════════════════════════════════
-    discovery.normalization = discovery.normalization || {};
-    discovery.normalization.enabled = container.querySelector('#a2-normalization-enabled')?.checked ?? true;
-    discovery.normalization.applyTo = ['trigger_matching', 'slot_extraction'];
-    discovery.normalization.preserveTranscript = container.querySelector('#a2-normalization-preserve')?.checked ?? true;
-    discovery.normalization.collapseWhitespace = container.querySelector('#a2-normalization-collapse')?.checked ?? true;
+    discovery.preprocessing = discovery.preprocessing || {};
+    discovery.preprocessing.enabled = container.querySelector('#a2-preprocessing-enabled')?.checked ?? true;
     
-    const fillersRaw = (container.querySelector('#a2-normalization-fillers')?.value || '').trim();
-    discovery.normalization.fillerWords = fillersRaw 
+    // Filler words (comma-separated)
+    const fillersRaw = (container.querySelector('#a2-preprocessing-fillers')?.value || '').trim();
+    discovery.preprocessing.fillerWords = fillersRaw 
       ? fillersRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-      : ['uh', 'um', 'like', 'you know', 'kinda', 'sorta', 'basically'];
+      : [];
     
-    const greetingsRaw = (container.querySelector('#a2-normalization-greetings')?.value || '').trim();
-    discovery.normalization.stripGreetings = greetingsRaw
-      ? greetingsRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-      : ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening'];
+    // Ignore phrases (comma-separated)
+    const ignoreRaw = (container.querySelector('#a2-preprocessing-ignore')?.value || '').trim();
+    discovery.preprocessing.ignorePhrases = ignoreRaw
+      ? ignoreRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+      : [];
+    
+    // Canonical rewrites (one per line: from → to)
+    const rewritesRaw = (container.querySelector('#a2-preprocessing-rewrites')?.value || '').trim();
+    discovery.preprocessing.canonicalRewrites = rewritesRaw
+      ? rewritesRaw.split('\n')
+          .map(line => {
+            const parts = line.split('→').map(s => s.trim());
+            if (parts.length === 2 && parts[0] && parts[1]) {
+              return { from: parts[0].toLowerCase(), to: parts[1].toLowerCase() };
+            }
+            return null;
+          })
+          .filter(Boolean)
+      : [];
 
     // ═══════════════════════════════════════════════════════════════════════
     // V4: LLM FALLBACK SETTINGS

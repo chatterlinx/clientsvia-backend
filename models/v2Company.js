@@ -4239,6 +4239,27 @@ const companySchema = new mongoose.Schema({
                 clarifiers: { type: mongoose.Schema.Types.Mixed, default: {} },
                 
                 // ═══════════════════════════════════════════════════════════
+                // V4: SPEECH PREPROCESSING - Clean input BEFORE matching
+                // ═══════════════════════════════════════════════════════════
+                // Runs before trigger-card matching, call-reason capture, and LLM.
+                // Cleaned text is for INTERNAL USE ONLY - never spoken to caller.
+                // This stops "repeat after me" garbage from dirty transcripts.
+                preprocessing: {
+                    enabled: { type: Boolean, default: true },
+                    // Phrases to completely delete (if found as whole phrase)
+                    // Example: "hi", "hello", "penguin", "my name is", "long time customer"
+                    ignorePhrases: { type: [String], default: [] },
+                    // Filler words to strip as tokens
+                    // Example: "uh", "um", "like", "basically", "you know", "I mean"
+                    fillerWords: { type: [String], default: [] },
+                    // Simple rewrites (map misspellings/variations to canonical form)
+                    // Example: [{ from: "air condition", to: "ac" }, { from: "not cooling", to: "ac not cooling" }]
+                    canonicalRewrites: { type: mongoose.Schema.Types.Mixed, default: [] },
+                    // Additional patterns to strip (regex-compatible strings)
+                    stripPatterns: { type: [String], default: [] }
+                },
+                
+                // ═══════════════════════════════════════════════════════════
                 // V4: CALL REASON CAPTURE - Sanitization/Summary Config
                 // ═══════════════════════════════════════════════════════════
                 // Controls how call_reason_detail is processed before display.
