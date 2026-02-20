@@ -90,7 +90,45 @@ const EVENT_TYPES = [
   'BAILOUT_TRIGGERED',        // Hard or soft bailout
   'TRANSFER_INITIATED',       // Transfer started
   'ERROR_OCCURRED',           // Exception/error
-  'CALL_END'
+  'CALL_END',
+  
+  // ═══════════════════════════════════════════════════════════════════════════
+  // V4: AGENT 2.0 SPEECH SOURCE TRACEABILITY
+  // ═══════════════════════════════════════════════════════════════════════════
+  // These events enable full traceability of where every spoken line came from.
+  // RULE: If a line can be spoken, it MUST have a UI path. No-UI-No-Speak.
+  'SPEECH_SOURCE_SELECTED',     // 📍 Source attribution for spoken text (UI path, card ID)
+  'SPOKEN_TEXT_UNMAPPED_BLOCKED', // 🚨 CRITICAL: Spoken text had no UI path - blocked
+  'SPEAK_GATE_FALLBACK',        // ⚠️ Primary UI path empty, used fallback
+  'SPEAK_GATE_EMERGENCY',       // 🆘 Using emergency fallback (last resort)
+  
+  // V4: Agent 2.0 Discovery Events
+  'A2_GATE',                    // Agent 2.0 gate evaluation
+  'A2_DISCOVERY_GATE',          // Discovery sub-gate
+  'A2_PATH_SELECTED',           // Which path was chosen (TRIGGER_CARD, FALLBACK, etc.)
+  'A2_RESPONSE_READY',          // Response built and ready
+  'A2_TRIGGER_EVAL',            // Trigger card evaluation results
+  'A2_SCENARIO_EVAL',           // Scenario fallback evaluation
+  'A2_MIC_OWNER_PROOF',         // Proof of which module owned the mic
+  'A2_LLM_FALLBACK_DECISION',   // LLM fallback decision details
+  'A2_CONFIG_NOTE',             // Configuration notes/warnings
+  
+  // V4: Greeting & Interceptor Events
+  'GREETING_EVALUATED',         // Greeting rule evaluation
+  'GREETING_INTERCEPTED',       // Greeting interceptor fired
+  
+  // V4: Core Runtime Events
+  'CORE_RUNTIME_OWNER_RESULT',  // Which owner produced the response
+  'TWIML_SENT',                 // TwiML response sent to Twilio
+  'INPUT_TEXT_FINALIZED',       // Caller input finalized
+  'GATHER_TIMEOUT',             // Gather timeout (silence)
+  
+  // V4: Audio Events  
+  'AUDIO_URL_PREFLIGHT_FAILED', // Audio URL check failed
+  'FELL_BACK_TO_TTS',           // Fell back to TTS from audio
+  
+  // V4: Route Events
+  'ROUTE_ERROR'                 // Route handler error
 ];
 
 // ============================================================================
