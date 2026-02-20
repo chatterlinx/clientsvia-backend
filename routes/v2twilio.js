@@ -3207,29 +3207,90 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     // ────────────────────────────────────────────────────────────────────────────
     // AGENT 2.0 FAST-PATH: Pre-generated instant audio (Trigger Card answers)
     // ────────────────────────────────────────────────────────────────────────────
-    // If Agent 2.0 Discovery returned an audioUrl, use it directly (already cached MP3).
+    // If Agent 2.0 Discovery returned an audioUrl, VALIDATE it exists before using.
+    // Twilio crashes with "Application Error" if the <Play> URL returns 404.
     try {
       const isAgent2Discovery = runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
       const agent2AudioUrl = runtimeResult?.audioUrl;
       if (!audioUrl && isAgent2Discovery && agent2AudioUrl) {
-        // audioUrl from Agent2DiscoveryRunner is a relative path like /audio/instant-lines/...
-        audioUrl = agent2AudioUrl.startsWith('http') 
-          ? agent2AudioUrl 
-          : `${getSecureBaseUrl(req)}${agent2AudioUrl}`;
-        voiceProviderUsed = 'instant_audio_agent2';
-        if (CallLogger) {
-          CallLogger.logEvent({
-            callId: callSid,
-            companyId: companyID,
-            type: 'INSTANT_AUDIO_AGENT2_HIT',
-            turn: turnNumber,
-            data: {
-              triggerCardId: runtimeResult?.triggerCard?.id || null,
-              triggerCardLabel: runtimeResult?.triggerCard?.label || null,
-              audioUrl: agent2AudioUrl,
-              matchSource: runtimeResult?.matchSource || null
+        // ════════════════════════════════════════════════════════════════════════
+        // AUDIO FILE PREFLIGHT: Verify file exists before using <Play>
+        // ════════════════════════════════════════════════════════════════════════
+        let audioFileExists = false;
+        
+        if (agent2AudioUrl.startsWith('/audio/') || agent2AudioUrl.startsWith('/instant-lines/')) {
+          // Local file - verify it exists on disk
+          const localFilePath = path.join(__dirname, '../public', agent2AudioUrl);
+          audioFileExists = fs.existsSync(localFilePath);
+          
+          if (!audioFileExists) {
+            logger.warn('[V2 RESPOND] ⚠️ Agent2 audio file missing', { 
+              path: localFilePath, 
+              rawUrl: agent2AudioUrl,
+              triggerCardId: runtimeResult?.triggerCard?.id 
+            });
+            
+            // Log preflight failure for Call Review
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'AUDIO_URL_PREFLIGHT_FAILED',
+                turn: turnNumber,
+                data: {
+                  audioUrl: agent2AudioUrl,
+                  localPath: localFilePath,
+                  reason: 'file_not_found',
+                  triggerCardId: runtimeResult?.triggerCard?.id,
+                  triggerCardLabel: runtimeResult?.triggerCard?.label,
+                  fallbackAction: 'will_use_tts'
+                }
+              }).catch(() => {});
             }
-          }).catch(() => {});
+          }
+        } else if (agent2AudioUrl.startsWith('http')) {
+          // External URL - assume it exists (preflight would add latency)
+          // TODO: Could add async preflight for external URLs if needed
+          audioFileExists = true;
+        }
+        
+        if (audioFileExists) {
+          audioUrl = agent2AudioUrl.startsWith('http') 
+            ? agent2AudioUrl 
+            : `${getSecureBaseUrl(req)}${agent2AudioUrl}`;
+          voiceProviderUsed = 'instant_audio_agent2';
+          
+          if (CallLogger) {
+            CallLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'INSTANT_AUDIO_AGENT2_HIT',
+              turn: turnNumber,
+              data: {
+                triggerCardId: runtimeResult?.triggerCard?.id || null,
+                triggerCardLabel: runtimeResult?.triggerCard?.label || null,
+                audioUrl: agent2AudioUrl,
+                matchSource: runtimeResult?.matchSource || null,
+                preflightPassed: true
+              }
+            }).catch(() => {});
+          }
+        } else {
+          // Audio file missing - will fall through to TTS below
+          if (CallLogger) {
+            CallLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'FELL_BACK_TO_TTS',
+              turn: turnNumber,
+              data: {
+                reason: 'instant_audio_file_missing',
+                missingAudioUrl: agent2AudioUrl,
+                triggerCardId: runtimeResult?.triggerCard?.id,
+                triggerCardLabel: runtimeResult?.triggerCard?.label
+              }
+            }).catch(() => {});
+          }
         }
       }
     } catch (e) {
@@ -3335,6 +3396,10 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
     timings.totalMs = Date.now() - T0;
     
     if (CallLogger) {
+      // Extract audio URL if present for audit
+      const playUrlMatch = twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
+      const playUrl = playUrlMatch ? playUrlMatch[1] : null;
+      
       await CallLogger.logEvent({
         callId: callSid,
         companyId: companyID,
@@ -3351,6 +3416,12 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
           responsePreview: responseText.substring(0, 80),
           matchSource: runtimeResult.matchSource,
           runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
+          // ════════════════════════════════════════════════════════════════════════
+          // TWIML PREVIEW - CRITICAL FOR DEBUGGING
+          // Without this, Call Review cannot prove what was actually sent to Twilio
+          // ════════════════════════════════════════════════════════════════════════
+          twimlPreview: twimlString.substring(0, 800),
+          playUrl: playUrl,
           // TIMING BREAKDOWN (all values in ms)
           timings: {
             companyLoadMs: timings.companyLoadMs || 0,
