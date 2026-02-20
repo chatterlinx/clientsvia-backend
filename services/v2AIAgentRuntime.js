@@ -194,6 +194,29 @@ class V2AIAgentRuntime {
         const agent2 = company?.aiAgentSettings?.agent2 || {};
         const agent2Enabled = agent2.enabled === true && agent2.discovery?.enabled === true;
         
+        // V126: GREETING_GATE_EVALUATION - Critical diagnostic for "skipped greeting" issues
+        // This logs exactly what the runtime sees at the moment of decision
+        const greetingGateEval = {
+            agent2MasterEnabled: agent2.enabled === true,
+            agent2DiscoveryEnabled: agent2.discovery?.enabled === true,
+            agent2EffectivelyEnabled: agent2Enabled,
+            greetingsConfigExists: Boolean(agent2.greetings),
+            callStartConfigExists: Boolean(agent2.greetings?.callStart),
+            callStartEnabled: agent2.greetings?.callStart?.enabled !== false,
+            callStartHasAudioUrl: Boolean(agent2.greetings?.callStart?.audioUrl?.trim()),
+            callStartHasText: Boolean(agent2.greetings?.callStart?.text?.trim()),
+            callStartTextPreview: agent2.greetings?.callStart?.text?.substring?.(0, 80) || null,
+            callStartAudioUrlPreview: agent2.greetings?.callStart?.audioUrl?.substring?.(0, 80) || null,
+            willUseAgent2: agent2Enabled,
+            willUseLegacy: !agent2Enabled,
+            reasonIfLegacy: !agent2Enabled ? (
+                agent2.enabled !== true ? 'agent2.enabled is not true' :
+                agent2.discovery?.enabled !== true ? 'agent2.discovery.enabled is not true' :
+                'unknown'
+            ) : null
+        };
+        logger.info(`[V2 GREETING] 📊 GREETING_GATE_EVALUATION:`, JSON.stringify(greetingGateEval, null, 2));
+        
         // 🔍 DEBUG: Log Agent 2.0 state for troubleshooting
         logger.info(`[V2 GREETING] 🔍 DEBUG: agent2.enabled=${agent2.enabled}, agent2.discovery?.enabled=${agent2.discovery?.enabled}`);
         logger.info(`[V2 GREETING] 🔍 DEBUG: agent2Enabled=${agent2Enabled}`);
@@ -232,26 +255,36 @@ class V2AIAgentRuntime {
             // Fall back to TTS text
             // 🛡️ DEFENSIVE: Ensure greetingText is a plain string, not an object/array/JSON
             let greetingText = callStart.text;
+            let usedHardcodedFallback = false;
+            let fallbackReason = null;
+            
             if (typeof greetingText !== 'string') {
                 logger.error(`[V2 GREETING] ❌ CRITICAL: callStart.text is not a string!`, {
                     type: typeof greetingText,
                     value: JSON.stringify(greetingText)?.substring(0, 200)
                 });
+                usedHardcodedFallback = true;
+                fallbackReason = 'callStart.text is not a string';
                 greetingText = "Thank you for calling. How can I help you today?";
             }
-            if (!greetingText.trim()) {
+            if (!usedHardcodedFallback && !greetingText.trim()) {
+                usedHardcodedFallback = true;
+                fallbackReason = 'callStart.text is empty';
                 greetingText = "Thank you for calling. How can I help you today?";
             }
             // Detect if greetingText looks like JSON/code (common data corruption symptom)
-            if (greetingText.startsWith('{') || greetingText.startsWith('[') || greetingText.includes('function') || greetingText.includes('const ') || greetingText.includes('module.exports')) {
+            if (!usedHardcodedFallback && (greetingText.startsWith('{') || greetingText.startsWith('[') || greetingText.includes('function') || greetingText.includes('const ') || greetingText.includes('module.exports'))) {
                 logger.error(`[V2 GREETING] ❌ CRITICAL: callStart.text appears to be code/JSON!`, {
                     preview: greetingText.substring(0, 200),
                     companyId: company._id
                 });
+                usedHardcodedFallback = true;
+                fallbackReason = 'callStart.text appears to be code/JSON';
                 greetingText = "Thank you for calling. How can I help you today?";
             }
             // 🆕 DETECT BUSINESS/FILE IDENTIFIERS (prevents "connection greeting code" being read aloud)
-            if (greetingText.includes('CONNECTION_GREETING') || 
+            if (!usedHardcodedFallback && (
+                greetingText.includes('CONNECTION_GREETING') || 
                 greetingText.includes('fd_CONNECTION_GREETING') || 
                 greetingText.match(/^fd_[A-Z_]+_\d+$/) ||
                 greetingText.includes('/audio/') ||           // 🆕 File path leak
@@ -259,7 +292,7 @@ class V2AIAgentRuntime {
                 greetingText.includes('.mp3') ||              // 🆕 Audio file extension
                 greetingText.includes('.wav') ||              // 🆕 Audio file extension
                 greetingText.startsWith('http') ||            // 🆕 URL leak
-                greetingText.match(/^\/.*\.(mp3|wav|ogg)$/i)) { // 🆕 Any audio file path pattern
+                greetingText.match(/^\/.*\.(mp3|wav|ogg)$/i))) { // 🆕 Any audio file path pattern
                 logger.error(`[V2 GREETING] ❌ CRITICAL: callStart.text contains file path or identifier!`, {
                     text: greetingText.substring(0, 200),
                     companyId: company._id,
@@ -268,7 +301,27 @@ class V2AIAgentRuntime {
                                    greetingText.includes('.mp3') ? 'audio_extension' :
                                    greetingText.startsWith('http') ? 'url' : 'identifier'
                 });
+                usedHardcodedFallback = true;
+                fallbackReason = 'callStart.text contains file path or identifier';
                 greetingText = "Thank you for calling. How can I help you today?";
+            }
+            
+            // V126: Log warning if hardcoded fallback was used - this is a Prime Directive violation
+            if (usedHardcodedFallback) {
+                logger.warn(`[V2 GREETING] ⚠️ HARDCODED_FALLBACK_USED: ${fallbackReason}`, {
+                    companyId: company._id,
+                    reason: fallbackReason,
+                    originalText: callStart.text?.substring?.(0, 100) || '[not a string]'
+                });
+                // Return with a flag so SPEAK_PROVENANCE can show this violation
+                return {
+                    mode: 'realtime',
+                    text: greetingText,
+                    voiceId: company.aiAgentSettings?.voiceSettings?.voiceId,
+                    source: 'agent2',
+                    usedHardcodedFallback: true,
+                    fallbackReason
+                };
             }
             const processedText = this.buildPureResponse(greetingText, company);
             logger.info(`[V2 GREETING] ✅ Agent 2.0 using TTS: "${processedText}"`);

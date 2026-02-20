@@ -1758,6 +1758,8 @@ router.post('/voice', async (req, res) => {
             ).catch(() => {}); // Fire and forget
             
             // V126: SPEAK_PROVENANCE for complete UI traceability
+            const usedFallback = initResult.greetingConfig?.usedHardcodedFallback === true;
+            const fallbackReason = initResult.greetingConfig?.fallbackReason || null;
             BlackBoxLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
@@ -1765,15 +1767,21 @@ router.post('/voice', async (req, res) => {
               turn: 0,
               data: {
                 sourceId: greetingSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting',
-                uiPath: greetingSource === 'agent2' 
-                  ? 'aiAgentSettings.agent2.greetings.callStart' 
-                  : 'connectionMessages (legacy)',
+                uiPath: usedFallback 
+                  ? 'HARDCODED_FALLBACK - Prime Directive Violation' 
+                  : (greetingSource === 'agent2' 
+                    ? 'aiAgentSettings.agent2.greetings.callStart' 
+                    : 'connectionMessages (legacy)'),
                 uiTab: greetingSource === 'agent2' ? 'Greetings' : 'Connection Messages',
                 configPath: greetingSource === 'agent2' ? 'agent2.greetings.callStart.text' : 'connectionMessages.greeting',
                 spokenTextPreview: greetingText.substring(0, 120),
                 audioUrl: null,
-                reason: 'Call start greeting (TTS)',
-                isFromUiConfig: true
+                reason: usedFallback 
+                  ? `FALLBACK: ${fallbackReason}` 
+                  : 'Call start greeting (TTS)',
+                isFromUiConfig: !usedFallback,
+                usedHardcodedFallback: usedFallback,
+                fallbackReason: fallbackReason
               }
             }).catch(() => {});
           }
