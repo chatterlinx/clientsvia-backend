@@ -383,12 +383,85 @@ class Agent2Manager {
   // ══════════════════════════════════════════════════════════════════════════
   // LLM FALLBACK TAB (Hybrid Assist - UI-Controlled)
   // ══════════════════════════════════════════════════════════════════════════
-  // Deterministic first (trigger cards), LLM only when needed.
-  // Every setting must be UI-owned. No hidden behaviors.
+  // Two modes: Guided Fallback (funnel to booking) vs Answer+Return (answer only)
+  // Both are ASSIST-ONLY. Deterministic owns the mic. LLM never takes over.
   // ══════════════════════════════════════════════════════════════════════════
   renderLLMFallbackTab() {
+    const mode = this.config?.llmFallback?.mode || 'guided';
+    const isGuided = mode === 'guided';
+    const isAnswerReturn = mode === 'answer_return';
+
     return `
       ${this.renderLLMMasterSwitchCard()}
+      ${this.renderLLMModeSelector()}
+      ${isGuided ? this.renderGuidedFallbackCards() : this.renderAnswerReturnCards()}
+      ${this.renderLLMUsageDashboardCard()}
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LLM FALLBACK: Mode Selector (Guided vs Answer+Return)
+  // ─────────────────────────────────────────────────────────────────────────
+  renderLLMModeSelector() {
+    const mode = this.config?.llmFallback?.mode || 'guided';
+    const enabled = this.config?.discovery?.llmFallback?.enabled === true;
+
+    if (!enabled) {
+      return '';
+    }
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:20px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">LLM Mode</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">
+            Choose how LLM assists. Both modes are <strong>assist-only</strong> — deterministic always owns the conversation.
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:16px; background:${mode === 'guided' ? '#052e16' : '#161b22'}; border:2px solid ${mode === 'guided' ? '#22d3ee' : '#30363d'}; border-radius:12px; transition:all 0.2s;">
+            <input type="radio" name="a2-llm-mode" value="guided" ${mode === 'guided' ? 'checked' : ''} style="margin-top:3px; accent-color:#22d3ee; width:18px; height:18px;">
+            <div>
+              <div style="color:${mode === 'guided' ? '#22d3ee' : '#c9d1d9'}; font-size:1rem; font-weight:600;">Guided Fallback</div>
+              <div style="color:#8b949e; font-size:0.8rem; margin-top:4px;">
+                LLM responds with empathy + guidance, then asks a <strong>UI-owned handoff question</strong> to funnel caller toward booking.
+              </div>
+              <div style="margin-top:8px; padding:8px; background:#0b1220; border-radius:6px; font-size:0.75rem; color:#6e7681;">
+                Best for: Service businesses wanting to maximize bookings
+              </div>
+            </div>
+          </label>
+
+          <label style="display:flex; align-items:flex-start; gap:12px; cursor:pointer; padding:16px; background:${mode === 'answer_return' ? '#052e16' : '#161b22'}; border:2px solid ${mode === 'answer_return' ? '#22d3ee' : '#30363d'}; border-radius:12px; transition:all 0.2s;">
+            <input type="radio" name="a2-llm-mode" value="answer_return" ${mode === 'answer_return' ? 'checked' : ''} style="margin-top:3px; accent-color:#22d3ee; width:18px; height:18px;">
+            <div>
+              <div style="color:${mode === 'answer_return' ? '#22d3ee' : '#c9d1d9'}; font-size:1rem; font-weight:600;">Answer + Return</div>
+              <div style="color:#8b949e; font-size:0.8rem; margin-top:4px;">
+                LLM gives a <strong>short answer only</strong>, then control returns to deterministic pipeline. No handoff question.
+              </div>
+              <div style="margin-top:8px; padding:8px; background:#0b1220; border-radius:6px; font-size:0.75rem; color:#6e7681;">
+                Best for: Info lines, FAQs, or when discovery owns all questioning
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div style="margin-top:16px; padding:12px; background:#161b22; border-radius:8px; display:flex; align-items:center; gap:10px;">
+          <span style="color:#f59e0b; font-size:1.2rem;">⚡</span>
+          <div style="color:#8b949e; font-size:0.85rem;">
+            <strong style="color:#c9d1d9;">Both modes:</strong> LLM fires only when deterministic fails. Next turn always re-enters trigger cards first. LLM cannot set state, mention times, or take over.
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // GUIDED FALLBACK: All existing cards (unchanged)
+  // ─────────────────────────────────────────────────────────────────────────
+  renderGuidedFallbackCards() {
+    return `
       ${this.renderLLMModelSelectionCard()}
       ${this.renderLLMTriggerRulesCard()}
       ${this.renderLLMOutputConstraintsCard()}
@@ -396,7 +469,178 @@ class Agent2Manager {
       ${this.renderLLMCallForwardingCard()}
       ${this.renderLLMPromptsCard()}
       ${this.renderLLMEmergencyFallbackCard()}
-      ${this.renderLLMUsageDashboardCard()}
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ANSWER + RETURN: New mode cards
+  // ─────────────────────────────────────────────────────────────────────────
+  renderAnswerReturnCards() {
+    const ar = this.config?.llmFallback?.answerReturn || {};
+    const enabled = ar.enabled !== false;
+    const model = ar.model || 'gpt-4.1-mini';
+    const customOverride = ar.customModelOverride || '';
+    const maxSentences = ar.maxSentences ?? 2;
+    const maxTokens = ar.maxOutputTokens ?? 140;
+    const temperature = ar.temperature ?? 0.2;
+    const forbidBookingTimes = ar.forbidBookingTimes !== false;
+    const forbiddenPatterns = (ar.forbiddenBookingPatterns || []).join('\n');
+    const cooldownTurns = ar.cooldownTurns ?? 1;
+    const maxUsesPerCall = ar.maxUsesPerCall ?? 2;
+    const systemPrompt = ar.systemPrompt || '';
+
+    const models = this._llmModels?.allowedModels || [];
+
+    return `
+      <!-- Answer+Return Enable -->
+      <div class="a2-card" style="background:#0b1220; border:1px solid ${enabled ? '#22d3ee' : '#30363d'}; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Answer + Return Mode</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">
+              LLM gives a short, helpful answer. No handoff question. Control returns to deterministic next turn.
+            </div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-ar-enabled" ${enabled ? 'checked' : ''} style="width:20px; height:20px; accent-color:#22d3ee;">
+            <span style="color:${enabled ? '#22d3ee' : '#6e7681'}; font-size:0.9rem; font-weight:600;">${enabled ? 'Active' : 'Inactive'}</span>
+          </label>
+        </div>
+        
+        ${enabled ? `
+          <div style="margin-top:16px; padding:12px; background:#052e16; border:1px solid #166534; border-radius:8px; color:#86efac; font-size:0.85rem;">
+            <strong>Behavior:</strong> LLM answers → Gather → Next turn starts at Trigger Cards (deterministic) → LLM only fires again if deterministic fails AND cooldown expired.
+          </div>
+        ` : `
+          <div style="margin-top:16px; padding:12px; background:#1c1917; border:1px solid #78350f; border-radius:8px; color:#fbbf24; font-size:0.85rem;">
+            <strong>Inactive:</strong> Switch to Guided Fallback mode, or enable this mode to configure.
+          </div>
+        `}
+      </div>
+
+      ${enabled ? `
+      <!-- Model Selection (Answer+Return) -->
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Model Selection</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Choose the LLM model for Answer+Return responses.</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Model</label>
+            <select id="a2-ar-model" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+              ${models.length > 0 ? models.map(m => `
+                <option value="${this.escapeHtml(m.id)}" ${model === m.id ? 'selected' : ''}>${this.escapeHtml(m.name)} — ${this.escapeHtml(m.description)}</option>
+              `).join('') : `
+                <option value="gpt-4.1-mini" ${model === 'gpt-4.1-mini' ? 'selected' : ''}>GPT-4.1 Mini (recommended)</option>
+                <option value="gpt-4.1-nano" ${model === 'gpt-4.1-nano' ? 'selected' : ''}>GPT-4.1 Nano (economy)</option>
+                <option value="gpt-4.1" ${model === 'gpt-4.1' ? 'selected' : ''}>GPT-4.1 (premium)</option>
+                <option value="gpt-4o-mini" ${model === 'gpt-4o-mini' ? 'selected' : ''}>GPT-4o Mini</option>
+              `}
+            </select>
+          </div>
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Custom Model Override</label>
+            <input type="text" id="a2-ar-custom-model" value="${this.escapeHtml(customOverride)}" placeholder="Leave blank to use selection above" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.9rem;">
+          </div>
+        </div>
+      </div>
+
+      <!-- Output Constraints (Answer+Return) -->
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Output Constraints</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Hard limits on LLM output. Violations trigger emergency fallback.</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:16px;">
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Sentences</label>
+            <input type="number" id="a2-ar-max-sentences" value="${maxSentences}" min="1" max="4" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+            <div style="color:#6e7681; font-size:0.75rem; margin-top:4px;">Keep it short (1-2 recommended)</div>
+          </div>
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Output Tokens</label>
+            <input type="number" id="a2-ar-max-tokens" value="${maxTokens}" min="50" max="300" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+          </div>
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Temperature</label>
+            <input type="number" id="a2-ar-temperature" value="${temperature}" min="0" max="1" step="0.1" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+            <div style="color:#6e7681; font-size:0.75rem; margin-top:4px;">Lower = more deterministic</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Anti-Booking Guardrails (Answer+Return) -->
+      <div class="a2-card" style="background:#0b1220; border:1px solid #f87171; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#f87171;">Anti-Booking Guardrails</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">LLM must NEVER mention scheduling, times, or availability. Discovery owns that.</div>
+        </div>
+
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:12px; background:${forbidBookingTimes ? '#052e16' : '#7f1d1d'}; border:1px solid ${forbidBookingTimes ? '#166534' : '#991b1b'}; border-radius:8px; margin-bottom:16px;">
+          <input type="checkbox" id="a2-ar-forbid-booking-times" ${forbidBookingTimes ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
+          <div>
+            <div style="color:${forbidBookingTimes ? '#86efac' : '#f87171'}; font-size:0.95rem; font-weight:600;">Forbid Booking Times (REQUIRED)</div>
+            <div style="color:#8b949e; font-size:0.8rem;">Block any mention of times, dates, availability, "schedule", "appointment", day names, etc.</div>
+          </div>
+        </label>
+
+        <div>
+          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Additional Forbidden Patterns (one per line)</label>
+          <textarea id="a2-ar-forbidden-patterns" rows="4" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.9rem; resize:vertical; font-family:monospace;" placeholder="schedule&#10;availability&#10;tomorrow&#10;next week">${this.escapeHtml(forbiddenPatterns)}</textarea>
+          <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Regex patterns or plain strings. If LLM output contains any, it's blocked.</div>
+        </div>
+      </div>
+
+      <!-- Takeover Prevention (Answer+Return) -->
+      <div class="a2-card" style="background:#0b1220; border:1px solid #22d3ee; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Takeover Prevention</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Prevents LLM from dominating the call. Forces deterministic retry between LLM uses.</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Cooldown Turns</label>
+            <input type="number" id="a2-ar-cooldown-turns" value="${cooldownTurns}" min="0" max="5" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+            <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">After LLM fires, block LLM for N turns (forces deterministic)</div>
+          </div>
+          <div>
+            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Uses Per Call</label>
+            <input type="number" id="a2-ar-max-uses" value="${maxUsesPerCall}" min="1" max="10" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:10px; color:#c9d1d9; font-size:0.95rem;">
+            <div style="color:#6e7681; font-size:0.8rem; margin-top:4px;">Hard cap on total LLM assists per call</div>
+          </div>
+        </div>
+
+        <!-- Locked setting: resetDeterministicNextTurn -->
+        <div style="padding:12px; background:#161b22; border-radius:8px; display:flex; align-items:center; gap:10px;">
+          <span style="color:#22d3ee; font-size:1.2rem;">🔒</span>
+          <div>
+            <div style="color:#c9d1d9; font-size:0.9rem; font-weight:600;">Reset to Deterministic Next Turn</div>
+            <div style="color:#6e7681; font-size:0.8rem;">Locked ON. After LLM speaks, next turn always starts at Trigger Cards.</div>
+          </div>
+          <input type="checkbox" checked disabled style="margin-left:auto; width:18px; height:18px; accent-color:#22d3ee;">
+        </div>
+      </div>
+
+      <!-- System Prompt (Answer+Return) -->
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
+        <div style="margin-bottom:16px;">
+          <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">System Prompt (Answer+Return)</h3>
+          <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">UI-owned prompt for this mode. Keep it focused on answering, not selling.</div>
+        </div>
+
+        <textarea id="a2-ar-system-prompt" rows="6" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.9rem; resize:vertical; font-family:monospace;" placeholder="You are a helpful assistant for [Company]. Answer the caller's question briefly and helpfully. Do NOT mention scheduling, appointments, times, or availability. Keep your response to 1-2 sentences.">${this.escapeHtml(systemPrompt)}</textarea>
+        <div style="color:#f59e0b; font-size:0.8rem; margin-top:6px;">
+          <strong>Reminder:</strong> Do NOT include booking/scheduling instructions. Discovery handles that.
+        </div>
+      </div>
+
+      <!-- Emergency Fallback (shared) -->
+      ${this.renderLLMEmergencyFallbackCard()}
+      ` : ''}
     `;
   }
 
@@ -4147,6 +4391,104 @@ class Agent2Manager {
       this.render(container);
     });
 
+    // Mode selector (Guided vs Answer+Return)
+    container.querySelectorAll('input[name="a2-llm-mode"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        this.config.llmFallback = this.config.llmFallback || {};
+        this.config.llmFallback.mode = e.target.value;
+        onAnyChange();
+        this.render(container);
+      });
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // ANSWER + RETURN MODE HANDLERS
+    // ──────────────────────────────────────────────────────────────────────────
+    container.querySelector('#a2-ar-enabled')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.enabled = e.target.checked;
+      onAnyChange();
+      this.render(container);
+    });
+
+    container.querySelector('#a2-ar-model')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.model = e.target.value;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-custom-model')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.customModelOverride = e.target.value.trim();
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-max-sentences')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.maxSentences = parseInt(e.target.value, 10) || 2;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-max-tokens')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.maxOutputTokens = parseInt(e.target.value, 10) || 140;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-temperature')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.temperature = parseFloat(e.target.value) || 0.2;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-forbid-booking-times')?.addEventListener('change', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.forbidBookingTimes = e.target.checked;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-forbidden-patterns')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.forbiddenBookingPatterns = e.target.value
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-cooldown-turns')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.cooldownTurns = parseInt(e.target.value, 10) || 1;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-max-uses')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.maxUsesPerCall = parseInt(e.target.value, 10) || 2;
+      onAnyChange();
+    });
+
+    container.querySelector('#a2-ar-system-prompt')?.addEventListener('input', (e) => {
+      this.config.llmFallback = this.config.llmFallback || {};
+      this.config.llmFallback.answerReturn = this.config.llmFallback.answerReturn || {};
+      this.config.llmFallback.answerReturn.systemPrompt = e.target.value;
+      onAnyChange();
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // GUIDED MODE HANDLERS (existing)
+    // ──────────────────────────────────────────────────────────────────────────
+
     // Model selection
     container.querySelector('#a2-llm-provider')?.addEventListener('change', (e) => {
       this.config.llmFallback = this.config.llmFallback || {};
@@ -6831,20 +7173,36 @@ class Agent2Manager {
       : [];
 
     // ═══════════════════════════════════════════════════════════════════════
-    // V4: LLM FALLBACK SETTINGS
+    // V4: LLM FALLBACK SETTINGS (discovery.llmFallback - enabled flag only)
+    // The full llmFallback config is managed by LLM Fallback tab event handlers
     // ═══════════════════════════════════════════════════════════════════════
     discovery.llmFallback = discovery.llmFallback || {};
-    discovery.llmFallback.enabled = container.querySelector('#a2-llm-enabled')?.checked ?? false;
-    discovery.llmFallback.mode = container.querySelector('#a2-llmfallback-mode')?.value || 'assist_only';
+    // Only collect enabled state from the master switch (if visible on current tab)
+    const llmEnabledEl = container.querySelector('#a2-llm-enabled');
+    if (llmEnabledEl) {
+      discovery.llmFallback.enabled = llmEnabledEl.checked;
+    } else {
+      // Preserve existing value if not on LLM tab
+      discovery.llmFallback.enabled = this.config?.discovery?.llmFallback?.enabled ?? false;
+    }
+    // Hard-coded guardrails (always enforced)
     discovery.llmFallback.onlyWhenAllElseFails = true;
-    discovery.llmFallback.maxTurnsPerCall = Number(container.querySelector('#a2-llmfallback-maxTurns')?.value) || 2;
-    discovery.llmFallback.blockedIfTriggerMatched = container.querySelector('#a2-llmfallback-blockedTrigger')?.checked ?? true;
-    discovery.llmFallback.blockedIfPendingQuestion = container.querySelector('#a2-llmfallback-blockedPending')?.checked ?? true;
     discovery.llmFallback.blockedIfCapturedReasonFlow = true;
     discovery.llmFallback.blockedIfBookingLocked = true;
-    discovery.llmFallback.forbidBookingTimes = container.querySelector('#a2-llmfallback-forbidTimes')?.checked ?? true;
 
     cfg.discovery = discovery;
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // V5: LLM FALLBACK CONFIG (cfg.llmFallback - mode + guided + answerReturn)
+    // Preserve config set by LLM Fallback tab event handlers
+    // ═══════════════════════════════════════════════════════════════════════
+    cfg.llmFallback = this.config?.llmFallback || {};
+    // Ensure mode has a default
+    cfg.llmFallback.mode = cfg.llmFallback.mode || 'guided';
+    // Ensure answerReturn has locked setting
+    if (cfg.llmFallback.answerReturn) {
+      cfg.llmFallback.answerReturn.resetDeterministicNextTurn = true; // LOCKED ON
+    }
     
     // ═══════════════════════════════════════════════════════════════════════
     // V4: GLOBAL NEGATIVE KEYWORDS (at agent2 root level)
