@@ -3782,22 +3782,9 @@ class Agent2Manager {
           <div style="color:#64748b; font-size:10px; margin-top:4px;">Normalizes variations to canonical forms for better matching. Format: "from → to" (one per line)</div>
         </div>
         
-        <div style="display:flex; gap:16px; margin-top:12px;">
-          <label style="display:flex; align-items:center; gap:8px; cursor:not-allowed; opacity:0.6;">
-            <input type="checkbox" checked disabled 
-              style="width:14px; height:14px; cursor:pointer;"/>
-            <span style="color:#94a3b8; font-size:12px;">Collapse whitespace</span>
-          </label>
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="a2-normalization-preserve" ${preserveTranscript ? 'checked' : ''} 
-              style="width:14px; height:14px; cursor:pointer;"/>
-            <span style="color:#94a3b8; font-size:12px;">Preserve raw transcript</span>
-          </label>
-        </div>
-        
         <div style="margin-top:12px; padding:10px; background:#1e1b4b; border:1px solid #4338ca; border-radius:8px;">
           <p style="color:#a5b4fc; font-size:10px; margin:0;">
-            <strong>Note:</strong> Normalization improves trigger card accuracy. Example: "Um, hi, my AC like isn't cooling" → "my AC isn't cooling"
+            <strong>Important:</strong> Preprocessing improves trigger card accuracy. Cleaned text is <strong>never spoken</strong> to callers — only used for internal matching. Raw transcript is always preserved in Call Review.
           </p>
         </div>
       </div>
