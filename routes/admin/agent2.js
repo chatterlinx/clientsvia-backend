@@ -328,7 +328,33 @@ function defaultAgent2Config() {
       enabled: false,  // Master kill switch - if OFF, LLM NEVER runs
       
       // ─────────────────────────────────────────────────────────────────────
-      // MODEL SELECTION
+      // V5: MODE SELECTOR (Guided vs Answer+Return)
+      // Both modes are ASSIST-ONLY. Deterministic owns the mic. LLM never takes over.
+      // Default: answer_return (safe default - just answers, no booking push)
+      // ─────────────────────────────────────────────────────────────────────
+      mode: 'answer_return',  // 'guided' | 'answer_return'
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // V5: ANSWER + RETURN MODE (one-shot answer, no question, back to deterministic)
+      // This is the DEFAULT mode - enabled by default
+      // ─────────────────────────────────────────────────────────────────────
+      answerReturn: {
+        enabled: true,  // Default ON since answer_return is the default mode
+        model: 'gpt-4.1-mini',
+        customModelOverride: '',
+        maxSentences: 2,
+        maxOutputTokens: 140,
+        temperature: 0.2,
+        forbidBookingTimes: true,
+        forbiddenBookingPatterns: [],  // Uses same default patterns as guided if empty
+        cooldownTurns: 1,              // After LLM fires, wait N turns before allowing again
+        maxUsesPerCall: 2,             // Hard cap per call
+        resetDeterministicNextTurn: true,  // LOCKED TRUE - next turn always deterministic
+        systemPrompt: ''               // Custom system prompt (optional)
+      },
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // MODEL SELECTION (for Guided mode)
       // ─────────────────────────────────────────────────────────────────────
       provider: 'openai',
       model: 'gpt-4.1-mini',
@@ -545,6 +571,15 @@ function mergeAgent2Config(saved) {
     llmFallback: {
       ...defaults.llmFallback,
       ...safeObject(src.llmFallback, {}),
+      // V5: Preserve mode - default to answer_return if not set
+      mode: src.llmFallback?.mode || 'answer_return',
+      // V5: Answer+Return config (enabled by default since it's the default mode)
+      answerReturn: {
+        ...defaults.llmFallback.answerReturn,
+        ...safeObject(src.llmFallback?.answerReturn, {}),
+        // Always enforce resetDeterministicNextTurn = true
+        resetDeterministicNextTurn: true
+      },
       triggers: {
         ...defaults.llmFallback.triggers,
         ...safeObject(src.llmFallback?.triggers, {})

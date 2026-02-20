@@ -387,7 +387,7 @@ class Agent2Manager {
   // Both are ASSIST-ONLY. Deterministic owns the mic. LLM never takes over.
   // ══════════════════════════════════════════════════════════════════════════
   renderLLMFallbackTab() {
-    const mode = this.config?.llmFallback?.mode || 'guided';
+    const mode = this.config?.llmFallback?.mode || 'answer_return';
     const isGuided = mode === 'guided';
     const isAnswerReturn = mode === 'answer_return';
 
@@ -403,7 +403,7 @@ class Agent2Manager {
   // LLM FALLBACK: Mode Selector (Guided vs Answer+Return)
   // ─────────────────────────────────────────────────────────────────────────
   renderLLMModeSelector() {
-    const mode = this.config?.llmFallback?.mode || 'guided';
+    const mode = this.config?.llmFallback?.mode || 'answer_return';
     const enabled = this.config?.discovery?.llmFallback?.enabled === true;
 
     if (!enabled) {
@@ -7198,7 +7198,7 @@ class Agent2Manager {
     // ═══════════════════════════════════════════════════════════════════════
     cfg.llmFallback = this.config?.llmFallback || {};
     // Ensure mode has a default
-    cfg.llmFallback.mode = cfg.llmFallback.mode || 'guided';
+    cfg.llmFallback.mode = cfg.llmFallback.mode || 'answer_return';
     // Ensure answerReturn has locked setting
     if (cfg.llmFallback.answerReturn) {
       cfg.llmFallback.answerReturn.resetDeterministicNextTurn = true; // LOCKED ON

@@ -183,7 +183,7 @@ function shouldCallLLMFallback({
   const llmFallback = config?.llmFallback;
   
   // V5: Determine active mode
-  const mode = llmFallback?.mode || 'guided';
+  const mode = llmFallback?.mode || 'answer_return';
   const isAnswerReturnMode = mode === 'answer_return';
   const answerReturnConfig = llmFallback?.answerReturn || {};
   
@@ -796,7 +796,7 @@ Respond with empathy and ask ONE question that moves them toward booking a servi
  */
 async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDiscoveryCriticalStep, llmTurnsThisCall, llmAssistState, hasPendingQuestion, hasCapturedReasonFlow, hasAfterHoursFlow, hasTransferFlow, hasSpeakSourceSelected, callContext, emit }) {
   const llmFallback = config?.llmFallback;
-  const mode = llmFallback?.mode || 'guided';
+  const mode = llmFallback?.mode || 'answer_return';
   const isAnswerReturnMode = mode === 'answer_return';
   const answerReturnConfig = llmFallback?.answerReturn || {};
   
