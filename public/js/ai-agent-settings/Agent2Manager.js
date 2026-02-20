@@ -848,14 +848,46 @@ class Agent2Manager {
       <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:16px;">
         <div style="color:#8b949e; font-size:0.8rem; margin-bottom:12px;">TRANSCRIPT</div>
         <div id="a2-transcript-container" style="max-height:250px; overflow:auto;">
-          ${transcript.length > 0 ? transcript.map(t => `
-            <div style="margin-bottom:10px; padding:10px; background:${t.role === 'caller' ? '#1a1f2e' : '#0d2818'}; border-radius:8px;">
-              <div style="font-size:0.7rem; color:${t.role === 'caller' ? '#60a5fa' : '#4ade80'}; margin-bottom:4px; font-weight:600;">
-                ${t.role === 'caller' ? '📞 CALLER' : '🤖 AGENT'} ${t.turn !== undefined ? `(Turn ${t.turn})` : ''}
+          ${transcript.length > 0 ? transcript.map(t => {
+            // Determine styling based on role and error/fallback status
+            let bgColor, borderColor, labelColor, icon, statusBadge = '';
+            
+            if (t.role === 'caller') {
+              bgColor = '#1a1f2e';
+              borderColor = '#30363d';
+              labelColor = '#60a5fa';
+              icon = '📞';
+            } else if (t.isError) {
+              // Error - red styling
+              bgColor = '#450a0a';
+              borderColor = '#991b1b';
+              labelColor = '#f87171';
+              icon = '❌';
+              statusBadge = '<span style="background:#991b1b; color:#fecaca; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">ERROR</span>';
+            } else if (t.isFallback) {
+              // Fallback - yellow styling
+              bgColor = '#422006';
+              borderColor = '#92400e';
+              labelColor = '#fbbf24';
+              icon = '⚠️';
+              statusBadge = '<span style="background:#92400e; color:#fde68a; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">FALLBACK</span>';
+            } else {
+              // Normal agent response - green styling
+              bgColor = '#0d2818';
+              borderColor = '#166534';
+              labelColor = '#4ade80';
+              icon = '🤖';
+            }
+            
+            return `
+            <div style="margin-bottom:10px; padding:10px; background:${bgColor}; border:1px solid ${borderColor}; border-radius:8px;">
+              <div style="font-size:0.7rem; color:${labelColor}; margin-bottom:4px; font-weight:600; display:flex; align-items:center;">
+                ${icon} ${t.role === 'caller' ? 'CALLER' : 'AGENT'} ${t.turn !== undefined ? `(Turn ${t.turn})` : ''}${statusBadge}
               </div>
               <div style="color:#e5e7eb; font-size:0.85rem; line-height:1.4;">${this.escapeHtml(t.text)}</div>
+              ${t.fallbackReason ? `<div style="color:#fbbf24; font-size:0.7rem; margin-top:6px;">Reason: ${this.escapeHtml(t.fallbackReason)}</div>` : ''}
             </div>
-          `).join('') : `
+          `}).join('') : `
             <div style="color:#6e7681; text-align:center; padding:20px;">No transcript available</div>
           `}
         </div>
@@ -945,13 +977,45 @@ class Agent2Manager {
         }
       }
       
-      // Agent response events (prefer A2_RESPONSE_READY, fallback to others)
-      if (e.type === 'A2_RESPONSE_READY' && e.data?.responsePreview) {
+      // Agent response events - PRIORITY ORDER:
+      // 1. TWIML_SENT (highest) - what was ACTUALLY sent to Twilio (truth)
+      // 2. A2_RESPONSE_READY - what Agent 2.0 planned to say
+      // 3. CORE_RUNTIME_OWNER_RESULT - what core runtime planned
+      // 4. AGENT_RESPONSE_BUILT - legacy response builder
+      // 
+      // CRITICAL: TWIML_SENT is the TRUTH. If an error occurred, it will show
+      // the fallback message, not the planned response.
+      if (e.type === 'TWIML_SENT' && e.data?.responsePreview) {
+        // This is what was ACTUALLY sent to Twilio
+        const text = e.data.responsePreview;
+        const isFallback = e.data.isFallback === true;
+        const fallbackReason = e.data.fallbackReason || null;
+        agentResponses.push({ 
+          text, 
+          t, 
+          eventTurn: e.turn, 
+          priority: 0, // Highest priority - this is truth
+          isFallback,
+          fallbackReason
+        });
+      } else if (e.type === 'A2_RESPONSE_READY' && e.data?.responsePreview) {
         agentResponses.push({ text: e.data.responsePreview, t, eventTurn: e.turn, priority: 1 });
       } else if (e.type === 'CORE_RUNTIME_OWNER_RESULT' && e.data?.responsePreview) {
         agentResponses.push({ text: e.data.responsePreview, t, eventTurn: e.turn, priority: 2 });
       } else if (e.type === 'AGENT_RESPONSE_BUILT' && e.data?.text) {
         agentResponses.push({ text: e.data.text, t, eventTurn: e.turn, priority: 3 });
+      }
+      
+      // Also check for ROUTE_ERROR - this means something crashed
+      if (e.type === 'ROUTE_ERROR') {
+        const errorText = `[ERROR] ${e.data?.error || 'Unknown error occurred'}`;
+        agentResponses.push({ 
+          text: errorText, 
+          t, 
+          eventTurn: e.turn, 
+          priority: 0, // Same as TWIML_SENT - this is truth
+          isError: true
+        });
       }
     });
     
@@ -975,8 +1039,9 @@ class Agent2Manager {
     
     // Step 5: For each agent response, find which turn it belongs to
     // (the agent response comes AFTER the caller input in the same turn)
+    // CRITICAL: Lower priority number = higher priority (TWIML_SENT is 0, A2_RESPONSE_READY is 1, etc.)
     const usedTurns = new Set();
-    agentResponses.sort((a, b) => a.priority - b.priority); // Process higher priority first
+    agentResponses.sort((a, b) => a.priority - b.priority); // Process highest priority (lowest number) first
     
     agentResponses.forEach(resp => {
       // Find the caller turn this response follows
@@ -990,7 +1055,21 @@ class Agent2Manager {
       }
       
       if (matchedTurn && !usedTurns.has(matchedTurn)) {
-        transcript.push({ role: 'agent', text: resp.text, turn: matchedTurn, order: resp.t });
+        const entry = { 
+          role: 'agent', 
+          text: resp.text, 
+          turn: matchedTurn, 
+          order: resp.t 
+        };
+        // Mark errors and fallbacks so UI can display them differently
+        if (resp.isError) {
+          entry.isError = true;
+        }
+        if (resp.isFallback) {
+          entry.isFallback = true;
+          entry.fallbackReason = resp.fallbackReason;
+        }
+        transcript.push(entry);
         usedTurns.add(matchedTurn);
       }
     });
