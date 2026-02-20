@@ -226,6 +226,23 @@ llmFallbackUsageSchema.index({ model: 1, createdAt: -1 });
 llmFallbackUsageSchema.index({ callSid: 1, turnNumber: 1 });
 
 // ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get timezone offset in milliseconds for a given timezone
+ * Returns the offset needed to convert UTC to local time
+ */
+function getTimezoneOffsetMs(timezone, date = new Date()) {
+  // Create a date string in the target timezone
+  const tzString = date.toLocaleString('en-US', { timeZone: timezone });
+  const tzDate = new Date(tzString);
+  
+  // The difference between UTC and the timezone-adjusted date
+  return date.getTime() - tzDate.getTime();
+}
+
+// ============================================================================
 // STATIC METHODS
 // ============================================================================
 
@@ -259,17 +276,43 @@ llmFallbackUsageSchema.statics.getAllModelPricing = function() {
 
 /**
  * Get usage stats for a company (today + MTD)
+ * Uses calendar month (1st of month to now) for MTD
+ * Uses timezone-aware date calculation (default: America/New_York)
  */
 llmFallbackUsageSchema.statics.getUsageStats = async function(companyId, timezone = 'America/New_York') {
+  // Use proper timezone calculation via Intl API
   const now = new Date();
   
-  // Calculate start of today in company timezone
-  const todayStart = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
-  todayStart.setHours(0, 0, 0, 0);
+  // Get current date parts in the target timezone
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
   
-  // Calculate start of month
-  const monthStart = new Date(todayStart);
-  monthStart.setDate(1);
+  const parts = formatter.formatToParts(now);
+  const getPart = (type) => parts.find(p => p.type === type)?.value;
+  
+  const year = parseInt(getPart('year'), 10);
+  const month = parseInt(getPart('month'), 10) - 1; // JS months are 0-indexed
+  const day = parseInt(getPart('day'), 10);
+  
+  // Calculate start of today in the target timezone (midnight)
+  // We need to create a UTC date that represents midnight in the target timezone
+  const todayInTZ = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+  
+  // Adjust for timezone offset to get actual UTC equivalent of "midnight in timezone"
+  const tzOffset = getTimezoneOffsetMs(timezone, now);
+  const todayStart = new Date(todayInTZ.getTime() + tzOffset);
+  
+  // Calculate start of calendar month (1st day of current month)
+  const monthStartInTZ = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+  const monthStart = new Date(monthStartInTZ.getTime() + tzOffset);
   
   // Aggregation pipeline
   const pipeline = [
@@ -361,7 +404,14 @@ llmFallbackUsageSchema.statics.getUsageStats = async function(companyId, timezon
     mtd: result.mtd[0] || emptyStats,
     byModel: result.byModel || [],
     last7Days: result.last7Days || [],
-    generatedAt: new Date().toISOString()
+    // Audit fields - prove the aggregation boundaries
+    meta: {
+      timezone,
+      todayStartUtc: todayStart.toISOString(),
+      monthStartUtc: monthStart.toISOString(),
+      aggregationType: 'CALENDAR_MONTH',
+      generatedAt: new Date().toISOString()
+    }
   };
 };
 

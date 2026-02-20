@@ -367,13 +367,17 @@ function defaultAgent2Config() {
         forbiddenBookingPatterns: [    // UI-configurable list of forbidden booking patterns
           // Time windows
           'morning', 'afternoon', 'evening', 'this morning', 'this afternoon',
+          'tomorrow morning', 'tomorrow afternoon', 'later today',
           '8-10', '8–10', '10-12', '10–12', '12-2', '12–2', '2-4', '2–4',
+          // Week references
+          'this week', 'next week', 'this weekend',
           // Scheduling language
           'time slot', 'appointment time', 'schedule you for', 'what time works',
           'morning or afternoon', 'today or tomorrow',
           // Availability language
           'when would you like', 'what time is good', 'when works for you',
           'earliest available', 'next available', 'soonest available',
+          'availability', 'openings', 'get you in',
           // Scheduling verbs
           'i can schedule', 'let me schedule', 'we can schedule',
           'i can book', 'let me book', 'we can book'

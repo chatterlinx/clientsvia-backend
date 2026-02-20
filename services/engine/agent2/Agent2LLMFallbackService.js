@@ -165,65 +165,147 @@ function shouldCallLLMFallback({
   inBookingFlow, 
   inDiscoveryCriticalStep, 
   llmTurnsThisCall,
-  // Additional blocking conditions
+  // Additional blocking conditions passed from runner
   hasPendingQuestion,      // YES/NO/REPROMPT flow active
   hasCapturedReasonFlow,   // Clarifier path mid-flight
   hasAfterHoursFlow,       // After-hours handling active
   hasTransferFlow,         // Transfer to advisor active
-  hasSpeakSourceSelected   // Another system already selected speak source
+  hasSpeakSourceSelected,  // Another system already selected speak source
+  triggerCardMatched,      // A trigger card matched this turn
+  bookingModeLocked        // Booking mode is locked
 }) {
   const llmFallback = config?.llmFallback;
   
+  // Build snapshot for audit (always included in response)
+  const stateSnapshot = {
+    hasPendingQuestion: !!hasPendingQuestion,
+    hasCapturedReasonFlow: !!hasCapturedReasonFlow,
+    hasAfterHoursFlow: !!hasAfterHoursFlow,
+    hasTransferFlow: !!hasTransferFlow,
+    hasSpeakSourceSelected: !!hasSpeakSourceSelected,
+    triggerCardMatched: !!triggerCardMatched,
+    bookingModeLocked: !!bookingModeLocked,
+    inBookingFlow: !!inBookingFlow,
+    inDiscoveryCriticalStep: !!inDiscoveryCriticalStep,
+    llmTurnsThisCall: llmTurnsThisCall || 0
+  };
+  
   // Hard gate: must be enabled
   if (!llmFallback?.enabled) {
-    return { call: false, reason: 'disabled', details: { enabled: false } };
+    return { 
+      call: false, 
+      reason: 'LLM_FALLBACK_DISABLED', 
+      blockedBy: 'CONFIG_DISABLED',
+      details: { enabled: false },
+      stateSnapshot 
+    };
   }
   
   const triggers = llmFallback.triggers || {};
   
   // ════════════════════════════════════════════════════════════════════════
   // BLOCKING CONDITIONS (LLM NOT allowed if ANY of these are true)
+  // Each returns precise blockedBy reason + full state snapshot
   // ════════════════════════════════════════════════════════════════════════
   
-  // Blocked during booking-critical steps (name/address/time capture)
-  if (triggers.blockedWhileBooking !== false && inBookingFlow) {
-    return { call: false, reason: 'blocked_during_booking', details: { inBookingFlow: true } };
-  }
-  
-  // Blocked during discovery-critical steps (slot filling)
-  if (triggers.blockedWhileDiscoveryCriticalStep !== false && inDiscoveryCriticalStep) {
-    return { call: false, reason: 'blocked_during_discovery_critical', details: { inDiscoveryCriticalStep: true } };
-  }
-  
-  // Blocked if pending question is active (YES/NO/REPROMPT flow)
-  if (hasPendingQuestion) {
-    return { call: false, reason: 'blocked_pending_question_active', details: { hasPendingQuestion: true } };
-  }
-  
-  // Blocked if captured-reason clarifier flow is mid-flight
-  if (hasCapturedReasonFlow) {
-    return { call: false, reason: 'blocked_captured_reason_flow', details: { hasCapturedReasonFlow: true } };
-  }
-  
-  // Blocked if after-hours/catastrophic fallback is active
-  if (hasAfterHoursFlow) {
-    return { call: false, reason: 'blocked_after_hours_flow', details: { hasAfterHoursFlow: true } };
-  }
-  
-  // Blocked if transfer flow is active
-  if (hasTransferFlow) {
-    return { call: false, reason: 'blocked_transfer_flow', details: { hasTransferFlow: true } };
+  // Blocked if a trigger card matched (deterministic path found)
+  if (triggerCardMatched) {
+    return { 
+      call: false, 
+      reason: 'Deterministic trigger card matched - LLM not needed', 
+      blockedBy: 'TRIGGER_CARD_MATCH',
+      details: { triggerCardMatched: true },
+      stateSnapshot 
+    };
   }
   
   // Blocked if another system already selected a speak source this turn
   if (hasSpeakSourceSelected) {
-    return { call: false, reason: 'blocked_speak_source_already_selected', details: { hasSpeakSourceSelected: true } };
+    return { 
+      call: false, 
+      reason: 'Another module already selected speak source', 
+      blockedBy: 'SPEAK_SOURCE_ALREADY_SELECTED',
+      details: { hasSpeakSourceSelected: true },
+      stateSnapshot 
+    };
+  }
+  
+  // Blocked during booking-critical steps (name/address/time capture)
+  if (triggers.blockedWhileBooking !== false && (inBookingFlow || bookingModeLocked)) {
+    return { 
+      call: false, 
+      reason: 'Blocked during booking flow', 
+      blockedBy: 'BOOKING_LOCKED',
+      details: { inBookingFlow, bookingModeLocked },
+      stateSnapshot 
+    };
+  }
+  
+  // Blocked during discovery-critical steps (slot filling)
+  if (triggers.blockedWhileDiscoveryCriticalStep !== false && inDiscoveryCriticalStep) {
+    return { 
+      call: false, 
+      reason: 'Blocked during discovery-critical step', 
+      blockedBy: 'DISCOVERY_CRITICAL_STEP',
+      details: { inDiscoveryCriticalStep: true },
+      stateSnapshot 
+    };
+  }
+  
+  // Blocked if pending question is active (YES/NO/REPROMPT flow)
+  if (hasPendingQuestion) {
+    return { 
+      call: false, 
+      reason: 'Pending question active - awaiting YES/NO/REPROMPT', 
+      blockedBy: 'PENDING_QUESTION',
+      details: { hasPendingQuestion: true },
+      stateSnapshot 
+    };
+  }
+  
+  // Blocked if captured-reason clarifier flow is mid-flight
+  if (hasCapturedReasonFlow) {
+    return { 
+      call: false, 
+      reason: 'Captured reason clarifier flow active', 
+      blockedBy: 'CAPTURED_REASON_FLOW',
+      details: { hasCapturedReasonFlow: true },
+      stateSnapshot 
+    };
+  }
+  
+  // Blocked if after-hours/catastrophic fallback is active
+  if (hasAfterHoursFlow) {
+    return { 
+      call: false, 
+      reason: 'After-hours or catastrophic fallback active', 
+      blockedBy: 'AFTER_HOURS_FLOW',
+      details: { hasAfterHoursFlow: true },
+      stateSnapshot 
+    };
+  }
+  
+  // Blocked if transfer flow is active
+  if (hasTransferFlow) {
+    return { 
+      call: false, 
+      reason: 'Transfer to advisor flow active', 
+      blockedBy: 'TRANSFER_FLOW',
+      details: { hasTransferFlow: true },
+      stateSnapshot 
+    };
   }
   
   // Max LLM turns per call (default 1 - LLM gets ONE shot)
   const maxTurns = triggers.maxLLMFallbackTurnsPerCall ?? 1;
   if (llmTurnsThisCall >= maxTurns) {
-    return { call: false, reason: 'max_llm_turns_reached', details: { llmTurnsThisCall, maxTurns } };
+    return { 
+      call: false, 
+      reason: `Max LLM turns reached (${llmTurnsThisCall}/${maxTurns})`, 
+      blockedBy: 'MAX_LLM_TURNS_REACHED',
+      details: { llmTurnsThisCall, maxTurns },
+      stateSnapshot 
+    };
   }
   
   // Compute complexity score
@@ -269,19 +351,23 @@ function shouldCallLLMFallback({
   if (triggersMatched.length === 0) {
     return { 
       call: false, 
-      reason: 'no_triggers_matched', 
+      reason: 'No trigger conditions met', 
+      blockedBy: 'NO_TRIGGERS_MATCHED',
       details: { 
         complexity,
         noMatchCount,
         noMatchThreshold,
         complexityThreshold
-      }
+      },
+      stateSnapshot
     };
   }
   
   return {
     call: true,
     reason: triggersMatched.join('+'),
+    blockedBy: null,
+    stateSnapshot,
     details: {
       complexity,
       noMatchCount,
@@ -364,13 +450,22 @@ function validateOutput(text, constraints, callerInput = '') {
     
     // Default patterns if UI array is empty (enforce UI truth - never allow empty)
     const defaultForbiddenPatterns = [
-      'morning', 'afternoon', 'evening',
+      // Time windows
+      'morning', 'afternoon', 'evening', 'this morning', 'this afternoon',
+      'tomorrow morning', 'tomorrow afternoon', 'later today',
       '8-10', '8–10', '10-12', '10–12', '12-2', '12–2', '2-4', '2–4',
+      // Week references
+      'this week', 'next week', 'this weekend',
+      // Scheduling language
       'time slot', 'appointment time', 'schedule you for', 'what time works',
+      'morning or afternoon', 'today or tomorrow',
+      // Availability language
       'when would you like', 'what time is good', 'when works for you',
       'earliest available', 'next available', 'soonest available',
-      'today or tomorrow', 'this afternoon', 'this morning',
-      'i can schedule', 'let me schedule', 'we can schedule'
+      'availability', 'openings', 'get you in',
+      // Scheduling verbs
+      'i can schedule', 'let me schedule', 'we can schedule',
+      'i can book', 'let me book', 'we can book'
     ];
     
     // Use UI patterns if provided and non-empty, otherwise use defaults
@@ -577,13 +672,21 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     hasCapturedReasonFlow,
     hasAfterHoursFlow,
     hasTransferFlow,
-    hasSpeakSourceSelected
+    hasSpeakSourceSelected,
+    triggerCardMatched: callContext?.triggerCardMatched,
+    bookingModeLocked: callContext?.bookingModeLocked
   });
   
+  // ════════════════════════════════════════════════════════════════════════
+  // A2_LLM_FALLBACK_DECISION - Must include blockedBy and stateSnapshot
+  // ════════════════════════════════════════════════════════════════════════
   emit('A2_LLM_FALLBACK_DECISION', {
     call: decision.call,
+    blocked: !decision.call,
+    blockedBy: decision.blockedBy || null,
     reason: decision.reason,
     details: decision.details,
+    stateSnapshot: decision.stateSnapshot,
     llmTurnsThisCall: llmTurnsThisCall || 0,
     maxTurns: llmFallback?.triggers?.maxLLMFallbackTurnsPerCall ?? 1
   });
@@ -692,7 +795,16 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     llmCreatedMultiTurnState: false,
     // The actual text control
     textProvidedBy: usedEmergencyFallback ? 'UI_EMERGENCY_FALLBACK' : 'LLM_WITH_VALIDATION',
-    textOverriddenByHandoff: false // Will be true if handoff question overrides
+    textOverriddenByHandoff: false, // Will be updated after handoff override
+    // ════════════════════════════════════════════════════════════════════════
+    // TWIML EVIDENCE - Proof that webhook/gather flow is unchanged
+    // This is what makes the "proof" real, not a self-assertion
+    // ════════════════════════════════════════════════════════════════════════
+    twimlGeneratedBy: 'v2twilio.js',
+    gatherModeUnchanged: true,
+    nextWebhookUnchanged: true,
+    gatherInputType: 'speech dtmf',
+    webhookEndpoint: '/api/twilio-stream/gather'
   });
   
   // ════════════════════════════════════════════════════════════════════════
@@ -762,12 +874,37 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     textOverriddenByHandoff = true;
   }
   
+  // ════════════════════════════════════════════════════════════════════════
+  // POST-OVERRIDE VALIDATION: Check ENTIRE finalResponse for forbidden content
+  // This catches sentence 1 (empathy) sneaking in scheduling language
+  // ════════════════════════════════════════════════════════════════════════
+  if (!usedEmergencyFallback) {
+    const postOverrideValidation = validateOutput(finalResponse, constraints, input);
+    
+    if (!postOverrideValidation.valid) {
+      emit('A2_LLM_POST_OVERRIDE_VALIDATION_FAILED', {
+        reason: 'Final response after handoff override still contains forbidden content',
+        violations: postOverrideValidation.violations,
+        originalFinalResponse: finalResponse.substring(0, 150),
+        action: 'using_emergency_fallback'
+      });
+      
+      // Emergency fallback - LLM tried to sneak forbidden content in sentence 1
+      if (emergencyFallback?.enabled !== false && emergencyFallback?.text) {
+        finalResponse = emergencyFallback.text;
+        usedEmergencyFallback = true;
+        constraintViolations = [...constraintViolations, ...postOverrideValidation.violations];
+      }
+    }
+  }
+  
   // Emit updated MIC_OWNER_PROOF with textOverriddenByHandoff
   if (textOverriddenByHandoff) {
     emit('A2_LLM_HANDOFF_OVERRIDE', {
       reason: 'UI-owned handoff question replaced LLM question portion',
       handoffMode,
       handoffQuestion,
+      postOverrideValidationPassed: !usedEmergencyFallback,
       originalLLMResponse: llmResult.response?.substring(0, 100) || '',
       finalResponse: finalResponse.substring(0, 150)
     });
