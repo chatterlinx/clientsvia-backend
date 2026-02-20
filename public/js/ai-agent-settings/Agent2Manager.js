@@ -4138,10 +4138,11 @@ class Agent2Manager {
     // LLM FALLBACK TAB HANDLERS
     // ══════════════════════════════════════════════════════════════════════════
 
-    // Master switch
+    // Master switch - saves to discovery.llmFallback.enabled
     container.querySelector('#a2-llm-enabled')?.addEventListener('change', (e) => {
-      this.config.llmFallback = this.config.llmFallback || {};
-      this.config.llmFallback.enabled = e.target.checked;
+      this.config.discovery = this.config.discovery || {};
+      this.config.discovery.llmFallback = this.config.discovery.llmFallback || {};
+      this.config.discovery.llmFallback.enabled = e.target.checked;
       onAnyChange();
       this.render(container);
     });
@@ -6833,7 +6834,7 @@ class Agent2Manager {
     // V4: LLM FALLBACK SETTINGS
     // ═══════════════════════════════════════════════════════════════════════
     discovery.llmFallback = discovery.llmFallback || {};
-    discovery.llmFallback.enabled = container.querySelector('#a2-llmfallback-enabled')?.checked ?? false;
+    discovery.llmFallback.enabled = container.querySelector('#a2-llm-enabled')?.checked ?? false;
     discovery.llmFallback.mode = container.querySelector('#a2-llmfallback-mode')?.value || 'assist_only';
     discovery.llmFallback.onlyWhenAllElseFails = true;
     discovery.llmFallback.maxTurnsPerCall = Number(container.querySelector('#a2-llmfallback-maxTurns')?.value) || 2;
