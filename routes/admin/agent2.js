@@ -363,6 +363,12 @@ function defaultAgent2Config() {
         antiParrotGuard: true,         // Don't repeat caller input >8 consecutive words
         antiParrotMaxWords: 8,
         blockTimeSlots: true,          // NEVER offer times/dates/scheduling windows
+        forbidBookingTimes: true,      // Hard block booking time language until Booking tab exists
+        forbiddenBookingPatterns: [    // UI-configurable list of forbidden booking patterns
+          'morning', 'afternoon', '8-10', '8–10', '10-12', '10–12', 
+          '12-2', '12–2', '2-4', '2–4', 'time slot', 'appointment time',
+          'schedule you for', 'what time works', 'morning or afternoon'
+        ],
         allowedTasks: {
           clarifyProblem: true,
           basicSafeGuidance: true,
@@ -613,6 +619,9 @@ function mergeAgent2Config(saved) {
   }
   if (!Array.isArray(merged.llmFallback.callForwarding.numbers)) {
     merged.llmFallback.callForwarding.numbers = defaults.llmFallback.callForwarding.numbers;
+  }
+  if (!Array.isArray(merged.llmFallback.constraints.forbiddenBookingPatterns)) {
+    merged.llmFallback.constraints.forbiddenBookingPatterns = defaults.llmFallback.constraints.forbiddenBookingPatterns;
   }
 
   return merged;

@@ -1418,16 +1418,37 @@ class Agent2DiscoveryRunner {
         nextState.booking?.step === 'NAME' ||
         nextState.booking?.step === 'ADDRESS' ||
         nextState.booking?.step === 'TIME' ||
-        nextState.booking?.step === 'CONFIRM'
+        nextState.booking?.step === 'CONFIRM' ||
+        nextState.bookingModeLocked
       );
       
       // Check if we're in discovery-critical step (slot filling)
       const inDiscoveryCriticalStep = !!(
-        nextState.slotFilling?.activeSlot ||
-        nextState.agent2?.discovery?.pendingQuestion
+        nextState.slotFilling?.activeSlot
       );
       
-      // Try LLM fallback
+      // Check additional blocking conditions
+      const hasPendingQuestion = !!(
+        nextState.agent2?.discovery?.pendingQuestion ||
+        nextState.agent2?.discovery?.llmHandoffPending
+      );
+      
+      const hasCapturedReasonFlow = !!(
+        capturedReason && 
+        nextState.agent2?.discovery?.clarifierPending
+      );
+      
+      const hasAfterHoursFlow = !!(
+        nextState.afterHours?.active ||
+        nextState.catastrophicFallback?.active
+      );
+      
+      const hasTransferFlow = !!(
+        nextState.transfer?.pending ||
+        nextState.transfer?.active
+      );
+      
+      // Try LLM fallback (passes all blocking conditions)
       const llmResult = await runLLMFallback({
         config: agent2,
         input,
@@ -1435,6 +1456,11 @@ class Agent2DiscoveryRunner {
         inBookingFlow,
         inDiscoveryCriticalStep,
         llmTurnsThisCall,
+        hasPendingQuestion,
+        hasCapturedReasonFlow,
+        hasAfterHoursFlow,
+        hasTransferFlow,
+        hasSpeakSourceSelected: false, // At this point, no source selected yet
         callContext: {
           callSid,
           companyId: companyId || company?._id?.toString?.() || null,

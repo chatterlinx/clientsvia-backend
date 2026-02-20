@@ -155,9 +155,23 @@ function computeComplexityScore(text) {
 
 /**
  * Determine if LLM fallback should be called
+ * LLM runs ONLY when ALL deterministic paths fail.
  * Returns { call: boolean, reason: string, details: Object }
  */
-function shouldCallLLMFallback({ config, noMatchCount, input, inBookingFlow, inDiscoveryCriticalStep, llmTurnsThisCall }) {
+function shouldCallLLMFallback({ 
+  config, 
+  noMatchCount, 
+  input, 
+  inBookingFlow, 
+  inDiscoveryCriticalStep, 
+  llmTurnsThisCall,
+  // Additional blocking conditions
+  hasPendingQuestion,      // YES/NO/REPROMPT flow active
+  hasCapturedReasonFlow,   // Clarifier path mid-flight
+  hasAfterHoursFlow,       // After-hours handling active
+  hasTransferFlow,         // Transfer to advisor active
+  hasSpeakSourceSelected   // Another system already selected speak source
+}) {
   const llmFallback = config?.llmFallback;
   
   // Hard gate: must be enabled
@@ -167,6 +181,10 @@ function shouldCallLLMFallback({ config, noMatchCount, input, inBookingFlow, inD
   
   const triggers = llmFallback.triggers || {};
   
+  // ════════════════════════════════════════════════════════════════════════
+  // BLOCKING CONDITIONS (LLM NOT allowed if ANY of these are true)
+  // ════════════════════════════════════════════════════════════════════════
+  
   // Blocked during booking-critical steps (name/address/time capture)
   if (triggers.blockedWhileBooking !== false && inBookingFlow) {
     return { call: false, reason: 'blocked_during_booking', details: { inBookingFlow: true } };
@@ -175,6 +193,31 @@ function shouldCallLLMFallback({ config, noMatchCount, input, inBookingFlow, inD
   // Blocked during discovery-critical steps (slot filling)
   if (triggers.blockedWhileDiscoveryCriticalStep !== false && inDiscoveryCriticalStep) {
     return { call: false, reason: 'blocked_during_discovery_critical', details: { inDiscoveryCriticalStep: true } };
+  }
+  
+  // Blocked if pending question is active (YES/NO/REPROMPT flow)
+  if (hasPendingQuestion) {
+    return { call: false, reason: 'blocked_pending_question_active', details: { hasPendingQuestion: true } };
+  }
+  
+  // Blocked if captured-reason clarifier flow is mid-flight
+  if (hasCapturedReasonFlow) {
+    return { call: false, reason: 'blocked_captured_reason_flow', details: { hasCapturedReasonFlow: true } };
+  }
+  
+  // Blocked if after-hours/catastrophic fallback is active
+  if (hasAfterHoursFlow) {
+    return { call: false, reason: 'blocked_after_hours_flow', details: { hasAfterHoursFlow: true } };
+  }
+  
+  // Blocked if transfer flow is active
+  if (hasTransferFlow) {
+    return { call: false, reason: 'blocked_transfer_flow', details: { hasTransferFlow: true } };
+  }
+  
+  // Blocked if another system already selected a speak source this turn
+  if (hasSpeakSourceSelected) {
+    return { call: false, reason: 'blocked_speak_source_already_selected', details: { hasSpeakSourceSelected: true } };
   }
   
   // Max LLM turns per call (default 1 - LLM gets ONE shot)
@@ -315,23 +358,40 @@ function validateOutput(text, constraints, callerInput = '') {
   }
   
   // Block time slots: LLM must NEVER offer times/dates/scheduling windows
-  if (constraints?.blockTimeSlots !== false) {
-    const timeSlotPatterns = [
+  // Uses UI-configurable forbiddenBookingPatterns + hardcoded safety patterns
+  if (constraints?.forbidBookingTimes !== false && constraints?.blockTimeSlots !== false) {
+    const textLower = cleanedText.toLowerCase();
+    
+    // UI-configurable forbidden patterns (from forbiddenBookingPatterns array)
+    const forbiddenPatterns = constraints?.forbiddenBookingPatterns || [
+      'morning', 'afternoon', '8-10', '8–10', '10-12', '10–12', '12-2', '12–2', '2-4', '2–4',
+      'time slot', 'appointment time', 'schedule you for', 'what time works'
+    ];
+    
+    for (const pattern of forbiddenPatterns) {
+      if (textLower.includes(pattern.toLowerCase())) {
+        violations.push(`forbidden_booking_pattern:${pattern}`);
+        break;
+      }
+    }
+    
+    // Additional regex patterns for edge cases (hardcoded safety net)
+    const timeSlotRegex = [
       /\b\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)\b/i,  // "9am", "10:30 PM"
       /\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
-      /\b(?:morning|afternoon|evening)\s+(?:slot|appointment|time|window)/i,
       /\b(?:available|open|free)\s+(?:at|on|for)\s+\d/i,  // "available at 2"
       /\b(?:schedule|book)\s+(?:you\s+)?(?:for|at)\s+\d/i,  // "schedule you for 3pm"
       /\btoday\s+at\s+\d/i,
       /\btomorrow\s+(?:at|around)\s+\d/i,
       /\bnext\s+(?:available|opening)/i,
-      /\btime\s+slot/i,
-      /\bappointment\s+(?:at|for|on)\s+/i
+      /\bappointment\s+(?:at|for|on)\s+/i,
+      /\bdo you prefer\s+(?:morning|afternoon|evening)/i,
+      /\bmorning or afternoon/i
     ];
     
-    for (const pattern of timeSlotPatterns) {
+    for (const pattern of timeSlotRegex) {
       if (pattern.test(cleanedText)) {
-        violations.push('contains_time_slot');
+        violations.push('contains_time_slot_regex');
         break;
       }
     }
@@ -517,6 +577,18 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
     sentenceCount = validation.sentenceCount || 0;
     hadFunnelQuestion = /\?$/.test(validation.cleanedText.trim());
     
+    // Emit validation result for Call Review visibility
+    emit('A2_LLM_OUTPUT_VALIDATION', {
+      passed: validation.valid,
+      violations: validation.violations,
+      sentenceCount,
+      hadFunnelQuestion,
+      forbidBookingTimes: constraints?.forbidBookingTimes !== false,
+      forbiddenPatternsChecked: constraints?.forbiddenBookingPatterns?.length || 0,
+      originalResponsePreview: llmResult.response.substring(0, 100),
+      cleanedResponsePreview: validation.cleanedText.substring(0, 100)
+    });
+    
     if (validation.valid) {
       finalResponse = validation.cleanedText;
     } else {
@@ -549,6 +621,14 @@ async function runLLMFallback({ config, input, noMatchCount, inBookingFlow, inDi
       return null; // Can't proceed without emergency fallback
     }
   }
+  
+  // Emit MIC_OWNER_PROOF - LLM never takes mic, Agent2 stays owner
+  emit('A2_MIC_OWNER_PROOF', {
+    owner: 'AGENT2_DISCOVERY',
+    llmUsed: true,
+    llmRole: 'ASSIST_ONLY',
+    note: 'LLM provided text but Agent2 maintains full mic ownership and control flow'
+  });
   
   // Determine handoff mode and action
   const handoffMode = handoff.mode || 'confirmService';
