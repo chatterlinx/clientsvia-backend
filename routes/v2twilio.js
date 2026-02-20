@@ -1886,6 +1886,7 @@ router.post('/voice', async (req, res) => {
     const twimlString = twiml.toString();
     
     // 📼 BLACK BOX: Log TwiML sent - this is the last thing we control before Twilio takes over
+    // NOTE: initResult may not be defined if we hit the catch block (fallback path)
     if (CallLogger) {
       CallLogger.logEvent({
         callId: req.body.CallSid,
@@ -1901,7 +1902,8 @@ router.post('/voice', async (req, res) => {
           actionUrl: `https://${req.get('host')}/api/twilio/v2-agent-respond/${company._id}`,
           twimlPreview: twimlString.substring(0, 500),
           // V4: responsePreview for Turn-0 greeting (Call Review needs this)
-          responsePreview: initResult?.greeting?.substring(0, 80) || null
+          // Guard against initResult not being defined in fallback path
+          responsePreview: (typeof initResult !== 'undefined' && initResult?.greeting) ? initResult.greeting.substring(0, 80) : null
         }
       }).catch(() => {});
     }
