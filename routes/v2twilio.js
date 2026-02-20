@@ -1611,22 +1611,22 @@ router.post('/voice', async (req, res) => {
               }
             }).catch(() => {});
             
-            // V126: SPEAK_PROVENANCE for complete UI traceability
+            // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
             CallLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
-              type: 'SPEAK_PROVENANCE',
+              type: 'SPEECH_SOURCE_SELECTED',
               turn: 0,
               data: {
                 sourceId: greetingSource === 'agent2' ? 'agent2.greetings.callStart' : 'legacy.greeting',
                 uiPath: greetingSource === 'agent2' 
-                  ? 'aiAgentSettings.agent2.greetings.callStart' 
-                  : 'connectionMessages (legacy)',
+                  ? 'aiAgentSettings.agent2.greetings.callStart.audioUrl' 
+                  : 'aiAgentSettings.connectionMessages.greeting',
                 uiTab: greetingSource === 'agent2' ? 'Greetings' : 'Connection Messages',
                 configPath: greetingSource === 'agent2' ? 'agent2.greetings.callStart.audioUrl' : 'connectionMessages.greeting',
-                spokenTextPreview: null,
+                spokenTextPreview: '(prerecorded audio)',
                 audioUrl,
-                reason: 'Call start greeting (prerecorded audio)',
+                note: 'Call start greeting (prerecorded audio)',
                 isFromUiConfig: true
               }
             }).catch(() => {});
@@ -1655,11 +1655,11 @@ router.post('/voice', async (req, res) => {
               }
             }).catch(() => {});
             
-            // V126: SPEAK_PROVENANCE for TTS fallback - this is KEY for Call Review visibility
+            // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
             CallLogger.logEvent({
               callId: req.body.CallSid,
               companyId: company._id,
-              type: 'SPEAK_PROVENANCE',
+              type: 'SPEECH_SOURCE_SELECTED',
               turn: 0,
               data: {
                 sourceId: hasUiConfiguredText 
@@ -1667,12 +1667,11 @@ router.post('/voice', async (req, res) => {
                   : 'HARDCODED_FALLBACK',
                 uiPath: hasUiConfiguredText 
                   ? 'aiAgentSettings.agent2.greetings.callStart.text' 
-                  : 'HARDCODED_FALLBACK - Prime Directive Violation',
+                  : 'UNMAPPED - HARDCODED_FALLBACK',
                 uiTab: 'Greetings',
                 configPath: 'agent2.greetings.callStart.text',
                 spokenTextPreview: fallbackText.substring(0, 100),
-                audioUrl: null,
-                reason: `Audio file missing (${rawAudioPath}), using TTS fallback from text field`,
+                note: `Audio file missing (${rawAudioPath}), using TTS fallback from text field`,
                 isFromUiConfig: hasUiConfiguredText,
                 audioMissing: true,
                 originalAudioPath: rawAudioPath

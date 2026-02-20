@@ -325,7 +325,7 @@ class Agent2DiscoveryRunner {
     // terrible when echoed back ("It sounds like I'm having AC problems...")
     // Sanitize it to a clean, short label instead.
     const rawReason = state?.plainSlots?.call_reason_detail || state?.slots?.call_reason_detail || null;
-    const reasonSanitizerConfig = discovery?.callReasonCapture || {};
+    const reasonSanitizerConfig = discoveryCfg?.callReasonCapture || {};
     let capturedReason = null;
     let capturedReasonRaw = null;
     
@@ -1037,7 +1037,7 @@ class Agent2DiscoveryRunner {
     const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
     const activeHints = nextState.agent2.hints || [];
     const activeLocks = nextState.agent2.locks || {};
-    const intentGateConfig = discovery.intentGate || {};
+    const intentGateConfig = discoveryCfg.intentGate || {};
     const globalNegativeKeywords = agent2.globalNegativeKeywords || [];
     
     // Use normalized input for matching (vocabulary engine may have corrected mishears)
@@ -1629,8 +1629,8 @@ class Agent2DiscoveryRunner {
       // NO-UI-NO-SPEAK ENFORCEMENT:
       // ALL text MUST come from UI via resolveSpeakLine(). Zero literal strings.
       
-      const humanToneConfig = discovery?.humanTone || {};
-      const discoveryHandoffConfig = discovery?.discoveryHandoff || {};
+      const humanToneConfig = discoveryCfg?.humanTone || {};
+      const discoveryHandoffConfig = discoveryCfg?.discoveryHandoff || {};
       
       // V120: If we just resolved a pending question (complex response), DON'T ask another one
       const skipClarifierQuestion = justResolvedPending || nextState.agent2.discovery.pendingQuestionWasComplex;

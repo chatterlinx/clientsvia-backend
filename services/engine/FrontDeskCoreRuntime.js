@@ -463,17 +463,15 @@ class FrontDeskCoreRuntime {
                         dtmfMessage: cqDtmfMessage.substring(0, 100)
                     });
                     
-                    // V125/V126: SPEAK_PROVENANCE for complete UI traceability
-                    bufferEvent('SPEAK_PROVENANCE', {
+                    // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
+                    bufferEvent('SPEECH_SOURCE_SELECTED', {
                         sourceId: 'connectionQualityGate.dtmfEscape',
                         uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
-                        uiTab: 'LLM-0 Behavior',
+                        uiTab: 'LLM-0 Behavior → Connection Quality Gate',
                         configPath: 'frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
                         spokenTextPreview: cqDtmfMessage.substring(0, 120),
-                        audioUrl: null,
-                        reason: `DTMF escape after ${callState._connectionTroubleCount} connection troubles (max: ${cqMaxRetries})`,
-                        isFromUiConfig: true,
-                        turn: turn
+                        note: `DTMF escape after ${callState._connectionTroubleCount} connection troubles (max: ${cqMaxRetries})`,
+                        isFromUiConfig: true
                     });
                     
                     logger.warn('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: DTMF escape triggered', {
@@ -519,17 +517,15 @@ class FrontDeskCoreRuntime {
                         clarificationPrompt: cqClarificationPrompt.substring(0, 100)
                     });
                     
-                    // V125/V126: SPEAK_PROVENANCE for complete UI traceability
-                    bufferEvent('SPEAK_PROVENANCE', {
+                    // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
+                    bufferEvent('SPEECH_SOURCE_SELECTED', {
                         sourceId: 'connectionQualityGate.clarification',
                         uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.clarificationPrompt',
-                        uiTab: 'LLM-0 Behavior',
+                        uiTab: 'LLM-0 Behavior → Connection Quality Gate',
                         configPath: 'frontDeskBehavior.connectionQualityGate.clarificationPrompt',
                         spokenTextPreview: cqClarificationPrompt.substring(0, 120),
-                        audioUrl: null,
-                        reason: `Connection trouble detected (${troubleReason}), retry ${callState._connectionTroubleCount}/${cqMaxRetries}`,
-                        isFromUiConfig: true,
-                        turn: turn
+                        note: `Connection trouble detected (${troubleReason}), retry ${callState._connectionTroubleCount}/${cqMaxRetries}`,
+                        isFromUiConfig: true
                     });
                     
                     logger.info('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: re-greeting', {

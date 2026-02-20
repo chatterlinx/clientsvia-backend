@@ -2643,6 +2643,10 @@ class Agent2Manager {
       // Emergency
       'agent2.emergencyFallback': '🚨 Emergency Fallback',
       
+      // Connection Quality Gate
+      'connectionQualityGate.clarification': '🔄 Connection Quality Gate → Re-greet',
+      'connectionQualityGate.dtmfEscape': '📞 Connection Quality Gate → DTMF Escape',
+      
       // Legacy/unknown
       'legacy': '⚠️ Legacy System',
       'legacy.greeting': '⚠️ Legacy → Greeting',
