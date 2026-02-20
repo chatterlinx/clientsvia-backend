@@ -570,6 +570,15 @@ class Agent2DiscoveryRunner {
     const hasPendingQuestion = pendingQuestion && typeof pendingQuestionTurn === 'number';
     const isRespondingToPending = hasPendingQuestion && pendingQuestionTurn === (turn - 1);
     
+    // V127: Build pendingInfo object for logging and state management
+    // This was previously undefined causing "pendingInfo is not defined" crashes
+    const pendingInfo = hasPendingQuestion ? {
+      question: pendingQuestion,
+      turn: pendingQuestionTurn,
+      source: pendingQuestionSource,
+      cardId: pendingQuestionSource?.startsWith('card:') ? pendingQuestionSource.replace('card:', '') : null
+    } : null;
+    
     // Check if this is a scheduling-related pending question
     const isSchedulingQuestion = pendingQuestion && (
       /schedule|book|appointment|service today/i.test(pendingQuestion) ||
@@ -641,49 +650,45 @@ class Agent2DiscoveryRunner {
         let response;
         let responseUiPath;
         
+        // V127: Build response and validate through SPEAK_PROVENANCE system
         if (pendingYes) {
           response = `${personalAck} ${pendingYes}`.trim();
           responseUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingYesResponse';
-        } else if (emergencyFallback?.text) {
-          response = `${personalAck} ${emergencyFallback.text}`.trim();
-          responseUiPath = emergencyFallback.uiPath;
-          emit('SPEECH_USING_EMERGENCY_FALLBACK', {
-            originalSourceId: 'agent2.discovery.pendingQuestion.yes',
-            reason: 'pendingYesResponse not configured',
-            severity: 'WARNING'
-          });
         } else {
-          // CRITICAL: No UI-configured response
-          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
-            blockedSourceId: 'agent2.discovery.pendingQuestion.yes',
-            blockedText: 'No pendingYesResponse or emergencyFallback configured',
-            reason: 'Pending question YES needs UI-configured response',
-            severity: 'CRITICAL'
-          });
-          response = personalAck;
-          responseUiPath = 'UNMAPPED - CRITICAL';
+          // No UI-configured pendingYesResponse - validateSpeechSource will handle fallback
+          response = personalAck || 'Let me help you with that.';
+          responseUiPath = null;
         }
         
         emit('A2_PATH_SELECTED', { 
           path: 'PENDING_QUESTION_YES', 
           reason: `User confirmed: detected YES markers`,
-          markers: { hasYesWord, hasYesPhrase, inputPreview: clip(inputLowerClean, 40) }
+          markers: { hasYesWord, hasYesPhrase, inputPreview: clip(inputLowerClean, 40) },
+          pendingInfo: { cardId: pendingInfo?.cardId, source: pendingInfo?.source }
         });
-        // V125: SPEECH_SOURCE_SELECTED - pendingQuestion paths are system-generated from trigger cards
-        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
-          'agent2.discovery.pendingQuestion.yesPath',
-          'aiAgentSettings.agent2.discovery.playbook.rules (follow-up)',
+        
+        // V127: Use validateSpeechSource for consistent SPEAK_PROVENANCE logging
+        const yesValidation = validateSpeechSource({
           response,
-          null,
-          `User confirmed YES to pending question from card: ${pendingInfo?.cardId || 'unknown'}`
-        ));
+          sourceId: 'agent2.discovery.pendingQuestion.yesPath',
+          uiPath: responseUiPath,
+          configPath: 'discovery.playbook.fallback.pendingYesResponse',
+          uiTab: 'Configuration',
+          audioUrl: null,
+          reason: `User confirmed YES to pending question from card: ${pendingInfo?.cardId || 'unknown'}`,
+          emergencyFallback,
+          emit
+        });
+        response = yesValidation.response;
+        
         emit('A2_RESPONSE_READY', {
           path: 'PENDING_QUESTION_YES',
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
           source: 'pendingQuestion.yesPath',
-          usedCallerName: usedName
+          usedCallerName: usedName,
+          wasBlocked: yesValidation.blocked
         });
         
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
@@ -701,7 +706,7 @@ class Agent2DiscoveryRunner {
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
         
-        // V126: Pending question NO response - UI-configured field
+        // V127: Build response and validate through SPEAK_PROVENANCE system
         const pendingNo = `${fallback.pendingNoResponse || ''}`.trim();
         let response;
         let noResponseUiPath;
@@ -709,46 +714,41 @@ class Agent2DiscoveryRunner {
         if (pendingNo) {
           response = `${personalAck} ${pendingNo}`.trim();
           noResponseUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingNoResponse';
-        } else if (emergencyFallback?.text) {
-          response = `${personalAck} ${emergencyFallback.text}`.trim();
-          noResponseUiPath = emergencyFallback.uiPath;
-          emit('SPEECH_USING_EMERGENCY_FALLBACK', {
-            originalSourceId: 'agent2.discovery.pendingQuestion.no',
-            reason: 'pendingNoResponse not configured',
-            severity: 'WARNING'
-          });
         } else {
-          // CRITICAL: No UI-configured response
-          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
-            blockedSourceId: 'agent2.discovery.pendingQuestion.no',
-            blockedText: 'No pendingNoResponse or emergencyFallback configured',
-            reason: 'Pending question NO needs UI-configured response',
-            severity: 'CRITICAL'
-          });
-          response = personalAck;
-          noResponseUiPath = 'UNMAPPED - CRITICAL';
+          // No UI-configured pendingNoResponse - validateSpeechSource will handle fallback
+          response = personalAck || 'No problem.';
+          noResponseUiPath = null;
         }
         
         emit('A2_PATH_SELECTED', { 
           path: 'PENDING_QUESTION_NO', 
           reason: `User declined: detected NO markers`,
-          markers: { hasNoWord, hasNoPhrase, inputPreview: clip(inputLowerClean, 40) }
+          markers: { hasNoWord, hasNoPhrase, inputPreview: clip(inputLowerClean, 40) },
+          pendingInfo: { cardId: pendingInfo?.cardId, source: pendingInfo?.source }
         });
-        // V125: SPEECH_SOURCE_SELECTED
-        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
-          'agent2.discovery.pendingQuestion.noPath',
-          'aiAgentSettings.agent2.discovery.playbook.rules (follow-up)',
+        
+        // V127: Use validateSpeechSource for consistent SPEAK_PROVENANCE logging
+        const noValidation = validateSpeechSource({
           response,
-          null,
-          `User said NO to pending question from card: ${pendingInfo?.cardId || 'unknown'}`
-        ));
+          sourceId: 'agent2.discovery.pendingQuestion.noPath',
+          uiPath: noResponseUiPath,
+          configPath: 'discovery.playbook.fallback.pendingNoResponse',
+          uiTab: 'Configuration',
+          audioUrl: null,
+          reason: `User said NO to pending question from card: ${pendingInfo?.cardId || 'unknown'}`,
+          emergencyFallback,
+          emit
+        });
+        response = noValidation.response;
+        
         emit('A2_RESPONSE_READY', {
           path: 'PENDING_QUESTION_NO',
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
           source: 'pendingQuestion.noPath',
-          usedCallerName: usedName
+          usedCallerName: usedName,
+          wasBlocked: noValidation.blocked
         });
         
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
@@ -761,38 +761,22 @@ class Agent2DiscoveryRunner {
         // DON'T clear pendingQuestion — we're re-asking
         nextState.agent2.discovery.lastPath = 'PENDING_REPROMPT';
         
-        // V126: Pending question REPROMPT - UI-configured field
+        // V127: Build response - prefer UI-configured reprompt, then original question, then emergency
         const pendingRepromptConfig = `${fallback.pendingReprompt || ''}`.trim();
         const pendingQ = pendingInfo?.question || '';
         let response;
         let repromptUiPath;
         
         if (pendingRepromptConfig) {
-          // Use the configured reprompt message
           response = pendingRepromptConfig;
           repromptUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingReprompt';
         } else if (pendingQ) {
-          // Re-ask the original pending question (from the card)
           response = `Sorry, I missed that. ${pendingQ}`;
           repromptUiPath = `aiAgentSettings.agent2.discovery.playbook.rules[id=${pendingInfo?.cardId}].followUp.question`;
-        } else if (emergencyFallback?.text) {
-          response = `Sorry, I missed that. ${emergencyFallback.text}`;
-          repromptUiPath = emergencyFallback.uiPath;
-          emit('SPEECH_USING_EMERGENCY_FALLBACK', {
-            originalSourceId: 'agent2.discovery.pendingQuestion.reprompt',
-            reason: 'pendingReprompt not configured and no pending question',
-            severity: 'WARNING'
-          });
         } else {
-          // CRITICAL: No UI-configured reprompt
-          emit('SPOKEN_TEXT_UNMAPPED_BLOCKED', {
-            blockedSourceId: 'agent2.discovery.pendingQuestion.reprompt',
-            blockedText: 'No pendingReprompt, pending question, or emergencyFallback',
-            reason: 'Pending question reprompt needs UI-configured response',
-            severity: 'CRITICAL'
-          });
+          // No reprompt config and no question - validateSpeechSource will handle fallback
           response = 'Sorry, I missed that.';
-          repromptUiPath = 'UNMAPPED - CRITICAL';
+          repromptUiPath = null;
         }
         
         emit('A2_PATH_SELECTED', { 
@@ -801,22 +785,31 @@ class Agent2DiscoveryRunner {
           inputLength,
           isMicroUtterance,
           looksLikeName,
-          inputPreview: clip(input, 40)
+          inputPreview: clip(input, 40),
+          pendingInfo: { cardId: pendingInfo?.cardId, source: pendingInfo?.source }
         });
-        // V125: SPEECH_SOURCE_SELECTED
-        emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
-          'agent2.discovery.pendingQuestion.reprompt',
-          'aiAgentSettings.agent2.discovery.playbook.rules (follow-up)',
+        
+        // V127: Use validateSpeechSource for consistent SPEAK_PROVENANCE logging
+        const repromptValidation = validateSpeechSource({
           response,
-          null,
-          'Reprompting after unclear response to pending question'
-        ));
+          sourceId: 'agent2.discovery.pendingQuestion.reprompt',
+          uiPath: repromptUiPath,
+          configPath: repromptUiPath ? 'discovery.playbook.fallback.pendingReprompt' : 'UNMAPPED',
+          uiTab: 'Configuration',
+          audioUrl: null,
+          reason: 'Reprompting after unclear response to pending question',
+          emergencyFallback,
+          emit
+        });
+        response = repromptValidation.response;
+        
         emit('A2_RESPONSE_READY', {
           path: 'PENDING_QUESTION_REPROMPT',
           responsePreview: clip(response, 120),
           responseLength: response.length,
           hasAudio: false,
-          source: 'pendingQuestion.reprompt'
+          source: 'pendingQuestion.reprompt',
+          wasBlocked: repromptValidation.blocked
         });
         
         return { response, matchSource: 'AGENT2_DISCOVERY', state: nextState };
