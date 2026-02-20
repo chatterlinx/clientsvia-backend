@@ -4226,6 +4226,8 @@ const companySchema = new mongoose.Schema({
         // NOTE: Keep schema minimal early; expand only as sections are locked.
         agent2: {
             enabled: { type: Boolean, default: false },
+            // V4: Global Negative Keywords - applies to ALL trigger cards
+            globalNegativeKeywords: { type: [String], default: [] },
             discovery: {
                 enabled: { type: Boolean, default: false },
                 // UI-driven playbook + style blocks (stored as structured JSON)
@@ -4235,6 +4237,120 @@ const companySchema = new mongoose.Schema({
                 vocabulary: { type: mongoose.Schema.Types.Mixed, default: {} },
                 // Clarifier system (disambiguation questions)
                 clarifiers: { type: mongoose.Schema.Types.Mixed, default: {} },
+                
+                // ═══════════════════════════════════════════════════════════
+                // V4: CALL REASON CAPTURE - Sanitization/Summary Config
+                // ═══════════════════════════════════════════════════════════
+                // Controls how call_reason_detail is processed before display.
+                // Prevents the "echo" problem where agent says caller's transcript.
+                callReasonCapture: {
+                    enabled: { type: Boolean, default: true },
+                    // 'summary_label' = map to short label (recommended)
+                    // 'truncate' = first N meaningful words
+                    // 'passthrough' = raw (legacy behavior)
+                    mode: { type: String, default: 'summary_label', trim: true },
+                    maxWords: { type: Number, default: 6 },
+                    stripLeadingPunctuation: { type: Boolean, default: true },
+                    stripGreetingPhrases: { type: Boolean, default: true },
+                    stripNamePhrases: { type: Boolean, default: true },
+                    stripFillerWords: { type: Boolean, default: true },
+                    // Custom intent → label mappings (extends defaults)
+                    customMappings: { type: mongoose.Schema.Types.Mixed, default: [] }
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // V4: INTENT PRIORITY GATE - Prevents FAQ hijacking
+                // ═══════════════════════════════════════════════════════════
+                // Detects service_down/emergency intent BEFORE card matching.
+                // Disqualifies/penalizes FAQ cards when caller has urgent issue.
+                intentGate: {
+                    enabled: { type: Boolean, default: true },
+                    basePenalty: { type: Number, default: 50 },
+                    emergencyFullDisqualify: { type: Boolean, default: true },
+                    // Categories to block/penalize when service_down detected
+                    disqualifiedCategories: { 
+                        type: [String], 
+                        default: ['faq', 'info', 'sales', 'financing', 'warranty', 
+                                  'maintenance_plan', 'system_age', 'lifespan', 
+                                  'replacement', 'upgrade', 'new_system', 'general']
+                    },
+                    // Additional service-down keywords (extends defaults)
+                    serviceDownKeywords: { type: [String], default: [] },
+                    emergencyKeywords: { type: [String], default: [] }
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // V4: HUMAN TONE - Empathy/professionalism templates
+                // ═══════════════════════════════════════════════════════════
+                // UI-owned text templates. NO DEFAULTS - must be configured in UI.
+                // If not configured, system uses fallback chain → emergency fallback.
+                // RULE: No UI = No speech. Zero hardcoded English strings.
+                humanTone: {
+                    enabled: { type: Boolean, default: true },
+                    // Templates are UI-configured. Empty by default - MUST be set in UI.
+                    templates: {
+                        serviceDown: { type: [String], default: [] },
+                        angry: { type: [String], default: [] },
+                        afterHours: { type: [String], default: [] },
+                        general: { type: [String], default: [] }
+                    }
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // V4: DISCOVERY HANDOFF - Consent question (no time offers)
+                // ═══════════════════════════════════════════════════════════
+                // Discovery asks consent ONLY. Booking times are a different lane.
+                // RULE: consentQuestion must be UI-configured. No hardcoded default.
+                discoveryHandoff: {
+                    enabled: { type: Boolean, default: true },
+                    // Consent question - MUST be configured in UI. Empty = no question asked.
+                    consentQuestion: { type: String, default: '', trim: true },
+                    yesNext: { type: String, default: 'BOOKING_LANE', trim: true },
+                    noNext: { type: String, default: 'MESSAGE_TAKING', trim: true },
+                    forbidBookingTimes: { type: Boolean, default: true }
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // V4: LLM FALLBACK SETTINGS - Control when/how LLM can speak
+                // ═══════════════════════════════════════════════════════════
+                // RULE: LLM never "takes over the mic". It can only assist.
+                // Sentence 2 is ALWAYS overridden by UI's discoveryHandoff.consentQuestion.
+                llmFallback: {
+                    enabled: { type: Boolean, default: false },
+                    mode: { type: String, default: 'assist_only', enum: ['assist_only', 'full', 'disabled'] },
+                    onlyWhenAllElseFails: { type: Boolean, default: true },
+                    maxTurnsPerCall: { type: Number, default: 2 },
+                    blockedIfTriggerMatched: { type: Boolean, default: true },
+                    blockedIfPendingQuestion: { type: Boolean, default: true },
+                    blockedIfCapturedReasonFlow: { type: Boolean, default: true },
+                    blockedIfBookingLocked: { type: Boolean, default: true },
+                    forbidBookingTimes: { type: Boolean, default: true }
+                },
+                
+                // ═══════════════════════════════════════════════════════════
+                // V4: NORMALIZATION - Filler/noise cleanup for matching
+                // ═══════════════════════════════════════════════════════════
+                // Applied to input BEFORE trigger card matching.
+                // Removes fillers, normalizes text for better match accuracy.
+                normalization: {
+                    enabled: { type: Boolean, default: true },
+                    applyTo: { 
+                        type: [String], 
+                        default: ['trigger_matching', 'slot_extraction']
+                    },
+                    preserveTranscript: { type: Boolean, default: true },
+                    fillerWords: { 
+                        type: [String], 
+                        default: ['uh', 'um', 'like', 'you know', 'kinda', 'sorta', 'basically']
+                    },
+                    stripGreetings: { 
+                        type: [String], 
+                        default: ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening']
+                    },
+                    collapseWhitespace: { type: Boolean, default: true },
+                    maxRepeatWordRun: { type: Number, default: 2 }
+                },
+                
                 updatedAt: { type: Date, default: null }
             },
             // Greetings system (Agent 2.0 owned - completely isolated from legacy)

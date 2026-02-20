@@ -34,6 +34,9 @@ const logger = require('../../../utils/logger');
 const { TriggerCardMatcher } = require('./TriggerCardMatcher');
 const { Agent2VocabularyEngine } = require('./Agent2VocabularyEngine');
 const { Agent2GreetingInterceptor } = require('./Agent2GreetingInterceptor');
+const { Agent2CallReasonSanitizer } = require('./Agent2CallReasonSanitizer');
+const { Agent2IntentPriorityGate } = require('./Agent2IntentPriorityGate');
+const { resolveSpeakLine } = require('./Agent2SpeakGate');
 const { runLLMFallback, computeComplexityScore } = require('./Agent2LLMFallbackService');
 
 // ScenarioEngine is lazy-loaded ONLY if useScenarioFallback is enabled
@@ -314,7 +317,37 @@ class Agent2DiscoveryRunner {
 
     const input = `${userInput || ''}`.trim();
     const inputLower = input.toLowerCase();
-    const capturedReason = naturalizeReason(state?.plainSlots?.call_reason_detail || state?.slots?.call_reason_detail || null);
+    
+    // ──────────────────────────────────────────────────────────────────────
+    // CALL REASON SANITIZATION (V4 - Prevents "echo" problem)
+    // ──────────────────────────────────────────────────────────────────────
+    // Raw call_reason_detail can be the caller's full transcript which sounds
+    // terrible when echoed back ("It sounds like I'm having AC problems...")
+    // Sanitize it to a clean, short label instead.
+    const rawReason = state?.plainSlots?.call_reason_detail || state?.slots?.call_reason_detail || null;
+    const reasonSanitizerConfig = discovery?.callReasonCapture || {};
+    let capturedReason = null;
+    let capturedReasonRaw = null;
+    
+    if (rawReason) {
+      capturedReasonRaw = naturalizeReason(rawReason);
+      
+      // Apply sanitization if enabled (default: enabled)
+      if (reasonSanitizerConfig.enabled !== false) {
+        const sanitized = Agent2CallReasonSanitizer.sanitize(rawReason, reasonSanitizerConfig);
+        capturedReason = sanitized.sanitized || capturedReasonRaw;
+        
+        logger.debug('[Agent2DiscoveryRunner] Call reason sanitized', {
+          rawPreview: clip(capturedReasonRaw, 60),
+          sanitized: capturedReason,
+          mode: sanitized.mode,
+          matched: sanitized.matched
+        });
+      } else {
+        capturedReason = capturedReasonRaw;
+      }
+    }
+    
     const callerName = state?.plainSlots?.name || null;
 
     // ──────────────────────────────────────────────────────────────────────
@@ -998,17 +1031,27 @@ class Agent2DiscoveryRunner {
     // ──────────────────────────────────────────────────────────────────────
     // Uses NORMALIZED input from vocabulary processing
     // Passes hints for optional card boosting (if TriggerCardMatcher supports it)
+    // V4: Intent Priority Gate config controls FAQ card disqualification
     // ──────────────────────────────────────────────────────────────────────
     const triggerCards = safeArr(playbook.rules);
     const cardPoolStats = TriggerCardMatcher.getPoolStats(triggerCards);
     const activeHints = nextState.agent2.hints || [];
     const activeLocks = nextState.agent2.locks || {};
+    const intentGateConfig = discovery.intentGate || {};
+    const globalNegativeKeywords = agent2.globalNegativeKeywords || [];
     
     // Use normalized input for matching (vocabulary engine may have corrected mishears)
     const triggerResult = TriggerCardMatcher.match(normalizedInput, triggerCards, {
       hints: activeHints,
-      locks: activeLocks
+      locks: activeLocks,
+      intentGateConfig,
+      globalNegativeKeywords
     });
+    
+    // Store intent gate result for empathy layer (V4)
+    if (triggerResult.intentGateResult) {
+      nextState.agent2.discovery.lastIntentGateResult = triggerResult.intentGateResult;
+    }
 
     // Emit detailed trigger evaluation for debugging
     emit('A2_TRIGGER_EVAL', {
@@ -1020,6 +1063,14 @@ class Agent2DiscoveryRunner {
       totalCards: triggerResult.totalCards,
       enabledCards: triggerResult.enabledCards,
       negativeBlocked: triggerResult.negativeBlocked,
+      // V4: Intent Priority Gate info
+      intentGateBlocked: triggerResult.intentGateBlocked || 0,
+      intentGateResult: triggerResult.intentGateResult ? {
+        serviceDownDetected: triggerResult.intentGateResult.serviceDownDetected,
+        emergencyDetected: triggerResult.intentGateResult.emergencyDetected,
+        urgencyScore: triggerResult.intentGateResult.urgencyScore,
+        matchedPatterns: triggerResult.intentGateResult.matchedPatterns?.length || 0
+      } : null,
       evaluated: triggerResult.evaluated.slice(0, 10),
       // Vocabulary integration info
       usedNormalizedInput: normalizedInput !== input,
@@ -1571,40 +1622,99 @@ class Agent2DiscoveryRunner {
     if (response) {
       // Response already set by scenario path - skip fallback
     } else if (capturedReason) {
-      // Path 5a: We captured a call reason but couldn't match — acknowledge what they said
+      // Path 5a: We captured a call reason but couldn't match — acknowledge and help
       // V119: This is the "noMatch_withReason" path — NEVER restart conversation
-      const reasonAck = `${fallback.noMatchWhenReasonCaptured || ''}`.trim() || "I'm sorry to hear that.";
-      const clarifier = `${fallback.noMatchClarifierQuestion || ''}`.trim();
+      // V4: NEVER echo caller text verbatim — use Human Tone + Discovery Handoff
+      //
+      // NO-UI-NO-SPEAK ENFORCEMENT:
+      // ALL text MUST come from UI via resolveSpeakLine(). Zero literal strings.
+      
+      const humanToneConfig = discovery?.humanTone || {};
+      const discoveryHandoffConfig = discovery?.discoveryHandoff || {};
       
       // V120: If we just resolved a pending question (complex response), DON'T ask another one
-      // Just acknowledge and let them continue the conversation naturally
       const skipClarifierQuestion = justResolvedPending || nextState.agent2.discovery.pendingQuestionWasComplex;
       
-      // V119: If we have a clarifier question, use it. Otherwise, DON'T ask "how can I help?"
-      // The clarifier should help narrow down the problem, not restart.
-      let nextQ;
-      if (skipClarifierQuestion) {
-        // Don't ask another question — they just gave us a complex response
-        nextQ = '';
-      } else if (clarifier) {
-        nextQ = clarifier;
-      } else {
-        // Default clarifier based on the fact we HAVE a reason
-        nextQ = 'Would you like to schedule a technician to take a look?';
+      // ─────────────────────────────────────────────────────────────────────
+      // V4: HUMAN TONE - Empathy from UI (via SpeakGate)
+      // ─────────────────────────────────────────────────────────────────────
+      // Determine which empathy template to use based on intent
+      const intentGateResult = nextState.agent2?.discovery?.lastIntentGateResult;
+      const isServiceDown = intentGateResult?.serviceDownDetected || 
+                            /not\s+(cool|heat|work)|down|broken|emergency/i.test(capturedReasonRaw || '');
+      
+      // Pick the right UI path based on detected intent
+      let empathyPrimaryPath;
+      if (humanToneConfig.enabled !== false) {
+        if (isServiceDown) {
+          empathyPrimaryPath = 'discovery.humanTone.templates.serviceDown';
+        } else {
+          empathyPrimaryPath = 'discovery.humanTone.templates.general';
+        }
+      }
+      
+      // Use SpeakGate to resolve empathy line with proper fallback chain
+      const empathyResult = resolveSpeakLine({
+        uiPath: empathyPrimaryPath,
+        fallbackUiPath: 'discovery.playbook.fallback.noMatchWhenReasonCaptured',
+        emergencyUiPath: 'emergencyFallbackLine.text',
+        config: agent2,
+        emit,
+        sourceId: 'agent2.discovery.humanTone',
+        reason: isServiceDown ? 'Service-down intent detected' : 'General empathy'
+      });
+      
+      let empathyLine = empathyResult.text;
+      let empathyUiPath = empathyResult.uiPath;
+      
+      // ─────────────────────────────────────────────────────────────────────
+      // V4: DISCOVERY HANDOFF - Consent question from UI (via SpeakGate)
+      // ─────────────────────────────────────────────────────────────────────
+      let nextQ = '';
+      let nextQUiPath = '';
+      
+      if (!skipClarifierQuestion) {
+        const handoffResult = resolveSpeakLine({
+          uiPath: 'discovery.discoveryHandoff.consentQuestion',
+          fallbackUiPath: 'discovery.playbook.fallback.noMatchClarifierQuestion',
+          emergencyUiPath: null, // No emergency for question - just skip if not configured
+          config: agent2,
+          emit,
+          sourceId: 'agent2.discovery.discoveryHandoff',
+          reason: 'Handoff consent question'
+        });
+        
+        // Only use question if it resolved (not blocked)
+        if (!handoffResult.blocked && handoffResult.text) {
+          nextQ = handoffResult.text;
+          nextQUiPath = handoffResult.uiPath;
+        }
+        // If no question configured, that's OK - just use empathy alone
       }
 
-      // V119: Avoid double-ack — if reasonAck already starts with the ack word, don't prepend again
-      const ackLower = ack.toLowerCase().replace(/[^a-z]/g, '');
-      const reasonAckStartsWithAck = reasonAck.toLowerCase().startsWith(ackLower) || 
-                                       reasonAck.toLowerCase().startsWith('ok') ||
-                                       reasonAck.toLowerCase().startsWith('i\'m sorry');
-      const finalAck = reasonAckStartsWithAck ? reasonAck : `${personalAck} ${reasonAck}`.trim();
-      
-      // V120: Build response — omit trailing question if we're skipping it
-      if (nextQ) {
-        response = `${finalAck} It sounds like ${capturedReason}. ${nextQ}`.replace(/\s+/g, ' ').trim();
+      // Build final response: empathy + next question (NO echo, NO hardcoded text)
+      if (empathyResult.blocked) {
+        // CRITICAL: No empathy text available - response will be empty
+        response = '';
+        logger.error('[Agent2DiscoveryRunner] CRITICAL - No UI text for empathy response');
       } else {
-        response = `${finalAck} It sounds like ${capturedReason}. How can I help with that?`.replace(/\s+/g, ' ').trim();
+        // Check if empathy already starts with an ack-like word
+        const empathyLower = empathyLine.toLowerCase();
+        const empathyStartsWithAck = empathyLower.startsWith('ok') ||
+                                     empathyLower.startsWith('got it') ||
+                                     empathyLower.startsWith('i hear') ||
+                                     empathyLower.startsWith('i understand') ||
+                                     empathyLower.startsWith('i can help') ||
+                                     empathyLower.startsWith('i get it');
+        
+        // Use personalized ack if we have caller name and empathy doesn't start with ack
+        const finalEmpathy = empathyStartsWithAck ? empathyLine : `${personalAck} ${empathyLine}`.trim();
+        
+        if (nextQ) {
+          response = `${finalEmpathy} ${nextQ}`.replace(/\s+/g, ' ').trim();
+        } else {
+          response = finalEmpathy;
+        }
       }
       
       nextState.agent2.discovery.lastPath = 'FALLBACK_REASON_CAPTURED';
@@ -1617,7 +1727,7 @@ class Agent2DiscoveryRunner {
       if (nextQ && !skipClarifierQuestion) {
         nextState.agent2.discovery.pendingQuestion = nextQ;
         nextState.agent2.discovery.pendingQuestionTurn = typeof turn === 'number' ? turn : null;
-        nextState.agent2.discovery.pendingQuestionSource = 'fallback.clarifier';
+        nextState.agent2.discovery.pendingQuestionSource = 'discoveryHandoff.consentQuestion';
       }
       
       // V120: Clear the complex flag after using it
@@ -1629,26 +1739,33 @@ class Agent2DiscoveryRunner {
         path: 'FALLBACK_WITH_REASON', 
         reason: pathReason,
         capturedReasonPreview: clip(capturedReason, 60),
-        skippedClarifier: skipClarifierQuestion
+        capturedReasonRaw: clip(capturedReasonRaw, 60),
+        sanitizedReason: capturedReason !== capturedReasonRaw,
+        skippedClarifier: skipClarifierQuestion,
+        usedHumanTone: humanToneConfig.enabled !== false,
+        empathyUiPath,
+        empathySeverity: empathyResult.severity,
+        nextQUiPath: nextQUiPath || null
       });
-      // V125: SPEECH_SOURCE_SELECTED
+      // V125: SPEECH_SOURCE_SELECTED - Must have valid UI path
       emit('SPEECH_SOURCE_SELECTED', buildSpeechSourceEvent(
-        'agent2.discovery.fallback.noMatchWhenReasonCaptured',
-        'aiAgentSettings.agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured',
+        'agent2.discovery.humanTone',
+        empathyUiPath,
         response,
         null,
-        'No trigger matched but caller provided a reason - acknowledging'
+        `HumanTone[${empathyResult.severity}]: ${empathyUiPath}, Handoff: ${nextQUiPath || 'none'}`
       ));
       emit('A2_RESPONSE_READY', {
         path: 'FALLBACK_WITH_REASON',
         responsePreview: clip(response, 120),
         responseLength: response.length,
         hasAudio: false,
-        source: 'fallback.noMatchWhenReasonCaptured',
+        source: empathyConfig.enabled !== false ? 'empathyLayer' : 'fallback.noMatchWhenReasonCaptured',
         usedCallerName: usedName,
-        hadClarifier: !!clarifier && !skipClarifierQuestion,
+        hadClarifier: !!nextQ && !skipClarifierQuestion,
         pendingQuestion: nextQ || null,
-        skippedClarifier: skipClarifierQuestion
+        skippedClarifier: skipClarifierQuestion,
+        noEchoMode: true
       });
       
     } else {

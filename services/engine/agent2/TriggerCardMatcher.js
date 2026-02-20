@@ -46,6 +46,7 @@
  */
 
 const logger = require('../../../utils/logger');
+const { Agent2IntentPriorityGate } = require('./Agent2IntentPriorityGate');
 
 // ────────────────────────────────────────────────────────────────────────────
 // GREETING PROTECTION CONSTANTS
@@ -200,6 +201,8 @@ class TriggerCardMatcher {
    * @param {Object} options - Optional matching options
    * @param {Array<string>} options.hints - Active vocabulary hints (e.g., ["maybe_thermostat"])
    * @param {Object} options.locks - Active component locks (e.g., { component: "thermostat" })
+   * @param {Object} options.intentGateConfig - UI config for Intent Priority Gate
+   * @param {Array<string>} options.globalNegativeKeywords - Global negatives that block ALL cards
    * @returns {TriggerMatchResult}
    */
   static match(inputText, cards, options = {}) {
@@ -207,6 +210,10 @@ class TriggerCardMatcher {
     const cardList = safeArr(cards);
     const hints = safeArr(options.hints || []);
     const locks = options.locks && typeof options.locks === 'object' ? options.locks : {};
+    const intentGateConfig = options.intentGateConfig || {};
+    const globalNegativeKeywords = safeArr(options.globalNegativeKeywords || [])
+      .map(normalizeText)
+      .filter(Boolean);
 
     const result = {
       matched: false,
@@ -219,8 +226,12 @@ class TriggerCardMatcher {
       totalCards: cardList.length,
       enabledCards: 0,
       negativeBlocked: 0,
+      intentGateBlocked: 0,
+      globalNegativeBlocked: false,
+      globalNegativeHit: null,
       hintBoostApplied: false,
-      lockBoostApplied: false
+      lockBoostApplied: false,
+      intentGateResult: null
     };
 
     if (!input) {
@@ -232,6 +243,44 @@ class TriggerCardMatcher {
       logger.debug('[TriggerCardMatcher] No cards to match against');
       return result;
     }
+    
+    // ─────────────────────────────────────────────────────────────────────────
+    // V4: GLOBAL NEGATIVE KEYWORDS - Block ALL cards if any match
+    // ─────────────────────────────────────────────────────────────────────────
+    // Check global negatives FIRST. If any match, no cards will be evaluated.
+    // This prevents spam, job seekers, etc. from triggering any card.
+    if (globalNegativeKeywords.length > 0) {
+      const globalHit = globalNegativeKeywords.find((gnk) => matchesAllWords(input, gnk).matches);
+      if (globalHit) {
+        result.globalNegativeBlocked = true;
+        result.globalNegativeHit = globalHit;
+        logger.info('[TriggerCardMatcher] Global negative keyword blocked all cards', {
+          globalNegativeHit: globalHit,
+          inputPreview: clip(input, 60)
+        });
+        return result;
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // INTENT PRIORITY GATE (V4): Detect service-down/emergency intent
+    // ─────────────────────────────────────────────────────────────────────────
+    // Run BEFORE card matching. If service-down detected, FAQ/sales cards
+    // get disqualified or heavily penalized to prevent false positives.
+    let gateResult = null;
+    if (intentGateConfig.enabled !== false) {
+      gateResult = Agent2IntentPriorityGate.evaluate(input, intentGateConfig);
+      result.intentGateResult = gateResult;
+      
+      if (gateResult.serviceDownDetected) {
+        logger.info('[TriggerCardMatcher] Intent gate detected service-down', {
+          urgencyScore: gateResult.urgencyScore,
+          isEmergency: gateResult.emergencyDetected,
+          matchedPatterns: gateResult.matchedPatterns.length,
+          disqualifiedCategories: gateResult.disqualifiedCategories.length
+        });
+      }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // PRIORITY ADJUSTMENT: Apply hint/lock boosts before sorting
@@ -242,6 +291,19 @@ class TriggerCardMatcher {
     const boostedCards = cardList.map(card => {
       let effectivePriority = typeof card.priority === 'number' ? card.priority : 100;
       let boostReasons = [];
+      let gateInfo = null;
+      
+      // Apply Intent Gate penalties/disqualification
+      if (gateResult && gateResult.serviceDownDetected) {
+        const gateCheck = Agent2IntentPriorityGate.checkCard(card, gateResult);
+        if (gateCheck.disqualified) {
+          gateInfo = { disqualified: true, reason: gateCheck.reason };
+        } else if (gateCheck.penalty > 0) {
+          effectivePriority += gateCheck.penalty;
+          boostReasons.push(`gate_penalty:${gateCheck.penalty}`);
+          gateInfo = { penalty: gateCheck.penalty, reason: gateCheck.reason };
+        }
+      }
       
       // Check for lock-based boost (strongest)
       if (locks.component) {
@@ -279,7 +341,8 @@ class TriggerCardMatcher {
       return {
         ...card,
         _effectivePriority: effectivePriority,
-        _boostReasons: boostReasons
+        _boostReasons: boostReasons,
+        _gateInfo: gateInfo
       };
     });
 
@@ -295,13 +358,15 @@ class TriggerCardMatcher {
         priority: typeof card.priority === 'number' ? card.priority : 100,
         effectivePriority: card._effectivePriority || (typeof card.priority === 'number' ? card.priority : 100),
         boostReasons: card._boostReasons || [],
+        gateInfo: card._gateInfo || null,
         enabled: card.enabled !== false,
         skipped: false,
         skipReason: null,
         negativeHit: null,
         keywordHit: null,
         phraseHit: null,
-        greetingBlocked: null, // V3: Track greeting protection
+        greetingBlocked: null,
+        intentGateBlocked: false,
         matched: false
       };
 
@@ -314,6 +379,20 @@ class TriggerCardMatcher {
       }
 
       result.enabledCards++;
+      
+      // V4: Skip cards disqualified by Intent Gate (emergency mode)
+      if (card._gateInfo && card._gateInfo.disqualified) {
+        cardEval.skipped = true;
+        cardEval.skipReason = 'INTENT_GATE_DISQUALIFIED';
+        cardEval.intentGateBlocked = true;
+        result.intentGateBlocked++;
+        result.evaluated.push(cardEval);
+        logger.debug('[TriggerCardMatcher] Card disqualified by Intent Gate', {
+          cardId: card.id,
+          reason: card._gateInfo.reason
+        });
+        continue;
+      }
 
       // ─────────────────────────────────────────────────────────────────────
       // NEGATIVE KEYWORDS (word-based) — if ALL words found, block this card

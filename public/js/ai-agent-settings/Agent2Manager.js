@@ -135,6 +135,46 @@ class Agent2Manager {
           },
           rules: []
         },
+        // V4: HUMAN TONE - UI-owned empathy templates
+        // NO DEFAULTS - must be configured in UI. If empty, uses fallback chain.
+        humanTone: {
+          enabled: true,
+          templates: {
+            serviceDown: [],  // MUST be configured in UI
+            angry: [],        // MUST be configured in UI
+            afterHours: [],   // MUST be configured in UI
+            general: []       // MUST be configured in UI
+          }
+        },
+        // V4: Intent Priority Gate - prevents FAQ hijacking on service-down calls
+        intentGate: {
+          enabled: true,
+          basePenalty: 50,
+          emergencyFullDisqualify: true,
+          disqualifiedCategories: ['faq', 'info', 'sales', 'financing', 'warranty', 'maintenance_plan', 'system_age', 'lifespan', 'replacement', 'upgrade', 'new_system', 'general'],
+          serviceDownKeywords: [],
+          emergencyKeywords: []
+        },
+        // V4: DISCOVERY HANDOFF - Consent question (no time offers)
+        // NO DEFAULT - must be configured in UI. If empty, no question asked.
+        discoveryHandoff: {
+          enabled: true,
+          consentQuestion: '',  // MUST be configured in UI
+          yesNext: 'BOOKING_LANE',
+          noNext: 'MESSAGE_TAKING',
+          forbidBookingTimes: true
+        },
+        // V4: Call Reason Capture - sanitizes raw transcript to clean labels
+        callReasonCapture: {
+          enabled: true,
+          mode: 'summary_label',
+          maxWords: 6,
+          stripLeadingPunctuation: true,
+          stripGreetingPhrases: true,
+          stripNamePhrases: true,
+          stripFillerWords: true,
+          customMappings: []
+        },
         updatedAt: null
       },
       greetings: {
@@ -3250,6 +3290,18 @@ class Agent2Manager {
             placeholder="How can I help you today?">${this.escapeHtml(this.agent2Config?.emergencyFallbackLine?.text || '')}</textarea>
         </div>
 
+        ${this._renderEmpathyAndToneSection()}
+        
+        ${this._renderIntentPriorityGateSection()}
+        
+        ${this._renderHandoffSection()}
+
+        ${this._renderNormalizationSection()}
+        
+        ${this._renderGlobalNegativeKeywordsSection()}
+        
+        ${this._renderLLMFallbackSection()}
+
         <div style="margin-top:16px; border:1px solid #1f2937; border-radius:12px; overflow:hidden;">
           <table style="width:100%; border-collapse:collapse;">
             <thead style="background:#0b1220;">
@@ -3303,6 +3355,410 @@ class Agent2Manager {
         </div>
       `
     );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // V4: HUMAN TONE SECTION (UI-owned empathy templates)
+  // ──────────────────────────────────────────────────────────────────────────
+  _renderEmpathyAndToneSection() {
+    const humanTone = this.config?.discovery?.humanTone || {};
+    const enabled = humanTone.enabled !== false;
+    const templates = humanTone.templates || {};
+    const serviceDownLines = Array.isArray(templates.serviceDown) ? templates.serviceDown : [];
+    const angryLines = Array.isArray(templates.angry) ? templates.angry : [];
+    const generalLines = Array.isArray(templates.general) ? templates.general : [];
+    
+    // Check if any templates are configured
+    const hasTemplates = serviceDownLines.length > 0 || angryLines.length > 0 || generalLines.length > 0;
+    
+    return `
+      <div style="margin-top:20px; padding:16px; background:#0b1220; border:1px solid ${hasTemplates ? '#1e3a5f' : '#f59e0b'}; border-radius:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">💜</span>
+            <label style="color:#a78bfa; font-size:14px; font-weight:600;">Human Tone</label>
+            <span style="font-size:10px; background:#1e3a5f; color:#818cf8; padding:2px 6px; border-radius:4px;">V4</span>
+            ${!hasTemplates ? '<span style="font-size:10px; background:#78350f; color:#fbbf24; padding:2px 6px; border-radius:4px; margin-left:4px;">NOT CONFIGURED</span>' : ''}
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-humantone-enabled" ${enabled ? 'checked' : ''} 
+              style="width:16px; height:16px; cursor:pointer;"/>
+            <span style="color:#94a3b8; font-size:12px;">Enabled</span>
+          </label>
+        </div>
+        
+        <p style="color:#6b7280; font-size:11px; margin-bottom:8px;">
+          UI-owned empathy templates. These are the ONLY empathy lines the AI can speak.
+        </p>
+        ${!hasTemplates ? `
+        <div style="margin-bottom:12px; padding:8px; background:#1c1917; border:1px solid #78350f; border-radius:6px;">
+          <p style="color:#fbbf24; font-size:11px; margin:0;">
+            <strong>⚠️ Required:</strong> Configure at least one template below. Without these, the AI will fall back to Playbook fallback or Emergency fallback.
+          </p>
+        </div>
+        ` : ''}
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:12px;">
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">
+              Service Down / Urgent Issue
+              <span style="color:#64748b; font-size:10px;">(aiAgentSettings.agent2.discovery.humanTone.templates.serviceDown[0])</span>
+            </label>
+            <textarea id="a2-humantone-serviceDown" rows="2"
+              style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
+              placeholder="(required) e.g., I hear you — no AC in this heat is miserable. I'm going to get this handled.">${this.escapeHtml(serviceDownLines[0] || '')}</textarea>
+          </div>
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">
+              Frustrated / Angry Caller
+              <span style="color:#64748b; font-size:10px;">(aiAgentSettings.agent2.discovery.humanTone.templates.angry[0])</span>
+            </label>
+            <textarea id="a2-humantone-angry" rows="2"
+              style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
+              placeholder="(optional) e.g., I get it — this is frustrating. I'm here with you and we'll fix this.">${this.escapeHtml(angryLines[0] || '')}</textarea>
+          </div>
+        </div>
+        
+        <div style="margin-top:12px; padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+          <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">
+            General Empathy (Default)
+            <span style="color:#64748b; font-size:10px;">(aiAgentSettings.agent2.discovery.humanTone.templates.general[0])</span>
+          </label>
+          <textarea id="a2-humantone-general" rows="1"
+            style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
+            placeholder="(required) e.g., Got it — I can help.">${this.escapeHtml(generalLines[0] || '')}</textarea>
+        </div>
+        
+        <div style="margin-top:12px; padding:10px; background:#052e16; border:1px solid #166534; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="color:#86efac; font-size:12px;">✓</span>
+            <span style="color:#86efac; font-size:11px; font-weight:500;">No-UI-No-Speak Enforced</span>
+          </div>
+          <p style="color:#6ee7b7; font-size:10px; margin-top:4px;">
+            Only text configured here can be spoken. The AI will NEVER say "It sounds like [caller's words]" or any hardcoded text.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // V4: INTENT PRIORITY GATE SECTION
+  // ──────────────────────────────────────────────────────────────────────────
+  _renderIntentPriorityGateSection() {
+    const intentGate = this.config?.discovery?.intentGate || {};
+    const enabled = intentGate.enabled !== false;
+    const emergencyFullDisqualify = intentGate.emergencyFullDisqualify !== false;
+    const disqualifiedCategories = Array.isArray(intentGate.disqualifiedCategories) 
+      ? intentGate.disqualifiedCategories 
+      : ['faq', 'info', 'sales', 'financing', 'warranty', 'maintenance_plan', 'system_age', 'lifespan', 'replacement', 'upgrade', 'new_system', 'general'];
+    
+    return `
+      <div style="margin-top:20px; padding:16px; background:#0b1220; border:1px solid #1e3a5f; border-radius:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">🚦</span>
+            <label style="color:#f97316; font-size:14px; font-weight:600;">Intent Priority Gate</label>
+            <span style="font-size:10px; background:#7c2d12; color:#fdba74; padding:2px 6px; border-radius:4px;">V4</span>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-intentgate-enabled" ${enabled ? 'checked' : ''} 
+              style="width:16px; height:16px; cursor:pointer;"/>
+            <span style="color:#94a3b8; font-size:12px;">Enabled</span>
+          </label>
+        </div>
+        
+        <p style="color:#6b7280; font-size:11px; margin-bottom:12px;">
+          Prevents FAQ/sales cards from hijacking service-down calls. When "not cooling" or "emergency" detected, FAQ cards are penalized or blocked.
+        </p>
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Card Categories to Penalize/Block</label>
+            <textarea id="a2-intentgate-categories" rows="2"
+              style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:11px;"
+              placeholder="faq, info, sales, financing, warranty, system_age">${this.escapeHtml(disqualifiedCategories.join(', '))}</textarea>
+            <div style="color:#64748b; font-size:10px; margin-top:4px;">Comma-separated. Cards with matching IDs/categories get penalized.</div>
+          </div>
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="a2-intentgate-emergencyDisqualify" ${emergencyFullDisqualify ? 'checked' : ''} 
+                  style="width:14px; height:14px; cursor:pointer;"/>
+                <span style="color:#e5e7eb; font-size:12px;">Fully disqualify FAQ cards on emergency</span>
+              </label>
+              <p style="color:#64748b; font-size:10px;">
+                When enabled, FAQ cards are completely blocked (not just penalized) when emergency keywords detected.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div style="margin-top:12px; padding:10px; background:#1c1917; border:1px solid #78350f; border-radius:8px;">
+          <div style="display:flex; align-items:start; gap:8px;">
+            <span style="font-size:14px;">💡</span>
+            <div>
+              <p style="color:#fbbf24; font-size:11px; font-weight:500; margin-bottom:2px;">Why this matters</p>
+              <p style="color:#a3a3a3; font-size:10px;">
+                Without this gate, a caller saying "I'm a longtime customer, my AC has problems" might match a "system age/lifespan" FAQ card instead of routing to service.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // V4: DISCOVERY HANDOFF SECTION (UI-owned consent question)
+  // ──────────────────────────────────────────────────────────────────────────
+  _renderHandoffSection() {
+    const discoveryHandoff = this.config?.discovery?.discoveryHandoff || {};
+    const consentQuestion = discoveryHandoff.consentQuestion || '';
+    const forbidBookingTimes = discoveryHandoff.forbidBookingTimes !== false;
+    const hasConsent = !!consentQuestion.trim();
+    
+    return `
+      <div style="margin-top:20px; padding:16px; background:#0b1220; border:1px solid ${hasConsent ? '#1e3a5f' : '#f59e0b'}; border-radius:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">🤝</span>
+            <label style="color:#22d3ee; font-size:14px; font-weight:600;">Discovery Handoff</label>
+            <span style="font-size:10px; background:#164e63; color:#67e8f9; padding:2px 6px; border-radius:4px;">V4</span>
+            ${!hasConsent ? '<span style="font-size:10px; background:#78350f; color:#fbbf24; padding:2px 6px; border-radius:4px; margin-left:4px;">NOT CONFIGURED</span>' : ''}
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-discoveryhandoff-forbidTimes" ${forbidBookingTimes ? 'checked' : ''} 
+              style="width:16px; height:16px; cursor:pointer;"/>
+            <span style="color:#94a3b8; font-size:12px;">Forbid Booking Times</span>
+          </label>
+        </div>
+        
+        <p style="color:#6b7280; font-size:11px; margin-bottom:8px;">
+          UI-owned consent question. Discovery asks for yes/no ONLY — booking times are a separate lane.
+        </p>
+        ${!hasConsent ? `
+        <div style="margin-bottom:12px; padding:8px; background:#1c1917; border:1px solid #78350f; border-radius:6px;">
+          <p style="color:#fbbf24; font-size:11px; margin:0;">
+            <strong>⚠️ Required:</strong> Configure a consent question below. Without this, no handoff question will be asked after empathy.
+          </p>
+        </div>
+        ` : ''}
+        
+        <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+          <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">
+            Consent Question (Yes/No only)
+            <span style="color:#64748b; font-size:10px;">(aiAgentSettings.agent2.discovery.discoveryHandoff.consentQuestion)</span>
+          </label>
+          <textarea id="a2-discoveryhandoff-consentQuestion" rows="2"
+            style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
+            placeholder="(required) e.g., Do you want us to send a technician out to take a look?">${this.escapeHtml(consentQuestion)}</textarea>
+        </div>
+        
+        <div style="margin-top:12px; padding:10px; background:#052e16; border:1px solid #166534; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="color:#86efac; font-size:12px;">✓</span>
+            <span style="color:#86efac; font-size:11px; font-weight:500;">No-UI-No-Speak Enforced</span>
+          </div>
+          <p style="color:#6ee7b7; font-size:10px; margin-top:4px;">
+            Only this question can be asked during handoff. No hardcoded "morning or afternoon" or time slot offers.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // V4: NORMALIZATION SECTION (Filler/greeting cleanup for matching)
+  // ──────────────────────────────────────────────────────────────────────────
+  _renderNormalizationSection() {
+    const normalization = this.config?.discovery?.normalization || {};
+    const enabled = normalization.enabled !== false;
+    const fillerWords = Array.isArray(normalization.fillerWords) 
+      ? normalization.fillerWords 
+      : ['uh', 'um', 'like', 'you know', 'kinda', 'sorta', 'basically'];
+    const stripGreetings = Array.isArray(normalization.stripGreetings)
+      ? normalization.stripGreetings
+      : ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening'];
+    const collapseWhitespace = normalization.collapseWhitespace !== false;
+    const preserveTranscript = normalization.preserveTranscript !== false;
+    
+    return `
+      <div style="margin-top:20px; padding:16px; background:#0b1220; border:1px solid #1e3a5f; border-radius:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">🧹</span>
+            <label style="color:#8b5cf6; font-size:14px; font-weight:600;">Normalization</label>
+            <span style="font-size:10px; background:#4c1d95; color:#c4b5fd; padding:2px 6px; border-radius:4px;">V4</span>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-normalization-enabled" ${enabled ? 'checked' : ''} 
+              style="width:16px; height:16px; cursor:pointer;"/>
+            <span style="color:#94a3b8; font-size:12px;">Enabled</span>
+          </label>
+        </div>
+        
+        <p style="color:#6b7280; font-size:11px; margin-bottom:12px;">
+          Cleans caller input BEFORE trigger card matching. Removes filler words and greetings for more accurate matching. Preserves raw transcript for review.
+        </p>
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Filler Words to Strip</label>
+            <textarea id="a2-normalization-fillers" rows="2"
+              style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:11px;"
+              placeholder="uh, um, like, you know">${this.escapeHtml(fillerWords.join(', '))}</textarea>
+            <div style="color:#64748b; font-size:10px; margin-top:4px;">Comma-separated. These words are removed before matching.</div>
+          </div>
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Greetings to Strip</label>
+            <textarea id="a2-normalization-greetings" rows="2"
+              style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:11px;"
+              placeholder="hi, hello, hey, good morning">${this.escapeHtml(stripGreetings.join(', '))}</textarea>
+            <div style="color:#64748b; font-size:10px; margin-top:4px;">Comma-separated. These greetings are removed from start of input.</div>
+          </div>
+        </div>
+        
+        <div style="display:flex; gap:16px; margin-top:12px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-normalization-collapse" ${collapseWhitespace ? 'checked' : ''} 
+              style="width:14px; height:14px; cursor:pointer;"/>
+            <span style="color:#94a3b8; font-size:12px;">Collapse whitespace</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-normalization-preserve" ${preserveTranscript ? 'checked' : ''} 
+              style="width:14px; height:14px; cursor:pointer;"/>
+            <span style="color:#94a3b8; font-size:12px;">Preserve raw transcript</span>
+          </label>
+        </div>
+        
+        <div style="margin-top:12px; padding:10px; background:#1e1b4b; border:1px solid #4338ca; border-radius:8px;">
+          <p style="color:#a5b4fc; font-size:10px; margin:0;">
+            <strong>Note:</strong> Normalization improves trigger card accuracy. Example: "Um, hi, my AC like isn't cooling" → "my AC isn't cooling"
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // V4: GLOBAL NEGATIVE KEYWORDS SECTION
+  // ──────────────────────────────────────────────────────────────────────────
+  _renderGlobalNegativeKeywordsSection() {
+    const globalNegativeKeywords = Array.isArray(this.agent2Config?.globalNegativeKeywords)
+      ? this.agent2Config.globalNegativeKeywords
+      : [];
+    
+    return `
+      <div style="margin-top:20px; padding:16px; background:#0b1220; border:1px solid #1e3a5f; border-radius:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+          <span style="font-size:18px;">🚫</span>
+          <label style="color:#ef4444; font-size:14px; font-weight:600;">Global Negative Keywords</label>
+          <span style="font-size:10px; background:#7f1d1d; color:#fca5a5; padding:2px 6px; border-radius:4px;">V4</span>
+        </div>
+        
+        <p style="color:#6b7280; font-size:11px; margin-bottom:12px;">
+          These keywords disqualify ALL trigger cards when detected. Use for phrases that should never match any card (e.g., job seekers, spam).
+        </p>
+        
+        <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+          <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">
+            Global Negative Keywords (one per line)
+            <span style="color:#64748b; font-size:10px;">(aiAgentSettings.agent2.globalNegativeKeywords)</span>
+          </label>
+          <textarea id="a2-global-negative-keywords" rows="4"
+            style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:11px;"
+            placeholder="job application&#10;resume&#10;career&#10;employment">${this.escapeHtml(globalNegativeKeywords.join('\n'))}</textarea>
+          <div style="color:#64748b; font-size:10px; margin-top:4px;">
+            If any of these phrases appear in caller input, no trigger cards will match. Per-card negative keywords are separate.
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // V4: LLM FALLBACK SETTINGS SECTION
+  // ──────────────────────────────────────────────────────────────────────────
+  _renderLLMFallbackSection() {
+    const llmFallback = this.config?.discovery?.llmFallback || {};
+    const enabled = llmFallback.enabled === true;
+    const mode = llmFallback.mode || 'assist_only';
+    const maxTurnsPerCall = llmFallback.maxTurnsPerCall || 2;
+    const blockedIfTriggerMatched = llmFallback.blockedIfTriggerMatched !== false;
+    const blockedIfPendingQuestion = llmFallback.blockedIfPendingQuestion !== false;
+    const forbidBookingTimes = llmFallback.forbidBookingTimes !== false;
+    
+    return `
+      <div style="margin-top:20px; padding:16px; background:#0b1220; border:1px solid ${enabled ? '#f59e0b' : '#1e3a5f'}; border-radius:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">🤖</span>
+            <label style="color:#fbbf24; font-size:14px; font-weight:600;">LLM Fallback Settings</label>
+            <span style="font-size:10px; background:#78350f; color:#fcd34d; padding:2px 6px; border-radius:4px;">V4</span>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="a2-llmfallback-enabled" ${enabled ? 'checked' : ''} 
+              style="width:16px; height:16px; cursor:pointer;"/>
+            <span style="color:#94a3b8; font-size:12px;">Enabled</span>
+          </label>
+        </div>
+        
+        <p style="color:#6b7280; font-size:11px; margin-bottom:12px;">
+          Controls when/how LLM can assist. LLM NEVER "takes over the mic" — it can only produce Sentence 1 (empathy). Sentence 2 is ALWAYS overridden by UI's discoveryHandoff.consentQuestion.
+        </p>
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Mode</label>
+            <select id="a2-llmfallback-mode"
+              style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; font-size:12px;">
+              <option value="disabled" ${mode === 'disabled' ? 'selected' : ''}>Disabled (deterministic only)</option>
+              <option value="assist_only" ${mode === 'assist_only' ? 'selected' : ''}>Assist Only (empathy sentence)</option>
+              <option value="full" ${mode === 'full' ? 'selected' : ''}>Full (not recommended)</option>
+            </select>
+            <div style="color:#64748b; font-size:10px; margin-top:4px;">"Assist Only" = LLM can provide empathy, but UI controls the question.</div>
+          </div>
+          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Max LLM Turns Per Call</label>
+            <input id="a2-llmfallback-maxTurns" type="number" min="0" max="10" value="${maxTurnsPerCall}"
+              style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; font-size:12px;"/>
+            <div style="color:#64748b; font-size:10px; margin-top:4px;">Limit how many times LLM can speak in a single call.</div>
+          </div>
+        </div>
+        
+        <div style="margin-top:12px; padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
+          <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:8px;">LLM is Blocked When:</label>
+          <div style="display:flex; flex-wrap:wrap; gap:12px;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="a2-llmfallback-blockedTrigger" ${blockedIfTriggerMatched ? 'checked' : ''} 
+                style="width:14px; height:14px;"/>
+              <span style="color:#94a3b8; font-size:11px;">Trigger card matched</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="a2-llmfallback-blockedPending" ${blockedIfPendingQuestion ? 'checked' : ''} 
+                style="width:14px; height:14px;"/>
+              <span style="color:#94a3b8; font-size:11px;">Pending question active</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="a2-llmfallback-forbidTimes" ${forbidBookingTimes ? 'checked' : ''} 
+                style="width:14px; height:14px;"/>
+              <span style="color:#94a3b8; font-size:11px;">Forbid booking times</span>
+            </label>
+          </div>
+        </div>
+        
+        <div style="margin-top:12px; padding:10px; background:#052e16; border:1px solid #166534; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="color:#86efac; font-size:12px;">✓</span>
+            <span style="color:#86efac; font-size:11px; font-weight:500;">LLM Cannot Steer Booking</span>
+          </div>
+          <p style="color:#6ee7b7; font-size:10px; margin-top:4px;">
+            Final combined output is always validated. LLM sentence is overridden by UI's discoveryHandoff.consentQuestion. Caller stays informed + in control.
+          </p>
+        </div>
+      </div>
+    `;
   }
 
   renderRuleModal(idx) {
@@ -6134,7 +6590,102 @@ class Agent2Manager {
     discovery.playbook.fallback.pendingNoResponse = (container.querySelector('#a2-fallback-pendingNoResponse')?.value || '').trim();
     discovery.playbook.fallback.pendingReprompt = (container.querySelector('#a2-fallback-pendingReprompt')?.value || '').trim();
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // V4: HUMAN TONE (UI-owned empathy templates)
+    // NO DEFAULTS - empty arrays if not configured (No-UI-No-Speak)
+    // ═══════════════════════════════════════════════════════════════════════
+    discovery.humanTone = discovery.humanTone || {};
+    discovery.humanTone.enabled = container.querySelector('#a2-humantone-enabled')?.checked ?? true;
+    discovery.humanTone.templates = discovery.humanTone.templates || {};
+    
+    const serviceDownLine = (container.querySelector('#a2-humantone-serviceDown')?.value || '').trim();
+    const angryLine = (container.querySelector('#a2-humantone-angry')?.value || '').trim();
+    const generalLine = (container.querySelector('#a2-humantone-general')?.value || '').trim();
+    
+    // NO DEFAULTS - if not configured, array stays empty (enforces UI requirement)
+    discovery.humanTone.templates.serviceDown = serviceDownLine ? [serviceDownLine] : [];
+    discovery.humanTone.templates.angry = angryLine ? [angryLine] : [];
+    discovery.humanTone.templates.general = generalLine ? [generalLine] : [];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V4: INTENT PRIORITY GATE
+    // ═══════════════════════════════════════════════════════════════════════
+    discovery.intentGate = discovery.intentGate || {};
+    discovery.intentGate.enabled = container.querySelector('#a2-intentgate-enabled')?.checked ?? true;
+    discovery.intentGate.emergencyFullDisqualify = container.querySelector('#a2-intentgate-emergencyDisqualify')?.checked ?? true;
+    discovery.intentGate.basePenalty = 50;
+    
+    const categoriesRaw = (container.querySelector('#a2-intentgate-categories')?.value || '').trim();
+    discovery.intentGate.disqualifiedCategories = categoriesRaw 
+      ? categoriesRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+      : ['faq', 'info', 'sales', 'financing', 'warranty', 'maintenance_plan', 'system_age', 'lifespan', 'replacement', 'upgrade', 'new_system', 'general'];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V4: DISCOVERY HANDOFF (UI-owned consent question)
+    // NO DEFAULT - empty string if not configured (No-UI-No-Speak)
+    // ═══════════════════════════════════════════════════════════════════════
+    discovery.discoveryHandoff = discovery.discoveryHandoff || {};
+    discovery.discoveryHandoff.enabled = true;
+    discovery.discoveryHandoff.consentQuestion = (container.querySelector('#a2-discoveryhandoff-consentQuestion')?.value || '').trim();
+    // NO DEFAULT for consentQuestion - must be configured in UI
+    discovery.discoveryHandoff.forbidBookingTimes = container.querySelector('#a2-discoveryhandoff-forbidTimes')?.checked ?? true;
+    discovery.discoveryHandoff.yesNext = 'BOOKING_LANE';
+    discovery.discoveryHandoff.noNext = 'MESSAGE_TAKING';
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V4: CALL REASON CAPTURE (uses default sanitizer settings)
+    // ═══════════════════════════════════════════════════════════════════════
+    discovery.callReasonCapture = discovery.callReasonCapture || {};
+    discovery.callReasonCapture.enabled = true;
+    discovery.callReasonCapture.mode = 'summary_label';
+    discovery.callReasonCapture.maxWords = 6;
+    discovery.callReasonCapture.stripLeadingPunctuation = true;
+    discovery.callReasonCapture.stripGreetingPhrases = true;
+    discovery.callReasonCapture.stripNamePhrases = true;
+    discovery.callReasonCapture.stripFillerWords = true;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V4: NORMALIZATION (filler/greeting cleanup for matching)
+    // ═══════════════════════════════════════════════════════════════════════
+    discovery.normalization = discovery.normalization || {};
+    discovery.normalization.enabled = container.querySelector('#a2-normalization-enabled')?.checked ?? true;
+    discovery.normalization.applyTo = ['trigger_matching', 'slot_extraction'];
+    discovery.normalization.preserveTranscript = container.querySelector('#a2-normalization-preserve')?.checked ?? true;
+    discovery.normalization.collapseWhitespace = container.querySelector('#a2-normalization-collapse')?.checked ?? true;
+    
+    const fillersRaw = (container.querySelector('#a2-normalization-fillers')?.value || '').trim();
+    discovery.normalization.fillerWords = fillersRaw 
+      ? fillersRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+      : ['uh', 'um', 'like', 'you know', 'kinda', 'sorta', 'basically'];
+    
+    const greetingsRaw = (container.querySelector('#a2-normalization-greetings')?.value || '').trim();
+    discovery.normalization.stripGreetings = greetingsRaw
+      ? greetingsRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+      : ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening'];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V4: LLM FALLBACK SETTINGS
+    // ═══════════════════════════════════════════════════════════════════════
+    discovery.llmFallback = discovery.llmFallback || {};
+    discovery.llmFallback.enabled = container.querySelector('#a2-llmfallback-enabled')?.checked ?? false;
+    discovery.llmFallback.mode = container.querySelector('#a2-llmfallback-mode')?.value || 'assist_only';
+    discovery.llmFallback.onlyWhenAllElseFails = true;
+    discovery.llmFallback.maxTurnsPerCall = Number(container.querySelector('#a2-llmfallback-maxTurns')?.value) || 2;
+    discovery.llmFallback.blockedIfTriggerMatched = container.querySelector('#a2-llmfallback-blockedTrigger')?.checked ?? true;
+    discovery.llmFallback.blockedIfPendingQuestion = container.querySelector('#a2-llmfallback-blockedPending')?.checked ?? true;
+    discovery.llmFallback.blockedIfCapturedReasonFlow = true;
+    discovery.llmFallback.blockedIfBookingLocked = true;
+    discovery.llmFallback.forbidBookingTimes = container.querySelector('#a2-llmfallback-forbidTimes')?.checked ?? true;
+
     cfg.discovery = discovery;
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // V4: GLOBAL NEGATIVE KEYWORDS (at agent2 root level)
+    // ═══════════════════════════════════════════════════════════════════════
+    const globalNegRaw = (container.querySelector('#a2-global-negative-keywords')?.value || '').trim();
+    cfg.globalNegativeKeywords = globalNegRaw
+      ? globalNegRaw.split('\n').map(s => s.trim().toLowerCase()).filter(Boolean)
+      : [];
     
     // V126: Emergency Fallback Line - REQUIRED for No-UI-No-Speak Guard
     cfg.emergencyFallbackLine = cfg.emergencyFallbackLine || {};
@@ -6163,7 +6714,13 @@ class Agent2Manager {
         'clarifierSystem',
         'playbook',
         'triggerCards',
-        'fallbackResponses'
+        'fallbackResponses',
+        'emergencyFallbackLine', // V4: Last resort (required)
+        'humanTone',             // V4: UI-owned empathy templates
+        'intentPriorityGate',    // V4: FAQ hijack prevention
+        'discoveryHandoff',      // V4: UI-owned consent question
+        'callReasonCapture',     // V4: Reason sanitization
+        'normalization'          // V4: Filler/greeting strip
       ],
       greetings: [
         'callStartGreeting',
