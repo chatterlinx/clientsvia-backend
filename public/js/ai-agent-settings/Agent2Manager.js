@@ -298,14 +298,14 @@ class Agent2Manager {
               ${isConfigTab ? 'Clean, isolated config surface. Discovery is built and locked before Booking.' : isGreetingsTab ? 'Agent 2.0 owns greetings when enabled. Legacy greeting rules are ignored.' : isLLMFallbackTab ? 'LLM hybrid assist for complex questions. Deterministic first, LLM only when needed.' : 'Enterprise call review console. Click a call to see details, transcript, and decision trail.'}
             </div>
           </div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap; ${isCallReviewTab || isLLMFallbackTab ? 'display:none;' : ''}">
-            <button id="a2-export-json" style="padding:8px 14px; background:${this.isDirty ? '#f59e0b' : '#1f6feb'}; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;" title="Download COMPLETE runtime wiring report including Agent 2.0 + all runtime dependencies${this.isDirty ? ' (includes unsaved changes)' : ''}">
+          <div style="display:flex; gap:10px; flex-wrap:wrap; ${isCallReviewTab ? 'display:none;' : ''}">
+            <button id="a2-export-json" style="padding:8px 14px; background:${this.isDirty ? '#f59e0b' : '#1f6feb'}; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; ${isLLMFallbackTab ? 'display:none;' : ''}" title="Download COMPLETE runtime wiring report including Agent 2.0 + all runtime dependencies${this.isDirty ? ' (includes unsaved changes)' : ''}">
               📥 Complete Wiring Report
             </button>
-            <button id="a2-export-agent2-only" style="padding:8px 14px; background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px; cursor:pointer; font-size:0.85rem;" title="Export Agent 2.0 namespace only (dev/debug)">
+            <button id="a2-export-agent2-only" style="padding:8px 14px; background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px; cursor:pointer; font-size:0.85rem; ${isLLMFallbackTab ? 'display:none;' : ''}" title="Export Agent 2.0 namespace only (dev/debug)">
               Agent2 Only
             </button>
-            <button id="a2-reset" style="padding:8px 14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer;">
+            <button id="a2-reset" style="padding:8px 14px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:8px; cursor:pointer; ${isLLMFallbackTab ? 'display:none;' : ''}">
               Reset
             </button>
             <button id="a2-save" style="padding:8px 14px; background:#238636; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:700;">
