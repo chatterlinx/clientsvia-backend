@@ -1607,7 +1607,7 @@ class Agent2Manager {
     
     // Key events for debugging
     const keyEvents = events.filter(e => 
-      ['CALL_START', 'A2_GATE', 'A2_DISCOVERY_GATE', 'A2_PATH_SELECTED', 'A2_RESPONSE_READY', 'A2_TRIGGER_EVAL', 'A2_SCENARIO_EVAL', 'A2_MIC_OWNER_PROOF', 'GREETING_EVALUATED', 'GREETING_INTERCEPTED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'SLOTS_EXTRACTED', 'CALL_END'].includes(e.type)
+      ['CALL_START', 'A2_GATE', 'A2_DISCOVERY_GATE', 'A2_PATH_SELECTED', 'A2_RESPONSE_READY', 'A2_TRIGGER_EVAL', 'A2_SCENARIO_EVAL', 'A2_MIC_OWNER_PROOF', 'GREETING_EVALUATED', 'GREETING_INTERCEPTED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'SLOTS_EXTRACTED', 'SPEECH_SOURCE_SELECTED', 'SPOKEN_TEXT_UNMAPPED_BLOCKED', 'CALL_END'].includes(e.type)
     );
 
     container.innerHTML = `
@@ -1781,6 +1781,41 @@ class Agent2Manager {
               `;
             }
             
+            // V4: Build speech source attribution line for agent responses
+            let sourceAttrHtml = '';
+            if (t.role === 'agent' && t.speechSource) {
+              const src = t.speechSource;
+              const sourceLabel = this._getSpeechSourceLabel(src.sourceId);
+              const isUnmapped = src.uiPath === 'UNMAPPED' || src.uiPath?.includes('UNMAPPED');
+              const sourceColor = isUnmapped ? '#f87171' : '#6ee7b7';
+              const sourceIcon = isUnmapped ? '⚠️' : '📍';
+              
+              sourceAttrHtml = `
+                <div style="margin-top:8px; padding:8px; background:${isUnmapped ? '#450a0a' : '#0d1117'}; border:1px solid ${isUnmapped ? '#991b1b' : '#30363d'}; border-radius:6px;">
+                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                    <span style="font-size:0.7rem;">${sourceIcon}</span>
+                    <span style="color:${sourceColor}; font-size:0.7rem; font-weight:600;">${sourceLabel}</span>
+                    ${isUnmapped ? '<span style="background:#991b1b; color:#fecaca; padding:1px 4px; border-radius:3px; font-size:0.6rem;">HARDCODED</span>' : ''}
+                  </div>
+                  <div style="color:#6b7280; font-size:0.65rem; font-family:monospace; word-break:break-all;">
+                    ${this.escapeHtml(src.uiPath || 'unknown')}
+                  </div>
+                  ${src.cardId ? `<div style="color:#818cf8; font-size:0.65rem; margin-top:2px;">Card: ${this.escapeHtml(src.cardId)}</div>` : ''}
+                  ${src.note ? `<div style="color:#9ca3af; font-size:0.65rem; margin-top:2px; font-style:italic;">${this.escapeHtml(src.note)}</div>` : ''}
+                </div>
+              `;
+            } else if (t.role === 'agent' && !t.speechSource) {
+              // No source info - likely legacy or missing event
+              sourceAttrHtml = `
+                <div style="margin-top:8px; padding:6px 8px; background:#1c1917; border:1px solid #78350f; border-radius:6px;">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:0.7rem;">❓</span>
+                    <span style="color:#fbbf24; font-size:0.65rem;">Source unknown (no SPEECH_SOURCE_SELECTED event)</span>
+                  </div>
+                </div>
+              `;
+            }
+            
             return `
             <div style="margin-bottom:10px; padding:10px; background:${bgColor}; border:1px solid ${borderColor}; border-radius:8px;">
               <div style="font-size:0.7rem; color:${labelColor}; margin-bottom:4px; font-weight:600; display:flex; align-items:center;">
@@ -1790,6 +1825,7 @@ class Agent2Manager {
               ${t.fallbackReason ? `<div style="color:#fbbf24; font-size:0.7rem; margin-top:6px;">Reason: ${this.escapeHtml(t.fallbackReason)}</div>` : ''}
               ${t.hadAudioIssue ? `<div style="color:#fb923c; font-size:0.7rem; margin-top:6px;">⚠️ Audio issue: ${this.escapeHtml(t.audioIssueReason || 'file not found')} - May not have been played</div>` : ''}
               ${comparisonHtml}
+              ${sourceAttrHtml}
             </div>
           `}).join('') : `
             <div style="color:#6e7681; text-align:center; padding:20px;">No transcript available</div>
@@ -1863,7 +1899,24 @@ class Agent2Manager {
     // Step 1: Add greeting as Turn 0 agent response
     const greeting = events.find(e => e.type === 'GREETING_SENT');
     if (greeting?.data?.text) {
-      transcript.push({ role: 'agent', text: greeting.data.text, turn: 0, order: 0 });
+      // V4: Look for SPEECH_SOURCE_SELECTED at turn 0 for greeting source
+      const greetingSource = events.find(e => e.type === 'SPEECH_SOURCE_SELECTED' && e.turn === 0);
+      transcript.push({ 
+        role: 'agent', 
+        text: greeting.data.text, 
+        turn: 0, 
+        order: 0,
+        speechSource: greetingSource ? {
+          sourceId: greetingSource.data?.sourceId || 'agent2.greetings.callStart',
+          uiPath: greetingSource.data?.uiPath || 'aiAgentSettings.agent2.greetings.callStart.text',
+          uiTab: greetingSource.data?.uiTab || 'greetings',
+          note: greetingSource.data?.note || null
+        } : {
+          sourceId: 'agent2.greetings.callStart',
+          uiPath: 'aiAgentSettings.agent2.greetings.callStart.text',
+          uiTab: 'greetings'
+        }
+      });
     }
     
     // Step 2: Collect all caller inputs and agent responses with timestamps
@@ -1873,6 +1926,9 @@ class Agent2Manager {
     // Track audio issues per turn (for detecting delivery failures)
     let audioPreflightFailed = null;
     let fellBackToTts = null;
+    
+    // V4: Track speech sources per turn (for source attribution)
+    let speechSources = null;
     
     events.forEach(e => {
       const t = e.t || 0;
@@ -1935,6 +1991,20 @@ class Agent2Manager {
           audioIssueReason: hadAudioIssue ? 
             (audioPreflightFailed?.[e.turn]?.reason || fellBackToTts?.[e.turn]?.reason) : null
         });
+      }
+      
+      // V4: Capture SPEECH_SOURCE_SELECTED for source attribution
+      if (e.type === 'SPEECH_SOURCE_SELECTED') {
+        if (!speechSources) speechSources = {};
+        speechSources[e.turn] = {
+          sourceId: e.data?.sourceId || 'unknown',
+          uiPath: e.data?.uiPath || 'UNMAPPED',
+          uiTab: e.data?.uiTab || null,
+          cardId: e.data?.cardId || null,
+          configPath: e.data?.configPath || null,
+          note: e.data?.note || null,
+          t
+        };
       }
       if (e.type === 'ROUTE_ERROR') {
         const errorText = `[ERROR] ${e.data?.error || 'Unknown error occurred'}`;
@@ -2042,6 +2112,11 @@ class Agent2Manager {
         // Only planned available (TWIML_SENT not logged for this turn)
         entry.text = plannedResp.text;
         entry.onlyPlanned = true; // Mark that we only have planned, not confirmed actual
+      }
+      
+      // V4: Attach speech source info for this turn
+      if (speechSources && speechSources[turn]) {
+        entry.speechSource = speechSources[turn];
       }
       
       if (entry.text) {
@@ -2529,9 +2604,67 @@ class Agent2Manager {
       'TWIML_SENT': '#6ee7b7',
       'INPUT_TEXT_FINALIZED': '#93c5fd',
       'GREETING_SENT': '#c4b5fd',
-      'SLOTS_EXTRACTED': '#a5b4fc'
+      'SLOTS_EXTRACTED': '#a5b4fc',
+      'SPEECH_SOURCE_SELECTED': '#86efac',
+      'SPOKEN_TEXT_UNMAPPED_BLOCKED': '#f87171'
     };
     return colors[type] || '#6e7681';
+  }
+
+  // V4: Get human-readable label for speech source
+  _getSpeechSourceLabel(sourceId) {
+    if (!sourceId) return 'Unknown Source';
+    
+    const labels = {
+      // Greeting sources
+      'agent2.greetings.callStart': '📞 Greeting → Call Start',
+      'agent2.greetings.interceptor': '👋 Greeting → Interceptor',
+      
+      // Discovery sources
+      'agent2.discovery.triggerCard': '🎯 Trigger Card',
+      'agent2.discovery.humanTone': '💜 Human Tone',
+      'agent2.discovery.discoveryHandoff': '🤝 Discovery Handoff',
+      'agent2.discovery.clarifier': '❓ Clarifier',
+      'agent2.discovery.clarifiers': '❓ Clarifier',
+      'agent2.discovery.vocabulary': '📖 Vocabulary',
+      'agent2.discovery.robotChallenge': '🤖 Robot Challenge',
+      'agent2.discovery.fallback': '⬇️ Fallback',
+      'agent2.discovery.fallback.noMatchAnswer': '⬇️ Fallback → No Match',
+      'agent2.discovery.fallback.noMatchWhenReasonCaptured': '⬇️ Fallback → Reason Captured',
+      'agent2.discovery.fallback.pendingComplexFollowup': '⬇️ Fallback → Complex Followup',
+      
+      // Scenario engine
+      'scenarioEngine.fallback': '🎭 Scenario Engine',
+      
+      // LLM sources
+      'agent2.llmFallback': '🤖 LLM Fallback',
+      'llm.fallback': '🤖 LLM Fallback',
+      
+      // Emergency
+      'agent2.emergencyFallback': '🚨 Emergency Fallback',
+      
+      // Legacy/unknown
+      'legacy': '⚠️ Legacy System',
+      'unknown': '❓ Unknown'
+    };
+    
+    // Check for exact match first
+    if (labels[sourceId]) return labels[sourceId];
+    
+    // Check for partial matches (e.g., "agent2.discovery.triggerCard[ac-repair]")
+    for (const [key, label] of Object.entries(labels)) {
+      if (sourceId.startsWith(key)) {
+        // Extract any ID in brackets
+        const match = sourceId.match(/\[([^\]]+)\]/);
+        if (match) {
+          return `${label} [${match[1]}]`;
+        }
+        return label;
+      }
+    }
+    
+    // Fallback: clean up the sourceId for display
+    return sourceId.replace(/^agent2\./, '').replace(/\./g, ' → ');
   }
 
   attachCallModalHandlers(call, events, transcript) {
