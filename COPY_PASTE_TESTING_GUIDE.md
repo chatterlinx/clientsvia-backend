@@ -215,6 +215,26 @@ TRUTH LINE       = 0
 
 **Paste if FAIL:** Actual count + screenshot
 
+### Check C: Full-Text Duplication Scan (Stronger Check)
+
+**Run in DevTools Console with modal open:**
+
+```javascript
+(() => {
+  const txt = document.body.innerText.toUpperCase();
+  const hasSpeakProv = txt.includes("SPEAK PROVENANCE");
+  const hasTruthLine = txt.includes("TRUTH LINE");
+  console.log({ hasSpeakProv, hasTruthLine });
+  return { hasSpeakProv, hasTruthLine };
+})();
+```
+
+**Expected:** `{ hasSpeakProv: false, hasTruthLine: false }`
+
+**FAIL:** If either is true = old section text still present somewhere
+
+**Paste if FAIL:** `true` result + screenshot showing where text appears
+
 ---
 
 ## 4) MODAL OPEN TIME (Performance Number)
