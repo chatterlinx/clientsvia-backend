@@ -1763,13 +1763,13 @@ class Agent2Manager {
 
   renderCallDetailModal() {
     return `
-      <div id="a2-call-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; overflow:auto;">
-        <div style="max-width:900px; margin:40px auto; background:#0d1117; border:1px solid #30363d; border-radius:16px; overflow:hidden;">
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:#161b22; border-bottom:1px solid #30363d;">
+      <div id="a2-call-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9999; overflow:auto;">
+        <div style="width:95%; max-width:1800px; height:95vh; margin:2.5vh auto; background:#0d1117; border:1px solid #30363d; border-radius:16px; overflow:hidden; display:flex; flex-direction:column;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; background:#161b22; border-bottom:1px solid #30363d; flex-shrink:0;">
             <div style="font-weight:700; color:#e5e7eb; font-size:1.1rem;">Call Details</div>
             <button id="a2-call-modal-close" style="background:none; border:none; color:#8b949e; font-size:1.5rem; cursor:pointer; padding:4px 8px;">&times;</button>
           </div>
-          <div id="a2-call-modal-content" style="padding:20px; max-height:70vh; overflow:auto;">
+          <div id="a2-call-modal-content" style="padding:20px; overflow:auto; flex:1;">
             <!-- Populated dynamically -->
           </div>
         </div>
@@ -1945,157 +1945,58 @@ class Agent2Manager {
         ${this.renderProblemsDetected(problems)}
       </div>
 
-      <!-- SPEAK PROVENANCE (What spoke + where it came from) -->
+      <!-- TRANSCRIPT (Enhanced with Provenance + Turn Truth Line) -->
       <div style="background:#0b1220; border:1px solid #22d3ee; border-radius:12px; padding:16px; margin-bottom:16px;">
         <div style="color:#22d3ee; font-size:0.8rem; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-          <span>🎯</span> SPEAK PROVENANCE (WHO SPOKE & WHY)
+          <span>📋</span> TRANSCRIPT
         </div>
-        <div style="font-size:0.75rem; color:#6e7681; margin-bottom:8px;">
-          Every spoken line is traced to its UI source. <span style="color:#f43f5e;">Red = BLOCKED/UNMAPPED</span>
+        <div style="font-size:0.75rem; color:#6e7681; margin-bottom:12px;">
+          Complete call conversation with full attribution. 
+          <span style="color:#4ade80;">Green = UI-owned</span> · 
+          <span style="color:#fbbf24;">Yellow = Fallback</span> · 
+          <span style="color:#f43f5e;">Red = Blocked/Error</span> · 
+          <span style="color:#60a5fa;">Blue = Caller</span>
         </div>
-        ${this.renderSpeakProvenance(events)}
-      </div>
-
-      <!-- TRUTH LINE (Turn-by-turn mic owner + path) -->
-      <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:16px;">
-        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:10px;">TURN-BY-TURN TRUTH LINE</div>
-        <div style="font-size:0.75rem; color:#6e7681; margin-bottom:8px;">
-          <span style="color:#4ade80;">● AGENT2</span> · 
-          <span style="color:#fbbf24;">● GREETING</span> · 
-          <span style="color:#f43f5e;">● LEGACY/OTHER</span>
+        <div id="a2-transcript-container" style="max-height:600px; overflow:auto;">
+          ${this.renderEnhancedTranscript(transcript, events, turnSummaries)}
         </div>
-        ${this.renderTruthLine(turnSummaries)}
-      </div>
-
-      <!-- TRANSCRIPT -->
-      <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px; margin-bottom:16px;">
-        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:12px;">TRANSCRIPT</div>
-        <div id="a2-transcript-container" style="max-height:250px; overflow:auto;">
-          ${transcript.length > 0 ? transcript.map(t => {
-            // Determine styling based on role and error/fallback status
-            let bgColor, borderColor, labelColor, icon, statusBadge = '';
-            
-            if (t.role === 'caller') {
-              bgColor = '#1a1f2e';
-              borderColor = '#30363d';
-              labelColor = '#60a5fa';
-              icon = '📞';
-            } else if (t.isError) {
-              // Error - red styling
-              bgColor = '#450a0a';
-              borderColor = '#991b1b';
-              labelColor = '#f87171';
-              icon = '❌';
-              statusBadge = '<span style="background:#991b1b; color:#fecaca; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">ERROR</span>';
-            } else if (t.isFallback) {
-              // Fallback - yellow styling
-              bgColor = '#422006';
-              borderColor = '#92400e';
-              labelColor = '#fbbf24';
-              icon = '⚠️';
-              statusBadge = '<span style="background:#92400e; color:#fde68a; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">FALLBACK</span>';
-            } else if (t.mismatch) {
-              // Mismatch between planned and actual - orange styling
-              bgColor = '#1c1917';
-              borderColor = '#78350f';
-              labelColor = '#fb923c';
-              icon = '🔄';
-              statusBadge = '<span style="background:#78350f; color:#fed7aa; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">CHANGED</span>';
-            } else if (t.hadAudioIssue) {
-              // Audio issue - TwiML sent but audio may have failed
-              bgColor = '#1c1917';
-              borderColor = '#7c2d12';
-              labelColor = '#fb923c';
-              icon = '🔇';
-              statusBadge = '<span style="background:#7c2d12; color:#fed7aa; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">AUDIO ISSUE</span>';
-            } else if (t.onlyPlanned) {
-              // Only planned available - gray/uncertain styling
-              bgColor = '#1f2937';
-              borderColor = '#374151';
-              labelColor = '#9ca3af';
-              icon = '📝';
-              statusBadge = '<span style="background:#374151; color:#d1d5db; padding:2px 6px; border-radius:4px; font-size:0.65rem; margin-left:8px;">PLANNED</span>';
-            } else {
-              // Normal agent response - green styling (confirmed actual)
-              bgColor = '#0d2818';
-              borderColor = '#166534';
-              labelColor = '#4ade80';
-              icon = '🤖';
-            }
-            
-            // Build the planned vs actual comparison if there's a mismatch
-            let comparisonHtml = '';
-            if (t.mismatch && t.plannedText) {
-              comparisonHtml = `
-                <div style="margin-top:8px; padding-top:8px; border-top:1px dashed #374151;">
-                  <div style="font-size:0.65rem; color:#9ca3af; margin-bottom:4px;">📝 PLANNED (not delivered):</div>
-                  <div style="color:#6b7280; font-size:0.8rem; font-style:italic; line-height:1.3;">"${this.escapeHtml(t.plannedText)}"</div>
-                </div>
-              `;
-            }
-            
-            // V4: Build speech source attribution line for agent responses
-            let sourceAttrHtml = '';
-            if (t.role === 'agent' && t.speechSource) {
-              const src = t.speechSource;
-              const sourceLabel = this._getSpeechSourceLabel(src.sourceId);
-              const isUnmapped = src.uiPath === 'UNMAPPED' || src.uiPath?.includes('UNMAPPED');
-              const sourceColor = isUnmapped ? '#f87171' : '#6ee7b7';
-              const sourceIcon = isUnmapped ? '⚠️' : '📍';
-              
-              sourceAttrHtml = `
-                <div style="margin-top:8px; padding:8px; background:${isUnmapped ? '#450a0a' : '#0d1117'}; border:1px solid ${isUnmapped ? '#991b1b' : '#30363d'}; border-radius:6px;">
-                  <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                    <span style="font-size:0.7rem;">${sourceIcon}</span>
-                    <span style="color:${sourceColor}; font-size:0.7rem; font-weight:600;">${sourceLabel}</span>
-                    ${isUnmapped ? '<span style="background:#991b1b; color:#fecaca; padding:1px 4px; border-radius:3px; font-size:0.6rem;">HARDCODED</span>' : ''}
-                  </div>
-                  <div style="color:#6b7280; font-size:0.65rem; font-family:monospace; word-break:break-all;">
-                    ${this.escapeHtml(src.uiPath || 'unknown')}
-                  </div>
-                  ${src.cardId ? `<div style="color:#818cf8; font-size:0.65rem; margin-top:2px;">Card: ${this.escapeHtml(src.cardId)}</div>` : ''}
-                  ${src.note ? `<div style="color:#9ca3af; font-size:0.65rem; margin-top:2px; font-style:italic;">${this.escapeHtml(src.note)}</div>` : ''}
-                </div>
-              `;
-            } else if (t.role === 'agent' && !t.speechSource) {
-              // No source info - likely legacy call or missing provenance event
-              sourceAttrHtml = `
-                <div style="margin-top:8px; padding:6px 8px; background:#1c1917; border:1px solid #78350f; border-radius:6px;">
-                  <div style="display:flex; align-items:center; gap:6px;">
-                    <span style="font-size:0.7rem;">❓</span>
-                    <span style="color:#fbbf24; font-size:0.65rem;">Source unknown (no provenance event for this turn)</span>
-                  </div>
-                  <div style="color:#92400e; font-size:0.6rem; margin-top:2px;">Check raw events for SPEAK_PROVENANCE or SPEECH_SOURCE_SELECTED</div>
-                </div>
-              `;
-            }
-            
-            return `
-            <div style="margin-bottom:10px; padding:10px; background:${bgColor}; border:1px solid ${borderColor}; border-radius:8px;">
-              <div style="font-size:0.7rem; color:${labelColor}; margin-bottom:4px; font-weight:600; display:flex; align-items:center;">
-                ${icon} ${t.role === 'caller' ? 'CALLER' : 'AGENT'} ${t.turn !== undefined ? `(Turn ${t.turn})` : ''}${statusBadge}
+        ${transcript._diagnostics && (transcript._diagnostics.missingSources.length > 0 || transcript._diagnostics.turnsWithOnlyPlanned.length > 0) ? `
+          <div style="margin-top:12px; padding:10px; background:#450a0a; border:1px solid #991b1b; border-radius:8px;">
+            <div style="color:#f87171; font-size:0.75rem; font-weight:600; margin-bottom:6px;">⚠️ TRANSCRIPT DIAGNOSTICS</div>
+            ${transcript._diagnostics.missingSources.length > 0 ? `
+              <div style="color:#fca5a5; font-size:0.7rem; margin-bottom:4px;">
+                🚨 Missing provenance events for turns: ${transcript._diagnostics.missingSources.join(', ')}
               </div>
-              <div style="color:#e5e7eb; font-size:0.85rem; line-height:1.4;">${this.escapeHtml(t.text)}</div>
-              ${t.fallbackReason ? `<div style="color:#fbbf24; font-size:0.7rem; margin-top:6px;">Reason: ${this.escapeHtml(t.fallbackReason)}</div>` : ''}
-              ${t.hadAudioIssue ? `<div style="color:#fb923c; font-size:0.7rem; margin-top:6px;">⚠️ Audio issue: ${this.escapeHtml(t.audioIssueReason || 'file not found')} - May not have been played</div>` : ''}
-              ${comparisonHtml}
-              ${sourceAttrHtml}
+            ` : ''}
+            ${transcript._diagnostics.turnsWithOnlyPlanned.length > 0 ? `
+              <div style="color:#fbbf24; font-size:0.7rem; margin-bottom:4px;">
+                📝 Only planned responses (no TWIML_SENT) for turns: ${transcript._diagnostics.turnsWithOnlyPlanned.join(', ')}
+              </div>
+            ` : ''}
+            <div style="color:#9ca3af; font-size:0.65rem; margin-top:6px;">
+              Events found: ${transcript._diagnostics.actualResponses} actual, ${transcript._diagnostics.plannedResponses} planned, ${transcript._diagnostics.totalCallerInputs} caller inputs
             </div>
-          `}).join('') : `
-            <div style="color:#6e7681; text-align:center; padding:20px;">No transcript available</div>
-          `}
-        </div>
+          </div>
+        ` : ''}
       </div>
 
       <!-- CALL EVENTS -->
       <div style="background:#0b1220; border:1px solid #1f2937; border-radius:12px; padding:16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:12px;">
           <div style="color:#8b949e; font-size:0.8rem;">CALL EVENTS (${events.length} total, ${keyEvents.length} key)</div>
-          <button id="a2-toggle-all-events" style="padding:4px 10px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; cursor:pointer; font-size:0.75rem;">
-            Show All
-          </button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input 
+              id="a2-event-filter" 
+              type="text" 
+              placeholder="Filter events..." 
+              style="padding:4px 10px; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; font-size:0.75rem; width:150px;"
+            />
+            <button id="a2-toggle-all-events" style="padding:4px 10px; background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; cursor:pointer; font-size:0.75rem;">
+              Show All
+            </button>
+          </div>
         </div>
-        <div id="a2-events-container" style="max-height:250px; overflow:auto; font-family:monospace; font-size:0.75rem;">
+        <div id="a2-events-container" style="max-height:400px; overflow:auto; font-family:monospace; font-size:0.75rem;">
           ${keyEvents.map(e => `
             <div style="margin-bottom:6px; padding:6px 8px; background:#161b22; border-radius:6px; border-left:3px solid ${this.getEventColor(e.type)};">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
@@ -2106,7 +2007,7 @@ class Agent2Manager {
             </div>
           `).join('')}
         </div>
-        <div id="a2-all-events-container" style="display:none; max-height:400px; overflow:auto; font-family:monospace; font-size:0.7rem; margin-top:12px;">
+        <div id="a2-all-events-container" style="display:none; max-height:600px; overflow:auto; font-family:monospace; font-size:0.7rem; margin-top:12px;">
           <pre style="color:#8b949e; white-space:pre-wrap; word-break:break-all;">${this.escapeHtml(JSON.stringify(events, null, 2))}</pre>
         </div>
       </div>
@@ -2400,6 +2301,16 @@ class Agent2Manager {
       // Within same turn: caller before agent
       return a.role === 'caller' ? -1 : 1;
     });
+
+    // V5: Add diagnostic metadata to help debug missing turns
+    transcript._diagnostics = {
+      totalCallerInputs: uniqueCallerInputs.length,
+      totalAgentResponses: agentResponses.length,
+      actualResponses: agentResponses.filter(r => r.source === 'actual').length,
+      plannedResponses: agentResponses.filter(r => r.source === 'planned').length,
+      missingSources: transcript.filter(t => t.role === 'agent' && !t.speechSource).map(t => t.turn),
+      turnsWithOnlyPlanned: transcript.filter(t => t.onlyPlanned).map(t => t.turn)
+    };
 
     return transcript;
   }
@@ -2708,6 +2619,282 @@ class Agent2Manager {
   }
 
   /**
+   * Enhanced Transcript: Merges transcript + provenance + turn summaries into unified cards
+   * Shows complete conversation with full attribution and runtime details
+   */
+  renderEnhancedTranscript(transcript, events, turnSummaries) {
+    if (transcript.length === 0) {
+      return '<div style="color:#6e7681; text-align:center; padding:20px;">No transcript available</div>';
+    }
+
+    // Build turn summary lookup
+    const turnSummaryMap = {};
+    turnSummaries.forEach(ts => {
+      turnSummaryMap[ts.turn] = ts;
+    });
+
+    // Build provenance event lookup by turn
+    const provenanceByTurn = {};
+    events.filter(e => 
+      e.type === 'SPEAK_PROVENANCE' || 
+      e.type === 'SPEECH_SOURCE_SELECTED' || 
+      e.type === 'SPOKEN_TEXT_UNMAPPED_BLOCKED' ||
+      e.type === 'GREETING_AUDIO_MISSING_TTS_FALLBACK'
+    ).forEach(e => {
+      const turn = e.turn ?? 0;
+      if (!provenanceByTurn[turn]) provenanceByTurn[turn] = [];
+      provenanceByTurn[turn].push(e);
+    });
+
+    return transcript.map(t => {
+      const turn = t.turn ?? 0;
+      const turnSummary = turnSummaryMap[turn];
+      const provenanceEvents = provenanceByTurn[turn] || [];
+      
+      // Determine card styling
+      let bgColor, borderColor, labelColor, icon, statusBadges = '';
+      
+      if (t.role === 'caller') {
+        // Caller turn - blue theme
+        bgColor = '#0c1e33';
+        borderColor = '#2563eb';
+        labelColor = '#60a5fa';
+        icon = '📞';
+      } else if (t.isError) {
+        bgColor = '#450a0a';
+        borderColor = '#991b1b';
+        labelColor = '#f87171';
+        icon = '❌';
+        statusBadges = '<span style="padding:2px 8px; background:#991b1b; color:#fecaca; border-radius:4px; font-size:0.7rem; font-weight:600; margin-left:8px;">ERROR</span>';
+      } else if (t.isFallback) {
+        bgColor = '#422006';
+        borderColor = '#f59e0b';
+        labelColor = '#fbbf24';
+        icon = '⚠️';
+        statusBadges = '<span style="padding:2px 8px; background:#92400e; color:#fde68a; border-radius:4px; font-size:0.7rem; font-weight:600; margin-left:8px;">FALLBACK</span>';
+      } else if (t.hadAudioIssue || t.mismatch) {
+        bgColor = '#1c1408';
+        borderColor = '#f59e0b';
+        labelColor = '#fbbf24';
+        icon = '🔄';
+        let badges = [];
+        if (t.hadAudioIssue) badges.push('AUDIO FALLBACK → TTS');
+        if (t.mismatch) badges.push('CHANGED');
+        statusBadges = badges.map(b => `<span style="padding:2px 8px; background:#92400e; color:#fde68a; border-radius:4px; font-size:0.7rem; font-weight:600; margin-left:8px;">${b}</span>`).join('');
+      } else if (!t.speechSource && t.role === 'agent') {
+        bgColor = '#450a0a';
+        borderColor = '#f43f5e';
+        labelColor = '#f87171';
+        icon = '🚨';
+        statusBadges = '<span style="padding:2px 8px; background:#991b1b; color:#fecaca; border-radius:4px; font-size:0.7rem; font-weight:600; margin-left:8px;">MISSING PROVENANCE</span>';
+      } else if (t.onlyPlanned) {
+        bgColor = '#1f2937';
+        borderColor = '#6b7280';
+        labelColor = '#9ca3af';
+        icon = '📝';
+        statusBadges = '<span style="padding:2px 8px; background:#374151; color:#d1d5db; border-radius:4px; font-size:0.7rem; font-weight:600; margin-left:8px;">PLANNED ONLY</span>';
+      } else {
+        bgColor = '#0d1117';
+        borderColor = '#4ade80';
+        labelColor = '#4ade80';
+        icon = '🤖';
+        statusBadges = '<span style="padding:2px 8px; background:#0d332222; color:#4ade80; border-radius:4px; font-size:0.7rem; font-weight:600; margin-left:8px;">UI-OWNED</span>';
+      }
+
+      // Build header with turn number and speaker
+      let headerHtml = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid ${borderColor}44;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span style="font-size:1.2rem;">${icon}</span>
+            <span style="color:${labelColor}; font-weight:700; font-size:0.85rem;">${t.role === 'caller' ? 'CALLER' : 'AGENT'}</span>
+            <span style="color:#6e7681; font-weight:600;">Turn ${turn}</span>
+            ${statusBadges}
+          </div>
+          <span style="color:#6e7681; font-size:0.7rem;">${t.role === 'caller' ? 'INPUT' : 'RESPONSE'}</span>
+        </div>
+      `;
+
+      // Build main text section
+      let textHtml = `
+        <div style="display:grid; gap:6px; font-size:0.85rem; margin-bottom:12px;">
+          <div style="display:flex; gap:8px;">
+            <span style="color:#6e7681; min-width:50px; font-weight:600;">Text:</span>
+            <span style="color:#e5e7eb; font-style:italic; line-height:1.5;">"${this.escapeHtml(t.text)}"</span>
+          </div>
+        </div>
+      `;
+
+      // Build attribution section (agent only)
+      let attributionHtml = '';
+      if (t.role === 'agent') {
+        if (t.speechSource) {
+          const src = t.speechSource;
+          const isUnmapped = src.uiPath === 'UNMAPPED' || src.uiPath?.includes('UNMAPPED') || src.uiPath?.includes('HARDCODED');
+          attributionHtml = `
+            <div style="display:grid; gap:6px; font-size:0.8rem; margin-bottom:12px; padding:10px; background:#0d111722; border-radius:6px;">
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:70px;">Source:</span>
+                <span style="color:#a5b4fc; font-family:monospace; font-size:0.75rem;">${this.escapeHtml(src.sourceId || 'unknown')}</span>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:70px;">UI Path:</span>
+                <span style="color:${isUnmapped ? '#f43f5e' : '#4ade80'}; font-family:monospace; font-size:0.75rem; word-break:break-all;">
+                  ${this.escapeHtml(src.uiPath || 'UNMAPPED')}
+                  ${isUnmapped ? ' <span style="background:#991b1b; color:#fecaca; padding:1px 4px; border-radius:3px; font-size:0.6rem;">HARDCODED</span>' : ''}
+                </span>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:70px;">UI Tab:</span>
+                <span style="color:#e5e7eb;">${this.escapeHtml(src.uiTab || '?')}</span>
+              </div>
+              ${src.cardId ? `
+                <div style="display:flex; gap:8px;">
+                  <span style="color:#6e7681; min-width:70px;">Card ID:</span>
+                  <span style="color:#818cf8; font-family:monospace; font-size:0.75rem;">${this.escapeHtml(src.cardId)}</span>
+                </div>
+              ` : ''}
+              ${src.note ? `
+                <div style="display:flex; gap:8px;">
+                  <span style="color:#6e7681; min-width:70px;">Reason:</span>
+                  <span style="color:#94a3b8;">${this.escapeHtml(src.note)}</span>
+                </div>
+              ` : ''}
+            </div>
+          `;
+        } else {
+          attributionHtml = `
+            <div style="padding:10px; background:#45 0a0a; border:1px solid #991b1b; border-radius:6px; margin-bottom:12px;">
+              <div style="color:#f87171; font-size:0.75rem; font-weight:600; margin-bottom:4px;">🚨 MISSING PROVENANCE</div>
+              <div style="color:#fca5a5; font-size:0.7rem; margin-bottom:4px;">
+                No SPEAK_PROVENANCE or SPEECH_SOURCE_SELECTED event found for this turn
+              </div>
+              <div style="color:#dc2626; font-size:0.65rem; margin-top:4px;">
+                Possible causes: (1) Backend not emitting events, (2) Hardcoded response bypassing SpeechGuard, (3) Legacy call
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      // Build runtime info section (from turn summary)
+      let runtimeHtml = '';
+      if (turnSummary && t.role === 'agent') {
+        const micColor = turnSummary.micOwner === 'AGENT2' || turnSummary.micOwner === 'AGENT2_DISCOVERY' ? '#4ade80' : 
+                         turnSummary.micOwner === 'GREETING' ? '#fbbf24' : '#f43f5e';
+        const latencyColor = turnSummary.latencyMs > 1500 ? '#f43f5e' : turnSummary.latencyMs > 800 ? '#fbbf24' : '#4ade80';
+        
+        runtimeHtml = `
+          <div style="display:grid; gap:6px; font-size:0.75rem; padding:8px; background:#0d111722; border-radius:6px; margin-bottom:12px;">
+            <div style="color:#6e7681; font-weight:600; margin-bottom:4px;">RUNTIME INFO</div>
+            <div style="display:flex; gap:8px;">
+              <span style="color:#6e7681; min-width:90px;">Mic Owner:</span>
+              <span style="color:${micColor}; font-weight:600;">● ${turnSummary.micOwner || '?'}</span>
+            </div>
+            ${turnSummary.path ? `
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:90px;">Path:</span>
+                <span style="color:#a5b4fc;">${this.escapeHtml(turnSummary.path)}</span>
+              </div>
+            ` : ''}
+            ${turnSummary.matchedCard ? `
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:90px;">Matched Card:</span>
+                <span style="color:#4ade80;">${this.escapeHtml(turnSummary.matchedCard)}</span>
+              </div>
+            ` : ''}
+            ${turnSummary.matchedOn ? `
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:90px;">Matched On:</span>
+                <span style="color:#9ca3af;">"${this.escapeHtml(turnSummary.matchedOn)}"</span>
+              </div>
+            ` : ''}
+            ${turnSummary.latencyMs ? `
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:90px;">Latency:</span>
+                <span style="color:${latencyColor}; font-weight:600;">${turnSummary.latencyMs}ms</span>
+                ${turnSummary.slowestSection ? `<span style="color:#6e7681;">(${turnSummary.slowestSection})</span>` : ''}
+              </div>
+            ` : ''}
+            ${turnSummary.scenarioTried ? `
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:90px;">Scenario:</span>
+                <span style="color:#fbbf24;">Attempted</span>
+              </div>
+            ` : ''}
+            ${turnSummary.pendingQuestion ? `
+              <div style="display:flex; gap:8px;">
+                <span style="color:#6e7681; min-width:90px;">Status:</span>
+                <span style="color:#fbbf24;">Pending Question</span>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      }
+
+      // Build issues section (planned vs actual, audio issues)
+      let issuesHtml = '';
+      if (t.role === 'agent') {
+        let issueItems = [];
+        
+        if (t.mismatch && t.plannedText) {
+          issueItems.push(`
+            <div style="padding:8px; background:#1c190822; border:1px solid #78350f; border-radius:6px;">
+              <div style="color:#fb923c; font-size:0.7rem; font-weight:600; margin-bottom:4px;">🔄 PLANNED vs ACTUAL</div>
+              <div style="font-size:0.75rem; margin-bottom:6px;">
+                <span style="color:#6e7681;">Planned:</span>
+                <span style="color:#9ca3af; font-style:italic;"> "${this.escapeHtml(t.plannedText)}"</span>
+              </div>
+              <div style="font-size:0.75rem;">
+                <span style="color:#6e7681;">Actual:</span>
+                <span style="color:#fb923c; font-style:italic;"> "${this.escapeHtml(t.text)}"</span>
+              </div>
+            </div>
+          `);
+        }
+        
+        if (t.hadAudioIssue) {
+          issueItems.push(`
+            <div style="padding:8px; background:#1c140822; border:1px solid #f59e0b; border-radius:6px;">
+              <div style="color:#fbbf24; font-size:0.7rem; font-weight:600; margin-bottom:4px;">⚠️ AUDIO ISSUE</div>
+              <div style="color:#fbbf24; font-size:0.75rem;">
+                ${this.escapeHtml(t.audioIssueReason || 'Audio file not found')} - Fell back to TTS
+              </div>
+              ${t.playUrl ? `<div style="color:#6e7681; font-size:0.65rem; margin-top:4px; font-family:monospace; word-break:break-all;">${this.escapeHtml(t.playUrl)}</div>` : ''}
+            </div>
+          `);
+        }
+        
+        if (t.fallbackReason) {
+          issueItems.push(`
+            <div style="padding:8px; background:#42200622; border:1px solid #92400e; border-radius:6px;">
+              <div style="color:#fbbf24; font-size:0.7rem; font-weight:600; margin-bottom:4px;">⚠️ FALLBACK</div>
+              <div style="color:#fbbf24; font-size:0.75rem;">${this.escapeHtml(t.fallbackReason)}</div>
+            </div>
+          `);
+        }
+        
+        if (issueItems.length > 0) {
+          issuesHtml = `
+            <div style="display:grid; gap:6px; margin-bottom:12px;">
+              ${issueItems.join('')}
+            </div>
+          `;
+        }
+      }
+
+      return `
+        <div style="background:${bgColor}; border:2px solid ${borderColor}; border-radius:10px; padding:14px; margin-bottom:12px;">
+          ${headerHtml}
+          ${textHtml}
+          ${attributionHtml}
+          ${runtimeHtml}
+          ${issuesHtml}
+        </div>
+      `;
+    }).join('');
+  }
+
+  /**
    * V126: Render SPEAK_PROVENANCE events in a clear, human-readable format.
    * This shows exactly what spoke, where it came from (UI path), and why.
    */
@@ -2982,6 +3169,37 @@ class Agent2Manager {
         allContainer.style.display = 'none';
         keyContainer.style.display = 'block';
         e.target.textContent = 'Show All';
+      }
+    });
+
+    // Event filter
+    document.getElementById('a2-event-filter')?.addEventListener('input', (e) => {
+      const filter = e.target.value.toLowerCase();
+      const allEventsContainer = document.getElementById('a2-all-events-container');
+      const keyEventsContainer = document.getElementById('a2-events-container');
+      
+      // Determine which container is visible
+      const isShowingAll = allEventsContainer.style.display !== 'none';
+      
+      // Filter all events in the raw JSON view
+      if (isShowingAll) {
+        const pre = allEventsContainer.querySelector('pre');
+        if (pre) {
+          const fullText = JSON.stringify(events, null, 2);
+          if (filter) {
+            // Highlight matching lines
+            const lines = fullText.split('\n');
+            const highlightedLines = lines.map(line => {
+              if (line.toLowerCase().includes(filter)) {
+                return `<span style="background:#fbbf24; color:#000;">${this.escapeHtml(line)}</span>`;
+              }
+              return this.escapeHtml(line);
+            });
+            pre.innerHTML = highlightedLines.join('\n');
+          } else {
+            pre.textContent = fullText;
+          }
+        }
       }
     });
   }
