@@ -35,28 +35,16 @@ const UI_BUILD = 'AGENT2_UI_V0.9';
 function defaultAgent2Config() {
   return {
     enabled: false,
+    // Global negative keywords that block ALL trigger cards (V4)
+    // Intentionally empty by default to avoid accidental suppression.
+    globalNegativeKeywords: [],
     discovery: {
       enabled: false,
       style: {
         ackWord: 'Ok.',
-        forbidPhrases: ['Got it'],
-        bridge: {
-          enabled: false,
-          maxPerTurn: 1,
-          lines: ['Ok — one second.']
-        },
-        systemDelay: {
-          enabled: true,
-          firstLine: "I'm sorry — looks like my system’s moving a little slow. Thanks for your patience!",
-          transferLine: "I'm so sorry — looks like my system isn't responding. Let me transfer you to a service advisor right away."
-        },
         robotChallenge: {
           enabled: true,
           line: "Please, I am here to help you! You can speak to me naturally and ask anything you need — How can I help you?"
-        },
-        whenInDoubt: {
-          enabled: true,
-          transferLine: "Ok, to ensure you get the best help, I’m transferring you to a service advisor who can assist with your service needs. Please hold."
         }
       },
       // ═══════════════════════════════════════════════════════════════════════
@@ -118,6 +106,13 @@ function defaultAgent2Config() {
             priority: 12
           }
         ]
+      },
+      // Pending Question Responses (V128)
+      // Single owner namespace for YES/NO/REPROMPT lines used by the pending-question state machine.
+      pendingQuestionResponses: {
+        yes: 'Great! Let me help you with that.',
+        no: 'No problem. Is there anything else I can help you with?',
+        reprompt: 'Sorry, I missed that. Could you say yes or no?'
       },
       playbook: {
         version: 'v2',
@@ -515,6 +510,7 @@ function mergeAgent2Config(saved) {
   const merged = {
     ...defaults,
     ...src,
+    globalNegativeKeywords: Array.isArray(src.globalNegativeKeywords) ? src.globalNegativeKeywords : defaults.globalNegativeKeywords,
     discovery: {
       ...defaults.discovery,
       ...safeObject(src.discovery, {}),
@@ -651,6 +647,58 @@ function mergeAgent2Config(saved) {
   // Clarifiers guardrails
   if (!Array.isArray(merged.discovery.clarifiers.entries)) {
     merged.discovery.clarifiers.entries = defaults.discovery.clarifiers.entries;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // V128: Pending Question Responses
+  // - Ensure stable object shape
+  // - Backward compatible migration from legacy keys in playbook.fallback
+  // - Remove dead legacy keys from merged output
+  // ──────────────────────────────────────────────────────────────────────────
+  const legacyFallback = safeObject(merged.discovery?.playbook?.fallback, {});
+  const legacyYes = typeof legacyFallback.pendingYesResponse === 'string' ? legacyFallback.pendingYesResponse.trim() : '';
+  const legacyNo = typeof legacyFallback.pendingNoResponse === 'string' ? legacyFallback.pendingNoResponse.trim() : '';
+  const legacyReprompt = typeof legacyFallback.pendingReprompt === 'string' ? legacyFallback.pendingReprompt.trim() : '';
+
+  merged.discovery.pendingQuestionResponses = {
+    ...defaults.discovery.pendingQuestionResponses,
+    ...safeObject(src.discovery?.pendingQuestionResponses, {})
+  };
+
+  // If new namespace missing values but legacy exists, adopt legacy (migration on read/save)
+  if (!merged.discovery.pendingQuestionResponses.yes && legacyYes) merged.discovery.pendingQuestionResponses.yes = legacyYes;
+  if (!merged.discovery.pendingQuestionResponses.no && legacyNo) merged.discovery.pendingQuestionResponses.no = legacyNo;
+  if (!merged.discovery.pendingQuestionResponses.reprompt && legacyReprompt) merged.discovery.pendingQuestionResponses.reprompt = legacyReprompt;
+
+  // Drop legacy keys from output (dead knobs / wrong namespace)
+  if (merged.discovery.playbook?.fallback && typeof merged.discovery.playbook.fallback === 'object') {
+    delete merged.discovery.playbook.fallback.pendingYesResponse;
+    delete merged.discovery.playbook.fallback.pendingNoResponse;
+    delete merged.discovery.playbook.fallback.pendingReprompt;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Remove dead style knobs from output (fight-for-existence enforcement)
+  // ──────────────────────────────────────────────────────────────────────────
+  if (merged.discovery?.style && typeof merged.discovery.style === 'object') {
+    delete merged.discovery.style.forbidPhrases;
+    delete merged.discovery.style.bridge;
+    delete merged.discovery.style.systemDelay;
+    delete merged.discovery.style.whenInDoubt;
+  }
+  
+  // ──────────────────────────────────────────────────────────────────────────
+  // Remove dead/config-theater knobs from output
+  // ──────────────────────────────────────────────────────────────────────────
+  if (merged.discovery?.intentGate && typeof merged.discovery.intentGate === 'object') {
+    delete merged.discovery.intentGate.emergencyFullDisqualify;
+  }
+  if (merged.discovery?.discoveryHandoff && typeof merged.discovery.discoveryHandoff === 'object') {
+    delete merged.discovery.discoveryHandoff.forbidBookingTimes;
+  }
+  if (merged.discovery?.humanTone?.templates && typeof merged.discovery.humanTone.templates === 'object') {
+    delete merged.discovery.humanTone.templates.angry;
+    delete merged.discovery.humanTone.templates.afterHours;
   }
 
   // Greetings guardrails

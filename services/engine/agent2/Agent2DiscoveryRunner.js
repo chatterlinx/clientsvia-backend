@@ -740,18 +740,21 @@ class Agent2DiscoveryRunner {
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
         
-        // V126: Pending question YES response - UI-configured field
-        const pendingYes = `${fallback.pendingYesResponse || ''}`.trim();
+        // V128: Pending question YES response (new namespace with legacy fallback)
+        const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
+        const pendingYes = `${pendingResponses.yes || fallback.pendingYesResponse || ''}`.trim();
         let response;
         let responseUiPath;
         
         // V127: Build response and validate through SPEAK_PROVENANCE system
         if (pendingYes) {
           response = `${personalAck} ${pendingYes}`.trim();
-          responseUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingYesResponse';
+          responseUiPath = pendingResponses.yes
+            ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.yes'
+            : 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingYesResponse';
         } else {
           // No UI-configured pendingYesResponse - validateSpeechSource will handle fallback
-          response = personalAck || 'Let me help you with that.';
+          response = personalAck || '';
           responseUiPath = null;
         }
         
@@ -767,7 +770,9 @@ class Agent2DiscoveryRunner {
           response,
           sourceId: 'agent2.discovery.pendingQuestion.yesPath',
           uiPath: responseUiPath,
-          configPath: 'discovery.playbook.fallback.pendingYesResponse',
+          configPath: pendingResponses.yes
+            ? 'discovery.pendingQuestionResponses.yes'
+            : 'discovery.playbook.fallback.pendingYesResponse',
           uiTab: 'Configuration',
           audioUrl: null,
           reason: `User confirmed YES to pending question from card: ${pendingInfo?.cardId || 'unknown'}`,
@@ -801,17 +806,20 @@ class Agent2DiscoveryRunner {
         const { ack: personalAck, usedName } = buildAck(ack, callerName, state);
         nextState.agent2.discovery.usedNameThisTurn = usedName;
         
-        // V127: Build response and validate through SPEAK_PROVENANCE system
-        const pendingNo = `${fallback.pendingNoResponse || ''}`.trim();
+        // V128: Pending question NO response (new namespace with legacy fallback)
+        const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
+        const pendingNo = `${pendingResponses.no || fallback.pendingNoResponse || ''}`.trim();
         let response;
         let noResponseUiPath;
         
         if (pendingNo) {
           response = `${personalAck} ${pendingNo}`.trim();
-          noResponseUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingNoResponse';
+          noResponseUiPath = pendingResponses.no
+            ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.no'
+            : 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingNoResponse';
         } else {
           // No UI-configured pendingNoResponse - validateSpeechSource will handle fallback
-          response = personalAck || 'No problem.';
+          response = personalAck || '';
           noResponseUiPath = null;
         }
         
@@ -827,7 +835,9 @@ class Agent2DiscoveryRunner {
           response,
           sourceId: 'agent2.discovery.pendingQuestion.noPath',
           uiPath: noResponseUiPath,
-          configPath: 'discovery.playbook.fallback.pendingNoResponse',
+          configPath: pendingResponses.no
+            ? 'discovery.pendingQuestionResponses.no'
+            : 'discovery.playbook.fallback.pendingNoResponse',
           uiTab: 'Configuration',
           audioUrl: null,
           reason: `User said NO to pending question from card: ${pendingInfo?.cardId || 'unknown'}`,
@@ -856,22 +866,32 @@ class Agent2DiscoveryRunner {
         // DON'T clear pendingQuestion — we're re-asking
         nextState.agent2.discovery.lastPath = 'PENDING_REPROMPT';
         
-        // V127: Build response - prefer UI-configured reprompt, then original question, then emergency
-        const pendingRepromptConfig = `${fallback.pendingReprompt || ''}`.trim();
+        // V128: Build response - prefer UI-configured reprompt, then original question, then emergency
+        const pendingResponses = safeObj(discoveryCfg?.pendingQuestionResponses, {});
+        const pendingRepromptConfig = `${pendingResponses.reprompt || fallback.pendingReprompt || ''}`.trim();
         const pendingQ = pendingInfo?.question || '';
         let response;
         let repromptUiPath;
+        let repromptConfigPath;
         
         if (pendingRepromptConfig) {
           response = pendingRepromptConfig;
-          repromptUiPath = 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingReprompt';
+          repromptUiPath = pendingResponses.reprompt
+            ? 'aiAgentSettings.agent2.discovery.pendingQuestionResponses.reprompt'
+            : 'aiAgentSettings.agent2.discovery.playbook.fallback.pendingReprompt';
+          repromptConfigPath = pendingResponses.reprompt
+            ? 'discovery.pendingQuestionResponses.reprompt'
+            : 'discovery.playbook.fallback.pendingReprompt';
         } else if (pendingQ) {
-          response = `Sorry, I missed that. ${pendingQ}`;
+          // No reprompt configured: re-ask the UI-owned question without adding hardcoded prefix text
+          response = pendingQ;
           repromptUiPath = `aiAgentSettings.agent2.discovery.playbook.rules[id=${pendingInfo?.cardId}].followUp.question`;
+          repromptConfigPath = repromptUiPath.replace('aiAgentSettings.agent2.', '');
         } else {
           // No reprompt config and no question - validateSpeechSource will handle fallback
-          response = 'Sorry, I missed that.';
+          response = '';
           repromptUiPath = null;
+          repromptConfigPath = 'UNMAPPED';
         }
         
         emit('A2_PATH_SELECTED', { 
@@ -889,7 +909,7 @@ class Agent2DiscoveryRunner {
           response,
           sourceId: 'agent2.discovery.pendingQuestion.reprompt',
           uiPath: repromptUiPath,
-          configPath: repromptUiPath ? 'discovery.playbook.fallback.pendingReprompt' : 'UNMAPPED',
+          configPath: repromptUiPath ? (repromptConfigPath || 'UNMAPPED') : 'UNMAPPED',
           uiTab: 'Configuration',
           audioUrl: null,
           reason: 'Reprompting after unclear response to pending question',

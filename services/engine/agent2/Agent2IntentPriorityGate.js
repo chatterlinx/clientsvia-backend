@@ -296,7 +296,6 @@ class Agent2IntentPriorityGate {
     return {
       enabled: true,
       basePenalty: 50,
-      emergencyFullDisqualify: true,
       patterns: DEFAULT_SERVICE_DOWN_PATTERNS.map(p => p.source),
       disqualifiedCategories: DEFAULT_DISQUALIFIED_CATEGORIES,
       // Keywords that trigger service-down detection (simplified for UI)

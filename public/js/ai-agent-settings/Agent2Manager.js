@@ -99,24 +99,14 @@ class Agent2Manager {
   getDefaultConfig() {
     return {
       enabled: false,
+      globalNegativeKeywords: [],
       discovery: {
         enabled: false,
         style: {
           ackWord: 'Ok.',
-          forbidPhrases: ['Got it'],
-          bridge: { enabled: false, maxPerTurn: 1, lines: ['Ok — one second.'] },
-          systemDelay: {
-            enabled: true,
-            firstLine: "I'm sorry — looks like my system's moving a little slow. Thanks for your patience!",
-            transferLine: "I'm so sorry — looks like my system isn't responding. Let me transfer you to a service advisor right away."
-          },
           robotChallenge: {
             enabled: true,
             line: "Please, I am here to help you! You can speak to me naturally and ask anything you need — How can I help you?"
-          },
-          whenInDoubt: {
-            enabled: true,
-            transferLine: "Ok, to ensure you get the best help, I'm transferring you to a service advisor who can assist with your service needs. Please hold."
           }
         },
         playbook: {
@@ -130,13 +120,15 @@ class Agent2Manager {
             // NEVER echo caller text. This is pure UI-owned text.
             noMatchWhenReasonCaptured: "Got it — I can help with that. Are you calling about your AC, heating, or something else?",
             noMatchClarifierQuestion: "Just so I help you the right way — is the system not running at all right now, or is it running but not cooling?",
-            afterAnswerQuestion: 'Would you like to schedule a visit, or do you have a question I can help with?',
-            // V126: Pending question responses - UI-configured, not hardcoded
-            pendingYesResponse: "Great! Let me help you with that.",
-            pendingNoResponse: "No problem. Is there anything else I can help you with?",
-            pendingReprompt: "Sorry, I missed that. Could you say yes or no?"
+            afterAnswerQuestion: 'Would you like to schedule a visit, or do you have a question I can help with?'
           },
           rules: []
+        },
+        // V128: Pending Question Responses (single owner namespace)
+        pendingQuestionResponses: {
+          yes: "Great! Let me help you with that.",
+          no: "No problem. Is there anything else I can help you with?",
+          reprompt: "Sorry, I missed that. Could you say yes or no?"
         },
         // V4: HUMAN TONE - UI-owned empathy templates
         // NO DEFAULTS - must be configured in UI. If empty, uses fallback chain.
@@ -144,8 +136,6 @@ class Agent2Manager {
           enabled: true,
           templates: {
             serviceDown: [],  // MUST be configured in UI
-            angry: [],        // MUST be configured in UI
-            afterHours: [],   // MUST be configured in UI
             general: []       // MUST be configured in UI
           }
         },
@@ -153,7 +143,6 @@ class Agent2Manager {
         intentGate: {
           enabled: true,
           basePenalty: 50,
-          emergencyFullDisqualify: true,
           disqualifiedCategories: ['faq', 'info', 'sales', 'financing', 'warranty', 'maintenance_plan', 'system_age', 'lifespan', 'replacement', 'upgrade', 'new_system', 'general'],
           serviceDownKeywords: [],
           emergencyKeywords: []
@@ -164,8 +153,7 @@ class Agent2Manager {
           enabled: true,
           consentQuestion: '',  // MUST be configured in UI
           yesNext: 'BOOKING_LANE',
-          noNext: 'MESSAGE_TAKING',
-          forbidBookingTimes: true
+          noNext: 'MESSAGE_TAKING'
         },
         // V4: Call Reason Capture - sanitizes raw transcript to clean labels
         callReasonCapture: {
@@ -376,7 +364,6 @@ class Agent2Manager {
     return `
       ${this.renderCallStartGreetingCard()}
       ${this.renderGreetingInterceptorCard()}
-      ${this.renderBridgeSettingsCard()}
     `;
   }
 
@@ -1626,42 +1613,6 @@ class Agent2Manager {
         </div>
         <div id="a2-greeting-modal-audio-status" style="margin-top:6px; color:#6e7681; font-size:0.8rem;">
           ${rule.audioUrl ? '<span style="color:#7ee787;">Audio ready</span>' : 'No audio generated yet.'}
-        </div>
-      </div>
-    `;
-  }
-
-  renderBridgeSettingsCard() {
-    const style = this.config?.discovery?.style || {};
-    const bridge = style.bridge || {};
-    const enabled = bridge.enabled === true;
-    const maxPerTurn = bridge.maxPerTurn || 1;
-    const lines = Array.isArray(bridge.lines) ? bridge.lines : ['Ok — one second.'];
-
-    return `
-      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:24px; margin-bottom:20px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-          <div>
-            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Bridge / Micro Filler</h3>
-            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px;">Short phrases to fill latency gaps ("Ok — one second."). Edits existing config at discovery.style.bridge.</div>
-          </div>
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="a2-bridge-enabled" ${enabled ? 'checked' : ''} style="width:18px; height:18px; accent-color:#22d3ee;">
-            <span style="color:#c9d1d9; font-size:0.9rem;">Enabled</span>
-          </label>
-        </div>
-        
-        <div style="display:flex; gap:24px; margin-bottom:16px;">
-          <div>
-            <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Max Per Turn</label>
-            <input type="number" id="a2-bridge-maxPerTurn" value="${maxPerTurn}" min="1" max="3" style="width:80px; background:#161b22; border:1px solid #30363d; border-radius:6px; padding:8px; color:#c9d1d9; text-align:center;">
-          </div>
-        </div>
-        
-        <div>
-          <label style="color:#8b949e; font-size:0.85rem; display:block; margin-bottom:6px;">Bridge Lines (one per line)</label>
-          <textarea id="a2-bridge-lines" rows="3" style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; color:#c9d1d9; font-size:0.95rem; resize:vertical;">${this.escapeHtml(lines.join('\n'))}</textarea>
-          <div style="color:#6e7681; font-size:0.75rem; margin-top:4px;">One line per row. These are randomly selected when a bridge is needed.</div>
         </div>
       </div>
     `;
@@ -3296,7 +3247,7 @@ class Agent2Manager {
             <input id="a2-discovery-enabled" type="checkbox" ${dEnabled ? 'checked' : ''} />
             <div>
               <div style="font-weight:700;">Enable Agent 2.0 Discovery</div>
-              <div style="color:#8b949e; font-size:12px;">UI-only until we wire runtime behind an explicit gate.</div>
+              <div style="color:#8b949e; font-size:12px;">Gates the Agent 2.0 Discovery runtime flow.</div>
             </div>
           </label>
         </div>
@@ -3306,7 +3257,6 @@ class Agent2Manager {
 
   renderStyleCard() {
     const style = this.config.discovery?.style || {};
-    const forbid = Array.isArray(style.forbidPhrases) ? style.forbidPhrases.join('\n') : '';
 
     // Build style lines array for table display
     const styleLines = this._getStyleLines();
@@ -3334,18 +3284,13 @@ class Agent2Manager {
 
     return this.renderCard(
       'Discovery Style & Safety',
-      'Click a row to edit. These are spoken lines the agent uses for greetings, delays, and transfers.',
+      'Click a row to edit. This section only includes runtime-wired Discovery lines.',
       `
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin-bottom:16px;">
           <div>
             <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Ack word (prefix for responses)</label>
             <input id="a2-style-ackWord" value="${this.escapeHtml(style.ackWord || 'Ok.')}"
               style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px;" />
-          </div>
-          <div>
-            <label style="display:block; color:#cbd5e1; font-size:12px; margin-bottom:6px;">Forbidden phrases (one per line)</label>
-            <textarea id="a2-style-forbid" rows="2"
-              style="width:100%; background:#0d1117; color:#e5e7eb; border:1px solid #30363d; border-radius:10px; padding:10px; resize:vertical;">${this.escapeHtml(forbid)}</textarea>
           </div>
         </div>
 
@@ -3672,44 +3617,12 @@ class Agent2Manager {
     const style = this.config.discovery?.style || {};
     return [
       {
-        id: 'bridge',
-        label: 'Bridge line (dead-air filler)',
-        enabled: style.bridge?.enabled === true,
-        text: Array.isArray(style.bridge?.lines) ? style.bridge.lines[0] || '' : '',
-        audioUrl: style.bridge?.audioUrl || '',
-        configPath: 'bridge'
-      },
-      {
         id: 'robot_challenge',
         label: 'Robot challenge response',
         enabled: style.robotChallenge?.enabled === true,
         text: style.robotChallenge?.line || '',
         audioUrl: style.robotChallenge?.audioUrl || '',
         configPath: 'robotChallenge'
-      },
-      {
-        id: 'delay_first',
-        label: 'System delay - first line',
-        enabled: style.systemDelay?.enabled === true,
-        text: style.systemDelay?.firstLine || '',
-        audioUrl: style.systemDelay?.firstLineAudioUrl || '',
-        configPath: 'systemDelay.firstLine'
-      },
-      {
-        id: 'delay_transfer',
-        label: 'System delay - transfer fallback',
-        enabled: style.systemDelay?.enabled === true,
-        text: style.systemDelay?.transferLine || '',
-        audioUrl: style.systemDelay?.transferLineAudioUrl || '',
-        configPath: 'systemDelay.transferLine'
-      },
-      {
-        id: 'when_in_doubt',
-        label: 'When in doubt - transfer',
-        enabled: style.whenInDoubt?.enabled === true,
-        text: style.whenInDoubt?.transferLine || '',
-        audioUrl: style.whenInDoubt?.audioUrl || '',
-        configPath: 'whenInDoubt'
       }
     ];
   }
@@ -3774,6 +3687,7 @@ class Agent2Manager {
     const rules = Array.isArray(pb.rules) ? pb.rules : [];
     const allowedTypes = Array.isArray(pb.allowedScenarioTypes) ? pb.allowedScenarioTypes : [];
     const fallback = pb.fallback || {};
+    const pendingResponses = this.config.discovery?.pendingQuestionResponses || {};
 
     const rows = rules.map((r, idx) => {
       const keywords = Array.isArray(r.match?.keywords) ? r.match.keywords.join(', ') : '';
@@ -3884,19 +3798,19 @@ class Agent2Manager {
               <label style="display:block; color:#94a3b8; font-size:11px; margin-bottom:4px;">When caller says YES</label>
               <textarea id="a2-fallback-pendingYesResponse" rows="2"
                 style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
-                placeholder="Great! Let me help you with that.">${this.escapeHtml(fallback.pendingYesResponse || '')}</textarea>
+                placeholder="Great! Let me help you with that.">${this.escapeHtml(pendingResponses.yes || '')}</textarea>
             </div>
             <div>
               <label style="display:block; color:#94a3b8; font-size:11px; margin-bottom:4px;">When caller says NO</label>
               <textarea id="a2-fallback-pendingNoResponse" rows="2"
                 style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
-                placeholder="No problem. Is there anything else I can help you with?">${this.escapeHtml(fallback.pendingNoResponse || '')}</textarea>
+                placeholder="No problem. Is there anything else I can help you with?">${this.escapeHtml(pendingResponses.no || '')}</textarea>
             </div>
             <div>
               <label style="display:block; color:#94a3b8; font-size:11px; margin-bottom:4px;">When response is unclear (reprompt)</label>
               <textarea id="a2-fallback-pendingReprompt" rows="2"
                 style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
-                placeholder="Sorry, I missed that. Could you say yes or no?">${this.escapeHtml(fallback.pendingReprompt || '')}</textarea>
+                placeholder="Sorry, I missed that. Could you say yes or no?">${this.escapeHtml(pendingResponses.reprompt || '')}</textarea>
             </div>
           </div>
         </div>
@@ -3991,11 +3905,10 @@ class Agent2Manager {
     const enabled = humanTone.enabled !== false;
     const templates = humanTone.templates || {};
     const serviceDownLines = Array.isArray(templates.serviceDown) ? templates.serviceDown : [];
-    const angryLines = Array.isArray(templates.angry) ? templates.angry : [];
     const generalLines = Array.isArray(templates.general) ? templates.general : [];
     
     // Check if any templates are configured
-    const hasTemplates = serviceDownLines.length > 0 || angryLines.length > 0 || generalLines.length > 0;
+    const hasTemplates = serviceDownLines.length > 0 || generalLines.length > 0;
     
     return `
       <div style="margin-top:20px; padding:16px; background:#0b1220; border:1px solid ${hasTemplates ? '#1e3a5f' : '#f59e0b'}; border-radius:12px;">
@@ -4024,7 +3937,7 @@ class Agent2Manager {
         </div>
         ` : ''}
         
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:12px;">
+        <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin-top:12px;">
           <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
             <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">
               Service Down / Urgent Issue
@@ -4033,15 +3946,6 @@ class Agent2Manager {
             <textarea id="a2-humantone-serviceDown" rows="2"
               style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
               placeholder="(required) e.g., I hear you — no AC in this heat is miserable. I'm going to get this handled.">${this.escapeHtml(serviceDownLines[0] || '')}</textarea>
-          </div>
-          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
-            <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">
-              Frustrated / Angry Caller
-              <span style="color:#64748b; font-size:10px;">(aiAgentSettings.agent2.discovery.humanTone.templates.angry[0])</span>
-            </label>
-            <textarea id="a2-humantone-angry" rows="2"
-              style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:12px;"
-              placeholder="(optional) e.g., I get it — this is frustrating. I'm here with you and we'll fix this.">${this.escapeHtml(angryLines[0] || '')}</textarea>
           </div>
         </div>
         
@@ -4074,7 +3978,6 @@ class Agent2Manager {
   _renderIntentPriorityGateSection() {
     const intentGate = this.config?.discovery?.intentGate || {};
     const enabled = intentGate.enabled !== false;
-    const emergencyFullDisqualify = intentGate.emergencyFullDisqualify !== false;
     const disqualifiedCategories = Array.isArray(intentGate.disqualifiedCategories) 
       ? intentGate.disqualifiedCategories 
       : ['faq', 'info', 'sales', 'financing', 'warranty', 'maintenance_plan', 'system_age', 'lifespan', 'replacement', 'upgrade', 'new_system', 'general'];
@@ -4098,25 +4001,13 @@ class Agent2Manager {
           Prevents FAQ/sales cards from hijacking service-down calls. When "not cooling" or "emergency" detected, FAQ cards are penalized or blocked.
         </p>
         
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div style="display:grid; grid-template-columns: 1fr; gap:12px;">
           <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
             <label style="display:block; color:#cbd5e1; font-size:11px; margin-bottom:6px;">Card Categories to Penalize/Block</label>
             <textarea id="a2-intentgate-categories" rows="2"
               style="width:100%; background:#161b22; color:#e5e7eb; border:1px solid #30363d; border-radius:8px; padding:8px; resize:vertical; font-size:11px;"
               placeholder="faq, info, sales, financing, warranty, system_age">${this.escapeHtml(disqualifiedCategories.join(', '))}</textarea>
             <div style="color:#64748b; font-size:10px; margin-top:4px;">Comma-separated. Cards with matching IDs/categories get penalized.</div>
-          </div>
-          <div style="padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:10px;">
-            <div style="display:flex; flex-direction:column; gap:10px;">
-              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                <input type="checkbox" id="a2-intentgate-emergencyDisqualify" ${emergencyFullDisqualify ? 'checked' : ''} 
-                  style="width:14px; height:14px; cursor:pointer;"/>
-                <span style="color:#e5e7eb; font-size:12px;">Fully disqualify FAQ cards on emergency</span>
-              </label>
-              <p style="color:#64748b; font-size:10px;">
-                When enabled, FAQ cards are completely blocked (not just penalized) when emergency keywords detected.
-              </p>
-            </div>
           </div>
         </div>
         
@@ -4141,7 +4032,6 @@ class Agent2Manager {
   _renderHandoffSection() {
     const discoveryHandoff = this.config?.discovery?.discoveryHandoff || {};
     const consentQuestion = discoveryHandoff.consentQuestion || '';
-    const forbidBookingTimes = discoveryHandoff.forbidBookingTimes !== false;
     const hasConsent = !!consentQuestion.trim();
     
     return `
@@ -4153,11 +4043,6 @@ class Agent2Manager {
             <span style="font-size:10px; background:#164e63; color:#67e8f9; padding:2px 6px; border-radius:4px;">V4</span>
             ${!hasConsent ? '<span style="font-size:10px; background:#78350f; color:#fbbf24; padding:2px 6px; border-radius:4px; margin-left:4px;">NOT CONFIGURED</span>' : ''}
           </div>
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-            <input type="checkbox" id="a2-discoveryhandoff-forbidTimes" ${forbidBookingTimes ? 'checked' : ''} 
-              style="width:16px; height:16px; cursor:pointer;"/>
-            <span style="color:#94a3b8; font-size:12px;">Forbid Booking Times</span>
-          </label>
         </div>
         
         <p style="color:#6b7280; font-size:11px; margin-bottom:8px;">
@@ -5216,29 +5101,6 @@ class Agent2Manager {
       this._closeGreetingModal();
     });
 
-    // Bridge settings
-    container.querySelector('#a2-bridge-enabled')?.addEventListener('change', (e) => {
-      this.config.discovery = this.config.discovery || {};
-      this.config.discovery.style = this.config.discovery.style || {};
-      this.config.discovery.style.bridge = this.config.discovery.style.bridge || {};
-      this.config.discovery.style.bridge.enabled = e.target.checked;
-      onAnyChange();
-    });
-    container.querySelector('#a2-bridge-maxPerTurn')?.addEventListener('input', (e) => {
-      this.config.discovery = this.config.discovery || {};
-      this.config.discovery.style = this.config.discovery.style || {};
-      this.config.discovery.style.bridge = this.config.discovery.style.bridge || {};
-      this.config.discovery.style.bridge.maxPerTurn = parseInt(e.target.value, 10) || 1;
-      onAnyChange();
-    });
-    container.querySelector('#a2-bridge-lines')?.addEventListener('input', (e) => {
-      this.config.discovery = this.config.discovery || {};
-      this.config.discovery.style = this.config.discovery.style || {};
-      this.config.discovery.style.bridge = this.config.discovery.style.bridge || {};
-      this.config.discovery.style.bridge.lines = e.target.value.split('\n').map(l => l.trim()).filter(Boolean);
-      onAnyChange();
-    });
-
     // CALL REVIEW TAB HANDLERS
     container.querySelector('#a2-refresh-calls')?.addEventListener('click', () => {
       this._calls = [];
@@ -5339,7 +5201,7 @@ class Agent2Manager {
       }
     });
 
-    container.querySelectorAll('#a2-style-ackWord, #a2-style-forbid, #a2-allowed-types, #a2-min-score')
+    container.querySelectorAll('#a2-style-ackWord, #a2-allowed-types, #a2-min-score')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelectorAll('#a2-fallback-noMatchAnswer, #a2-fallback-afterAnswerQuestion')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
@@ -6019,35 +5881,11 @@ class Agent2Manager {
     const style = this.config.discovery.style = this.config.discovery.style || {};
 
     switch (lineId) {
-      case 'bridge':
-        style.bridge = style.bridge || {};
-        style.bridge.enabled = enabled;
-        style.bridge.lines = text ? [text] : [];
-        style.bridge.audioUrl = audioUrl;
-        break;
       case 'robot_challenge':
         style.robotChallenge = style.robotChallenge || {};
         style.robotChallenge.enabled = enabled;
         style.robotChallenge.line = text;
         style.robotChallenge.audioUrl = audioUrl;
-        break;
-      case 'delay_first':
-        style.systemDelay = style.systemDelay || {};
-        style.systemDelay.enabled = enabled;
-        style.systemDelay.firstLine = text;
-        style.systemDelay.firstLineAudioUrl = audioUrl;
-        break;
-      case 'delay_transfer':
-        style.systemDelay = style.systemDelay || {};
-        style.systemDelay.enabled = enabled;
-        style.systemDelay.transferLine = text;
-        style.systemDelay.transferLineAudioUrl = audioUrl;
-        break;
-      case 'when_in_doubt':
-        style.whenInDoubt = style.whenInDoubt || {};
-        style.whenInDoubt.enabled = enabled;
-        style.whenInDoubt.transferLine = text;
-        style.whenInDoubt.audioUrl = audioUrl;
         break;
     }
 
@@ -7283,14 +7121,8 @@ class Agent2Manager {
     // Inline style fields (not in modal)
     discovery.style.ackWord = (container.querySelector('#a2-style-ackWord')?.value || 'Ok.').trim() || 'Ok.';
 
-    const forbidRaw = container.querySelector('#a2-style-forbid')?.value || '';
-    discovery.style.forbidPhrases = forbidRaw
-      .split('\n')
-      .map(s => s.trim())
-      .filter(Boolean);
-
-    // NOTE: Style lines (bridge, robotChallenge, systemDelay, whenInDoubt) are now
-    // managed by the style modal (_saveStyleModal) - not read from inline form fields.
+    // NOTE: Runtime-wired style lines (currently: robotChallenge) are managed by the style modal
+    // (_saveStyleModal) - not read from inline form fields.
 
     const typesRaw = container.querySelector('#a2-allowed-types')?.value || '';
     discovery.playbook.allowedScenarioTypes = typesRaw.split(',').map(s => s.trim()).filter(Boolean);
@@ -7302,10 +7134,12 @@ class Agent2Manager {
     discovery.playbook.fallback.afterAnswerQuestion = (container.querySelector('#a2-fallback-afterAnswerQuestion')?.value || '').trim();
     discovery.playbook.fallback.noMatchWhenReasonCaptured = (container.querySelector('#a2-fallback-noMatchWhenReasonCaptured')?.value || '').trim();
     discovery.playbook.fallback.noMatchClarifierQuestion = (container.querySelector('#a2-fallback-noMatchClarifierQuestion')?.value || '').trim();
-    // V126: Pending question responses - UI-configured, not hardcoded
-    discovery.playbook.fallback.pendingYesResponse = (container.querySelector('#a2-fallback-pendingYesResponse')?.value || '').trim();
-    discovery.playbook.fallback.pendingNoResponse = (container.querySelector('#a2-fallback-pendingNoResponse')?.value || '').trim();
-    discovery.playbook.fallback.pendingReprompt = (container.querySelector('#a2-fallback-pendingReprompt')?.value || '').trim();
+    
+    // V128: Pending question responses (new owner namespace)
+    discovery.pendingQuestionResponses = discovery.pendingQuestionResponses || {};
+    discovery.pendingQuestionResponses.yes = (container.querySelector('#a2-fallback-pendingYesResponse')?.value || '').trim();
+    discovery.pendingQuestionResponses.no = (container.querySelector('#a2-fallback-pendingNoResponse')?.value || '').trim();
+    discovery.pendingQuestionResponses.reprompt = (container.querySelector('#a2-fallback-pendingReprompt')?.value || '').trim();
 
     // ═══════════════════════════════════════════════════════════════════════
     // V4: HUMAN TONE (UI-owned empathy templates)
@@ -7316,12 +7150,10 @@ class Agent2Manager {
     discovery.humanTone.templates = discovery.humanTone.templates || {};
     
     const serviceDownLine = (container.querySelector('#a2-humantone-serviceDown')?.value || '').trim();
-    const angryLine = (container.querySelector('#a2-humantone-angry')?.value || '').trim();
     const generalLine = (container.querySelector('#a2-humantone-general')?.value || '').trim();
     
     // NO DEFAULTS - if not configured, array stays empty (enforces UI requirement)
     discovery.humanTone.templates.serviceDown = serviceDownLine ? [serviceDownLine] : [];
-    discovery.humanTone.templates.angry = angryLine ? [angryLine] : [];
     discovery.humanTone.templates.general = generalLine ? [generalLine] : [];
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -7329,7 +7161,6 @@ class Agent2Manager {
     // ═══════════════════════════════════════════════════════════════════════
     discovery.intentGate = discovery.intentGate || {};
     discovery.intentGate.enabled = container.querySelector('#a2-intentgate-enabled')?.checked ?? true;
-    discovery.intentGate.emergencyFullDisqualify = container.querySelector('#a2-intentgate-emergencyDisqualify')?.checked ?? true;
     discovery.intentGate.basePenalty = 50;
     
     const categoriesRaw = (container.querySelector('#a2-intentgate-categories')?.value || '').trim();
@@ -7345,7 +7176,6 @@ class Agent2Manager {
     discovery.discoveryHandoff.enabled = true;
     discovery.discoveryHandoff.consentQuestion = (container.querySelector('#a2-discoveryhandoff-consentQuestion')?.value || '').trim();
     // NO DEFAULT for consentQuestion - must be configured in UI
-    discovery.discoveryHandoff.forbidBookingTimes = container.querySelector('#a2-discoveryhandoff-forbidTimes')?.checked ?? true;
     discovery.discoveryHandoff.yesNext = 'BOOKING_LANE';
     discovery.discoveryHandoff.noNext = 'MESSAGE_TAKING';
 
