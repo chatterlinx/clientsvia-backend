@@ -794,7 +794,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
   try {
     const { companyId } = req.params;
     const company = await v2Company.findById(companyId)
-      .select('aiAgentSettings.agent2 effectiveConfigVersion updatedAt')
+      .select('aiAgentSettings agentSettings effectiveConfigVersion updatedAt')
       .lean();
 
     if (!company) {
@@ -803,6 +803,13 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
 
     const saved = company.aiAgentSettings?.agent2 || null;
     const data = mergeAgent2Config(saved);
+
+    // V1.0: Break-glass truth (env allowlist) - UI must be able to show this.
+    const breakGlassAllowlist = (process.env.AGENT2_FORCE_DISABLE_ALLOWLIST || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const breakGlassActive = breakGlassAllowlist.includes(String(companyId));
 
     // ════════════════════════════════════════════════════════════════════════
     // V1.0: LAZY MIGRATION - Persist corrected config if it was missing/wrong
@@ -815,6 +822,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
     
     if (needsMigration) {
       try {
+        const beforeCompanyDoc = company;
         await v2Company.updateOne(
           { _id: companyId },
           { $set: { 'aiAgentSettings.agent2': data } }
@@ -826,17 +834,31 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
           migratedTo: { enabled: true, discoveryEnabled: true }
         });
         
-        // Log migration event (non-blocking)
+        // Config audit entry (non-blocking). This is not a call event; CallLogger requires callId.
         try {
-          await CallLogger.logEvent('AGENT2_LAZY_MIGRATION', {
+          const afterCompanyDoc = {
+            ...beforeCompanyDoc,
+            aiAgentSettings: {
+              ...(beforeCompanyDoc.aiAgentSettings || {}),
+              agent2: data
+            }
+          };
+
+          await ConfigAuditService.logConfigChange({
+            req,
             companyId,
-            previousConfig: {
-              enabled: saved?.enabled,
-              discoveryEnabled: saved?.discovery?.enabled
+            action: 'AGENT2_LAZY_MIGRATION',
+            meta: {
+              mutationKind: 'lazy_migration',
+              enforcement: true,
+              breakGlassActive
             },
-            migratedTo: { enabled: true, discoveryEnabled: true },
-            reason: 'V1.0 permanent default enforcement',
-            ts: new Date().toISOString()
+            updatedPaths: [
+              'aiAgentSettings.agent2.enabled',
+              'aiAgentSettings.agent2.discovery.enabled'
+            ],
+            beforeCompanyDoc,
+            afterCompanyDoc
           });
         } catch (e) { /* non-blocking */ }
       } catch (migrationErr) {
@@ -853,7 +875,11 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
       meta: {
         uiBuild: UI_BUILD,
         effectiveConfigVersion: company.effectiveConfigVersion || company.updatedAt || null,
-        lazyMigrated: needsMigration
+        lazyMigrated: needsMigration,
+        breakGlassActive,
+        policy: {
+          agent2PermanentDefault: true
+        }
       }
     });
   } catch (error) {

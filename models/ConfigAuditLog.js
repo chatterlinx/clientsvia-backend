@@ -55,6 +55,12 @@ const ConfigAuditLogSchema = new mongoose.Schema({
     summary: { type: String, default: null, maxLength: 500 }
   },
 
+  // Optional structured metadata for governance/compliance.
+  // Examples:
+  // - { mutationKind: 'lazy_migration', enforcement: true }
+  // - { mutationKind: 'break_glass', breakGlassActive: true }
+  meta: { type: mongoose.Schema.Types.Mixed, default: {} },
+
   // Snapshots (kept lean; can be pruned later if needed)
   before: { type: mongoose.Schema.Types.Mixed, default: null },
   after: { type: mongoose.Schema.Types.Mixed, default: null },

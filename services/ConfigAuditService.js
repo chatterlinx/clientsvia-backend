@@ -63,10 +63,11 @@ class ConfigAuditService {
    * @param {string} params.companyId
    * @param {string} params.action
    * @param {string[]} [params.updatedPaths]
+   * @param {object} [params.meta]
    * @param {object} [params.beforeCompanyDoc] - lean company doc
    * @param {object} [params.afterCompanyDoc] - lean company doc
    */
-  static async logConfigChange({ req, companyId, action, updatedPaths = [], beforeCompanyDoc, afterCompanyDoc }) {
+  static async logConfigChange({ req, companyId, action, updatedPaths = [], meta = {}, beforeCompanyDoc, afterCompanyDoc }) {
     try {
       const requestId = getRequestId(req);
       const user = req.user || {};
@@ -100,6 +101,7 @@ class ConfigAuditService {
           updatedPaths,
           summary: summarizePaths(updatedPaths)
         },
+        meta: meta && typeof meta === 'object' ? meta : {},
         before: beforeCompanyDoc ? { aiAgentSettings: beforeCompanyDoc.aiAgentSettings, agentSettings: beforeCompanyDoc.agentSettings } : null,
         after: afterCompanyDoc ? { aiAgentSettings: afterCompanyDoc.aiAgentSettings, agentSettings: afterCompanyDoc.agentSettings } : null
       });
@@ -115,6 +117,59 @@ class ConfigAuditService {
       return entry;
     } catch (error) {
       logger.error('[CONFIG AUDIT] Failed to log config change (non-fatal)', {
+        companyId,
+        action,
+        error: error.message
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Log a system-level governance notice that is not tied to an admin request.
+   * This is used for operational/compliance events like break-glass bypass activation.
+   *
+   * IMPORTANT: This is NOT the call-review/blackbox timeline. It is config governance only.
+   */
+  static async logSystemEvent({ companyId, action, meta = {}, before = null, after = null, updatedPaths = [] }) {
+    try {
+      const entry = await ConfigAuditLog.create({
+        companyId,
+        actor: {
+          userId: 'system',
+          email: null,
+          role: 'system',
+          effectiveRole: 'system',
+          breakGlass: false
+        },
+        request: {
+          requestId: null,
+          method: null,
+          path: null,
+          ip: null,
+          userAgent: null
+        },
+        action,
+        effectiveConfigVersionBefore: null,
+        effectiveConfigVersionAfter: null,
+        diff: {
+          updatedPaths,
+          summary: summarizePaths(updatedPaths)
+        },
+        meta: meta && typeof meta === 'object' ? meta : {},
+        before,
+        after
+      });
+
+      logger.info('[CONFIG AUDIT] Logged system event', {
+        companyId,
+        action,
+        auditId: entry?._id?.toString?.() || null
+      });
+
+      return entry;
+    } catch (error) {
+      logger.error('[CONFIG AUDIT] Failed to log system event (non-fatal)', {
         companyId,
         action,
         error: error.message

@@ -47,6 +47,7 @@ class Agent2Manager {
     const token = this._getToken();
     if (!token) {
       this.config = this.getDefaultConfig();
+      this._agent2Meta = {};
       return this.config;
     }
 
@@ -59,11 +60,13 @@ class Agent2Manager {
 
     if (!res.ok) {
       this.config = this.getDefaultConfig();
+      this._agent2Meta = {};
       return this.config;
     }
 
     const json = await res.json();
     this.config = json?.data || this.getDefaultConfig();
+    this._agent2Meta = json?.meta || {};
     return this.config;
   }
 
@@ -98,7 +101,8 @@ class Agent2Manager {
   // ──────────────────────────────────────────────────────────────────────────
   getDefaultConfig() {
     return {
-      enabled: false,
+      // V1.0: Agent 2.0 is the permanent platform default
+      enabled: true,
       globalNegativeKeywords: [],
       // V129: Real bridge (latency filler)
       bridge: {
@@ -115,7 +119,8 @@ class Agent2Manager {
         ]
       },
       discovery: {
-        enabled: false,
+        // V1.0: Discovery is permanently enabled
+        enabled: true,
         style: {
           ackWord: 'Ok.',
           robotChallenge: {
@@ -3435,10 +3440,33 @@ class Agent2Manager {
 
   renderStatusCard() {
     // V1.0: Agent 2.0 is PERMANENT DEFAULT - no toggle, just status badge
+    const meta = this._agent2Meta || {};
+    const breakGlassActive = meta.breakGlassActive === true;
+    const lazyMigrated = meta.lazyMigrated === true;
+    const policyPermanent = meta?.policy?.agent2PermanentDefault === true;
+
     return this.renderCard(
       'Status',
       'Agent 2.0 is the platform default. Legacy discovery has been deprecated.',
       `
+        ${breakGlassActive ? `
+          <div style="margin-bottom:12px; padding:12px; background:#2d0b0b; border:1px solid #f85149; border-radius:10px;">
+            <div style="font-weight:800; color:#f85149;">BREAK-GLASS ACTIVE (env allowlist)</div>
+            <div style="color:#8b949e; font-size:12px; margin-top:6px; line-height:1.4;">
+              Agent 2.0 is bypassed for this company via <code>AGENT2_FORCE_DISABLE_ALLOWLIST</code>. This is read-only and not controlled by the UI.
+            </div>
+          </div>
+        ` : ''}
+
+        ${lazyMigrated ? `
+          <div style="margin-bottom:12px; padding:12px; background:#0b1220; border:1px solid #30363d; border-radius:10px;">
+            <div style="font-weight:700; color:#c9d1d9;">Legacy config detected and ignored</div>
+            <div style="color:#8b949e; font-size:12px; margin-top:6px; line-height:1.4;">
+              Persisted <code>enabled=false</code> / <code>discovery.enabled=false</code> was found and auto-corrected on load. Runtime enforces Agent 2.0 permanent default.
+            </div>
+          </div>
+        ` : ''}
+
         <div style="display:flex; align-items:center; gap:16px; padding:16px; background:linear-gradient(135deg, #0d4429 0%, #0d1117 100%); border:1px solid #238636; border-radius:12px;">
           <div style="width:48px; height:48px; background:#238636; border-radius:50%; display:flex; align-items:center; justify-content:center;">
             <span style="font-size:24px;">✓</span>
@@ -3446,26 +3474,34 @@ class Agent2Manager {
           <div style="flex:1;">
             <div style="font-weight:800; font-size:1.1rem; color:#7ee787;">Agent 2.0 is the Platform Default</div>
             <div style="color:#8b949e; font-size:13px; margin-top:4px;">
-              Discovery is permanently enabled. All calls use Agent 2.0 for discovery conversations.
+              ${breakGlassActive ? 'Agent 2.0 is temporarily bypassed for this company (break-glass).' : 'Discovery is permanently enabled. All calls use Agent 2.0 for discovery conversations.'}
             </div>
           </div>
           <div style="text-align:right;">
-            <div style="background:#238636; color:white; padding:6px 14px; border-radius:8px; font-weight:700; font-size:12px;">ACTIVE</div>
-            <div style="color:#6e7681; font-size:11px; margin-top:6px;">v1.0 Permanent</div>
+            <div style="background:${breakGlassActive ? '#f85149' : '#238636'}; color:white; padding:6px 14px; border-radius:8px; font-weight:700; font-size:12px;">
+              ${breakGlassActive ? 'BYPASSED' : 'ACTIVE'}
+            </div>
+            <div style="color:#6e7681; font-size:11px; margin-top:6px;">${policyPermanent ? 'v1.0 Permanent' : 'policy unknown'}</div>
           </div>
         </div>
         <div style="margin-top:12px; padding:12px; background:#161b22; border:1px solid #30363d; border-radius:10px; display:flex; gap:16px;">
           <div style="flex:1; text-align:center; border-right:1px solid #30363d; padding-right:16px;">
             <div style="color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Agent 2.0</div>
-            <div style="color:#7ee787; font-size:1.1rem; font-weight:700; margin-top:4px;">Enabled</div>
+            <div style="color:${breakGlassActive ? '#f85149' : '#7ee787'}; font-size:1.1rem; font-weight:700; margin-top:4px;">
+              ${breakGlassActive ? 'Bypassed' : 'Enabled'}
+            </div>
           </div>
           <div style="flex:1; text-align:center; border-right:1px solid #30363d; padding-right:16px;">
             <div style="color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Discovery</div>
-            <div style="color:#7ee787; font-size:1.1rem; font-weight:700; margin-top:4px;">Enabled</div>
+            <div style="color:${breakGlassActive ? '#f85149' : '#7ee787'}; font-size:1.1rem; font-weight:700; margin-top:4px;">
+              ${breakGlassActive ? 'Bypassed' : 'Enabled'}
+            </div>
           </div>
           <div style="flex:1; text-align:center;">
             <div style="color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Legacy Discovery</div>
-            <div style="color:#f85149; font-size:1.1rem; font-weight:700; margin-top:4px;">Deprecated</div>
+            <div style="color:${breakGlassActive ? '#7ee787' : '#f85149'}; font-size:1.1rem; font-weight:700; margin-top:4px;">
+              ${breakGlassActive ? 'Active (break-glass)' : 'Deprecated'}
+            </div>
           </div>
         </div>
       `
@@ -7508,6 +7544,13 @@ class Agent2Manager {
     
     cfg.meta = cfg.meta || {};
     cfg.meta.uiBuild = Agent2Manager.UI_BUILD;
+
+    // V1.0: Permanent default enforcement (UI truth).
+    // Even if local state is reset or old exports are imported, UI must reflect policy.
+    cfg.enabled = true;
+    cfg.discovery = cfg.discovery && typeof cfg.discovery === 'object' ? cfg.discovery : {};
+    cfg.discovery.enabled = true;
+
     this.config = cfg;
   }
 

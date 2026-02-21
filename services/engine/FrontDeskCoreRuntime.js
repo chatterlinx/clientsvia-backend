@@ -82,12 +82,40 @@ try {
     CallLogger = null;
 }
 
+// Optional: Config governance audit (NOT call review timeline)
+let ConfigAuditService = null;
+try {
+    ConfigAuditService = require('../ConfigAuditService');
+} catch (err) {
+    ConfigAuditService = null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // V1.0: AGENT 2.0 PERMANENT DEFAULT ENFORCEMENT
 // ═══════════════════════════════════════════════════════════════════════════
 // Agent 2.0 is ALWAYS enabled. This is the only way to stop ghost bugs.
 // Break-glass: AGENT2_FORCE_DISABLE_ALLOWLIST env var for emergency only.
 // ═══════════════════════════════════════════════════════════════════════════
+
+const _breakGlassAuditThrottle = new Map(); // companyId -> lastLoggedMs
+function maybeAuditBreakGlass(companyId) {
+    if (!ConfigAuditService?.logSystemEvent) return;
+    if (!companyId || companyId === 'unknown') return;
+    const now = Date.now();
+    const last = _breakGlassAuditThrottle.get(companyId) || 0;
+    // Avoid spamming: at most once per process per 30 minutes per company
+    if (now - last < 30 * 60 * 1000) return;
+    _breakGlassAuditThrottle.set(companyId, now);
+
+    ConfigAuditService.logSystemEvent({
+        companyId,
+        action: 'AGENT2_BREAK_GLASS_ACTIVE',
+        meta: {
+            mutationKind: 'break_glass',
+            breakGlassActive: true
+        }
+    }).catch(() => {});
+}
 
 /**
  * Check if Agent 2.0 should be enabled for this company.
@@ -117,6 +145,8 @@ function isAgent2Enabled(company, bufferEvent) {
                 timestamp: new Date().toISOString()
             });
         }
+        // Config governance trail (throttled)
+        maybeAuditBreakGlass(companyId);
         logger.warn('[FRONT_DESK_CORE_RUNTIME] AGENT2_BREAK_GLASS_USED', { companyId });
         return { enabled: false, reason: 'BREAK_GLASS_ALLOWLIST', enforced: false };
     }
@@ -178,43 +208,43 @@ const ALLOWED_PREEMPTORS = new Set([
     'CONNECTION_QUALITY_GATE',
     'AFTER_HOURS_GATE', 
     'ESCALATION_DETECTOR',
-    'GREETING_INTERCEPTOR_AGENT2',  // Agent2's greeting interceptor only
     'SILENCE_HANGUP_POLICY',
     'DTMF_RESCUE'
 ]);
 
 /**
- * Log when a platform preemptor speaks before Agent2.
- * This creates an audit trail for debugging mic ownership issues.
+ * Central enforcement: when Agent2 is enabled, only allowlisted preemptors may speak.
+ * If blocked, emit PLATFORM_PREEMPTOR_BLOCKED and force caller to continue to Agent2.
  */
-function logPreemptorSpoke(bufferEvent, preemptorId, reason, details = {}) {
+function enforcePreemptorOrContinue({ agent2Enabled, bufferEvent, preemptorId, reason, details = {} }) {
+    // Only enforce when Agent2 is active. Under break-glass, we intentionally allow legacy behavior.
+    if (!agent2Enabled) return true;
+
     const isAllowed = ALLOWED_PREEMPTORS.has(preemptorId);
-    
+    const payload = {
+        preemptorId,
+        reason,
+        allowed: isAllowed,
+        ...details,
+        timestamp: new Date().toISOString()
+    };
+
     if (isAllowed) {
-        bufferEvent('PLATFORM_PREEMPTOR_ALLOWED_SPOKE', {
-            preemptorId,
-            reason,
-            allowed: true,
-            ...details,
-            timestamp: new Date().toISOString()
-        });
-    } else {
-        // This should NOT happen in V1.0 - all non-allowed preemptors should be blocked
-        bufferEvent('PLATFORM_PREEMPTOR_BLOCKED', {
-            preemptorId,
-            reason,
-            allowed: false,
-            blocked: true,
-            warning: 'Non-allowlisted preemptor attempted to speak - this should not happen in V1.0',
-            ...details,
-            timestamp: new Date().toISOString()
-        });
-        logger.warn('[FRONT_DESK_CORE_RUNTIME] PLATFORM_PREEMPTOR_BLOCKED', {
-            preemptorId,
-            reason,
-            details
-        });
+        bufferEvent('PLATFORM_PREEMPTOR_ALLOWED_SPOKE', payload);
+        return true;
     }
+
+    bufferEvent('PLATFORM_PREEMPTOR_BLOCKED', {
+        ...payload,
+        blocked: true,
+        warning: 'Non-allowlisted preemptor attempted to speak - response discarded, continuing to Agent2'
+    });
+    logger.warn('[FRONT_DESK_CORE_RUNTIME] PLATFORM_PREEMPTOR_BLOCKED', {
+        preemptorId,
+        reason,
+        details
+    });
+    return false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -478,6 +508,11 @@ class FrontDeskCoreRuntime {
                 discoveryStepId: state.discovery?.currentStepId || null,
                 discoverySlotId: state.discovery?.currentSlotId || null
             });
+
+            // V1.0: Compute Agent2 enablement ONCE per turn for consistent enforcement/proof.
+            // This emits AGENT2_DEFAULT_ENFORCED or AGENT2_BREAK_GLASS_USED as appropriate.
+            const agent2Check = isAgent2Enabled(company, bufferEvent);
+            const agent2Enabled = agent2Check.enabled;
             
             // ═══════════════════════════════════════════════════════════════════════════
             // S1: RUNTIME OWNERSHIP
@@ -621,17 +656,27 @@ class FrontDeskCoreRuntime {
                         turn: turn
                     });
                     
+                    const allowedToSpeak = enforcePreemptorOrContinue({
+                        agent2Enabled,
+                        bufferEvent,
+                        preemptorId: 'CONNECTION_QUALITY_GATE',
+                        reason: 'DTMF_ESCAPE',
+                        details: { troubleCount: callState._connectionTroubleCount, turn }
+                    });
+
                     // Return DTMF escape response
                     // Note: The actual DTMF handling (Gather with numDigits) happens in v2twilio.js
-                    return {
-                        response: cqDtmfMessage,
-                        state: callState,
-                        lane: 'DISCOVERY',
-                        signals: { escalate: false, bookingComplete: false, dtmfEscape: true },
-                        action: 'DTMF_ESCAPE',
-                        matchSource: 'CONNECTION_QUALITY_GATE',
-                        turnEventBuffer
-                    };
+                    if (allowedToSpeak) {
+                        return {
+                            response: cqDtmfMessage,
+                            state: callState,
+                            lane: 'DISCOVERY',
+                            signals: { escalate: false, bookingComplete: false, dtmfEscape: true },
+                            action: 'DTMF_ESCAPE',
+                            matchSource: 'CONNECTION_QUALITY_GATE',
+                            turnEventBuffer
+                        };
+                    }
                 } else {
                     // Re-greet - still have retries left
                     bufferEvent('CONNECTION_QUALITY_GATE_REGREET', {
@@ -659,16 +704,26 @@ class FrontDeskCoreRuntime {
                         troubleReason
                     });
                     
+                    const allowedToSpeak = enforcePreemptorOrContinue({
+                        agent2Enabled,
+                        bufferEvent,
+                        preemptorId: 'CONNECTION_QUALITY_GATE',
+                        reason: 'REGREET',
+                        details: { troubleCount: callState._connectionTroubleCount, troubleReason, turn }
+                    });
+
                     // Return clarification prompt
-                    return {
-                        response: cqClarificationPrompt,
-                        state: callState,
-                        lane: 'DISCOVERY',
-                        signals: { escalate: false, bookingComplete: false },
-                        action: 'CONTINUE',
-                        matchSource: 'CONNECTION_QUALITY_GATE',
-                        turnEventBuffer
-                    };
+                    if (allowedToSpeak) {
+                        return {
+                            response: cqClarificationPrompt,
+                            state: callState,
+                            lane: 'DISCOVERY',
+                            signals: { escalate: false, bookingComplete: false },
+                            action: 'CONTINUE',
+                            matchSource: 'CONNECTION_QUALITY_GATE',
+                            turnEventBuffer
+                        };
+                    }
                 }
             }
             
@@ -758,39 +813,52 @@ class FrontDeskCoreRuntime {
             
             // If escalation triggered, return immediately
             if (escalationTriggered) {
-                // V1.0: Log allowed preemptor speaking before Agent2
-                logPreemptorSpoke(bufferEvent, 'ESCALATION_DETECTOR', 'EXPLICIT_TRANSFER_REQUEST', {
-                    matchedTrigger: matchedEscalationTrigger,
-                    turn
+                // V1.0: Enforce allowlist BEFORE returning a spoken response.
+                const allowedToSpeak = enforcePreemptorOrContinue({
+                    agent2Enabled,
+                    bufferEvent,
+                    preemptorId: 'ESCALATION_DETECTOR',
+                    reason: 'EXPLICIT_TRANSFER_REQUEST',
+                    details: {
+                        matchedTrigger: matchedEscalationTrigger,
+                        turn
+                    }
                 });
-                
-                bufferEvent('ESCALATION_TRIGGERED', {
-                    matchedTrigger: matchedEscalationTrigger,
-                    escalationMessage: escalationMessage.substring(0, 80),
-                    transferNumber: transferNumber ? '***' : null, // Don't log full number
-                    action: transferNumber ? 'TRANSFER' : 'ESCALATE',
-                    sectionTrail: tracer.getTrailString()
-                });
-                
-                logger.warn('[FRONT_DESK_CORE_RUNTIME] ESCALATION TRIGGERED', {
-                    callSid,
-                    matchedTrigger: matchedEscalationTrigger,
-                    hasTransferNumber: !!transferNumber
-                });
-                
-                return {
-                    response: escalationMessage,
-                    state: callState,
-                    lane: 'ESCALATION',
-                    signals: { 
-                        escalate: true, 
-                        bookingComplete: false,
-                        transferNumber: transferNumber || null
-                    },
-                    action: 'ESCALATE',
-                    matchSource: 'ESCALATION_DETECTOR',
-                    turnEventBuffer
-                };
+
+                if (!allowedToSpeak) {
+                    // Discard response and continue into Agent2.
+                    escalationTriggered = false;
+                }
+
+                if (allowedToSpeak) {
+                    bufferEvent('ESCALATION_TRIGGERED', {
+                        matchedTrigger: matchedEscalationTrigger,
+                        escalationMessage: escalationMessage.substring(0, 80),
+                        transferNumber: transferNumber ? '***' : null, // Don't log full number
+                        action: transferNumber ? 'TRANSFER' : 'ESCALATE',
+                        sectionTrail: tracer.getTrailString()
+                    });
+
+                    logger.warn('[FRONT_DESK_CORE_RUNTIME] ESCALATION TRIGGERED', {
+                        callSid,
+                        matchedTrigger: matchedEscalationTrigger,
+                        hasTransferNumber: !!transferNumber
+                    });
+
+                    return {
+                        response: escalationMessage,
+                        state: callState,
+                        lane: 'ESCALATION',
+                        signals: { 
+                            escalate: true, 
+                            bookingComplete: false,
+                            transferNumber: transferNumber || null
+                        },
+                        action: 'ESCALATE',
+                        matchSource: 'ESCALATION_DETECTOR',
+                        turnEventBuffer
+                    };
+                }
             }
             
             // ═══════════════════════════════════════════════════════════════════════════
@@ -804,7 +872,7 @@ class FrontDeskCoreRuntime {
             
             // V119: Check if utterance passes the short-greeting gate BEFORE trying to match
             const isShortEnough = GreetingInterceptor.isShortGreeting(inputText);
-            const greetingMatch = GreetingInterceptor.tryIntercept(inputText, company, state);
+            let greetingMatch = GreetingInterceptor.tryIntercept(inputText, company, state);
             
             // V119: ALWAYS emit greeting evaluation proof (whether it matched or not)
             bufferEvent('GREETING_EVALUATED', {
@@ -818,16 +886,34 @@ class FrontDeskCoreRuntime {
             });
             
             if (greetingMatch) {
-                // V1.0: Log allowed preemptor speaking before Agent2
-                // NOTE: This is the LEGACY greeting interceptor. In V1.0, Agent2's greeting
-                // interceptor is the preferred path. This may need to be deprecated.
-                logPreemptorSpoke(bufferEvent, 'GREETING_INTERCEPTOR', 'SHORT_GREETING_MATCHED', {
-                    matchedTrigger: greetingMatch.matchedTrigger,
-                    matchType: greetingMatch.matchType,
-                    isLegacy: true,
-                    turn
+                // V1.0: Enforce allowlist BEFORE returning a spoken response.
+                // Normal policy: legacy greeting/instant responders are blocked while Agent2 is active.
+                const allowedToSpeak = enforcePreemptorOrContinue({
+                    agent2Enabled,
+                    bufferEvent,
+                    preemptorId: 'GREETING_INTERCEPTOR',
+                    reason: 'SHORT_GREETING_MATCHED',
+                    details: {
+                        matchedTrigger: greetingMatch.matchedTrigger,
+                        matchType: greetingMatch.matchType,
+                        isLegacy: true,
+                        turn
+                    }
                 });
+
+                if (!allowedToSpeak) {
+                    bufferEvent('GREETING_INTERCEPT_DISCARDED', {
+                        matchedTrigger: greetingMatch.matchedTrigger,
+                        matchType: greetingMatch.matchType,
+                        reason: 'BLOCKED_BY_AGENT2_PREEMPTOR_POLICY',
+                        turn
+                    });
+                    greetingMatch = null;
+                }
                 
+                if (!greetingMatch) {
+                    // Continue into Agent2 (do not early-return).
+                } else {
                 // Log the intercept
                 bufferEvent('GREETING_INTERCEPTED', {
                     matchedTrigger: greetingMatch.matchedTrigger,
@@ -848,14 +934,16 @@ class FrontDeskCoreRuntime {
                     isLegacy: true
                 });
                 
-                // V119: Emit MIC_OWNER_PROOF for greeting intercept path
-                // This proves Agent 2.0 was BYPASSED because greeting matched
-                const agent2Enabled =
-                    company?.aiAgentSettings?.agent2?.enabled === true &&
-                    company?.aiAgentSettings?.agent2?.discovery?.enabled === true;
+                // V119/V1.0: Emit MIC_OWNER_PROOF for greeting intercept path
+                // This proves Agent 2.0 was BYPASSED because greeting matched.
+                // IMPORTANT: use the V1.0 enforcement/break-glass check (not raw config),
+                // otherwise these proof events lie whenever config is missing/false OR break-glass is active.
+                // At this point, greeting was allowed to speak, so Agent2 was bypassed.
+                // Use the computed turn-level truth (includes break-glass).
+                const agent2EnabledTruth = agent2Enabled;
                     
                 bufferEvent('A2_MIC_OWNER_PROOF', {
-                    agent2Enabled,
+                    agent2Enabled: agent2EnabledTruth,
                     agent2Ran: false,
                     agent2Responded: false,
                     finalResponder: 'GREETING_INTERCEPTOR',
@@ -890,6 +978,7 @@ class FrontDeskCoreRuntime {
                     matchSource: 'GREETING_INTERCEPTOR',
                     turnEventBuffer
                 };
+                }
             }
             
             // ═══════════════════════════════════════════════════════════════════════════
@@ -1209,8 +1298,8 @@ class FrontDeskCoreRuntime {
                     // - Legacy owners are BLOCKED (not just skipped)
                     // - Break-glass only via AGENT2_FORCE_DISABLE_ALLOWLIST env var
                     // - We emit proof of blocking AND enforcement
-                    const agent2Check = isAgent2Enabled(company, bufferEvent);
-                    const agent2Enabled = agent2Check.enabled;
+                    // Use the turn-level computed truth (avoid duplicate enforcement events)
+                    // NOTE: 'agent2Check' and 'agent2Enabled' are defined at top of try{} scope.
                     
                     if (agent2Enabled) {
                         currentSection = 'A2_DISCOVERY';
@@ -1309,8 +1398,7 @@ class FrontDeskCoreRuntime {
                 // LEGACY PATH: Only runs if Agent 2.0 is DISABLED (break-glass only)
                 // ═══════════════════════════════════════════════════════════════════════════
                 // V1.0: Agent 2.0 is PERMANENTLY ON. This path is only reachable via break-glass.
-                const agent2WasEnabledCheck = isAgent2Enabled(company, null); // Don't double-log
-                const agent2WasEnabled = agent2WasEnabledCheck.enabled;
+                const agent2WasEnabled = agent2Enabled;
 
                 if (!ownerResult && !agent2WasEnabled) {
                     // Legacy DiscoveryFlowRunner — only if Agent 2.0 is OFF (break-glass only)
