@@ -5,6 +5,23 @@
 
 ---
 
+## AUTO NO-SHIP IF ANY OF THESE OCCUR:
+
+- ❌ Any red console error
+- ❌ Modal fails to open or freezes
+- ❌ DOM shows TRANSCRIPT > 1 OR SPEAK PROVENANCE > 0 OR TRUTH LINE > 0
+- ❌ Provenance appears "filled in" when missing events exist
+- ❌ modal-open time > 1000ms on 50+ turn call (unless explicitly accepted)
+
+## SHIP ONLY IF ALL PASS:
+
+- ✅ 6 call types pass (no crashes)
+- ✅ Duplication table matches expected (TRANSCRIPT=1, others=0)
+- ✅ Performance acceptable (< 1s)
+- ✅ No fabricated provenance
+
+---
+
 ## 0) PREP (No Excuses)
 
 ```
@@ -152,24 +169,51 @@ Screenshot or copy/paste console red error (top 20 lines)
 
 ---
 
-## 3) DOM DUPLICATION CHECK (Run Once)
+## 3) DOM DUPLICATION CHECK (Run Once - CRITICAL)
 
 **Open any call modal, then run in DevTools Console:**
 
+### Check A: Duplicate Legacy Sections
+
 ```javascript
 (() => {
-  const hits = [...document.querySelectorAll("*")]
-    .filter(n => /^TRANSCRIPT$/i.test((n.textContent || "").trim()));
-  console.log("TRANSCRIPT headers:", hits.length);
-  return hits.length;
+  const needles = ["SPEAK PROVENANCE", "TRUTH LINE", "TRANSCRIPT"];
+  const hits = {};
+  needles.forEach(k => {
+    hits[k] = [...document.querySelectorAll("*")]
+      .filter(n => ((n.textContent || "").trim().toUpperCase() === k))
+      .length;
+  });
+  console.table(hits);
+  return hits;
 })();
 ```
 
-**Expected:** `1`
+**Expected:**
+```
+TRANSCRIPT       = 1
+SPEAK PROVENANCE = 0
+TRUTH LINE       = 0
+```
 
-**FAIL:** `> 1` (duplicate sections still exist)
+**FAIL:** Any number not matching expected = hidden duplication
 
-**Paste if FAIL:** Actual count + screenshot of DOM tree
+### Check B: "[No text available]" Fallback Working
+
+**On call with empty/blank text turns:**
+
+```javascript
+(() => {
+  const cards = [...document.querySelectorAll("*")]
+    .filter(n => (n.textContent || "").includes("[No text available]"));
+  console.log("Cards with [No text available]:", cards.length);
+  return cards.length;
+})();
+```
+
+**Expected:** `>= 1` (on empty-text call), `0` (on normal call)
+
+**Paste if FAIL:** Actual count + screenshot
 
 ---
 
@@ -222,29 +266,29 @@ console.timeEnd("modal-open");
 ```
 === CALL REVIEW TRANSCRIPT VERIFICATION RESULTS ===
 
-Smoke Test: PASS / FAIL
+Smoke: PASS / FAIL
   Console errors? YES / NO
 
-0-turn call: PASS / FAIL
-1–2 turn call: PASS / FAIL
-50+ turn call: PASS / FAIL
+Edge cases:
+0-turn: PASS / FAIL
+1–2 turn: PASS / FAIL
+50+ turn: PASS / FAIL
   Modal-open time: ___ ms
-Missing provenance call: PASS / FAIL
-Empty speechResult call: PASS / FAIL
-Transfer/multi-leg call: PASS / FAIL
+Missing provenance: PASS / FAIL
+Empty speechResult: PASS / FAIL
+Transfer/multi-leg: PASS / FAIL
 
-DOM TRANSCRIPT headers count: ___
+Duplication table:
+TRANSCRIPT = _
+SPEAK PROVENANCE = _
+TRUTH LINE = _
+
+No text available count on empty-text call: _
 
 Truth integrity check: PASS / FAIL
 
 Console errors (if any):
 [paste top 20 lines or write "NONE"]
-
-Performance issues (if any):
-[describe or write "NONE"]
-
-Screenshots (if failures):
-[attach or write "NONE"]
 
 Overall verdict: SHIP / DO NOT SHIP / FIX REQUIRED
 ```
