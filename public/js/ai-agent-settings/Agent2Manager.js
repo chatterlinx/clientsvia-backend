@@ -265,7 +265,7 @@ class Agent2Manager {
         exportBtn.title = 'Configuration has unsaved changes - export will include current state';
       } else {
         exportBtn.style.background = '#1f6feb';
-        exportBtn.title = 'Download complete Agent 2.0 wiring report with all configuration, runtime integration, and validation';
+        exportBtn.title = 'Download wiring report (UI + persisted + runtime owners + flow tree + evidence)';
       }
     }
   }
@@ -301,8 +301,8 @@ class Agent2Manager {
             </div>
           </div>
           <div style="display:flex; gap:10px; flex-wrap:wrap; ${isCallReviewTab ? 'display:none;' : ''}">
-            <button id="a2-export-json" style="padding:8px 14px; background:${this.isDirty ? '#f59e0b' : '#1f6feb'}; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; ${isLLMFallbackTab ? 'display:none;' : ''}" title="Download COMPLETE runtime wiring report including Agent 2.0 + all runtime dependencies${this.isDirty ? ' (includes unsaved changes)' : ''}">
-              📥 Complete Wiring Report
+            <button id="a2-export-json" style="padding:8px 14px; background:${this.isDirty ? '#f59e0b' : '#1f6feb'}; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600; ${isLLMFallbackTab ? 'display:none;' : ''}" title="Download wiring report: UI snapshot + persisted snapshot + runtime owners + flow tree + evidence${this.isDirty ? ' (includes unsaved changes)' : ''}">
+              📥 Wiring Report
             </button>
             <button id="a2-export-agent2-only" style="padding:8px 14px; background:#21262d; color:#8b949e; border:1px solid #30363d; border-radius:8px; cursor:pointer; font-size:0.85rem; ${isLLMFallbackTab ? 'display:none;' : ''}" title="Export Agent 2.0 namespace only (dev/debug)">
               Agent2 Only
@@ -3434,27 +3434,39 @@ class Agent2Manager {
   }
 
   renderStatusCard() {
-    const enabled = this.config.enabled === true;
-    const dEnabled = this.config.discovery?.enabled === true;
+    // V1.0: Agent 2.0 is PERMANENT DEFAULT - no toggle, just status badge
     return this.renderCard(
       'Status',
-      'This only controls Agent 2.0 configuration. Runtime takeover is a later, explicit step.',
+      'Agent 2.0 is the platform default. Legacy discovery has been deprecated.',
       `
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <label style="display:flex; align-items:center; gap:10px; padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
-            <input id="a2-enabled" type="checkbox" ${enabled ? 'checked' : ''} />
-            <div>
-              <div style="font-weight:700;">Enable Agent 2.0 (master)</div>
-              <div style="color:#8b949e; font-size:12px;">Stores config under <code style="background:#111827; padding:2px 6px; border-radius:6px;">aiAgentSettings.agent2</code></div>
+        <div style="display:flex; align-items:center; gap:16px; padding:16px; background:linear-gradient(135deg, #0d4429 0%, #0d1117 100%); border:1px solid #238636; border-radius:12px;">
+          <div style="width:48px; height:48px; background:#238636; border-radius:50%; display:flex; align-items:center; justify-content:center;">
+            <span style="font-size:24px;">✓</span>
+          </div>
+          <div style="flex:1;">
+            <div style="font-weight:800; font-size:1.1rem; color:#7ee787;">Agent 2.0 is the Platform Default</div>
+            <div style="color:#8b949e; font-size:13px; margin-top:4px;">
+              Discovery is permanently enabled. All calls use Agent 2.0 for discovery conversations.
             </div>
-          </label>
-          <label style="display:flex; align-items:center; gap:10px; padding:12px; background:#0d1117; border:1px solid #30363d; border-radius:12px;">
-            <input id="a2-discovery-enabled" type="checkbox" ${dEnabled ? 'checked' : ''} />
-            <div>
-              <div style="font-weight:700;">Enable Agent 2.0 Discovery</div>
-              <div style="color:#8b949e; font-size:12px;">Gates the Agent 2.0 Discovery runtime flow.</div>
-            </div>
-          </label>
+          </div>
+          <div style="text-align:right;">
+            <div style="background:#238636; color:white; padding:6px 14px; border-radius:8px; font-weight:700; font-size:12px;">ACTIVE</div>
+            <div style="color:#6e7681; font-size:11px; margin-top:6px;">v1.0 Permanent</div>
+          </div>
+        </div>
+        <div style="margin-top:12px; padding:12px; background:#161b22; border:1px solid #30363d; border-radius:10px; display:flex; gap:16px;">
+          <div style="flex:1; text-align:center; border-right:1px solid #30363d; padding-right:16px;">
+            <div style="color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Agent 2.0</div>
+            <div style="color:#7ee787; font-size:1.1rem; font-weight:700; margin-top:4px;">Enabled</div>
+          </div>
+          <div style="flex:1; text-align:center; border-right:1px solid #30363d; padding-right:16px;">
+            <div style="color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Discovery</div>
+            <div style="color:#7ee787; font-size:1.1rem; font-weight:700; margin-top:4px;">Enabled</div>
+          </div>
+          <div style="flex:1; text-align:center;">
+            <div style="color:#8b949e; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Legacy Discovery</div>
+            <div style="color:#f85149; font-size:1.1rem; font-weight:700; margin-top:4px;">Deprecated</div>
+          </div>
         </div>
       `
     );
@@ -5323,10 +5335,8 @@ class Agent2Manager {
     });
 
     // CONFIG TAB HANDLERS (existing)
-    const enabled = container.querySelector('#a2-enabled');
-    const dEnabled = container.querySelector('#a2-discovery-enabled');
-    enabled?.addEventListener('change', (e) => { this.config.enabled = e.target.checked; onAnyChange(); });
-    dEnabled?.addEventListener('change', (e) => { this.config.discovery.enabled = e.target.checked; onAnyChange(); });
+    // V1.0: Agent 2.0 enabled toggles removed - permanently enabled
+    // The old #a2-enabled and #a2-discovery-enabled checkboxes no longer exist
 
     container.querySelector('#a2-reset')?.addEventListener('click', () => {
       if (!confirm('Reset Agent 2.0 config to defaults?')) return;
@@ -7578,6 +7588,9 @@ class Agent2Manager {
     // ═══════════════════════════════════════════════════════════════════════
     let persistedSnapshot = null;
     let frontDeskConfig = null;
+    let flowTreeSnapshot = null;
+    let wiringStatusSnapshot = null;
+    let controlPlaneRawSnapshot = null;
     let persistedFetchError = null;
     
     try {
@@ -7599,6 +7612,31 @@ class Agent2Manager {
       if (fdRes.ok) {
         const fdJson = await fdRes.json();
         frontDeskConfig = fdJson?.data || fdJson || null;
+      }
+
+      // Fetch Flow Tree + Runtime Bindings (Control Plane Wiring truth)
+      const flowRes = await fetch(`/api/admin/truth-bundle/flow-tree`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (flowRes.ok) {
+        flowTreeSnapshot = await flowRes.json();
+      }
+
+      // Fetch AW Wiring report (wiring tab truth)
+      const wiringRes = await fetch(`/api/admin/wiring-status/${this.companyId}?includeGuardrails=0&includeInfrastructure=0`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (wiringRes.ok) {
+        wiringStatusSnapshot = await wiringRes.json();
+      }
+
+      // Fetch raw control-plane truth (DB echo for debugging)
+      const rawRes = await fetch(`/api/company/${this.companyId}/control-plane/raw`, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+      });
+      if (rawRes.ok) {
+        const rawJson = await rawRes.json();
+        controlPlaneRawSnapshot = rawJson?.data || rawJson || null;
       }
     } catch (err) {
       persistedFetchError = err.message;
@@ -7623,7 +7661,7 @@ class Agent2Manager {
     
     // Check what we're actually exporting
     const exportedSections = ['agent2Master', 'discoveryMaster', 'discoveryStyle', 
-      'vocabularySystem', 'clarifierSystem', 'playbook', 'triggerCards', 'fallbackResponses',
+      'bridgeSettings', 'vocabularySystem', 'clarifierSystem', 'playbook', 'triggerCards', 'fallbackResponses',
       'callStartGreeting', 'greetingInterceptor', 'intentWordBlocking', 'callList'];
     uiCoverage.exportedSections = exportedSections;
     
@@ -7740,6 +7778,16 @@ class Agent2Manager {
     if (!frontDeskConfig) {
       missingSections.push('frontDeskBehavior');
       failedChecks.push('RUNTIME_DEPENDENCY_MISSING: Could not fetch frontDeskBehavior config');
+    }
+
+    // Control Plane Wiring truth is required for calling this report "wiring complete"
+    if (!flowTreeSnapshot) {
+      missingSections.push('flowTree');
+      failedChecks.push('CONTROL_PLANE_MISSING: Could not fetch Flow Tree truth (truth-bundle/flow-tree)');
+    }
+    if (!wiringStatusSnapshot) {
+      missingSections.push('awWiringStatus');
+      failedChecks.push('CONTROL_PLANE_MISSING: Could not fetch AW wiring status (wiring-status)');
     }
     
     // ═══════════════════════════════════════════════════════════════════════
@@ -7880,6 +7928,16 @@ class Agent2Manager {
         uiPath: 'Agent 2.0 > Greetings > Call Start Greeting',
         url: config.greetings.callStart.audioUrl,
         fallbackText: config.greetings?.callStart?.text || '[no fallback text]'
+      });
+    }
+
+    // Agent2 discovery style: robot challenge (runtime-wired line)
+    if (config.discovery?.style?.robotChallenge?.audioUrl) {
+      allAudioUrls.push({
+        sourceId: 'agent2.discovery.style.robotChallenge',
+        uiPath: 'Agent 2.0 > Configuration > Discovery Style > Robot Challenge',
+        url: config.discovery.style.robotChallenge.audioUrl,
+        fallbackText: config.discovery?.style?.robotChallenge?.line || '[no fallback text]'
       });
     }
     
@@ -8250,7 +8308,7 @@ class Agent2Manager {
     return {
       manifest: {
         reportType: 'COMPLETE_RUNTIME_WIRING_REPORT',
-        title: 'Complete Runtime Wiring Report (Agent 2.0 + Dependencies)',
+        title: 'Wiring Report (UI + Persisted + Runtime Owners + Flow Tree + Evidence)',
         companyId: this.companyId,
         uiBuild: Agent2Manager.UI_BUILD,
         generatedAt: timestamp,
@@ -8283,6 +8341,13 @@ class Agent2Manager {
       agent2Config,
       
       runtimeDependencies,
+
+      controlPlaneTruth: {
+        _description: 'Control Plane Wiring truth sources (Flow Tree + AW wiring report + raw config echo)',
+        flowTreeSnapshot,
+        wiringStatusSnapshot,
+        controlPlaneRawSnapshot
+      },
       
       audioAssets,
       

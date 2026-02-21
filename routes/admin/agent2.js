@@ -30,11 +30,21 @@ const CallLogger = require('../../services/CallLogger');
 const CallRecording = require('../../models/CallRecording');
 const LLMFallbackUsage = require('../../models/LLMFallbackUsage');
 
-const UI_BUILD = 'AGENT2_UI_V0.9';
+const UI_BUILD = 'AGENT2_UI_V1.0';
+
+// ════════════════════════════════════════════════════════════════════════════════
+// AGENT 2.0 PERMANENT DEFAULT POLICY
+// ════════════════════════════════════════════════════════════════════════════════
+// Agent 2.0 is the ONLY Discovery system. Legacy discovery is deprecated.
+// - enabled and discovery.enabled are ALWAYS true
+// - UI cannot turn Agent2 off
+// - Runtime enforces Agent2 even if config is missing/wrong
+// - Break-glass only via AGENT2_FORCE_DISABLE_ALLOWLIST env var
+// ════════════════════════════════════════════════════════════════════════════════
 
 function defaultAgent2Config() {
   return {
-    enabled: false,
+    enabled: true,  // V1.0: PERMANENT DEFAULT - Agent 2.0 is always on
     // Global negative keywords that block ALL trigger cards (V4)
     // Intentionally empty by default to avoid accidental suppression.
     globalNegativeKeywords: [],
@@ -55,7 +65,7 @@ function defaultAgent2Config() {
       ]
     },
     discovery: {
-      enabled: false,
+      enabled: true,  // V1.0: PERMANENT DEFAULT - Discovery is always on
       style: {
         ackWord: 'Ok.',
         robotChallenge: {
@@ -631,6 +641,15 @@ function mergeAgent2Config(saved) {
     }
   };
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // V1.0: AGENT 2.0 PERMANENT DEFAULT ENFORCEMENT
+  // ════════════════════════════════════════════════════════════════════════════
+  // Regardless of what's in the DB, Agent 2.0 is ALWAYS enabled.
+  // This enforcement prevents "why is it acting different today?" chaos.
+  // ════════════════════════════════════════════════════════════════════════════
+  merged.enabled = true;
+  merged.discovery.enabled = true;
+
   // Guardrails: ensure arrays are arrays (UI expects stable types).
   if (!Array.isArray(merged.discovery.playbook.allowedScenarioTypes)) {
     merged.discovery.playbook.allowedScenarioTypes = defaults.discovery.playbook.allowedScenarioTypes;
@@ -785,12 +804,56 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
     const saved = company.aiAgentSettings?.agent2 || null;
     const data = mergeAgent2Config(saved);
 
+    // ════════════════════════════════════════════════════════════════════════
+    // V1.0: LAZY MIGRATION - Persist corrected config if it was missing/wrong
+    // ════════════════════════════════════════════════════════════════════════
+    // If the saved config had enabled=false or discovery.enabled=false,
+    // we've corrected it in mergeAgent2Config. Now persist the fix.
+    const needsMigration = 
+      saved?.enabled !== true || 
+      saved?.discovery?.enabled !== true;
+    
+    if (needsMigration) {
+      try {
+        await v2Company.updateOne(
+          { _id: companyId },
+          { $set: { 'aiAgentSettings.agent2': data } }
+        );
+        logger.info('[AGENT2] V1.0 lazy migration: Enforced permanent default', {
+          companyId,
+          previousEnabled: saved?.enabled,
+          previousDiscoveryEnabled: saved?.discovery?.enabled,
+          migratedTo: { enabled: true, discoveryEnabled: true }
+        });
+        
+        // Log migration event (non-blocking)
+        try {
+          await CallLogger.logEvent('AGENT2_LAZY_MIGRATION', {
+            companyId,
+            previousConfig: {
+              enabled: saved?.enabled,
+              discoveryEnabled: saved?.discovery?.enabled
+            },
+            migratedTo: { enabled: true, discoveryEnabled: true },
+            reason: 'V1.0 permanent default enforcement',
+            ts: new Date().toISOString()
+          });
+        } catch (e) { /* non-blocking */ }
+      } catch (migrationErr) {
+        logger.warn('[AGENT2] Lazy migration failed (non-blocking)', { 
+          companyId, 
+          error: migrationErr.message 
+        });
+      }
+    }
+
     return res.json({
       success: true,
       data,
       meta: {
         uiBuild: UI_BUILD,
-        effectiveConfigVersion: company.effectiveConfigVersion || company.updatedAt || null
+        effectiveConfigVersion: company.effectiveConfigVersion || company.updatedAt || null,
+        lazyMigrated: needsMigration
       }
     });
   } catch (error) {

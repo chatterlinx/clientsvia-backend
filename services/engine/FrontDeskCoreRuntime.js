@@ -1,6 +1,6 @@
 /**
  * ════════════════════════════════════════════════════════════════════════════
- * FRONT DESK CORE RUNTIME - V111 Enterprise Edition
+ * FRONT DESK CORE RUNTIME - V1.0 (Agent 2.0 Permanent Default)
  * ════════════════════════════════════════════════════════════════════════════
  * 
  * The single orchestrator for all call processing. Every turn goes through here.
@@ -13,24 +13,28 @@
  * │ S2.5  Escalation Detection (manager/human requests)                    │
  * │ GREET Greeting Intercept (good morning → instant response)             │
  * │ S3    Slot Extraction (name/phone/address)                             │
- * │ S4    Discovery Flow (step progression)                                │
+ * │ S4    Discovery Flow (Agent 2.0 ONLY)                                  │
  * │ S5    Consent Gate (intent detection → booking consent)                │
  * │ S6    Booking Flow (collect remaining info)                            │
  * │ S7    Voice Provider (TTS output)                                      │
  * │ OPEN  Opener Engine (prepend micro-acknowledgment)                     │
  * └─────────────────────────────────────────────────────────────────────────┘
  * 
- * SPEAKER OWNERSHIP CONTRACT (V118 - AGENT 2.0 TAKEOVER):
+ * SPEAKER OWNERSHIP CONTRACT (V1.0 - AGENT 2.0 PERMANENT DEFAULT):
  * Only these modules may generate final response text:
  * - GreetingInterceptor (instant greetings ONLY)
- * - Agent2DiscoveryRunner (PRIMARY discovery speaker when enabled)
- * - DiscoveryFlowRunner (LEGACY — only if Agent 2.0 is disabled)
+ * - Agent2DiscoveryRunner (THE discovery speaker - ALWAYS ON)
+ * - DiscoveryFlowRunner (DEPRECATED - only via BREAK_GLASS)
  * - ConsentGate (ONLY after discovery complete)
  * - BookingFlowRunner (ONLY after consent)
  * - OpenerEngine (prepends micro-acks to responses)
  * 
- * V118: Agent 2.0 owns the mic. No fallback to legacy when enabled.
- * Legacy DiscoveryFlowRunner only runs if Agent 2.0 is OFF.
+ * V1.0 POLICY (PERMANENT):
+ * - Agent 2.0 is the ONLY Discovery system
+ * - Legacy Discovery is deprecated and unreachable (except via break-glass)
+ * - UI cannot turn Agent2 off
+ * - Runtime enforces Agent2 even if config is missing/wrong
+ * - Break-glass: AGENT2_FORCE_DISABLE_ALLOWLIST env var only
  * 
  * RAW EVENTS:
  * Every section emits SECTION_* events for complete observability.
@@ -57,16 +61,17 @@ const GreetingInterceptor = require('./interceptors/GreetingInterceptor');
 // NOTE: S3.5 detection trigger block removed in V117 clean-sweep (unused + crash risk)
 
 // ═══════════════════════════════════════════════════════════════════════════
-// V118: AGENT 2.0 TAKEOVER - ONE MIC ARCHITECTURE
+// V1.0: AGENT 2.0 PERMANENT DEFAULT - ONE MIC ARCHITECTURE
 // ═══════════════════════════════════════════════════════════════════════════
-// DECISION: Agent2DiscoveryRunner owns the mic when enabled. No fallback.
+// DECISION: Agent2DiscoveryRunner owns the mic PERMANENTLY. No fallback.
 // 
 // V117 (Feb 17, 2026): Removed S4A Pipeline, CallReasonExtractor hijack.
 // V118 (Feb 18, 2026): Agent 2.0 is the ONLY speaker when enabled.
-//                      Legacy DiscoveryFlowRunner only runs if Agent 2.0 OFF.
+// V1.0 (Feb 21, 2026): Agent 2.0 is PERMANENTLY ON. Config cannot disable.
+//                      Legacy DiscoveryFlowRunner only via break-glass.
 // 
 // RATIONALE: One brain, one mic. Agent 2.0 Trigger Cards are deterministic.
-// No competing speakers. No fallback confusion.
+// No competing speakers. No fallback confusion. No "why is it different today?"
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Agent 2.0 uses CallLogger (not legacy BlackBox name)
@@ -75,6 +80,65 @@ try {
     CallLogger = require('../CallLogger');
 } catch (err) {
     CallLogger = null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V1.0: AGENT 2.0 PERMANENT DEFAULT ENFORCEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+// Agent 2.0 is ALWAYS enabled. This is the only way to stop ghost bugs.
+// Break-glass: AGENT2_FORCE_DISABLE_ALLOWLIST env var for emergency only.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Check if Agent 2.0 should be enabled for this company.
+ * V1.0: Agent 2.0 is PERMANENTLY ON. Config values are ignored.
+ * Only break-glass env var can disable for allowlisted companyIds.
+ * 
+ * @param {Object} company - Company document
+ * @param {Function} bufferEvent - Event emitter for proof events
+ * @returns {{ enabled: boolean, reason: string, enforced: boolean }}
+ */
+function isAgent2Enabled(company, bufferEvent) {
+    const companyId = company?._id?.toString() || 'unknown';
+    const configEnabled = company?.aiAgentSettings?.agent2?.enabled;
+    const configDiscoveryEnabled = company?.aiAgentSettings?.agent2?.discovery?.enabled;
+    
+    // Break-glass check: AGENT2_FORCE_DISABLE_ALLOWLIST env var
+    const breakGlassAllowlist = (process.env.AGENT2_FORCE_DISABLE_ALLOWLIST || '').split(',').map(s => s.trim()).filter(Boolean);
+    const isBreakGlassActive = breakGlassAllowlist.includes(companyId);
+    
+    if (isBreakGlassActive) {
+        // Log break-glass usage
+        if (bufferEvent) {
+            bufferEvent('AGENT2_BREAK_GLASS_USED', {
+                companyId,
+                reason: 'Company in AGENT2_FORCE_DISABLE_ALLOWLIST',
+                configWas: { enabled: configEnabled, discoveryEnabled: configDiscoveryEnabled },
+                timestamp: new Date().toISOString()
+            });
+        }
+        logger.warn('[FRONT_DESK_CORE_RUNTIME] AGENT2_BREAK_GLASS_USED', { companyId });
+        return { enabled: false, reason: 'BREAK_GLASS_ALLOWLIST', enforced: false };
+    }
+    
+    // V1.0: Agent 2.0 is PERMANENTLY ON regardless of config
+    const wasConfigMissing = configEnabled !== true || configDiscoveryEnabled !== true;
+    
+    if (wasConfigMissing && bufferEvent) {
+        bufferEvent('AGENT2_DEFAULT_ENFORCED', {
+            companyId,
+            reason: 'missing_or_disabled_config',
+            configWas: { enabled: configEnabled, discoveryEnabled: configDiscoveryEnabled },
+            enforcedTo: { enabled: true, discoveryEnabled: true },
+            timestamp: new Date().toISOString()
+        });
+    }
+    
+    return { 
+        enabled: true, 
+        reason: wasConfigMissing ? 'ENFORCED_DEFAULT' : 'CONFIG_MATCH',
+        enforced: wasConfigMissing 
+    };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -91,6 +155,67 @@ const CRITICAL_EVENTS = new Set([
     'S3_EXTRACTION_ERROR',
     'S3_MERGE_ERROR'
 ]);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V1.0: ALLOWED PLATFORM PREEMPTORS
+// ═══════════════════════════════════════════════════════════════════════════
+// These modules are explicitly ALLOWED to speak BEFORE Agent2 Discovery.
+// Everything else must be blocked or moved into Agent2.
+// 
+// ALLOWED (tight + deterministic):
+// - CONNECTION_QUALITY_GATE: Connection quality / DTMF rescue (only if input unusable)
+// - AFTER_HOURS_GATE: Business closed check
+// - ESCALATION_DETECTOR: Explicit transfer request + consent
+// - GREETING_INTERCEPTOR: Short greetings only (under Agent2 control in V1.0)
+// - SILENCE_HANGUP: Global silence policy
+// 
+// NOT ALLOWED (must be blocked when Agent2 is active):
+// - Legacy instant responses that hijack conversation
+// - Legacy greeting rules outside Agent2 namespace
+// - Any module that speaks without being in this allowlist
+// ═══════════════════════════════════════════════════════════════════════════
+const ALLOWED_PREEMPTORS = new Set([
+    'CONNECTION_QUALITY_GATE',
+    'AFTER_HOURS_GATE', 
+    'ESCALATION_DETECTOR',
+    'GREETING_INTERCEPTOR_AGENT2',  // Agent2's greeting interceptor only
+    'SILENCE_HANGUP_POLICY',
+    'DTMF_RESCUE'
+]);
+
+/**
+ * Log when a platform preemptor speaks before Agent2.
+ * This creates an audit trail for debugging mic ownership issues.
+ */
+function logPreemptorSpoke(bufferEvent, preemptorId, reason, details = {}) {
+    const isAllowed = ALLOWED_PREEMPTORS.has(preemptorId);
+    
+    if (isAllowed) {
+        bufferEvent('PLATFORM_PREEMPTOR_ALLOWED_SPOKE', {
+            preemptorId,
+            reason,
+            allowed: true,
+            ...details,
+            timestamp: new Date().toISOString()
+        });
+    } else {
+        // This should NOT happen in V1.0 - all non-allowed preemptors should be blocked
+        bufferEvent('PLATFORM_PREEMPTOR_BLOCKED', {
+            preemptorId,
+            reason,
+            allowed: false,
+            blocked: true,
+            warning: 'Non-allowlisted preemptor attempted to speak - this should not happen in V1.0',
+            ...details,
+            timestamp: new Date().toISOString()
+        });
+        logger.warn('[FRONT_DESK_CORE_RUNTIME] PLATFORM_PREEMPTOR_BLOCKED', {
+            preemptorId,
+            reason,
+            details
+        });
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // NOTE: CallReasonExtractor, GreetingInterceptor, EscalationDetector, and
@@ -633,6 +758,12 @@ class FrontDeskCoreRuntime {
             
             // If escalation triggered, return immediately
             if (escalationTriggered) {
+                // V1.0: Log allowed preemptor speaking before Agent2
+                logPreemptorSpoke(bufferEvent, 'ESCALATION_DETECTOR', 'EXPLICIT_TRANSFER_REQUEST', {
+                    matchedTrigger: matchedEscalationTrigger,
+                    turn
+                });
+                
                 bufferEvent('ESCALATION_TRIGGERED', {
                     matchedTrigger: matchedEscalationTrigger,
                     escalationMessage: escalationMessage.substring(0, 80),
@@ -687,6 +818,16 @@ class FrontDeskCoreRuntime {
             });
             
             if (greetingMatch) {
+                // V1.0: Log allowed preemptor speaking before Agent2
+                // NOTE: This is the LEGACY greeting interceptor. In V1.0, Agent2's greeting
+                // interceptor is the preferred path. This may need to be deprecated.
+                logPreemptorSpoke(bufferEvent, 'GREETING_INTERCEPTOR', 'SHORT_GREETING_MATCHED', {
+                    matchedTrigger: greetingMatch.matchedTrigger,
+                    matchType: greetingMatch.matchType,
+                    isLegacy: true,
+                    turn
+                });
+                
                 // Log the intercept
                 bufferEvent('GREETING_INTERCEPTED', {
                     matchedTrigger: greetingMatch.matchedTrigger,
@@ -1060,21 +1201,23 @@ class FrontDeskCoreRuntime {
                 // ───────────────────────────────────────────────────────────────────────────
                 if (!ownerResult) {
                     // ───────────────────────────────────────────────────────────────────────────
-                    // AGENT 2.0 (DISCOVERY ONLY) — Single mic owner, UI-gated
+                    // AGENT 2.0 (DISCOVERY ONLY) — Single mic owner, PERMANENT DEFAULT
                     // ───────────────────────────────────────────────────────────────────────────
-                    // V119: HARD ISOLATION - When Agent 2.0 is enabled:
+                    // V1.0: HARD ISOLATION + PERMANENT DEFAULT
+                    // - Agent 2.0 is ALWAYS enabled (config is ignored)
                     // - It is the ONLY speaker
                     // - Legacy owners are BLOCKED (not just skipped)
-                    // - We emit proof of blocking
-                    const agent2Enabled =
-                        company?.aiAgentSettings?.agent2?.enabled === true &&
-                        company?.aiAgentSettings?.agent2?.discovery?.enabled === true;
+                    // - Break-glass only via AGENT2_FORCE_DISABLE_ALLOWLIST env var
+                    // - We emit proof of blocking AND enforcement
+                    const agent2Check = isAgent2Enabled(company, bufferEvent);
+                    const agent2Enabled = agent2Check.enabled;
                     
                     if (agent2Enabled) {
                         currentSection = 'A2_DISCOVERY';
                         verboseEvents = false; // Suppress legacy noise when Agent 2.0 active
                         
                         // V119: Emit legacy blocked proof BEFORE running Agent 2.0
+                        // V1.0: Also emit enforcement status
                         bufferEvent('A2_LEGACY_BLOCKED', {
                             blocked: true,
                             blockedOwners: [
@@ -1083,7 +1226,11 @@ class FrontDeskCoreRuntime {
                                 'CallReasonExtractor_ack',
                                 'S4A_Pipeline'
                             ],
-                            reason: 'Agent 2.0 enabled - legacy owners will NOT be evaluated',
+                            reason: agent2Check.enforced 
+                                ? 'Agent 2.0 ENFORCED (config was missing/disabled) - legacy owners will NOT be evaluated'
+                                : 'Agent 2.0 enabled - legacy owners will NOT be evaluated',
+                            enforced: agent2Check.enforced,
+                            enforcementReason: agent2Check.reason,
                             turn,
                             uiBuild: company?.aiAgentSettings?.agent2?.meta?.uiBuild || null
                         });
@@ -1100,6 +1247,7 @@ class FrontDeskCoreRuntime {
                         
                         // ═══════════════════════════════════════════════════════════════════════════
                         // V119: A2_MIC_OWNER_PROOF — CONSOLIDATED PROOF OF WHAT RAN AND WHAT DIDN'T
+                        // V1.0: Added enforcement proof fields
                         // ═══════════════════════════════════════════════════════════════════════════
                         // This is the SINGLE event that proves hard isolation.
                         // Check this event to verify no other speaker executed.
@@ -1111,6 +1259,10 @@ class FrontDeskCoreRuntime {
                             agent2Ran: true,
                             agent2Responded: !!ownerResult?.response,
                             finalResponder: ownerResult?.matchSource || 'AGENT2_DISCOVERY',
+                            // V1.0: Enforcement proof
+                            agent2Enforced: agent2Check.enforced,
+                            enforcementReason: agent2Check.reason,
+                            permanentDefault: true,  // V1.0: Always true - Agent 2.0 is permanent
                             // PROOF: Greeting was evaluated but did NOT match (otherwise we wouldn't be here)
                             greetingInterceptorRan: false,  // Would have returned early if it fired
                             greetingEvaluated: true,        // See GREETING_EVALUATED event above
@@ -1130,28 +1282,51 @@ class FrontDeskCoreRuntime {
                             configHash: company?.aiAgentSettings?.agent2?.meta?.uiBuild || null
                         });
                         
+                        // V1.0: Emit explicit mic owner confirmation
+                        bufferEvent('A2_MIC_OWNER_CONFIRMED', {
+                            owner: 'AGENT2_DISCOVERY',
+                            permanentDefault: true,
+                            enforced: agent2Check.enforced,
+                            turn
+                        });
+                        
                         // HARD RETURN: Do not evaluate any other speakers
                         // ownerResult is set, legacy path will be skipped by the agent2WasEnabled check
                     } else {
-                        // Legacy path - emit that Agent 2.0 is OFF
+                        // Legacy path - emit that Agent 2.0 is OFF (break-glass only)
+                        // V1.0: This should ONLY happen via break-glass allowlist
                         bufferEvent('A2_LEGACY_BLOCKED', {
                             blocked: false,
-                            reason: 'Agent 2.0 disabled - legacy owners may run',
+                            reason: 'Agent 2.0 disabled via BREAK_GLASS_ALLOWLIST - legacy owners may run',
+                            breakGlassActive: true,
+                            enforcementReason: agent2Check.reason,
                             turn
                         });
                     }
                 }
 
                 // ═══════════════════════════════════════════════════════════════════════════
-                // LEGACY PATH: Only runs if Agent 2.0 is DISABLED
+                // LEGACY PATH: Only runs if Agent 2.0 is DISABLED (break-glass only)
                 // ═══════════════════════════════════════════════════════════════════════════
-                const agent2WasEnabled =
-                    company?.aiAgentSettings?.agent2?.enabled === true &&
-                    company?.aiAgentSettings?.agent2?.discovery?.enabled === true;
+                // V1.0: Agent 2.0 is PERMANENTLY ON. This path is only reachable via break-glass.
+                const agent2WasEnabledCheck = isAgent2Enabled(company, null); // Don't double-log
+                const agent2WasEnabled = agent2WasEnabledCheck.enabled;
 
                 if (!ownerResult && !agent2WasEnabled) {
-                    // Legacy DiscoveryFlowRunner — only if Agent 2.0 is OFF
-                    bufferEvent('LEGACY_DISCOVERY_FLOW_ENTER', { reason: 'agent2_disabled' });
+                    // Legacy DiscoveryFlowRunner — only if Agent 2.0 is OFF (break-glass only)
+                    // V1.0: This path is deprecated. It should only run via break-glass.
+                    bufferEvent('LEGACY_DISCOVERY_FLOW_ENTER', { 
+                        reason: 'agent2_disabled_via_break_glass',
+                        deprecated: true,
+                        warning: 'Legacy discovery is deprecated. Agent 2.0 is the permanent default.'
+                    });
+                    
+                    // V1.0: Log that we're bypassing the permanent default
+                    logger.warn('[FRONT_DESK_CORE_RUNTIME] LEGACY_DISCOVERY_BYPASSED - Using deprecated legacy path', {
+                        callSid,
+                        companyId,
+                        reason: 'BREAK_GLASS_ALLOWLIST'
+                    });
                     ownerResult = DiscoveryFlowRunner.run({
                         company,
                         callSid,
