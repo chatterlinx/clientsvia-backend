@@ -2623,19 +2623,19 @@ class Agent2Manager {
    * Shows complete conversation with full attribution and runtime details
    */
   renderEnhancedTranscript(transcript, events, turnSummaries) {
-    if (transcript.length === 0) {
+    if (!transcript || transcript.length === 0) {
       return '<div style="color:#6e7681; text-align:center; padding:20px;">No transcript available</div>';
     }
 
-    // Build turn summary lookup
+    // Build turn summary lookup (defensive - handle null/undefined)
     const turnSummaryMap = {};
-    turnSummaries.forEach(ts => {
+    (turnSummaries || []).forEach(ts => {
       turnSummaryMap[ts.turn] = ts;
     });
 
-    // Build provenance event lookup by turn
+    // Build provenance event lookup by turn (defensive - handle null/undefined)
     const provenanceByTurn = {};
-    events.filter(e => 
+    (events || []).filter(e => 
       e.type === 'SPEAK_PROVENANCE' || 
       e.type === 'SPEECH_SOURCE_SELECTED' || 
       e.type === 'SPOKEN_TEXT_UNMAPPED_BLOCKED' ||
@@ -2714,12 +2714,13 @@ class Agent2Manager {
         </div>
       `;
 
-      // Build main text section
+      // Build main text section (handle empty/null text)
+      const textToDisplay = t.text || '[No text available]';
       let textHtml = `
         <div style="display:grid; gap:6px; font-size:0.85rem; margin-bottom:12px;">
           <div style="display:flex; gap:8px;">
             <span style="color:#6e7681; min-width:50px; font-weight:600;">Text:</span>
-            <span style="color:#e5e7eb; font-style:italic; line-height:1.5;">"${this.escapeHtml(t.text)}"</span>
+            <span style="color:${t.text ? '#e5e7eb' : '#6e7681'}; font-style:italic; line-height:1.5;">"${this.escapeHtml(textToDisplay)}"</span>
           </div>
         </div>
       `;
