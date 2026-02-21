@@ -752,7 +752,9 @@ function handleTransfer(twiml, company, fallbackMessage = "I'm connecting you to
     // Continue conversation instead of hanging up [[memory:8276820]]
     const gather = twiml.gather({
       input: 'speech',
-      speechTimeout: '3', // Matches production defaults for consistent experience
+      actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
+      timeout: 7,
+      speechTimeout: 'auto',
       speechModel: 'phone_call',
       action: `/api/twilio/v2-agent-respond/${companyID || 'unknown'}`,
       method: 'POST'
@@ -1227,13 +1229,14 @@ router.post('/voice', async (req, res) => {
       
       // 🎯 CRITICAL: Test Pilot must use SAME speech detection settings as real customer calls
       // This ensures testing accuracy - what you test is what customers experience
-      // Using production defaults: 3s speechTimeout, 5s initialTimeout
+      // Using robust defaults: auto speechTimeout, 7s initialTimeout, actionOnEmptyResult
       const gather = twiml.gather({
         input: 'speech',
         action: `/api/twilio/test-respond/${company.template._id}`,
         method: 'POST',
-        timeout: 5, // Initial timeout (how long to wait for ANY speech)
-        speechTimeout: '3', // Speech timeout (how long after they STOP talking) - MATCHES PRODUCTION!
+        actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
+        timeout: 7, // Initial timeout (how long to wait for ANY speech)
+        speechTimeout: 'auto', // Auto speech timeout - let Twilio decide when user is done
         enhanced: true, // Enhanced speech recognition
         speechModel: 'phone_call', // Optimized for phone calls
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
@@ -1528,9 +1531,10 @@ router.post('/voice', async (req, res) => {
         input: 'speech',
         action: actionUrl,
         method: 'POST',
+        actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech detected (prevents infinite loop)
         bargeIn: speechDetection.bargeIn ?? false,
-        timeout: speechDetection.initialTimeout ?? 5,
-        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(),
+        timeout: speechDetection.initialTimeout ?? 7,
+        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         hints: hints,
@@ -1869,9 +1873,10 @@ router.post('/voice', async (req, res) => {
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
+        actionOnEmptyResult: true,
         bargeIn: false,
-        timeout: 5,
-        speechTimeout: '3', // Matches production defaults for consistent experience
+        timeout: 7,
+        speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call'
       });
@@ -2288,9 +2293,10 @@ router.post('/handle-speech', async (req, res) => {
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
+        actionOnEmptyResult: true,
         bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
-        timeout: speechDetection.initialTimeout ?? 5,
-        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(),
+        timeout: speechDetection.initialTimeout ?? 7,
+        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -2401,9 +2407,10 @@ router.post('/handle-speech', async (req, res) => {
           input: 'speech',
           action: `https://${req.get('host')}/api/twilio/handle-speech`,
           method: 'POST',
+          actionOnEmptyResult: true,
           bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
-          timeout: speechDetection.initialTimeout ?? 5,
-          speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10s (default: 3s)
+          timeout: speechDetection.initialTimeout ?? 7,
+          speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
           enhanced: speechDetection.enhancedRecognition ?? true,
           speechModel: speechDetection.speechModel ?? 'phone_call',
           partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -2428,9 +2435,10 @@ router.post('/handle-speech', async (req, res) => {
         input: 'speech',
         action: `https://${req.get('host')}/api/twilio/handle-speech`,
         method: 'POST',
+        actionOnEmptyResult: true,
         bargeIn: speechDetection.bargeIn ?? (company.aiSettings?.bargeIn ?? false),
-        timeout: speechDetection.initialTimeout ?? 5,
-        speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10s (default: 3s)
+        timeout: speechDetection.initialTimeout ?? 7,
+        speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
         enhanced: speechDetection.enhancedRecognition ?? true,
         speechModel: speechDetection.speechModel ?? 'phone_call',
         partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -2537,9 +2545,10 @@ router.post('/handle-speech', async (req, res) => {
       input: 'speech',
       action: `https://${req.get('host')}/api/twilio/handle-speech`,
       method: 'POST',
+      actionOnEmptyResult: true,
       bargeIn: speechDetection.bargeIn ?? false,
-      timeout: speechDetection.initialTimeout ?? 5,
-      speechTimeout: (speechDetection.speechTimeout ?? 3).toString(), // Configurable: 1-10 seconds (default: 3s)
+      timeout: speechDetection.initialTimeout ?? 7,
+      speechTimeout: speechDetection.speechTimeout ? speechDetection.speechTimeout.toString() : 'auto',
       enhanced: speechDetection.enhancedRecognition ?? true,
       speechModel: speechDetection.speechModel ?? 'phone_call',
       partialResultCallback: `https://${req.get('host')}/api/twilio/partial-speech`
@@ -2715,8 +2724,9 @@ router.post('/:companyID/voice', async (req, res) => {
       input: 'speech',
       action: `${getSecureBaseUrl(req)}/api/twilio/v2-agent-respond/${companyID}`,
       method: 'POST',
-      timeout: 5,
-      speechTimeout: '3',
+      actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
+      timeout: 7,
+      speechTimeout: 'auto',
       enhanced: true,
       speechModel: 'phone_call'
     });
@@ -2796,8 +2806,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         input: 'speech',
         action: `/api/twilio/v2-agent-respond/${companyID}`,
         method: 'POST',
-        timeout: 5,
-        speechTimeout: '3',
+        actionOnEmptyResult: true,
+        timeout: 7,
+        speechTimeout: 'auto',
         speechModel: 'phone_call'
       });
       twimlString = twiml.toString();
@@ -3371,8 +3382,9 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       input: 'speech',
       action: `/api/twilio/v2-agent-respond/${companyID}`,
       method: 'POST',
-      timeout: 5,
-      speechTimeout: '3',
+      actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
+      timeout: 7,
+      speechTimeout: 'auto',
       speechModel: 'phone_call',
       partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${companyID}`,
       partialResultCallbackMethod: 'POST'
@@ -3916,8 +3928,9 @@ router.post('/test-respond/:templateId', async (req, res) => {
         input: 'speech',
         action: `/api/twilio/test-respond/${templateId}`,
         method: 'POST',
-        timeout: 5,
-        speechTimeout: '3', // Matches production defaults - what you test is what customers get!
+        actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
+        timeout: 7,
+        speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call',
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
@@ -3937,8 +3950,9 @@ router.post('/test-respond/:templateId', async (req, res) => {
         input: 'speech',
         action: `/api/twilio/test-respond/${templateId}`,
         method: 'POST',
-        timeout: 5,
-        speechTimeout: '3', // Matches production defaults - what you test is what customers get!
+        actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
+        timeout: 7,
+        speechTimeout: 'auto',
         enhanced: true,
         speechModel: 'phone_call',
         hints: 'um, uh, like, you know, so, well, I mean, and then, so anyway, basically, actually' // Help recognize common filler words
@@ -5028,7 +5042,8 @@ router.post('/test-gather-twiml', (req, res) => {
     input: 'speech',
     action: actionUrl,
     method: 'POST',
-    timeout: 5,
+    actionOnEmptyResult: true,
+    timeout: 7,
     speechTimeout: 'auto'
   });
   gather.say('Say anything after this message, then wait.');
