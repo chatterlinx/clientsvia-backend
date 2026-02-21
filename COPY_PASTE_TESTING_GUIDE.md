@@ -235,6 +235,25 @@ TRUTH LINE       = 0
 
 **Paste if FAIL:** `true` result + screenshot showing where text appears
 
+### Check D: Card Count vs Turn Count
+
+**Run in DevTools Console with modal open:**
+
+```javascript
+(() => {
+  const cardCount = document.querySelectorAll('[data-transcript-card="true"]').length;
+  console.log("Transcript card count:", cardCount);
+  return cardCount;
+})();
+```
+
+**Expected:** Count roughly equals number of turns shown (caller + agent)
+
+**PASS:** Card count matches visible turns  
+**FAIL:** Card count is 0 or wildly off = rendering logic broken
+
+**Paste if FAIL:** Actual count + expected turn count
+
 ---
 
 ## 4) MODAL OPEN TIME (Performance Number)

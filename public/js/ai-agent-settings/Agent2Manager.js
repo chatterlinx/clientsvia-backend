@@ -2886,7 +2886,7 @@ class Agent2Manager {
       }
 
       return `
-        <div style="background:${bgColor}; border:2px solid ${borderColor}; border-radius:10px; padding:14px; margin-bottom:12px;">
+        <div data-transcript-card="true" data-turn="${turn}" data-speaker="${t.role}" style="background:${bgColor}; border:2px solid ${borderColor}; border-radius:10px; padding:14px; margin-bottom:12px;">
           ${headerHtml}
           ${textHtml}
           ${attributionHtml}
