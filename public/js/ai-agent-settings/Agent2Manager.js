@@ -2714,13 +2714,15 @@ class Agent2Manager {
         </div>
       `;
 
-      // Build main text section (handle empty/null text)
-      const textToDisplay = t.text || '[No text available]';
+      // Build main text section (handle empty/null/whitespace-only text)
+      const raw = (t && typeof t.text === 'string') ? t.text.trim() : '';
+      const textToDisplay = raw.length ? raw : '[No text available]';
+      const hasText = raw.length > 0;
       let textHtml = `
         <div style="display:grid; gap:6px; font-size:0.85rem; margin-bottom:12px;">
           <div style="display:flex; gap:8px;">
             <span style="color:#6e7681; min-width:50px; font-weight:600;">Text:</span>
-            <span style="color:${t.text ? '#e5e7eb' : '#6e7681'}; font-style:italic; line-height:1.5;">"${this.escapeHtml(textToDisplay)}"</span>
+            <span style="color:${hasText ? '#e5e7eb' : '#6e7681'}; font-style:italic; line-height:1.5;">"${this.escapeHtml(textToDisplay)}"</span>
           </div>
         </div>
       `;
