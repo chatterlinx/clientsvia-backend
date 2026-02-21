@@ -38,6 +38,22 @@ function defaultAgent2Config() {
     // Global negative keywords that block ALL trigger cards (V4)
     // Intentionally empty by default to avoid accidental suppression.
     globalNegativeKeywords: [],
+    // V129: Real bridge (latency filler)
+    // Two-phase TwiML: if processing exceeds thresholdMs, return a short bridge line
+    // and Redirect to a continuation endpoint that serves the real answer.
+    bridge: {
+      enabled: false,
+      thresholdMs: 1100,
+      hardCapMs: 6000,
+      maxBridgesPerCall: 2,
+      maxRedirectAttempts: 2,
+      lines: [
+        'Ok — one moment.',
+        'Got it — give me just a second.',
+        "One sec — I’m pulling that up now.",
+        'Alright — hang with me for a moment.'
+      ]
+    },
     discovery: {
       enabled: false,
       style: {
@@ -511,27 +527,19 @@ function mergeAgent2Config(saved) {
     ...defaults,
     ...src,
     globalNegativeKeywords: Array.isArray(src.globalNegativeKeywords) ? src.globalNegativeKeywords : defaults.globalNegativeKeywords,
+    bridge: {
+      ...defaults.bridge,
+      ...safeObject(src.bridge, {})
+    },
     discovery: {
       ...defaults.discovery,
       ...safeObject(src.discovery, {}),
       style: {
         ...defaults.discovery.style,
         ...safeObject(src.discovery?.style, {}),
-        bridge: {
-          ...defaults.discovery.style.bridge,
-          ...safeObject(src.discovery?.style?.bridge, {})
-        },
-        systemDelay: {
-          ...defaults.discovery.style.systemDelay,
-          ...safeObject(src.discovery?.style?.systemDelay, {})
-        },
         robotChallenge: {
           ...defaults.discovery.style.robotChallenge,
           ...safeObject(src.discovery?.style?.robotChallenge, {})
-        },
-        whenInDoubt: {
-          ...defaults.discovery.style.whenInDoubt,
-          ...safeObject(src.discovery?.style?.whenInDoubt, {})
         }
       },
       playbook: {
@@ -647,6 +655,36 @@ function mergeAgent2Config(saved) {
   // Clarifiers guardrails
   if (!Array.isArray(merged.discovery.clarifiers.entries)) {
     merged.discovery.clarifiers.entries = defaults.discovery.clarifiers.entries;
+  }
+
+  // Bridge guardrails
+  if (!merged.bridge || typeof merged.bridge !== 'object') {
+    merged.bridge = { ...defaults.bridge };
+  } else {
+    merged.bridge = {
+      ...defaults.bridge,
+      ...safeObject(merged.bridge, {})
+    };
+  }
+  if (!Array.isArray(merged.bridge.lines)) {
+    merged.bridge.lines = defaults.bridge.lines;
+  } else {
+    merged.bridge.lines = merged.bridge.lines
+      .map(s => (typeof s === 'string' ? s.trim() : ''))
+      .filter(Boolean)
+      .slice(0, 12);
+  }
+  if (typeof merged.bridge.thresholdMs !== 'number' || !Number.isFinite(merged.bridge.thresholdMs) || merged.bridge.thresholdMs < 0) {
+    merged.bridge.thresholdMs = defaults.bridge.thresholdMs;
+  }
+  if (typeof merged.bridge.hardCapMs !== 'number' || !Number.isFinite(merged.bridge.hardCapMs) || merged.bridge.hardCapMs < merged.bridge.thresholdMs) {
+    merged.bridge.hardCapMs = Math.max(defaults.bridge.hardCapMs, merged.bridge.thresholdMs);
+  }
+  if (typeof merged.bridge.maxBridgesPerCall !== 'number' || !Number.isFinite(merged.bridge.maxBridgesPerCall) || merged.bridge.maxBridgesPerCall < 0) {
+    merged.bridge.maxBridgesPerCall = defaults.bridge.maxBridgesPerCall;
+  }
+  if (typeof merged.bridge.maxRedirectAttempts !== 'number' || !Number.isFinite(merged.bridge.maxRedirectAttempts) || merged.bridge.maxRedirectAttempts < 0) {
+    merged.bridge.maxRedirectAttempts = defaults.bridge.maxRedirectAttempts;
   }
 
   // ──────────────────────────────────────────────────────────────────────────

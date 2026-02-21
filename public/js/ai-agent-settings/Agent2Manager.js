@@ -100,6 +100,20 @@ class Agent2Manager {
     return {
       enabled: false,
       globalNegativeKeywords: [],
+      // V129: Real bridge (latency filler)
+      bridge: {
+        enabled: false,
+        thresholdMs: 1100,
+        hardCapMs: 6000,
+        maxBridgesPerCall: 2,
+        maxRedirectAttempts: 2,
+        lines: [
+          'Ok — one moment.',
+          'Got it — give me just a second.',
+          "One sec — I’m pulling that up now.",
+          'Alright — hang with me for a moment.'
+        ]
+      },
       discovery: {
         enabled: false,
         style: {
@@ -349,11 +363,76 @@ class Agent2Manager {
   renderConfigTab() {
     return `
       ${this.renderStatusCard()}
+      ${this.renderBridgeCard()}
       ${this.renderStyleCard()}
       ${this.renderVocabularyCard()}
       ${this.renderClarifiersCard()}
       ${this.renderPlaybookCard()}
       ${this.renderSimulatorCard()}
+    `;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Bridge (Real latency filler, wired in TwiML handler)
+  // ─────────────────────────────────────────────────────────────────────────
+  renderBridgeCard() {
+    const bridge = this.config?.bridge || {};
+    const enabled = bridge.enabled === true;
+    const thresholdMs = Number.isFinite(bridge.thresholdMs) ? bridge.thresholdMs : 1100;
+    const hardCapMs = Number.isFinite(bridge.hardCapMs) ? bridge.hardCapMs : 6000;
+    const maxBridgesPerCall = Number.isFinite(bridge.maxBridgesPerCall) ? bridge.maxBridgesPerCall : 2;
+    const maxRedirectAttempts = Number.isFinite(bridge.maxRedirectAttempts) ? bridge.maxRedirectAttempts : 2;
+    const lines = Array.isArray(bridge.lines) ? bridge.lines.join('\n') : '';
+
+    return `
+      <div class="a2-card" style="background:#0b1220; border:1px solid #1f2937; border-radius:16px; padding:20px; margin-bottom:20px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; color:#22d3ee;">Real Bridge (Latency Filler)</h3>
+            <div style="color:#6e7681; font-size:0.85rem; margin-top:4px; line-height:1.4;">
+              If processing crosses the threshold, Agent 2.0 plays a short bridge line and then redirects to finish the turn.
+              Hard caps prevent spam.
+            </div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; color:#c9d1d9;">
+            <input id="a2-bridge-enabled" type="checkbox" ${enabled ? 'checked' : ''} style="accent-color:#22d3ee; width:18px; height:18px;">
+            <span style="font-weight:600;">Enabled</span>
+          </label>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-top:16px;">
+          <div>
+            <label style="display:block; color:#8b949e; font-size:12px; margin-bottom:6px;">Threshold (ms)</label>
+            <input id="a2-bridge-thresholdMs" type="number" value="${this.escapeHtml(String(thresholdMs))}" min="0" max="10000"
+              style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:10px; color:#c9d1d9;">
+          </div>
+          <div>
+            <label style="display:block; color:#8b949e; font-size:12px; margin-bottom:6px;">Hard cap (ms)</label>
+            <input id="a2-bridge-hardCapMs" type="number" value="${this.escapeHtml(String(hardCapMs))}" min="0" max="20000"
+              style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:10px; color:#c9d1d9;">
+          </div>
+          <div>
+            <label style="display:block; color:#8b949e; font-size:12px; margin-bottom:6px;">Max bridges / call</label>
+            <input id="a2-bridge-maxPerCall" type="number" value="${this.escapeHtml(String(maxBridgesPerCall))}" min="0" max="5"
+              style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:10px; color:#c9d1d9;">
+          </div>
+          <div>
+            <label style="display:block; color:#8b949e; font-size:12px; margin-bottom:6px;">Max redirects</label>
+            <input id="a2-bridge-maxRedirects" type="number" value="${this.escapeHtml(String(maxRedirectAttempts))}" min="0" max="5"
+              style="width:100%; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:10px; color:#c9d1d9;">
+          </div>
+        </div>
+
+        <div style="margin-top:14px;">
+          <label style="display:block; color:#8b949e; font-size:12px; margin-bottom:6px;">Bridge lines (1 per line, keep tight)</label>
+          <textarea id="a2-bridge-lines" rows="4"
+            style="width:100%; background:#161b22; color:#c9d1d9; border:1px solid #30363d; border-radius:12px; padding:10px; font-size:13px; resize:vertical;"
+            placeholder="Ok — one moment.">${this.escapeHtml(lines)}</textarea>
+          <div style="color:#6e7681; font-size:0.75rem; margin-top:8px;">
+            Guardrails: max 12 lines kept, empty lines dropped. Runtime will avoid repeating the same line twice in a row per call.
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -1810,8 +1889,31 @@ class Agent2Manager {
     const llmStats = this.calculateLlmUsage(events, call);
     
     // Key events for debugging
-    const keyEvents = events.filter(e => 
-      ['CALL_START', 'A2_GATE', 'A2_DISCOVERY_GATE', 'A2_PATH_SELECTED', 'A2_RESPONSE_READY', 'A2_TRIGGER_EVAL', 'A2_SCENARIO_EVAL', 'A2_MIC_OWNER_PROOF', 'GREETING_EVALUATED', 'GREETING_INTERCEPTED', 'CORE_RUNTIME_OWNER_RESULT', 'TWIML_SENT', 'SLOTS_EXTRACTED', 'SPEECH_SOURCE_SELECTED', 'SPEAK_PROVENANCE', 'SPOKEN_TEXT_UNMAPPED_BLOCKED', 'CALL_END'].includes(e.type)
+    const keyEvents = events.filter(e =>
+      [
+        'CALL_START',
+        'A2_GATE',
+        'A2_DISCOVERY_GATE',
+        'A2_PATH_SELECTED',
+        'A2_RESPONSE_READY',
+        'A2_TRIGGER_EVAL',
+        'A2_SCENARIO_EVAL',
+        'A2_MIC_OWNER_PROOF',
+        'GREETING_EVALUATED',
+        'GREETING_INTERCEPTED',
+        'CORE_RUNTIME_OWNER_RESULT',
+        // V129: Real bridge observability
+        'AGENT2_BRIDGE_SPOKEN',
+        'AGENT2_BRIDGE_FINAL_CACHED',
+        'AGENT2_BRIDGE_TIMEOUT',
+        // Delivery proof
+        'TWIML_SENT',
+        'SLOTS_EXTRACTED',
+        'SPEECH_SOURCE_SELECTED',
+        'SPEAK_PROVENANCE',
+        'SPOKEN_TEXT_UNMAPPED_BLOCKED',
+        'CALL_END'
+      ].includes(e.type)
     );
 
     container.innerHTML = `
@@ -3008,6 +3110,10 @@ class Agent2Manager {
       'GREETING_EVALUATED': '#fb923c',
       'GREETING_INTERCEPTED': '#fbbf24',
       'CORE_RUNTIME_OWNER_RESULT': '#fbbf24',
+      // V129: Real bridge events
+      'AGENT2_BRIDGE_SPOKEN': '#38bdf8',
+      'AGENT2_BRIDGE_FINAL_CACHED': '#22c55e',
+      'AGENT2_BRIDGE_TIMEOUT': '#fb7185',
       'TWIML_SENT': '#6ee7b7',
       'INPUT_TEXT_FINALIZED': '#93c5fd',
       'GREETING_SENT': '#c4b5fd',
@@ -3101,14 +3207,113 @@ class Agent2Manager {
     });
 
     // Export events
-    document.getElementById('a2-export-events')?.addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(events, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `call-review-${call.callSid}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+    document.getElementById('a2-export-events')?.addEventListener('click', async () => {
+      const btn = document.getElementById('a2-export-events');
+      const prevText = btn?.textContent || '';
+      if (btn) {
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        btn.textContent = 'Preparing...';
+      }
+
+      try {
+        // Recompute derived diagnostics at export-time so it stays accurate as the UI evolves
+        const { turnSummaries, problems } = this.analyzeCall(events);
+        const llmStats = this.calculateLlmUsage(events, call);
+
+        // Prefer live fetch of current config for troubleshooting diffs.
+        // If the fetch fails, fall back to the in-memory config snapshot.
+        let agent2ConfigSnapshot = null;
+        try {
+          const token = this._getToken();
+          const res = await fetch(`/api/admin/agent2/${this.companyId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const json = await res.json();
+            agent2ConfigSnapshot = json?.data || null;
+          }
+        } catch (_) {
+          agent2ConfigSnapshot = null;
+        }
+        if (!agent2ConfigSnapshot) {
+          agent2ConfigSnapshot = JSON.parse(JSON.stringify(this.config || this.getDefaultConfig()));
+        }
+
+        // Summarize bridge behavior for fast troubleshooting (still include full events below)
+        const bridgeEvents = events.filter(e => e?.type?.startsWith('AGENT2_BRIDGE_'));
+        const bridgeSpoken = bridgeEvents.filter(e => e.type === 'AGENT2_BRIDGE_SPOKEN');
+        const bridgeTimeouts = bridgeEvents.filter(e => e.type === 'AGENT2_BRIDGE_TIMEOUT');
+        const bridgeCached = bridgeEvents.filter(e => e.type === 'AGENT2_BRIDGE_FINAL_CACHED');
+
+        const exportedAt = new Date().toISOString();
+        const exportBundle = {
+          exportVersion: 'call_review_bundle_v1',
+          exportedAt,
+          companyId: this.companyId,
+          call: {
+            callSid: call.callSid || null,
+            from: call.from || call.callerPhone || null,
+            to: call.to || call.toPhone || null,
+            startTime: call.startTime || call.startedAt || call.createdAt || null,
+            endedAt: call.endedAt || null,
+            durationMs: call.durationMs || null,
+            durationSeconds: typeof call.duration === 'number' ? Math.round(call.duration) : null,
+            status: call.status || null,
+            source: call.source || null,
+            awHash: call.awHash || null,
+            traceRunId: call.traceRunId || null,
+            flags: call.flags || {},
+            diagnosis: call.diagnosis || null,
+            performance: call.performance || null
+          },
+          agent2ConfigSnapshot: {
+            fetchedAt: exportedAt,
+            uiBuild: agent2ConfigSnapshot?.meta?.uiBuild || null,
+            bridge: agent2ConfigSnapshot?.bridge || null,
+            // Full snapshot for replay/debug (Agent2 namespace only)
+            agent2: agent2ConfigSnapshot
+          },
+          derived: {
+            transcript,
+            llmStats,
+            turnSummaries,
+            problems,
+            bridgeSummary: {
+              spokenCount: bridgeSpoken.length,
+              cachedFinalCount: bridgeCached.length,
+              timeoutCount: bridgeTimeouts.length,
+              spokenTurns: bridgeSpoken.map(e => e.turn).filter(v => typeof v === 'number'),
+              timeoutTurns: bridgeTimeouts.map(e => e.turn).filter(v => typeof v === 'number')
+            }
+          },
+          events
+        };
+
+        const payload = JSON.stringify(exportBundle, null, 2);
+        const blob = new Blob([payload], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeSid = (call.callSid || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+        a.download = `call-review-${safeSid}-${exportedAt.replace(/[:.]/g, '-')}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        // Copy to clipboard for quick sharing in troubleshooting
+        try {
+          await navigator.clipboard.writeText(payload);
+        } catch (_) {}
+      } catch (e) {
+        console.error('Call review export failed:', e);
+        alert(`Export failed: ${e.message || e}`);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.textContent = prevText || '📋 Download Call Review';
+        }
+      }
     });
 
     // Toggle all events
@@ -5203,6 +5408,8 @@ class Agent2Manager {
 
     container.querySelectorAll('#a2-style-ackWord, #a2-allowed-types, #a2-min-score')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
+    container.querySelectorAll('#a2-bridge-enabled, #a2-bridge-thresholdMs, #a2-bridge-hardCapMs, #a2-bridge-maxPerCall, #a2-bridge-maxRedirects, #a2-bridge-lines')
+      .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelectorAll('#a2-fallback-noMatchAnswer, #a2-fallback-afterAnswerQuestion')
       .forEach((el) => el?.addEventListener('input', onAnyChange));
     container.querySelectorAll('#a2-fallback-noMatchWhenReasonCaptured, #a2-fallback-noMatchClarifierQuestion')
@@ -7262,6 +7469,24 @@ class Agent2Manager {
     cfg.globalNegativeKeywords = globalNegRaw
       ? globalNegRaw.split('\n').map(s => s.trim().toLowerCase()).filter(Boolean)
       : [];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // V129: Real bridge (latency filler)
+    // ═══════════════════════════════════════════════════════════════════════
+    cfg.bridge = cfg.bridge || {};
+    cfg.bridge.enabled = container.querySelector('#a2-bridge-enabled')?.checked ?? false;
+    const thresholdMs = Number(container.querySelector('#a2-bridge-thresholdMs')?.value ?? 1100);
+    const hardCapMs = Number(container.querySelector('#a2-bridge-hardCapMs')?.value ?? 6000);
+    const maxPerCall = Number(container.querySelector('#a2-bridge-maxPerCall')?.value ?? 2);
+    const maxRedirects = Number(container.querySelector('#a2-bridge-maxRedirects')?.value ?? 2);
+    cfg.bridge.thresholdMs = Number.isFinite(thresholdMs) ? Math.max(0, Math.min(10000, thresholdMs)) : 1100;
+    cfg.bridge.hardCapMs = Number.isFinite(hardCapMs) ? Math.max(cfg.bridge.thresholdMs, Math.min(20000, hardCapMs)) : 6000;
+    cfg.bridge.maxBridgesPerCall = Number.isFinite(maxPerCall) ? Math.max(0, Math.min(5, maxPerCall)) : 2;
+    cfg.bridge.maxRedirectAttempts = Number.isFinite(maxRedirects) ? Math.max(0, Math.min(5, maxRedirects)) : 2;
+    const bridgeLinesRaw = (container.querySelector('#a2-bridge-lines')?.value || '').trim();
+    cfg.bridge.lines = bridgeLinesRaw
+      ? bridgeLinesRaw.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 12)
+      : [];
     
     // V126: Emergency Fallback Line - REQUIRED for No-UI-No-Speak Guard
     cfg.emergencyFallbackLine = cfg.emergencyFallbackLine || {};
@@ -7285,6 +7510,7 @@ class Agent2Manager {
       config: [
         'agent2Master',
         'discoveryMaster', 
+        'bridgeSettings',
         'discoveryStyle',
         'vocabularySystem',
         'clarifierSystem',

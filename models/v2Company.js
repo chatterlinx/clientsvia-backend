@@ -4228,6 +4228,28 @@ const companySchema = new mongoose.Schema({
             enabled: { type: Boolean, default: false },
             // V4: Global Negative Keywords - applies to ALL trigger cards
             globalNegativeKeywords: { type: [String], default: [] },
+            // V129: Real bridge (latency filler) settings
+            // Two-phase TwiML: play a short bridge line, then Redirect to continue.
+            bridge: {
+                enabled: { type: Boolean, default: false },
+                // If processing crosses this threshold, we may send the bridge TwiML.
+                thresholdMs: { type: Number, default: 1100 },
+                // Absolute ceiling: after this, do not keep redirecting/waiting.
+                hardCapMs: { type: Number, default: 6000 },
+                // Caps to prevent spam
+                maxBridgesPerCall: { type: Number, default: 2 },
+                maxRedirectAttempts: { type: Number, default: 2 },
+                // Keep bridge lines tight (≈ under ~1.2s spoken time)
+                lines: {
+                    type: [String],
+                    default: [
+                        'Ok — one moment.',
+                        'Got it — give me just a second.',
+                        "One sec — I’m pulling that up now.",
+                        'Alright — hang with me for a moment.'
+                    ]
+                }
+            },
             discovery: {
                 enabled: { type: Boolean, default: false },
                 // UI-driven playbook + style blocks (stored as structured JSON)

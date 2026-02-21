@@ -2770,6 +2770,176 @@ router.post('/voice/:companyID', (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
+// V129: BRIDGE CONTINUATION ENDPOINT (TWO-PHASE TWIML)
+// ═══════════════════════════════════════════════════════════════════════════
+// Used only when /v2-agent-respond returns bridge TwiML early.
+// This endpoint does NOT run core runtime and does NOT increment turn count.
+// It polls Redis for cached final TwiML and returns it when ready.
+router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
+  const companyID = req.params.companyID;
+  const callSid = req.body.CallSid;
+  const token = `${req.query.token || ''}`.trim();
+  const turnNumber = parseInt(req.query.turn || 0, 10) || 0;
+  // NOTE: attempt is not trusted as the sole cap (query params can be replayed).
+  const attemptHint = parseInt(req.query.attempt || 0, 10) || 0;
+
+  let twimlString = '';
+  let voiceProviderUsed = 'twilio_say';
+
+  try {
+    const redis = await getRedis();
+    const company = await Company.findById(companyID).lean();
+
+    const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
+    const hardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
+    const maxRedirectAttempts = Number.isFinite(bridgeCfg.maxRedirectAttempts) ? bridgeCfg.maxRedirectAttempts : 2;
+
+    const cacheKey = callSid && token ? `a2bridge:twiml:${callSid}:${turnNumber}:${token}` : null;
+    const startedKey = callSid && token ? `a2bridge:t0:${callSid}:${turnNumber}:${token}` : null;
+    const attemptsKey = callSid && token ? `a2bridge:attempts:${callSid}:${turnNumber}:${token}` : null;
+
+    // Redis-backed redirect attempts counter (hard cap that can't be reset by query params)
+    let attempt = attemptHint;
+    if (redis && attemptsKey) {
+      try {
+        attempt = await redis.incr(attemptsKey);
+        if (attempt === 1) {
+          // Attempt cap TTL: short-lived per bridged turn/token
+          await redis.expire(attemptsKey, 60 * 5);
+        }
+      } catch (_) {
+        // If Redis errors here, fall back to attemptHint (still capped, but weaker).
+        attempt = attemptHint;
+      }
+    }
+
+    let startedAtMs = 0;
+    if (redis && startedKey) {
+      const raw = await redis.get(startedKey);
+      startedAtMs = parseInt(raw || 0, 10) || 0;
+    }
+    const elapsedMs = startedAtMs ? (Date.now() - startedAtMs) : null;
+
+    let cached = null;
+    if (redis && cacheKey) {
+      const raw = await redis.get(cacheKey);
+      cached = raw ? JSON.parse(raw) : null;
+    }
+
+    if (cached?.twimlString) {
+      twimlString = cached.twimlString;
+      voiceProviderUsed = cached.voiceProviderUsed || voiceProviderUsed;
+
+      // TWIML_SENT (final answer) - CRITICAL - MUST AWAIT
+      if (CallLogger && callSid) {
+        const playUrlMatch = twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
+        const playUrl = playUrlMatch ? playUrlMatch[1] : null;
+        await CallLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'TWIML_SENT',
+          turn: turnNumber,
+          data: {
+            section: 'S7_VOICE_PROVIDER',
+            route: '/v2-agent-bridge-continue',
+            twimlLength: twimlString.length,
+            hasGather: twimlString.includes('<Gather'),
+            hasPlay: twimlString.includes('<Play'),
+            hasSay: twimlString.includes('<Say'),
+            voiceProviderUsed,
+            responsePreview: `${cached.responsePreview || ''}`.substring(0, 80),
+            matchSource: cached.matchSource || null,
+            twimlPreview: twimlString.substring(0, 800),
+            playUrl,
+            bridge: {
+              token: token ? `${token}`.slice(0, 8) : null,
+              attempt,
+              elapsedMs
+            },
+            timings: cached.timings || { totalMs: elapsedMs }
+          }
+        }).catch(err => {
+          logger.error('[V2 BRIDGE CONTINUE] TWIML_SENT log failed', { error: err.message });
+        });
+      }
+
+      res.type('text/xml');
+      return res.send(twimlString);
+    }
+
+    // If background compute failed OR caps hit: fall back to transfer policy.
+    const capHit = attempt >= maxRedirectAttempts || (typeof elapsedMs === 'number' && elapsedMs >= hardCapMs);
+    if (cached?.error || capHit) {
+      if (CallLogger && callSid) {
+        await CallLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'AGENT2_BRIDGE_TIMEOUT',
+          turn: turnNumber,
+          data: {
+            attempt,
+            maxRedirectAttempts,
+            hardCapMs,
+            elapsedMs,
+            error: cached?.error || null
+          }
+        }).catch(() => {});
+      }
+
+      const twiml = new twilio.twiml.VoiceResponse();
+      handleTransfer(twiml, company || {}, "I'm connecting you to our team.", companyID);
+      twimlString = twiml.toString();
+
+      if (CallLogger && callSid) {
+        await CallLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'TWIML_SENT',
+          turn: turnNumber,
+          data: {
+            section: 'S7_VOICE_PROVIDER',
+            route: '/v2-agent-bridge-continue',
+            twimlLength: twimlString.length,
+            hasGather: twimlString.includes('<Gather'),
+            hasPlay: twimlString.includes('<Play'),
+            hasSay: twimlString.includes('<Say'),
+            voiceProviderUsed: 'twilio_say',
+            isFallback: true,
+            fallbackReason: cached?.error ? 'bridge_compute_failed' : 'bridge_timeout',
+            bridge: { attempt, elapsedMs }
+          }
+        }).catch(() => {});
+      }
+
+      res.type('text/xml');
+      return res.send(twimlString);
+    }
+
+    // Not ready: pause briefly and redirect to poll again.
+    const redirectUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-bridge-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(token)}&attempt=${attempt}`;
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.pause({ length: 1 });
+    // CRITICAL: method=POST so CallSid stays in request body (safe state correlation)
+    twiml.redirect({ method: 'POST' }, redirectUrl);
+    twimlString = twiml.toString();
+
+    res.type('text/xml');
+    return res.send(twimlString);
+  } catch (error) {
+    logger.error('[V2 BRIDGE CONTINUE] Route crashed', {
+      callSid,
+      companyID,
+      error: error.message
+    });
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say("I'm connecting you to our team.");
+    twimlString = twiml.toString();
+    res.type('text/xml');
+    return res.send(twimlString);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
 // V2 AI Agent response handler - PLUMBING ONLY CORE PATH
 // ═══════════════════════════════════════════════════════════════════════════
 // TRACE CONTINUITY GUARANTEE:
@@ -3075,221 +3245,209 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // CORE RUNTIME - Process turn and collect events in buffer
-    // ═══════════════════════════════════════════════════════════════════════════
-    // V116: processTurn is now async (supports S4A triage + scenario matching)
-    // T2: Core runtime start
-    const T2_start = Date.now();
-    const runtimeResult = await FrontDeskCoreRuntime.processTurn(
-      company.aiAgentSettings || {},
-      callState,
-      speechResult,
-      {
-        company,
-        callSid,
-        companyId: companyID,
-        callerPhone: fromNumber,
-        turnCount: callState.turnCount,
-        inputTextSource  // Pass source to runtime for accurate logging
-      }
-    );
-    timings.coreRuntimeMs = Date.now() - T2_start;
+    const hostHeader = req.get('host');
+    const bridgeCfg = company?.aiAgentSettings?.agent2?.bridge || {};
+    const bridgeEnabled = bridgeCfg?.enabled === true;
+    const bridgeThresholdMs = Number.isFinite(bridgeCfg.thresholdMs) ? bridgeCfg.thresholdMs : 1100;
+    const bridgeHardCapMs = Number.isFinite(bridgeCfg.hardCapMs) ? bridgeCfg.hardCapMs : 6000;
+    const bridgeMaxPerCall = Number.isFinite(bridgeCfg.maxBridgesPerCall) ? bridgeCfg.maxBridgesPerCall : 2;
+    const bridgeMaxRedirectAttempts = Number.isFinite(bridgeCfg.maxRedirectAttempts) ? bridgeCfg.maxRedirectAttempts : 2;
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // CRITICAL: AWAIT FLUSH OF TURN EVENT BUFFER
-    // ═══════════════════════════════════════════════════════════════════════════
-    // This is the KEY fix for trace continuity. Critical events are AWAITED.
-    // If this succeeds, we KNOW S1/S2/S3/OWNER_RESULT are persisted.
-    // ═══════════════════════════════════════════════════════════════════════════
-    const T3_start = Date.now();
-    if (runtimeResult.turnEventBuffer && runtimeResult.turnEventBuffer.length > 0) {
-      await FrontDeskCoreRuntime.flushEventBuffer(runtimeResult.turnEventBuffer);
-    }
-    timings.eventFlushMs = Date.now() - T3_start;
+    const pendingQ = callState?.agent2?.discovery?.pendingQuestion || null;
+    const pendingQTurn = callState?.agent2?.discovery?.pendingQuestionTurn;
+    const isRespondingToPendingYesNo = !!pendingQ && typeof pendingQTurn === 'number' && pendingQTurn === (turnNumber - 1);
+    const isAlreadyTransferLane = (callState?.sessionMode === 'TRANSFER');
 
-    const persistedState = runtimeResult.state || StateStore.persist(callState, StateStore.load(callState));
-    
-    // Add timestamp for state freshness tracking
-    persistedState._lastUpdatedTs = new Date().toISOString();
-    persistedState._stateKey = redisKey; // Preserve for drift detection
+    const mayBridge =
+      bridgeEnabled &&
+      !!redis &&
+      !!callSid &&
+      bridgeThresholdMs >= 200 &&
+      bridgeHardCapMs >= bridgeThresholdMs &&
+      bridgeMaxPerCall > 0 &&
+      !isRespondingToPendingYesNo &&
+      !isAlreadyTransferLane;
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // S0: STATE INTEGRITY - SAVE PHASE
-    // ═══════════════════════════════════════════════════════════════════════════
-    let stateSaveError = null;
-    
-    // Persist state to Redis
-    if (redis && redisKey) {
-      try {
-        await redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 });
-      } catch (err) {
-        stateSaveError = err.message;
-        logger.warn('[V2TWILIO] Redis write failed', { callSid, error: err.message });
-      }
-    }
-    req.session.callState = persistedState;
-    
-    // EMIT S0 STATE SAVE EVENT (CRITICAL - confirms state persistence)
-    if (CallLogger && callSid) {
-      await CallLogger.logEvent({
-        callId: callSid,
-        companyId: companyID,
-        type: 'SECTION_S0_STATE_SAVE',
-        turn: turnNumber,
-        data: {
-          stateKey: redisKey,
-          stateSaveError,
-          saved: {
-            turnCount: persistedState.turnCount,
-            lane: persistedState.sessionMode || 'DISCOVERY',
-            stepId: persistedState.discoveryCurrentStepId || persistedState.currentStepId || null,
-            discoveryComplete: persistedState.discoveryComplete === true,
-            callReasonCaptured: hasSlotValue(persistedState.slots, 'call_reason_detail') ||
-              hasSlotValue(persistedState.pendingSlots, 'call_reason_detail'),
-            namePresent: hasSlotValue(persistedState.slots, 'name') ||
-              hasSlotValue(persistedState.slots, 'name.first') ||
-              hasSlotValue(persistedState.slots, 'name.last') ||
-              hasSlotValue(persistedState.slots, 'lastName'),
-            addressPresent: hasSlotValue(persistedState.slots, 'address'),
-            lastUpdatedTs: persistedState._lastUpdatedTs
-          }
-        }
-      }).catch(err => {
-        logger.error('[V2TWILIO] S0_STATE_SAVE log failed', { error: err.message });
-      });
-    }
+    const computeTurnPromise = (async () => {
+      let localVoiceProviderUsed = 'twilio_say';
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // VOICE GENERATION: ElevenLabs TTS or Twilio <Say>
-    // ═══════════════════════════════════════════════════════════════════════════
-    const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
-    const elevenLabsVoice = voiceSettings.voiceId;
-    const responseText = runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?";
-    
-    let audioUrl = null;
-    let ttsLatencyMs = null;
-
-    // ────────────────────────────────────────────────────────────────────────────
-    // V116 FAST-PATH: Pre-generated instant audio (GreetingInterceptor)
-    // ────────────────────────────────────────────────────────────────────────────
-    // If a cached MP3 exists for this exact line + voice fingerprint, skip ElevenLabs TTS.
-    try {
-      const isGreetingIntercept = runtimeResult?.matchSource === 'GREETING_INTERCEPTOR';
-      if (!audioUrl && isGreetingIntercept && elevenLabsVoice && responseText) {
-        const status = InstantAudioService.getStatus({
+      // ═══════════════════════════════════════════════════════════════════════════
+      // CORE RUNTIME - Process turn and collect events in buffer
+      // ═══════════════════════════════════════════════════════════════════════════
+      const T2_start = Date.now();
+      const runtimeResult = await FrontDeskCoreRuntime.processTurn(
+        company.aiAgentSettings || {},
+        callState,
+        speechResult,
+        {
+          company,
+          callSid,
           companyId: companyID,
-          kind: 'GREETING_RULE',
-          text: responseText,
-          voiceSettings
-        });
+          callerPhone: fromNumber,
+          turnCount: callState.turnCount,
+          inputTextSource
+        }
+      );
+      timings.coreRuntimeMs = Date.now() - T2_start;
 
-        if (status.exists) {
-          audioUrl = `${getSecureBaseUrl(req)}${status.url}`;
-          voiceProviderUsed = 'instant_audio_cache';
-          if (CallLogger) {
-            CallLogger.logEvent({
-              callId: callSid,
-              companyId: companyID,
-              type: 'INSTANT_AUDIO_CACHE_HIT',
-              turn: turnNumber,
-              data: {
-                kind: status.kind,
-                fileName: status.fileName,
-                url: status.url,
-                matchSource: runtimeResult?.matchSource || null
-              }
-            }).catch(() => {});
-          }
-        } else if (CallLogger) {
-          CallLogger.logEvent({
-            callId: callSid,
-            companyId: companyID,
-            type: 'INSTANT_AUDIO_CACHE_MISS',
-            turn: turnNumber,
-            data: { kind: 'GREETING_RULE', matchSource: runtimeResult?.matchSource || null }
-          }).catch(() => {});
+      const T3_start = Date.now();
+      if (runtimeResult.turnEventBuffer && runtimeResult.turnEventBuffer.length > 0) {
+        await FrontDeskCoreRuntime.flushEventBuffer(runtimeResult.turnEventBuffer);
+      }
+      timings.eventFlushMs = Date.now() - T3_start;
+
+      const persistedState = runtimeResult.state || StateStore.persist(callState, StateStore.load(callState));
+      persistedState._lastUpdatedTs = new Date().toISOString();
+      persistedState._stateKey = redisKey;
+
+      let stateSaveError = null;
+      if (redis && redisKey) {
+        try {
+          await redis.set(redisKey, JSON.stringify(persistedState), { EX: 60 * 60 * 4 });
+        } catch (err) {
+          stateSaveError = err.message;
+          logger.warn('[V2TWILIO] Redis write failed', { callSid, error: err.message });
         }
       }
-    } catch (e) {
-      // Never block voice output on cache logic.
-      logger.warn('[V2 RESPOND] Instant audio cache check failed', { error: e.message });
-    }
+      req.session.callState = persistedState;
 
-    // ────────────────────────────────────────────────────────────────────────────
-    // AGENT 2.0 FAST-PATH: Pre-generated instant audio (Trigger Card answers)
-    // ────────────────────────────────────────────────────────────────────────────
-    // If Agent 2.0 Discovery returned an audioUrl, VALIDATE it exists before using.
-    // Twilio crashes with "Application Error" if the <Play> URL returns 404.
-    try {
-      const isAgent2Discovery = runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
-      const agent2AudioUrl = runtimeResult?.audioUrl;
-      if (!audioUrl && isAgent2Discovery && agent2AudioUrl) {
-        // ════════════════════════════════════════════════════════════════════════
-        // AUDIO FILE PREFLIGHT: Verify file exists before using <Play>
-        // ════════════════════════════════════════════════════════════════════════
-        let audioFileExists = false;
-        
-        if (agent2AudioUrl.startsWith('/audio/') || agent2AudioUrl.startsWith('/instant-lines/')) {
-          // Local file - verify it exists on disk
-          const localFilePath = path.join(__dirname, '../public', agent2AudioUrl);
-          audioFileExists = fs.existsSync(localFilePath);
-          
-          if (!audioFileExists) {
-            logger.warn('[V2 RESPOND] ⚠️ Agent2 audio file missing', { 
-              path: localFilePath, 
-              rawUrl: agent2AudioUrl,
-              triggerCardId: runtimeResult?.triggerCard?.id 
-            });
-            
-            // Log preflight failure for Call Review
+      if (CallLogger && callSid) {
+        await CallLogger.logEvent({
+          callId: callSid,
+          companyId: companyID,
+          type: 'SECTION_S0_STATE_SAVE',
+          turn: turnNumber,
+          data: {
+            stateKey: redisKey,
+            stateSaveError,
+            saved: {
+              turnCount: persistedState.turnCount,
+              lane: persistedState.sessionMode || 'DISCOVERY',
+              stepId: persistedState.discoveryCurrentStepId || persistedState.currentStepId || null,
+              discoveryComplete: persistedState.discoveryComplete === true,
+              callReasonCaptured: hasSlotValue(persistedState.slots, 'call_reason_detail') ||
+                hasSlotValue(persistedState.pendingSlots, 'call_reason_detail'),
+              namePresent: hasSlotValue(persistedState.slots, 'name') ||
+                hasSlotValue(persistedState.slots, 'name.first') ||
+                hasSlotValue(persistedState.slots, 'name.last') ||
+                hasSlotValue(persistedState.slots, 'lastName'),
+              addressPresent: hasSlotValue(persistedState.slots, 'address'),
+              lastUpdatedTs: persistedState._lastUpdatedTs
+            }
+          }
+        }).catch(err => {
+          logger.error('[V2TWILIO] S0_STATE_SAVE log failed', { error: err.message });
+        });
+      }
+
+      const voiceSettings = company.aiAgentSettings?.voiceSettings || {};
+      const elevenLabsVoice = voiceSettings.voiceId;
+      const responseText = runtimeResult.response || "I'm sorry, I didn't catch that. Could you repeat that?";
+
+      let audioUrl = null;
+      let ttsLatencyMs = null;
+
+      try {
+        const isGreetingIntercept = runtimeResult?.matchSource === 'GREETING_INTERCEPTOR';
+        if (!audioUrl && isGreetingIntercept && elevenLabsVoice && responseText) {
+          const status = InstantAudioService.getStatus({
+            companyId: companyID,
+            kind: 'GREETING_RULE',
+            text: responseText,
+            voiceSettings
+          });
+
+          if (status.exists) {
+            audioUrl = `${getSecureBaseUrl(req)}${status.url}`;
+            localVoiceProviderUsed = 'instant_audio_cache';
             if (CallLogger) {
               CallLogger.logEvent({
                 callId: callSid,
                 companyId: companyID,
-                type: 'AUDIO_URL_PREFLIGHT_FAILED',
+                type: 'INSTANT_AUDIO_CACHE_HIT',
                 turn: turnNumber,
                 data: {
-                  audioUrl: agent2AudioUrl,
-                  localPath: localFilePath,
-                  reason: 'file_not_found',
-                  triggerCardId: runtimeResult?.triggerCard?.id,
-                  triggerCardLabel: runtimeResult?.triggerCard?.label,
-                  fallbackAction: 'will_use_tts'
+                  kind: status.kind,
+                  fileName: status.fileName,
+                  url: status.url,
+                  matchSource: runtimeResult?.matchSource || null
                 }
               }).catch(() => {});
             }
-          }
-        } else if (agent2AudioUrl.startsWith('http')) {
-          // External URL - assume it exists (preflight would add latency)
-          // TODO: Could add async preflight for external URLs if needed
-          audioFileExists = true;
-        }
-        
-        if (audioFileExists) {
-          audioUrl = agent2AudioUrl.startsWith('http') 
-            ? agent2AudioUrl 
-            : `${getSecureBaseUrl(req)}${agent2AudioUrl}`;
-          voiceProviderUsed = 'instant_audio_agent2';
-          
-          if (CallLogger) {
+          } else if (CallLogger) {
             CallLogger.logEvent({
               callId: callSid,
               companyId: companyID,
-              type: 'INSTANT_AUDIO_AGENT2_HIT',
+              type: 'INSTANT_AUDIO_CACHE_MISS',
               turn: turnNumber,
-              data: {
-                triggerCardId: runtimeResult?.triggerCard?.id || null,
-                triggerCardLabel: runtimeResult?.triggerCard?.label || null,
-                audioUrl: agent2AudioUrl,
-                matchSource: runtimeResult?.matchSource || null,
-                preflightPassed: true
-              }
+              data: { kind: 'GREETING_RULE', matchSource: runtimeResult?.matchSource || null }
             }).catch(() => {});
           }
-        } else {
-          // Audio file missing - will fall through to TTS below
-          if (CallLogger) {
+        }
+      } catch (e) {
+        logger.warn('[V2 RESPOND] Instant audio cache check failed', { error: e.message });
+      }
+
+      try {
+        const isAgent2Discovery = runtimeResult?.matchSource === 'AGENT2_DISCOVERY';
+        const agent2AudioUrl = runtimeResult?.audioUrl;
+        if (!audioUrl && isAgent2Discovery && agent2AudioUrl) {
+          let audioFileExists = false;
+
+          if (agent2AudioUrl.startsWith('/audio/') || agent2AudioUrl.startsWith('/instant-lines/')) {
+            const localFilePath = path.join(__dirname, '../public', agent2AudioUrl);
+            audioFileExists = fs.existsSync(localFilePath);
+
+            if (!audioFileExists) {
+              logger.warn('[V2 RESPOND] ⚠️ Agent2 audio file missing', {
+                path: localFilePath,
+                rawUrl: agent2AudioUrl,
+                triggerCardId: runtimeResult?.triggerCard?.id
+              });
+
+              if (CallLogger) {
+                CallLogger.logEvent({
+                  callId: callSid,
+                  companyId: companyID,
+                  type: 'AUDIO_URL_PREFLIGHT_FAILED',
+                  turn: turnNumber,
+                  data: {
+                    audioUrl: agent2AudioUrl,
+                    localPath: localFilePath,
+                    reason: 'file_not_found',
+                    triggerCardId: runtimeResult?.triggerCard?.id,
+                    triggerCardLabel: runtimeResult?.triggerCard?.label,
+                    fallbackAction: 'will_use_tts'
+                  }
+                }).catch(() => {});
+              }
+            }
+          } else if (agent2AudioUrl.startsWith('http')) {
+            audioFileExists = true;
+          }
+
+          if (audioFileExists) {
+            audioUrl = agent2AudioUrl.startsWith('http')
+              ? agent2AudioUrl
+              : `${getSecureBaseUrl(req)}${agent2AudioUrl}`;
+            localVoiceProviderUsed = 'instant_audio_agent2';
+
+            if (CallLogger) {
+              CallLogger.logEvent({
+                callId: callSid,
+                companyId: companyID,
+                type: 'INSTANT_AUDIO_AGENT2_HIT',
+                turn: turnNumber,
+                data: {
+                  triggerCardId: runtimeResult?.triggerCard?.id || null,
+                  triggerCardLabel: runtimeResult?.triggerCard?.label || null,
+                  audioUrl: agent2AudioUrl,
+                  matchSource: runtimeResult?.matchSource || null,
+                  preflightPassed: true
+                }
+              }).catch(() => {});
+            }
+          } else if (CallLogger) {
             CallLogger.logEvent({
               callId: callSid,
               companyId: companyID,
@@ -3304,115 +3462,113 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
             }).catch(() => {});
           }
         }
+      } catch (e) {
+        logger.warn('[V2 RESPOND] Agent2 instant audio check failed', { error: e.message });
       }
-    } catch (e) {
-      logger.warn('[V2 RESPOND] Agent2 instant audio check failed', { error: e.message });
-    }
-    
-    if (!audioUrl && elevenLabsVoice && responseText) {
-      const ttsStartTime = Date.now();
-      
-      try {
-        // TTS started (fire-and-forget, not critical)
-        if (CallLogger) {
-          CallLogger.logEvent({
-            callId: callSid,
-            companyId: companyID,
-            type: 'TTS_STARTED',
-            turn: turnNumber,
-            data: { voiceId: elevenLabsVoice, textLength: responseText.length }
-          }).catch(() => {});
+
+      if (!audioUrl && elevenLabsVoice && responseText) {
+        const ttsStartTime = Date.now();
+        try {
+          if (CallLogger) {
+            CallLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'TTS_STARTED',
+              turn: turnNumber,
+              data: { voiceId: elevenLabsVoice, textLength: responseText.length }
+            }).catch(() => {});
+          }
+
+          const buffer = await synthesizeSpeech({
+            text: responseText,
+            voiceId: elevenLabsVoice,
+            stability: voiceSettings.stability,
+            similarity_boost: voiceSettings.similarityBoost,
+            style: voiceSettings.styleExaggeration,
+            model_id: voiceSettings.aiModel,
+            company
+          });
+
+          ttsLatencyMs = Date.now() - ttsStartTime;
+
+          const fileName = `ai_respond_${callSid}_${Date.now()}.mp3`;
+          const audioDir = path.join(__dirname, '../public/audio');
+          if (!fs.existsSync(audioDir)) {
+            fs.mkdirSync(audioDir, { recursive: true });
+          }
+          fs.writeFileSync(path.join(audioDir, fileName), buffer);
+
+          audioUrl = `https://${hostHeader}/audio/${fileName}`;
+          localVoiceProviderUsed = 'elevenlabs';
+
+          if (CallLogger) {
+            CallLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'TTS_COMPLETED',
+              turn: turnNumber,
+              data: { voiceId: elevenLabsVoice, latencyMs: ttsLatencyMs }
+            }).catch(() => {});
+          }
+        } catch (ttsError) {
+          logger.error('[V2 RESPOND] ElevenLabs TTS failed', {
+            callSid: callSid?.slice(-8),
+            error: ttsError.message
+          });
+
+          if (CallLogger) {
+            CallLogger.logEvent({
+              callId: callSid,
+              companyId: companyID,
+              type: 'TTS_FAILED',
+              turn: turnNumber,
+              data: { error: ttsError.message, fallback: 'twilio_say' }
+            }).catch(() => {});
+          }
         }
-        
-        const buffer = await synthesizeSpeech({
-          text: responseText,
-          voiceId: elevenLabsVoice,
-          stability: voiceSettings.stability,
-          similarity_boost: voiceSettings.similarityBoost,
-          style: voiceSettings.styleExaggeration,
-          model_id: voiceSettings.aiModel,
-          company
-        });
-        
-        ttsLatencyMs = Date.now() - ttsStartTime;
-        
-        // Save audio file
-        const fileName = `ai_respond_${callSid}_${Date.now()}.mp3`;
-        const audioDir = path.join(__dirname, '../public/audio');
-        if (!fs.existsSync(audioDir)) {
-          fs.mkdirSync(audioDir, { recursive: true });
-        }
-        fs.writeFileSync(path.join(audioDir, fileName), buffer);
-        
-        audioUrl = `https://${req.get('host')}/audio/${fileName}`;
-        voiceProviderUsed = 'elevenlabs';
-        
-        // TTS completed (fire-and-forget, not critical)
-        if (CallLogger) {
-          CallLogger.logEvent({
-            callId: callSid,
-            companyId: companyID,
-            type: 'TTS_COMPLETED',
-            turn: turnNumber,
-            data: { voiceId: elevenLabsVoice, latencyMs: ttsLatencyMs }
-          }).catch(() => {});
-        }
-      } catch (ttsError) {
-        logger.error('[V2 RESPOND] ElevenLabs TTS failed', {
-          callSid: callSid?.slice(-8),
-          error: ttsError.message
-        });
-        
-        if (CallLogger) {
-          CallLogger.logEvent({
-            callId: callSid,
-            companyId: companyID,
-            type: 'TTS_FAILED',
-            turn: turnNumber,
-            data: { error: ttsError.message, fallback: 'twilio_say' }
-          }).catch(() => {});
-        }
-        // Fall through to <Say>
       }
-    }
 
-    // Build TwiML response
-    const twiml = new twilio.twiml.VoiceResponse();
-    const gather = twiml.gather({
-      input: 'speech',
-      action: `/api/twilio/v2-agent-respond/${companyID}`,
-      method: 'POST',
-      actionOnEmptyResult: true, // CRITICAL: Post to action even if no speech (prevents loop)
-      timeout: 7,
-      speechTimeout: 'auto',
-      speechModel: 'phone_call',
-      partialResultCallback: `https://${req.get('host')}/api/twilio/v2-agent-partial/${companyID}`,
-      partialResultCallbackMethod: 'POST'
-    });
-    
-    if (audioUrl) {
-      gather.play(audioUrl);
-    } else {
-      gather.say(escapeTwiML(responseText));
-    }
-    
-    twimlString = twiml.toString();
+      const twiml = new twilio.twiml.VoiceResponse();
+      const gather = twiml.gather({
+        input: 'speech',
+        action: `/api/twilio/v2-agent-respond/${companyID}`,
+        method: 'POST',
+        actionOnEmptyResult: true,
+        timeout: 7,
+        speechTimeout: 'auto',
+        speechModel: 'phone_call',
+        partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
+        partialResultCallbackMethod: 'POST'
+      });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // TWIML_SENT - CRITICAL EVENT - MUST AWAIT
-    // ═══════════════════════════════════════════════════════════════════════════
-    // This is the FINAL gate. If this event exists, the turn completed.
-    // If this event is missing, something crashed before we got here.
-    // ═══════════════════════════════════════════════════════════════════════════
-    // Calculate total time and add TTS timing
-    timings.ttsMs = ttsLatencyMs || 0;
-    timings.totalMs = Date.now() - T0;
-    
-    if (CallLogger) {
-      // Extract audio URL if present for audit
+      if (audioUrl) gather.play(audioUrl);
+      else gather.say(escapeTwiML(responseText));
+
+      const outTwimlString = twiml.toString();
+
+      timings.ttsMs = ttsLatencyMs || 0;
+      timings.totalMs = Date.now() - T0;
+
+      return {
+        twimlString: outTwimlString,
+        voiceProviderUsed: localVoiceProviderUsed,
+        responseText,
+        matchSource: runtimeResult.matchSource,
+        timings: {
+          companyLoadMs: timings.companyLoadMs || 0,
+          coreRuntimeMs: timings.coreRuntimeMs || 0,
+          eventFlushMs: timings.eventFlushMs || 0,
+          ttsMs: timings.ttsMs || 0,
+          totalMs: timings.totalMs || 0
+        }
+      };
+    })();
+
+    const logTwimlSent = async ({ route, twimlString, voiceProviderUsed, responsePreview, matchSource, isBridge = false, bridgeMeta = null, isFallback = false, fallbackReason = null, timings = null }) => {
+      if (!CallLogger || !callSid) return;
       const playUrlMatch = twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
       const playUrl = playUrlMatch ? playUrlMatch[1] : null;
-      
+
       await CallLogger.logEvent({
         callId: callSid,
         companyId: companyID,
@@ -3420,34 +3576,208 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
         turn: turnNumber,
         data: {
           section: 'S7_VOICE_PROVIDER',
-          route: '/v2-agent-respond',
+          route,
           twimlLength: twimlString.length,
           hasGather: twimlString.includes('<Gather'),
           hasPlay: twimlString.includes('<Play'),
           hasSay: twimlString.includes('<Say'),
           voiceProviderUsed,
-          responsePreview: responseText.substring(0, 80),
-          matchSource: runtimeResult.matchSource,
+          responsePreview: `${responsePreview || ''}`.substring(0, 80),
+          matchSource: matchSource || null,
           runtimeCommitSha: process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT?.substring(0, 8) || null,
-          // ════════════════════════════════════════════════════════════════════════
-          // TWIML PREVIEW - CRITICAL FOR DEBUGGING
-          // Without this, Call Review cannot prove what was actually sent to Twilio
-          // ════════════════════════════════════════════════════════════════════════
           twimlPreview: twimlString.substring(0, 800),
-          playUrl: playUrl,
-          // TIMING BREAKDOWN (all values in ms)
-          timings: {
-            companyLoadMs: timings.companyLoadMs || 0,
-            coreRuntimeMs: timings.coreRuntimeMs || 0,
-            eventFlushMs: timings.eventFlushMs || 0,
-            ttsMs: timings.ttsMs || 0,
-            totalMs: timings.totalMs || 0
-          }
+          playUrl,
+          isBridge: isBridge === true,
+          isFallback: isFallback === true,
+          fallbackReason: fallbackReason || null,
+          bridge: bridgeMeta || null,
+          timings: timings || undefined
         }
       }).catch(err => {
         logger.error('[V2 RESPOND] TWIML_SENT log failed', { error: err.message });
       });
+    };
+
+    if (!mayBridge) {
+      const result = await computeTurnPromise;
+      twimlString = result.twimlString;
+      voiceProviderUsed = result.voiceProviderUsed;
+      await logTwimlSent({
+        route: '/v2-agent-respond',
+        twimlString,
+        voiceProviderUsed,
+        responsePreview: result.responseText,
+        matchSource: result.matchSource,
+        timings: result.timings
+      });
+      res.type('text/xml');
+      return res.send(twimlString);
     }
+
+    const thresholdPromise = new Promise((resolve) => setTimeout(resolve, bridgeThresholdMs));
+    const first = await Promise.race([
+      computeTurnPromise.then((r) => ({ kind: 'result', r })),
+      thresholdPromise.then(() => ({ kind: 'threshold' }))
+    ]);
+
+    if (first.kind === 'result') {
+      const result = first.r;
+      twimlString = result.twimlString;
+      voiceProviderUsed = result.voiceProviderUsed;
+      await logTwimlSent({
+        route: '/v2-agent-respond',
+        twimlString,
+        voiceProviderUsed,
+        responsePreview: result.responseText,
+        matchSource: result.matchSource,
+        timings: result.timings
+      });
+      res.type('text/xml');
+      return res.send(twimlString);
+    }
+
+    // Threshold crossed first: attempt bridge with caps + per-turn guard.
+    const bridgeCountKey = `a2bridge:count:${callSid}`;
+    const bridgeTurnKey = `a2bridge:turn:${callSid}:${turnNumber}`;
+    const lastLineKey = `a2bridge:lastLine:${callSid}`;
+
+    const bridgesUsedRaw = await redis.get(bridgeCountKey);
+    const bridgesUsed = parseInt(bridgesUsedRaw || 0, 10) || 0;
+    if (bridgesUsed >= bridgeMaxPerCall) {
+      const result = await computeTurnPromise;
+      twimlString = result.twimlString;
+      voiceProviderUsed = result.voiceProviderUsed;
+      await logTwimlSent({
+        route: '/v2-agent-respond',
+        twimlString,
+        voiceProviderUsed,
+        responsePreview: result.responseText,
+        matchSource: result.matchSource,
+        timings: result.timings
+      });
+      res.type('text/xml');
+      return res.send(twimlString);
+    }
+
+    const guardSet = await redis.set(bridgeTurnKey, '1', { EX: 60 * 10, NX: true });
+    if (!guardSet) {
+      const result = await computeTurnPromise;
+      twimlString = result.twimlString;
+      voiceProviderUsed = result.voiceProviderUsed;
+      await logTwimlSent({
+        route: '/v2-agent-respond',
+        twimlString,
+        voiceProviderUsed,
+        responsePreview: result.responseText,
+        matchSource: result.matchSource,
+        timings: result.timings
+      });
+      res.type('text/xml');
+      return res.send(twimlString);
+    }
+
+    const rawLines = Array.isArray(bridgeCfg.lines) ? bridgeCfg.lines : [];
+    const bridgeLines = rawLines.map(s => (typeof s === 'string' ? s.trim() : '')).filter(Boolean).slice(0, 12);
+    const usableLines = bridgeLines.length > 0 ? bridgeLines : ['Ok — one moment.'];
+
+    let idx = 0;
+    try {
+      const h = crypto.createHash('sha256').update(`${callSid}:${turnNumber}`).digest('hex');
+      idx = parseInt(h.substring(0, 8), 16) % usableLines.length;
+    } catch (_) {
+      idx = 0;
+    }
+
+    const lastIdxRaw = await redis.get(lastLineKey);
+    const lastIdx = parseInt(lastIdxRaw || -1, 10);
+    if (usableLines.length > 1 && idx === lastIdx) {
+      idx = (idx + 1) % usableLines.length;
+    }
+    await redis.set(lastLineKey, String(idx), { EX: 60 * 60 * 4 }).catch(() => {});
+
+    const newCount = await redis.incr(bridgeCountKey);
+    if (newCount === 1) await redis.expire(bridgeCountKey, 60 * 60 * 4).catch(() => {});
+
+    // State flag (best-effort, for traceability; guard keys remain authoritative)
+    callState.agent2Bridge = callState.agent2Bridge || {};
+    callState.agent2Bridge.lastBridgeTurn = turnNumber;
+    callState.agent2Bridge.bridgesUsedThisCall = newCount;
+
+    const token = crypto.randomBytes(8).toString('hex');
+    const cacheKey = `a2bridge:twiml:${callSid}:${turnNumber}:${token}`;
+    const startedKey = `a2bridge:t0:${callSid}:${turnNumber}:${token}`;
+    await redis.set(startedKey, String(Date.now()), { EX: 60 * 10 }).catch(() => {});
+
+    computeTurnPromise
+      .then(async (result) => {
+        const payload = {
+          twimlString: result.twimlString,
+          voiceProviderUsed: result.voiceProviderUsed,
+          responsePreview: `${result.responseText || ''}`.substring(0, 120),
+          matchSource: result.matchSource,
+          timings: result.timings
+        };
+        // Idempotency: write-once. Continuation must never see a partial write.
+        await redis.set(cacheKey, JSON.stringify(payload), { EX: 90, NX: true });
+        if (CallLogger && callSid) {
+          CallLogger.logEvent({
+            callId: callSid,
+            companyId: companyID,
+            type: 'AGENT2_BRIDGE_FINAL_CACHED',
+            turn: turnNumber,
+            data: {
+              cacheTtlSec: 90,
+              matchSource: result.matchSource || null,
+              twimlLength: result.twimlString?.length || 0,
+              timings: result.timings || null
+            }
+          }).catch(() => {});
+        }
+      })
+      .catch(async (err) => {
+        await redis.set(cacheKey, JSON.stringify({ error: err?.message || 'compute_failed' }), { EX: 90, NX: true }).catch(() => {});
+      });
+
+    const elapsedMs = Date.now() - T0;
+    const bridgeLine = usableLines[idx];
+    const continueUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-bridge-continue/${companyID}?turn=${turnNumber}&token=${encodeURIComponent(token)}&attempt=0`;
+
+    if (CallLogger && callSid) {
+      await CallLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'AGENT2_BRIDGE_SPOKEN',
+        turn: turnNumber,
+        data: {
+          elapsedMs,
+          thresholdMs: bridgeThresholdMs,
+          hardCapMs: bridgeHardCapMs,
+          maxRedirectAttempts: bridgeMaxRedirectAttempts,
+          bridgesUsedBefore: bridgesUsed,
+          bridgesUsedAfter: newCount,
+          lineIdx: idx,
+          linePreview: bridgeLine.substring(0, 80),
+          reason: 'threshold_exceeded'
+        }
+      }).catch(() => {});
+    }
+
+    const bridgeTwiml = new twilio.twiml.VoiceResponse();
+    bridgeTwiml.say(escapeTwiML(bridgeLine));
+    // CRITICAL: method=POST so continuation receives CallSid in body
+    bridgeTwiml.redirect({ method: 'POST' }, continueUrl);
+    twimlString = bridgeTwiml.toString();
+    voiceProviderUsed = 'twilio_say';
+
+    await logTwimlSent({
+      route: '/v2-agent-respond',
+      twimlString,
+      voiceProviderUsed,
+      responsePreview: bridgeLine,
+      matchSource: 'AGENT2_BRIDGE',
+      isBridge: true,
+      bridgeMeta: { token: token.slice(0, 8), elapsedMs, thresholdMs: bridgeThresholdMs }
+    });
 
     res.type('text/xml');
     return res.send(twimlString);
