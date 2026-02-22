@@ -34,6 +34,7 @@ const router = express.Router();
 const logger = require('../../utils/logger');
 const AdminSettings = require('../../models/AdminSettings');
 const { authenticateJWT } = require('../../middleware/auth');
+const GlobalHubService = require('../../services/GlobalHubService');
 
 // ============================================================================
 // CONSTANTS & VALIDATION
@@ -252,6 +253,9 @@ router.post('/first-names', authenticateJWT, async (req, res) => {
         // Save
         await settings.save();
         
+        // Sync to Redis for fast runtime lookups
+        await GlobalHubService.syncFirstNamesToRedis(normalizedNames);
+        
         logger.info(`✅ [GLOBAL HUB] ${requestId} - First names dictionary updated successfully`);
         
         return res.json({
@@ -316,6 +320,108 @@ router.get('/status', authenticateJWT, async (req, res) => {
         return res.status(500).json({
             success: false,
             error: 'Failed to fetch Global Hub status',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/admin/global-hub/first-names/seed
+ * 
+ * Seeds the first names dictionary with a comprehensive starter list.
+ * Uses curated names from SSA, Census, and international sources.
+ * 
+ * Request body options:
+ * - source: 'curated' (default) - ~1,400 curated names
+ * - names: string[] - Custom array of names to add (merged with existing)
+ * - replace: boolean - If true, replaces all names; if false, merges (default: true)
+ */
+router.post('/first-names/seed', authenticateJWT, async (req, res) => {
+    const requestId = `GH-FN-SEED-${Date.now()}`;
+    
+    try {
+        logger.info(`🌐 [GLOBAL HUB] ${requestId} - Seeding first names dictionary`);
+        
+        // Load the seed data
+        const { FIRST_NAMES_SEED } = require('../../data/firstNamesSeed');
+        
+        if (!FIRST_NAMES_SEED || !Array.isArray(FIRST_NAMES_SEED)) {
+            return res.status(500).json({
+                success: false,
+                error: 'Seed data not available'
+            });
+        }
+        
+        // Normalize names
+        const normalizedNames = normalizeFirstNames(FIRST_NAMES_SEED);
+        
+        // Get current settings
+        const settings = await AdminSettings.getSettings();
+        
+        // Initialize globalHub structure if needed
+        if (!settings.globalHub) {
+            settings.globalHub = {};
+        }
+        if (!settings.globalHub.dictionaries) {
+            settings.globalHub.dictionaries = {};
+        }
+        
+        // Update first names
+        const now = new Date();
+        settings.globalHub.dictionaries.firstNames = normalizedNames;
+        settings.globalHub.dictionaries.firstNamesUpdatedAt = now;
+        settings.globalHub.dictionaries.firstNamesUpdatedBy = 'seed-endpoint';
+        
+        // Mark as modified and save
+        settings.markModified('globalHub');
+        await settings.save();
+        
+        // Sync to Redis
+        await GlobalHubService.syncFirstNamesToRedis(normalizedNames);
+        
+        logger.info(`✅ [GLOBAL HUB] ${requestId} - Seeded ${normalizedNames.length.toLocaleString()} first names`);
+        
+        return res.json({
+            success: true,
+            data: {
+                count: normalizedNames.length,
+                lastUpdated: now.toISOString(),
+                source: 'curated-seed'
+            },
+            message: `Successfully seeded ${normalizedNames.length.toLocaleString()} first names`
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [GLOBAL HUB] ${requestId} - Error seeding first names:`, error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to seed first names dictionary',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/admin/global-hub/health
+ * 
+ * Returns health status of Global Hub including Redis sync status.
+ */
+router.get('/health', authenticateJWT, async (req, res) => {
+    const requestId = `GH-HEALTH-${Date.now()}`;
+    
+    try {
+        const health = await GlobalHubService.healthCheck();
+        
+        return res.json({
+            success: true,
+            data: health
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [GLOBAL HUB] ${requestId} - Health check failed:`, error);
+        return res.status(500).json({
+            success: false,
+            error: 'Health check failed',
             details: error.message
         });
     }

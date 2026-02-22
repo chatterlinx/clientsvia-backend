@@ -1056,6 +1056,22 @@ async function startServer() {
         }
         console.log('════════════════════════════════════════════════════════════════════');
         
+        // 🌐 GLOBAL HUB: Load shared dictionaries into Redis for fast cross-tenant lookups
+        console.log('[Server] Step 3.6/7: Initializing Global Hub Service...');
+        try {
+            const GlobalHubService = require('./services/GlobalHubService');
+            const hubResult = await GlobalHubService.initialize();
+            if (hubResult.success) {
+                console.log(`[Server] ✅ Step 3.6 COMPLETE: Global Hub initialized (${hubResult.count.toLocaleString()} first names loaded)`);
+            } else {
+                console.warn('[Server] ⚠️ Global Hub initialization returned no data (seed via admin UI)');
+            }
+        } catch (hubError) {
+            console.error('[Server] ❌ Global Hub initialization failed:', hubError.message);
+            console.warn('[Server] ⚠️ First names lookups will use fallback (empty until seeded)');
+        }
+        console.log('════════════════════════════════════════════════════════════════════');
+        
         // 🔧 FIX: Ensure v2TradeCategory indexes are correct for multi-tenancy
         console.log('[Server] Step 2.5/7: Checking v2TradeCategory indexes...');
         try {
