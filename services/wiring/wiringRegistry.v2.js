@@ -1658,19 +1658,7 @@ const wiringRegistryV2 = {
         
         // ☢️ NUKED Feb 2026: tab.dynamicFlow removed - V110 architecture replaces it
         // ☢️ NUKED Feb 2026: tab.transfers, tab.callProtection removed - cheat sheet nuke
-        
-        // ---------------------------------------------------------------------
-        // FLOW TREE TAB
-        // ---------------------------------------------------------------------
-        {
-            id: 'tab.flowTree',
-            label: 'Flow Tree',
-            description: 'AI decision visualization',
-            ui: { tabId: 'flow-tree', navSelector: '[data-tab="flow-tree"]' },
-            db: { collection: null, basePath: null },
-            scope: 'company',
-            sections: []
-        },
+        // ☢️ NUKED Feb 2026: tab.flowTree removed - Flow Tree visualization nuked
         
         // ---------------------------------------------------------------------
         // INTEGRATIONS TAB (Company Profile → Configuration)

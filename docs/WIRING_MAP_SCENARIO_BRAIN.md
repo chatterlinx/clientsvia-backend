@@ -147,10 +147,10 @@
 - **Need**: Filter scenarios by `company.tradeKey` at runtime
 - **Current**: All scenarios from template are available regardless of trade
 
-### 3. Flow Tree Snapshot Integration
-- **Status**: PARTIAL
-- **Need**: Snapshot must include:
-  - `scenarioEngine.enabled`
+### 3. ~~Flow Tree Snapshot Integration~~ (☢️ NUKED Feb 2026)
+- **Status**: REMOVED - Flow Tree visualization nuked
+- ~~**Need**: Snapshot must include:~~
+  - ~~`scenarioEngine.enabled`~~
   - `scenarioEngine.tiers.tier1/2/3` config
   - `dataConfig.scenarios.count`
   - `dataConfig.scenarios.enabledCount`
@@ -166,7 +166,7 @@
 1. ✅ Discovery complete (this document)
 2. Create `ScenarioEngine.selectResponse()` adapter
 3. Add `companyScenarioToggles` collection
-4. Update Flow Tree snapshot to include scenario config
+4. ~~Update Flow Tree snapshot to include scenario config~~ (☢️ NUKED Feb 2026)
 5. Add trade selection filter to runtime
 
 ---

@@ -67,7 +67,7 @@ ctx.slots.* = (BookingNameHandler.js: multiple)
 
 | File | Status |
 |------|--------|
-| `FlowTreeDefinition.js` | ✅ REMOVED (V96j) |
+| `FlowTreeDefinition.js` | ✅ REMOVED (V96j) → ☢️ FILE DELETED (Feb 2026 - Flow Tree nuke) |
 | `v2twilio.js` | ✅ REMOVED from usedPath (V96j) |
 | `ConversationEngine.js` | ⚠️ Has comments + debug checks |
 
@@ -81,7 +81,7 @@ ctx.slots.* = (BookingNameHandler.js: multiple)
 - [x] Booking gate in v2twilio.js with defer handling
 - [x] ConversationEngine BOOKING_MODE block guarded
 - [x] BookingFlowRunner.safeSetSlot routes through IdentitySlotFirewall
-- [x] BOOKING_SNAP removed from FlowTreeDefinition
+- [x] BOOKING_SNAP removed from FlowTreeDefinition → ☢️ FILE DELETED (Feb 2026 - Flow Tree nuke)
 - [x] Direct address write in BookingFlowRunner.js:782 fixed (via safeSetSlot)
 - [x] ConversationStateMachine slot writes routed through firewall (via _safeWriteSlot helper)
 - [x] CONFIRMATION prompt now configurable via Booking Prompt tab (bookingBehavior.confirmationPrompt)

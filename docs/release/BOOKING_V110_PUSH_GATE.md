@@ -37,7 +37,7 @@ Do NOT push if ANY of these are true:
 
 ## 0) Non-Negotiable: Wiring Truth
 
-All wiring changes must be applied through the **Control Plane Wiring tab flow tree** so the Wiring tab + raw events stay the JSON truth.
+All wiring changes must be applied through the **Control Plane Wiring tab** so the Wiring tab + raw events stay the JSON truth.
 
 **No side-wiring in code "because it works."**
 

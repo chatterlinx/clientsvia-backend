@@ -16,7 +16,7 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
 | UI Tab | Init function | Primary UI manager(s) |
 |---|---|---|
 | Front Desk | `initFrontDesk()` | `public/js/ai-agent-settings/FrontDeskBehaviorManager.js` |
-| Flow Tree | `initFlowTree()` | inline in `control-plane-v2.html` (plus snapshot loader) |
+| ~~Flow Tree~~ | ~~`initFlowTree()`~~ | ☢️ NUKED Feb 2026 |
 | Data & Config | `initDataConfig()` | `AiCoreTemplatesManager`, `AiCoreLiveScenariosManager`, plus inline handlers |
 | Call Protection | `initCallProtection()` | `CheatSheetManager` (edge cases) |
 | Transfer Calls | `initTransferCalls()` | `CheatSheetManager` (transfer rules) |
@@ -106,18 +106,8 @@ Control Plane V2 tab switching is implemented directly in `public/control-plane-
 
 ---
 
-<!-- ☢️ NUKED Feb 2026: Dynamic Flow tab and Flow Tree removed - V110 architecture replaces this feature -->
-
-## Flow Tree (visualization)
-
-### UI
-- Inline: loads snapshot and renders nodes.
-
-### API
-- `GET /api/company/:companyId/system-snapshot` (used by Flow Tree view)
-
-### Backend routes
-- `routes/company/systemSnapshot.js`
+<!-- ☢️ NUKED Feb 2026: Dynamic Flow tab removed - V110 architecture replaces this feature -->
+<!-- ☢️ NUKED Feb 2026: Flow Tree tab, System Snapshot API, FlowTreeDefinition.js, TruthBundleExporter.js all removed -->
 
 ---
 

@@ -360,48 +360,7 @@ const wiringRegistryV1 = {
       requiredFields: []
     },
 
-    // =========================================================================
-    // TAB: FLOW TREE (READ-ONLY VISUALIZATION)
-    // =========================================================================
-    {
-      id: "tab.flowTree",
-      type: "TAB",
-      label: "Flow Tree",
-      description: "READ-ONLY: AI Decision Flow Tree visualization + System Snapshot",
-      expectedDbPaths: [],
-      expectedConsumers: ["PlatformSnapshotService"],
-      expectedTraceKeys: [],
-      uiOnly: true,
-      note: "This tab VISUALIZES state, it doesn't control behavior",
-      children: [
-        "flowTree.decisionTree",
-        "flowTree.systemSnapshot"
-      ]
-    },
-
-    {
-      id: "flowTree.decisionTree",
-      type: "SECTION",
-      label: "AI Decision Flow Tree",
-      parentId: "tab.flowTree",
-      description: "Visual representation of call flow decisions",
-      expectedDbPaths: [],
-      expectedConsumers: [],
-      uiOnly: true,
-      requiredFields: []
-    },
-
-    {
-      id: "flowTree.systemSnapshot",
-      type: "SECTION",
-      label: "System Snapshot",
-      parentId: "tab.flowTree",
-      description: "Runtime truth snapshot with health status",
-      expectedDbPaths: [],
-      expectedConsumers: ["PlatformSnapshotService"],
-      requiredFields: []
-    },
-
+    // ☢️ NUKED Feb 2026: tab.flowTree, flowTree.decisionTree, flowTree.systemSnapshot removed - Flow Tree visualization nuked
     // ☢️ NUKED Feb 2026: tab.dynamicFlow, dynamicFlow.companyFlows, dynamicFlow.templates removed - V110 architecture replaces Dynamic Flows
 
     // =========================================================================

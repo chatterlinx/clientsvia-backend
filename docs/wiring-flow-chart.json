@@ -198,18 +198,6 @@
         }
       },
       {
-        "id": "tab_flowTree",
-        "label": "Flow Tree Tab",
-        "type": "tab",
-        "description": "Visual flow builder (not fully used).",
-        "health": "Underutilized: Could integrate with new chart.",
-        "dependencies": [],
-        "position": {
-          "x": 400,
-          "y": 100
-        }
-      },
-      {
         "id": "tab_dataConfig",
         "label": "Data & Config Tab",
         "type": "tab",

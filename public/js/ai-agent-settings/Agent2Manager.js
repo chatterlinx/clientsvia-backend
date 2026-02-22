@@ -7621,7 +7621,7 @@ class Agent2Manager {
     // ═══════════════════════════════════════════════════════════════════════
     let persistedSnapshot = null;
     let frontDeskConfig = null;
-    let flowTreeSnapshot = null;
+    // ☢️ NUKED Feb 2026: flowTreeSnapshot removed - Flow Tree visualization nuked
     let wiringStatusSnapshot = null;
     let controlPlaneRawSnapshot = null;
     let persistedFetchError = null;
@@ -7647,13 +7647,7 @@ class Agent2Manager {
         frontDeskConfig = fdJson?.data || fdJson || null;
       }
 
-      // Fetch Flow Tree + Runtime Bindings (Control Plane Wiring truth)
-      const flowRes = await fetch(`/api/admin/truth-bundle/flow-tree`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
-      if (flowRes.ok) {
-        flowTreeSnapshot = await flowRes.json();
-      }
+      // ☢️ NUKED Feb 2026: Flow Tree fetch removed - Flow Tree visualization nuked
 
       // Fetch AW Wiring report (wiring tab truth)
       const wiringRes = await fetch(`/api/admin/wiring-status/${this.companyId}?includeGuardrails=0&includeInfrastructure=0`, {
@@ -7744,10 +7738,7 @@ class Agent2Manager {
     }
 
     // Control Plane Wiring truth is required for calling this report "wiring complete"
-    if (!flowTreeSnapshot) {
-      missingSections.push('flowTree');
-      failedChecks.push('CONTROL_PLANE_MISSING: Could not fetch Flow Tree truth (truth-bundle/flow-tree)');
-    }
+    // ☢️ NUKED Feb 2026: flowTreeSnapshot check removed - Flow Tree visualization nuked
     if (!wiringStatusSnapshot) {
       missingSections.push('awWiringStatus');
       failedChecks.push('CONTROL_PLANE_MISSING: Could not fetch AW wiring status (wiring-status)');
@@ -8216,8 +8207,8 @@ class Agent2Manager {
       runtimeDependencies,
 
       controlPlaneTruth: {
-        _description: 'Control Plane Wiring truth sources (Flow Tree + AW wiring report + raw config echo)',
-        flowTreeSnapshot,
+        _description: 'Control Plane Wiring truth sources (AW wiring report + raw config echo)',
+        // ☢️ NUKED Feb 2026: flowTreeSnapshot removed - Flow Tree visualization nuked
         wiringStatusSnapshot,
         controlPlaneRawSnapshot
       },
