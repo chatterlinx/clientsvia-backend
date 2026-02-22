@@ -618,6 +618,7 @@ function registerRoutes(routes) {
     
     // PUBLIC HEALTH/VERSION ROUTES - Must be before auth-protected routes
     app.use('/api', routes.healthRoutes); // SYSTEM: Health check + version endpoint (PUBLIC, no auth)
+    app.use('/api', require('./routes/v2metrics')); // 📊 Metrics API (codebase LOC, performance - PUBLIC)
 
     // --- API Routes ---
     app.use('/api', routes.v2CompanyRoutes);
