@@ -1107,6 +1107,11 @@
       <span>Agent 2.0</span>
       <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('agent2')"></i>
     </button>
+    <button class="nav-tab" data-tab="global-hub">
+      <i class="fas fa-globe"></i>
+      <span>Global Hub</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('global-hub')"></i>
+    </button>
     <button class="nav-tab" data-tab="flow-tree">
       <i class="fas fa-project-diagram"></i>
       <span>Flow Tree</span>
@@ -1230,6 +1235,21 @@
           <div class="loading-container">
             <i class="fas fa-layer-group fa-spin"></i>
             <p>Loading Agent 2.0...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         GLOBAL HUB - Cross-Tenant Shared Resources
+         Platform-wide dictionaries accessible to all companies
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="global-hub">
+      <div class="card">
+        <div id="global-hub-container">
+          <div class="loading-container">
+            <i class="fas fa-globe fa-spin"></i>
+            <p>Loading Global Hub...</p>
           </div>
         </div>
       </div>
@@ -2795,6 +2815,18 @@
           <p><strong>Storage:</strong> <code>company.aiAgentSettings.agent2</code></p>
           <p><strong>Note:</strong> This tab stores config now; runtime takeover is a separate, explicit step.</p>`
       },
+      'global-hub': {
+        title: '🌐 Global Hub',
+        content: `<p><strong>Purpose:</strong> Cross-tenant shared resources accessible to ALL companies.</p>
+          <p><strong>Key Features:</strong></p>
+          <ul style="margin: 8px 0; padding-left: 20px;">
+            <li><strong>First Names Dictionary:</strong> Common first names for caller validation</li>
+            <li><strong>Shared Data:</strong> Platform-wide dictionaries (no per-company duplication)</li>
+            <li><strong>Admin Managed:</strong> Only platform admins can modify</li>
+          </ul>
+          <p><strong>Storage:</strong> <code>AdminSettings.globalHub.dictionaries</code> (global, no companyId)</p>
+          <p><strong>Note:</strong> Data here benefits ALL tenants — dentists, plumbers, HVAC, etc.</p>`
+      },
       'flow-tree': {
         title: '🌳 Flow Tree (Visualization)',
         content: `<p><strong>Purpose:</strong> READ-ONLY dashboard showing the overall system architecture and current state.</p>
@@ -3130,6 +3162,9 @@
           case 'agent2':
             await initAgent2();
             break;
+          case 'global-hub':
+            await initGlobalHub();
+            break;
           case 'flow-tree':
             await initFlowTree();
             break;
@@ -3203,6 +3238,220 @@
         console.log('✅ [INIT] Agent 2.0 initialized');
       } else {
         console.error('❌ [INIT] Agent 2.0 container or manager missing');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GLOBAL HUB INITIALIZATION (Cross-Tenant Shared Resources)
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initGlobalHub() {
+      console.log('🌐 [INIT] Initializing Global Hub...');
+      await loadScript(`/js/GlobalHubManager.js?v=${Date.now()}`);
+      
+      const container = document.getElementById('global-hub-container');
+      if (container && window.GlobalHubManager) {
+        // Render inline UI for Control Plane context
+        await renderGlobalHubInline(container);
+        console.log('✅ [INIT] Global Hub initialized');
+      } else {
+        console.error('❌ [INIT] Global Hub container or manager missing');
+      }
+    }
+    
+    // Render Global Hub inline within Control Plane
+    async function renderGlobalHubInline(container) {
+      // Fetch status
+      const token = localStorage.getItem('adminToken');
+      let status = null;
+      
+      try {
+        const response = await fetch('/api/admin/global-hub/status', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          status = data.data;
+        }
+      } catch (e) {
+        console.error('Failed to fetch Global Hub status:', e);
+      }
+      
+      const firstNamesCount = status?.dictionaries?.firstNames?.count || 0;
+      const lastUpdated = status?.dictionaries?.firstNames?.lastUpdated;
+      const lastUpdatedText = lastUpdated ? new Date(lastUpdated).toLocaleDateString() : 'Never';
+      
+      container.innerHTML = `
+        <div style="padding: 24px;">
+          <div style="margin-bottom: 24px;">
+            <h2 style="font-size: 24px; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">
+              <i class="fas fa-globe" style="color: #06b6d4; margin-right: 8px;"></i>
+              Global Hub
+            </h2>
+            <p style="color: #94a3b8; font-size: 14px;">
+              Cross-tenant shared resources. Data here is accessible to ALL companies.
+            </p>
+          </div>
+          
+          <div style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border-radius: 12px; padding: 24px; border: 1px solid #334155;">
+            <h3 style="font-size: 18px; font-weight: 600; color: #f8fafc; margin-bottom: 16px;">
+              <i class="fas fa-book" style="color: #3b82f6; margin-right: 8px;"></i>
+              Shared Dictionaries
+            </h3>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
+              <!-- First Names Card -->
+              <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 10px; padding: 20px; border: 1px solid #3b82f6;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                  <div style="width: 48px; height: 48px; background: rgba(59, 130, 246, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                    <i class="fas fa-user" style="color: #3b82f6; font-size: 20px;"></i>
+                  </div>
+                  <span style="font-size: 28px; font-weight: 700; color: #3b82f6;">${firstNamesCount.toLocaleString()}</span>
+                </div>
+                <h4 style="font-size: 16px; font-weight: 600; color: #f8fafc; margin-bottom: 8px;">First Names</h4>
+                <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">Common first names for caller validation and name matching.</p>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-size: 12px; color: #64748b;">Updated: ${lastUpdatedText}</span>
+                  <button onclick="openGlobalHubFirstNamesModal()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-edit"></i> Edit
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Placeholder Cards -->
+              <div style="background: rgba(30, 41, 59, 0.5); border-radius: 10px; padding: 20px; border: 1px dashed #475569; opacity: 0.6;">
+                <div style="width: 48px; height: 48px; background: rgba(100, 116, 139, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                  <i class="fas fa-users" style="color: #64748b; font-size: 20px;"></i>
+                </div>
+                <h4 style="font-size: 16px; font-weight: 600; color: #94a3b8; margin-bottom: 8px;">Last Names</h4>
+                <p style="font-size: 13px; color: #64748b;">Coming soon...</p>
+              </div>
+              
+              <div style="background: rgba(30, 41, 59, 0.5); border-radius: 10px; padding: 20px; border: 1px dashed #475569; opacity: 0.6;">
+                <div style="width: 48px; height: 48px; background: rgba(100, 116, 139, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
+                  <i class="fas fa-tag" style="color: #64748b; font-size: 20px;"></i>
+                </div>
+                <h4 style="font-size: 16px; font-weight: 600; color: #94a3b8; margin-bottom: 8px;">Common Titles</h4>
+                <p style="font-size: 13px; color: #64748b;">Coming soon...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- First Names Modal -->
+        <div id="global-hub-first-names-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+          <div style="background: #1e293b; border-radius: 12px; max-width: 700px; width: 90%; max-height: 85vh; display: flex; flex-direction: column; border: 1px solid #334155;">
+            <div style="padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+              <h3 style="font-size: 18px; font-weight: 600; color: #f8fafc;">
+                <i class="fas fa-user" style="color: #3b82f6; margin-right: 8px;"></i>
+                Edit First Names Dictionary
+              </h3>
+              <button onclick="closeGlobalHubFirstNamesModal()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 20px;">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div style="padding: 20px; flex: 1; overflow-y: auto;">
+              <label style="display: block; font-size: 14px; font-weight: 500; color: #f8fafc; margin-bottom: 8px;">
+                First Names (one per line)
+              </label>
+              <textarea id="global-hub-first-names-textarea" style="width: 100%; height: 300px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; color: #f8fafc; font-family: monospace; font-size: 14px; resize: vertical;" placeholder="Enter names, one per line..."></textarea>
+              <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; margin-top: 16px;">
+                <h4 style="font-size: 13px; font-weight: 600; color: #3b82f6; margin-bottom: 8px;">
+                  <i class="fas fa-info-circle" style="margin-right: 6px;"></i>Auto-Processing
+                </h4>
+                <ul style="font-size: 12px; color: #94a3b8; margin: 0; padding-left: 20px;">
+                  <li>Names are automatically converted to Title Case</li>
+                  <li>Duplicates are removed (case-insensitive)</li>
+                  <li>Empty lines and whitespace are trimmed</li>
+                  <li>List is sorted alphabetically</li>
+                </ul>
+              </div>
+            </div>
+            <div style="padding: 16px 20px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 12px;">
+              <button onclick="closeGlobalHubFirstNamesModal()" style="background: #334155; color: #f8fafc; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">
+                Cancel
+              </button>
+              <button onclick="saveGlobalHubFirstNames()" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <i class="fas fa-save"></i> Save
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Global Hub Modal Functions
+    async function openGlobalHubFirstNamesModal() {
+      const modal = document.getElementById('global-hub-first-names-modal');
+      const textarea = document.getElementById('global-hub-first-names-textarea');
+      if (!modal || !textarea) return;
+      
+      modal.style.display = 'flex';
+      textarea.value = 'Loading...';
+      textarea.disabled = true;
+      
+      try {
+        const token = localStorage.getItem('adminToken');
+        const response = await fetch('/api/admin/global-hub/first-names', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          textarea.value = (data.data?.firstNames || []).join('\n');
+        } else {
+          textarea.value = '';
+        }
+      } catch (e) {
+        console.error('Failed to load first names:', e);
+        textarea.value = '';
+      }
+      
+      textarea.disabled = false;
+      textarea.focus();
+    }
+    
+    function closeGlobalHubFirstNamesModal() {
+      const modal = document.getElementById('global-hub-first-names-modal');
+      if (modal) modal.style.display = 'none';
+    }
+    
+    async function saveGlobalHubFirstNames() {
+      const textarea = document.getElementById('global-hub-first-names-textarea');
+      if (!textarea) return;
+      
+      const namesArray = textarea.value.split('\n').map(l => l.trim()).filter(l => l);
+      
+      try {
+        const token = localStorage.getItem('adminToken');
+        const response = await fetch('/api/admin/global-hub/first-names', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ firstNames: namesArray })
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          textarea.value = (data.data?.firstNames || []).join('\n');
+          closeGlobalHubFirstNamesModal();
+          // Refresh the inline display
+          const container = document.getElementById('global-hub-container');
+          if (container) await renderGlobalHubInline(container);
+          showToast('First names saved successfully!', 'success');
+        } else {
+          const err = await response.json();
+          showToast(err.error || 'Failed to save', 'error');
+        }
+      } catch (e) {
+        console.error('Failed to save first names:', e);
+        showToast('Failed to save first names', 'error');
       }
     }
     
