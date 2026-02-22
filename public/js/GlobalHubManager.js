@@ -209,6 +209,37 @@ const GlobalHubManager = (function() {
         }
     }
     
+    /**
+     * Seed first names with curated starter list
+     */
+    async function seedFirstNames() {
+        try {
+            const response = await fetch(`${API_BASE}/first-names/seed`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                credentials: 'include'
+            });
+            
+            if (response.status === 401) {
+                window.location.href = '/login.html';
+                return null;
+            }
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Failed to seed: ${response.statusText}`);
+            }
+            
+            return data;
+            
+        } catch (error) {
+            console.error('[GlobalHubManager] Error seeding first names:', error);
+            showToast(error.message || 'Failed to seed first names', 'error');
+            return null;
+        }
+    }
+    
     // ========================================================================
     // UI UPDATE FUNCTIONS
     // ========================================================================
@@ -347,9 +378,51 @@ const GlobalHubManager = (function() {
     // ========================================================================
     
     /**
+     * Handle seed first names button click
+     */
+    async function handleSeedFirstNames() {
+        const seedBtn = elements.seedFirstNamesBtn;
+        
+        // Confirm with user
+        const currentCount = state.firstNames?.length || 0;
+        if (currentCount > 0) {
+            const confirmed = confirm(`This will replace the current ${currentCount.toLocaleString()} names with ~1,400 curated names. Continue?`);
+            if (!confirmed) return;
+        }
+        
+        // Show loading state
+        if (seedBtn) {
+            seedBtn.disabled = true;
+            seedBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Seeding...';
+        }
+        
+        // Call seed API
+        const result = await seedFirstNames();
+        
+        // Reset button
+        if (seedBtn) {
+            seedBtn.disabled = false;
+            seedBtn.innerHTML = '<i class="fas fa-seedling"></i> Seed';
+        }
+        
+        if (result && result.success) {
+            showToast(result.message || `Seeded ${result.data?.count?.toLocaleString() || ''} names`, 'success');
+            
+            // Refresh dashboard
+            const status = await fetchStatus();
+            updateDashboard(status);
+        }
+    }
+    
+    /**
      * Set up event listeners
      */
     function setupEventListeners() {
+        // Seed First Names button
+        if (elements.seedFirstNamesBtn) {
+            elements.seedFirstNamesBtn.addEventListener('click', handleSeedFirstNames);
+        }
+        
         // Edit First Names button
         if (elements.editFirstNamesBtn) {
             elements.editFirstNamesBtn.addEventListener('click', openFirstNamesModal);
@@ -409,6 +482,7 @@ const GlobalHubManager = (function() {
             // Dashboard elements
             firstNamesCount: document.getElementById('first-names-count'),
             firstNamesUpdated: document.getElementById('first-names-updated'),
+            seedFirstNamesBtn: document.getElementById('seed-first-names-btn'),
             editFirstNamesBtn: document.getElementById('edit-first-names-btn'),
             
             // Modal elements

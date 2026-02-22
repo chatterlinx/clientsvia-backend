@@ -271,13 +271,23 @@
                             <p class="text-sm text-gray-600 mb-4">
                                 Common first names for caller validation and name matching.
                             </p>
-                            <div class="flex items-center justify-between">
+                            <div class="flex items-center justify-between mb-3">
                                 <span id="first-names-updated" class="text-xs text-gray-400">
                                     Never updated
                                 </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button 
+                                    id="seed-first-names-btn"
+                                    class="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+                                    title="Load ~1,400 curated names from diverse backgrounds"
+                                >
+                                    <i class="fas fa-seedling"></i>
+                                    Seed
+                                </button>
                                 <button 
                                     id="edit-first-names-btn"
-                                    class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
                                 >
                                     <i class="fas fa-edit"></i>
                                     Edit
