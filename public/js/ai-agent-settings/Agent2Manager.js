@@ -3161,10 +3161,6 @@ class Agent2Manager {
       // Emergency
       'agent2.emergencyFallback': '🚨 Emergency Fallback',
       
-      // Connection Quality Gate
-      'connectionQualityGate.clarification': '🔄 Connection Quality Gate → Re-greet',
-      'connectionQualityGate.dtmfEscape': '📞 Connection Quality Gate → DTMF Escape',
-      
       // Legacy/unknown
       'legacy': '⚠️ Legacy System',
       'legacy.greeting': '⚠️ Legacy → Greeting',
@@ -7589,12 +7585,6 @@ class Agent2Manager {
     },
     runtimeDependencies: [
       'agent2',
-      'frontDeskBehavior.connectionQualityGate',
-      'frontDeskBehavior.recoveryMessages',
-      'frontDeskBehavior.conversationStages.greetingRules',
-      'instantResponses',
-      'afterHoursSettings',
-      'transferSettings',
       'voicemailSettings'
     ]
   };
@@ -7718,88 +7708,18 @@ class Agent2Manager {
     }
     
     // ═══════════════════════════════════════════════════════════════════════
-    // STEP 5: Runtime Dependencies (Connection Recovery, DTMF, etc.)
+    // STEP 5: Runtime Dependencies (Voicemail only - all others nuked Feb 2026)
     // ═══════════════════════════════════════════════════════════════════════
     const runtimeDependencies = {
       _description: 'Config surfaces outside Agent 2.0 that can override/interrupt calls',
       
-      connectionQualityGate: {
-        uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate',
-        canOverrideAgent2: true,
-        executesAt: 'S1.5 (before Agent2 greeting)',
-        config: frontDeskConfig?.connectionQualityGate || null,
-        _extracted: {
-          enabled: frontDeskConfig?.connectionQualityGate?.enabled ?? true,
-          clarificationPrompt: frontDeskConfig?.connectionQualityGate?.clarificationPrompt || 
-                              frontDeskConfig?.connectionQualityGate?.reGreeting || 
-                              "I'm sorry, I didn't quite catch that. Could you please repeat what you said?",
-          dtmfEscapeMessage: frontDeskConfig?.connectionQualityGate?.dtmfEscapeMessage || 
-                            "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.",
-          transferDestination: frontDeskConfig?.connectionQualityGate?.transferDestination || '',
-          maxRetries: frontDeskConfig?.connectionQualityGate?.maxRetries || 3
-        }
-      },
-      
-      connectionRecoveryMessages: {
-        uiPath: 'aiAgentSettings.frontDeskBehavior.recoveryMessages',
-        canOverrideAgent2: true,
-        executesAt: 'Any turn (on STT failure/unclear audio)',
-        config: frontDeskConfig?.recoveryMessages || null,
-        _extracted: {
-          audioUnclear: frontDeskConfig?.recoveryMessages?.audioUnclear || [],
-          connectionCutOut: frontDeskConfig?.recoveryMessages?.connectionCutOut || [],
-          silenceRecovery: frontDeskConfig?.recoveryMessages?.silenceRecovery || [],
-          generalError: frontDeskConfig?.recoveryMessages?.generalError || [],
-          technicalTransfer: frontDeskConfig?.recoveryMessages?.technicalTransfer || []
-        }
-      },
-      
-      legacyGreetingRules: {
-        uiPath: 'aiAgentSettings.frontDeskBehavior.conversationStages.greetingRules',
+      voicemailSettings: {
+        uiPath: 'aiAgentSettings.voicemailSettings',
         canOverrideAgent2: false,
-        executesAt: 'Only when Agent2 greetings disabled',
-        note: 'These are bypassed when Agent 2.0 is enabled',
-        config: frontDeskConfig?.conversationStages?.greetingRules || [],
-        count: (frontDeskConfig?.conversationStages?.greetingRules || []).length
-      },
-      
-      instantResponses: {
-        uiPath: 'aiAgentSettings.instantResponses',
-        canOverrideAgent2: true,
-        executesAt: 'Before discovery (instant match layer)',
-        config: frontDeskConfig?.instantResponses || [],
+        executesAt: 'On voicemail decision',
+        config: frontDeskConfig?.voicemailSettings || null,
         _extracted: {
-          total: (frontDeskConfig?.instantResponses || []).length,
-          enabled: (frontDeskConfig?.instantResponses || []).filter(r => r.enabled !== false).length,
-          greetingCategory: (frontDeskConfig?.instantResponses || []).filter(r => r.category === 'greeting').length
-        }
-      },
-      
-      // V126: After-hours routing (can override all Agent2 behavior)
-      afterHoursSettings: {
-        uiPath: 'aiAgentSettings.afterHoursSettings',
-        canOverrideAgent2: true,
-        executesAt: 'Call start (before any greeting)',
-        config: frontDeskConfig?.afterHoursSettings || null,
-        _extracted: {
-          enabled: frontDeskConfig?.afterHoursSettings?.enabled ?? false,
-          action: frontDeskConfig?.afterHoursSettings?.action || 'voicemail',
-          message: frontDeskConfig?.afterHoursSettings?.message || '',
-          forwardNumber: frontDeskConfig?.afterHoursSettings?.forwardNumber || ''
-        }
-      },
-      
-      // V126: Transfer settings (who gets transferred where)
-      transferSettings: {
-        uiPath: 'aiAgentSettings.transferSettings',
-        canOverrideAgent2: true,
-        executesAt: 'On escalation/transfer decision',
-        config: frontDeskConfig?.transferSettings || null,
-        _extracted: {
-          enabled: frontDeskConfig?.transferSettings?.enabled ?? true,
-          transferNumber: frontDeskConfig?.transferSettings?.transferNumber || '',
-          transferMessage: frontDeskConfig?.transferSettings?.transferMessage || "I'm connecting you to our team.",
-          voicemailEnabled: frontDeskConfig?.voicemailSettings?.enabled ?? false,
+          enabled: frontDeskConfig?.voicemailSettings?.enabled ?? false,
           voicemailNumber: frontDeskConfig?.voicemailSettings?.voicemailNumber || ''
         }
       },
@@ -7841,33 +7761,6 @@ class Agent2Manager {
       _description: 'Deterministic order of speech sources - first match wins',
       speechSources: [
         {
-          sourceId: 'catastrophicFallback.dtmfMenu',
-          uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
-          priority: 1,
-          canOverride: ['*'],
-          triggerCondition: 'maxRetries exceeded on connection quality issues',
-          enabled: runtimeDependencies.connectionQualityGate._extracted.enabled,
-          textPreview: runtimeDependencies.connectionQualityGate._extracted.dtmfEscapeMessage?.substring(0, 80)
-        },
-        {
-          sourceId: 'connectionQualityGate.clarification',
-          uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.clarificationPrompt',
-          priority: 2,
-          canOverride: ['agent2.greetings', 'agent2.discovery'],
-          triggerCondition: 'STT confidence below threshold OR trouble phrases detected',
-          enabled: runtimeDependencies.connectionQualityGate._extracted.enabled,
-          textPreview: runtimeDependencies.connectionQualityGate._extracted.clarificationPrompt?.substring(0, 80)
-        },
-        {
-          sourceId: 'connectionRecovery.audioUnclear',
-          uiPath: 'aiAgentSettings.frontDeskBehavior.recoveryMessages.audioUnclear',
-          priority: 3,
-          canOverride: ['agent2.discovery'],
-          triggerCondition: 'Audio quality issues detected mid-call',
-          enabled: true,
-          textPreview: (runtimeDependencies.connectionRecoveryMessages._extracted.audioUnclear[0] || '').substring(0, 80)
-        },
-        {
           sourceId: 'agent2.greetings.callStart',
           uiPath: 'aiAgentSettings.agent2.greetings.callStart',
           priority: 10,
@@ -7905,43 +7798,11 @@ class Agent2Manager {
           textPreview: (config.discovery?.playbook?.fallback?.noMatchAnswer || '').substring(0, 80)
         },
         {
-          sourceId: 'legacy.greetingRules',
-          uiPath: 'aiAgentSettings.frontDeskBehavior.conversationStages.greetingRules',
-          priority: 100,
-          canOverride: [],
-          triggerCondition: 'Only when Agent2 greetings DISABLED',
-          enabled: !(config.enabled && config.greetings?.interceptor?.enabled),
-          rulesCount: runtimeDependencies.legacyGreetingRules.count
-        },
-        // V126: After-hours (highest priority - overrides everything)
-        {
-          sourceId: 'afterHours.routing',
-          uiPath: 'aiAgentSettings.afterHoursSettings',
-          priority: 0,
-          canOverride: ['*'],
-          triggerCondition: 'Outside business hours (per schedule)',
-          enabled: runtimeDependencies.afterHoursSettings._extracted.enabled,
-          action: runtimeDependencies.afterHoursSettings._extracted.action,
-          textPreview: (runtimeDependencies.afterHoursSettings._extracted.message || '').substring(0, 80)
-        },
-        // V126: Transfer/Escalation
-        {
-          sourceId: 'transfer.humanAgent',
-          uiPath: 'aiAgentSettings.transferSettings',
-          priority: 50,
-          canOverride: [],
-          triggerCondition: 'Escalation requested OR trigger card with transfer action',
-          enabled: runtimeDependencies.transferSettings._extracted.enabled,
-          transferNumber: runtimeDependencies.transferSettings._extracted.transferNumber ? '✓ Configured' : '✗ Missing',
-          textPreview: (runtimeDependencies.transferSettings._extracted.transferMessage || '').substring(0, 80)
-        },
-        // V126: Voicemail fallback
-        {
           sourceId: 'voicemail.fallback',
           uiPath: 'aiAgentSettings.voicemailSettings',
           priority: 60,
           canOverride: [],
-          triggerCondition: 'Transfer unavailable OR DTMF option 2 selected',
+          triggerCondition: 'Voicemail requested OR escalation unavailable',
           enabled: runtimeDependencies.voicemailSettings._extracted.enabled,
           textPreview: (runtimeDependencies.voicemailSettings._extracted.greeting || '').substring(0, 80)
         }
@@ -8099,22 +7960,6 @@ class Agent2Manager {
     // ═══════════════════════════════════════════════════════════════════════
     const conflicts = [];
     
-    // Check: Connection Quality Gate can override Agent2 Call Start
-    if (runtimeDependencies.connectionQualityGate._extracted.enabled && 
-        config.enabled && config.greetings?.callStart?.enabled) {
-      conflicts.push({
-        type: 'GREETING_SOURCE_COMPETITION',
-        severity: 'WARNING',
-        sources: ['connectionQualityGate.clarification', 'agent2.greetings.callStart'],
-        description: 'Connection Quality Gate can speak BEFORE Agent 2.0 Call Start greeting on turn 0 if STT confidence is low',
-        recommendation: 'Review if this is intended behavior. The gate\'s clarification prompt may fire instead of your configured greeting.',
-        affectedPaths: [
-          'aiAgentSettings.frontDeskBehavior.connectionQualityGate.clarificationPrompt',
-          'aiAgentSettings.agent2.greetings.callStart.text'
-        ]
-      });
-    }
-    
     // Check: Vocabulary enabled entries but system disabled
     const vocabEntries = config.discovery?.vocabulary?.entries || [];
     const enabledVocabEntries = vocabEntries.filter(e => e.enabled);
@@ -8140,19 +7985,6 @@ class Agent2Manager {
         description: `Clarifier system is DISABLED but has ${enabledClarifierEntries.length} enabled entries that will NEVER run`,
         recommendation: 'Either enable the clarifier system or remove the entries to avoid confusion',
         affectedPaths: ['aiAgentSettings.agent2.discovery.clarifiers.enabled']
-      });
-    }
-    
-    // Check: DTMF fallback enabled but no transfer destination
-    if (runtimeDependencies.connectionQualityGate._extracted.enabled && 
-        !runtimeDependencies.connectionQualityGate._extracted.transferDestination) {
-      conflicts.push({
-        type: 'INCOMPLETE_FALLBACK_CONFIG',
-        severity: 'CRITICAL',
-        sources: ['connectionQualityGate.dtmfMenu'],
-        description: 'DTMF escape menu is enabled but no transfer destination configured for Press 1',
-        recommendation: 'Configure a phone number for transferDestination or disable the connection quality gate',
-        affectedPaths: ['aiAgentSettings.frontDeskBehavior.connectionQualityGate.transferDestination']
       });
     }
     
@@ -8333,8 +8165,6 @@ class Agent2Manager {
     validation.runtimeFallbackAudit = {
       _description: 'Hardcoded fallback responses that may fire when UI-configured values are missing',
       knownFallbacks: [
-        { source: 'connectionQualityGate.clarification', fallbackText: "I'm sorry, I didn't quite catch that. Could you please repeat what you said?", uiPath: 'frontDeskBehavior.connectionQualityGate.clarificationPrompt' },
-        { source: 'connectionQualityGate.dtmfEscape', fallbackText: "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.", uiPath: 'frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage' },
         { source: 'agent2.discovery.fallback.noMatchAnswer', fallbackText: "How can I help you today?", uiPath: 'agent2.discovery.playbook.fallback.noMatchAnswer' },
         { source: 'agent2.discovery.fallback.noMatchWhenReasonCaptured', fallbackText: "I'm sorry to hear that.", uiPath: 'agent2.discovery.playbook.fallback.noMatchWhenReasonCaptured' },
         { source: 'agent2.greetings.interceptor.rules[].responseText', fallbackText: "Hi! How can I help you?", uiPath: 'agent2.greetings.interceptor.rules[].responseText' },

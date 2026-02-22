@@ -22,12 +22,13 @@
  * 
  * SPEAKER OWNERSHIP CONTRACT (V1.0 - AGENT 2.0 PERMANENT DEFAULT):
  * Only these modules may generate final response text:
- * - GreetingInterceptor (instant greetings ONLY)
- * - Agent2DiscoveryRunner (THE discovery speaker - ALWAYS ON)
+ * - Agent2DiscoveryRunner (THE discovery speaker - ALWAYS ON, includes greetings)
  * - DiscoveryFlowRunner (DEPRECATED - only via BREAK_GLASS)
  * - ConsentGate (ONLY after discovery complete)
  * - BookingFlowRunner (ONLY after consent)
  * - OpenerEngine (prepends micro-acks to responses)
+ * 
+ * NUKED (Feb 2026): Legacy GreetingInterceptor - replaced by Agent2GreetingInterceptor
  * 
  * V1.0 POLICY (PERMANENT):
  * - Agent 2.0 is the ONLY Discovery system
@@ -55,10 +56,10 @@ const SlotExtractor = require('./booking/SlotExtractor');
 const { selectOpener, prependOpener } = require('./OpenerEngine');
 const { Agent2DiscoveryRunner } = require('./agent2/Agent2DiscoveryRunner');
 
-// Interceptors - modular pattern matchers
-const GreetingInterceptor = require('./interceptors/GreetingInterceptor');
-// NOTE: CallReasonExtractor REMOVED in V117 Nuclear Cut - was hijacking turn ownership
-// NOTE: S3.5 detection trigger block removed in V117 clean-sweep (unused + crash risk)
+// NOTE: All legacy interceptors REMOVED Feb 2026 Nuclear Cleanup:
+// - GreetingInterceptor: replaced by Agent2GreetingInterceptor
+// - CallReasonExtractor: REMOVED in V117 Nuclear Cut - was hijacking turn ownership
+// - S3.5 detection trigger block: removed in V117 clean-sweep (unused + crash risk)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // V1.0: AGENT 2.0 PERMANENT DEFAULT - ONE MIC ARCHITECTURE
@@ -507,95 +508,11 @@ class FrontDeskCoreRuntime {
             // ═══════════════════════════════════════════════════════════════════════════
             
             // ═══════════════════════════════════════════════════════════════════════════
-            // GREETING INTERCEPT - CHECK BEFORE SLOT EXTRACTION
+            // GREETING INTERCEPT - NUKED (Feb 2026)
             // ═══════════════════════════════════════════════════════════════════════════
-            // This handles instant responses from Global Settings → Instant Responses:
-            // "good morning" → "Good morning! How can I help you today?"
-            // Must happen BEFORE we run SlotExtractor or Discovery.
+            // DELETED: Legacy GreetingInterceptor removed. Agent 2.0 now handles all
+            // greeting responses via Agent2GreetingInterceptor in Agent2DiscoveryRunner.
             // ═══════════════════════════════════════════════════════════════════════════
-            currentSection = 'GREETING_INTERCEPT';
-            
-            // V119: Check if utterance passes the short-greeting gate BEFORE trying to match
-            const isShortEnough = GreetingInterceptor.isShortGreeting(inputText);
-            let greetingMatch = GreetingInterceptor.tryIntercept(inputText, company, state);
-            
-            // V119: ALWAYS emit greeting evaluation proof (whether it matched or not)
-            bufferEvent('GREETING_EVALUATED', {
-                inputPreview: inputText.substring(0, 60),
-                inputWordCount: (inputText || '').split(/\s+/).filter(w => w.length > 0).length,
-                isShortGreeting: isShortEnough,
-                matched: !!greetingMatch,
-                matchedTrigger: greetingMatch?.matchedTrigger || null,
-                blockedReason: !isShortEnough ? 'UTTERANCE_TOO_LONG_FOR_GREETING' : (greetingMatch ? null : 'NO_RULE_MATCHED'),
-                turn
-            });
-            
-            if (greetingMatch) {
-                // Greeting matched - let it respond (short greetings only)
-                bufferEvent('GREETING_INTERCEPTED', {
-                    matchedTrigger: greetingMatch.matchedTrigger,
-                    matchType: greetingMatch.matchType,
-                    responsePreview: greetingMatch.response.substring(0, 80),
-                    sectionTrail: tracer.getTrailString()
-                });
-                
-                // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
-                // This is a LEGACY greeting interceptor path (not Agent 2.0)
-                bufferEvent('SPEECH_SOURCE_SELECTED', {
-                    sourceId: 'legacy.greetingInterceptor',
-                    uiPath: 'aiAgentSettings.frontDeskBehavior.greetingResponses',
-                    uiTab: 'Global Settings → Instant Responses',
-                    configPath: `greetingResponses.${greetingMatch.matchedTrigger || 'generic'}`,
-                    spokenTextPreview: greetingMatch.response?.substring(0, 120),
-                    note: `Legacy greeting interceptor matched: "${greetingMatch.matchedTrigger}" (${greetingMatch.matchType})`,
-                    isLegacy: true
-                });
-                
-                // V119/V1.0: Emit MIC_OWNER_PROOF for greeting intercept path
-                // This proves Agent 2.0 was BYPASSED because greeting matched.
-                // IMPORTANT: use the V1.0 enforcement/break-glass check (not raw config),
-                // otherwise these proof events lie whenever config is missing/false OR break-glass is active.
-                // At this point, greeting was allowed to speak, so Agent2 was bypassed.
-                // Use the computed turn-level truth (includes break-glass).
-                const agent2EnabledTruth = agent2Enabled;
-                    
-                bufferEvent('A2_MIC_OWNER_PROOF', {
-                    agent2Enabled: agent2EnabledTruth,
-                    agent2Ran: false,
-                    agent2Responded: false,
-                    finalResponder: 'GREETING_INTERCEPTOR',
-                    // PROOF: Greeting intercepted BEFORE Agent 2.0 could run
-                    greetingInterceptorRan: true,
-                    greetingMatched: greetingMatch.matchedTrigger,
-                    legacyDiscoveryRan: false,
-                    scenarioEngineAutoRan: false,
-                    callReasonExtractorAckRan: false,
-                    consentGateRan: false,
-                    bookingFlowRan: false,
-                    openerEngineRan: false,
-                    // Why Agent 2.0 didn't run
-                    bypassReason: 'GREETING_INTERCEPTED_EARLY_RETURN',
-                    turn,
-                    inputPreview: inputText.substring(0, 40)
-                });
-                
-                logger.info('[FRONT_DESK_CORE_RUNTIME] Greeting intercepted', {
-                    callSid,
-                    trigger: greetingMatch.matchedTrigger,
-                    matchType: greetingMatch.matchType
-                });
-                
-                // HARD RETURN: Greeting owns this turn, nothing else runs
-                return {
-                    response: greetingMatch.response,
-                    state: state,
-                    lane: 'DISCOVERY',
-                    signals: { escalate: false, bookingComplete: false },
-                    action: 'CONTINUE',
-                    matchSource: 'GREETING_INTERCEPTOR',
-                    turnEventBuffer
-                };
-            }
             
             // ═══════════════════════════════════════════════════════════════════════════
             // S3: SLOT EXTRACTION

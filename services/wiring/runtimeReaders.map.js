@@ -268,21 +268,6 @@ const RUNTIME_READERS_MAP = {
         defaultValue: ['yes', 'yeah', 'yep', 'please', 'sure', 'okay', 'ok']
     },
 
-    // V111: Connection Quality Gate - bad connection / low confidence detection
-    'frontDesk.connectionQualityGate': {
-        readers: [
-            {
-                file: 'services/engine/FrontDeskCoreRuntime.js',
-                function: 'processTurn',
-                description: 'GATE 1.5: Intercepts low-confidence STT and trouble phrases on early turns',
-                required: false
-            }
-        ],
-        dbPath: 'company.aiAgentSettings.frontDeskBehavior.connectionQualityGate',
-        scope: 'company',
-        defaultValue: { enabled: true, confidenceThreshold: 0.72, maxRetries: 3 }
-    },
-
     // V111: Company-configurable protected words for STT filler removal
     'frontDesk.sttProtectedWords': {
         readers: [

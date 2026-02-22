@@ -334,8 +334,9 @@ const UI_DEFAULTS = {
         }
     },
 
-    // 🌙 After-hours message contract (deterministic message-taking)
-    afterHoursMessageContract: {
+    // ☢️ NUKED Feb 2026: afterHoursMessageContract UI removed - runtime uses hardcoded default
+    // (keeping schema in model for backward compatibility with existing data)
+    _afterHoursMessageContractNuked: {
         mode: 'inherit_booking_minimum',
         requiredFieldKeys: ['name', 'phone', 'address', 'problemSummary', 'preferredTime'],
         extraSlotIds: []
@@ -813,8 +814,7 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 vendorHandling: config.vendorHandling || null,
                 // 📦 Unit of Work (UoW)
                 unitOfWork: config.unitOfWork || null,
-                // 🌙 After-hours message contract (deterministic)
-                afterHoursMessageContract: config.afterHoursMessageContract || null,
+                // ☢️ NUKED Feb 2026: afterHoursMessageContract removed from UI
                 bookingTemplates: config.bookingTemplates || null,
                 serviceFlow: config.serviceFlow,
                 promptGuards: config.promptGuards,
@@ -865,8 +865,6 @@ router.get('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_
                 architectureNotesUpdated: config.architectureNotesUpdated || null,
                 // 🧠 V111: Conversation Memory Config - Runtime truth configuration
                 conversationMemory: config.conversationMemory || null,
-                // 📡 V111: Connection Quality Gate - Bad connection / low confidence
-                connectionQualityGate: config.connectionQualityGate || null,
                 // 🛡️ V111: STT Protected Words - Company-specific words never stripped by STT
                 sttProtectedWords: config.sttProtectedWords || [],
                 lastUpdated: saved.lastUpdated || null,
@@ -1035,17 +1033,6 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // DEPRECATED (Feb 2026): CONNECTION QUALITY GATE - NUKED
-        // Runtime code removed. Config save kept for backward DB compat only.
-        // ═══════════════════════════════════════════════════════════════════════════
-        if (updates.connectionQualityGate !== undefined) {
-            updateObj['aiAgentSettings.frontDeskBehavior.connectionQualityGate'] = updates.connectionQualityGate;
-            logger.warn('[FRONT DESK BEHAVIOR] DEPRECATED: connectionQualityGate config saved but runtime removed', {
-                companyId
-            });
-        }
-        
-        // ═══════════════════════════════════════════════════════════════════════════
         // V111: STT PROTECTED WORDS - Company-specific words never stripped by STT
         // ═══════════════════════════════════════════════════════════════════════════
         if (updates.sttProtectedWords !== undefined) {
@@ -1076,10 +1063,7 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
             updateObj['aiAgentSettings.frontDeskBehavior.unitOfWork'] = updates.unitOfWork;
         }
 
-        // 🌙 After-hours message contract (deterministic)
-        if (updates.afterHoursMessageContract && typeof updates.afterHoursMessageContract === 'object') {
-            updateObj['aiAgentSettings.frontDeskBehavior.afterHoursMessageContract'] = updates.afterHoursMessageContract;
-        }
+        // ☢️ NUKED Feb 2026: afterHoursMessageContract updates disabled
 
         // ═══════════════════════════════════════════════════════════════════════
         // 🕒 V109: Canonical business hours migration

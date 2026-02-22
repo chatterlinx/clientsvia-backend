@@ -103,57 +103,13 @@ const SPEECH_REGISTRY = {
   },
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // CONNECTION RECOVERY SOURCES (connectionQualityGate NUKED Feb 2026)
+  // VOICEMAIL (only remaining routing source after Feb 2026 nuke)
   // ═══════════════════════════════════════════════════════════════════════════
-  'connectionRecovery.choppy': {
-    uiPath: 'aiAgentSettings.frontDeskBehavior.recoveryMessages.choppyConnection',
-    uiTab: 'LLM-0 Behavior',
-    configPath: 'frontDeskBehavior.recoveryMessages.choppyConnection',
-    description: 'Choppy connection recovery message'
-  },
-  'connectionRecovery.silence': {
-    uiPath: 'aiAgentSettings.frontDeskBehavior.recoveryMessages.silenceDetected',
-    uiTab: 'LLM-0 Behavior',
-    configPath: 'frontDeskBehavior.recoveryMessages.silenceDetected',
-    description: 'Silence detected recovery message'
-  },
-  'connectionRecovery.generalError': {
-    uiPath: 'aiAgentSettings.frontDeskBehavior.recoveryMessages.generalError',
-    uiTab: 'LLM-0 Behavior',
-    configPath: 'frontDeskBehavior.recoveryMessages.generalError',
-    description: 'General error recovery message'
-  },
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // TRANSFER / ROUTING SOURCES (No-UI-No-Execute applies here too)
-  // ═══════════════════════════════════════════════════════════════════════════
-  'transfer.message': {
-    uiPath: 'aiAgentSettings.transferSettings.transferMessage',
-    uiTab: 'Transfer Settings',
-    configPath: 'transferSettings.transferMessage',
-    description: 'Transfer announcement message'
-  },
   'transfer.voicemail': {
     uiPath: 'aiAgentSettings.voicemailSettings.voicemailGreeting',
     uiTab: 'Voicemail Settings',
     configPath: 'voicemailSettings.voicemailGreeting',
     description: 'Voicemail greeting'
-  },
-  
-  // ═══════════════════════════════════════════════════════════════════════════
-  // LEGACY / CONNECTION MESSAGES (visible in Connection Messages UI)
-  // ═══════════════════════════════════════════════════════════════════════════
-  'legacy.greeting': {
-    uiPath: 'connectionMessages.greeting',
-    uiTab: 'Connection Messages',
-    configPath: 'connectionMessages.greeting',
-    description: 'Legacy greeting message'
-  },
-  'legacy.lowConfidence': {
-    uiPath: 'aiAgentSettings.lowConfidenceHandling.retryMessage',
-    uiTab: 'AI Settings',
-    configPath: 'aiAgentSettings.lowConfidenceHandling.retryMessage',
-    description: 'Low confidence retry message'
   },
   
   // ═══════════════════════════════════════════════════════════════════════════
@@ -165,12 +121,6 @@ const SPEECH_REGISTRY = {
     configPath: 'suspendedAccountMessage',
     description: 'Account suspended message'
   },
-  'system.afterHours': {
-    uiPath: 'aiAgentSettings.afterHoursSettings.message',
-    uiTab: 'After Hours',
-    configPath: 'aiAgentSettings.afterHoursSettings.message',
-    description: 'After hours message'
-  },
   'system.callForward': {
     uiPath: 'callForwardMessage',
     uiTab: 'Call Forward',
@@ -181,26 +131,15 @@ const SPEECH_REGISTRY = {
 
 /**
  * ROUTING_REGISTRY: Every routing action MUST be registered here.
- * No-UI-No-Execute applies to transfers, DTMF menus, voicemail, etc.
+ * No-UI-No-Execute applies to voicemail, etc.
+ * NOTE: Transfer Settings and After Hours nuked Feb 2026
  */
 const ROUTING_REGISTRY = {
-  'transfer.humanAgent': {
-    uiPath: 'aiAgentSettings.transferSettings',
-    uiTab: 'Transfer Settings',
-    configPath: 'transferSettings.enabled',
-    description: 'Transfer to human agent'
-  },
   'transfer.voicemail': {
     uiPath: 'aiAgentSettings.voicemailSettings',
     uiTab: 'Voicemail Settings',
     configPath: 'voicemailSettings.enabled',
     description: 'Transfer to voicemail'
-  },
-  'routing.afterHours': {
-    uiPath: 'aiAgentSettings.afterHoursSettings',
-    uiTab: 'After Hours',
-    configPath: 'afterHoursSettings.enabled',
-    description: 'After hours routing'
   }
 };
 

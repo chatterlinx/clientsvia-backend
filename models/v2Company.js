@@ -1769,65 +1769,7 @@ const companySchema = new mongoose.Schema({
                 // Only accept Deepgram result if confidence is above this (0-100%)
                 deepgramAcceptThreshold: { type: Number, default: 80, min: 50, max: 100 }
             },
-            // CONNECTION RECOVERY MESSAGES - When audio is unclear
-            // 🚨 UI-CONTROLLED - Multiple variants for natural sound (random selection)
-            // V69: Changed from single strings to arrays for random variant selection
-            recoveryMessages: {
-                // When audio is unclear (formerly "choppy" - more human-like phrases)
-                audioUnclear: {
-                    type: [String],
-                    default: [
-                        "I can hear you, just not clearly. Mind saying that again?",
-                        "Sounds like the line cut out for a second. Can you repeat that for me?",
-                        "I'm here — the audio broke up a bit. Say that one more time?",
-                        "I caught part of that, but not all. Can you repeat it for me?",
-                        "Say that again for me?",
-                        "One more time?",
-                        "Sorry, didn't catch that — repeat it?"
-                    ]
-                },
-                // When connection cuts out briefly
-                connectionCutOut: {
-                    type: [String],
-                    default: [
-                        "Sorry, the connection cut out for a second. What can I help you with?",
-                        "The line dropped for a moment there. What were you saying?",
-                        "I lost you for a second. Go ahead?"
-                    ]
-                },
-                // When caller returns after silence
-                silenceRecovery: {
-                    type: [String],
-                    default: [
-                        "I'm here — go ahead, I'm listening.",
-                        "Still here! What can I help you with?",
-                        "I'm listening — go ahead."
-                    ]
-                },
-                // General "didn't understand" recovery
-                generalError: {
-                    type: [String],
-                    default: [
-                        "I missed that. Could you say that again?",
-                        "Say that one more time for me?",
-                        "One more time?",
-                        "Didn't quite catch that — repeat it?"
-                    ]
-                },
-                // When transferring due to technical issues
-                technicalTransfer: {
-                    type: [String],
-                    default: [
-                        "I'm having some technical difficulties. Let me connect you to our team.",
-                        "Let me get someone on the line who can help you better."
-                    ]
-                },
-                // LEGACY: Keep choppyConnection for backward compat (maps to audioUnclear)
-                choppyConnection: {
-                    type: String,
-                    default: "I can hear you, just not clearly. Mind saying that again?"
-                }
-            },
+            // ☢️ NUKED Feb 2026: recoveryMessages - moved to built-in runtime defaults
             // FRUSTRATION DETECTION - Escalate immediately on emotional keywords
             // Prevents loops when caller is clearly frustrated
             frustrationDetection: {
@@ -2191,33 +2133,6 @@ const companySchema = new mongoose.Schema({
             // Each item: { word: String, category: String }
             // ═══════════════════════════════════════════════════════════════
             sttProtectedWords: { type: mongoose.Schema.Types.Mixed, default: [] },
-            
-            // ═══════════════════════════════════════════════════════════════
-            // DEPRECATED (Feb 2026): CONNECTION QUALITY GATE - NUKED
-            // Was hijacking Agent 2.0 on early turns. Agent 2.0 now handles
-            // all input including "hello?" patterns. Schema kept for DB compat.
-            // ═══════════════════════════════════════════════════════════════
-            connectionQualityGate: {
-                enabled: { type: Boolean, default: true },
-                // STT confidence below this on turns 1-2 triggers re-greeting
-                confidenceThreshold: { type: Number, default: 0.72, min: 0.3, max: 0.95 },
-                // How many consecutive trouble turns before DTMF escape
-                maxRetries: { type: Number, default: 3, min: 1, max: 5 },
-                // Phrases that signal caller can't hear the agent
-                troublePhrases: { type: [String], default: [
-                    'hello', 'hello?', 'hi', 'hi?', 'are you there',
-                    'can you hear me', 'is anyone there', 'is somebody there',
-                    'hey', 'hey?', 'anybody there'
-                ]},
-                // Clarification prompt when STT confidence is low or connection trouble detected
-                // (Legacy field name: reGreeting — kept for DB backward compatibility)
-                reGreeting: { type: String, default: "I'm sorry, I didn't quite catch that. Could you please repeat what you said?" },
-                clarificationPrompt: { type: String },
-                // The DTMF escape message after maxRetries
-                dtmfEscapeMessage: { type: String, default: "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail." },
-                // Where Press 1 routes (phone number or SIP)
-                transferDestination: { type: String, default: '' }
-            },
             
             // ═══════════════════════════════════════════════════════════════
             // V92: DEBUG LOGGING - Enhanced diagnostics for consent/booking flow
@@ -5214,21 +5129,7 @@ const companySchema = new mongoose.Schema({
                 }
             },
             
-            // ⚡ Instant Responses (0ms response time)
-            instantResponses: [{
-                id: { type: String, required: true },
-                trigger: [{ type: String, trim: true }], // keywords that trigger this response
-                response: { type: String, required: true, trim: true },
-                category: { 
-                    type: String, 
-                    enum: ['greeting', 'emergency', 'common'], 
-                    default: 'common' 
-                },
-                priority: { type: Number, min: 1, max: 10, default: 5 },
-                enabled: { type: Boolean, default: true },
-                createdAt: { type: Date, default: Date.now },
-                updatedAt: { type: Date, default: Date.now }
-            }],
+            // ☢️ NUKED Feb 2026: instantResponses - legacy greeting system replaced by Agent 2.0 greetings
             
             // 📋 Response Templates (100ms response time) - migrated from knowledgeManagement.templates
             responseTemplates: [{
@@ -5254,7 +5155,6 @@ const companySchema = new mongoose.Schema({
             
             // 🎯 Performance Metrics
             performance: {
-                instantResponsesUsed: { type: Number, default: 0 },
                 templatesUsed: { type: Number, default: 0 },
                 avgResponseTime: { type: Number, default: 0 },
                 successRate: { type: Number, default: 0 },

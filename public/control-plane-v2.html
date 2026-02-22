@@ -3243,215 +3243,523 @@
     
     // ═══════════════════════════════════════════════════════════════════════════
     // GLOBAL HUB INITIALIZATION (Cross-Tenant Shared Resources)
+    // Enterprise-grade implementation with full First Names & Last Names support
     // ═══════════════════════════════════════════════════════════════════════════
-    async function initGlobalHub() {
-      console.log('🌐 [INIT] Initializing Global Hub...');
-      await loadScript(`/js/GlobalHubManager.js?v=${Date.now()}`);
-      
-      const container = document.getElementById('global-hub-container');
-      if (container && window.GlobalHubManager) {
-        // Render inline UI for Control Plane context
-        await renderGlobalHubInline(container);
-        console.log('✅ [INIT] Global Hub initialized');
-      } else {
-        console.error('❌ [INIT] Global Hub container or manager missing');
-      }
-    }
     
-    // Render Global Hub inline within Control Plane
-    async function renderGlobalHubInline(container) {
-      // Fetch status
-      const token = localStorage.getItem('adminToken');
-      let status = null;
+    const GlobalHubController = {
+      state: {
+        initialized: false,
+        status: null,
+        isLoading: false
+      },
       
-      try {
-        const response = await fetch('/api/admin/global-hub/status', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+      getAuthHeaders() {
+        const token = localStorage.getItem('adminToken');
+        return {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : ''
+        };
+      },
+      
+      formatDate(dateString) {
+        if (!dateString) return 'Never';
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
+      },
+      
+      async fetchStatus() {
+        try {
+          const response = await fetch('/api/admin/global-hub/status', {
+            headers: this.getAuthHeaders()
+          });
+          if (response.ok) {
+            const data = await response.json();
+            this.state.status = data.data;
+            return data.data;
           }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          status = data.data;
+        } catch (e) {
+          console.error('[GlobalHub] Failed to fetch status:', e);
         }
-      } catch (e) {
-        console.error('Failed to fetch Global Hub status:', e);
-      }
+        return null;
+      },
       
-      const firstNamesCount = status?.dictionaries?.firstNames?.count || 0;
-      const lastUpdated = status?.dictionaries?.firstNames?.lastUpdated;
-      const lastUpdatedText = lastUpdated ? new Date(lastUpdated).toLocaleDateString() : 'Never';
+      async init(container) {
+        if (this.state.isLoading) return;
+        this.state.isLoading = true;
+        
+        console.log('🌐 [GlobalHub] Initializing...');
+        
+        const status = await this.fetchStatus();
+        this.render(container, status);
+        this.state.initialized = true;
+        this.state.isLoading = false;
+        
+        console.log('✅ [GlobalHub] Initialized');
+      },
       
-      container.innerHTML = `
-        <div style="padding: 24px;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 24px; font-weight: 700; color: #f8fafc; margin-bottom: 8px;">
-              <i class="fas fa-globe" style="color: #06b6d4; margin-right: 8px;"></i>
-              Global Hub
-            </h2>
-            <p style="color: #94a3b8; font-size: 14px;">
-              Cross-tenant shared resources. Data here is accessible to ALL companies.
-            </p>
+      render(container, status) {
+        const firstNames = status?.dictionaries?.firstNames || {};
+        const lastNames = status?.dictionaries?.lastNames || {};
+        
+        const firstNamesCount = firstNames.count || 0;
+        const lastNamesCount = lastNames.count || 0;
+        const firstNamesUpdated = this.formatDate(firstNames.lastUpdated);
+        const lastNamesUpdated = this.formatDate(lastNames.lastUpdated);
+        
+        container.innerHTML = `
+          <div style="padding: 24px;">
+            <div style="margin-bottom: 24px;">
+              <h2 style="font-size: 24px; font-weight: 700; color: #f8fafc; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-globe" style="color: #06b6d4;"></i>
+                Global Hub
+              </h2>
+              <p style="color: #94a3b8; font-size: 14px;">
+                Cross-tenant shared resources. Data here is accessible to ALL companies.
+              </p>
+            </div>
+            
+            <div style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border-radius: 12px; padding: 24px; border: 1px solid #334155;">
+              <h3 style="font-size: 18px; font-weight: 600; color: #f8fafc; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-book" style="color: #3b82f6;"></i>
+                Shared Dictionaries
+              </h3>
+              <p style="color: #64748b; font-size: 13px; margin-bottom: 20px;">Universal lookup lists shared across all tenants</p>
+              
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+                
+                <!-- First Names Card -->
+                <div id="gh-first-names-card" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; padding: 24px; border: 1px solid #3b82f6; transition: transform 0.2s, box-shadow 0.2s;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div style="width: 52px; height: 52px; background: rgba(59, 130, 246, 0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                      <i class="fas fa-user" style="color: #3b82f6; font-size: 22px;"></i>
+                    </div>
+                    <span id="gh-first-names-count" style="font-size: 32px; font-weight: 700; color: #3b82f6;">${firstNamesCount.toLocaleString()}</span>
+                  </div>
+                  <h4 style="font-size: 17px; font-weight: 600; color: #f8fafc; margin-bottom: 8px;">First Names</h4>
+                  <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px; line-height: 1.5;">Common first names for caller validation and name matching.</p>
+                  <div style="font-size: 12px; color: #64748b; margin-bottom: 16px;">
+                    <span id="gh-first-names-updated">Updated: ${firstNamesUpdated}</span>
+                  </div>
+                  <div style="display: flex; gap: 10px;">
+                    <button onclick="GlobalHubController.seedFirstNames()" id="gh-seed-first-btn" style="flex: 1; background: #22c55e; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s;">
+                      <i class="fas fa-seedling"></i> Seed
+                    </button>
+                    <button onclick="GlobalHubController.openFirstNamesModal()" style="flex: 1; background: #3b82f6; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s;">
+                      <i class="fas fa-edit"></i> Edit
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Last Names Card -->
+                <div id="gh-last-names-card" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 12px; padding: 24px; border: 1px solid #22c55e; transition: transform 0.2s, box-shadow 0.2s;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div style="width: 52px; height: 52px; background: rgba(34, 197, 94, 0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                      <i class="fas fa-users" style="color: #22c55e; font-size: 22px;"></i>
+                    </div>
+                    <span id="gh-last-names-count" style="font-size: 32px; font-weight: 700; color: #22c55e;">${lastNamesCount.toLocaleString()}</span>
+                  </div>
+                  <h4 style="font-size: 17px; font-weight: 600; color: #f8fafc; margin-bottom: 8px;">Last Names</h4>
+                  <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px; line-height: 1.5;">US Census surnames for caller validation and name matching.</p>
+                  <div style="font-size: 12px; color: #64748b; margin-bottom: 16px;">
+                    <span id="gh-last-names-updated">Updated: ${lastNamesUpdated}</span>
+                  </div>
+                  <div style="display: flex; gap: 10px;">
+                    <button onclick="GlobalHubController.seedLastNames()" id="gh-seed-last-btn" style="flex: 1; background: #10b981; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s;">
+                      <i class="fas fa-seedling"></i> Seed
+                    </button>
+                    <button onclick="GlobalHubController.openLastNamesModal()" style="flex: 1; background: #22c55e; color: white; border: none; padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.2s;">
+                      <i class="fas fa-edit"></i> Edit
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Common Titles Placeholder -->
+                <div style="background: rgba(30, 41, 59, 0.5); border-radius: 12px; padding: 24px; border: 1px dashed #475569; opacity: 0.6;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                    <div style="width: 52px; height: 52px; background: rgba(100, 116, 139, 0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                      <i class="fas fa-tag" style="color: #64748b; font-size: 22px;"></i>
+                    </div>
+                  </div>
+                  <h4 style="font-size: 17px; font-weight: 600; color: #94a3b8; margin-bottom: 8px;">Common Titles</h4>
+                  <p style="font-size: 13px; color: #64748b; line-height: 1.5;">Coming soon...</p>
+                </div>
+              </div>
+            </div>
           </div>
           
-          <div style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border-radius: 12px; padding: 24px; border: 1px solid #334155;">
-            <h3 style="font-size: 18px; font-weight: 600; color: #f8fafc; margin-bottom: 16px;">
-              <i class="fas fa-book" style="color: #3b82f6; margin-right: 8px;"></i>
-              Shared Dictionaries
-            </h3>
-            
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px;">
-              <!-- First Names Card -->
-              <div style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-radius: 10px; padding: 20px; border: 1px solid #3b82f6;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                  <div style="width: 48px; height: 48px; background: rgba(59, 130, 246, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                    <i class="fas fa-user" style="color: #3b82f6; font-size: 20px;"></i>
-                  </div>
-                  <span style="font-size: 28px; font-weight: 700; color: #3b82f6;">${firstNamesCount.toLocaleString()}</span>
+          <!-- First Names Modal -->
+          <div id="gh-first-names-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+            <div style="background: #1e293b; border-radius: 16px; max-width: 720px; width: 92%; max-height: 85vh; display: flex; flex-direction: column; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+              <div style="padding: 20px 24px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 18px; font-weight: 600; color: #f8fafc; display: flex; align-items: center; gap: 10px;">
+                  <i class="fas fa-user" style="color: #3b82f6;"></i>
+                  Edit First Names Dictionary
+                </h3>
+                <button onclick="GlobalHubController.closeFirstNamesModal()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 22px; padding: 4px;">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div style="padding: 24px; flex: 1; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                  <label style="font-size: 14px; font-weight: 500; color: #f8fafc;">First Names (one per line)</label>
+                  <span id="gh-first-names-modal-count" style="font-size: 13px; color: #64748b;">0 names</span>
                 </div>
-                <h4 style="font-size: 16px; font-weight: 600; color: #f8fafc; margin-bottom: 8px;">First Names</h4>
-                <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">Common first names for caller validation and name matching.</p>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span style="font-size: 12px; color: #64748b;">Updated: ${lastUpdatedText}</span>
-                  <button onclick="openGlobalHubFirstNamesModal()" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                    <i class="fas fa-edit"></i> Edit
-                  </button>
+                <textarea id="gh-first-names-textarea" style="width: 100%; height: 320px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; color: #f8fafc; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; resize: vertical; line-height: 1.6;" placeholder="Enter names, one per line..."></textarea>
+                <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 10px; padding: 14px; margin-top: 16px;">
+                  <h4 style="font-size: 13px; font-weight: 600; color: #3b82f6; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-info-circle"></i> Auto-Processing on Save
+                  </h4>
+                  <ul style="font-size: 12px; color: #94a3b8; margin: 0; padding-left: 20px; line-height: 1.8;">
+                    <li>Names are automatically converted to Title Case</li>
+                    <li>Duplicates are removed (case-insensitive)</li>
+                    <li>Empty lines and whitespace are trimmed</li>
+                    <li>List is sorted alphabetically</li>
+                  </ul>
                 </div>
               </div>
-              
-              <!-- Placeholder Cards -->
-              <div style="background: rgba(30, 41, 59, 0.5); border-radius: 10px; padding: 20px; border: 1px dashed #475569; opacity: 0.6;">
-                <div style="width: 48px; height: 48px; background: rgba(100, 116, 139, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-                  <i class="fas fa-users" style="color: #64748b; font-size: 20px;"></i>
-                </div>
-                <h4 style="font-size: 16px; font-weight: 600; color: #94a3b8; margin-bottom: 8px;">Last Names</h4>
-                <p style="font-size: 13px; color: #64748b;">Coming soon...</p>
-              </div>
-              
-              <div style="background: rgba(30, 41, 59, 0.5); border-radius: 10px; padding: 20px; border: 1px dashed #475569; opacity: 0.6;">
-                <div style="width: 48px; height: 48px; background: rgba(100, 116, 139, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px;">
-                  <i class="fas fa-tag" style="color: #64748b; font-size: 20px;"></i>
-                </div>
-                <h4 style="font-size: 16px; font-weight: 600; color: #94a3b8; margin-bottom: 8px;">Common Titles</h4>
-                <p style="font-size: 13px; color: #64748b;">Coming soon...</p>
+              <div style="padding: 16px 24px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 12px;">
+                <button onclick="GlobalHubController.closeFirstNamesModal()" style="background: #334155; color: #f8fafc; border: none; padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">
+                  Cancel
+                </button>
+                <button onclick="GlobalHubController.saveFirstNames()" id="gh-save-first-btn" style="background: #3b82f6; color: white; border: none; padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                  <i class="fas fa-save"></i> Save
+                </button>
               </div>
             </div>
           </div>
-        </div>
+          
+          <!-- Last Names Modal -->
+          <div id="gh-last-names-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+            <div style="background: #1e293b; border-radius: 16px; max-width: 720px; width: 92%; max-height: 85vh; display: flex; flex-direction: column; border: 1px solid #334155; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+              <div style="padding: 20px 24px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 18px; font-weight: 600; color: #f8fafc; display: flex; align-items: center; gap: 10px;">
+                  <i class="fas fa-users" style="color: #22c55e;"></i>
+                  Edit Last Names Dictionary
+                </h3>
+                <button onclick="GlobalHubController.closeLastNamesModal()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 22px; padding: 4px;">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div style="padding: 24px; flex: 1; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                  <label style="font-size: 14px; font-weight: 500; color: #f8fafc;">Last Names / Surnames (one per line)</label>
+                  <span id="gh-last-names-modal-count" style="font-size: 13px; color: #64748b;">0 names</span>
+                </div>
+                <textarea id="gh-last-names-textarea" style="width: 100%; height: 320px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; color: #f8fafc; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; resize: vertical; line-height: 1.6;" placeholder="Enter surnames, one per line..."></textarea>
+                <div style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 10px; padding: 14px; margin-top: 16px;">
+                  <h4 style="font-size: 13px; font-weight: 600; color: #22c55e; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-info-circle"></i> Auto-Processing on Save
+                  </h4>
+                  <ul style="font-size: 12px; color: #94a3b8; margin: 0; padding-left: 20px; line-height: 1.8;">
+                    <li>Names are automatically converted to Title Case</li>
+                    <li>Duplicates are removed (case-insensitive)</li>
+                    <li>Empty lines and whitespace are trimmed</li>
+                    <li>List is sorted alphabetically</li>
+                  </ul>
+                </div>
+              </div>
+              <div style="padding: 16px 24px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 12px;">
+                <button onclick="GlobalHubController.closeLastNamesModal()" style="background: #334155; color: #f8fafc; border: none; padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;">
+                  Cancel
+                </button>
+                <button onclick="GlobalHubController.saveLastNames()" id="gh-save-last-btn" style="background: #22c55e; color: white; border: none; padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                  <i class="fas fa-save"></i> Save
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
         
-        <!-- First Names Modal -->
-        <div id="global-hub-first-names-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
-          <div style="background: #1e293b; border-radius: 12px; max-width: 700px; width: 90%; max-height: 85vh; display: flex; flex-direction: column; border: 1px solid #334155;">
-            <div style="padding: 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
-              <h3 style="font-size: 18px; font-weight: 600; color: #f8fafc;">
-                <i class="fas fa-user" style="color: #3b82f6; margin-right: 8px;"></i>
-                Edit First Names Dictionary
-              </h3>
-              <button onclick="closeGlobalHubFirstNamesModal()" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 20px;">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-            <div style="padding: 20px; flex: 1; overflow-y: auto;">
-              <label style="display: block; font-size: 14px; font-weight: 500; color: #f8fafc; margin-bottom: 8px;">
-                First Names (one per line)
-              </label>
-              <textarea id="global-hub-first-names-textarea" style="width: 100%; height: 300px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; color: #f8fafc; font-family: monospace; font-size: 14px; resize: vertical;" placeholder="Enter names, one per line..."></textarea>
-              <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 12px; margin-top: 16px;">
-                <h4 style="font-size: 13px; font-weight: 600; color: #3b82f6; margin-bottom: 8px;">
-                  <i class="fas fa-info-circle" style="margin-right: 6px;"></i>Auto-Processing
-                </h4>
-                <ul style="font-size: 12px; color: #94a3b8; margin: 0; padding-left: 20px;">
-                  <li>Names are automatically converted to Title Case</li>
-                  <li>Duplicates are removed (case-insensitive)</li>
-                  <li>Empty lines and whitespace are trimmed</li>
-                  <li>List is sorted alphabetically</li>
-                </ul>
-              </div>
-            </div>
-            <div style="padding: 16px 20px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 12px;">
-              <button onclick="closeGlobalHubFirstNamesModal()" style="background: #334155; color: #f8fafc; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">
-                Cancel
-              </button>
-              <button onclick="saveGlobalHubFirstNames()" style="background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-                <i class="fas fa-save"></i> Save
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    
-    // Global Hub Modal Functions
-    async function openGlobalHubFirstNamesModal() {
-      const modal = document.getElementById('global-hub-first-names-modal');
-      const textarea = document.getElementById('global-hub-first-names-textarea');
-      if (!modal || !textarea) return;
+        // Attach textarea input listeners for live count
+        const firstTextarea = document.getElementById('gh-first-names-textarea');
+        const lastTextarea = document.getElementById('gh-last-names-textarea');
+        
+        if (firstTextarea) {
+          firstTextarea.addEventListener('input', () => {
+            const count = firstTextarea.value.split('\n').filter(l => l.trim()).length;
+            const countEl = document.getElementById('gh-first-names-modal-count');
+            if (countEl) countEl.textContent = `${count.toLocaleString()} names`;
+          });
+        }
+        
+        if (lastTextarea) {
+          lastTextarea.addEventListener('input', () => {
+            const count = lastTextarea.value.split('\n').filter(l => l.trim()).length;
+            const countEl = document.getElementById('gh-last-names-modal-count');
+            if (countEl) countEl.textContent = `${count.toLocaleString()} names`;
+          });
+        }
+      },
       
-      modal.style.display = 'flex';
-      textarea.value = 'Loading...';
-      textarea.disabled = true;
+      async refresh() {
+        const container = document.getElementById('global-hub-container');
+        if (container) {
+          const status = await this.fetchStatus();
+          this.render(container, status);
+        }
+      },
       
-      try {
-        const token = localStorage.getItem('adminToken');
-        const response = await fetch('/api/admin/global-hub/first-names', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+      updateDashboardCounts(status) {
+        const firstCount = document.getElementById('gh-first-names-count');
+        const lastCount = document.getElementById('gh-last-names-count');
+        const firstUpdated = document.getElementById('gh-first-names-updated');
+        const lastUpdated = document.getElementById('gh-last-names-updated');
+        
+        if (firstCount) firstCount.textContent = (status?.dictionaries?.firstNames?.count || 0).toLocaleString();
+        if (lastCount) lastCount.textContent = (status?.dictionaries?.lastNames?.count || 0).toLocaleString();
+        if (firstUpdated) firstUpdated.textContent = `Updated: ${this.formatDate(status?.dictionaries?.firstNames?.lastUpdated)}`;
+        if (lastUpdated) lastUpdated.textContent = `Updated: ${this.formatDate(status?.dictionaries?.lastNames?.lastUpdated)}`;
+      },
+      
+      // First Names Modal
+      async openFirstNamesModal() {
+        const modal = document.getElementById('gh-first-names-modal');
+        const textarea = document.getElementById('gh-first-names-textarea');
+        const countEl = document.getElementById('gh-first-names-modal-count');
+        if (!modal || !textarea) return;
+        
+        modal.style.display = 'flex';
+        textarea.value = 'Loading...';
+        textarea.disabled = true;
+        
+        try {
+          const response = await fetch('/api/admin/global-hub/first-names', { headers: this.getAuthHeaders() });
+          if (response.ok) {
+            const data = await response.json();
+            const names = data.data?.firstNames || [];
+            textarea.value = names.join('\n');
+            if (countEl) countEl.textContent = `${names.length.toLocaleString()} names`;
+          } else {
+            textarea.value = '';
           }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          textarea.value = (data.data?.firstNames || []).join('\n');
-        } else {
+        } catch (e) {
+          console.error('[GlobalHub] Failed to load first names:', e);
           textarea.value = '';
         }
-      } catch (e) {
-        console.error('Failed to load first names:', e);
-        textarea.value = '';
-      }
-      
-      textarea.disabled = false;
-      textarea.focus();
-    }
-    
-    function closeGlobalHubFirstNamesModal() {
-      const modal = document.getElementById('global-hub-first-names-modal');
-      if (modal) modal.style.display = 'none';
-    }
-    
-    async function saveGlobalHubFirstNames() {
-      const textarea = document.getElementById('global-hub-first-names-textarea');
-      if (!textarea) return;
-      
-      const namesArray = textarea.value.split('\n').map(l => l.trim()).filter(l => l);
-      
-      try {
-        const token = localStorage.getItem('adminToken');
-        const response = await fetch('/api/admin/global-hub/first-names', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ firstNames: namesArray })
-        });
         
-        if (response.ok) {
-          const data = await response.json();
-          textarea.value = (data.data?.firstNames || []).join('\n');
-          closeGlobalHubFirstNamesModal();
-          // Refresh the inline display
-          const container = document.getElementById('global-hub-container');
-          if (container) await renderGlobalHubInline(container);
-          showToast('First names saved successfully!', 'success');
-        } else {
-          const err = await response.json();
-          showToast(err.error || 'Failed to save', 'error');
+        textarea.disabled = false;
+        textarea.focus();
+      },
+      
+      closeFirstNamesModal() {
+        const modal = document.getElementById('gh-first-names-modal');
+        if (modal) modal.style.display = 'none';
+      },
+      
+      async saveFirstNames() {
+        const textarea = document.getElementById('gh-first-names-textarea');
+        const saveBtn = document.getElementById('gh-save-first-btn');
+        if (!textarea) return;
+        
+        const namesArray = textarea.value.split('\n').map(l => l.trim()).filter(l => l);
+        
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         }
-      } catch (e) {
-        console.error('Failed to save first names:', e);
-        showToast('Failed to save first names', 'error');
+        
+        try {
+          const response = await fetch('/api/admin/global-hub/first-names', {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ firstNames: namesArray })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            textarea.value = (data.data?.firstNames || []).join('\n');
+            this.closeFirstNamesModal();
+            showToast(data.message || 'First names saved successfully!', 'success');
+            const status = await this.fetchStatus();
+            this.updateDashboardCounts(status);
+          } else {
+            const err = await response.json();
+            showToast(err.error || 'Failed to save', 'error');
+          }
+        } catch (e) {
+          console.error('[GlobalHub] Failed to save first names:', e);
+          showToast('Failed to save first names', 'error');
+        }
+        
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+        }
+      },
+      
+      async seedFirstNames() {
+        const seedBtn = document.getElementById('gh-seed-first-btn');
+        const currentCount = this.state.status?.dictionaries?.firstNames?.count || 0;
+        
+        if (currentCount > 0) {
+          const confirmed = confirm(`This will replace the current ${currentCount.toLocaleString()} names with ~9,500 SSA names. Continue?`);
+          if (!confirmed) return;
+        }
+        
+        if (seedBtn) {
+          seedBtn.disabled = true;
+          seedBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Seeding...';
+        }
+        
+        try {
+          const response = await fetch('/api/admin/global-hub/first-names/seed', {
+            method: 'POST',
+            headers: this.getAuthHeaders()
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            showToast(data.message || `Seeded ${data.data?.count?.toLocaleString() || ''} first names`, 'success');
+            const status = await this.fetchStatus();
+            this.updateDashboardCounts(status);
+          } else {
+            const err = await response.json();
+            showToast(err.error || 'Failed to seed', 'error');
+          }
+        } catch (e) {
+          console.error('[GlobalHub] Failed to seed first names:', e);
+          showToast('Failed to seed first names', 'error');
+        }
+        
+        if (seedBtn) {
+          seedBtn.disabled = false;
+          seedBtn.innerHTML = '<i class="fas fa-seedling"></i> Seed';
+        }
+      },
+      
+      // Last Names Modal
+      async openLastNamesModal() {
+        const modal = document.getElementById('gh-last-names-modal');
+        const textarea = document.getElementById('gh-last-names-textarea');
+        const countEl = document.getElementById('gh-last-names-modal-count');
+        if (!modal || !textarea) return;
+        
+        modal.style.display = 'flex';
+        textarea.value = 'Loading...';
+        textarea.disabled = true;
+        
+        try {
+          const response = await fetch('/api/admin/global-hub/last-names', { headers: this.getAuthHeaders() });
+          if (response.ok) {
+            const data = await response.json();
+            const names = data.data?.lastNames || [];
+            textarea.value = names.join('\n');
+            if (countEl) countEl.textContent = `${names.length.toLocaleString()} names`;
+          } else {
+            textarea.value = '';
+          }
+        } catch (e) {
+          console.error('[GlobalHub] Failed to load last names:', e);
+          textarea.value = '';
+        }
+        
+        textarea.disabled = false;
+        textarea.focus();
+      },
+      
+      closeLastNamesModal() {
+        const modal = document.getElementById('gh-last-names-modal');
+        if (modal) modal.style.display = 'none';
+      },
+      
+      async saveLastNames() {
+        const textarea = document.getElementById('gh-last-names-textarea');
+        const saveBtn = document.getElementById('gh-save-last-btn');
+        if (!textarea) return;
+        
+        const namesArray = textarea.value.split('\n').map(l => l.trim()).filter(l => l);
+        
+        if (saveBtn) {
+          saveBtn.disabled = true;
+          saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+        
+        try {
+          const response = await fetch('/api/admin/global-hub/last-names', {
+            method: 'POST',
+            headers: this.getAuthHeaders(),
+            body: JSON.stringify({ lastNames: namesArray })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            textarea.value = (data.data?.lastNames || []).join('\n');
+            this.closeLastNamesModal();
+            showToast(data.message || 'Last names saved successfully!', 'success');
+            const status = await this.fetchStatus();
+            this.updateDashboardCounts(status);
+          } else {
+            const err = await response.json();
+            showToast(err.error || 'Failed to save', 'error');
+          }
+        } catch (e) {
+          console.error('[GlobalHub] Failed to save last names:', e);
+          showToast('Failed to save last names', 'error');
+        }
+        
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+        }
+      },
+      
+      async seedLastNames() {
+        const seedBtn = document.getElementById('gh-seed-last-btn');
+        const currentCount = this.state.status?.dictionaries?.lastNames?.count || 0;
+        
+        if (currentCount > 0) {
+          const confirmed = confirm(`This will replace the current ${currentCount.toLocaleString()} surnames with ~162,000 Census surnames. Continue?`);
+          if (!confirmed) return;
+        }
+        
+        if (seedBtn) {
+          seedBtn.disabled = true;
+          seedBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Seeding...';
+        }
+        
+        try {
+          const response = await fetch('/api/admin/global-hub/last-names/seed', {
+            method: 'POST',
+            headers: this.getAuthHeaders()
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            showToast(data.message || `Seeded ${data.data?.count?.toLocaleString() || ''} last names`, 'success');
+            const status = await this.fetchStatus();
+            this.updateDashboardCounts(status);
+          } else {
+            const err = await response.json();
+            showToast(err.error || 'Failed to seed', 'error');
+          }
+        } catch (e) {
+          console.error('[GlobalHub] Failed to seed last names:', e);
+          showToast('Failed to seed last names', 'error');
+        }
+        
+        if (seedBtn) {
+          seedBtn.disabled = false;
+          seedBtn.innerHTML = '<i class="fas fa-seedling"></i> Seed';
+        }
+      }
+    };
+    
+    // Keyboard shortcuts for modals
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        GlobalHubController.closeFirstNamesModal();
+        GlobalHubController.closeLastNamesModal();
+      }
+    });
+    
+    async function initGlobalHub() {
+      console.log('🌐 [INIT] Initializing Global Hub...');
+      const container = document.getElementById('global-hub-container');
+      if (container) {
+        await GlobalHubController.init(container);
+        console.log('✅ [INIT] Global Hub initialized');
+      } else {
+        console.error('❌ [INIT] Global Hub container missing');
       }
     }
     

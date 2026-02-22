@@ -703,12 +703,7 @@ class FrontDeskBehaviorManager {
                 }
             },
 
-            // After-hours message contract (deterministic)
-            afterHoursMessageContract: {
-                mode: 'inherit_booking_minimum',
-                requiredFieldKeys: ['name', 'phone', 'address', 'problemSummary', 'preferredTime'],
-                extraSlotIds: []
-            },
+            // ☢️ NUKED Feb 2026: afterHoursMessageContract UI removed - runtime uses default
 
             // ════════════════════════════════════════════════════════════════════
             // V77: Off-Rails Recovery (Resume Booking Protocol)
@@ -946,68 +941,7 @@ class FrontDeskBehaviorManager {
         };
     }
 
-    onAfterHoursContractModeChange(mode) {
-        const el = document.getElementById('fdb-ah-contract-custom');
-        if (!el) return;
-        el.style.display = mode === 'custom' ? 'block' : 'none';
-    }
-
-    collectAfterHoursMessageContractConfig() {
-        const getChecked = (id) => document.getElementById(id)?.checked === true;
-        const getValue = (id) => (document.getElementById(id)?.value || '').trim();
-
-        const modeRaw = getValue('fdb-ah-contract-mode') || 'inherit_booking_minimum';
-        const mode = ['inherit_booking_minimum', 'custom'].includes(modeRaw) ? modeRaw : 'inherit_booking_minimum';
-
-        // Default: inherit booking minimum (safe baseline)
-        if (mode !== 'custom') {
-            return {
-                mode: 'inherit_booking_minimum',
-                requiredFieldKeys: ['name', 'phone', 'address', 'problemSummary', 'preferredTime'],
-                extraSlotIds: []
-            };
-        }
-
-        const requiredFieldKeys = [];
-        if (getChecked('fdb-ah-req-name')) requiredFieldKeys.push('name');
-        if (getChecked('fdb-ah-req-phone')) requiredFieldKeys.push('phone');
-        if (getChecked('fdb-ah-req-address')) requiredFieldKeys.push('address');
-        if (getChecked('fdb-ah-req-problem')) requiredFieldKeys.push('problemSummary');
-        if (getChecked('fdb-ah-req-time')) requiredFieldKeys.push('preferredTime');
-
-        // Optional extras: booking slot IDs
-        const extrasRaw = getValue('fdb-ah-extra-slotIds') || '[]';
-        let extraSlotIds = [];
-        try {
-            const parsed = JSON.parse(extrasRaw);
-            if (!Array.isArray(parsed)) {
-                throw new Error('Extra slot IDs must be a JSON array');
-            }
-            extraSlotIds = parsed
-                .map(x => String(x || '').trim())
-                .filter(Boolean);
-            // de-dupe while preserving order
-            const seen = new Set();
-            extraSlotIds = extraSlotIds.filter(id => (seen.has(id) ? false : (seen.add(id), true)));
-        } catch (e) {
-            const msg = `After-hours extra slot IDs JSON is invalid: ${e.message}`;
-            console.error('[FRONT DESK BEHAVIOR] ❌', msg);
-            this.showNotification(`❌ ${msg}`, 'error');
-            throw new Error(msg);
-        }
-
-        if (requiredFieldKeys.length === 0 && extraSlotIds.length === 0) {
-            const msg = 'After-hours custom contract requires at least one required field (or extra slot ID).';
-            this.showNotification(`❌ ${msg}`, 'error');
-            throw new Error(msg);
-        }
-
-        return {
-            mode: 'custom',
-            requiredFieldKeys,
-            extraSlotIds
-        };
-    }
+    // ☢️ NUKED Feb 2026: onAfterHoursContractModeChange, collectAfterHoursMessageContractConfig removed
 
     // Render the full UI
     render(container) {
@@ -5775,20 +5709,7 @@ class FrontDeskBehaviorManager {
         };
         const serviceFlowTradeBlocks = serviceFlowTrades.map(renderServiceFlowTrade).join('');
 
-        // After-hours message contract (deterministic)
-        const ah = this.config.afterHoursMessageContract || {};
-        const ahMode = ah.mode || 'inherit_booking_minimum';
-        const ahRequiredRaw = Array.isArray(ah.requiredFieldKeys) ? ah.requiredFieldKeys : [];
-        const ahRequired = ahRequiredRaw.length > 0
-            ? ahRequiredRaw
-            : ['name', 'phone', 'address', 'problemSummary', 'preferredTime'];
-        const ahExtraSlotIds = this.escapeHtml(JSON.stringify(Array.isArray(ah.extraSlotIds) ? ah.extraSlotIds : [], null, 0));
-        const ahCustomVisible = ahMode === 'custom';
-        const ahReqName = ahRequired.includes('name');
-        const ahReqPhone = ahRequired.includes('phone');
-        const ahReqAddress = ahRequired.includes('address');
-        const ahReqProblem = ahRequired.includes('problemSummary');
-        const ahReqTime = ahRequired.includes('preferredTime');
+        // ☢️ NUKED Feb 2026: After-hours message contract UI removed
 
         return `
             <!-- ☢️ NUKED: Booking Contract V2 (Beta) - Removed Jan 2026 - Never wired to runtime -->
@@ -5843,67 +5764,9 @@ class FrontDeskBehaviorManager {
                 </div>
 
                 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-                <!-- AFTER-HOURS MESSAGE CONTRACT (Deterministic) -->
+                <!-- ☢️ NUKED Feb 2026: After-Hours Message Contract UI removed -->
+                <!-- Runtime defaults to booking minimum - no custom config allowed -->
                 <!-- ═══════════════════════════════════════════════════════════════════════ -->
-                <div style="background: #0d1117; border: 1px solid ${ahMode === 'custom' ? '#f0883e' : '#30363d'}; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                    <div style="display:flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-                        <div>
-                            <h3 style="margin: 0; color: #58a6ff;">🌙 After-Hours Message Contract</h3>
-                            <p style="margin: 6px 0 0 0; color: #8b949e; font-size: 0.8rem;">
-                                Enterprise default: after-hours message-taking asks the <strong>booking minimum</strong> (name, phone, address, issue, time) and requires confirmation.
-                                <br><span style="color:#6e7681;">Use <strong>Custom</strong> only if your after-hours policy needs a different required set.</span>
-                            </p>
-                        </div>
-                        <div style="display:flex; align-items:center; gap: 10px; padding: 10px 12px; background:#161b22; border:1px solid #30363d; border-radius: 8px;">
-                            <span style="color:#8b949e; font-weight:700;">Mode</span>
-                            <select id="fdb-ah-contract-mode"
-                                onchange="window.frontDeskManager.onAfterHoursContractModeChange(this.value)"
-                                style="padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 6px; color:#c9d1d9;">
-                                <option value="inherit_booking_minimum" ${ahMode === 'inherit_booking_minimum' ? 'selected' : ''}>Inherit booking minimum (recommended)</option>
-                                <option value="custom" ${ahMode === 'custom' ? 'selected' : ''}>Custom required fields</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="fdb-ah-contract-custom" style="margin-top: 12px; display: ${ahCustomVisible ? 'block' : 'none'};">
-                        <div style="background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px;">
-                            <div style="display:flex; flex-wrap: wrap; gap: 10px;">
-                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
-                                    <input type="checkbox" id="fdb-ah-req-name" ${ahReqName ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
-                                    <span style="color:#c9d1d9; font-weight:700;">Name</span>
-                                </label>
-                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
-                                    <input type="checkbox" id="fdb-ah-req-phone" ${ahReqPhone ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
-                                    <span style="color:#c9d1d9; font-weight:700;">Phone</span>
-                                </label>
-                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
-                                    <input type="checkbox" id="fdb-ah-req-address" ${ahReqAddress ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
-                                    <span style="color:#c9d1d9; font-weight:700;">Service Address</span>
-                                </label>
-                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
-                                    <input type="checkbox" id="fdb-ah-req-problem" ${ahReqProblem ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
-                                    <span style="color:#c9d1d9; font-weight:700;">Problem Summary</span>
-                                </label>
-                                <label style="display:flex; align-items:center; gap: 8px; padding: 8px 10px; background:#0b0f14; border:1px solid #30363d; border-radius: 8px; cursor:pointer;">
-                                    <input type="checkbox" id="fdb-ah-req-time" ${ahReqTime ? 'checked' : ''} style="accent-color:#f0883e; width: 16px; height: 16px;">
-                                    <span style="color:#c9d1d9; font-weight:700;">Preferred Time</span>
-                                </label>
-                            </div>
-
-                            <div style="margin-top: 12px;">
-                                <label style="display:block; color:#8b949e; font-size: 11px; margin-bottom: 6px;">
-                                    Extra booking slot IDs (JSON array) <span style="color:#6e7681;">(optional: additional fields to collect after-hours)</span>
-                                </label>
-                                <input id="fdb-ah-extra-slotIds" value='${ahExtraSlotIds}'
-                                    placeholder='["email","gateCode","unitNumber"]'
-                                    style="width: 100%; padding: 10px; background: #0b0f14; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-family: monospace; font-size: 12px;">
-                                <p style="margin: 8px 0 0 0; color:#6e7681; font-size: 0.75rem;">
-                                    Tip: these must match <strong>Booking Slots</strong> IDs so the question text stays UI-controlled.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
                 <!-- ═══════════════════════════════════════════════════════════════════════ -->
                 <!-- UNIT OF WORK (UoW) - Multi-location / multi-job in one call -->
@@ -9380,9 +9243,8 @@ Sean → Shawn, Shaun`;
                 ${this.renderInstantAudioGeneratorCard()}
 
                 <!-- ═══════════════════════════════════════════════════════════════════ -->
-                <!-- INSTANT RESPONSES (0 TOKENS) -->
+                <!-- INSTANT RESPONSES - NUKED Feb 2026 (replaced by Agent 2.0 greetings) -->
                 <!-- ═══════════════════════════════════════════════════════════════════ -->
-                ${this.renderInstantResponsesCard()}
 
                 <!-- ═══════════════════════════════════════════════════════════════════ -->
                 <!-- 3-TIER INTELLIGENCE THRESHOLDS -->
@@ -10642,14 +10504,6 @@ Sean → Shawn, Shaun`;
     renderDiscoveryConsentTab() {
         const dc = this.config.discoveryConsent || {};
         const dt = this.config.detectionTriggers || {};
-        const cq = this.config.connectionQualityGate || {};
-        const cqEnabled = cq.enabled !== false;
-        const cqThreshold = cq.confidenceThreshold || 0.72;
-        const cqMaxRetries = cq.maxRetries || 3;
-        const cqTroublePhrases = (cq.troublePhrases || ['hello', 'hello?', 'hi', 'hi?', 'are you there', 'can you hear me', 'is anyone there', 'is somebody there', 'hey', 'hey?', 'anybody there']).join('\n');
-        const cqClarificationPrompt = cq.clarificationPrompt || cq.reGreeting || "I'm sorry, I didn't quite catch that. Could you please repeat what you said?";
-        const cqDtmfMessage = cq.dtmfEscapeMessage || "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.";
-        const cqTransferDest = cq.transferDestination || '';
         const recommendedConsentPhrases = [
             'schedule a visit',
             'book an appointment',
@@ -10679,117 +10533,6 @@ Sean → Shawn, Shaun`;
                 <p style="color: #8b949e; margin-bottom: 20px; font-size: 0.875rem;">
                     <strong>V22 Architecture:</strong> LLM speaks first during discovery. Booking ONLY starts after explicit caller consent.
                 </p>
-                
-                <!-- V111: Connection Quality Gate (FIRST CHECKPOINT) -->
-                <div style="background: #0d1117; border: 2px solid #58a6ff; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-                    <h4 style="margin: 0 0 4px 0; color: #58a6ff; display: flex; align-items: center; gap: 8px;">
-                        📡 Connection Issue Detection
-                        <span style="background: #58a6ff30; color: #58a6ff; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: normal;">V111</span>
-                        <span style="background: #da363330; color: #da3633; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: normal;">PRE-DISCOVERY</span>
-                    </h4>
-                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 4px;">
-                        <strong>Caller can't hear the agent or bad connection.</strong>
-                    </p>
-                    <p style="color: #8b949e; font-size: 0.8rem; margin-bottom: 16px;">
-                        When a caller experiences dead silence, line noise, or can't hear the agent — they say things like
-                        "hello?" or "are you there?". Without this gate, the AI treats that as a real question and gives a wrong answer.
-                        This detects those patterns and low-quality STT on the first turns, re-greets the caller, and after
-                        repeated failures offers a press-1/press-2 escape to reach a human or leave a voicemail.
-                    </p>
-                    
-                    <!-- Enable Toggle -->
-                    <label style="display: flex; align-items: center; gap: 12px; cursor: pointer; padding: 12px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; margin-bottom: 16px;">
-                        <input type="checkbox" id="fdb-cq-enabled" ${cqEnabled ? 'checked' : ''} 
-                            style="accent-color: #58a6ff; width: 20px; height: 20px;">
-                        <div>
-                            <span style="color: #c9d1d9; font-weight: 600;">Enable Connection Quality Gate</span>
-                            <p style="color: #8b949e; font-size: 0.75rem; margin: 4px 0 0 0;">
-                                When enabled, intercepts low-confidence STT and trouble phrases on turns 1-2 before they reach the LLM.
-                            </p>
-                        </div>
-                    </label>
-                    
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-                        <!-- Confidence Threshold -->
-                        <div>
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
-                                STT Confidence Threshold
-                            </label>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <input type="range" id="fdb-cq-threshold" min="30" max="95" value="${Math.round(cqThreshold * 100)}" 
-                                    style="flex: 1; accent-color: #58a6ff;"
-                                    oninput="document.getElementById('fdb-cq-threshold-val').textContent = this.value + '%'">
-                                <span id="fdb-cq-threshold-val" style="color: #58a6ff; font-weight: 600; font-size: 0.9rem; min-width: 40px;">${Math.round(cqThreshold * 100)}%</span>
-                            </div>
-                            <p style="color: #8b949e; font-size: 0.7rem; margin: 4px 0 0 0;">
-                                STT below this on turns 1-2 triggers re-greeting instead of LLM. (Recommended: 72%)
-                            </p>
-                        </div>
-                        
-                        <!-- Max Retries -->
-                        <div>
-                            <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
-                                Max Retries Before DTMF Escape
-                            </label>
-                            <select id="fdb-cq-maxRetries" style="width: 100%; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; padding: 10px; border-radius: 6px; font-size: 0.9rem;">
-                                <option value="1" ${cqMaxRetries === 1 ? 'selected' : ''}>1 retry</option>
-                                <option value="2" ${cqMaxRetries === 2 ? 'selected' : ''}>2 retries</option>
-                                <option value="3" ${cqMaxRetries === 3 ? 'selected' : ''}>3 retries (recommended)</option>
-                                <option value="4" ${cqMaxRetries === 4 ? 'selected' : ''}>4 retries</option>
-                                <option value="5" ${cqMaxRetries === 5 ? 'selected' : ''}>5 retries</option>
-                            </select>
-                            <p style="color: #8b949e; font-size: 0.7rem; margin: 4px 0 0 0;">
-                                After this many failed turns, offer caller press-1/press-2 escape.
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <!-- Trouble Phrases -->
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
-                            Connection Trouble Phrases <span style="color: #8b949e; font-weight: normal;">(one per line)</span>
-                        </label>
-                        <textarea id="fdb-cq-troublePhrases" rows="4" 
-                            style="width: 100%; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; padding: 10px; border-radius: 6px; font-size: 0.85rem; font-family: monospace; resize: vertical;"
-                            placeholder="hello&#10;are you there&#10;can you hear me">${cqTroublePhrases}</textarea>
-                        <p style="color: #8b949e; font-size: 0.7rem; margin: 4px 0 0 0;">
-                            If caller says any of these on early turns, treated as connection trouble — not a real request.
-                        </p>
-                    </div>
-                    
-                    <!-- Re-Greeting -->
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
-                            Clarification Prompt <span style="color: #8b949e; font-weight: normal;">(spoken when caller's speech is unclear)</span>
-                        </label>
-                        <input type="text" id="fdb-cq-clarificationPrompt" value="${cqClarificationPrompt}"
-                            placeholder="I'm sorry, I didn't quite catch that. Could you please repeat what you said?"
-                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
-                    </div>
-                    
-                    <!-- DTMF Escape Message -->
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
-                            DTMF Escape Message <span style="color: #8b949e; font-weight: normal;">(spoken after max retries)</span>
-                        </label>
-                        <textarea id="fdb-cq-dtmfMessage" rows="2" 
-                            style="width: 100%; background: #161b22; color: #c9d1d9; border: 1px solid #30363d; padding: 10px; border-radius: 6px; font-size: 0.85rem; resize: vertical;"
-                            placeholder="I'm sorry, we seem to have a bad connection...">${cqDtmfMessage}</textarea>
-                    </div>
-                    
-                    <!-- Transfer Destination -->
-                    <div>
-                        <label style="display: block; margin-bottom: 6px; color: #c9d1d9; font-weight: 500; font-size: 0.85rem;">
-                            Press 1 Transfer Destination <span style="color: #8b949e; font-weight: normal;">(phone number)</span>
-                        </label>
-                        <input type="text" id="fdb-cq-transferDest" value="${cqTransferDest}"
-                            placeholder="+15551234567"
-                            style="width: 100%; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; color: #c9d1d9; font-size: 0.9rem;">
-                        <p style="color: #8b949e; font-size: 0.7rem; margin: 4px 0 0 0;">
-                            Where "Press 1" routes to. Leave empty to use company's default transfer number.
-                        </p>
-                    </div>
-                </div>
                 
                 <!-- Kill Switches Section -->
                 <div style="background: #0d1117; border: 2px solid #f85149; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
@@ -12400,10 +12143,7 @@ Sean → Shawn, Shaun`;
             this.config.unitOfWork = this.collectUnitOfWorkConfig();
         }
 
-        // After-hours message contract (deterministic)
-        if (document.getElementById('fdb-ah-contract-mode')) {
-            this.config.afterHoursMessageContract = this.collectAfterHoursMessageContractConfig();
-        }
+        // ☢️ NUKED Feb 2026: After-hours message contract UI removed
         
         // ═══════════════════════════════════════════════════════════════════
         // BOOKING OUTCOME - What AI says when all slots collected
@@ -12511,22 +12251,6 @@ Sean → Shawn, Shaun`;
         // ════════════════════════════════════════════════════════════════════════════
         // V111: Connection Quality Gate Settings
         // ════════════════════════════════════════════════════════════════════════════
-        if (document.getElementById('fdb-cq-enabled')) {
-            const cqTroublePhrases = (get('fdb-cq-troublePhrases') || '')
-                .split('\n').map(p => p.trim().toLowerCase()).filter(p => p);
-            
-            this.config.connectionQualityGate = {
-                enabled: getChecked('fdb-cq-enabled'),
-                confidenceThreshold: parseInt(document.getElementById('fdb-cq-threshold')?.value || '72', 10) / 100,
-                maxRetries: parseInt(get('fdb-cq-maxRetries') || '3', 10),
-                troublePhrases: cqTroublePhrases.length > 0 ? cqTroublePhrases : ['hello', 'hello?', 'are you there', 'can you hear me', 'is anyone there'],
-                clarificationPrompt: get('fdb-cq-clarificationPrompt') || "I'm sorry, I didn't quite catch that. Could you please repeat what you said?",
-                dtmfEscapeMessage: get('fdb-cq-dtmfMessage') || "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.",
-                transferDestination: get('fdb-cq-transferDest') || ''
-            };
-            console.log('[FRONT DESK BEHAVIOR] 📡 V111 Connection Quality Gate saved:', this.config.connectionQualityGate);
-        }
-        
         // ════════════════════════════════════════════════════════════════════════════
         // V22: Discovery & Consent Gate Settings
         // ════════════════════════════════════════════════════════════════════════════
@@ -12825,13 +12549,8 @@ Sean → Shawn, Shaun`;
             },
             
             // ════════════════════════════════════════════════════════════════════
-            // TAB: GLOBAL SETTINGS → Instant Responses
+            // NUKED Feb 2026: instantResponses moved to Agent 2.0 greetings
             // ════════════════════════════════════════════════════════════════════
-            instantResponses: {
-                _wiredTo: 'GreetingInterceptor.js, FrontDeskCoreRuntime.js, InstantAudioService.js',
-                _rawEvents: ['GREETING_INTERCEPTED', 'INPUT_TEXT_SELECTED'],
-                greetingRules: this.config.greetingRules || this.config.conversationStages?.greetingRules || []
-            },
             
             // ════════════════════════════════════════════════════════════════════
             // TAB: DISCOVERY & CONSENT
@@ -12839,15 +12558,6 @@ Sean → Shawn, Shaun`;
             discoveryAndConsent: {
                 _wiredTo: 'ConsentGate.js, FrontDeskCoreRuntime.js',
                 _rawEvents: ['CONSENT_GATE_INTENT_DETECTION', 'CONSENT_GATE_ASK', 'CONSENT_GATE_EVALUATE', 'SECTION_S5_CONSENT_GRANTED'],
-                
-                connectionQualityGate: {
-                    _wiredTo: 'FrontDeskCoreRuntime.js (S1.5)',
-                    enabled: this.config.connectionQualityGate?.enabled,
-                    confidenceThreshold: this.config.connectionQualityGate?.confidenceThreshold,
-                    maxRetries: this.config.connectionQualityGate?.maxRetries,
-                    troublePhrases: this.config.connectionQualityGate?.troublePhrases || [],
-                    clarificationPrompt: this.config.connectionQualityGate?.clarificationPrompt
-                },
                 
                 escalation: {
                     _wiredTo: 'FrontDeskCoreRuntime.js (S2.5), EscalationDetector.js',

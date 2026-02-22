@@ -41,9 +41,6 @@ class ResponseRenderer {
         // Style acknowledgments from UI (if configured)
         this.styleAcks = company.aiAgentSettings?.frontDeskBehavior?.styleAcknowledgments || {};
         
-        // Recovery messages from UI
-        this.recoveryMessages = company.aiAgentSettings?.frontDeskBehavior?.recoveryMessages || {};
-        
         // Fallback responses from UI
         this.fallbackResponses = company.aiAgentSettings?.frontDeskBehavior?.fallbackResponses || {};
         
@@ -233,11 +230,8 @@ class ResponseRenderer {
      * Render error response
      */
     renderError(message) {
-        const recovery = this.recoveryMessages.generalError || 
-            "I'm sorry, I'm having a little trouble. Could you repeat that?";
-        
         return {
-            say: recovery,
+            say: "I'm sorry, I'm having a little trouble. Could you repeat that?",
             action: 'ERROR',
             error: message,
             tokensUsed: 0,
@@ -337,11 +331,6 @@ class ResponseRenderer {
      * Get escalation phrase (transfer to human)
      */
     getEscalationPhrase() {
-        // Try UI-configured recovery message first
-        if (this.recoveryMessages.technicalTransfer) {
-            return this.recoveryMessages.technicalTransfer;
-        }
-        
         return this.pickVariant([
             "Let me get someone who can help you better. One moment please.",
             "I want to make sure we get this right. Let me transfer you to our team.",
