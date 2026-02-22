@@ -128,5 +128,108 @@ router.get('/metrics/errors', authenticateJWT, requireRole('admin'), (req, res) 
   }
 });
 
+// ============================================================================
+// GET /api/metrics/codebase - Codebase line count stats
+// ============================================================================
+
+const fs = require('fs');
+const path = require('path');
+
+function countLines(filePath) {
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    return content.split('\n').length;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function countLinesInDir(dirPath, extensions = ['.js', '.html']) {
+  let total = 0;
+  try {
+    const items = fs.readdirSync(dirPath, { withFileTypes: true });
+    for (const item of items) {
+      const fullPath = path.join(dirPath, item.name);
+      if (item.isDirectory() && !item.name.startsWith('.') && item.name !== 'node_modules') {
+        total += countLinesInDir(fullPath, extensions);
+      } else if (item.isFile() && extensions.some(ext => item.name.endsWith(ext))) {
+        total += countLines(fullPath);
+      }
+    }
+  } catch (e) {
+    // Skip inaccessible directories
+  }
+  return total;
+}
+
+// Cache the count (recalculate every 5 minutes max)
+let cachedCodebaseStats = null;
+let cacheTime = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCodebaseStats() {
+  const now = Date.now();
+  if (cachedCodebaseStats && (now - cacheTime) < CACHE_TTL) {
+    return cachedCodebaseStats;
+  }
+  
+  const rootDir = path.resolve(__dirname, '..');
+  
+  // Count specific areas
+  const controlPlaneHtml = countLines(path.join(rootDir, 'public/control-plane-v2.html'));
+  const aiAgentSettingsDir = path.join(rootDir, 'public/js/ai-agent-settings');
+  const controlPlaneJs = countLinesInDir(aiAgentSettingsDir, ['.js']);
+  
+  // Count backend
+  const servicesDir = path.join(rootDir, 'services');
+  const routesDir = path.join(rootDir, 'routes');
+  const modelsDir = path.join(rootDir, 'models');
+  
+  const servicesLines = countLinesInDir(servicesDir, ['.js']);
+  const routesLines = countLinesInDir(routesDir, ['.js']);
+  const modelsLines = countLinesInDir(modelsDir, ['.js']);
+  
+  // Total backend JS
+  const backendTotal = servicesLines + routesLines + modelsLines;
+  
+  // Control plane total
+  const controlPlaneTotal = controlPlaneHtml + controlPlaneJs;
+  
+  cachedCodebaseStats = {
+    controlPlane: {
+      html: controlPlaneHtml,
+      js: controlPlaneJs,
+      total: controlPlaneTotal
+    },
+    backend: {
+      services: servicesLines,
+      routes: routesLines,
+      models: modelsLines,
+      total: backendTotal
+    },
+    total: controlPlaneTotal + backendTotal
+  };
+  cacheTime = now;
+  
+  return cachedCodebaseStats;
+}
+
+router.get('/metrics/codebase', (req, res) => {
+  try {
+    const stats = getCodebaseStats();
+    res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      stats
+    });
+  } catch (error) {
+    logger.error('Error calculating codebase stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to calculate codebase stats'
+    });
+  }
+});
+
 module.exports = router;
 

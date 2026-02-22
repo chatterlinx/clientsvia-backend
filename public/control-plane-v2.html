@@ -1055,6 +1055,7 @@
       <span>Back to Company Profile</span>
     </button>
       <h1 class="page-title">🎛️ Control Plane</h1>
+      <span id="cp-loc-badge" title="Lines of Code in Control Plane" style="display: none; font-size: 11px; color: #64748b; background: #1e293b; padding: 4px 8px; border-radius: 6px; font-weight: 600; margin-left: 8px;"></span>
     </div>
     <div class="header-right">
       <div id="cp-ready-chip" title="Readiness: /api/readyz" style="display:none; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; border:1px solid #334155; background:#0f172a; color:#e2e8f0; font-weight:700; font-size:12px;">
@@ -7996,6 +7997,21 @@
           </div>
         `;
       }
+      
+      // Fetch and display LOC count
+      fetch('/api/metrics/codebase')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.stats) {
+            const badge = document.getElementById('cp-loc-badge');
+            if (badge) {
+              badge.textContent = `${data.stats.controlPlane.total.toLocaleString()} LOC`;
+              badge.title = `Control Plane: ${data.stats.controlPlane.total.toLocaleString()} lines (HTML: ${data.stats.controlPlane.html.toLocaleString()}, JS: ${data.stats.controlPlane.js.toLocaleString()})`;
+              badge.style.display = 'inline-block';
+            }
+          }
+        })
+        .catch(() => {});
     });
     
     console.log('✅ [CONTROL PLANE] Clean Architecture loaded - Dec 2025');
