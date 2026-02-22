@@ -284,6 +284,205 @@ router.post('/first-names', authenticateJWT, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/global-hub/last-names
+ * 
+ * Returns the global last names (surnames) dictionary.
+ * This is a GLOBAL resource - no companyId needed or accepted.
+ */
+router.get('/last-names', authenticateJWT, async (req, res) => {
+    const requestId = `GH-LN-GET-${Date.now()}`;
+    
+    try {
+        logger.info(`🌐 [GLOBAL HUB] ${requestId} - Fetching last names dictionary`);
+        
+        const settings = await AdminSettings.getSettings();
+        
+        const lastNames = settings?.globalHub?.dictionaries?.lastNames || [];
+        const lastUpdated = settings?.globalHub?.dictionaries?.lastNamesUpdatedAt || null;
+        
+        logger.info(`🌐 [GLOBAL HUB] ${requestId} - Returning ${lastNames.length} last names`);
+        
+        return res.json({
+            success: true,
+            data: {
+                lastNames,
+                count: lastNames.length,
+                lastUpdated
+            }
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [GLOBAL HUB] ${requestId} - Error fetching last names:`, error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to fetch last names dictionary',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/admin/global-hub/last-names
+ * 
+ * Updates the global last names (surnames) dictionary.
+ * This is a GLOBAL resource - no companyId accepted.
+ */
+router.post('/last-names', authenticateJWT, async (req, res) => {
+    const requestId = `GH-LN-POST-${Date.now()}`;
+    
+    try {
+        const { lastNames } = req.body;
+        
+        logger.info(`🌐 [GLOBAL HUB] ${requestId} - Updating last names dictionary`);
+        logger.info(`🌐 [GLOBAL HUB] ${requestId} - Input count: ${Array.isArray(lastNames) ? lastNames.length : 'invalid'}`);
+        
+        // Validate input (reuse validation with adjusted field name)
+        if (!Array.isArray(lastNames)) {
+            return res.status(400).json({
+                success: false,
+                error: 'lastNames must be an array'
+            });
+        }
+        
+        if (lastNames.length > 200000) { // Allow more for Census data
+            return res.status(400).json({
+                success: false,
+                error: 'Maximum 200,000 names allowed'
+            });
+        }
+        
+        // Normalize names (reuse same logic)
+        const inputCount = lastNames.length;
+        const normalizedNames = normalizeFirstNames(lastNames); // Same normalization
+        const outputCount = normalizedNames.length;
+        const duplicatesRemoved = inputCount - outputCount;
+        
+        logger.info(`🌐 [GLOBAL HUB] ${requestId} - Normalized: ${inputCount} → ${outputCount} (${duplicatesRemoved} duplicates removed)`);
+        
+        // Get current settings
+        const settings = await AdminSettings.getSettings();
+        
+        // Initialize globalHub structure if needed
+        if (!settings.globalHub) {
+            settings.globalHub = {};
+        }
+        if (!settings.globalHub.dictionaries) {
+            settings.globalHub.dictionaries = {};
+        }
+        
+        // Update last names
+        const now = new Date();
+        settings.globalHub.dictionaries.lastNames = normalizedNames;
+        settings.globalHub.dictionaries.lastNamesUpdatedAt = now;
+        settings.globalHub.dictionaries.lastNamesUpdatedBy = req.user?.email || req.user?.userId || 'admin';
+        
+        // Mark as modified (Mongoose mixed type)
+        settings.markModified('globalHub');
+        
+        // Save
+        await settings.save();
+        
+        // Sync to Redis for fast runtime lookups
+        await GlobalHubService.syncLastNamesToRedis(normalizedNames);
+        
+        logger.info(`✅ [GLOBAL HUB] ${requestId} - Last names dictionary updated successfully`);
+        
+        return res.json({
+            success: true,
+            data: {
+                lastNames: normalizedNames,
+                count: normalizedNames.length,
+                lastUpdated: now.toISOString(),
+                stats: {
+                    inputCount,
+                    outputCount,
+                    duplicatesRemoved
+                }
+            },
+            message: `Successfully saved ${outputCount.toLocaleString()} last names`
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [GLOBAL HUB] ${requestId} - Error updating last names:`, error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to update last names dictionary',
+            details: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/admin/global-hub/last-names/seed
+ * 
+ * Seeds the last names dictionary with US Census surnames (~162K names).
+ */
+router.post('/last-names/seed', authenticateJWT, async (req, res) => {
+    const requestId = `GH-LN-SEED-${Date.now()}`;
+    
+    try {
+        logger.info(`🌐 [GLOBAL HUB] ${requestId} - Seeding last names dictionary`);
+        
+        // Load the seed data
+        const { LAST_NAMES_SEED } = require('../../data/lastNamesSeed');
+        
+        if (!LAST_NAMES_SEED || !Array.isArray(LAST_NAMES_SEED)) {
+            return res.status(500).json({
+                success: false,
+                error: 'Seed data not available'
+            });
+        }
+        
+        // Normalize names
+        const normalizedNames = normalizeFirstNames(LAST_NAMES_SEED);
+        
+        // Get current settings
+        const settings = await AdminSettings.getSettings();
+        
+        // Initialize globalHub structure if needed
+        if (!settings.globalHub) {
+            settings.globalHub = {};
+        }
+        if (!settings.globalHub.dictionaries) {
+            settings.globalHub.dictionaries = {};
+        }
+        
+        // Update last names
+        const now = new Date();
+        settings.globalHub.dictionaries.lastNames = normalizedNames;
+        settings.globalHub.dictionaries.lastNamesUpdatedAt = now;
+        settings.globalHub.dictionaries.lastNamesUpdatedBy = 'seed-endpoint';
+        
+        // Mark as modified and save
+        settings.markModified('globalHub');
+        await settings.save();
+        
+        // Sync to Redis
+        await GlobalHubService.syncLastNamesToRedis(normalizedNames);
+        
+        logger.info(`✅ [GLOBAL HUB] ${requestId} - Seeded ${normalizedNames.length.toLocaleString()} last names`);
+        
+        return res.json({
+            success: true,
+            data: {
+                count: normalizedNames.length,
+                lastUpdated: now.toISOString(),
+                source: 'us-census-2010'
+            },
+            message: `Successfully seeded ${normalizedNames.length.toLocaleString()} last names (US Census 2010)`
+        });
+        
+    } catch (error) {
+        logger.error(`❌ [GLOBAL HUB] ${requestId} - Error seeding last names:`, error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to seed last names dictionary',
+            details: error.message
+        });
+    }
+});
+
+/**
  * GET /api/admin/global-hub/status
  * 
  * Returns overview status of all Global Hub resources.
@@ -304,6 +503,11 @@ router.get('/status', authenticateJWT, async (req, res) => {
                     count: dictionaries.firstNames?.length || 0,
                     lastUpdated: dictionaries.firstNamesUpdatedAt || null,
                     updatedBy: dictionaries.firstNamesUpdatedBy || null
+                },
+                lastNames: {
+                    count: dictionaries.lastNames?.length || 0,
+                    lastUpdated: dictionaries.lastNamesUpdatedAt || null,
+                    updatedBy: dictionaries.lastNamesUpdatedBy || null
                 }
             }
         };

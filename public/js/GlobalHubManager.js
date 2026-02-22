@@ -42,7 +42,9 @@ const GlobalHubManager = (function() {
     
     let state = {
         firstNames: [],
-        lastUpdated: null,
+        lastNames: [],
+        firstNamesLastUpdated: null,
+        lastNamesLastUpdated: null,
         isLoading: false
     };
     
@@ -240,6 +242,99 @@ const GlobalHubManager = (function() {
         }
     }
     
+    /**
+     * Fetch last names list
+     */
+    async function fetchLastNames() {
+        try {
+            const response = await fetch(`${API_BASE}/last-names`, {
+                method: 'GET',
+                headers: getAuthHeaders(),
+                credentials: 'include'
+            });
+            
+            if (response.status === 401) {
+                window.location.href = '/login.html';
+                return null;
+            }
+            
+            if (!response.ok) {
+                throw new Error(`Failed to fetch last names: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            return data.data;
+            
+        } catch (error) {
+            console.error('[GlobalHubManager] Error fetching last names:', error);
+            showToast('Failed to load last names', 'error');
+            return null;
+        }
+    }
+    
+    /**
+     * Save last names list
+     */
+    async function saveLastNames(namesArray) {
+        try {
+            const response = await fetch(`${API_BASE}/last-names`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                credentials: 'include',
+                body: JSON.stringify({ lastNames: namesArray })
+            });
+            
+            if (response.status === 401) {
+                window.location.href = '/login.html';
+                return null;
+            }
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Failed to save: ${response.statusText}`);
+            }
+            
+            return data;
+            
+        } catch (error) {
+            console.error('[GlobalHubManager] Error saving last names:', error);
+            showToast(error.message || 'Failed to save last names', 'error');
+            return null;
+        }
+    }
+    
+    /**
+     * Seed last names with US Census data
+     */
+    async function seedLastNames() {
+        try {
+            const response = await fetch(`${API_BASE}/last-names/seed`, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                credentials: 'include'
+            });
+            
+            if (response.status === 401) {
+                window.location.href = '/login.html';
+                return null;
+            }
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || `Failed to seed: ${response.statusText}`);
+            }
+            
+            return data;
+            
+        } catch (error) {
+            console.error('[GlobalHubManager] Error seeding last names:', error);
+            showToast(error.message || 'Failed to seed last names', 'error');
+            return null;
+        }
+    }
+    
     // ========================================================================
     // UI UPDATE FUNCTIONS
     // ========================================================================
@@ -251,6 +346,7 @@ const GlobalHubManager = (function() {
         if (!status) return;
         
         const firstNames = status.dictionaries?.firstNames;
+        const lastNames = status.dictionaries?.lastNames;
         
         if (firstNames) {
             // Update count
@@ -264,7 +360,22 @@ const GlobalHubManager = (function() {
             }
             
             // Store state
-            state.lastUpdated = firstNames.lastUpdated;
+            state.firstNamesLastUpdated = firstNames.lastUpdated;
+        }
+        
+        if (lastNames) {
+            // Update count
+            if (elements.lastNamesCount) {
+                elements.lastNamesCount.textContent = formatNumber(lastNames.count);
+            }
+            
+            // Update last updated
+            if (elements.lastNamesUpdated) {
+                elements.lastNamesUpdated.textContent = formatDate(lastNames.lastUpdated);
+            }
+            
+            // Store state
+            state.lastNamesLastUpdated = lastNames.lastUpdated;
         }
     }
     
@@ -374,6 +485,111 @@ const GlobalHubManager = (function() {
     }
     
     // ========================================================================
+    // LAST NAMES MODAL FUNCTIONS
+    // ========================================================================
+    
+    /**
+     * Open the last names modal
+     */
+    async function openLastNamesModal() {
+        const modal = elements.lastNamesModal;
+        const textarea = elements.lastNamesTextarea;
+        const saveBtn = elements.saveLastNamesBtn;
+        
+        if (!modal || !textarea) return;
+        
+        // Show loading state
+        textarea.value = 'Loading...';
+        textarea.disabled = true;
+        if (saveBtn) saveBtn.disabled = true;
+        
+        // Show modal
+        modal.classList.add('active');
+        
+        // Fetch current names
+        const data = await fetchLastNames();
+        
+        if (data) {
+            state.lastNames = data.lastNames || [];
+            textarea.value = state.lastNames.join('\n');
+        } else {
+            textarea.value = '';
+        }
+        
+        // Enable editing
+        textarea.disabled = false;
+        if (saveBtn) saveBtn.disabled = false;
+        
+        // Focus textarea
+        textarea.focus();
+    }
+    
+    /**
+     * Close the last names modal
+     */
+    function closeLastNamesModal() {
+        const modal = elements.lastNamesModal;
+        if (modal) {
+            modal.classList.remove('active');
+        }
+    }
+    
+    /**
+     * Save last names from modal
+     */
+    async function handleSaveLastNames() {
+        const textarea = elements.lastNamesTextarea;
+        const saveBtn = elements.saveLastNamesBtn;
+        
+        if (!textarea) return;
+        
+        // Parse textarea content into array
+        const text = textarea.value;
+        const namesArray = text
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+        
+        // Show loading state
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        }
+        
+        // Save to API
+        const result = await saveLastNames(namesArray);
+        
+        // Reset button
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<i class="fas fa-save"></i> Save';
+        }
+        
+        if (result && result.success) {
+            // Update textarea with normalized names
+            if (result.data?.lastNames) {
+                textarea.value = result.data.lastNames.join('\n');
+                state.lastNames = result.data.lastNames;
+            }
+            
+            // Show success message with stats
+            const stats = result.data?.stats;
+            let message = result.message || 'Saved successfully';
+            if (stats && stats.duplicatesRemoved > 0) {
+                message += ` (${stats.duplicatesRemoved} duplicates removed)`;
+            }
+            showToast(message, 'success');
+            
+            // Close modal
+            closeLastNamesModal();
+            
+            // Refresh dashboard
+            const status = await fetchStatus();
+            updateDashboard(status);
+        }
+    }
+    
+    // ========================================================================
     // EVENT HANDLERS
     // ========================================================================
     
@@ -386,7 +602,7 @@ const GlobalHubManager = (function() {
         // Confirm with user
         const currentCount = state.firstNames?.length || 0;
         if (currentCount > 0) {
-            const confirmed = confirm(`This will replace the current ${currentCount.toLocaleString()} names with ~1,400 curated names. Continue?`);
+            const confirmed = confirm(`This will replace the current ${currentCount.toLocaleString()} names with ~9,500 SSA names. Continue?`);
             if (!confirmed) return;
         }
         
@@ -415,9 +631,48 @@ const GlobalHubManager = (function() {
     }
     
     /**
+     * Handle seed last names button click
+     */
+    async function handleSeedLastNames() {
+        const seedBtn = elements.seedLastNamesBtn;
+        
+        // Confirm with user
+        const currentCount = state.lastNames?.length || 0;
+        if (currentCount > 0) {
+            const confirmed = confirm(`This will replace the current ${currentCount.toLocaleString()} names with ~162,000 Census surnames. Continue?`);
+            if (!confirmed) return;
+        }
+        
+        // Show loading state
+        if (seedBtn) {
+            seedBtn.disabled = true;
+            seedBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Seeding...';
+        }
+        
+        // Call seed API
+        const result = await seedLastNames();
+        
+        // Reset button
+        if (seedBtn) {
+            seedBtn.disabled = false;
+            seedBtn.innerHTML = '<i class="fas fa-seedling"></i> Seed';
+        }
+        
+        if (result && result.success) {
+            showToast(result.message || `Seeded ${result.data?.count?.toLocaleString() || ''} surnames`, 'success');
+            
+            // Refresh dashboard
+            const status = await fetchStatus();
+            updateDashboard(status);
+        }
+    }
+    
+    /**
      * Set up event listeners
      */
     function setupEventListeners() {
+        // ====== FIRST NAMES ======
+        
         // Seed First Names button
         if (elements.seedFirstNamesBtn) {
             elements.seedFirstNamesBtn.addEventListener('click', handleSeedFirstNames);
@@ -438,12 +693,39 @@ const GlobalHubManager = (function() {
             elements.cancelModalBtn.addEventListener('click', closeFirstNamesModal);
         }
         
-        // Save button
+        // ====== LAST NAMES ======
+        
+        // Seed Last Names button
+        if (elements.seedLastNamesBtn) {
+            elements.seedLastNamesBtn.addEventListener('click', handleSeedLastNames);
+        }
+        
+        // Edit Last Names button
+        if (elements.editLastNamesBtn) {
+            elements.editLastNamesBtn.addEventListener('click', openLastNamesModal);
+        }
+        
+        // Close last names modal button
+        if (elements.closeLastNamesModalBtn) {
+            elements.closeLastNamesModalBtn.addEventListener('click', closeLastNamesModal);
+        }
+        
+        // Cancel last names button
+        if (elements.cancelLastNamesModalBtn) {
+            elements.cancelLastNamesModalBtn.addEventListener('click', closeLastNamesModal);
+        }
+        
+        // Save first names button
         if (elements.saveFirstNamesBtn) {
             elements.saveFirstNamesBtn.addEventListener('click', handleSaveFirstNames);
         }
         
-        // Close modal on backdrop click
+        // Save last names button
+        if (elements.saveLastNamesBtn) {
+            elements.saveLastNamesBtn.addEventListener('click', handleSaveLastNames);
+        }
+        
+        // Close first names modal on backdrop click
         if (elements.firstNamesModal) {
             elements.firstNamesModal.addEventListener('click', (e) => {
                 if (e.target === elements.firstNamesModal) {
@@ -452,10 +734,20 @@ const GlobalHubManager = (function() {
             });
         }
         
-        // Close modal on Escape key
+        // Close last names modal on backdrop click
+        if (elements.lastNamesModal) {
+            elements.lastNamesModal.addEventListener('click', (e) => {
+                if (e.target === elements.lastNamesModal) {
+                    closeLastNamesModal();
+                }
+            });
+        }
+        
+        // Close modals on Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeFirstNamesModal();
+                closeLastNamesModal();
             }
         });
         
@@ -465,6 +757,9 @@ const GlobalHubManager = (function() {
                 if (elements.firstNamesModal?.classList.contains('active')) {
                     e.preventDefault();
                     handleSaveFirstNames();
+                } else if (elements.lastNamesModal?.classList.contains('active')) {
+                    e.preventDefault();
+                    handleSaveLastNames();
                 }
             }
         });
@@ -479,18 +774,31 @@ const GlobalHubManager = (function() {
      */
     function cacheElements() {
         elements = {
-            // Dashboard elements
+            // First Names Dashboard elements
             firstNamesCount: document.getElementById('first-names-count'),
             firstNamesUpdated: document.getElementById('first-names-updated'),
             seedFirstNamesBtn: document.getElementById('seed-first-names-btn'),
             editFirstNamesBtn: document.getElementById('edit-first-names-btn'),
             
-            // Modal elements
+            // First Names Modal elements
             firstNamesModal: document.getElementById('first-names-modal'),
             firstNamesTextarea: document.getElementById('first-names-textarea'),
             closeModalBtn: document.getElementById('close-modal-btn'),
             cancelModalBtn: document.getElementById('cancel-modal-btn'),
             saveFirstNamesBtn: document.getElementById('save-first-names-btn'),
+            
+            // Last Names Dashboard elements
+            lastNamesCount: document.getElementById('last-names-count'),
+            lastNamesUpdated: document.getElementById('last-names-updated'),
+            seedLastNamesBtn: document.getElementById('seed-last-names-btn'),
+            editLastNamesBtn: document.getElementById('edit-last-names-btn'),
+            
+            // Last Names Modal elements
+            lastNamesModal: document.getElementById('last-names-modal'),
+            lastNamesTextarea: document.getElementById('last-names-textarea'),
+            closeLastNamesModalBtn: document.getElementById('close-last-names-modal-btn'),
+            cancelLastNamesModalBtn: document.getElementById('cancel-last-names-modal-btn'),
+            saveLastNamesBtn: document.getElementById('save-last-names-btn'),
             
             // Toast
             toast: document.getElementById('toast')
@@ -524,6 +832,8 @@ const GlobalHubManager = (function() {
         init,
         openFirstNamesModal,
         closeFirstNamesModal,
+        openLastNamesModal,
+        closeLastNamesModal,
         refresh: async () => {
             const status = await fetchStatus();
             updateDashboard(status);

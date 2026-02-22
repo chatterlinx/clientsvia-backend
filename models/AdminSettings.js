@@ -939,6 +939,23 @@ const adminSettingsSchema = new mongoose.Schema({
                 type: String,
                 default: null,
                 description: 'Who last updated first names list'
+            },
+            
+            // Last Names Dictionary (Census Surnames)
+            lastNames: {
+                type: [String],
+                default: [],
+                description: 'Global list of US Census surnames (Title Case, deduplicated, sorted)'
+            },
+            lastNamesUpdatedAt: {
+                type: Date,
+                default: null,
+                description: 'When last names list was last updated'
+            },
+            lastNamesUpdatedBy: {
+                type: String,
+                default: null,
+                description: 'Who last updated last names list'
             }
         }
     },

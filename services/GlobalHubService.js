@@ -50,13 +50,19 @@ const { redisClient } = require('../clients');
 const REDIS_KEYS = {
     FIRST_NAMES: 'globalHub:firstNames',           // SET (lowercase for lookups)
     FIRST_NAMES_ORIGINAL: 'globalHub:firstNames:original', // SET (original casing)
-    FIRST_NAMES_META: 'globalHub:firstNames:meta'  // HASH (metadata)
+    FIRST_NAMES_META: 'globalHub:firstNames:meta', // HASH (metadata)
+    
+    LAST_NAMES: 'globalHub:lastNames',             // SET (lowercase for lookups)
+    LAST_NAMES_ORIGINAL: 'globalHub:lastNames:original',   // SET (original casing)
+    LAST_NAMES_META: 'globalHub:lastNames:meta'    // HASH (metadata)
 };
 
 // In-memory fallback when Redis unavailable
 let memoryFallback = {
     firstNames: new Set(),
-    firstNamesOriginal: []
+    firstNamesOriginal: [],
+    lastNames: new Set(),
+    lastNamesOriginal: []
 };
 
 /**
@@ -132,6 +138,82 @@ async function getFirstNamesCount() {
     } catch (error) {
         logger.error('❌ [GLOBAL HUB] Error getting first names count:', error);
         return memoryFallback.firstNames.size;
+    }
+}
+
+/**
+ * ============================================================================
+ * LAST NAMES - Fast Lookup Functions
+ * ============================================================================
+ */
+
+/**
+ * Check if a name is in the last names (surnames) dictionary
+ * O(1) lookup via Redis SISMEMBER
+ * 
+ * @param {string} name - Name to check
+ * @returns {Promise<boolean>} - True if name is a known last name
+ */
+async function isLastName(name) {
+    if (!name || typeof name !== 'string') return false;
+    
+    const normalizedName = name.trim().toLowerCase();
+    if (!normalizedName) return false;
+    
+    try {
+        // Try Redis first
+        if (redisClient && redisClient.isReady) {
+            const result = await redisClient.sIsMember(REDIS_KEYS.LAST_NAMES, normalizedName);
+            return result === 1 || result === true;
+        }
+        
+        // Fallback to memory
+        return memoryFallback.lastNames.has(normalizedName);
+        
+    } catch (error) {
+        logger.error('❌ [GLOBAL HUB] Error checking last name:', error);
+        // Fallback to memory on error
+        return memoryFallback.lastNames.has(normalizedName);
+    }
+}
+
+/**
+ * Get all last names (for admin UI display)
+ * Returns original casing
+ * 
+ * @returns {Promise<string[]>} - Array of last names in Title Case
+ */
+async function getLastNames() {
+    try {
+        // Try Redis first
+        if (redisClient && redisClient.isReady) {
+            const names = await redisClient.sMembers(REDIS_KEYS.LAST_NAMES_ORIGINAL);
+            return names.sort((a, b) => a.localeCompare(b));
+        }
+        
+        // Fallback to memory
+        return [...memoryFallback.lastNamesOriginal].sort((a, b) => a.localeCompare(b));
+        
+    } catch (error) {
+        logger.error('❌ [GLOBAL HUB] Error getting last names:', error);
+        return [...memoryFallback.lastNamesOriginal].sort((a, b) => a.localeCompare(b));
+    }
+}
+
+/**
+ * Get last names count
+ * 
+ * @returns {Promise<number>} - Count of names in dictionary
+ */
+async function getLastNamesCount() {
+    try {
+        if (redisClient && redisClient.isReady) {
+            return await redisClient.sCard(REDIS_KEYS.LAST_NAMES);
+        }
+        return memoryFallback.lastNames.size;
+    } catch (error) {
+        logger.error('❌ [GLOBAL HUB] Error getting last names count:', error);
+        return memoryFallback.lastNames.size;
     }
 }
 
@@ -215,6 +297,79 @@ async function syncFirstNamesToRedis(namesFromDb = null) {
 }
 
 /**
+ * Sync last names from MongoDB to Redis
+ * Called on server startup and after admin saves
+ * 
+ * @param {string[]} [namesFromDb] - Optional: names array (skips DB fetch if provided)
+ * @returns {Promise<{success: boolean, count: number}>}
+ */
+async function syncLastNamesToRedis(namesFromDb = null) {
+    const startTime = Date.now();
+    logger.info('🌐 [GLOBAL HUB] Syncing last names to Redis...');
+    
+    try {
+        // Get names from MongoDB if not provided
+        let names = namesFromDb;
+        
+        if (!names) {
+            const AdminSettings = require('../models/AdminSettings');
+            const settings = await AdminSettings.getSettings();
+            names = settings?.globalHub?.dictionaries?.lastNames || [];
+        }
+        
+        if (!Array.isArray(names) || names.length === 0) {
+            logger.warn('🌐 [GLOBAL HUB] No last names to sync');
+            return { success: true, count: 0 };
+        }
+        
+        // Update memory fallback first (always works)
+        memoryFallback.lastNames = new Set(names.map(n => n.toLowerCase()));
+        memoryFallback.lastNamesOriginal = [...names];
+        
+        // Sync to Redis if available
+        if (redisClient && redisClient.isReady) {
+            // Use pipeline for efficiency
+            const pipeline = redisClient.multi();
+            
+            // Clear existing sets
+            pipeline.del(REDIS_KEYS.LAST_NAMES);
+            pipeline.del(REDIS_KEYS.LAST_NAMES_ORIGINAL);
+            
+            // Add lowercase names for lookups (batched)
+            const lowercaseNames = names.map(n => n.toLowerCase());
+            if (lowercaseNames.length > 0) {
+                pipeline.sAdd(REDIS_KEYS.LAST_NAMES, lowercaseNames);
+            }
+            
+            // Add original casing for display
+            if (names.length > 0) {
+                pipeline.sAdd(REDIS_KEYS.LAST_NAMES_ORIGINAL, names);
+            }
+            
+            // Update metadata
+            pipeline.hSet(REDIS_KEYS.LAST_NAMES_META, {
+                count: names.length.toString(),
+                lastSynced: new Date().toISOString()
+            });
+            
+            // Execute pipeline
+            await pipeline.exec();
+            
+            const elapsed = Date.now() - startTime;
+            logger.info(`✅ [GLOBAL HUB] Synced ${names.length.toLocaleString()} last names to Redis in ${elapsed}ms`);
+        } else {
+            logger.warn('⚠️ [GLOBAL HUB] Redis not available, using memory fallback only');
+        }
+        
+        return { success: true, count: names.length };
+        
+    } catch (error) {
+        logger.error('❌ [GLOBAL HUB] Error syncing last names to Redis:', error);
+        return { success: false, count: 0, error: error.message };
+    }
+}
+
+/**
  * Initialize Global Hub on server startup
  * Loads all dictionaries from MongoDB into Redis
  */
@@ -223,10 +378,17 @@ async function initialize() {
     
     try {
         // Sync first names
-        const result = await syncFirstNamesToRedis();
+        const firstResult = await syncFirstNamesToRedis();
         
-        logger.info(`✅ [GLOBAL HUB] Initialized - ${result.count.toLocaleString()} first names loaded`);
-        return result;
+        // Sync last names
+        const lastResult = await syncLastNamesToRedis();
+        
+        logger.info(`✅ [GLOBAL HUB] Initialized - ${firstResult.count.toLocaleString()} first names, ${lastResult.count.toLocaleString()} last names loaded`);
+        return { 
+            success: true, 
+            firstNames: firstResult.count, 
+            lastNames: lastResult.count 
+        };
         
     } catch (error) {
         logger.error('❌ [GLOBAL HUB] Initialization failed:', error);
@@ -247,19 +409,23 @@ async function healthCheck() {
     const status = {
         redis: false,
         memoryFallback: true,
-        firstNamesCount: 0
+        firstNamesCount: 0,
+        lastNamesCount: 0
     };
     
     try {
         if (redisClient && redisClient.isReady) {
             status.redis = true;
             status.firstNamesCount = await redisClient.sCard(REDIS_KEYS.FIRST_NAMES);
+            status.lastNamesCount = await redisClient.sCard(REDIS_KEYS.LAST_NAMES);
         } else {
             status.firstNamesCount = memoryFallback.firstNames.size;
+            status.lastNamesCount = memoryFallback.lastNames.size;
         }
     } catch (error) {
         logger.error('❌ [GLOBAL HUB] Health check error:', error);
         status.firstNamesCount = memoryFallback.firstNames.size;
+        status.lastNamesCount = memoryFallback.lastNames.size;
     }
     
     return status;
@@ -270,13 +436,19 @@ async function healthCheck() {
 // ============================================================================
 
 module.exports = {
-    // Lookup functions (for runtime use across all companies)
+    // First Names - Lookup functions (for runtime use across all companies)
     isFirstName,
     getFirstNames,
     getFirstNamesCount,
     
+    // Last Names - Lookup functions (for runtime use across all companies)
+    isLastName,
+    getLastNames,
+    getLastNamesCount,
+    
     // Sync functions (for admin operations)
     syncFirstNamesToRedis,
+    syncLastNamesToRedis,
     
     // Initialization (called on server startup)
     initialize,
