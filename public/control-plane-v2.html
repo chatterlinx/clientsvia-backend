@@ -1092,11 +1092,7 @@
     <!-- REMOVED: Version History tab (Jan 2026)
          Individual feature tabs now save directly to live.
          Rollback capability can be added via backend API if needed. -->
-    <button class="nav-tab" data-tab="agent-wiring" style="color: #22d3ee;">
-      <i class="fas fa-plug"></i>
-      <span>🔌 Agent Wiring (AW)</span>
-      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('agent-wiring')"></i>
-    </button>
+    <!-- ☢️ NUKED Feb 2026: Agent Wiring (AW) tab removed - entire AW system eliminated -->
     <button class="nav-tab" data-tab="scenario-gaps" onclick="openScenarioGaps(); return false;" style="color: #f472b6;">
       <i class="fas fa-bullseye"></i>
       <span>🎯 Gaps</span>
@@ -2052,374 +2048,11 @@
     <!-- ☢️ NUKED Feb 2026: Call Protection, Transfer Calls, Links panels removed — full cheat sheet nuke
          Tier 2 reserved for future rebuild -->
 
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         AGENT WIRING (AW) - Enterprise Single Source of Truth
-         If it's not here, it doesn't exist. Married to Raw Events (RE).
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="agent-wiring">
-      <link rel="stylesheet" href="/css/wiringTab.css">
-      
-      <div id="wiringTab">
-        <!-- Toast notification -->
-        <div id="wiringToast" class="w-toast ok"></div>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             V93: ONBOARDING COCKPIT - THE HERO SECTION
-             This is what users see first. It's the "sales demo control panel."
-             Everything operational goes here.
-             ═══════════════════════════════════════════════════════════════════ -->
-        <!-- COCKPIT IS NOW FIRST - moved from below tier blocks -->
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             V93: ONBOARDING COCKPIT - Critical 12 Fields for Day-1 Setup
-             This is NOT another settings page. It's a guided wizard that:
-             1. Writes to real config paths
-             2. Emits CONFIG_WRITE events to Raw Events
-             3. Shows diff vs template
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringOnboardingCockpit" class="w-panel" style="margin-bottom: 16px; border: 2px solid #22d3ee; background: linear-gradient(135deg, rgba(34, 211, 238, 0.05) 0%, rgba(6, 182, 212, 0.02) 100%);">
-          <div class="w-panel-title" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleOnboardingCockpit()">
-            <span>🚀 Onboarding Cockpit <span style="color: #94a3b8; font-weight: 400; font-size: 12px;">(Critical 12 Fields)</span></span>
-            <span id="cockpitToggleIcon" style="font-size: 18px;">▼</span>
-          </div>
-          
-          <div id="cockpitContent" style="display: block; padding: 16px 0;">
-            <!-- Company Setup -->
-            <div class="cockpit-section">
-              <h4 style="color: #22d3ee; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Company Setup</h4>
-              <div class="cockpit-grid">
-                <div class="cockpit-field">
-                  <label>Trade Template</label>
-                  <select id="cockpit_tradeTemplate" onchange="cockpitFieldChanged('tradeTemplate', this.value)">
-                    <option value="hvac">HVAC</option>
-                    <option value="plumbing">Plumbing</option>
-                    <option value="electrical">Electrical</option>
-                    <option value="general">General Contractor</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
-                <div class="cockpit-field">
-                  <label>Service Areas</label>
-                  <input type="text" id="cockpit_serviceAreas" placeholder="Fort Myers, Cape Coral, Naples" onchange="cockpitFieldChanged('serviceAreas', this.value)" />
-                </div>
-                <div class="cockpit-field">
-                  <label>Business Hours</label>
-                  <input type="text" id="cockpit_businessHours" placeholder="8am-5pm Mon-Fri" onchange="cockpitFieldChanged('businessHours', this.value)" />
-                </div>
-              </div>
-            </div>
-            
-            <!-- Booking -->
-            <div class="cockpit-section" style="margin-top: 16px;">
-              <h4 style="color: #f97316; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Booking</h4>
-              <div class="cockpit-grid">
-                <div class="cockpit-field">
-                  <label>Booking Enabled</label>
-                  <select id="cockpit_bookingEnabled" onchange="cockpitFieldChanged('bookingEnabled', this.value === 'true')">
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-                <div class="cockpit-field">
-                  <label>Required Fields</label>
-                  <select id="cockpit_requiredFields" onchange="cockpitFieldChanged('requiredFields', this.value)">
-                    <option value="name_phone">Name + Phone</option>
-                    <option value="name_phone_address">Name + Phone + Address</option>
-                    <option value="all">All Fields</option>
-                  </select>
-                </div>
-                <div class="cockpit-field">
-                  <label>Require City</label>
-                  <select id="cockpit_requireCity" onchange="cockpitFieldChanged('booking.addressVerification.requireCity', this.value === 'true')">
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-                <div class="cockpit-field">
-                  <label>Require State</label>
-                  <select id="cockpit_requireState" onchange="cockpitFieldChanged('booking.addressVerification.requireState', this.value === 'true')">
-                    <option value="false">No (infer from city)</option>
-                    <option value="true">Yes (multi-state business)</option>
-                  </select>
-                </div>
-                <div class="cockpit-field">
-                  <label>Ask Unit Question</label>
-                  <select id="cockpit_requireUnitQuestion" onchange="cockpitFieldChanged('booking.addressVerification.requireUnitQuestion', this.value === 'true')">
-                    <option value="true">Yes ("House or apartment?")</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-                <div class="cockpit-field">
-                  <label>First-Name Dictionary</label>
-                  <select id="cockpit_firstNameDictEnabled" onchange="cockpitFieldChanged('firstNameDictEnabled', this.value === 'true')">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Routing -->
-            <div class="cockpit-section" style="margin-top: 16px;">
-              <h4 style="color: #a855f7; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Routing</h4>
-              <div class="cockpit-grid">
-                <div class="cockpit-field">
-                  <label>Emergency Detection</label>
-                  <select id="cockpit_emergencyDetection" onchange="cockpitFieldChanged('emergencyDetection', this.value === 'true')">
-                    <option value="true">Enabled</option>
-                    <option value="false">Disabled</option>
-                  </select>
-                </div>
-                <div class="cockpit-field">
-                  <label>Transfer to Service</label>
-                  <input type="text" id="cockpit_transferService" placeholder="+1234567890" onchange="cockpitFieldChanged('transferService', this.value)" />
-                </div>
-              </div>
-            </div>
-            
-            <!-- Voice -->
-            <div class="cockpit-section" style="margin-top: 16px;">
-              <h4 style="color: #22c55e; margin: 0 0 12px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px;">Voice</h4>
-              <div class="cockpit-grid">
-                <div class="cockpit-field">
-                  <label>Voice Provider</label>
-                  <select id="cockpit_voiceProvider" onchange="cockpitFieldChanged('voiceProvider', this.value)">
-                    <option value="elevenlabs">ElevenLabs</option>
-                    <option value="twilio">Twilio</option>
-                    <option value="google">Google TTS</option>
-                  </select>
-                </div>
-                <div class="cockpit-field" style="grid-column: span 2;">
-                  <label>Default Greeting</label>
-                  <input type="text" id="cockpit_greeting" placeholder="Thank you for calling [Company]..." onchange="cockpitFieldChanged('greeting', this.value)" />
-                </div>
-              </div>
-            </div>
-            
-            <!-- Proof Actions -->
-            <div class="cockpit-section" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #2a2a2e;">
-              <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                <button id="cockpitSaveAll" class="w-btn primary" onclick="saveCockpitConfig()" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); padding: 10px 24px;">
-                  💾 Save All Changes
-                </button>
-                <button id="cockpitTestCall" class="w-btn" onclick="openTestConsoleFromCockpit()" style="padding: 10px 20px;">
-                  📞 Run Test Call
-                </button>
-                <button id="cockpitExportAW" class="w-btn" onclick="document.getElementById('wiringExportFull').click()" style="padding: 10px 20px;">
-                  ⬇️ Export AW
-                </button>
-                <button id="cockpitExportRE" class="w-btn" onclick="window.open('/black-box-detail.html?companyId=' + getSelectedCompanyId(), '_blank')" style="padding: 10px 20px;">
-                  ⬇️ Export RE
-                </button>
-              </div>
-              <div id="cockpitStatus" style="margin-top: 12px; font-size: 12px; color: #94a3b8;"></div>
-            </div>
-          </div>
-        </div>
-        
-        <style>
-          .cockpit-section { }
-          .cockpit-grid { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 12px; 
-          }
-          .cockpit-field { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 4px; 
-          }
-          .cockpit-field label { 
-            font-size: 11px; 
-            color: #94a3b8; 
-            text-transform: uppercase; 
-            letter-spacing: 0.3px; 
-          }
-          .cockpit-field input, .cockpit-field select { 
-            background: #1e1e24; 
-            border: 1px solid #3a3a44; 
-            border-radius: 6px; 
-            padding: 8px 10px; 
-            color: #e5e7eb; 
-            font-size: 13px; 
-          }
-          .cockpit-field input:focus, .cockpit-field select:focus { 
-            border-color: #22d3ee; 
-            outline: none; 
-          }
-          .cockpit-field.changed input, .cockpit-field.changed select {
-            border-color: #f97316;
-            background: rgba(249, 115, 22, 0.1);
-          }
-          @media (max-width: 800px) {
-            .cockpit-grid { grid-template-columns: repeat(2, 1fr); }
-          }
-        </style>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             V93: EVIDENCE HEADER - Proves the page is looking at TRUTH
-             If any field is missing → show UNVERIFIED
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringEvidenceHeader" class="w-evidence-header" style="display: flex; flex-wrap: wrap; gap: 16px; padding: 12px 16px; background: #0d1117; border: 1px solid #2a2a2e; border-radius: 8px; margin-bottom: 16px; font-size: 12px;">
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <span style="color: #6e7681;">ECV:</span>
-            <span id="evidenceECV" style="color: #22d3ee; font-family: monospace;">—</span>
-          </div>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <span style="color: #6e7681;">AW Hash:</span>
-            <span id="evidenceAwHash" style="color: #f97316; font-family: monospace;">—</span>
-          </div>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <span style="color: #6e7681;">Generated:</span>
-            <span id="evidenceGeneratedAt" style="color: #94a3b8; font-family: monospace;">—</span>
-          </div>
-          <div id="evidenceVerified" style="margin-left: auto; padding: 4px 10px; border-radius: 4px; font-weight: 600; background: #1e3a3a; color: #22c55e;">
-            ✓ VERIFIED
-          </div>
-        </div>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             V93: NEXT BEST ACTIONS - Do this next to improve agent (Top 5)
-             This sells the platform - visible near top
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringNextActions"></div>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             TOOLBAR - Search + Actions
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div class="w-toolbar">
-          <div class="w-toolbar-left">
-            <input type="text" id="wiringSearch" class="w-search" placeholder="Search tabs, sections, nodes..." />
-            <span id="wiringFocusPill" class="w-pill">Focus: none</span>
-          </div>
-          <div class="w-toolbar-right">
-            <button id="wiringExportFull" class="w-btn" style="background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; font-weight: 700; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px;" title="Download complete AW truth bundle">
-              ⬇️ Download AW Export
-            </button>
-            <button id="wiringExpandAll" class="w-btn">Expand All</button>
-            <button id="wiringCollapseAll" class="w-btn">Collapse All</button>
-            <button id="wiringClearFocus" class="w-btn">Clear Focus</button>
-            <button id="wiringClearCache" class="w-btn danger">Clear Cache</button>
-            <button id="wiringReload" class="w-btn primary">🔄 Reload</button>
-          </div>
-        </div>
-        
-        <!-- Loading -->
-        <div id="wiringLoading" class="w-loading" style="display: none;">
-          Loading wiring report...
-        </div>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             V93: DIAGNOSTICS ACCORDION - Collapsed by default
-             Analysis, not operation. Scoreboard + Coverage + Legacy/Ghosts
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringDiagnosticsAccordion" class="w-panel" style="margin-bottom: 16px;">
-          <div class="w-panel-title" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleDiagnosticsAccordion()">
-            <span>📊 Diagnostics <span style="color: #6e7681; font-weight: 400; font-size: 12px;">(Performance Tier, Coverage, Legacy)</span></span>
-            <span id="diagnosticsToggleIcon" style="font-size: 18px;">▶</span>
-          </div>
-          <div id="diagnosticsContent" style="display: none; padding-top: 16px;">
-            <!-- Tier Progress (moved from top) -->
-            <div id="wiringTierProgress"></div>
-            
-            <!-- Scoreboard -->
-            <div id="wiringScoreboard"></div>
-            
-            <!-- Executive Banner -->
-            <div id="wiringExecutiveBanner"></div>
-            
-            <!-- Kill Switches -->
-            <div id="wiringKillSwitches"></div>
-            
-            <!-- Gap Analysis -->
-            <div id="wiringGapAnalysis"></div>
-            
-            <!-- Action Queue -->
-            <div id="wiringActionQueue"></div>
-            
-            <!-- Special Checks -->
-            <div id="wiringSpecialChecks"></div>
-            
-            <!-- Issues & Guardrails -->
-            <div class="w-grid-2">
-              <div id="wiringIssues"></div>
-              <div id="wiringGuardrails"></div>
-            </div>
-          </div>
-        </div>
-        
-        <script>
-          function toggleDiagnosticsAccordion() {
-            const content = document.getElementById('diagnosticsContent');
-            const icon = document.getElementById('diagnosticsToggleIcon');
-            if (content.style.display === 'none') {
-              content.style.display = 'block';
-              icon.textContent = '▼';
-            } else {
-              content.style.display = 'none';
-              icon.textContent = '▶';
-            }
-          }
-        </script>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             V93: WIRING INVENTORY TABLE - The Ghost Buster
-             Master list of EVERYTHING in the platform
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringInventoryTable"></div>
-        
-        <!-- ═══════════════════════════════════════════════════════════════════
-             WIRING TREE - Field hierarchy view
-             ═══════════════════════════════════════════════════════════════════ -->
-        <div id="wiringTree"></div>
-
-        <!-- Node Inspector (Source of Truth) -->
-        <div id="wiringInspector"></div>
-
-        <!-- Diagrams (Mermaid strings) -->
-        <div id="wiringDiagrams"></div>
-        
-        <!-- Checkpoints Reference -->
-        <div id="wiringCheckpoints"></div>
-
-        <!-- Paste JSON + Validate Modal (inline panel) -->
-        <div id="wiringValidatePanel" style="display:none; margin-top: 16px;">
-          <div class="w-panel">
-            <div class="w-panel-title">🧪 Paste JSON + Validate (Deterministic)</div>
-            <div class="w-meta-small">Paste a Wiring Report JSON (or company config JSON) and validate against registry rules.</div>
-            <textarea id="wiringValidateInput" style="width:100%; min-height: 180px; margin-top: 10px; background:#0b0b0d; color:#e5e7eb; border:1px solid #2a2a2e; border-radius:10px; padding:12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size:12px;"></textarea>
-            <div style="margin-top: 10px; display:flex; gap:10px; flex-wrap:wrap;">
-              <button id="wiringValidateRun" class="w-btn primary">Validate JSON</button>
-              <button id="wiringValidateClose" class="w-btn">Close</button>
-            </div>
-            <div id="wiringValidateOutput" style="margin-top: 12px;"></div>
-          </div>
-        </div>
-      </div>
-      
-      <script src="/js/wiringTab.js"></script>
-      <script>
-        // Initialize when tab becomes visible
-        (function() {
-          const tab = document.querySelector('[data-panel="agent-wiring"]');
-          const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-              if (mutation.target === tab && tab.classList.contains('active')) {
-                const companyId = window.getSelectedCompanyId ? window.getSelectedCompanyId() : 
-                                 new URLSearchParams(window.location.search).get('companyId') || 
-                                 localStorage.getItem('lastCompanyId');
-                if (window.ClientViaWiringTab) {
-                  // Always re-init on activation so company switches don’t leave Wiring “dead”.
-                  window.ClientViaWiringTab.initWiringTab({ companyId });
-                }
-              }
-            });
-          });
-          observer.observe(tab, { attributes: true, attributeFilter: ['class'] });
-        })();
-      </script>
-    </div>
-
+    <!-- ☢️ NUKED Feb 2026: AGENT WIRING (AW) tab panel removed - entire AW system eliminated
+         ~360 lines removed: Onboarding Cockpit, Evidence Header, Next Actions,
+         Toolbar, Diagnostics, Inventory Table, Wiring Tree, Inspector, Diagrams, 
+         Checkpoints, Validate Panel, initialization scripts -->
+    <!-- ☢️ NUKED Feb 2026: AGENT WIRING (AW) tab panel removed - entire AW system eliminated (~350 lines) -->
     <!-- REMOVED Feb 2026: Legacy tab panel - migration complete, tab was broken -->
     
   </main>
@@ -2682,16 +2315,7 @@
       // Initialize tab content if not already done
       initializeTab(tabId);
 
-      // Agent Wiring (AW) must always re-init on activation (company switches must not leave it dead).
-      // Backward compat: accept both 'wiring' and 'agent-wiring' tab IDs
-      if ((tabId === 'agent-wiring' || tabId === 'wiring') && window.ClientViaWiringTab && currentCompanyId) {
-        try {
-          window.ClientViaWiringTab.initWiringTab({ companyId: currentCompanyId });
-          console.log('✅ [NAV] Agent Wiring init triggered on tab switch', { companyId: currentCompanyId });
-        } catch (e) {
-          console.error('❌ [NAV] Agent Wiring init failed on tab switch', e);
-        }
-      }
+      // ☢️ NUKED Feb 2026: Agent Wiring (AW) tab re-init code removed
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2826,14 +2450,13 @@
         const section = params.get('section');
         const field = params.get('field');
         
-        // Backward compatibility: 'wiring' → 'agent-wiring'
-        if (tab === 'wiring') {
-          tab = 'agent-wiring';
-          // Update URL without reload for clean bookmarks
-          params.set('tab', 'agent-wiring');
+        // ☢️ NUKED Feb 2026: 'wiring' → 'agent-wiring' migration removed (tab no longer exists)
+        if (tab === 'wiring' || tab === 'agent-wiring') {
+          tab = 'data-config'; // Redirect to Data Config instead
+          params.set('tab', 'data-config');
           const newUrl = window.location.pathname + '?' + params.toString() + window.location.hash;
           history.replaceState({}, '', newUrl);
-          console.log('🔄 [ControlPlaneNav] Migrated tab=wiring → tab=agent-wiring');
+          console.log('🔄 [ControlPlaneNav] Nuked wiring tab → redirected to data-config');
         }
         
         if (tab || section || field) {
@@ -2872,9 +2495,7 @@
           // ☢️ NUKED: 'dynamic-flow' case removed Feb 2026
           // ☢️ NUKED Feb 2026: call-protection, transfer-calls, links cases removed — cheat sheet nuke
           // REMOVED: version-history case (Jan 2026) - tab deleted
-          case 'wiring':
-            await initWiring();
-            break;
+          // ☢️ NUKED Feb 2026: case 'wiring' removed - AW tab eliminated
           case 'data-config':
             await initDataConfig();
             break;
@@ -2886,25 +2507,7 @@
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    // WIRING INITIALIZATION (V2 Source of Truth)
-    // ═══════════════════════════════════════════════════════════════════════════
-    async function initWiring() {
-      try {
-        // wiringTab.js is included inside the agent-wiring panel, but this is a safety net
-        if (!window.ClientViaWiringTab) {
-          await loadScript('/js/wiringTab.js');
-        }
-        if (window.ClientViaWiringTab) {
-          window.ClientViaWiringTab.initWiringTab({ companyId: currentCompanyId });
-          console.log('✅ [INIT] Agent Wiring initialized', { companyId: currentCompanyId });
-        } else {
-          console.error('❌ [INIT] Agent Wiring module missing after load');
-        }
-      } catch (e) {
-        console.error('❌ [INIT] Wiring init failed', e);
-      }
-    }
+    // ☢️ NUKED Feb 2026: WIRING INITIALIZATION removed - AW tab eliminated
     
     // ═══════════════════════════════════════════════════════════════════════════
     // FRONT DESK INITIALIZATION

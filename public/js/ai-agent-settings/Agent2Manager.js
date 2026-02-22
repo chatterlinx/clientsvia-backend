@@ -7622,7 +7622,7 @@ class Agent2Manager {
     let persistedSnapshot = null;
     let frontDeskConfig = null;
     // ☢️ NUKED Feb 2026: flowTreeSnapshot removed - Flow Tree visualization nuked
-    let wiringStatusSnapshot = null;
+    // ☢️ NUKED Feb 2026: wiringStatusSnapshot removed - AW Agent Wiring tab eliminated
     let controlPlaneRawSnapshot = null;
     let persistedFetchError = null;
     
@@ -7648,14 +7648,7 @@ class Agent2Manager {
       }
 
       // ☢️ NUKED Feb 2026: Flow Tree fetch removed - Flow Tree visualization nuked
-
-      // Fetch AW Wiring report (wiring tab truth)
-      const wiringRes = await fetch(`/api/admin/wiring-status/${this.companyId}?includeGuardrails=0&includeInfrastructure=0`, {
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-      });
-      if (wiringRes.ok) {
-        wiringStatusSnapshot = await wiringRes.json();
-      }
+      // ☢️ NUKED Feb 2026: AW Wiring report fetch removed - AW Agent Wiring tab eliminated
 
       // Fetch raw control-plane truth (DB echo for debugging)
       const rawRes = await fetch(`/api/company/${this.companyId}/control-plane/raw`, {
@@ -7739,10 +7732,7 @@ class Agent2Manager {
 
     // Control Plane Wiring truth is required for calling this report "wiring complete"
     // ☢️ NUKED Feb 2026: flowTreeSnapshot check removed - Flow Tree visualization nuked
-    if (!wiringStatusSnapshot) {
-      missingSections.push('awWiringStatus');
-      failedChecks.push('CONTROL_PLANE_MISSING: Could not fetch AW wiring status (wiring-status)');
-    }
+    // ☢️ NUKED Feb 2026: wiringStatusSnapshot check removed - AW Agent Wiring tab eliminated
     
     // ═══════════════════════════════════════════════════════════════════════
     // STEP 6: Execution Model (Who Can Speak + Priority Order)
@@ -8207,9 +8197,9 @@ class Agent2Manager {
       runtimeDependencies,
 
       controlPlaneTruth: {
-        _description: 'Control Plane Wiring truth sources (AW wiring report + raw config echo)',
+        _description: 'Control Plane Wiring truth sources (raw config echo)',
         // ☢️ NUKED Feb 2026: flowTreeSnapshot removed - Flow Tree visualization nuked
-        wiringStatusSnapshot,
+        // ☢️ NUKED Feb 2026: wiringStatusSnapshot removed - AW Agent Wiring tab eliminated
         controlPlaneRawSnapshot
       },
       

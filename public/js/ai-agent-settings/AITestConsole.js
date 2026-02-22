@@ -2310,30 +2310,16 @@ ${separator}`;
             const lastDebugEntry = this.debugLog.length > 0 ? this.debugLog[this.debugLog.length - 1] : null;
             const debugSnapshot = lastDebugEntry?.debugSnapshot || lastDebugEntry?.debug?.debugSnapshot || null;
             
-            let diagnostics;
-            
-            if (debugSnapshot) {
-                // EVIDENCE-BASED: Use actual debugSnapshot from test
-                console.log('[AI Test] 🔬 Running evidence-based diagnosis with debugSnapshot');
-                const response = await fetch(`/api/admin/wiring-status/${this.companyId}/diagnose`, {
-                    method: 'POST',
-                    headers: { 
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ debugSnapshot })
-                });
-                diagnostics = await response.json();
-                diagnostics._hasEvidence = true;
-            } else {
-                // FALLBACK: Quick diagnostics (no test evidence yet)
-                console.log('[AI Test] ⚠️ No test run yet, using quick diagnostics');
-                const response = await fetch(`/api/admin/wiring-status/${this.companyId}/quick-diagnostics`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                diagnostics = await response.json();
-                diagnostics._hasEvidence = false;
-            }
+            // ☢️ NUKED Feb 2026: Wiring diagnostics removed - AW Agent Wiring tab eliminated
+            // The /api/admin/wiring-status endpoints no longer exist
+            const diagnostics = {
+                _nuked: true,
+                _hasEvidence: !!debugSnapshot,
+                message: 'AW Agent Wiring system removed Feb 2026',
+                topDiagnoses: [],
+                warningCount: 0,
+                errorCount: 0
+            };
             
             // Store for PATCH JSON export
             this.lastDiagnostics = diagnostics;
@@ -2841,28 +2827,14 @@ ${separator}`;
             </div>
         `;
 
-        try {
-            const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-            const response = await fetch(`/api/admin/wiring-status/${this.companyId}/scenario-coverage?daysBack=7`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const report = await response.json();
-            this.renderCoverageReport(report);
-        } catch (error) {
-            console.error('[COVERAGE] Analysis failed:', error);
-            content.innerHTML = `
-                <div style="background: #2d1c1c; border: 1px solid #f85149; border-radius: 8px; padding: 16px; text-align: center;">
-                    <div style="font-size: 28px; margin-bottom: 8px;">❌</div>
-                    <div style="color: #f85149; font-weight: 600; margin-bottom: 4px;">Analysis Failed</div>
-                    <div style="color: #8b949e; font-size: 11px;">${error.message}</div>
-                </div>
-            `;
-        }
+        // ☢️ NUKED Feb 2026: Scenario coverage endpoint removed - AW Agent Wiring tab eliminated
+        content.innerHTML = `
+            <div style="background: #2d3748; border: 1px solid #4a5568; border-radius: 8px; padding: 16px; text-align: center;">
+                <div style="font-size: 28px; margin-bottom: 8px;">☢️</div>
+                <div style="color: #a0aec0; font-weight: 600; margin-bottom: 4px;">Feature Removed</div>
+                <div style="color: #718096; font-size: 11px;">Scenario Coverage analysis was part of the Agent Wiring system, which was removed Feb 2026.</div>
+            </div>
+        `;
     }
 
     /**
