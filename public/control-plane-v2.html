@@ -3400,21 +3400,33 @@
                 </button>
               </div>
               <div style="padding: 24px; flex: 1; overflow-y: auto;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                  <label style="font-size: 14px; font-weight: 500; color: #f8fafc;">First Names (one per line)</label>
-                  <span id="gh-first-names-modal-count" style="font-size: 13px; color: #64748b;">0 names</span>
+                <!-- Search and Stats Row -->
+                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px;">
+                  <div style="flex: 1; position: relative;">
+                    <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #64748b;"></i>
+                    <input type="text" id="gh-first-names-search" placeholder="Search names..." 
+                      oninput="GlobalHubController.searchFirstNames(this.value)"
+                      style="width: 100%; padding: 10px 12px 10px 38px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #f8fafc; font-size: 14px;">
+                  </div>
+                  <div style="display: flex; gap: 16px; font-size: 13px; white-space: nowrap;">
+                    <span style="color: #94a3b8;">Total: <strong id="gh-first-names-modal-count" style="color: #3b82f6;">0</strong></span>
+                    <span style="color: #94a3b8;">Duplicates: <strong id="gh-first-names-dupes" style="color: #ef4444;">0</strong></span>
+                  </div>
                 </div>
-                <textarea id="gh-first-names-textarea" style="width: 100%; height: 320px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; color: #f8fafc; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; resize: vertical; line-height: 1.6;" placeholder="Enter names, one per line..."></textarea>
+                <!-- Search Results -->
+                <div id="gh-first-names-search-results" style="display: none; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 12px; max-height: 120px; overflow-y: auto;">
+                  <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Search Results:</div>
+                  <div id="gh-first-names-search-list" style="font-size: 13px; color: #f8fafc;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <label style="font-size: 14px; font-weight: 500; color: #f8fafc;">First Names (one per line)</label>
+                </div>
+                <textarea id="gh-first-names-textarea" style="width: 100%; height: 280px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; color: #f8fafc; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; resize: vertical; line-height: 1.6;" placeholder="Enter names, one per line..."></textarea>
                 <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 10px; padding: 14px; margin-top: 16px;">
-                  <h4 style="font-size: 13px; font-weight: 600; color: #3b82f6; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                  <h4 style="font-size: 13px; font-weight: 600; color: #3b82f6; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
                     <i class="fas fa-info-circle"></i> Auto-Processing on Save
                   </h4>
-                  <ul style="font-size: 12px; color: #94a3b8; margin: 0; padding-left: 20px; line-height: 1.8;">
-                    <li>Names are automatically converted to Title Case</li>
-                    <li>Duplicates are removed (case-insensitive)</li>
-                    <li>Empty lines and whitespace are trimmed</li>
-                    <li>List is sorted alphabetically</li>
-                  </ul>
+                  <p style="font-size: 12px; color: #94a3b8; margin: 0;">Names are automatically converted to Title Case</p>
                 </div>
               </div>
               <div style="padding: 16px 24px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 12px;">
@@ -3441,21 +3453,33 @@
                 </button>
               </div>
               <div style="padding: 24px; flex: 1; overflow-y: auto;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                  <label style="font-size: 14px; font-weight: 500; color: #f8fafc;">Last Names / Surnames (one per line)</label>
-                  <span id="gh-last-names-modal-count" style="font-size: 13px; color: #64748b;">0 names</span>
+                <!-- Search and Stats Row -->
+                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px;">
+                  <div style="flex: 1; position: relative;">
+                    <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #64748b;"></i>
+                    <input type="text" id="gh-last-names-search" placeholder="Search names..." 
+                      oninput="GlobalHubController.searchLastNames(this.value)"
+                      style="width: 100%; padding: 10px 12px 10px 38px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #f8fafc; font-size: 14px;">
+                  </div>
+                  <div style="display: flex; gap: 16px; font-size: 13px; white-space: nowrap;">
+                    <span style="color: #94a3b8;">Total: <strong id="gh-last-names-modal-count" style="color: #22c55e;">0</strong></span>
+                    <span style="color: #94a3b8;">Duplicates: <strong id="gh-last-names-dupes" style="color: #ef4444;">0</strong></span>
+                  </div>
                 </div>
-                <textarea id="gh-last-names-textarea" style="width: 100%; height: 320px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; color: #f8fafc; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; resize: vertical; line-height: 1.6;" placeholder="Enter surnames, one per line..."></textarea>
+                <!-- Search Results -->
+                <div id="gh-last-names-search-results" style="display: none; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 12px; max-height: 120px; overflow-y: auto;">
+                  <div style="font-size: 12px; color: #64748b; margin-bottom: 8px;">Search Results:</div>
+                  <div id="gh-last-names-search-list" style="font-size: 13px; color: #f8fafc;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <label style="font-size: 14px; font-weight: 500; color: #f8fafc;">Last Names / Surnames (one per line)</label>
+                </div>
+                <textarea id="gh-last-names-textarea" style="width: 100%; height: 280px; background: #0f172a; border: 1px solid #334155; border-radius: 10px; padding: 14px; color: #f8fafc; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; resize: vertical; line-height: 1.6;" placeholder="Enter surnames, one per line..."></textarea>
                 <div style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 10px; padding: 14px; margin-top: 16px;">
-                  <h4 style="font-size: 13px; font-weight: 600; color: #22c55e; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                  <h4 style="font-size: 13px; font-weight: 600; color: #22c55e; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
                     <i class="fas fa-info-circle"></i> Auto-Processing on Save
                   </h4>
-                  <ul style="font-size: 12px; color: #94a3b8; margin: 0; padding-left: 20px; line-height: 1.8;">
-                    <li>Names are automatically converted to Title Case</li>
-                    <li>Duplicates are removed (case-insensitive)</li>
-                    <li>Empty lines and whitespace are trimmed</li>
-                    <li>List is sorted alphabetically</li>
-                  </ul>
+                  <p style="font-size: 12px; color: #94a3b8; margin: 0;">Names are automatically converted to Title Case</p>
                 </div>
               </div>
               <div style="padding: 16px 24px; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 12px;">
@@ -3470,25 +3494,103 @@
           </div>
         `;
         
-        // Attach textarea input listeners for live count
+        // Attach textarea input listeners for live count and duplicate detection
         const firstTextarea = document.getElementById('gh-first-names-textarea');
         const lastTextarea = document.getElementById('gh-last-names-textarea');
         
         if (firstTextarea) {
           firstTextarea.addEventListener('input', () => {
-            const count = firstTextarea.value.split('\n').filter(l => l.trim()).length;
-            const countEl = document.getElementById('gh-first-names-modal-count');
-            if (countEl) countEl.textContent = `${count.toLocaleString()} names`;
+            this.updateFirstNamesStats();
           });
         }
         
         if (lastTextarea) {
           lastTextarea.addEventListener('input', () => {
-            const count = lastTextarea.value.split('\n').filter(l => l.trim()).length;
-            const countEl = document.getElementById('gh-last-names-modal-count');
-            if (countEl) countEl.textContent = `${count.toLocaleString()} names`;
+            this.updateLastNamesStats();
           });
         }
+      },
+      
+      updateFirstNamesStats() {
+        const textarea = document.getElementById('gh-first-names-textarea');
+        const countEl = document.getElementById('gh-first-names-modal-count');
+        const dupesEl = document.getElementById('gh-first-names-dupes');
+        if (!textarea) return;
+        
+        const lines = textarea.value.split('\n').map(l => l.trim().toLowerCase()).filter(l => l);
+        const unique = new Set(lines);
+        const dupes = lines.length - unique.size;
+        
+        if (countEl) countEl.textContent = lines.length.toLocaleString();
+        if (dupesEl) dupesEl.textContent = dupes.toLocaleString();
+      },
+      
+      updateLastNamesStats() {
+        const textarea = document.getElementById('gh-last-names-textarea');
+        const countEl = document.getElementById('gh-last-names-modal-count');
+        const dupesEl = document.getElementById('gh-last-names-dupes');
+        if (!textarea) return;
+        
+        const lines = textarea.value.split('\n').map(l => l.trim().toLowerCase()).filter(l => l);
+        const unique = new Set(lines);
+        const dupes = lines.length - unique.size;
+        
+        if (countEl) countEl.textContent = lines.length.toLocaleString();
+        if (dupesEl) dupesEl.textContent = dupes.toLocaleString();
+      },
+      
+      searchFirstNames(query) {
+        const textarea = document.getElementById('gh-first-names-textarea');
+        const resultsDiv = document.getElementById('gh-first-names-search-results');
+        const listDiv = document.getElementById('gh-first-names-search-list');
+        if (!textarea || !resultsDiv || !listDiv) return;
+        
+        if (!query || query.length < 2) {
+          resultsDiv.style.display = 'none';
+          return;
+        }
+        
+        const names = textarea.value.split('\n').map(l => l.trim()).filter(l => l);
+        const q = query.toLowerCase();
+        const matches = names.filter(n => n.toLowerCase().includes(q)).slice(0, 20);
+        
+        if (matches.length === 0) {
+          listDiv.innerHTML = '<span style="color: #64748b;">No matches found</span>';
+        } else {
+          listDiv.innerHTML = matches.map(m => {
+            const idx = m.toLowerCase().indexOf(q);
+            const highlighted = m.substring(0, idx) + '<mark style="background: #fbbf24; color: #0f172a; padding: 0 2px; border-radius: 2px;">' + m.substring(idx, idx + query.length) + '</mark>' + m.substring(idx + query.length);
+            return highlighted;
+          }).join(', ');
+        }
+        resultsDiv.style.display = 'block';
+      },
+      
+      searchLastNames(query) {
+        const textarea = document.getElementById('gh-last-names-textarea');
+        const resultsDiv = document.getElementById('gh-last-names-search-results');
+        const listDiv = document.getElementById('gh-last-names-search-list');
+        if (!textarea || !resultsDiv || !listDiv) return;
+        
+        if (!query || query.length < 2) {
+          resultsDiv.style.display = 'none';
+          return;
+        }
+        
+        const names = textarea.value.split('\n').map(l => l.trim()).filter(l => l);
+        const q = query.toLowerCase();
+        const matches = names.filter(n => n.toLowerCase().includes(q)).slice(0, 20);
+        
+        if (matches.length === 0) {
+          listDiv.innerHTML = '<span style="color: #64748b;">No matches found</span>';
+        } else {
+          listDiv.innerHTML = matches.map(m => {
+            const idx = m.toLowerCase().indexOf(q);
+            const highlighted = m.substring(0, idx) + '<mark style="background: #4ade80; color: #0f172a; padding: 0 2px; border-radius: 2px;">' + m.substring(idx, idx + query.length) + '</mark>' + m.substring(idx + query.length);
+            return highlighted;
+          }).join(', ');
+        }
+        resultsDiv.style.display = 'block';
       },
       
       async refresh() {
@@ -3515,12 +3617,15 @@
       async openFirstNamesModal() {
         const modal = document.getElementById('gh-first-names-modal');
         const textarea = document.getElementById('gh-first-names-textarea');
-        const countEl = document.getElementById('gh-first-names-modal-count');
+        const searchInput = document.getElementById('gh-first-names-search');
+        const searchResults = document.getElementById('gh-first-names-search-results');
         if (!modal || !textarea) return;
         
         modal.style.display = 'flex';
         textarea.value = 'Loading...';
         textarea.disabled = true;
+        if (searchInput) searchInput.value = '';
+        if (searchResults) searchResults.style.display = 'none';
         
         try {
           const response = await fetch('/api/admin/global-hub/first-names', { headers: this.getAuthHeaders() });
@@ -3528,7 +3633,7 @@
             const data = await response.json();
             const names = data.data?.firstNames || [];
             textarea.value = names.join('\n');
-            if (countEl) countEl.textContent = `${names.length.toLocaleString()} names`;
+            this.updateFirstNamesStats();
           } else {
             textarea.value = '';
           }
@@ -3631,12 +3736,15 @@
       async openLastNamesModal() {
         const modal = document.getElementById('gh-last-names-modal');
         const textarea = document.getElementById('gh-last-names-textarea');
-        const countEl = document.getElementById('gh-last-names-modal-count');
+        const searchInput = document.getElementById('gh-last-names-search');
+        const searchResults = document.getElementById('gh-last-names-search-results');
         if (!modal || !textarea) return;
         
         modal.style.display = 'flex';
         textarea.value = 'Loading...';
         textarea.disabled = true;
+        if (searchInput) searchInput.value = '';
+        if (searchResults) searchResults.style.display = 'none';
         
         try {
           const response = await fetch('/api/admin/global-hub/last-names', { headers: this.getAuthHeaders() });
@@ -3644,7 +3752,7 @@
             const data = await response.json();
             const names = data.data?.lastNames || [];
             textarea.value = names.join('\n');
-            if (countEl) countEl.textContent = `${names.length.toLocaleString()} names`;
+            this.updateLastNamesStats();
           } else {
             textarea.value = '';
           }
