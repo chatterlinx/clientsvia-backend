@@ -899,6 +899,50 @@ const adminSettingsSchema = new mongoose.Schema({
         description: 'Global list of custom name rejection words — words never accepted as caller names (shared across all companies)'
     },
     
+    // ============================================================================
+    // 🌐 GLOBAL HUB - Cross-Tenant Shared Resources (Feb 2026)
+    // ============================================================================
+    // PURPOSE:
+    //   Central repository for platform-wide shared data that benefits ALL tenants.
+    //   Unlike per-company settings, Global Hub resources are universal.
+    // 
+    // ARCHITECTURE:
+    //   - GLOBAL ONLY: No companyId association
+    //   - SINGLETON: Stored here in AdminSettings (single document)
+    //   - ADMIN MANAGED: Only platform admins can modify
+    //   - TENANT READABLE: All companies can read/reference these dictionaries
+    // 
+    // USE CASES:
+    //   - First Names: Validate caller names across all companies
+    //   - Last Names: (Future) Validate surnames
+    //   - Common Titles: (Future) Mr., Mrs., Dr., etc.
+    //   - Industry Terms: (Future) Shared terminology
+    // 
+    // WHY NOT PER-COMPANY?
+    //   A "John" is a "John" whether at a dentist or plumber.
+    //   Maintaining 100+ separate name lists is wasteful and error-prone.
+    // ============================================================================
+    globalHub: {
+        dictionaries: {
+            // First Names Dictionary
+            firstNames: {
+                type: [String],
+                default: [],
+                description: 'Global list of common first names (Title Case, deduplicated, sorted)'
+            },
+            firstNamesUpdatedAt: {
+                type: Date,
+                default: null,
+                description: 'When first names list was last updated'
+            },
+            firstNamesUpdatedBy: {
+                type: String,
+                default: null,
+                description: 'Who last updated first names list'
+            }
+        }
+    },
+    
     // Metadata
     lastUpdated: {
         type: Date,
