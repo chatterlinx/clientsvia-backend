@@ -187,69 +187,10 @@ const CRITICAL_EVENTS = new Set([
 ]);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// V1.0: ALLOWED PLATFORM PREEMPTORS
+// LEGACY PREEMPTORS - NUKED (Feb 2026)
 // ═══════════════════════════════════════════════════════════════════════════
-// These modules are explicitly ALLOWED to speak BEFORE Agent2 Discovery.
-// Everything else must be blocked or moved into Agent2.
-// 
-// ALLOWED (tight + deterministic):
-// - CONNECTION_QUALITY_GATE: Connection quality / DTMF rescue (only if input unusable)
-// - AFTER_HOURS_GATE: Business closed check
-// - ESCALATION_DETECTOR: Explicit transfer request + consent
-// - GREETING_INTERCEPTOR: Short greetings only (under Agent2 control in V1.0)
-// - SILENCE_HANGUP: Global silence policy
-// 
-// NOT ALLOWED (must be blocked when Agent2 is active):
-// - Legacy instant responses that hijack conversation
-// - Legacy greeting rules outside Agent2 namespace
-// - Any module that speaks without being in this allowlist
-// ═══════════════════════════════════════════════════════════════════════════
-const ALLOWED_PREEMPTORS = new Set([
-    'CONNECTION_QUALITY_GATE',
-    'AFTER_HOURS_GATE', 
-    'ESCALATION_DETECTOR',
-    'SILENCE_HANGUP_POLICY',
-    'DTMF_RESCUE'
-]);
-
-/**
- * Central enforcement: when Agent2 is enabled, only allowlisted preemptors may speak.
- * If blocked, emit PLATFORM_PREEMPTOR_BLOCKED and force caller to continue to Agent2.
- */
-function enforcePreemptorOrContinue({ agent2Enabled, bufferEvent, preemptorId, reason, details = {} }) {
-    // Only enforce when Agent2 is active. Under break-glass, we intentionally allow legacy behavior.
-    if (!agent2Enabled) return true;
-
-    const isAllowed = ALLOWED_PREEMPTORS.has(preemptorId);
-    const payload = {
-        preemptorId,
-        reason,
-        allowed: isAllowed,
-        ...details,
-        timestamp: new Date().toISOString()
-    };
-
-    if (isAllowed) {
-        bufferEvent('PLATFORM_PREEMPTOR_ALLOWED_SPOKE', payload);
-        return true;
-    }
-
-    bufferEvent('PLATFORM_PREEMPTOR_BLOCKED', {
-        ...payload,
-        blocked: true,
-        warning: 'Non-allowlisted preemptor attempted to speak - response discarded, continuing to Agent2'
-    });
-    logger.warn('[FRONT_DESK_CORE_RUNTIME] PLATFORM_PREEMPTOR_BLOCKED', {
-        preemptorId,
-        reason,
-        details
-    });
-    return false;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// NOTE: CallReasonExtractor, GreetingInterceptor, EscalationDetector, and
-// ConnectionQualityGate have been extracted to ./interceptors/ for modularity.
+// DELETED: ConnectionQualityGate, EscalationDetector, CallReasonExtractor
+// Agent 2.0 is now the ONLY responder. No preemptors hijack the conversation.
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -530,211 +471,11 @@ class FrontDeskCoreRuntime {
             });
             
             // ═══════════════════════════════════════════════════════════════════════════
-            // S1.5: CONNECTION QUALITY GATE (V111)
+            // S1.5: CONNECTION QUALITY GATE - NUKED (Feb 2026)
             // ═══════════════════════════════════════════════════════════════════════════
-            // WIRED FROM: frontDeskBehavior.connectionQualityGate (Discovery & Consent tab)
-            // 
-            // PURPOSE: Detect bad connections, low STT confidence, and "hello? are you there?"
-            // patterns on early turns (1-2). Without this gate, the AI treats "hello?" as a
-            // real question and gives wrong answers.
-            //
-            // ACTIONS:
-            // - If trouble phrase detected OR STT confidence < threshold → re-greet
-            // - After maxRetries → offer DTMF escape (press 1 for human, press 2 for voicemail)
+            // DELETED: Was hijacking Agent 2.0 on early turns with "hello?" detection.
+            // Agent 2.0 now handles ALL input including connection-related utterances.
             // ═══════════════════════════════════════════════════════════════════════════
-            currentSection = 'S1_5_CONNECTION_QUALITY_GATE';
-            const cqGate = company?.aiAgentSettings?.frontDeskBehavior?.connectionQualityGate || {};
-            const cqEnabled = cqGate.enabled !== false; // Default: enabled
-            const cqThreshold = cqGate.confidenceThreshold || 0.72;
-            const cqMaxRetries = cqGate.maxRetries || 3;
-            const cqTroublePhrases = cqGate.troublePhrases || [
-                'hello', 'hello?', 'hi', 'hi?', 'are you there',
-                'can you hear me', 'is anyone there', 'is somebody there',
-                'hey', 'hey?', 'anybody there'
-            ];
-            const cqClarificationPrompt = cqGate.clarificationPrompt || cqGate.reGreeting || 
-                "I'm sorry, I didn't quite catch that. Could you please repeat what you said?";
-            const cqDtmfMessage = cqGate.dtmfEscapeMessage || 
-                "I'm sorry, we seem to have a bad connection. Press 1 to speak with a service advisor, or press 2 to leave a voicemail.";
-            
-            // Get STT confidence from context (passed from v2twilio.js)
-            const sttConfidence = context.sttConfidence || 1.0; // Default high if not provided
-            const inputTextRaw = userInput || '';
-            const inputTextLower = inputTextRaw.toLowerCase().trim();
-            
-            // Initialize connection trouble tracking in state
-            if (!callState._connectionTroubleCount) {
-                callState._connectionTroubleCount = 0;
-            }
-            
-            // Only run on early turns (1-2) when enabled
-            const isEarlyTurn = turn <= 2;
-            let connectionTroubleDetected = false;
-            let troubleReason = null;
-            
-            if (cqEnabled && isEarlyTurn) {
-                // Check 1: Is this a trouble phrase?
-                const matchedTroublePhrase = cqTroublePhrases.find(phrase => {
-                    const phraseLower = phrase.toLowerCase().trim();
-                    return inputTextLower === phraseLower || 
-                           inputTextLower.startsWith(phraseLower + ' ') ||
-                           inputTextLower.endsWith(' ' + phraseLower) ||
-                           inputTextLower.includes(' ' + phraseLower + ' ');
-                });
-                
-                if (matchedTroublePhrase) {
-                    connectionTroubleDetected = true;
-                    troubleReason = 'TROUBLE_PHRASE';
-                }
-                
-                // Check 2: Low STT confidence
-                if (!connectionTroubleDetected && sttConfidence < cqThreshold) {
-                    connectionTroubleDetected = true;
-                    troubleReason = 'LOW_STT_CONFIDENCE';
-                }
-            }
-            
-            // EMIT S1.5 CONNECTION QUALITY GATE EVENT (always, for debugging)
-            bufferEvent('SECTION_S1_5_CONNECTION_QUALITY_GATE', {
-                enabled: cqEnabled,
-                turn: turn,
-                isEarlyTurn: isEarlyTurn,
-                sttConfidence: sttConfidence,
-                confidenceThreshold: cqThreshold,
-                inputTextPreview: inputTextRaw.substring(0, 40),
-                troubleDetected: connectionTroubleDetected,
-                troubleReason: troubleReason,
-                troubleCount: callState._connectionTroubleCount,
-                maxRetries: cqMaxRetries,
-                configSource: 'frontDeskBehavior.connectionQualityGate'
-            });
-            
-            // If connection trouble detected, handle it
-            if (connectionTroubleDetected) {
-                callState._connectionTroubleCount++;
-                
-                // Check if we've exceeded max retries
-                if (callState._connectionTroubleCount >= cqMaxRetries) {
-                    // DTMF Escape - too many failures
-                    bufferEvent('CONNECTION_QUALITY_GATE_DTMF_ESCAPE', {
-                        troubleCount: callState._connectionTroubleCount,
-                        maxRetries: cqMaxRetries,
-                        action: 'DTMF_ESCAPE',
-                        dtmfMessage: cqDtmfMessage.substring(0, 100)
-                    });
-                    
-                    // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
-                    bufferEvent('SPEECH_SOURCE_SELECTED', {
-                        sourceId: 'connectionQualityGate.dtmfEscape',
-                        uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
-                        uiTab: 'LLM-0 Behavior → Connection Quality Gate',
-                        configPath: 'frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
-                        spokenTextPreview: cqDtmfMessage.substring(0, 120),
-                        note: `DTMF escape after ${callState._connectionTroubleCount} connection troubles (max: ${cqMaxRetries})`,
-                        isFromUiConfig: true
-                    });
-                    
-                    logger.warn('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: DTMF escape triggered', {
-                        callSid,
-                        troubleCount: callState._connectionTroubleCount,
-                        maxRetries: cqMaxRetries
-                    });
-                    
-                    // V126: ROUTING_PROVENANCE - Log routing decision for No-UI-No-Execute compliance
-                    bufferEvent('ROUTING_PROVENANCE', {
-                        routingId: 'dtmf.catastrophicMenu',
-                        uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfOptions',
-                        uiTab: 'LLM-0 Behavior',
-                        configPath: 'frontDeskBehavior.connectionQualityGate',
-                        action: 'DTMF_ESCAPE',
-                        reason: `Connection quality gate triggered DTMF menu after ${callState._connectionTroubleCount} troubles`,
-                        isFromUiConfig: true,
-                        dtmfOptions: {
-                          option1: 'Transfer to agent',
-                          option2: 'Leave voicemail'
-                        },
-                        turn: turn
-                    });
-                    
-                    const allowedToSpeak = enforcePreemptorOrContinue({
-                        agent2Enabled,
-                        bufferEvent,
-                        preemptorId: 'CONNECTION_QUALITY_GATE',
-                        reason: 'DTMF_ESCAPE',
-                        details: { troubleCount: callState._connectionTroubleCount, turn }
-                    });
-
-                    // Return DTMF escape response
-                    // Note: The actual DTMF handling (Gather with numDigits) happens in v2twilio.js
-                    if (allowedToSpeak) {
-                        return {
-                            response: cqDtmfMessage,
-                            state: callState,
-                            lane: 'DISCOVERY',
-                            signals: { escalate: false, bookingComplete: false, dtmfEscape: true },
-                            action: 'DTMF_ESCAPE',
-                            matchSource: 'CONNECTION_QUALITY_GATE',
-                            turnEventBuffer
-                        };
-                    }
-                } else {
-                    // Re-greet - still have retries left
-                    bufferEvent('CONNECTION_QUALITY_GATE_REGREET', {
-                        troubleCount: callState._connectionTroubleCount,
-                        maxRetries: cqMaxRetries,
-                        troubleReason: troubleReason,
-                        action: 'REGREET',
-                        clarificationPrompt: cqClarificationPrompt.substring(0, 100)
-                    });
-                    
-                    // V4: SPEECH_SOURCE_SELECTED for Call Review transcript attribution
-                    bufferEvent('SPEECH_SOURCE_SELECTED', {
-                        sourceId: 'connectionQualityGate.clarification',
-                        uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.clarificationPrompt',
-                        uiTab: 'LLM-0 Behavior → Connection Quality Gate',
-                        configPath: 'frontDeskBehavior.connectionQualityGate.clarificationPrompt',
-                        spokenTextPreview: cqClarificationPrompt.substring(0, 120),
-                        note: `Connection trouble detected (${troubleReason}), retry ${callState._connectionTroubleCount}/${cqMaxRetries}`,
-                        isFromUiConfig: true
-                    });
-                    
-                    logger.info('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: re-greeting', {
-                        callSid,
-                        troubleCount: callState._connectionTroubleCount,
-                        troubleReason
-                    });
-                    
-                    const allowedToSpeak = enforcePreemptorOrContinue({
-                        agent2Enabled,
-                        bufferEvent,
-                        preemptorId: 'CONNECTION_QUALITY_GATE',
-                        reason: 'REGREET',
-                        details: { troubleCount: callState._connectionTroubleCount, troubleReason, turn }
-                    });
-
-                    // Return clarification prompt
-                    if (allowedToSpeak) {
-                        return {
-                            response: cqClarificationPrompt,
-                            state: callState,
-                            lane: 'DISCOVERY',
-                            signals: { escalate: false, bookingComplete: false },
-                            action: 'CONTINUE',
-                            matchSource: 'CONNECTION_QUALITY_GATE',
-                            turnEventBuffer
-                        };
-                    }
-                }
-            }
-            
-            // Reset trouble count if this turn was clean
-            if (cqEnabled && isEarlyTurn && !connectionTroubleDetected && callState._connectionTroubleCount > 0) {
-                logger.info('[FRONT_DESK_CORE_RUNTIME] Connection quality gate: trouble count reset (clean turn)', {
-                    callSid,
-                    previousTroubleCount: callState._connectionTroubleCount
-                });
-                callState._connectionTroubleCount = 0;
-            }
             
             // ═══════════════════════════════════════════════════════════════════════════
             // S2: INPUT TEXT TRUTH
@@ -759,107 +500,11 @@ class FrontDeskCoreRuntime {
             });
             
             // ═══════════════════════════════════════════════════════════════════════════
-            // S2.5: ESCALATION DETECTION (V111 WIRING) - HIGHEST PRIORITY
+            // S2.5: ESCALATION DETECTION - NUKED (Feb 2026)
             // ═══════════════════════════════════════════════════════════════════════════
-            // WIRED FROM: frontDeskBehavior.escalation.triggerPhrases
-            //
-            // PURPOSE: Detect when caller wants human assistance ("manager", "supervisor",
-            // "real person", "human", etc.) and escalate BEFORE any other processing.
-            //
-            // PRIORITY: Escalation trumps EVERYTHING - greeting, discovery, booking.
-            // If someone says "I want to speak to a manager", we don't ask their name.
-            //
-            // CONFIG PATHS:
-            // - frontDeskBehavior.escalation.enabled
-            // - frontDeskBehavior.escalation.triggerPhrases[]
-            // - frontDeskBehavior.escalation.escalationMessage
-            // - frontDeskBehavior.escalation.transferNumber
+            // DELETED: Was hijacking Agent 2.0 with "manager"/"human" keyword detection.
+            // Escalation/transfer requests are now handled by Agent 2.0 Trigger Cards.
             // ═══════════════════════════════════════════════════════════════════════════
-            currentSection = 'S2_5_ESCALATION_DETECTION';
-            const escalationConfig = company?.aiAgentSettings?.frontDeskBehavior?.escalation || {};
-            const escalationEnabled = escalationConfig.enabled !== false; // Default: enabled
-            const escalationTriggers = Array.isArray(escalationConfig.triggerPhrases) && escalationConfig.triggerPhrases.length > 0
-                ? escalationConfig.triggerPhrases
-                : ['manager', 'supervisor', 'real person', 'human', 'someone else', 'speak to a person', 'talk to someone'];
-            const escalationMessage = escalationConfig.escalationMessage || 
-                "I understand you'd like to speak with someone. Let me transfer you right away.";
-            const transferNumber = escalationConfig.transferNumber || null;
-            
-            const inputTextLowerEsc = inputText.toLowerCase().trim();
-            let escalationTriggered = false;
-            let matchedEscalationTrigger = null;
-            
-            if (escalationEnabled && inputTextLowerEsc) {
-                for (const trigger of escalationTriggers) {
-                    const triggerLower = trigger.toLowerCase().trim();
-                    if (inputTextLowerEsc.includes(triggerLower)) {
-                        escalationTriggered = true;
-                        matchedEscalationTrigger = trigger;
-                        break;
-                    }
-                }
-            }
-            
-            // EMIT ESCALATION DETECTION EVENT (always, for raw event visibility)
-            bufferEvent('SECTION_S2_5_ESCALATION_DETECTION', {
-                enabled: escalationEnabled,
-                inputTextPreview: inputText.substring(0, 60),
-                triggered: escalationTriggered,
-                matchedTrigger: matchedEscalationTrigger,
-                configuredTriggerCount: escalationTriggers.length,
-                hasTransferNumber: !!transferNumber,
-                configSource: 'frontDeskBehavior.escalation'
-            });
-            
-            // If escalation triggered, return immediately
-            if (escalationTriggered) {
-                // V1.0: Enforce allowlist BEFORE returning a spoken response.
-                const allowedToSpeak = enforcePreemptorOrContinue({
-                    agent2Enabled,
-                    bufferEvent,
-                    preemptorId: 'ESCALATION_DETECTOR',
-                    reason: 'EXPLICIT_TRANSFER_REQUEST',
-                    details: {
-                        matchedTrigger: matchedEscalationTrigger,
-                        turn
-                    }
-                });
-
-                if (!allowedToSpeak) {
-                    // Discard response and continue into Agent2.
-                    escalationTriggered = false;
-                }
-
-                if (allowedToSpeak) {
-                    bufferEvent('ESCALATION_TRIGGERED', {
-                        matchedTrigger: matchedEscalationTrigger,
-                        escalationMessage: escalationMessage.substring(0, 80),
-                        transferNumber: transferNumber ? '***' : null, // Don't log full number
-                        action: transferNumber ? 'TRANSFER' : 'ESCALATE',
-                        sectionTrail: tracer.getTrailString()
-                    });
-
-                    logger.warn('[FRONT_DESK_CORE_RUNTIME] ESCALATION TRIGGERED', {
-                        callSid,
-                        matchedTrigger: matchedEscalationTrigger,
-                        hasTransferNumber: !!transferNumber
-                    });
-
-                    return {
-                        response: escalationMessage,
-                        state: callState,
-                        lane: 'ESCALATION',
-                        signals: { 
-                            escalate: true, 
-                            bookingComplete: false,
-                            transferNumber: transferNumber || null
-                        },
-                        action: 'ESCALATE',
-                        matchSource: 'ESCALATION_DETECTOR',
-                        turnEventBuffer
-                    };
-                }
-            }
             
             // ═══════════════════════════════════════════════════════════════════════════
             // GREETING INTERCEPT - CHECK BEFORE SLOT EXTRACTION
@@ -886,35 +531,7 @@ class FrontDeskCoreRuntime {
             });
             
             if (greetingMatch) {
-                // V1.0: Enforce allowlist BEFORE returning a spoken response.
-                // Normal policy: legacy greeting/instant responders are blocked while Agent2 is active.
-                const allowedToSpeak = enforcePreemptorOrContinue({
-                    agent2Enabled,
-                    bufferEvent,
-                    preemptorId: 'GREETING_INTERCEPTOR',
-                    reason: 'SHORT_GREETING_MATCHED',
-                    details: {
-                        matchedTrigger: greetingMatch.matchedTrigger,
-                        matchType: greetingMatch.matchType,
-                        isLegacy: true,
-                        turn
-                    }
-                });
-
-                if (!allowedToSpeak) {
-                    bufferEvent('GREETING_INTERCEPT_DISCARDED', {
-                        matchedTrigger: greetingMatch.matchedTrigger,
-                        matchType: greetingMatch.matchType,
-                        reason: 'BLOCKED_BY_AGENT2_PREEMPTOR_POLICY',
-                        turn
-                    });
-                    greetingMatch = null;
-                }
-                
-                if (!greetingMatch) {
-                    // Continue into Agent2 (do not early-return).
-                } else {
-                // Log the intercept
+                // Greeting matched - let it respond (short greetings only)
                 bufferEvent('GREETING_INTERCEPTED', {
                     matchedTrigger: greetingMatch.matchedTrigger,
                     matchType: greetingMatch.matchType,
@@ -978,7 +595,6 @@ class FrontDeskCoreRuntime {
                     matchSource: 'GREETING_INTERCEPTOR',
                     turnEventBuffer
                 };
-                }
             }
             
             // ═══════════════════════════════════════════════════════════════════════════

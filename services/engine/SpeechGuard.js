@@ -103,20 +103,8 @@ const SPEECH_REGISTRY = {
   },
   
   // ═══════════════════════════════════════════════════════════════════════════
-  // CONNECTION QUALITY GATE / RECOVERY SOURCES
+  // CONNECTION RECOVERY SOURCES (connectionQualityGate NUKED Feb 2026)
   // ═══════════════════════════════════════════════════════════════════════════
-  'connectionQualityGate.clarification': {
-    uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.clarificationPrompt',
-    uiTab: 'LLM-0 Behavior',
-    configPath: 'frontDeskBehavior.connectionQualityGate.clarificationPrompt',
-    description: 'Clarification prompt for choppy connection'
-  },
-  'connectionQualityGate.dtmfEscape': {
-    uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
-    uiTab: 'LLM-0 Behavior',
-    configPath: 'frontDeskBehavior.connectionQualityGate.dtmfEscapeMessage',
-    description: 'DTMF escape message for bad connection'
-  },
   'connectionRecovery.choppy': {
     uiPath: 'aiAgentSettings.frontDeskBehavior.recoveryMessages.choppyConnection',
     uiTab: 'LLM-0 Behavior',
@@ -207,12 +195,6 @@ const ROUTING_REGISTRY = {
     uiTab: 'Voicemail Settings',
     configPath: 'voicemailSettings.enabled',
     description: 'Transfer to voicemail'
-  },
-  'dtmf.catastrophicMenu': {
-    uiPath: 'aiAgentSettings.frontDeskBehavior.connectionQualityGate.dtmfOptions',
-    uiTab: 'LLM-0 Behavior',
-    configPath: 'frontDeskBehavior.connectionQualityGate.dtmfOptions',
-    description: 'DTMF menu for catastrophic fallback'
   },
   'routing.afterHours': {
     uiPath: 'aiAgentSettings.afterHoursSettings',

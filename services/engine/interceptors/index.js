@@ -3,22 +3,22 @@
  * INTERCEPTORS - Pre-flow pattern matchers
  * ════════════════════════════════════════════════════════════════════════════
  * 
- * These run BEFORE the main Discovery/Booking flow to handle common patterns:
- * - Greetings ("good morning") → instant response, no LLM
- * - Escalation ("manager please") → bypass everything, transfer
- * - Connection trouble ("hello? are you there?") → re-greet
+ * NUCLEAR CLEANUP (Feb 2026): Legacy preemptors removed.
+ * Agent 2.0 is now the ONLY responder during discovery.
+ * 
+ * Remaining:
+ * - GreetingInterceptor: Short greetings only (under Agent2 control)
+ * 
+ * NUKED (hijacking Agent 2.0):
+ * - ConnectionQualityGate: DELETED - was hijacking turn 1-2
+ * - EscalationDetector: DELETED - was hijacking transfer requests
+ * - CallReasonExtractor: DELETED - was hijacking acknowledgments
  * 
  * ════════════════════════════════════════════════════════════════════════════
  */
 
 const GreetingInterceptor = require('./GreetingInterceptor');
-const EscalationDetector = require('./EscalationDetector');
-const ConnectionQualityGate = require('./ConnectionQualityGate');
-const CallReasonExtractor = require('./CallReasonExtractor');
 
 module.exports = {
-    GreetingInterceptor,
-    EscalationDetector,
-    ConnectionQualityGate,
-    CallReasonExtractor
+    GreetingInterceptor
 };

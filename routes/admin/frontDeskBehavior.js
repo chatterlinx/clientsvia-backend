@@ -1035,16 +1035,13 @@ router.patch('/:companyId', authenticateJWT, requirePermission(PERMISSIONS.CONFI
         }
         
         // ═══════════════════════════════════════════════════════════════════════════
-        // V111: CONNECTION QUALITY GATE - Bad connection / low confidence handling
+        // DEPRECATED (Feb 2026): CONNECTION QUALITY GATE - NUKED
+        // Runtime code removed. Config save kept for backward DB compat only.
         // ═══════════════════════════════════════════════════════════════════════════
         if (updates.connectionQualityGate !== undefined) {
             updateObj['aiAgentSettings.frontDeskBehavior.connectionQualityGate'] = updates.connectionQualityGate;
-            logger.info('[FRONT DESK BEHAVIOR] V111: Saving connectionQualityGate', {
-                companyId,
-                enabled: updates.connectionQualityGate?.enabled,
-                confidenceThreshold: updates.connectionQualityGate?.confidenceThreshold,
-                maxRetries: updates.connectionQualityGate?.maxRetries,
-                troublePhrasesCount: (updates.connectionQualityGate?.troublePhrases || []).length
+            logger.warn('[FRONT DESK BEHAVIOR] DEPRECATED: connectionQualityGate config saved but runtime removed', {
+                companyId
             });
         }
         

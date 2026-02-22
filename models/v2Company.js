@@ -2193,9 +2193,9 @@ const companySchema = new mongoose.Schema({
             sttProtectedWords: { type: mongoose.Schema.Types.Mixed, default: [] },
             
             // ═══════════════════════════════════════════════════════════════
-            // V111: CONNECTION QUALITY GATE - Detect bad connections, low
-            // STT confidence, and "hello? are you there?" patterns on early
-            // turns. Configured via Discovery & Consent tab.
+            // DEPRECATED (Feb 2026): CONNECTION QUALITY GATE - NUKED
+            // Was hijacking Agent 2.0 on early turns. Agent 2.0 now handles
+            // all input including "hello?" patterns. Schema kept for DB compat.
             // ═══════════════════════════════════════════════════════════════
             connectionQualityGate: {
                 enabled: { type: Boolean, default: true },
@@ -3229,7 +3229,10 @@ const companySchema = new mongoose.Schema({
             }],
             
             // ═══════════════════════════════════════════════════════════════
-            // ESCALATION SETTINGS
+            // DEPRECATED (Feb 2026): ESCALATION SETTINGS - NUKED
+            // Was hijacking Agent 2.0 with "manager"/"human" keyword detection.
+            // Escalation/transfer now handled by Agent 2.0 Trigger Cards.
+            // Schema kept for DB backward compatibility.
             // ═══════════════════════════════════════════════════════════════
             escalation: {
                 enabled: { type: Boolean, default: true },
