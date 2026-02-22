@@ -115,6 +115,85 @@ const GlobalHubManager = (function() {
         }, 3000);
     }
     
+    /**
+     * Parse textarea content into names array and count duplicates
+     */
+    function parseNamesWithStats(text) {
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const seen = new Map();
+        let duplicateCount = 0;
+        
+        for (const name of lines) {
+            const key = name.toLowerCase();
+            if (seen.has(key)) {
+                duplicateCount++;
+            } else {
+                seen.set(key, name);
+            }
+        }
+        
+        return {
+            total: lines.length,
+            unique: seen.size,
+            duplicates: duplicateCount,
+            names: lines
+        };
+    }
+    
+    /**
+     * Search names in textarea
+     */
+    function searchNames(text, query) {
+        if (!query || query.length < 2) return [];
+        
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lowerQuery = query.toLowerCase();
+        
+        return lines.filter(name => name.toLowerCase().includes(lowerQuery)).slice(0, 50);
+    }
+    
+    /**
+     * Update modal stats display
+     */
+    function updateModalStats(type, stats) {
+        const totalEl = type === 'first' ? elements.firstNamesTotalCount : elements.lastNamesTotalCount;
+        const dupEl = type === 'first' ? elements.firstNamesDuplicateCount : elements.lastNamesDuplicateCount;
+        
+        if (totalEl) totalEl.textContent = formatNumber(stats.total);
+        if (dupEl) {
+            dupEl.textContent = formatNumber(stats.duplicates);
+            dupEl.className = stats.duplicates > 0 ? 'text-orange-500 font-bold' : 'text-gray-400';
+        }
+    }
+    
+    /**
+     * Show search results
+     */
+    function showSearchResults(type, results, query) {
+        const resultsEl = type === 'first' ? elements.firstNamesSearchResults : elements.lastNamesSearchResults;
+        const countEl = type === 'first' ? elements.firstNamesSearchCount : elements.lastNamesSearchCount;
+        const listEl = type === 'first' ? elements.firstNamesSearchList : elements.lastNamesSearchList;
+        
+        if (!resultsEl || !listEl) return;
+        
+        if (results.length === 0 || !query || query.length < 2) {
+            resultsEl.classList.add('hidden');
+            return;
+        }
+        
+        resultsEl.classList.remove('hidden');
+        if (countEl) countEl.textContent = results.length + (results.length === 50 ? '+' : '');
+        
+        const colorClass = type === 'first' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800';
+        listEl.innerHTML = results.map(name => {
+            const highlighted = name.replace(
+                new RegExp(`(${query})`, 'gi'),
+                '<strong class="underline">$1</strong>'
+            );
+            return `<span class="px-2 py-1 ${colorClass} rounded text-sm">${highlighted}</span>`;
+        }).join('');
+    }
+    
     // ========================================================================
     // API FUNCTIONS
     // ========================================================================
@@ -390,6 +469,7 @@ const GlobalHubManager = (function() {
         const modal = elements.firstNamesModal;
         const textarea = elements.firstNamesTextarea;
         const saveBtn = elements.saveFirstNamesBtn;
+        const searchInput = elements.firstNamesSearch;
         
         if (!modal || !textarea) return;
         
@@ -397,6 +477,12 @@ const GlobalHubManager = (function() {
         textarea.value = 'Loading...';
         textarea.disabled = true;
         if (saveBtn) saveBtn.disabled = true;
+        if (searchInput) searchInput.value = '';
+        
+        // Hide search results
+        if (elements.firstNamesSearchResults) {
+            elements.firstNamesSearchResults.classList.add('hidden');
+        }
         
         // Show modal
         modal.classList.add('active');
@@ -410,6 +496,10 @@ const GlobalHubManager = (function() {
         } else {
             textarea.value = '';
         }
+        
+        // Update stats
+        const stats = parseNamesWithStats(textarea.value);
+        updateModalStats('first', stats);
         
         // Enable editing
         textarea.disabled = false;
@@ -427,6 +517,9 @@ const GlobalHubManager = (function() {
         if (modal) {
             modal.classList.remove('active');
         }
+        // Clear search
+        if (elements.firstNamesSearch) elements.firstNamesSearch.value = '';
+        if (elements.firstNamesSearchResults) elements.firstNamesSearchResults.classList.add('hidden');
     }
     
     /**
@@ -495,6 +588,7 @@ const GlobalHubManager = (function() {
         const modal = elements.lastNamesModal;
         const textarea = elements.lastNamesTextarea;
         const saveBtn = elements.saveLastNamesBtn;
+        const searchInput = elements.lastNamesSearch;
         
         if (!modal || !textarea) return;
         
@@ -502,6 +596,12 @@ const GlobalHubManager = (function() {
         textarea.value = 'Loading...';
         textarea.disabled = true;
         if (saveBtn) saveBtn.disabled = true;
+        if (searchInput) searchInput.value = '';
+        
+        // Hide search results
+        if (elements.lastNamesSearchResults) {
+            elements.lastNamesSearchResults.classList.add('hidden');
+        }
         
         // Show modal
         modal.classList.add('active');
@@ -515,6 +615,10 @@ const GlobalHubManager = (function() {
         } else {
             textarea.value = '';
         }
+        
+        // Update stats
+        const stats = parseNamesWithStats(textarea.value);
+        updateModalStats('last', stats);
         
         // Enable editing
         textarea.disabled = false;
@@ -532,6 +636,9 @@ const GlobalHubManager = (function() {
         if (modal) {
             modal.classList.remove('active');
         }
+        // Clear search
+        if (elements.lastNamesSearch) elements.lastNamesSearch.value = '';
+        if (elements.lastNamesSearchResults) elements.lastNamesSearchResults.classList.add('hidden');
     }
     
     /**
@@ -763,6 +870,44 @@ const GlobalHubManager = (function() {
                 }
             }
         });
+        
+        // ====== SEARCH & STATS ======
+        
+        // First names search
+        if (elements.firstNamesSearch) {
+            elements.firstNamesSearch.addEventListener('input', (e) => {
+                const query = e.target.value;
+                const text = elements.firstNamesTextarea?.value || '';
+                const results = searchNames(text, query);
+                showSearchResults('first', results, query);
+            });
+        }
+        
+        // Last names search
+        if (elements.lastNamesSearch) {
+            elements.lastNamesSearch.addEventListener('input', (e) => {
+                const query = e.target.value;
+                const text = elements.lastNamesTextarea?.value || '';
+                const results = searchNames(text, query);
+                showSearchResults('last', results, query);
+            });
+        }
+        
+        // First names textarea changes (update stats)
+        if (elements.firstNamesTextarea) {
+            elements.firstNamesTextarea.addEventListener('input', () => {
+                const stats = parseNamesWithStats(elements.firstNamesTextarea.value);
+                updateModalStats('first', stats);
+            });
+        }
+        
+        // Last names textarea changes (update stats)
+        if (elements.lastNamesTextarea) {
+            elements.lastNamesTextarea.addEventListener('input', () => {
+                const stats = parseNamesWithStats(elements.lastNamesTextarea.value);
+                updateModalStats('last', stats);
+            });
+        }
     }
     
     // ========================================================================
@@ -786,6 +931,12 @@ const GlobalHubManager = (function() {
             closeModalBtn: document.getElementById('close-modal-btn'),
             cancelModalBtn: document.getElementById('cancel-modal-btn'),
             saveFirstNamesBtn: document.getElementById('save-first-names-btn'),
+            firstNamesSearch: document.getElementById('first-names-search'),
+            firstNamesTotalCount: document.getElementById('first-names-total-count'),
+            firstNamesDuplicateCount: document.getElementById('first-names-duplicate-count'),
+            firstNamesSearchResults: document.getElementById('first-names-search-results'),
+            firstNamesSearchCount: document.getElementById('first-names-search-count'),
+            firstNamesSearchList: document.getElementById('first-names-search-list'),
             
             // Last Names Dashboard elements
             lastNamesCount: document.getElementById('last-names-count'),
@@ -799,6 +950,12 @@ const GlobalHubManager = (function() {
             closeLastNamesModalBtn: document.getElementById('close-last-names-modal-btn'),
             cancelLastNamesModalBtn: document.getElementById('cancel-last-names-modal-btn'),
             saveLastNamesBtn: document.getElementById('save-last-names-btn'),
+            lastNamesSearch: document.getElementById('last-names-search'),
+            lastNamesTotalCount: document.getElementById('last-names-total-count'),
+            lastNamesDuplicateCount: document.getElementById('last-names-duplicate-count'),
+            lastNamesSearchResults: document.getElementById('last-names-search-results'),
+            lastNamesSearchCount: document.getElementById('last-names-search-count'),
+            lastNamesSearchList: document.getElementById('last-names-search-list'),
             
             // Toast
             toast: document.getElementById('toast')
