@@ -25,6 +25,7 @@
  * - PUT    /:companyId/trigger-visibility - Hide/show global triggers
  * - PUT    /:companyId/trigger-override   - Set partial override
  * - DELETE /:companyId/trigger-override/:triggerId - Remove partial override
+ * - PUT    /:companyId/trigger-scope      - Change trigger scope (LOCAL/GLOBAL)
  *
  * - GET    /:companyId/duplicates         - Check for duplicate triggers
  *
@@ -1031,6 +1032,130 @@ router.delete('/:companyId/trigger-override/:triggerId',
       });
     } catch (error) {
       logger.error('[CompanyTriggers] Remove override error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * PUT /:companyId/trigger-scope
+ * Change a trigger's scope between LOCAL and GLOBAL
+ */
+router.put('/:companyId/trigger-scope',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { triggerId, scope } = req.body;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      if (!triggerId || !scope) {
+        return res.status(400).json({
+          success: false,
+          error: 'triggerId and scope are required'
+        });
+      }
+
+      if (scope !== 'LOCAL' && scope !== 'GLOBAL') {
+        return res.status(400).json({
+          success: false,
+          error: 'scope must be either LOCAL or GLOBAL'
+        });
+      }
+
+      const trigger = await CompanyLocalTrigger.findOne({ 
+        companyId, 
+        triggerId,
+        isDeleted: { $ne: true }
+      });
+
+      if (!trigger) {
+        return res.status(404).json({
+          success: false,
+          error: 'Trigger not found'
+        });
+      }
+
+      if (scope === 'GLOBAL') {
+        if (!isPlatformAdmin(req.user)) {
+          return res.status(403).json({
+            success: false,
+            error: 'Only platform admins can change triggers to GLOBAL scope'
+          });
+        }
+
+        const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+        if (!settings?.activeGroupId) {
+          return res.status(400).json({
+            success: false,
+            error: 'Cannot change to GLOBAL scope: No active global group selected'
+          });
+        }
+
+        const globalTrigger = await GlobalTrigger.create({
+          groupId: settings.activeGroupId,
+          ruleId: trigger.ruleId,
+          triggerId: `GLOBAL_${settings.activeGroupId}_${trigger.ruleId}`,
+          label: trigger.label,
+          description: trigger.description || '',
+          priority: trigger.priority,
+          keywords: trigger.keywords || [],
+          phrases: trigger.phrases || [],
+          negativeKeywords: trigger.negativeKeywords || [],
+          answerText: trigger.answerText,
+          audioUrl: trigger.audioUrl || '',
+          followUpQuestion: trigger.followUpQuestion || '',
+          followUpNextAction: trigger.followUpNextAction || '',
+          tags: trigger.tags || [],
+          createdBy: userId,
+          updatedBy: userId
+        });
+
+        await CompanyLocalTrigger.updateOne(
+          { _id: trigger._id },
+          {
+            $set: {
+              isDeleted: true,
+              deletedAt: new Date(),
+              deletedBy: userId,
+              deletedReason: 'CONVERTED_TO_GLOBAL'
+            }
+          }
+        );
+
+        await GlobalTriggerGroup.updateOne(
+          { groupId: settings.activeGroupId },
+          { $inc: { triggerCount: 1 } }
+        );
+
+        logger.info('[CompanyTriggers] Trigger converted to GLOBAL', {
+          companyId,
+          triggerId,
+          ruleId: trigger.ruleId,
+          newGlobalTriggerId: globalTrigger.triggerId,
+          convertedBy: userId
+        });
+
+        return res.json({
+          success: true,
+          message: 'Trigger converted to GLOBAL scope',
+          data: {
+            scope: 'GLOBAL',
+            triggerId: globalTrigger.triggerId,
+            ruleId: trigger.ruleId
+          }
+        });
+
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Converting GLOBAL triggers to LOCAL is not currently supported'
+        });
+      }
+
+    } catch (error) {
+      logger.error('[CompanyTriggers] Change scope error', { error: error.message });
       return res.status(500).json({ success: false, error: error.message });
     }
   }

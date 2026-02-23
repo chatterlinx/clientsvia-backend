@@ -375,23 +375,27 @@
         confirmToggleTrigger(trigger, enabled, checkbox);
       });
     });
+    
+    DOM.triggerList.querySelectorAll('.toggle-scope').forEach(toggle => {
+      toggle.addEventListener('change', async (e) => {
+        const triggerId = e.target.dataset.triggerId;
+        const newIsGlobal = e.target.checked;
+        const checkbox = e.target;
+        
+        checkbox.checked = !newIsGlobal;
+        
+        const trigger = state.triggers.find(t => t.triggerId === triggerId);
+        confirmToggleScope(trigger, newIsGlobal, checkbox);
+      });
+    });
   }
 
   function renderTriggerRow(trigger) {
-    let scopeClass = 'local';
-    let scopeLabel = 'Local';
-    if (trigger.scope === 'GLOBAL') {
-      scopeClass = 'global';
-      scopeLabel = 'Global';
-    } else if (trigger.isOverridden) {
-      scopeClass = 'override';
-      scopeLabel = 'Override';
-    }
-    
     const keywords = (trigger.match?.keywords || []).slice(0, 4).join(', ');
     const hasText = trigger.answer?.answerText ? true : false;
     const hasAudio = trigger.answer?.hasAudio || trigger.answer?.audioUrl;
     const isEnabled = trigger.isEnabled !== false;
+    const isGlobalScope = trigger.scope === 'GLOBAL';
     
     const priority = trigger.priority || 50;
     const priorityLabel = getPriorityLabel(priority);
@@ -418,7 +422,12 @@
         </div>
         <div class="trigger-followup ${followUpClass}" title="${escapeHtml(followUpDisplay)}">${escapeHtml(followUpDisplay)}</div>
         <div>
-          <span class="scope-badge ${scopeClass}">${scopeLabel}</span>
+          <label class="toggle-switch" title="${isGlobalScope ? 'Global' : 'Local'}">
+            <input type="checkbox" class="toggle-scope" 
+                   data-trigger-id="${trigger.triggerId}" 
+                   ${isGlobalScope ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
         </div>
         <div>
           <label class="toggle-switch">
@@ -721,6 +730,36 @@
     DOM.inputApproval.focus();
   }
 
+  function confirmToggleScope(trigger, newIsGlobal, checkbox) {
+    const newScope = newIsGlobal ? 'GLOBAL' : 'LOCAL';
+    const actionLabel = newIsGlobal ? 'Change to Global' : 'Change to Local';
+    
+    let impactText = '';
+    if (newIsGlobal) {
+      impactText = 'This will change the trigger from LOCAL to GLOBAL scope. Global triggers are shared across multiple companies in the same group.';
+    } else {
+      impactText = 'This will change the trigger from GLOBAL to LOCAL scope. Local triggers are specific to this company only.';
+    }
+    
+    state.pendingApproval = {
+      action: 'toggleScope',
+      trigger,
+      newScope,
+      checkbox
+    };
+    
+    DOM.approvalTitle.textContent = actionLabel;
+    DOM.approvalText.innerHTML = `
+      <strong>${escapeHtml(trigger.label)}</strong><br><br>
+      ${impactText}<br><br>
+      <span style="color: var(--text-muted); font-size: 0.875rem;">Current Scope: ${trigger.scope} · Rule ID: ${trigger.ruleId}</span>
+    `;
+    updateApprovalHint('Yes');
+    DOM.inputApproval.value = '';
+    DOM.modalApproval.classList.add('active');
+    DOM.inputApproval.focus();
+  }
+
   function updateApprovalHint(requiredText) {
     const label = DOM.modalApproval.querySelector('.form-label');
     if (label) {
@@ -748,7 +787,7 @@
       return;
     }
     
-    const { action, trigger, newEnabledState, checkbox } = state.pendingApproval;
+    const { action, trigger, newEnabledState, newScope, checkbox } = state.pendingApproval;
     
     try {
       if (action === 'delete') {
@@ -771,11 +810,13 @@
         } else {
           await toggleLocalTriggerEnabled(trigger.triggerId, newEnabledState);
         }
+      } else if (action === 'toggleScope') {
+        await toggleTriggerScope(trigger.triggerId, newScope);
       }
       
       closeApprovalModal();
       
-      if (action === 'delete') {
+      if (action === 'delete' || action === 'toggleScope') {
         await loadTriggers();
       }
       
@@ -821,6 +862,30 @@
     } catch (error) {
       console.error('[Triggers] Enable toggle failed:', error);
       showToast('error', 'Failed', 'Could not change trigger status.');
+      await loadTriggers();
+      throw error;
+    }
+  }
+
+  async function toggleTriggerScope(triggerId, newScope) {
+    const trigger = state.triggers.find(t => t.triggerId === triggerId);
+    if (!trigger) {
+      return;
+    }
+    
+    try {
+      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/trigger-scope`, {
+        method: 'PUT',
+        body: { triggerId, scope: newScope }
+      });
+      
+      const scopeLabel = newScope === 'GLOBAL' ? 'global' : 'local';
+      showToast('success', 'Scope Changed', `Trigger is now ${scopeLabel}.`);
+      await loadTriggers();
+      
+    } catch (error) {
+      console.error('[Triggers] Scope toggle failed:', error);
+      showToast('error', 'Failed', 'Could not change trigger scope.');
       await loadTriggers();
       throw error;
     }
