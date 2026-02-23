@@ -1350,27 +1350,29 @@ router.post('/voice', async (req, res) => {
     logger.info(`[AI AGENT LOGIC] Using new AI Agent Logic system for company: ${company._id}`);
     
     // ════════════════════════════════════════════════════════════════════════════
-    // 🔥 CONFIG PRE-WARM: Load configs into Redis cache at call start
+    // 🔥 CONFIG PRE-WARM: Fire-and-forget cache warming at call start
     // ════════════════════════════════════════════════════════════════════════════
-    // This eliminates cold-start latency spikes on first turn.
+    // DO NOT AWAIT — this runs in background while call setup continues.
     // Loads: agent2Config, bookingConfig, calendarStatus, globalFirstNames
+    // By the time first turn runs, cache should be warm.
     // ════════════════════════════════════════════════════════════════════════════
-    let prewarmResult = null;
-    try {
-      const ConfigCacheService = require('../services/ConfigCacheService');
-      prewarmResult = await ConfigCacheService.prewarmForCall(company._id.toString());
-      logger.info('[CONFIG PRE-WARM] Complete', {
-        companyId: company._id.toString(),
-        t_total_ms: prewarmResult?.perf?.t_total_ms,
-        cacheHits: prewarmResult?.perf?.cacheHit
+    const ConfigCacheService = require('../services/ConfigCacheService');
+    const companyIdStr = company._id.toString();
+    
+    ConfigCacheService.prewarmForCall(companyIdStr)
+      .then(result => {
+        logger.info('[CONFIG PRE-WARM] Complete', {
+          companyId: companyIdStr,
+          t_total_ms: result?.perf?.t_total_ms,
+          cacheHits: result?.perf?.cacheHit
+        });
+      })
+      .catch(err => {
+        logger.warn('[CONFIG PRE-WARM] Failed (non-blocking)', {
+          error: err?.message,
+          companyId: companyIdStr
+        });
       });
-    } catch (prewarmErr) {
-      // Non-blocking: Log but continue with call
-      logger.warn('[CONFIG PRE-WARM] Failed (non-blocking)', {
-        error: prewarmErr.message,
-        companyId: company._id.toString()
-      });
-    }
     
     // ════════════════════════════════════════════════════════════════════════════
     // 📞 CALL CENTER MODULE V2: Customer Recognition
