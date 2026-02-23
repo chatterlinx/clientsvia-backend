@@ -302,15 +302,16 @@
     }
     
     DOM.statGlobal.textContent = state.stats.globalEnabledCount || 0;
-    DOM.statLocal.textContent = state.stats.localEnabledCount || state.stats.localCount || 0;
+    DOM.statLocal.textContent = state.stats.localEnabledCount || 0;
     DOM.statOverrides.textContent = state.stats.overrideCount || 0;
     DOM.statHidden.textContent = state.stats.globalHiddenCount || 0;
     DOM.statTotal.textContent = state.stats.totalActiveCount || 0;
     
-    const disabledCount = state.stats.localDisabledCount || 0;
     if (DOM.statDisabled) {
-      DOM.statDisabled.textContent = disabledCount;
+      DOM.statDisabled.textContent = state.stats.totalDisabledCount || 0;
     }
+    
+    console.log('[Triggers] Stats updated:', state.stats);
   }
 
   function renderTriggers() {
@@ -769,10 +770,6 @@
           await toggleGlobalTriggerVisibility(trigger.triggerId, newEnabledState);
         } else {
           await toggleLocalTriggerEnabled(trigger.triggerId, newEnabledState);
-        }
-        
-        if (checkbox) {
-          checkbox.checked = newEnabledState;
         }
       }
       
