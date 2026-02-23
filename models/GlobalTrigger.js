@@ -9,9 +9,16 @@
  * - Efficient querying and updates
  * - Better scalability for large groups
  *
+ * DRAFT/PUBLISHED MODEL:
+ * - Each trigger has a `state` field: 'draft' or 'published'
+ * - Admins edit DRAFT triggers (never touch published directly)
+ * - Publish operation: copy draft → published (upsert)
+ * - Runtime reads ONLY 'published' state triggers
+ * - This prevents draft edits from leaking live
+ *
  * UNIQUENESS GUARANTEE:
- * - { groupId, ruleId } is unique (MongoDB enforced)
- * - { triggerId } is unique globally (MongoDB enforced)
+ * - { groupId, ruleId, state } is unique (for non-deleted docs)
+ * - Partial unique index excludes soft-deleted docs (allows recreate after delete)
  * - Duplicates are PHYSICALLY IMPOSSIBLE at the database level
  *
  * ============================================================================
@@ -39,8 +46,21 @@ const globalTriggerSchema = new mongoose.Schema({
   triggerId: {
     type: String,
     required: true,
-    unique: true,
     trim: true
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DRAFT/PUBLISHED STATE
+  // ─────────────────────────────────────────────────────────────────────────
+  // 'draft' = editable by admins, not served to companies
+  // 'published' = read-only snapshot served to companies at runtime
+  // Publish operation copies draft → published (upsert)
+  state: {
+    type: String,
+    enum: ['draft', 'published'],
+    default: 'draft',
+    required: true,
+    index: true
   },
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -187,11 +207,29 @@ const globalTriggerSchema = new mongoose.Schema({
 // INDEXES - CRITICAL FOR DUPLICATE PREVENTION
 // ─────────────────────────────────────────────────────────────────────────────
 
-globalTriggerSchema.index({ groupId: 1, ruleId: 1 }, { unique: true });
-globalTriggerSchema.index({ triggerId: 1 }, { unique: true });
-globalTriggerSchema.index({ groupId: 1, priority: 1 });
-globalTriggerSchema.index({ groupId: 1, enabled: 1 });
-globalTriggerSchema.index({ groupId: 1, isDeleted: 1 });  // Soft delete queries
+// PRIMARY UNIQUE: { groupId, ruleId, state } - allows one draft and one published per ruleId
+// PARTIAL: excludes soft-deleted docs so you can recreate after delete
+globalTriggerSchema.index(
+  { groupId: 1, ruleId: 1, state: 1 },
+  { 
+    unique: true,
+    partialFilterExpression: { isDeleted: { $ne: true } }
+  }
+);
+
+// triggerId unique per state (not globally - allows draft and published to coexist)
+globalTriggerSchema.index(
+  { triggerId: 1, state: 1 },
+  { 
+    unique: true,
+    partialFilterExpression: { isDeleted: { $ne: true } }
+  }
+);
+
+// Query optimization indexes
+globalTriggerSchema.index({ groupId: 1, state: 1, priority: 1 });
+globalTriggerSchema.index({ groupId: 1, state: 1, enabled: 1 });
+globalTriggerSchema.index({ groupId: 1, state: 1, isDeleted: 1 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VIRTUAL: Generate triggerId from groupId and ruleId
@@ -205,28 +243,62 @@ globalTriggerSchema.statics.generateTriggerId = function(groupId, ruleId) {
 // STATICS
 // ─────────────────────────────────────────────────────────────────────────────
 
-globalTriggerSchema.statics.findByGroupId = function(groupId, includeDeleted = false) {
+// RUNTIME: Load ONLY published, enabled, non-deleted triggers
+globalTriggerSchema.statics.findPublishedByGroupId = function(groupId) {
+  return this.find({
+    groupId: groupId.toLowerCase(),
+    state: 'published',
+    enabled: true,
+    isDeleted: { $ne: true }
+  })
+    .sort({ priority: 1 })
+    .lean();
+};
+
+// ADMIN: Load draft triggers for editing
+globalTriggerSchema.statics.findDraftsByGroupId = function(groupId) {
+  return this.find({
+    groupId: groupId.toLowerCase(),
+    state: 'draft',
+    isDeleted: { $ne: true }
+  })
+    .sort({ priority: 1 })
+    .lean();
+};
+
+// ADMIN: Load all triggers (both states) for a group
+globalTriggerSchema.statics.findByGroupId = function(groupId, options = {}) {
+  const { state = null, includeDeleted = false, includeDisabled = true } = options;
   const query = { groupId: groupId.toLowerCase() };
+  
+  if (state) {
+    query.state = state;
+  }
   if (!includeDeleted) {
     query.isDeleted = { $ne: true };
   }
+  if (!includeDisabled) {
+    query.enabled = true;
+  }
+  
   return this.find(query)
     .sort({ priority: 1 })
     .lean();
 };
 
-globalTriggerSchema.statics.findByTriggerId = function(triggerId, includeDeleted = false) {
-  const query = { triggerId };
+globalTriggerSchema.statics.findByTriggerId = function(triggerId, state = 'draft', includeDeleted = false) {
+  const query = { triggerId, state };
   if (!includeDeleted) {
     query.isDeleted = { $ne: true };
   }
   return this.findOne(query).lean();
 };
 
-globalTriggerSchema.statics.existsInGroup = async function(groupId, ruleId, includeDeleted = false) {
+globalTriggerSchema.statics.existsInGroup = async function(groupId, ruleId, state = 'draft', includeDeleted = false) {
   const query = {
     groupId: groupId.toLowerCase(),
-    ruleId
+    ruleId,
+    state
   };
   if (!includeDeleted) {
     query.isDeleted = { $ne: true };
@@ -235,17 +307,30 @@ globalTriggerSchema.statics.existsInGroup = async function(groupId, ruleId, incl
   return count > 0;
 };
 
-globalTriggerSchema.statics.countByGroupId = function(groupId, includeDeleted = false) {
+// Find soft-deleted trigger (for revival)
+globalTriggerSchema.statics.findDeletedInGroup = function(groupId, ruleId, state = 'draft') {
+  return this.findOne({
+    groupId: groupId.toLowerCase(),
+    ruleId,
+    state,
+    isDeleted: true
+  });
+};
+
+globalTriggerSchema.statics.countByGroupId = function(groupId, state = null, includeDeleted = false) {
   const query = { groupId: groupId.toLowerCase() };
+  if (state) {
+    query.state = state;
+  }
   if (!includeDeleted) {
     query.isDeleted = { $ne: true };
   }
   return this.countDocuments(query);
 };
 
-globalTriggerSchema.statics.findDuplicatesInGroup = async function(groupId) {
+globalTriggerSchema.statics.findDuplicatesInGroup = async function(groupId, state = 'draft') {
   const duplicates = await this.aggregate([
-    { $match: { groupId: groupId.toLowerCase(), isDeleted: { $ne: true } } },
+    { $match: { groupId: groupId.toLowerCase(), state, isDeleted: { $ne: true } } },
     { $group: {
       _id: '$ruleId',
       count: { $sum: 1 },
@@ -308,8 +393,107 @@ globalTriggerSchema.methods.toMatcherFormat = function() {
       nextAction: this.followUpNextAction || ''
     },
     _scope: 'GLOBAL',
-    _originGroupId: this.groupId
+    _originGroupId: this.groupId,
+    _state: this.state
   };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLISH OPERATION: Copy draft → published
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Publish all draft triggers in a group to 'published' state.
+ * Uses upsert to create or update published versions.
+ * Returns { publishedCount, deletedCount, errors }
+ */
+globalTriggerSchema.statics.publishGroup = async function(groupId, userId) {
+  const normalizedGroupId = groupId.toLowerCase();
+  const results = {
+    publishedCount: 0,
+    deletedFromPublished: 0,
+    errors: []
+  };
+
+  // 1. Get all draft triggers (non-deleted)
+  const drafts = await this.find({
+    groupId: normalizedGroupId,
+    state: 'draft',
+    isDeleted: { $ne: true }
+  }).lean();
+
+  // 2. Get all currently published triggers
+  const currentPublished = await this.find({
+    groupId: normalizedGroupId,
+    state: 'published',
+    isDeleted: { $ne: true }
+  }).lean();
+
+  const draftRuleIds = new Set(drafts.map(d => d.ruleId));
+
+  // 3. For each draft: upsert into published
+  for (const draft of drafts) {
+    try {
+      const publishedData = {
+        groupId: draft.groupId,
+        ruleId: draft.ruleId,
+        triggerId: draft.triggerId,
+        state: 'published',
+        label: draft.label,
+        description: draft.description,
+        enabled: draft.enabled,
+        priority: draft.priority,
+        keywords: draft.keywords,
+        phrases: draft.phrases,
+        negativeKeywords: draft.negativeKeywords,
+        scenarioTypeAllowlist: draft.scenarioTypeAllowlist,
+        answerText: draft.answerText,
+        audioUrl: draft.audioUrl,
+        followUpQuestion: draft.followUpQuestion,
+        followUpNextAction: draft.followUpNextAction,
+        typeAllowlist: draft.typeAllowlist,
+        tags: draft.tags,
+        version: draft.version,
+        createdAt: draft.createdAt,
+        createdBy: draft.createdBy,
+        updatedAt: new Date(),
+        updatedBy: userId,
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null,
+        deletedReason: null
+      };
+
+      await this.findOneAndUpdate(
+        { groupId: normalizedGroupId, ruleId: draft.ruleId, state: 'published' },
+        { $set: publishedData },
+        { upsert: true, new: true }
+      );
+      results.publishedCount++;
+    } catch (err) {
+      results.errors.push({ ruleId: draft.ruleId, error: err.message });
+    }
+  }
+
+  // 4. Soft-delete published triggers that no longer exist in draft
+  for (const pub of currentPublished) {
+    if (!draftRuleIds.has(pub.ruleId)) {
+      await this.findOneAndUpdate(
+        { _id: pub._id },
+        { 
+          $set: { 
+            isDeleted: true, 
+            deletedAt: new Date(), 
+            deletedBy: userId,
+            deletedReason: 'REMOVED_FROM_DRAFT_ON_PUBLISH'
+          } 
+        }
+      );
+      results.deletedFromPublished++;
+    }
+  }
+
+  return results;
 };
 
 module.exports = mongoose.model('GlobalTrigger', globalTriggerSchema);

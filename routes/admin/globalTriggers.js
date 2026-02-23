@@ -473,15 +473,29 @@ router.post('/trigger-groups/:groupId/publish',
         });
       }
 
-      const triggers = await GlobalTrigger.find({ groupId: groupId.toLowerCase() }).lean();
+      // ═══════════════════════════════════════════════════════════════════════
+      // DRAFT → PUBLISHED: Copy all draft triggers to published state
+      // This is the REAL publish operation that prevents draft leakage
+      // ═══════════════════════════════════════════════════════════════════════
+      const publishResult = await GlobalTrigger.publishGroup(groupId.toLowerCase(), userId);
+
+      if (publishResult.errors.length > 0) {
+        logger.error('[GlobalTriggers] Publish had errors', {
+          groupId,
+          errors: publishResult.errors
+        });
+      }
+
+      // Get draft triggers for snapshot (version history)
+      const draftTriggers = await GlobalTrigger.findDraftsByGroupId(groupId.toLowerCase());
 
       const snapshot = {
         version: group.version,
-        triggerCount: triggers.length,
+        triggerCount: publishResult.publishedCount,
         publishedAt: new Date(),
         publishedBy: userId,
         changeLog: changeLog || '',
-        triggersSnapshot: triggers
+        triggersSnapshot: draftTriggers  // Store draft state at time of publish
       };
 
       group.versionHistory.push(snapshot);
@@ -492,10 +506,11 @@ router.post('/trigger-groups/:groupId/publish',
 
       group.publishedVersion = group.version;
       group.isDraft = false;
-      group.triggerCount = triggers.length;
+      group.triggerCount = publishResult.publishedCount;
       group.addAuditEntry('GROUP_PUBLISHED', userId, { 
         version: group.version,
-        triggerCount: triggers.length,
+        triggerCount: publishResult.publishedCount,
+        deletedFromPublished: publishResult.deletedFromPublished,
         changeLog 
       });
 
@@ -504,7 +519,8 @@ router.post('/trigger-groups/:groupId/publish',
       logger.info('[GlobalTriggers] Group published', {
         groupId,
         version: group.version,
-        triggerCount: triggers.length,
+        publishedCount: publishResult.publishedCount,
+        deletedFromPublished: publishResult.deletedFromPublished,
         publishedBy: userId
       });
 
@@ -514,7 +530,9 @@ router.post('/trigger-groups/:groupId/publish',
           groupId,
           version: group.version,
           publishedVersion: group.publishedVersion,
-          triggerCount: triggers.length
+          triggerCount: publishResult.publishedCount,
+          deletedFromPublished: publishResult.deletedFromPublished,
+          publishErrors: publishResult.errors
         }
       });
     } catch (error) {
@@ -640,12 +658,16 @@ router.get('/trigger-groups/:groupId/triggers',
         });
       }
 
-      const triggers = await GlobalTrigger.findByGroupId(groupId);
+      // Admin sees draft triggers by default (what they're editing)
+      // Use ?state=published to see live triggers
+      const state = req.query.state || 'draft';
+      const triggers = await GlobalTrigger.findByGroupId(groupId, { state });
 
       return res.json({
         success: true,
         data: triggers,
         total: triggers.length,
+        state,
         groupId: group.groupId,
         groupName: group.name
       });
@@ -736,13 +758,15 @@ router.post('/trigger-groups/:groupId/triggers',
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // IDEMPOTENT CREATE: Return existing if already exists
+      // IDEMPOTENT CREATE: Return existing if already exists (non-deleted)
       // ═══════════════════════════════════════════════════════════════════════
-      const exists = await GlobalTrigger.existsInGroup(normalizedGroupId, ruleId);
+      const exists = await GlobalTrigger.existsInGroup(normalizedGroupId, ruleId, 'draft');
       if (exists) {
         const existing = await GlobalTrigger.findOne({ 
           groupId: normalizedGroupId, 
-          ruleId 
+          ruleId,
+          state: 'draft',
+          isDeleted: { $ne: true }
         });
         logger.info('[GlobalTriggers] Idempotent create - returning existing', {
           groupId: normalizedGroupId,
@@ -756,12 +780,59 @@ router.post('/trigger-groups/:groupId/triggers',
         });
       }
 
+      // ═══════════════════════════════════════════════════════════════════════
+      // REVIVAL: If soft-deleted version exists, revive it instead of creating
+      // ═══════════════════════════════════════════════════════════════════════
+      const deletedTrigger = await GlobalTrigger.findDeletedInGroup(normalizedGroupId, ruleId, 'draft');
+      if (deletedTrigger) {
+        deletedTrigger.isDeleted = false;
+        deletedTrigger.deletedAt = null;
+        deletedTrigger.deletedBy = null;
+        deletedTrigger.deletedReason = null;
+        deletedTrigger.label = label;
+        deletedTrigger.description = description || '';
+        deletedTrigger.enabled = enabled !== false;
+        deletedTrigger.priority = priority || 50;
+        deletedTrigger.keywords = keywords || [];
+        deletedTrigger.phrases = phrases || [];
+        deletedTrigger.negativeKeywords = negativeKeywords || [];
+        deletedTrigger.answerText = answerText;
+        deletedTrigger.audioUrl = audioUrl || '';
+        deletedTrigger.followUpQuestion = followUpQuestion || '';
+        deletedTrigger.followUpNextAction = followUpNextAction || '';
+        deletedTrigger.scenarioTypeAllowlist = scenarioTypeAllowlist || [];
+        deletedTrigger.tags = tags || [];
+        deletedTrigger.updatedAt = new Date();
+        deletedTrigger.updatedBy = userId;
+        deletedTrigger.version += 1;
+
+        await deletedTrigger.save();
+
+        group.incrementVersion(userId);
+        group.addAuditEntry('TRIGGER_REVIVED', userId, { ruleId, triggerId: deletedTrigger.triggerId });
+        await group.save();
+
+        logger.info('[GlobalTriggers] Trigger revived from soft-delete', {
+          groupId: normalizedGroupId,
+          ruleId,
+          triggerId: deletedTrigger.triggerId,
+          revivedBy: userId
+        });
+
+        return res.status(200).json({
+          success: true,
+          data: deletedTrigger,
+          revived: true
+        });
+      }
+
       const triggerId = GlobalTrigger.generateTriggerId(normalizedGroupId, ruleId);
 
       const trigger = await GlobalTrigger.create({
         groupId: normalizedGroupId,
         ruleId,
         triggerId,
+        state: 'draft',  // All new triggers start as draft
         label,
         description: description || '',
         enabled: enabled !== false,
@@ -780,7 +851,7 @@ router.post('/trigger-groups/:groupId/triggers',
       });
 
       group.incrementVersion(userId);
-      group.triggerCount = await GlobalTrigger.countByGroupId(normalizedGroupId);
+      group.triggerCount = await GlobalTrigger.countByGroupId(normalizedGroupId, 'draft');
       group.addAuditEntry('TRIGGER_ADDED', userId, { ruleId, label });
       await group.save();
 
@@ -803,7 +874,12 @@ router.post('/trigger-groups/:groupId/triggers',
           const rawRuleId = req.body.ruleId;
           const groupId = normalizeGroupId(rawGroupId);
           const ruleId = normalizeRuleId(rawRuleId);
-          const existing = await GlobalTrigger.findOne({ groupId, ruleId });
+          const existing = await GlobalTrigger.findOne({ 
+            groupId, 
+            ruleId, 
+            state: 'draft',
+            isDeleted: { $ne: true }
+          });
           if (existing) {
             logger.info('[GlobalTriggers] Idempotent create (race) - returning existing', {
               groupId,

@@ -174,14 +174,21 @@ async function loadTriggersForCompany(companyId, options = {}) {
 async function mergeTriggers(companyId, settings, groupInfo, isGroupPublished = true) {
   let globalTriggers = [];
   
-  // VERSIONING MODEL: Only load global triggers if group is published
-  // Draft groups don't serve their triggers to companies yet
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CRITICAL RUNTIME FILTERS:
+  // - Global: state='published', enabled=true, isDeleted!=true
+  // - Local: enabled=true, isDeleted!=true
+  // These filters are enforced at the query level (not post-filter)
+  // ═══════════════════════════════════════════════════════════════════════════
+  
+  // Load ONLY published global triggers (never draft - prevents draft leakage)
   if (settings && settings.activeGroupId && isGroupPublished) {
-    const rawGlobalTriggers = await GlobalTrigger.findByGroupId(settings.activeGroupId);
+    const rawGlobalTriggers = await GlobalTrigger.findPublishedByGroupId(settings.activeGroupId);
     globalTriggers = rawGlobalTriggers.map(gt => gt.toMatcherFormat ? gt.toMatcherFormat() : gt);
   }
 
-  const rawLocalTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+  // Load ONLY active local triggers (enabled=true, isDeleted!=true)
+  const rawLocalTriggers = await CompanyLocalTrigger.findActiveByCompanyId(companyId);
   const localTriggers = rawLocalTriggers.map(lt => lt.toMatcherFormat ? lt.toMatcherFormat() : lt);
 
   const hiddenSet = new Set(settings?.hiddenGlobalTriggerIds || []);

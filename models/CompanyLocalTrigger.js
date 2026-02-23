@@ -212,11 +212,24 @@ const companyLocalTriggerSchema = new mongoose.Schema({
 // INDEXES - CRITICAL FOR DUPLICATE PREVENTION AND ISOLATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-// PRIMARY: ruleId unique per company (canonical uniqueness)
-companyLocalTriggerSchema.index({ companyId: 1, ruleId: 1 }, { unique: true });
+// PRIMARY: ruleId unique per company (only for non-deleted docs)
+// PARTIAL: allows recreate after soft delete
+companyLocalTriggerSchema.index(
+  { companyId: 1, ruleId: 1 },
+  { 
+    unique: true,
+    partialFilterExpression: { isDeleted: { $ne: true } }
+  }
+);
 
-// triggerId unique per company (NOT globally - that's dangerous for restructuring)
-companyLocalTriggerSchema.index({ companyId: 1, triggerId: 1 }, { unique: true });
+// triggerId unique per company (only for non-deleted docs)
+companyLocalTriggerSchema.index(
+  { companyId: 1, triggerId: 1 },
+  { 
+    unique: true,
+    partialFilterExpression: { isDeleted: { $ne: true } }
+  }
+);
 
 // Query optimization
 companyLocalTriggerSchema.index({ companyId: 1, priority: 1 });
@@ -224,13 +237,14 @@ companyLocalTriggerSchema.index({ companyId: 1, enabled: 1 });
 companyLocalTriggerSchema.index({ companyId: 1, isDeleted: 1 });
 
 // CRITICAL: Unique override index - one override per global trigger per company
-// overrideOfTriggerId is the single source of truth for override uniqueness
+// PARTIAL: only when isOverride=true AND not deleted
 companyLocalTriggerSchema.index(
   { companyId: 1, overrideOfTriggerId: 1 },
   { 
     unique: true,
     partialFilterExpression: { 
-      isOverride: true, 
+      isOverride: true,
+      isDeleted: { $ne: true },
       overrideOfTriggerId: { $type: 'string' } 
     }
   }
@@ -250,6 +264,18 @@ companyLocalTriggerSchema.statics.generateTriggerId = function(companyId, ruleId
   return `${companyId}::${ruleId}`;
 };
 
+// RUNTIME: Load ONLY enabled, non-deleted triggers
+companyLocalTriggerSchema.statics.findActiveByCompanyId = function(companyId) {
+  return this.find({
+    companyId,
+    enabled: true,
+    isDeleted: { $ne: true }
+  })
+    .sort({ priority: 1 })
+    .lean();
+};
+
+// ADMIN: Load all triggers for editing
 companyLocalTriggerSchema.statics.findByCompanyId = function(companyId, includeDeleted = false) {
   const query = { companyId };
   if (!includeDeleted) {
@@ -260,17 +286,38 @@ companyLocalTriggerSchema.statics.findByCompanyId = function(companyId, includeD
     .lean();
 };
 
-companyLocalTriggerSchema.statics.findByTriggerId = function(triggerId) {
-  return this.findOne({ triggerId }).lean();
+companyLocalTriggerSchema.statics.findByTriggerId = function(triggerId, includeDeleted = false) {
+  const query = { triggerId };
+  if (!includeDeleted) {
+    query.isDeleted = { $ne: true };
+  }
+  return this.findOne(query).lean();
 };
 
-companyLocalTriggerSchema.statics.existsForCompany = async function(companyId, ruleId) {
-  const count = await this.countDocuments({ companyId, ruleId });
+companyLocalTriggerSchema.statics.existsForCompany = async function(companyId, ruleId, includeDeleted = false) {
+  const query = { companyId, ruleId };
+  if (!includeDeleted) {
+    query.isDeleted = { $ne: true };
+  }
+  const count = await this.countDocuments(query);
   return count > 0;
 };
 
-companyLocalTriggerSchema.statics.overrideExists = async function(companyId, overrideOfTriggerId) {
-  const count = await this.countDocuments({ companyId, overrideOfTriggerId });
+// Find soft-deleted trigger (for revival)
+companyLocalTriggerSchema.statics.findDeletedForCompany = function(companyId, ruleId) {
+  return this.findOne({
+    companyId,
+    ruleId,
+    isDeleted: true
+  });
+};
+
+companyLocalTriggerSchema.statics.overrideExists = async function(companyId, overrideOfTriggerId, includeDeleted = false) {
+  const query = { companyId, overrideOfTriggerId, isOverride: true };
+  if (!includeDeleted) {
+    query.isDeleted = { $ne: true };
+  }
+  const count = await this.countDocuments(query);
   return count > 0;
 };
 

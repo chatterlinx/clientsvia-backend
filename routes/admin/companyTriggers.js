@@ -555,7 +555,11 @@ router.post('/:companyId/local-triggers',
       const exists = await CompanyLocalTrigger.existsForCompany(companyId, ruleId);
       if (exists) {
         // Idempotent create: return existing trigger instead of error
-        const existing = await CompanyLocalTrigger.findOne({ companyId, ruleId });
+        const existing = await CompanyLocalTrigger.findOne({ 
+          companyId, 
+          ruleId,
+          isDeleted: { $ne: true }
+        });
         logger.info('[CompanyTriggers] Idempotent create - returning existing', {
           companyId,
           ruleId,
@@ -565,6 +569,51 @@ router.post('/:companyId/local-triggers',
           success: true,
           data: existing,
           alreadyExisted: true
+        });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // REVIVAL: If soft-deleted version exists, revive it instead of creating
+      // ═══════════════════════════════════════════════════════════════════════
+      const deletedTrigger = await CompanyLocalTrigger.findDeletedForCompany(companyId, ruleId);
+      if (deletedTrigger) {
+        deletedTrigger.isDeleted = false;
+        deletedTrigger.deletedAt = null;
+        deletedTrigger.deletedBy = null;
+        deletedTrigger.deletedReason = null;
+        deletedTrigger.label = label;
+        deletedTrigger.description = description || '';
+        deletedTrigger.enabled = enabled !== false;
+        deletedTrigger.priority = priority || 50;
+        deletedTrigger.keywords = keywords || [];
+        deletedTrigger.phrases = phrases || [];
+        deletedTrigger.negativeKeywords = negativeKeywords || [];
+        deletedTrigger.answerText = answerText;
+        deletedTrigger.audioUrl = audioUrl || '';
+        deletedTrigger.followUpQuestion = followUpQuestion || '';
+        deletedTrigger.followUpNextAction = followUpNextAction || '';
+        deletedTrigger.isOverride = Boolean(isOverride);
+        deletedTrigger.overrideOfGroupId = overrideOfGroupId;
+        deletedTrigger.overrideOfRuleId = overrideOfRuleId;
+        deletedTrigger.overrideOfTriggerId = isOverride ? overrideOfTriggerId : null;
+        deletedTrigger.overrideType = isOverride ? 'FULL' : null;
+        deletedTrigger.tags = tags || [];
+        deletedTrigger.updatedAt = new Date();
+        deletedTrigger.updatedBy = userId;
+
+        await deletedTrigger.save();
+
+        logger.info('[CompanyTriggers] Local trigger revived from soft-delete', {
+          companyId,
+          ruleId,
+          triggerId: deletedTrigger.triggerId,
+          revivedBy: userId
+        });
+
+        return res.status(200).json({
+          success: true,
+          data: deletedTrigger,
+          revived: true
         });
       }
 
@@ -620,7 +669,11 @@ router.post('/:companyId/local-triggers',
           const { companyId } = req.params;
           const rawRuleId = req.body.ruleId;
           const ruleId = normalizeRuleId(rawRuleId);
-          const existing = await CompanyLocalTrigger.findOne({ companyId, ruleId });
+          const existing = await CompanyLocalTrigger.findOne({ 
+            companyId, 
+            ruleId,
+            isDeleted: { $ne: true }
+          });
           if (existing) {
             logger.info('[CompanyTriggers] Idempotent create (race) - returning existing', {
               companyId,
