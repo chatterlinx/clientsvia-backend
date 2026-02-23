@@ -67,6 +67,7 @@
     headerCompanyId: document.getElementById('header-company-id'),
     btnDownloadTruth: document.getElementById('btn-download-truth'),
     btnBack: document.getElementById('btn-back'),
+    btnBackToProfile: document.getElementById('btn-back-to-profile'),
     btnSaveConfig: document.getElementById('btn-save-config'),
     
     // Stats
@@ -140,7 +141,7 @@
       // Update header logo link with companyId
       const logoLink = document.getElementById('header-logo-link');
       if (logoLink) {
-        logoLink.href = `/company-profile?companyId=${encodeURIComponent(state.companyId)}`;
+        logoLink.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
       }
     }
   }
@@ -155,6 +156,11 @@
     DOM.btnBack.addEventListener('click', (e) => {
       e.preventDefault();
       window.location.href = `/agent-console/index.html?companyId=${encodeURIComponent(state.companyId)}`;
+    });
+    
+    // Back to Company Profile
+    DOM.btnBackToProfile.addEventListener('click', () => {
+      window.location.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
     });
     
     DOM.btnDownloadTruth.addEventListener('click', downloadTruthJson);

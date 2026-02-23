@@ -42,6 +42,7 @@
     headerCompanyId: document.getElementById('header-company-id'),
     btnDownloadTruth: document.getElementById('btn-download-truth'),
     btnLogout: document.getElementById('btn-logout'),
+    btnBackToProfile: document.getElementById('btn-back-to-profile'),
     
     // Truth Panel
     btnRefreshTruth: document.getElementById('btn-refresh-truth'),
@@ -95,7 +96,7 @@
       // Update header logo link with companyId
       const logoLink = document.getElementById('header-logo-link');
       if (logoLink) {
-        logoLink.href = `/company-profile?companyId=${encodeURIComponent(state.companyId)}`;
+        logoLink.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
       }
     }
   }
@@ -109,10 +110,12 @@
     // Master Download Truth Button (header)
     DOM.btnDownloadTruth.addEventListener('click', downloadTruthJson);
     
-    // Back to Company Profile
-    DOM.btnLogout.addEventListener('click', () => {
+    // Back to Company Profile (both buttons)
+    const navigateToCompanyProfile = () => {
       window.location.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
-    });
+    };
+    DOM.btnLogout.addEventListener('click', navigateToCompanyProfile);
+    DOM.btnBackToProfile.addEventListener('click', navigateToCompanyProfile);
     
     // Truth Panel Actions
     DOM.btnRefreshTruth.addEventListener('click', refreshTruthData);

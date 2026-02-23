@@ -466,7 +466,15 @@ async function init() {
   // Update header logo link with companyId
   const logoLink = document.getElementById('header-logo-link');
   if (logoLink) {
-    logoLink.href = `/company-profile?companyId=${encodeURIComponent(companyId)}`;
+    logoLink.href = `/company-profile.html?companyId=${encodeURIComponent(companyId)}`;
+  }
+  
+  // Back to Company Profile button
+  const btnBackToProfile = document.getElementById('btn-back-to-profile');
+  if (btnBackToProfile) {
+    btnBackToProfile.addEventListener('click', () => {
+      window.location.href = `/company-profile.html?companyId=${encodeURIComponent(companyId)}`;
+    });
   }
   
   initElements();
