@@ -307,6 +307,9 @@
       case 'global-hub':
         window.location.href = `${baseUrl}/global-hub.html${companyParam}`;
         break;
+      case 'calendar':
+        window.location.href = `${baseUrl}/calendar.html${companyParam}`;
+        break;
       default:
         console.warn('[AgentConsole] Unknown navigation target:', page);
     }

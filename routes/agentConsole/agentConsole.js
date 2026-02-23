@@ -137,8 +137,16 @@ async function readCompanyProfileTruth(companyId) {
       callRoutingMode: company.twilioConfig?.callRoutingMode || 'unknown'
     },
     googleCalendar: {
-      isConnected: !!company.googleCalendar?.accessToken,
-      calendarId: company.googleCalendar?.calendarId || null
+      connected: !!company.googleCalendar?.connected,
+      calendarId: company.googleCalendar?.calendarId || null,
+      calendarName: company.googleCalendar?.calendarName || null,
+      calendarEmail: company.googleCalendar?.calendarEmail || null,
+      connectedAt: company.googleCalendar?.connectedAt || null,
+      settings: {
+        bufferMinutes: company.googleCalendar?.settings?.bufferMinutes || 60,
+        defaultDurationMinutes: company.googleCalendar?.settings?.defaultDurationMinutes || 60,
+        maxBookingDaysAhead: company.googleCalendar?.settings?.maxBookingDaysAhead || 30
+      }
     },
     contactsCount: company.contacts?.length || 0
   };
@@ -551,6 +559,250 @@ router.get(
     } catch (error) {
       logger.error(`[${MODULE_ID}] Get Booking config failed: ${error.message}`);
       res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/* ============================================================================
+   GOOGLE CALENDAR ENDPOINTS — Agent Console Calendar Management
+   ============================================================================ */
+
+const GoogleCalendarService = require('../../services/GoogleCalendarService');
+
+/**
+ * GET /:companyId/calendar/status
+ * 
+ * Get calendar connection status
+ */
+router.get(
+  '/:companyId/calendar/status',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+      const status = await GoogleCalendarService.getStatus(companyId);
+      
+      res.json({
+        connected: status.connected,
+        email: status.calendarEmail || null,
+        calendarId: status.calendarId || null,
+        calendarName: status.calendarName || null,
+        connectedAt: status.connectedAt || null,
+        healthy: status.healthy,
+        lastError: status.lastError || null
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Calendar status check failed: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /:companyId/calendar/connect/start
+ * 
+ * Start OAuth flow — returns authUrl for redirect
+ */
+router.post(
+  '/:companyId/calendar/connect/start',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+      if (!GoogleCalendarService.isConfigured()) {
+        return res.status(503).json({ 
+          error: 'Google Calendar OAuth not configured on server' 
+        });
+      }
+      
+      const authUrl = GoogleCalendarService.generateAuthUrl(companyId);
+      
+      logger.info(`[${MODULE_ID}] Calendar OAuth started`, { companyId });
+      
+      res.json({ authUrl });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Calendar connect start failed: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /:companyId/calendar/disconnect
+ * 
+ * Disconnect calendar — revokes tokens and clears stored credentials
+ */
+router.post(
+  '/:companyId/calendar/disconnect',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+      const result = await GoogleCalendarService.disconnectCalendar(companyId);
+      
+      // Invalidate truth cache
+      truthCache.delete(companyId);
+      
+      logger.info(`[${MODULE_ID}] Calendar disconnected`, { companyId });
+      
+      res.json({ success: result.success, message: 'Calendar disconnected' });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Calendar disconnect failed: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /:companyId/calendar/test
+ * 
+ * Test calendar connection — verifies API access
+ */
+router.get(
+  '/:companyId/calendar/test',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+      const result = await GoogleCalendarService.testConnection(companyId);
+      
+      res.json(result);
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Calendar test failed: ${error.message}`);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /:companyId/calendar/calendars
+ * 
+ * List available calendars (requires connection)
+ */
+router.get(
+  '/:companyId/calendar/calendars',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    const { companyId } = req.params;
+    
+    try {
+      const result = await GoogleCalendarService.listCalendars(companyId);
+      
+      if (!result.success) {
+        return res.status(400).json({ error: result.error, calendars: [] });
+      }
+      
+      res.json({ calendars: result.calendars });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] List calendars failed: ${error.message}`);
+      res.status(500).json({ error: error.message, calendars: [] });
+    }
+  }
+);
+
+/**
+ * POST /:companyId/calendar/select
+ * 
+ * Select which calendar to use for bookings
+ */
+router.post(
+  '/:companyId/calendar/select',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const { calendarId } = req.body;
+    
+    if (!calendarId) {
+      return res.status(400).json({ error: 'Missing calendarId' });
+    }
+    
+    try {
+      const result = await GoogleCalendarService.selectCalendar(companyId, calendarId);
+      
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+      
+      // Invalidate truth cache
+      truthCache.delete(companyId);
+      
+      logger.info(`[${MODULE_ID}] Calendar selected`, { 
+        companyId, 
+        calendarId,
+        calendarName: result.calendarName
+      });
+      
+      res.json(result);
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Select calendar failed: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /:companyId/calendar/test-availability
+ * 
+ * Preview available time options for a given date range
+ * This is what Booking Logic will consume
+ */
+router.post(
+  '/:companyId/calendar/test-availability',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    const { companyId } = req.params;
+    const { startDate, durationMinutes } = req.body;
+    
+    if (!startDate) {
+      return res.status(400).json({ error: 'Missing startDate' });
+    }
+    
+    try {
+      const start = new Date(startDate);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 7); // Look ahead 7 days
+      
+      const result = await GoogleCalendarService.findAvailableSlots(companyId, {
+        startDate: start,
+        endDate: end,
+        durationMinutes: durationMinutes || 60,
+        maxSlots: 20
+      });
+      
+      // Transform to our "time options" format (no "slots" terminology)
+      const availableTimeOptions = (result || []).map(slot => ({
+        start: slot.start,
+        end: slot.end,
+        displayText: slot.displayText || null,
+        duration: durationMinutes || 60
+      }));
+      
+      res.json({
+        success: true,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        durationMinutes: durationMinutes || 60,
+        availableTimeOptions,
+        count: availableTimeOptions.length
+      });
+    } catch (error) {
+      logger.error(`[${MODULE_ID}] Test availability failed: ${error.message}`);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message,
+        availableTimeOptions: [] 
+      });
     }
   }
 );

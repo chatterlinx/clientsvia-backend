@@ -1180,6 +1180,96 @@ async function listEvents(companyId, options = {}) {
     }
 }
 
+/**
+ * List all calendars for a connected company
+ * Used by Agent Console to allow calendar selection
+ */
+async function listCalendars(companyId) {
+    try {
+        const { client, error } = await getOAuth2ClientForCompany(companyId);
+        
+        if (!client) {
+            logger.warn('[GOOGLE CALENDAR] Cannot list calendars - not connected', { companyId });
+            return { success: false, error: error || 'Not connected', calendars: [] };
+        }
+        
+        const calendar = google.calendar({ version: 'v3', auth: client });
+        const response = await calendar.calendarList.list();
+        
+        const calendars = (response.data.items || []).map(cal => ({
+            id: cal.id,
+            summary: cal.summary,
+            description: cal.description,
+            primary: cal.primary || false,
+            accessRole: cal.accessRole,
+            backgroundColor: cal.backgroundColor
+        }));
+        
+        logger.info('[GOOGLE CALENDAR] Listed calendars', { 
+            companyId, 
+            count: calendars.length 
+        });
+        
+        return { success: true, calendars };
+    } catch (err) {
+        logger.error('[GOOGLE CALENDAR] Failed to list calendars', { 
+            companyId, 
+            error: err.message 
+        });
+        
+        if (err.code === 401 || err.message?.includes('invalid_grant')) {
+            await handleTokenError(companyId, err);
+        }
+        
+        return { success: false, error: err.message, calendars: [] };
+    }
+}
+
+/**
+ * Select a specific calendar for the company
+ */
+async function selectCalendar(companyId, calendarId) {
+    try {
+        const { client, error } = await getOAuth2ClientForCompany(companyId);
+        
+        if (!client) {
+            return { success: false, error: error || 'Not connected' };
+        }
+        
+        const calendar = google.calendar({ version: 'v3', auth: client });
+        const calInfo = await calendar.calendars.get({ calendarId });
+        
+        await v2Company.updateOne(
+            { _id: companyId },
+            {
+                $set: {
+                    'googleCalendar.calendarId': calendarId,
+                    'googleCalendar.calendarName': calInfo.data.summary
+                }
+            }
+        );
+        
+        logger.info('[GOOGLE CALENDAR] Calendar selected', { 
+            companyId, 
+            calendarId,
+            calendarName: calInfo.data.summary
+        });
+        
+        return { 
+            success: true, 
+            calendarId, 
+            calendarName: calInfo.data.summary 
+        };
+    } catch (err) {
+        logger.error('[GOOGLE CALENDAR] Failed to select calendar', { 
+            companyId, 
+            calendarId,
+            error: err.message 
+        });
+        return { success: false, error: err.message };
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // EXPORTS
 // ════════════════════════════════════════════════════════════════════════════════
@@ -1203,6 +1293,10 @@ module.exports = {
     // Status
     getStatus,
     testConnection,
+    
+    // Calendar Management (Agent Console)
+    listCalendars,
+    selectCalendar,
     
     // Config check
     isConfigured: () => !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET)
