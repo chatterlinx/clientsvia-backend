@@ -96,8 +96,15 @@ const companyTriggerSettingsSchema = new mongoose.Schema({
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // HIDDEN GLOBAL TRIGGERS (opt-out list)
+  // DISABLED GLOBAL TRIGGERS (opt-out list)
+  // Disabled triggers are still visible but marked as OFF
   // ─────────────────────────────────────────────────────────────────────────
+  disabledGlobalTriggerIds: {
+    type: [String],
+    default: []
+  },
+  
+  // DEPRECATED: Legacy field for migration
   hiddenGlobalTriggerIds: {
     type: [String],
     default: []
@@ -184,26 +191,35 @@ companyTriggerSettingsSchema.statics.setActiveGroup = function(companyId, groupI
   );
 };
 
-companyTriggerSettingsSchema.statics.hideGlobalTrigger = function(companyId, triggerId) {
+companyTriggerSettingsSchema.statics.disableGlobalTrigger = function(companyId, triggerId) {
   return this.findOneAndUpdate(
     { companyId },
     { 
-      $addToSet: { hiddenGlobalTriggerIds: triggerId },
+      $addToSet: { disabledGlobalTriggerIds: triggerId },
       $set: { updatedAt: new Date() }
     },
     { upsert: true, new: true }
   );
 };
 
-companyTriggerSettingsSchema.statics.showGlobalTrigger = function(companyId, triggerId) {
+companyTriggerSettingsSchema.statics.enableGlobalTrigger = function(companyId, triggerId) {
   return this.findOneAndUpdate(
     { companyId },
     { 
-      $pull: { hiddenGlobalTriggerIds: triggerId },
+      $pull: { disabledGlobalTriggerIds: triggerId },
       $set: { updatedAt: new Date() }
     },
     { new: true }
   );
+};
+
+// LEGACY: Keep old methods for backward compatibility
+companyTriggerSettingsSchema.statics.hideGlobalTrigger = function(companyId, triggerId) {
+  return this.disableGlobalTrigger(companyId, triggerId);
+};
+
+companyTriggerSettingsSchema.statics.showGlobalTrigger = function(companyId, triggerId) {
+  return this.enableGlobalTrigger(companyId, triggerId);
 };
 
 companyTriggerSettingsSchema.statics.setPartialOverride = async function(companyId, globalTriggerId, overrideData, userId) {
@@ -270,8 +286,13 @@ companyTriggerSettingsSchema.statics.getCompaniesUsingGroup = function(groupId) 
 // METHODS
 // ─────────────────────────────────────────────────────────────────────────────
 
+companyTriggerSettingsSchema.methods.isGlobalTriggerDisabled = function(triggerId) {
+  return this.disabledGlobalTriggerIds.includes(triggerId);
+};
+
+// LEGACY: Keep old method for backward compatibility
 companyTriggerSettingsSchema.methods.isGlobalTriggerHidden = function(triggerId) {
-  return this.hiddenGlobalTriggerIds.includes(triggerId);
+  return this.isGlobalTriggerDisabled(triggerId);
 };
 
 companyTriggerSettingsSchema.methods.getPartialOverride = function(globalTriggerId) {
@@ -285,6 +306,12 @@ companyTriggerSettingsSchema.methods.getPartialOverride = function(globalTrigger
 companyTriggerSettingsSchema.pre('save', function(next) {
   this.updatedAt = new Date();
 
+  // Deduplicate disabledGlobalTriggerIds
+  if (this.disabledGlobalTriggerIds && this.disabledGlobalTriggerIds.length > 0) {
+    this.disabledGlobalTriggerIds = [...new Set(this.disabledGlobalTriggerIds)];
+  }
+
+  // Legacy field deduplication
   if (this.hiddenGlobalTriggerIds && this.hiddenGlobalTriggerIds.length > 0) {
     this.hiddenGlobalTriggerIds = [...new Set(this.hiddenGlobalTriggerIds)];
   }

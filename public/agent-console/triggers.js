@@ -705,12 +705,12 @@
     let impactText = '';
     if (trigger.scope === 'GLOBAL') {
       impactText = newEnabledState 
-        ? 'This will make this global trigger ACTIVE for this company. Callers will receive this response when matched.'
-        : 'This will HIDE this global trigger for this company. Callers will NOT receive this response.';
+        ? 'This will ENABLE this global trigger for this company. Callers will receive this response when matched.'
+        : 'This will DISABLE this global trigger for this company. The trigger will remain visible but will NOT fire. Callers will NOT receive this response.';
     } else {
       impactText = newEnabledState
-        ? 'This will ACTIVATE this local trigger. Callers will receive this response when matched.'
-        : 'This will DEACTIVATE this local trigger. Callers will NOT receive this response.';
+        ? 'This will ENABLE this local trigger. Callers will receive this response when matched.'
+        : 'This will DISABLE this local trigger. The trigger will remain visible but will NOT fire. Callers will NOT receive this response.';
     }
     
     state.pendingApproval = {
@@ -853,12 +853,12 @@
         body: { triggerId, visible }
       });
       
-      showToast('success', visible ? 'Enabled' : 'Hidden', `Global trigger ${visible ? 'enabled' : 'hidden'} for this company.`);
+      showToast('success', visible ? 'Enabled' : 'Disabled', `Global trigger ${visible ? 'enabled' : 'disabled'} for this company.`);
       await loadTriggers();
       
     } catch (error) {
-      console.error('[Triggers] Visibility toggle failed:', error);
-      showToast('error', 'Failed', 'Could not change trigger visibility.');
+      console.error('[Triggers] Enable/disable toggle failed:', error);
+      showToast('error', 'Failed', 'Could not change trigger status.');
       await loadTriggers();
       throw error;
     }

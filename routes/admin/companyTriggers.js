@@ -116,7 +116,7 @@ async function buildMergedTriggerList(companyId) {
 
   const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
 
-  const hiddenSet = new Set(settings?.hiddenGlobalTriggerIds || []);
+  const disabledGlobalSet = new Set(settings?.disabledGlobalTriggerIds || []);
   
   // partialOverrides is now a Map (keyed by globalTriggerId)
   // Convert to regular Map if it's a Mongoose Map
@@ -141,16 +141,13 @@ async function buildMergedTriggerList(companyId) {
   const triggerMap = new Map();
 
   for (const gt of globalTriggers) {
-    if (hiddenSet.has(gt.triggerId)) {
-      continue;
-    }
-
     // Check for full override by ruleId (not by parsing triggerId)
     if (fullOverrideByRuleId.has(gt.ruleId)) {
       continue;
     }
 
     const partialOverride = partialOverrideMap.get(gt.triggerId);
+    const isDisabled = disabledGlobalSet.has(gt.triggerId);
     
     triggerMap.set(gt.ruleId, {
       triggerId: gt.triggerId,
@@ -159,7 +156,7 @@ async function buildMergedTriggerList(companyId) {
       scope: 'GLOBAL',
       originGroupId: gt.groupId,
       originGroupName: groupInfo?.name || null,
-      isEnabled: true,
+      isEnabled: !isDisabled,
       isOverridden: Boolean(partialOverride),
       overrideType: partialOverride ? 'PARTIAL' : null,
       priority: gt.priority,
@@ -226,10 +223,9 @@ async function buildMergedTriggerList(companyId) {
     .sort((a, b) => a.priority - b.priority);
 
   const globalCount = globalTriggers.length;
-  const globalHiddenCount = hiddenSet.size;
-  const globalVisibleCount = globalCount - globalHiddenCount;
+  const globalDisabledCount = disabledGlobalSet.size;
   const globalOverriddenCount = fullOverrideByRuleId.size;
-  const globalEnabledCount = globalVisibleCount - globalOverriddenCount;
+  const globalEnabledCount = globalCount - globalDisabledCount - globalOverriddenCount;
   
   const localNonOverride = localTriggers.filter(lt => !lt.isOverride && lt.isDeleted !== true);
   const localCount = localNonOverride.length;
@@ -253,9 +249,8 @@ async function buildMergedTriggerList(companyId) {
     triggers,
     stats: {
       globalCount,
-      globalVisibleCount,
       globalEnabledCount,
-      globalHiddenCount,
+      globalDisabledCount,
       globalOverriddenCount,
       localCount,
       localEnabledCount,
@@ -880,7 +875,8 @@ router.delete('/:companyId/local-triggers/:ruleId',
 
 /**
  * PUT /:companyId/trigger-visibility
- * Hide or show a global trigger for this company
+ * Enable or disable a global trigger for this company
+ * Note: Disabled triggers are still visible but marked as OFF
  */
 router.put('/:companyId/trigger-visibility',
   authenticateJWT,
@@ -908,15 +904,15 @@ router.put('/:companyId/trigger-visibility',
 
       let settings;
       if (visible === false) {
-        settings = await CompanyTriggerSettings.hideGlobalTrigger(companyId, triggerId);
+        settings = await CompanyTriggerSettings.disableGlobalTrigger(companyId, triggerId);
       } else {
-        settings = await CompanyTriggerSettings.showGlobalTrigger(companyId, triggerId);
+        settings = await CompanyTriggerSettings.enableGlobalTrigger(companyId, triggerId);
       }
 
-      logger.info('[CompanyTriggers] Trigger visibility changed', {
+      logger.info('[CompanyTriggers] Trigger enabled/disabled', {
         companyId,
         triggerId,
-        visible: visible !== false,
+        enabled: visible !== false,
         changedBy: userId
       });
 
@@ -924,12 +920,12 @@ router.put('/:companyId/trigger-visibility',
         success: true,
         data: {
           triggerId,
-          visible: visible !== false,
-          hiddenGlobalTriggerIds: settings.hiddenGlobalTriggerIds
+          enabled: visible !== false,
+          disabledGlobalTriggerIds: settings.disabledGlobalTriggerIds
         }
       });
     } catch (error) {
-      logger.error('[CompanyTriggers] Set visibility error', { error: error.message });
+      logger.error('[CompanyTriggers] Enable/disable error', { error: error.message });
       return res.status(500).json({ success: false, error: error.message });
     }
   }
