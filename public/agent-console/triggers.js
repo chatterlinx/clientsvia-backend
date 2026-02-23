@@ -70,7 +70,6 @@
     statGlobal: document.getElementById('stat-global'),
     statLocal: document.getElementById('stat-local'),
     statOverrides: document.getElementById('stat-overrides'),
-    statHidden: document.getElementById('stat-hidden'),
     statTotal: document.getElementById('stat-total'),
     statDisabled: document.getElementById('stat-disabled'),
     
@@ -304,7 +303,6 @@
     DOM.statGlobal.textContent = state.stats.globalEnabledCount || 0;
     DOM.statLocal.textContent = state.stats.localEnabledCount || 0;
     DOM.statOverrides.textContent = state.stats.overrideCount || 0;
-    DOM.statHidden.textContent = state.stats.globalHiddenCount || 0;
     DOM.statTotal.textContent = state.stats.totalActiveCount || 0;
     
     if (DOM.statDisabled) {
