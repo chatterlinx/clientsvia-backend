@@ -227,8 +227,15 @@ async function buildMergedTriggerList(companyId) {
   const globalCount = globalTriggers.length;
   const globalHiddenCount = hiddenSet.size;
   const globalEnabledCount = globalCount - globalHiddenCount - fullOverrideByRuleId.size;
-  const localCount = localTriggers.filter(lt => !lt.isOverride).length;
+  
+  const localNonOverride = localTriggers.filter(lt => !lt.isOverride);
+  const localCount = localNonOverride.length;
+  const localEnabledCount = localNonOverride.filter(lt => lt.enabled !== false).length;
+  const localDisabledCount = localCount - localEnabledCount;
+  
   const overrideCount = localTriggers.filter(lt => lt.isOverride).length + partialOverrideMap.size;
+  
+  const totalActiveCount = triggers.filter(t => t.isEnabled !== false).length;
 
   return {
     companyId,
@@ -242,8 +249,10 @@ async function buildMergedTriggerList(companyId) {
       globalEnabledCount,
       globalHiddenCount,
       localCount,
+      localEnabledCount,
+      localDisabledCount,
       overrideCount,
-      totalActiveCount: triggers.length
+      totalActiveCount
     }
   };
 }

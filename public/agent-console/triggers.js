@@ -72,6 +72,7 @@
     statOverrides: document.getElementById('stat-overrides'),
     statHidden: document.getElementById('stat-hidden'),
     statTotal: document.getElementById('stat-total'),
+    statDisabled: document.getElementById('stat-disabled'),
     
     triggerList: document.getElementById('trigger-list'),
     triggerTableHeader: document.getElementById('trigger-table-header'),
@@ -301,10 +302,15 @@
     }
     
     DOM.statGlobal.textContent = state.stats.globalEnabledCount || 0;
-    DOM.statLocal.textContent = state.stats.localCount || 0;
+    DOM.statLocal.textContent = state.stats.localEnabledCount || state.stats.localCount || 0;
     DOM.statOverrides.textContent = state.stats.overrideCount || 0;
     DOM.statHidden.textContent = state.stats.globalHiddenCount || 0;
     DOM.statTotal.textContent = state.stats.totalActiveCount || 0;
+    
+    const disabledCount = state.stats.localDisabledCount || 0;
+    if (DOM.statDisabled) {
+      DOM.statDisabled.textContent = disabledCount;
+    }
   }
 
   function renderTriggers() {

@@ -109,6 +109,14 @@
       font-size: 0.875rem;
     }
     
+    .stat-value-success {
+      color: #16a34a;
+    }
+    
+    .stat-value-muted {
+      color: #9ca3af;
+    }
+    
     /* Trigger Table */
     .trigger-table {
       width: 100%;
@@ -728,8 +736,12 @@
             <span class="trigger-stat-label">Hidden</span>
           </div>
           <div class="trigger-stat">
-            <span class="trigger-stat-value" id="stat-total">0</span>
+            <span class="trigger-stat-value stat-value-success" id="stat-total">0</span>
             <span class="trigger-stat-label">Total Active</span>
+          </div>
+          <div class="trigger-stat">
+            <span class="trigger-stat-value stat-value-muted" id="stat-disabled">0</span>
+            <span class="trigger-stat-label">Disabled</span>
           </div>
         </div>
       </div>
