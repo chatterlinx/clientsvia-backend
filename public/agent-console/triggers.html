@@ -168,30 +168,30 @@
       font-size: 0.75rem;
       padding: 4px 8px;
       border-radius: 4px;
-      background: var(--bg-tertiary);
-      color: var(--text-secondary);
+      background: #6b7280;
+      color: #ffffff;
     }
     
     .trigger-priority.p1 {
-      background: #fef3c7;
-      color: #92400e;
+      background: #dc2626;
+      color: #ffffff;
     }
     
     .trigger-priority.p2 {
-      background: #e0e7ff;
-      color: #3730a3;
+      background: #f59e0b;
+      color: #ffffff;
     }
     
     .trigger-priority.p3 {
-      background: var(--bg-tertiary);
-      color: var(--text-secondary);
+      background: #6b7280;
+      color: #ffffff;
     }
     
     /* Rule ID */
     .trigger-rule-id {
       font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
       font-size: 0.75rem;
-      color: var(--text-muted);
+      color: #374151;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -199,8 +199,8 @@
     
     /* Label Column */
     .trigger-label {
-      font-weight: 500;
-      color: var(--text-primary);
+      font-weight: 600;
+      color: #111827;
       font-size: 0.875rem;
       white-space: nowrap;
       overflow: hidden;
@@ -210,7 +210,7 @@
     /* Keywords Column */
     .trigger-keywords {
       font-size: 0.75rem;
-      color: var(--text-muted);
+      color: #4b5563;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -233,49 +233,49 @@
     }
     
     .answer-badge.text {
-      background: #dbeafe;
-      color: #1d4ed8;
+      background: #2563eb;
+      color: #ffffff;
     }
     
     .answer-badge.audio {
-      background: #dcfce7;
-      color: #15803d;
+      background: #16a34a;
+      color: #ffffff;
     }
     
     /* Follow-up Column */
     .trigger-followup {
       font-size: 0.75rem;
-      color: var(--text-secondary);
+      color: #374151;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     
     .trigger-followup.none {
-      color: var(--text-muted);
+      color: #6b7280;
       font-style: italic;
     }
 
-    /* Dark mode answer badges */
+    /* Dark mode - badges stay solid colors for visibility */
     @media (prefers-color-scheme: dark) {
-      .answer-badge.text {
-        background: #1e3a5f;
-        color: #93c5fd;
+      .trigger-rule-id {
+        color: #d1d5db;
       }
       
-      .answer-badge.audio {
-        background: #14532d;
-        color: #86efac;
+      .trigger-label {
+        color: #f3f4f6;
       }
       
-      .trigger-priority.p1 {
-        background: #78350f;
-        color: #fef3c7;
+      .trigger-keywords {
+        color: #9ca3af;
       }
       
-      .trigger-priority.p2 {
-        background: #312e81;
-        color: #c7d2fe;
+      .trigger-followup {
+        color: #d1d5db;
+      }
+      
+      .trigger-followup.none {
+        color: #6b7280;
       }
     }
 
@@ -298,24 +298,24 @@
       gap: 4px;
       padding: 4px 8px;
       border-radius: 4px;
-      font-size: 0.75rem;
-      font-weight: 500;
+      font-size: 0.7rem;
+      font-weight: 600;
       text-transform: uppercase;
     }
     
     .scope-badge.global {
-      background: var(--blue-bg);
-      color: var(--blue-text);
+      background: #1d4ed8;
+      color: #ffffff;
     }
     
     .scope-badge.local {
-      background: var(--green-bg);
-      color: var(--green-text);
+      background: #16a34a;
+      color: #ffffff;
     }
     
     .scope-badge.override {
-      background: var(--orange-bg);
-      color: var(--orange-text);
+      background: #ea580c;
+      color: #ffffff;
     }
     
     /* Status indicators */
