@@ -91,6 +91,12 @@
     if (state.companyId) {
       DOM.headerCompanyId.textContent = truncateId(state.companyId);
       DOM.headerCompanyId.title = state.companyId;
+      
+      // Update header logo link with companyId
+      const logoLink = document.getElementById('header-logo-link');
+      if (logoLink) {
+        logoLink.href = `/company-profile?companyId=${encodeURIComponent(state.companyId)}`;
+      }
     }
   }
 

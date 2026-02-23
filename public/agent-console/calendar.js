@@ -463,6 +463,12 @@ async function init() {
     return;
   }
   
+  // Update header logo link with companyId
+  const logoLink = document.getElementById('header-logo-link');
+  if (logoLink) {
+    logoLink.href = `/company-profile?companyId=${encodeURIComponent(companyId)}`;
+  }
+  
   initElements();
   initEventHandlers();
   
