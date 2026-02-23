@@ -360,12 +360,12 @@
         const triggerId = e.target.dataset.triggerId;
         const scope = e.target.dataset.scope;
         const enabled = e.target.checked;
+        const checkbox = e.target;
         
-        if (scope === 'GLOBAL') {
-          await toggleGlobalTriggerVisibility(triggerId, enabled);
-        } else {
-          await toggleLocalTriggerEnabled(triggerId, enabled);
-        }
+        checkbox.checked = !enabled;
+        
+        const trigger = state.triggers.find(t => t.triggerId === triggerId);
+        confirmToggleTrigger(trigger, enabled, checkbox);
       });
     });
   }
@@ -674,9 +674,53 @@
     
     DOM.approvalTitle.textContent = 'Delete Trigger';
     DOM.approvalText.textContent = `Are you sure you want to delete "${trigger.label}"?`;
+    updateApprovalHint('approved');
     DOM.inputApproval.value = '';
     DOM.modalApproval.classList.add('active');
     DOM.inputApproval.focus();
+  }
+
+  function confirmToggleTrigger(trigger, newEnabledState, checkbox) {
+    const action = newEnabledState ? 'enable' : 'disable';
+    const actionLabel = newEnabledState ? 'Enable' : 'Disable';
+    
+    let impactText = '';
+    if (trigger.scope === 'GLOBAL') {
+      impactText = newEnabledState 
+        ? 'This will make this global trigger ACTIVE for this company. Callers will receive this response when matched.'
+        : 'This will HIDE this global trigger for this company. Callers will NOT receive this response.';
+    } else {
+      impactText = newEnabledState
+        ? 'This will ACTIVATE this local trigger. Callers will receive this response when matched.'
+        : 'This will DEACTIVATE this local trigger. Callers will NOT receive this response.';
+    }
+    
+    state.pendingApproval = {
+      action: 'toggle',
+      trigger,
+      newEnabledState,
+      checkbox
+    };
+    
+    DOM.approvalTitle.textContent = `${actionLabel} Trigger`;
+    DOM.approvalText.innerHTML = `
+      <strong>${escapeHtml(trigger.label)}</strong><br><br>
+      ${impactText}<br><br>
+      <span style="color: var(--text-muted); font-size: 0.875rem;">Scope: ${trigger.scope} · Rule ID: ${trigger.ruleId}</span>
+    `;
+    updateApprovalHint('Yes');
+    DOM.inputApproval.value = '';
+    DOM.modalApproval.classList.add('active');
+    DOM.inputApproval.focus();
+  }
+
+  function updateApprovalHint(requiredText) {
+    const label = DOM.modalApproval.querySelector('.form-label');
+    if (label) {
+      label.textContent = `Type "${requiredText}" to confirm:`;
+    }
+    DOM.inputApproval.placeholder = requiredText;
+    DOM.inputApproval.dataset.requiredText = requiredText.toLowerCase();
   }
 
   function closeApprovalModal() {
@@ -686,9 +730,10 @@
 
   async function confirmApproval() {
     const approvalText = DOM.inputApproval.value.trim().toLowerCase();
+    const requiredText = DOM.inputApproval.dataset.requiredText || 'approved';
     
-    if (approvalText !== 'approved') {
-      showToast('error', 'Approval Required', 'Please type "approved" to confirm.');
+    if (approvalText !== requiredText) {
+      showToast('error', 'Confirmation Required', `Please type "${requiredText === 'yes' ? 'Yes' : 'approved'}" to confirm.`);
       return;
     }
     
@@ -696,7 +741,7 @@
       return;
     }
     
-    const { action, trigger } = state.pendingApproval;
+    const { action, trigger, newEnabledState, checkbox } = state.pendingApproval;
     
     try {
       if (action === 'delete') {
@@ -713,10 +758,23 @@
         }
         
         showToast('success', 'Deleted', `Trigger "${trigger.label}" deleted.`);
+      } else if (action === 'toggle') {
+        if (trigger.scope === 'GLOBAL') {
+          await toggleGlobalTriggerVisibility(trigger.triggerId, newEnabledState);
+        } else {
+          await toggleLocalTriggerEnabled(trigger.triggerId, newEnabledState);
+        }
+        
+        if (checkbox) {
+          checkbox.checked = newEnabledState;
+        }
       }
       
       closeApprovalModal();
-      await loadTriggers();
+      
+      if (action === 'delete') {
+        await loadTriggers();
+      }
       
     } catch (error) {
       console.error('[Triggers] Action failed:', error);
@@ -731,13 +789,14 @@
         body: { triggerId, visible }
       });
       
-      showToast('success', visible ? 'Enabled' : 'Disabled', `Trigger ${visible ? 'enabled' : 'hidden'} for this company.`);
+      showToast('success', visible ? 'Enabled' : 'Hidden', `Global trigger ${visible ? 'enabled' : 'hidden'} for this company.`);
       await loadTriggers();
       
     } catch (error) {
       console.error('[Triggers] Visibility toggle failed:', error);
       showToast('error', 'Failed', 'Could not change trigger visibility.');
       await loadTriggers();
+      throw error;
     }
   }
 
@@ -753,13 +812,14 @@
         body: { enabled }
       });
       
-      showToast('success', enabled ? 'Enabled' : 'Disabled', `Trigger ${enabled ? 'enabled' : 'disabled'}.`);
+      showToast('success', enabled ? 'Enabled' : 'Disabled', `Local trigger ${enabled ? 'activated' : 'deactivated'}.`);
       await loadTriggers();
       
     } catch (error) {
       console.error('[Triggers] Enable toggle failed:', error);
       showToast('error', 'Failed', 'Could not change trigger status.');
       await loadTriggers();
+      throw error;
     }
   }
 
