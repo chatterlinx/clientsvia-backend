@@ -14,6 +14,20 @@
   <link rel="stylesheet" href="/agent-console/styles.css">
   <style>
     /* ════════════════════════════════════════════════════════════════════════
+       CSS VARIABLES (required for trigger console)
+       ════════════════════════════════════════════════════════════════════════ */
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f9fafb;
+      --bg-tertiary: #f3f4f6;
+      --text-primary: #111827;
+      --text-secondary: #4b5563;
+      --text-muted: #9ca3af;
+      --border-color: #e5e7eb;
+      --border-light: #f3f4f6;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
        TRIGGER CONSOLE SPECIFIC STYLES
        ════════════════════════════════════════════════════════════════════════ */
     
@@ -380,6 +394,30 @@
     .form-section-title {
       font-weight: 600;
       margin-bottom: 12px;
+      color: var(--text-primary);
+    }
+
+    /* Form Input Overrides - ensure dark readable text */
+    .modal .form-input,
+    .modal .form-textarea,
+    .modal .form-select {
+      color: var(--text-primary) !important;
+      background: var(--bg-primary) !important;
+      border-color: var(--border-color);
+    }
+    
+    .modal .form-input::placeholder,
+    .modal .form-textarea::placeholder {
+      color: var(--text-muted);
+    }
+    
+    .modal .form-label {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    
+    .modal .form-hint {
+      color: var(--text-muted);
     }
     
     /* Approval Modal */
