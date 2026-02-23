@@ -1078,6 +1078,135 @@ Respond ONLY with valid JSON, no markdown, no explanation:
   }
 });
 
+/**
+ * POST /:companyId/gpt-prefill-advanced
+ * Advanced GPT prefill with customizable settings
+ * Body: { 
+ *   keywords: string,
+ *   businessType: string,
+ *   businessLabel: string,
+ *   tone: string,
+ *   additionalInstructions: string,
+ *   includeFollowup: boolean
+ * }
+ * Returns: { success, data: { label, ruleId, phrases, negativeKeywords, answerText, followUpQuestion } }
+ */
+router.post('/:companyId/gpt-prefill-advanced', authenticateJWT, requirePermission(PERMISSIONS.CONFIG_WRITE), async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    const {
+      keywords = '',
+      businessType = 'general',
+      businessLabel = 'Service Business',
+      tone = 'friendly and conversational',
+      additionalInstructions = '',
+      includeFollowup = true
+    } = req.body;
+
+    const trimmedKeywords = keywords.trim();
+    if (!trimmedKeywords) {
+      return res.status(400).json({ success: false, error: 'Keywords required' });
+    }
+
+    if (!openaiClient) {
+      return res.status(503).json({ success: false, error: 'OpenAI not configured' });
+    }
+
+    const company = await v2Company.findById(companyId).select('companyName').lean();
+    if (!company) {
+      return res.status(404).json({ success: false, error: 'Company not found' });
+    }
+
+    const companyName = company.companyName || 'our company';
+
+    const systemPrompt = `You are an AI assistant helping create trigger cards for an AI phone agent at a ${businessLabel} business called "${companyName}".
+
+BUSINESS CONTEXT:
+- Business Type: ${businessLabel}
+- Company Name: ${companyName}
+- Tone: ${tone}
+${additionalInstructions ? `- Additional Instructions: ${additionalInstructions}` : ''}
+
+Given a set of keywords that represent a caller's intent, generate:
+
+1. label: A short, clear display name (2-4 words) that describes what the caller is asking about
+2. ruleId: A lowercase, dot-separated identifier (e.g., "pricing.service_call", "hours.weekend") - NO spaces, only letters, numbers, dots, underscores
+3. phrases: 3-5 natural language phrases callers commonly say when asking about this topic
+4. negativeKeywords: 2-3 words that would indicate a DIFFERENT intent (to avoid false matches)
+5. answerText: A helpful, ${tone} answer (2-4 sentences). Be specific to ${businessLabel}. Include realistic pricing/details if relevant.
+${includeFollowup ? '6. followUpQuestion: A natural question to continue the conversation and guide the caller toward booking/next steps' : ''}
+
+IMPORTANT:
+- The answerText should sound natural and helpful, like a real person answering the phone
+- Include specific details relevant to ${businessLabel} (realistic prices, common services, etc.)
+- The tone should be ${tone}
+
+Respond ONLY with valid JSON, no markdown, no explanation:
+{
+  "label": "...",
+  "ruleId": "...",
+  "phrases": ["...", "...", "..."],
+  "negativeKeywords": ["...", "..."],
+  "answerText": "..."${includeFollowup ? ',\n  "followUpQuestion": "..."' : ''}
+}`;
+
+    const userPrompt = `Keywords: ${trimmedKeywords}`;
+
+    logger.info('[AGENT2] GPT-4 advanced prefill request', { 
+      companyId, 
+      keywords: trimmedKeywords, 
+      businessType, 
+      tone 
+    });
+
+    const response = await openaiClient.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 600
+    });
+
+    const content = response.choices?.[0]?.message?.content || '';
+
+    let parsed;
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON in response');
+      }
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch (parseErr) {
+      logger.error('[AGENT2] GPT-4 advanced prefill parse error', { content, error: parseErr.message });
+      return res.status(500).json({ success: false, error: 'Failed to parse GPT response' });
+    }
+
+    logger.info('[AGENT2] GPT-4 advanced prefill success', { 
+      companyId, 
+      keywords: trimmedKeywords, 
+      label: parsed.label,
+      ruleId: parsed.ruleId
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        label: parsed.label || '',
+        ruleId: (parsed.ruleId || '').toLowerCase().replace(/[^a-z0-9._-]/g, '_'),
+        phrases: Array.isArray(parsed.phrases) ? parsed.phrases : [],
+        negativeKeywords: Array.isArray(parsed.negativeKeywords) ? parsed.negativeKeywords : [],
+        answerText: parsed.answerText || '',
+        followUpQuestion: includeFollowup ? (parsed.followUpQuestion || '') : ''
+      }
+    });
+  } catch (error) {
+    logger.error('[AGENT2] GPT-4 advanced prefill error', { error: error.message });
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 // GREETINGS - SEED FROM GLOBAL
 // ═══════════════════════════════════════════════════════════════════════════

@@ -38,7 +38,16 @@
     editingTrigger: null,
     pendingApproval: null,
     
-    searchQuery: ''
+    searchQuery: '',
+    
+    // GPT Settings
+    gptSettings: {
+      businessType: 'hvac',
+      defaultPriority: 50,
+      tone: 'friendly',
+      instructions: '',
+      includeFollowup: true
+    }
   };
 
   /* --------------------------------------------------------------------------
@@ -104,6 +113,19 @@
     inputGroupName: document.getElementById('input-group-name'),
     inputGroupIcon: document.getElementById('input-group-icon'),
     inputGroupDescription: document.getElementById('input-group-description'),
+    
+    // GPT Settings Modal
+    modalGptSettings: document.getElementById('modal-gpt-settings'),
+    modalGptClose: document.getElementById('modal-gpt-close'),
+    btnGptSettings: document.getElementById('btn-gpt-settings'),
+    btnGptPrefill: document.getElementById('btn-gpt-prefill'),
+    btnGptSettingsCancel: document.getElementById('btn-gpt-settings-cancel'),
+    btnGptSettingsSave: document.getElementById('btn-gpt-settings-save'),
+    gptBusinessType: document.getElementById('gpt-business-type'),
+    gptDefaultPriority: document.getElementById('gpt-default-priority'),
+    gptTone: document.getElementById('gpt-tone'),
+    gptInstructions: document.getElementById('gpt-instructions'),
+    gptIncludeFollowup: document.getElementById('gpt-include-followup'),
     
     toastContainer: document.getElementById('toast-container')
   };
@@ -182,11 +204,29 @@
     DOM.btnGroupCancel.addEventListener('click', closeCreateGroupModal);
     DOM.btnGroupCreate.addEventListener('click', createGroup);
     
+    // GPT Settings & Prefill
+    if (DOM.btnGptSettings) {
+      DOM.btnGptSettings.addEventListener('click', openGptSettingsModal);
+    }
+    if (DOM.btnGptPrefill) {
+      DOM.btnGptPrefill.addEventListener('click', gptPrefill);
+    }
+    if (DOM.modalGptClose) {
+      DOM.modalGptClose.addEventListener('click', closeGptSettingsModal);
+    }
+    if (DOM.btnGptSettingsCancel) {
+      DOM.btnGptSettingsCancel.addEventListener('click', closeGptSettingsModal);
+    }
+    if (DOM.btnGptSettingsSave) {
+      DOM.btnGptSettingsSave.addEventListener('click', saveGptSettings);
+    }
+    
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeTriggerModal();
         closeApprovalModal();
         closeCreateGroupModal();
+        closeGptSettingsModal();
       }
     });
   }
@@ -662,6 +702,169 @@
       showToast('error', 'Failed', 'Could not change trigger status.');
       await loadTriggers();
     }
+  }
+
+  /* --------------------------------------------------------------------------
+     GPT-4 PREFILL
+     -------------------------------------------------------------------------- */
+  function openGptSettingsModal() {
+    if (DOM.gptBusinessType) {
+      DOM.gptBusinessType.value = state.gptSettings.businessType;
+    }
+    if (DOM.gptDefaultPriority) {
+      DOM.gptDefaultPriority.value = state.gptSettings.defaultPriority;
+    }
+    if (DOM.gptTone) {
+      DOM.gptTone.value = state.gptSettings.tone;
+    }
+    if (DOM.gptInstructions) {
+      DOM.gptInstructions.value = state.gptSettings.instructions;
+    }
+    if (DOM.gptIncludeFollowup) {
+      DOM.gptIncludeFollowup.checked = state.gptSettings.includeFollowup;
+    }
+    
+    if (DOM.modalGptSettings) {
+      DOM.modalGptSettings.classList.add('active');
+    }
+  }
+
+  function closeGptSettingsModal() {
+    if (DOM.modalGptSettings) {
+      DOM.modalGptSettings.classList.remove('active');
+    }
+  }
+
+  function saveGptSettings() {
+    state.gptSettings.businessType = DOM.gptBusinessType?.value || 'hvac';
+    state.gptSettings.defaultPriority = parseInt(DOM.gptDefaultPriority?.value, 10) || 50;
+    state.gptSettings.tone = DOM.gptTone?.value || 'friendly';
+    state.gptSettings.instructions = DOM.gptInstructions?.value || '';
+    state.gptSettings.includeFollowup = DOM.gptIncludeFollowup?.checked !== false;
+    
+    closeGptSettingsModal();
+    showToast('success', 'Settings Saved', 'GPT prefill settings updated.');
+  }
+
+  async function gptPrefill() {
+    const keywordsInput = DOM.inputTriggerKeywords;
+    const keywords = (keywordsInput?.value || '').trim();
+    
+    if (!keywords) {
+      showToast('warning', 'Keywords Required', 'Enter keywords first, then click GPT-4 Prefill.');
+      keywordsInput?.focus();
+      return;
+    }
+    
+    const btn = DOM.btnGptPrefill;
+    const originalText = btn?.innerHTML || 'GPT-4 Prefill';
+    
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span>Generating...</span>';
+    }
+    
+    try {
+      const response = await gptPrefillRequest(keywords);
+      
+      if (response.label && DOM.inputTriggerLabel) {
+        DOM.inputTriggerLabel.value = response.label;
+      }
+      if (response.phrases && Array.isArray(response.phrases) && DOM.inputTriggerPhrases) {
+        DOM.inputTriggerPhrases.value = response.phrases.join(', ');
+      }
+      if (response.negativeKeywords && Array.isArray(response.negativeKeywords) && DOM.inputTriggerNegative) {
+        DOM.inputTriggerNegative.value = response.negativeKeywords.join(', ');
+      }
+      if (response.answerText && DOM.inputTriggerAnswer) {
+        DOM.inputTriggerAnswer.value = response.answerText;
+      }
+      if (response.followUpQuestion && DOM.inputTriggerFollowup && state.gptSettings.includeFollowup) {
+        DOM.inputTriggerFollowup.value = response.followUpQuestion;
+      }
+      if (response.ruleId && DOM.inputTriggerRuleId) {
+        const existingRuleId = DOM.inputTriggerRuleId.value.trim();
+        if (!existingRuleId) {
+          DOM.inputTriggerRuleId.value = response.ruleId;
+        }
+      }
+      if (DOM.inputTriggerPriority && !state.editingTrigger) {
+        DOM.inputTriggerPriority.value = state.gptSettings.defaultPriority;
+      }
+      
+      if (btn) {
+        btn.innerHTML = '<span style="color: #22c55e;">Done!</span>';
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }, 1500);
+      }
+      
+      showToast('success', 'Prefill Complete', 'Review and edit the generated content as needed.');
+      
+    } catch (error) {
+      console.error('[Triggers] GPT prefill failed:', error);
+      showToast('error', 'Prefill Failed', error.message || 'Could not generate content.');
+      
+      if (btn) {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+  }
+
+  async function gptPrefillRequest(keywords) {
+    const token = localStorage.getItem('adminToken') ||
+                  localStorage.getItem('token') ||
+                  sessionStorage.getItem('token');
+    
+    const businessTypeLabels = {
+      hvac: 'HVAC / Air Conditioning',
+      plumbing: 'Plumbing',
+      electrical: 'Electrical',
+      roofing: 'Roofing',
+      dental: 'Dental Office',
+      medical: 'Medical Practice',
+      legal: 'Law Firm',
+      automotive: 'Automotive / Mechanic',
+      landscaping: 'Landscaping',
+      cleaning: 'Cleaning Services',
+      general: 'General Service Business'
+    };
+    
+    const toneDescriptions = {
+      friendly: 'friendly and conversational',
+      professional: 'professional and formal',
+      casual: 'casual and relaxed',
+      empathetic: 'empathetic and supportive'
+    };
+    
+    const businessLabel = businessTypeLabels[state.gptSettings.businessType] || 'Service Business';
+    const toneDesc = toneDescriptions[state.gptSettings.tone] || 'friendly and conversational';
+    
+    const response = await fetch(`/api/admin/agent2/${state.companyId}/gpt-prefill-advanced`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        keywords: keywords,
+        businessType: state.gptSettings.businessType,
+        businessLabel: businessLabel,
+        tone: toneDesc,
+        additionalInstructions: state.gptSettings.instructions,
+        includeFollowup: state.gptSettings.includeFollowup
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'GPT prefill request failed');
+    }
+    
+    return data.data;
   }
 
   /* --------------------------------------------------------------------------
