@@ -25,6 +25,36 @@ const AgentConsoleAuth = (function() {
   }
 
   /**
+   * Decode JWT payload without verification (client-side only)
+   * @param {string} token - JWT token
+   * @returns {Object|null} - Decoded payload or null if invalid
+   */
+  function decodeJwtPayload(token) {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const payload = parts[1];
+      const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+      return JSON.parse(decoded);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Check if JWT token is expired (client-side check)
+   * @param {string} token - JWT token
+   * @returns {boolean} - true if expired or invalid
+   */
+  function isTokenExpired(token) {
+    const payload = decodeJwtPayload(token);
+    if (!payload || !payload.exp) return true;
+    // exp is in seconds, Date.now() is in milliseconds
+    // Add 10 second buffer to avoid edge cases
+    return (payload.exp * 1000) < (Date.now() + 10000);
+  }
+
+  /**
    * Clear auth token and redirect to login
    * @param {string} [message] - Optional message to show on login page
    */
@@ -36,15 +66,26 @@ const AgentConsoleAuth = (function() {
   }
 
   /**
-   * Check if user is authenticated, redirect if not
+   * Check if user is authenticated with valid token, redirect if not
+   * Performs client-side JWT expiry check (no server call needed)
    * @returns {boolean}
    */
   function requireAuth() {
     const token = getToken();
+    
+    // No token present
     if (!token) {
       clearAndRedirect('Please log in to access Agent Console');
       return false;
     }
+    
+    // Token expired (client-side check)
+    if (isTokenExpired(token)) {
+      console.warn('[AgentConsoleAuth] Token expired, redirecting to login');
+      clearAndRedirect('Session expired - please log in again');
+      return false;
+    }
+    
     return true;
   }
 

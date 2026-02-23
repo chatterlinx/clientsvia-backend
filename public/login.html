@@ -243,10 +243,29 @@
                     }
                     buttonText.textContent = 'Success! Redirecting...';
                     
-                    // Check for returnUrl in query params
+                    // Check for returnUrl in query params (with security validation)
                     const urlParams = new URLSearchParams(window.location.search);
-                    const returnUrl = urlParams.get('returnUrl');
-                    const redirectTo = returnUrl ? decodeURIComponent(returnUrl) : '/index.html';
+                    const returnUrlRaw = urlParams.get('returnUrl');
+                    
+                    // Validate returnUrl is same-origin path only (prevent open redirect)
+                    function isValidReturnUrl(url) {
+                        if (!url) return false;
+                        // Decode once
+                        const decoded = decodeURIComponent(url);
+                        // Must start with /
+                        if (!decoded.startsWith('/')) return false;
+                        // Must NOT contain // (protocol-relative URL)
+                        if (decoded.includes('//')) return false;
+                        // Must NOT contain : before first / (scheme like javascript: or https:)
+                        const colonIndex = decoded.indexOf(':');
+                        const slashIndex = decoded.indexOf('/');
+                        if (colonIndex !== -1 && colonIndex < slashIndex) return false;
+                        return true;
+                    }
+                    
+                    const redirectTo = isValidReturnUrl(returnUrlRaw) 
+                        ? decodeURIComponent(returnUrlRaw) 
+                        : '/index.html';
                     
                     setTimeout(() => {
                         window.location.href = redirectTo;

@@ -143,26 +143,13 @@
     setLoading(true);
     
     try {
-      await Promise.all([
-        loadCompanyInfo(),
-        loadTruthData()
-      ]);
+      // Truth endpoint includes company info, no separate call needed
+      await loadTruthData();
     } catch (error) {
       console.error('[AgentConsole] Failed to load initial data:', error);
       showToast('error', 'Load Failed', 'Could not load company data. Please refresh.');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function loadCompanyInfo() {
-    try {
-      const data = await AgentConsoleAuth.apiFetch(`/api/admin/companies/${state.companyId}`);
-      state.companyName = data.companyName || data.company?.companyName || 'Unknown Company';
-      DOM.headerCompanyName.textContent = state.companyName;
-    } catch (error) {
-      console.error('[AgentConsole] Failed to load company info:', error);
-      DOM.headerCompanyName.textContent = 'Company';
     }
   }
 
@@ -175,11 +162,19 @@
       DOM.truthJsonDisplay.textContent = 'Loading...';
       
       state.truthData = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/truth`);
+      
+      // Extract company name from truth data
+      state.companyName = state.truthData?.companyProfile?.businessName || 
+                          state.truthData?.companyProfile?.companyName || 
+                          'Unknown Company';
+      DOM.headerCompanyName.textContent = state.companyName;
+      
       renderTruthJson(state.truthData);
       showToast('success', 'Truth Refreshed', 'Runtime truth data updated successfully.');
     } catch (error) {
       console.error('[AgentConsole] Failed to load truth data:', error);
       DOM.truthJsonDisplay.textContent = JSON.stringify({ error: 'Failed to load truth data' }, null, 2);
+      DOM.headerCompanyName.textContent = 'Company';
       showToast('error', 'Refresh Failed', 'Could not load runtime truth data.');
     }
   }
