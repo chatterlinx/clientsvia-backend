@@ -213,7 +213,7 @@ async function buildMergedTriggerList(companyId) {
 
   const globalCount = globalTriggers.length;
   const globalHiddenCount = hiddenSet.size;
-  const globalEnabledCount = globalCount - globalHiddenCount - overrideMap.size;
+  const globalEnabledCount = globalCount - globalHiddenCount - fullOverrideByRuleId.size;
   const localCount = localTriggers.filter(lt => !lt.isOverride).length;
   const overrideCount = localTriggers.filter(lt => lt.isOverride).length + partialOverrideMap.size;
 
