@@ -25,17 +25,29 @@ const AgentConsoleAuth = (function() {
   }
 
   /**
+   * Decode base64url string with proper padding
+   * @param {string} str - base64url encoded string
+   * @returns {string} - decoded string
+   */
+  function base64UrlDecode(str) {
+    // Convert base64url to base64
+    let s = str.replace(/-/g, '+').replace(/_/g, '/');
+    // Pad to length multiple of 4
+    while (s.length % 4) s += '=';
+    return atob(s);
+  }
+
+  /**
    * Decode JWT payload without verification (client-side only)
    * @param {string} token - JWT token
    * @returns {Object|null} - Decoded payload or null if invalid
    */
   function decodeJwtPayload(token) {
     try {
-      const parts = token.split('.');
+      const parts = String(token || '').split('.');
       if (parts.length !== 3) return null;
-      const payload = parts[1];
-      const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-      return JSON.parse(decoded);
+      const json = base64UrlDecode(parts[1]);
+      return JSON.parse(json);
     } catch (e) {
       return null;
     }
@@ -50,8 +62,9 @@ const AgentConsoleAuth = (function() {
     const payload = decodeJwtPayload(token);
     if (!payload || !payload.exp) return true;
     // exp is in seconds, Date.now() is in milliseconds
-    // Add 10 second buffer to avoid edge cases
-    return (payload.exp * 1000) < (Date.now() + 10000);
+    // 10 second buffer to avoid edge cases
+    const expMs = payload.exp * 1000;
+    return expMs < (Date.now() + 10000);
   }
 
   /**

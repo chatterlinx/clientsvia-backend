@@ -243,29 +243,33 @@
                     }
                     buttonText.textContent = 'Success! Redirecting...';
                     
-                    // Check for returnUrl in query params (with security validation)
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const returnUrlRaw = urlParams.get('returnUrl');
+                    // Secure returnUrl handling (prevent open redirect)
+                    function safeDecodeReturnUrl(raw) {
+                        if (!raw) return null;
+                        try {
+                            return decodeURIComponent(raw);
+                        } catch (e) {
+                            return null;
+                        }
+                    }
                     
-                    // Validate returnUrl is same-origin path only (prevent open redirect)
-                    function isValidReturnUrl(url) {
-                        if (!url) return false;
-                        // Decode once
-                        const decoded = decodeURIComponent(url);
-                        // Must start with /
+                    function isValidReturnUrl(decoded) {
+                        if (!decoded) return false;
+                        // Must be a relative path
                         if (!decoded.startsWith('/')) return false;
-                        // Must NOT contain // (protocol-relative URL)
-                        if (decoded.includes('//')) return false;
-                        // Must NOT contain : before first / (scheme like javascript: or https:)
-                        const colonIndex = decoded.indexOf(':');
-                        const slashIndex = decoded.indexOf('/');
-                        if (colonIndex !== -1 && colonIndex < slashIndex) return false;
+                        // No protocol-relative URLs
+                        if (decoded.startsWith('//')) return false;
+                        // Block any scheme attempts
+                        if (decoded.includes('://')) return false;
+                        if (decoded.includes(':')) return false;
+                        // Block control characters
+                        if (/[\u0000-\u001F\u007F]/.test(decoded)) return false;
                         return true;
                     }
                     
-                    const redirectTo = isValidReturnUrl(returnUrlRaw) 
-                        ? decodeURIComponent(returnUrlRaw) 
-                        : '/index.html';
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const decodedReturnUrl = safeDecodeReturnUrl(urlParams.get('returnUrl'));
+                    const redirectTo = isValidReturnUrl(decodedReturnUrl) ? decodedReturnUrl : '/index.html';
                     
                     setTimeout(() => {
                         window.location.href = redirectTo;
