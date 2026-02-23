@@ -952,6 +952,14 @@ input, textarea, select {
   max-width: 800px;
 }
 
+/* Full-width single-column layout for pages that need more space */
+.single-column-layout-full {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 100%;
+}
+
 /* --------------------------------------------------------------------------
    MODALS
    -------------------------------------------------------------------------- */
