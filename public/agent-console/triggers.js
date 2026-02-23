@@ -422,12 +422,14 @@
         </div>
         <div class="trigger-followup ${followUpClass}" title="${escapeHtml(followUpDisplay)}">${escapeHtml(followUpDisplay)}</div>
         <div>
-          <label class="toggle-switch" title="${isGlobalScope ? 'Global' : 'Local'}">
-            <input type="checkbox" class="toggle-scope" 
-                   data-trigger-id="${trigger.triggerId}" 
-                   ${isGlobalScope ? 'checked' : ''}>
-            <span class="toggle-slider"></span>
-          </label>
+          ${isGlobalScope ? 
+            '<span class="scope-badge global" title="Global triggers cannot be converted back to LOCAL">GLOBAL</span>' :
+            `<label class="toggle-switch" title="Local (click to convert to Global - cannot be reversed)">
+              <input type="checkbox" class="toggle-scope" 
+                     data-trigger-id="${trigger.triggerId}">
+              <span class="toggle-slider"></span>
+            </label>`
+          }
         </div>
         <div>
           <label class="toggle-switch">
@@ -735,10 +737,27 @@
     const actionLabel = newIsGlobal ? 'Change to Global' : 'Change to Local';
     
     let impactText = '';
+    let warningBox = '';
+    
     if (newIsGlobal) {
       impactText = 'This will change the trigger from LOCAL to GLOBAL scope. Global triggers are shared across multiple companies in the same group.';
+      warningBox = `
+        <div style="background: #fee2e2; border: 2px solid #dc2626; border-radius: 8px; padding: 12px; margin: 16px 0;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 1.25rem;">⚠️</span>
+            <strong style="color: #dc2626;">WARNING: This action cannot be reversed!</strong>
+          </div>
+          <p style="margin: 0; color: #991b1b; font-size: 0.875rem; line-height: 1.5;">
+            Once you convert this trigger to GLOBAL scope, you will <strong>NOT</strong> be able to change it back to LOCAL. 
+            The toggle will be replaced with a permanent GLOBAL badge.
+          </p>
+        </div>
+      `;
     } else {
-      impactText = 'This will change the trigger from GLOBAL to LOCAL scope. Local triggers are specific to this company only.';
+      impactText = 'Converting GLOBAL triggers to LOCAL is not supported. This action is blocked for data integrity.';
+      showToast('error', 'Action Not Allowed', 'GLOBAL triggers cannot be converted back to LOCAL scope.');
+      checkbox.checked = true;
+      return;
     }
     
     state.pendingApproval = {
@@ -751,7 +770,8 @@
     DOM.approvalTitle.textContent = actionLabel;
     DOM.approvalText.innerHTML = `
       <strong>${escapeHtml(trigger.label)}</strong><br><br>
-      ${impactText}<br><br>
+      ${impactText}
+      ${warningBox}
       <span style="color: var(--text-muted); font-size: 0.875rem;">Current Scope: ${trigger.scope} · Rule ID: ${trigger.ruleId}</span>
     `;
     updateApprovalHint('Yes');
