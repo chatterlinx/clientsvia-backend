@@ -4396,6 +4396,12 @@ class CompanyProfileManager {
                 companyIdElement.textContent = `ID: ${this.companyId}`;
             }
             
+            // Update top header platform label with company name
+            const pageLoadedTimeElement = document.getElementById('page-loaded-time');
+            if (pageLoadedTimeElement && this.currentData.companyName) {
+                pageLoadedTimeElement.textContent = this.currentData.companyName;
+            }
+            
         } catch (error) {
         }
     }
