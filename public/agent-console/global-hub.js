@@ -7,6 +7,8 @@
  * - Display platform-wide shared resources
  * - First Names dictionary lookup
  * - Platform default triggers status
+ * 
+ * Uses AgentConsoleAuth for centralized authentication.
  * ============================================================================
  */
 
@@ -20,14 +22,6 @@
     API_BASE: '/api/agent-console',
     GLOBAL_HUB_API: '/api/admin/global-hub'
   };
-
-  /* --------------------------------------------------------------------------
-     AUTH HELPER
-     -------------------------------------------------------------------------- */
-  function getAuthHeaders() {
-    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-  }
 
   /* --------------------------------------------------------------------------
      STATE
@@ -73,6 +67,11 @@
      INITIALIZATION
      -------------------------------------------------------------------------- */
   function init() {
+    // Require auth before anything else
+    if (!AgentConsoleAuth.requireAuth()) {
+      return;
+    }
+
     extractCompanyId();
     setupEventListeners();
     loadGlobalHubStats();
@@ -130,39 +129,32 @@
     try {
       // Try to get stats from truth endpoint
       if (state.companyId) {
-        const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-          credentials: 'include',
-          headers: getAuthHeaders()
-        });
+        const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/truth`);
         
-        if (response.ok) {
-          const data = await response.json();
-          
-          // First names
-          state.firstNamesCount = data.globalHub?.firstNames?.count || 0;
-          DOM.statFirstnamesCount.textContent = state.firstNamesCount.toLocaleString();
-          
-          if (data.globalHub?.firstNames?.status === 'loaded') {
-            DOM.badgeFirstnamesStatus.textContent = 'Loaded';
-            DOM.badgeFirstnamesStatus.className = 'badge badge-success';
-            DOM.statCacheStatus.textContent = 'Active';
-          } else {
-            DOM.badgeFirstnamesStatus.textContent = 'Empty';
-            DOM.badgeFirstnamesStatus.className = 'badge badge-warning';
-            DOM.statCacheStatus.textContent = 'N/A';
-          }
-          
-          // Platform defaults
-          if (data.globalHub?.platformDefaults?.loaded) {
-            DOM.badgeDefaultsStatus.textContent = 'Active';
-            DOM.badgeDefaultsStatus.className = 'badge badge-success';
-          } else {
-            DOM.badgeDefaultsStatus.textContent = 'Not Loaded';
-            DOM.badgeDefaultsStatus.className = 'badge badge-warning';
-          }
-          
-          return;
+        // First names
+        state.firstNamesCount = data.globalHub?.firstNames?.count || 0;
+        DOM.statFirstnamesCount.textContent = state.firstNamesCount.toLocaleString();
+        
+        if (data.globalHub?.firstNames?.status === 'loaded') {
+          DOM.badgeFirstnamesStatus.textContent = 'Loaded';
+          DOM.badgeFirstnamesStatus.className = 'badge badge-success';
+          DOM.statCacheStatus.textContent = 'Active';
+        } else {
+          DOM.badgeFirstnamesStatus.textContent = 'Empty';
+          DOM.badgeFirstnamesStatus.className = 'badge badge-warning';
+          DOM.statCacheStatus.textContent = 'N/A';
         }
+        
+        // Platform defaults
+        if (data.globalHub?.platformDefaults?.loaded) {
+          DOM.badgeDefaultsStatus.textContent = 'Active';
+          DOM.badgeDefaultsStatus.className = 'badge badge-success';
+        } else {
+          DOM.badgeDefaultsStatus.textContent = 'Not Loaded';
+          DOM.badgeDefaultsStatus.className = 'badge badge-warning';
+        }
+        
+        return;
       }
       
       // Fallback: try direct global hub API
@@ -179,21 +171,14 @@
 
   async function loadFromGlobalHubApi() {
     try {
-      const response = await fetch(`${CONFIG.GLOBAL_HUB_API}/stats`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.GLOBAL_HUB_API}/stats`);
+      state.firstNamesCount = data.firstNamesCount || 0;
+      DOM.statFirstnamesCount.textContent = state.firstNamesCount.toLocaleString();
+      DOM.statCacheStatus.textContent = data.cacheStatus || 'Unknown';
       
-      if (response.ok) {
-        const data = await response.json();
-        state.firstNamesCount = data.firstNamesCount || 0;
-        DOM.statFirstnamesCount.textContent = state.firstNamesCount.toLocaleString();
-        DOM.statCacheStatus.textContent = data.cacheStatus || 'Unknown';
-        
-        if (state.firstNamesCount > 0) {
-          DOM.badgeFirstnamesStatus.textContent = 'Loaded';
-          DOM.badgeFirstnamesStatus.className = 'badge badge-success';
-        }
+      if (state.firstNamesCount > 0) {
+        DOM.badgeFirstnamesStatus.textContent = 'Loaded';
+        DOM.badgeFirstnamesStatus.className = 'badge badge-success';
       }
     } catch (error) {
       console.error('[GlobalHub] Global hub API failed:', error);
@@ -204,21 +189,14 @@
     DOM.btnRefreshFirstnames.disabled = true;
     
     try {
-      const response = await fetch(`${CONFIG.GLOBAL_HUB_API}/first-names/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: getAuthHeaders()
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.GLOBAL_HUB_API}/first-names/refresh`, {
+        method: 'POST'
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        state.firstNamesCount = data.count || state.firstNamesCount;
-        DOM.statFirstnamesCount.textContent = state.firstNamesCount.toLocaleString();
-        DOM.statCacheStatus.textContent = 'Refreshed';
-        showToast('success', 'Refreshed', `${state.firstNamesCount.toLocaleString()} names loaded into cache.`);
-      } else {
-        throw new Error('Refresh failed');
-      }
+      state.firstNamesCount = data.count || state.firstNamesCount;
+      DOM.statFirstnamesCount.textContent = state.firstNamesCount.toLocaleString();
+      DOM.statCacheStatus.textContent = 'Refreshed';
+      showToast('success', 'Refreshed', `${state.firstNamesCount.toLocaleString()} names loaded into cache.`);
     } catch (error) {
       console.error('[GlobalHub] Refresh failed:', error);
       showToast('error', 'Refresh Failed', 'Could not refresh first names cache.');
@@ -261,18 +239,8 @@
     `;
     
     try {
-      const response = await fetch(`${CONFIG.GLOBAL_HUB_API}/first-names/lookup?name=${encodeURIComponent(name)}`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        displaySearchResult(name, data.exists, data.normalized);
-      } else {
-        // Simulate result for demo
-        displaySearchResult(name, isCommonName(name), name.charAt(0).toUpperCase() + name.slice(1).toLowerCase());
-      }
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.GLOBAL_HUB_API}/first-names/lookup?name=${encodeURIComponent(name)}`);
+      displaySearchResult(name, data.exists, data.normalized);
     } catch (error) {
       console.error('[GlobalHub] Name search failed:', error);
       // Simulate result for demo
@@ -335,16 +303,7 @@
     }
     
     try {
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/truth`);
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

@@ -6,6 +6,7 @@
  * Purpose: Connect, verify, and test Google Calendar integration for Booking Logic.
  * 
  * NO legacy UI code. Uses only Agent Console API endpoints.
+ * Uses AgentConsoleAuth for centralized authentication.
  * 
  * ════════════════════════════════════════════════════════════════════════════════
  */
@@ -115,29 +116,9 @@ function formatTimeOption(timeOption) {
   return `${dateStr}, ${startStr} - ${endStr}`;
 }
 
-function getAuthHeaders() {
-  const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-}
-
 async function apiFetch(endpoint, options = {}) {
   const url = `/api/agent-console/${companyId}${endpoint}`;
-  
-  const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-      ...options.headers
-    },
-    ...options
-  });
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || error.message || 'Request failed');
-  }
-  
-  return response.json();
+  return AgentConsoleAuth.apiFetch(url, options);
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -342,7 +323,7 @@ async function saveCalendarSelection() {
   try {
     await apiFetch('/calendar/select', {
       method: 'POST',
-      body: JSON.stringify({ calendarId })
+      body: { calendarId }
     });
     
     const selectedCal = calendarList.find(c => c.id === calendarId);
@@ -383,7 +364,7 @@ async function previewAvailability() {
   try {
     const result = await apiFetch('/calendar/test-availability', {
       method: 'POST',
-      body: JSON.stringify({ startDate, durationMinutes: duration })
+      body: { startDate, durationMinutes: duration }
     });
     
     els.availabilityJson.textContent = JSON.stringify(result, null, 2);
@@ -470,6 +451,11 @@ function initEventHandlers() {
 // ════════════════════════════════════════════════════════════════════════════════
 
 async function init() {
+  // Require auth before anything else
+  if (!AgentConsoleAuth.requireAuth()) {
+    return;
+  }
+
   companyId = getCompanyIdFromUrl();
   
   if (!companyId) {

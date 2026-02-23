@@ -242,8 +242,14 @@
                         console.error('❌ No token in response!');
                     }
                     buttonText.textContent = 'Success! Redirecting...';
+                    
+                    // Check for returnUrl in query params
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const returnUrl = urlParams.get('returnUrl');
+                    const redirectTo = returnUrl ? decodeURIComponent(returnUrl) : '/index.html';
+                    
                     setTimeout(() => {
-                        window.location.href = '/index.html';
+                        window.location.href = redirectTo;
                     }, 1000);
                 } else {
                     // Login failed

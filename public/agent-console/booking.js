@@ -7,6 +7,8 @@
  * - Load and display Booking Logic configuration
  * - Handle calendar status display
  * - Booking flow step simulation
+ * 
+ * Uses AgentConsoleAuth for centralized authentication.
  * ============================================================================
  */
 
@@ -19,14 +21,6 @@
   const CONFIG = {
     API_BASE: '/api/agent-console'
   };
-
-  /* --------------------------------------------------------------------------
-     AUTH HELPER
-     -------------------------------------------------------------------------- */
-  function getAuthHeaders() {
-    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-  }
 
   /* --------------------------------------------------------------------------
      STATE
@@ -83,6 +77,11 @@
      INITIALIZATION
      -------------------------------------------------------------------------- */
   function init() {
+    // Require auth before anything else
+    if (!AgentConsoleAuth.requireAuth()) {
+      return;
+    }
+
     extractCompanyId();
     
     if (!state.companyId) {
@@ -159,16 +158,7 @@
      -------------------------------------------------------------------------- */
   async function loadConfig() {
     try {
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/booking/config`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/booking/config`);
       state.companyName = data.companyName;
       state.config = data.bookingLogic || {};
       state.calendarConnected = data.calendarConnected;
@@ -265,22 +255,14 @@
     appendBookingTrace(`[Step] Processing with userInput: "${userInput || '(none)'}"`);
     
     try {
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/booking/test-step`, {
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/booking/test-step`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        credentials: 'include',
-        body: JSON.stringify({
+        body: {
           payload,
           bookingCtx: state.testBookingCtx,
           userInput: userInput || null
-        })
+        }
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
       
       // Update displays
       if (data.result) {
@@ -383,16 +365,7 @@
      -------------------------------------------------------------------------- */
   async function downloadTruthJson() {
     try {
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/truth`);
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

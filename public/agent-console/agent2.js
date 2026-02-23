@@ -8,6 +8,8 @@
  * - Handle config updates (greeting, phrases, style)
  * - Live Test Turn functionality
  * - Generate sample handoff payloads
+ * 
+ * Uses AgentConsoleAuth for centralized authentication.
  * ============================================================================
  */
 
@@ -39,14 +41,6 @@
       'manager'
     ]
   };
-
-  /* --------------------------------------------------------------------------
-     AUTH HELPER
-     -------------------------------------------------------------------------- */
-  function getAuthHeaders() {
-    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-  }
 
   /* --------------------------------------------------------------------------
      STATE
@@ -118,6 +112,11 @@
      INITIALIZATION
      -------------------------------------------------------------------------- */
   function init() {
+    // Require auth before anything else
+    if (!AgentConsoleAuth.requireAuth()) {
+      return;
+    }
+
     extractCompanyId();
     
     if (!state.companyId) {
@@ -193,16 +192,7 @@
      -------------------------------------------------------------------------- */
   async function loadConfig() {
     try {
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`);
       state.companyName = data.companyName;
       state.config = data.agent2 || {};
       
@@ -247,72 +237,75 @@
     state.isDirty = false;
   }
 
+  /* --------------------------------------------------------------------------
+     PHRASE LIST MANAGEMENT
+     -------------------------------------------------------------------------- */
   function renderPhraseList(type, phrases) {
     const container = type === 'consent' ? DOM.consentPhrasesList : DOM.escalationPhrasesList;
     container.innerHTML = '';
     
     phrases.forEach((phrase, index) => {
-      const tag = document.createElement('div');
-      tag.className = 'tag';
+      const tag = document.createElement('span');
+      tag.className = 'phrase-tag';
       tag.innerHTML = `
-        <span>${escapeHtml(phrase)}</span>
-        <button class="tag-remove" data-type="${type}" data-index="${index}" title="Remove">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </button>
+        ${escapeHtml(phrase)}
+        <button type="button" class="phrase-remove" data-type="${type}" data-index="${index}">×</button>
       `;
       container.appendChild(tag);
     });
     
-    // Add click handlers for remove buttons
-    container.querySelectorAll('.tag-remove').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const phraseType = btn.dataset.type;
-        const index = parseInt(btn.dataset.index, 10);
-        removePhrase(phraseType, index);
+    // Add event listeners for remove buttons
+    container.querySelectorAll('.phrase-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const type = e.target.dataset.type;
+        const index = parseInt(e.target.dataset.index);
+        removePhrase(type, index);
       });
     });
   }
 
   function addPhrase(type) {
     const input = type === 'consent' ? DOM.inputConsentPhrase : DOM.inputEscalationPhrase;
-    const value = input.value.trim().toLowerCase();
+    const phrase = input.value.trim().toLowerCase();
     
-    if (!value) return;
+    if (!phrase) return;
     
-    const key = type === 'consent' ? 'consentPhrases' : 'escalationPhrases';
-    if (!state.config[key]) {
-      state.config[key] = type === 'consent' ? [...CONFIG.DEFAULT_CONSENT_PHRASES] : [...CONFIG.DEFAULT_ESCALATION_PHRASES];
+    const arrayKey = type === 'consent' ? 'consentPhrases' : 'escalationPhrases';
+    const defaults = type === 'consent' ? CONFIG.DEFAULT_CONSENT_PHRASES : CONFIG.DEFAULT_ESCALATION_PHRASES;
+    
+    if (!state.config[arrayKey]) {
+      state.config[arrayKey] = [...defaults];
     }
     
-    if (!state.config[key].includes(value)) {
-      state.config[key].push(value);
-      renderPhraseList(type, state.config[key]);
-      state.isDirty = true;
+    if (state.config[arrayKey].includes(phrase)) {
+      showToast('warning', 'Duplicate', 'This phrase already exists.');
+      return;
     }
+    
+    state.config[arrayKey].push(phrase);
+    renderPhraseList(type, state.config[arrayKey]);
     
     input.value = '';
+    state.isDirty = true;
   }
 
   function removePhrase(type, index) {
-    const key = type === 'consent' ? 'consentPhrases' : 'escalationPhrases';
-    if (state.config[key] && state.config[key][index] !== undefined) {
-      state.config[key].splice(index, 1);
-      renderPhraseList(type, state.config[key]);
-      state.isDirty = true;
+    const arrayKey = type === 'consent' ? 'consentPhrases' : 'escalationPhrases';
+    const defaults = type === 'consent' ? CONFIG.DEFAULT_CONSENT_PHRASES : CONFIG.DEFAULT_ESCALATION_PHRASES;
+    
+    if (!state.config[arrayKey]) {
+      state.config[arrayKey] = [...defaults];
     }
+    
+    state.config[arrayKey].splice(index, 1);
+    renderPhraseList(type, state.config[arrayKey]);
+    state.isDirty = true;
   }
 
   /* --------------------------------------------------------------------------
      SAVE CONFIG
      -------------------------------------------------------------------------- */
   async function saveConfig() {
-    if (!state.isDirty) {
-      showToast('info', 'No Changes', 'No changes to save.');
-      return;
-    }
-    
     const updates = {
       greetings: {
         initial: DOM.inputGreetingInitial.value.trim(),
@@ -333,18 +326,11 @@
     };
     
     try {
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`, {
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        credentials: 'include',
-        body: JSON.stringify(updates)
+        body: updates
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
       state.config = data.agent2;
       state.isDirty = false;
       
@@ -373,21 +359,13 @@
     appendTraceLog(`[Turn ${state.testSession.turn + 1}] Caller: "${text}"`);
     
     try {
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/test-turn`, {
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/test-turn`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        credentials: 'include',
-        body: JSON.stringify({
+        body: {
           text,
           session: state.testSession
-        })
+        }
       });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
       
       // Update display
       DOM.testOutputReply.textContent = data.result?.replyText || 'No reply generated.';
@@ -476,16 +454,7 @@
      -------------------------------------------------------------------------- */
   async function downloadTruthJson() {
     try {
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/truth`);
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);

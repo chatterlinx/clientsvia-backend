@@ -24,14 +24,6 @@
   };
 
   /* --------------------------------------------------------------------------
-     AUTH HELPER
-     -------------------------------------------------------------------------- */
-  function getAuthHeaders() {
-    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
-    return token ? { 'Authorization': `Bearer ${token}` } : {};
-  }
-
-  /* --------------------------------------------------------------------------
      STATE
      -------------------------------------------------------------------------- */
   const state = {
@@ -72,6 +64,11 @@
      INITIALIZATION
      -------------------------------------------------------------------------- */
   function init() {
+    // Require auth before anything else
+    if (!AgentConsoleAuth.requireAuth()) {
+      return;
+    }
+
     extractCompanyId();
     
     if (!state.companyId) {
@@ -160,16 +157,7 @@
 
   async function loadCompanyInfo() {
     try {
-      const response = await fetch(`/api/admin/companies/${state.companyId}`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await AgentConsoleAuth.apiFetch(`/api/admin/companies/${state.companyId}`);
       state.companyName = data.companyName || data.company?.companyName || 'Unknown Company';
       DOM.headerCompanyName.textContent = state.companyName;
     } catch (error) {
@@ -186,16 +174,7 @@
     try {
       DOM.truthJsonDisplay.textContent = 'Loading...';
       
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      state.truthData = await response.json();
+      state.truthData = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/truth`);
       renderTruthJson(state.truthData);
       showToast('success', 'Truth Refreshed', 'Runtime truth data updated successfully.');
     } catch (error) {
@@ -250,16 +229,7 @@
     
     try {
       // Fetch fresh data for download
-      const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include',
-        headers: getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await AgentConsoleAuth.apiFetch(`${CONFIG.API_BASE}/${state.companyId}/truth`);
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
