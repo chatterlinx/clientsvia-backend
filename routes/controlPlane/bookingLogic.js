@@ -55,7 +55,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateJWT } = require('../../middleware/auth');
 const BookingLogicEngine = require('../../services/engine/booking/BookingLogicEngine');
-const logger = require('../../config/logger');
+const logger = require('../../utils/logger');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // INTERNAL AUTH KEY (for server-to-server calls)
