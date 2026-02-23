@@ -77,172 +77,179 @@
         </div>
       </div>
 
-      <!-- Two Column Layout -->
-      <div class="config-layout">
-        <!-- Left: Configuration Panel -->
-        <div class="config-panel">
-          
-          <!-- Calendar Connection Status -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Calendar Connection</h2>
-              <span class="badge" id="badge-calendar-status">Checking...</span>
-            </div>
-            <div class="card-body">
-              <div id="calendar-connected" class="hidden">
-                <div class="flex items-center gap-4 mb-4">
-                  <div style="width: 48px; height: 48px; background: var(--color-success-50); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="3" y="4" width="18" height="18" rx="2" stroke="#22c55e" stroke-width="2"/>
-                      <path d="M3 10H21" stroke="#22c55e" stroke-width="2"/>
-                      <path d="M8 2V6M16 2V6" stroke="#22c55e" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Google Calendar Connected</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);" id="calendar-id-display">Calendar ID: —</div>
-                  </div>
+      <!-- ═══════════════════════════════════════════════════════════════
+           SINGLE-PAGE LAYOUT — CLEAN CARD-BASED DESIGN
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="single-column-layout">
+        
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Calendar Connection Status
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Calendar Connection</h2>
+            <span class="badge" id="badge-calendar-status">Checking...</span>
+          </div>
+          <div class="card-body">
+            <div id="calendar-connected" class="hidden">
+              <div class="flex items-center gap-4">
+                <div style="width: 48px; height: 48px; background: var(--color-success-50); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="4" width="18" height="18" rx="2" stroke="#22c55e" stroke-width="2"/>
+                    <path d="M3 10H21" stroke="#22c55e" stroke-width="2"/>
+                    <path d="M8 2V6M16 2V6" stroke="#22c55e" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Google Calendar Connected</div>
+                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-500); margin-top: var(--space-1);" id="calendar-id-display">Calendar ID: —</div>
                 </div>
               </div>
-              <div id="calendar-disconnected">
-                <div class="flex items-center gap-4 mb-4">
-                  <div style="width: 48px; height: 48px; background: var(--color-warning-50); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M12 3L22 21H2L12 3Z" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
-                      <path d="M12 10V14M12 18V18.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Calendar Not Connected</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Connect Google Calendar in Company Profile to enable booking.</div>
-                  </div>
+            </div>
+            <div id="calendar-disconnected">
+              <div class="flex items-center gap-4">
+                <div style="width: 48px; height: 48px; background: var(--color-warning-50); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 3L22 21H2L12 3Z" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M12 10V14M12 18V18.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Calendar Not Connected</div>
+                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-500); margin-top: var(--space-1);">Connect Google Calendar in Company Profile to enable booking.</div>
                 </div>
               </div>
             </div>
           </div>
-
-          <!-- Booking Parameters -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Booking Parameters</h2>
-            </div>
-            <div class="card-body">
-              <div class="form-group">
-                <label class="form-label">Slot Duration (minutes)</label>
-                <select class="form-select" id="input-slot-duration" style="max-width: 200px;">
-                  <option value="15">15 minutes</option>
-                  <option value="30">30 minutes</option>
-                  <option value="45">45 minutes</option>
-                  <option value="60" selected>60 minutes (1 hour)</option>
-                  <option value="90">90 minutes</option>
-                  <option value="120">120 minutes (2 hours)</option>
-                </select>
-                <p class="form-hint">Default appointment slot length for new bookings.</p>
-              </div>
-              
-              <div class="form-group">
-                <label class="form-label">Buffer Between Appointments (minutes)</label>
-                <select class="form-select" id="input-buffer-minutes" style="max-width: 200px;">
-                  <option value="0" selected>No buffer</option>
-                  <option value="15">15 minutes</option>
-                  <option value="30">30 minutes</option>
-                  <option value="60">60 minutes</option>
-                </select>
-                <p class="form-hint">Minimum time between appointment slots.</p>
-              </div>
-              
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">Advance Booking Window (days)</label>
-                <select class="form-select" id="input-advance-days" style="max-width: 200px;">
-                  <option value="7">7 days</option>
-                  <option value="14" selected>14 days (2 weeks)</option>
-                  <option value="21">21 days (3 weeks)</option>
-                  <option value="30">30 days</option>
-                  <option value="60">60 days</option>
-                </select>
-                <p class="form-hint">How far in advance callers can book appointments.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Confirmation Settings -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Confirmation Settings</h2>
-            </div>
-            <div class="card-body">
-              <div class="form-group">
-                <label class="form-label">Confirmation Message</label>
-                <textarea class="form-textarea" id="input-confirmation-message" rows="4" placeholder="Your appointment is confirmed for {date} at {time}. We'll see you then!"></textarea>
-                <p class="form-hint">Spoken after booking is complete. Use {date} and {time} placeholders.</p>
-              </div>
-              
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label" style="display: flex; align-items: center; gap: var(--space-2);">
-                  <input type="checkbox" id="input-sms-confirmation" style="width: 16px; height: 16px;">
-                  Send SMS Confirmation
-                </label>
-                <p class="form-hint">Text the caller a confirmation message after booking.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Flow Steps Reference -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Booking Flow Steps</h2>
-            </div>
-            <div class="card-body">
-              <div style="display: flex; flex-direction: column; gap: var(--space-3);">
-                <div class="flex items-center gap-3">
-                  <div style="width: 28px; height: 28px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm);">1</div>
-                  <div>
-                    <div style="font-weight: var(--font-weight-medium);">Receive Handoff Payload</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Accept payload from Agent 2.0 with assumptions & summary</div>
-                  </div>
-                </div>
-                <div class="flex items-center gap-3">
-                  <div style="width: 28px; height: 28px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm);">2</div>
-                  <div>
-                    <div style="font-weight: var(--font-weight-medium);">Collect Missing Fields</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Prompt for name, phone, address if not already captured</div>
-                  </div>
-                </div>
-                <div class="flex items-center gap-3">
-                  <div style="width: 28px; height: 28px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm);">3</div>
-                  <div>
-                    <div style="font-weight: var(--font-weight-medium);">Offer Available Slots</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Query calendar and present open time slots</div>
-                  </div>
-                </div>
-                <div class="flex items-center gap-3">
-                  <div style="width: 28px; height: 28px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm);">4</div>
-                  <div>
-                    <div style="font-weight: var(--font-weight-medium);">Confirm & Book</div>
-                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Create calendar event and confirm with caller</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
         </div>
 
-        <!-- Right: Test Step Panel -->
-        <div class="preview-panel">
-          <div class="test-panel">
-            <div class="test-panel-header">
-              <h3 class="test-panel-title">
-                <span class="status-dot active"></span>
-                Booking Flow Simulator
-              </h3>
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Booking Parameters
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Booking Parameters</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Slot Duration (minutes)</label>
+              <select class="form-select" id="input-slot-duration" style="max-width: 300px;">
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="45">45 minutes</option>
+                <option value="60" selected>60 minutes (1 hour)</option>
+                <option value="90">90 minutes</option>
+                <option value="120">120 minutes (2 hours)</option>
+              </select>
+              <p class="form-hint">Default appointment slot length for new bookings.</p>
             </div>
-            <div class="test-panel-body">
-              <div class="form-group">
-                <label class="form-label">Sample Handoff Payload</label>
-                <div class="json-viewer">
-                  <div class="json-viewer-content" style="max-height: 150px;">
-                    <textarea class="form-textarea" id="test-payload-input" rows="6" style="font-family: 'SF Mono', monospace; font-size: var(--font-size-xs); background: var(--color-gray-900); color: var(--color-gray-100); border: none;">{
+            
+            <div class="form-group">
+              <label class="form-label">Buffer Between Appointments (minutes)</label>
+              <select class="form-select" id="input-buffer-minutes" style="max-width: 300px;">
+                <option value="0" selected>No buffer</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">60 minutes</option>
+              </select>
+              <p class="form-hint">Minimum time between appointment slots.</p>
+            </div>
+            
+            <div class="form-group mb-0">
+              <label class="form-label">Advance Booking Window (days)</label>
+              <select class="form-select" id="input-advance-days" style="max-width: 300px;">
+                <option value="7">7 days</option>
+                <option value="14" selected>14 days (2 weeks)</option>
+                <option value="21">21 days (3 weeks)</option>
+                <option value="30">30 days</option>
+                <option value="60">60 days</option>
+              </select>
+              <p class="form-hint">How far in advance callers can book appointments.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Confirmation Settings
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Confirmation Settings</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Confirmation Message</label>
+              <textarea class="form-textarea" id="input-confirmation-message" rows="4" placeholder="Your appointment is confirmed for {date} at {time}. We'll see you then!"></textarea>
+              <p class="form-hint">Spoken after booking is complete. Use {date} and {time} placeholders.</p>
+            </div>
+            
+            <div class="form-group mb-0">
+              <label class="form-label checkbox-label">
+                <input type="checkbox" id="input-sms-confirmation">
+                Send SMS Confirmation
+              </label>
+              <p class="form-hint">Text the caller a confirmation message after booking.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Booking Flow Steps Reference
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Booking Flow Steps</h2>
+          </div>
+          <div class="card-body">
+            <div style="display: flex; flex-direction: column; gap: var(--space-4);">
+              <div class="flex items-start gap-3">
+                <div style="width: 32px; height: 32px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); flex-shrink: 0;">1</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Receive Handoff Payload</div>
+                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: var(--space-1);">Accept payload from Agent 2.0 with assumptions & summary</div>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div style="width: 32px; height: 32px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); flex-shrink: 0;">2</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Collect Missing Fields</div>
+                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: var(--space-1);">Prompt for name, phone, address if not already captured</div>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div style="width: 32px; height: 32px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); flex-shrink: 0;">3</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Offer Available Slots</div>
+                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: var(--space-1);">Query calendar and present open time slots</div>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <div style="width: 32px; height: 32px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm); flex-shrink: 0;">4</div>
+                <div style="flex: 1;">
+                  <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Confirm & Book</div>
+                  <div style="font-size: var(--font-size-sm); color: var(--color-gray-600); margin-top: var(--space-1);">Create calendar event and confirm with caller</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Booking Flow Simulator
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <span class="status-dot active"></span>
+              Booking Flow Simulator
+            </h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Sample Handoff Payload</label>
+              <div class="json-viewer">
+                <div class="json-viewer-content json-viewer-content-md">
+                  <textarea class="form-textarea" id="test-payload-input" rows="8" style="font-family: 'SF Mono', 'Monaco', 'Consolas', monospace; font-size: var(--font-size-xs); background: var(--color-gray-900); color: var(--color-gray-100); border: none; resize: vertical;">{
   "handoffContractVersion": "AC1",
   "companyId": "",
   "callSid": "TEST_123",
@@ -257,57 +264,63 @@
     "urgency": "routine"
   }
 }</textarea>
-                  </div>
                 </div>
               </div>
-              
-              <div class="form-group">
-                <label class="form-label">User Input (optional)</label>
-                <input type="text" class="form-input" id="test-user-input" placeholder="Caller response to current prompt...">
-              </div>
-              
-              <div class="flex gap-2 mb-4">
-                <button class="btn btn-primary flex-1" id="btn-test-step">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M13.5 8L3 13V3L13.5 8Z" fill="currentColor"/>
-                  </svg>
-                  Run Step
-                </button>
-                <button class="btn btn-secondary" id="btn-reset-booking">
-                  Reset
-                </button>
-              </div>
-              
-              <div class="test-output">
-                <div class="test-output-label">Next Prompt</div>
-                <div class="test-output-text" id="test-next-prompt">Run a step to see the next prompt...</div>
-              </div>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">User Input (optional)</label>
+              <input type="text" class="form-input" id="test-user-input" placeholder="Caller response to current prompt...">
+            </div>
+            
+            <div class="flex gap-2 mb-4">
+              <button class="btn btn-primary flex-1" id="btn-test-step">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M13.5 8L3 13V3L13.5 8Z" fill="currentColor"/>
+                </svg>
+                Run Step
+              </button>
+              <button class="btn btn-secondary" id="btn-reset-booking">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M13 7C13 10.3137 10.3137 13 7 13C3.68629 13 1 10.3137 1 7C1 3.68629 3.68629 1 7 1C9.22222 1 11.1684 2.21309 12.1892 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M10 4H12.5V1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Reset
+              </button>
+            </div>
+            
+            <div class="test-output">
+              <div class="test-output-label">Next Prompt</div>
+              <div class="test-output-text empty" id="test-next-prompt">Run a step to see the next prompt...</div>
+            </div>
 
-              <div class="mt-4">
-                <div class="test-output-label">Booking Context (bookingCtx)</div>
-                <div class="json-viewer" style="margin-top: var(--space-2);">
-                  <div class="json-viewer-content" style="max-height: 200px;">
-                    <pre id="test-booking-ctx">null</pre>
-                  </div>
+            <div class="mt-4">
+              <div class="test-output-label">Booking Context (bookingCtx)</div>
+              <div class="json-viewer mt-2">
+                <div class="json-viewer-content json-viewer-content-md">
+                  <pre id="test-booking-ctx">null</pre>
                 </div>
               </div>
+            </div>
 
-              <div class="trace-log mt-4">
-                <pre id="test-booking-trace">[Booking flow trace will appear here]</pre>
-              </div>
+            <div class="trace-log">
+              <pre id="test-booking-trace">[Booking flow trace will appear here]</pre>
             </div>
           </div>
+        </div>
 
-          <!-- bookingCtx Contract -->
-          <div class="card mt-4">
-            <div class="card-header">
-              <h2 class="card-title">bookingCtx Shape</h2>
-            </div>
-            <div class="card-body">
-              <p class="form-hint">The booking context tracks progress through the booking flow:</p>
-              <div class="json-viewer mt-4">
-                <div class="json-viewer-content" style="max-height: 250px;">
-                  <pre>{
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: bookingCtx Contract Reference
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">bookingCtx Contract Shape</h2>
+          </div>
+          <div class="card-body">
+            <p class="form-hint mb-4">The booking context object tracks progress through the booking flow:</p>
+            <div class="json-viewer">
+              <div class="json-viewer-content json-viewer-content-lg">
+                <pre>{
   "step": "COLLECT_NAME|COLLECT_PHONE|OFFER_SLOTS|CONFIRM",
   "collectedFields": {
     "firstName": "...",
@@ -323,11 +336,11 @@
   "calendarEventId": "...",
   "completed": false
 }</pre>
-                </div>
               </div>
             </div>
           </div>
         </div>
+
       </div>
     </main>
 
