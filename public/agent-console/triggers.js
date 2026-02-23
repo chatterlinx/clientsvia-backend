@@ -74,6 +74,7 @@
     statTotal: document.getElementById('stat-total'),
     
     triggerList: document.getElementById('trigger-list'),
+    triggerTableHeader: document.getElementById('trigger-table-header'),
     emptyState: document.getElementById('empty-state'),
     triggerSearch: document.getElementById('trigger-search'),
     duplicateWarning: document.getElementById('duplicate-warning'),
@@ -322,10 +323,16 @@
     if (filtered.length === 0) {
       DOM.triggerList.innerHTML = '';
       DOM.emptyState.style.display = 'flex';
+      if (DOM.triggerTableHeader) {
+        DOM.triggerTableHeader.style.display = 'none';
+      }
       return;
     }
     
     DOM.emptyState.style.display = 'none';
+    if (DOM.triggerTableHeader) {
+      DOM.triggerTableHeader.style.display = 'grid';
+    }
     DOM.triggerList.innerHTML = filtered.map(renderTriggerRow).join('');
     
     DOM.triggerList.querySelectorAll('.btn-edit-trigger').forEach(btn => {
@@ -365,33 +372,46 @@
 
   function renderTriggerRow(trigger) {
     let scopeClass = 'local';
-    let scopeLabel = 'LOCAL';
+    let scopeLabel = 'Local';
     if (trigger.scope === 'GLOBAL') {
       scopeClass = 'global';
-      scopeLabel = 'GLOBAL';
+      scopeLabel = 'Global';
     } else if (trigger.isOverridden) {
       scopeClass = 'override';
-      scopeLabel = 'OVERRIDE';
+      scopeLabel = 'Override';
     }
     
-    const keywords = (trigger.match?.keywords || []).slice(0, 3).join(', ');
-    const hasAudio = trigger.answer?.hasAudio;
+    const keywords = (trigger.match?.keywords || []).slice(0, 4).join(', ');
+    const hasText = trigger.answer?.answerText ? true : false;
+    const hasAudio = trigger.answer?.hasAudio || trigger.answer?.audioUrl;
     const isEnabled = trigger.isEnabled !== false;
+    
+    const priority = trigger.priority || 50;
+    const priorityLabel = getPriorityLabel(priority);
+    const priorityClass = getPriorityClass(priority);
+    
+    const ruleId = trigger.ruleId || '—';
+    
+    const followUpAction = trigger.followUp?.nextAction || trigger.followUp?.question;
+    const followUpDisplay = followUpAction ? formatFollowUpAction(followUpAction) : 'None';
+    const followUpClass = followUpAction ? '' : 'none';
     
     return `
       <div class="trigger-row ${isEnabled ? '' : 'disabled'}">
-        <div class="trigger-priority">#${trigger.priority || 50}</div>
-        <div class="trigger-info">
-          <div class="trigger-label">${escapeHtml(trigger.label || 'Untitled')}</div>
-          <div class="trigger-keywords">${escapeHtml(keywords) || 'No keywords'}</div>
+        <div>
+          <span class="trigger-priority ${priorityClass}">${priorityLabel}</span>
         </div>
+        <div class="trigger-rule-id" title="${escapeHtml(ruleId)}">${escapeHtml(ruleId)}</div>
+        <div class="trigger-label" title="${escapeHtml(trigger.label || 'Untitled')}">${escapeHtml(trigger.label || 'Untitled')}</div>
+        <div class="trigger-keywords" title="${escapeHtml((trigger.match?.keywords || []).join(', '))}">${escapeHtml(keywords) || '—'}</div>
+        <div class="answer-format">
+          ${hasText ? '<span class="answer-badge text">TEXT</span>' : ''}
+          ${hasAudio ? '<span class="answer-badge audio">AUDIO</span>' : ''}
+          ${!hasText && !hasAudio ? '<span style="color: var(--text-muted);">—</span>' : ''}
+        </div>
+        <div class="trigger-followup ${followUpClass}" title="${escapeHtml(followUpDisplay)}">${escapeHtml(followUpDisplay)}</div>
         <div>
           <span class="scope-badge ${scopeClass}">${scopeLabel}</span>
-        </div>
-        <div class="trigger-status">
-          <span class="audio-indicator ${hasAudio ? 'has-audio' : ''}" title="${hasAudio ? 'Has audio' : 'No audio'}">
-            ${hasAudio ? '🔊' : '🔇'}
-          </span>
         </div>
         <div>
           <label class="toggle-switch">
@@ -416,6 +436,45 @@
         </div>
       </div>
     `;
+  }
+
+  function getPriorityLabel(priority) {
+    if (priority <= 20) return 'P1';
+    if (priority <= 40) return 'P2';
+    if (priority <= 60) return 'P3';
+    if (priority <= 80) return 'P4';
+    return 'P5';
+  }
+
+  function getPriorityClass(priority) {
+    if (priority <= 20) return 'p1';
+    if (priority <= 40) return 'p2';
+    return 'p3';
+  }
+
+  function formatFollowUpAction(action) {
+    if (!action) return 'None';
+    
+    const actionMap = {
+      'ask_location': 'Ask Location',
+      'check_schedule': 'Check Schedule',
+      'ask_model': 'Ask Model',
+      'book_appointment': 'Book Appt',
+      'transfer_agent': 'Transfer',
+      'end_call': 'End Call',
+      'none': 'None'
+    };
+    
+    const lowerAction = action.toLowerCase().replace(/\s+/g, '_');
+    if (actionMap[lowerAction]) {
+      return actionMap[lowerAction];
+    }
+    
+    if (action.length > 20) {
+      return action.substring(0, 18) + '...';
+    }
+    
+    return action;
   }
 
   /* --------------------------------------------------------------------------
