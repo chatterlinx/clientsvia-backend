@@ -41,6 +41,14 @@
   };
 
   /* --------------------------------------------------------------------------
+     AUTH HELPER
+     -------------------------------------------------------------------------- */
+  function getAuthHeaders() {
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
+  /* --------------------------------------------------------------------------
      STATE
      -------------------------------------------------------------------------- */
   const state = {
@@ -186,7 +194,8 @@
   async function loadConfig() {
     try {
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {
@@ -326,7 +335,7 @@
     try {
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/config`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         credentials: 'include',
         body: JSON.stringify(updates)
       });
@@ -366,7 +375,7 @@
     try {
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/agent2/test-turn`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         credentials: 'include',
         body: JSON.stringify({
           text,
@@ -468,7 +477,8 @@
   async function downloadTruthJson() {
     try {
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {

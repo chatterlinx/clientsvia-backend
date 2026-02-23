@@ -21,6 +21,14 @@
   };
 
   /* --------------------------------------------------------------------------
+     AUTH HELPER
+     -------------------------------------------------------------------------- */
+  function getAuthHeaders() {
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
+  /* --------------------------------------------------------------------------
      STATE
      -------------------------------------------------------------------------- */
   const state = {
@@ -152,7 +160,8 @@
   async function loadConfig() {
     try {
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/booking/config`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {
@@ -258,7 +267,7 @@
     try {
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/booking/test-step`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         credentials: 'include',
         body: JSON.stringify({
           payload,
@@ -375,7 +384,8 @@
   async function downloadTruthJson() {
     try {
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {

@@ -115,12 +115,18 @@ function formatTimeOption(timeOption) {
   return `${dateStr}, ${startStr} - ${endStr}`;
 }
 
+function getAuthHeaders() {
+  const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
 async function apiFetch(endpoint, options = {}) {
   const url = `/api/agent-console/${companyId}${endpoint}`;
   
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
       ...options.headers
     },
     ...options

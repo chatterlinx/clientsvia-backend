@@ -24,6 +24,14 @@
   };
 
   /* --------------------------------------------------------------------------
+     AUTH HELPER
+     -------------------------------------------------------------------------- */
+  function getAuthHeaders() {
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
+  /* --------------------------------------------------------------------------
      STATE
      -------------------------------------------------------------------------- */
   const state = {
@@ -153,7 +161,8 @@
   async function loadCompanyInfo() {
     try {
       const response = await fetch(`/api/admin/companies/${state.companyId}`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {
@@ -178,7 +187,8 @@
       DOM.truthJsonDisplay.textContent = 'Loading...';
       
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {
@@ -241,7 +251,8 @@
     try {
       // Fetch fresh data for download
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {

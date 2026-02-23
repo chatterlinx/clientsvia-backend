@@ -22,6 +22,14 @@
   };
 
   /* --------------------------------------------------------------------------
+     AUTH HELPER
+     -------------------------------------------------------------------------- */
+  function getAuthHeaders() {
+    const token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  }
+
+  /* --------------------------------------------------------------------------
      STATE
      -------------------------------------------------------------------------- */
   const state = {
@@ -123,7 +131,8 @@
       // Try to get stats from truth endpoint
       if (state.companyId) {
         const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-          credentials: 'include'
+          credentials: 'include',
+          headers: getAuthHeaders()
         });
         
         if (response.ok) {
@@ -171,7 +180,8 @@
   async function loadFromGlobalHubApi() {
     try {
       const response = await fetch(`${CONFIG.GLOBAL_HUB_API}/stats`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {
@@ -196,7 +206,8 @@
     try {
       const response = await fetch(`${CONFIG.GLOBAL_HUB_API}/first-names/refresh`, {
         method: 'POST',
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {
@@ -251,7 +262,8 @@
     
     try {
       const response = await fetch(`${CONFIG.GLOBAL_HUB_API}/first-names/lookup?name=${encodeURIComponent(name)}`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {
@@ -324,7 +336,8 @@
     
     try {
       const response = await fetch(`${CONFIG.API_BASE}/${state.companyId}/truth`, {
-        credentials: 'include'
+        credentials: 'include',
+        headers: getAuthHeaders()
       });
       
       if (!response.ok) {
