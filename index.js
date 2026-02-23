@@ -252,6 +252,8 @@ async function loadAllRoutes() {
         // serviceTypeClarificationRoutes REMOVED Dec 2025 - redundant with Triage
         // ☢️ NUKED Feb 22, 2026: frontDeskBehaviorRoutes REMOVED - Agent 2.0 is the only discovery system
         routes.agent2Routes = await loadRouteWithTimeout('./routes/admin/agent2', 'agent2Routes'); // 🧩 Agent 2.0 (isolated, UI-controlled)
+        routes.globalTriggersRoutes = await loadRouteWithTimeout('./routes/admin/globalTriggers', 'globalTriggersRoutes'); // 🌍 Global Triggers (platform-wide trigger groups)
+        routes.companyTriggersRoutes = await loadRouteWithTimeout('./routes/admin/companyTriggers', 'companyTriggersRoutes'); // 🏢 Company Triggers (company-scoped trigger management)
         routes.globalHubRoutes = await loadRouteWithTimeout('./routes/admin/globalHub', 'globalHubRoutes'); // 🌐 Global Hub (cross-tenant shared resources)
         routes.conversationMemoryRoutes = await loadRouteWithTimeout('./routes/admin/conversationMemory', 'conversationMemoryRoutes'); // 📊 V111 Conversation Memory Viewer
         routes.transcriptsRoutes = await loadRouteWithTimeout('./routes/admin/transcripts', 'transcriptsRoutes'); // 📝 V111 Call Transcripts
@@ -737,6 +739,8 @@ function registerRoutes(routes) {
     // serviceTypeClarificationRoutes REMOVED Dec 2025 - nuked
     // ☢️ NUKED Feb 22, 2026: /api/admin/front-desk-behavior routes removed - Agent 2.0 is the only discovery system
     app.use('/api/admin/agent2', routes.agent2Routes); // 🧩 Agent 2.0 (isolated, UI-controlled)
+    app.use('/api/admin/agent2/global', routes.globalTriggersRoutes); // 🌍 Global Triggers (platform-wide, no companyId)
+    app.use('/api/admin/agent2/company', routes.companyTriggersRoutes); // 🏢 Company Triggers (company-scoped)
     app.use('/api/admin/global-hub', routes.globalHubRoutes); // 🌐 Global Hub (cross-tenant shared dictionaries)
     app.use('/api/admin/conversation-memory', routes.conversationMemoryRoutes); // 📊 V111 Conversation Memory Viewer
     app.use('/api/admin/transcripts', routes.transcriptsRoutes); // 📝 V111 Call Transcripts

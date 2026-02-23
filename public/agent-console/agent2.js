@@ -163,6 +163,23 @@
       window.location.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
     });
     
+    // Trigger Console link
+    const linkTriggerConsole = document.getElementById('link-trigger-console');
+    if (linkTriggerConsole) {
+      linkTriggerConsole.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = `/agent-console/triggers.html?companyId=${encodeURIComponent(state.companyId)}`;
+      });
+    }
+    
+    const statBoxTriggers = document.getElementById('stat-box-triggers');
+    if (statBoxTriggers) {
+      statBoxTriggers.addEventListener('click', () => {
+        window.location.href = `/agent-console/triggers.html?companyId=${encodeURIComponent(state.companyId)}`;
+      });
+      statBoxTriggers.style.cursor = 'pointer';
+    }
+    
     DOM.btnDownloadTruth.addEventListener('click', downloadTruthJson);
     DOM.btnSaveConfig.addEventListener('click', saveConfig);
     

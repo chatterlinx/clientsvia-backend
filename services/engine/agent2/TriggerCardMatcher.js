@@ -609,6 +609,54 @@ class TriggerCardMatcher {
         : 0
     };
   }
+
+  /**
+   * Load and match triggers for a company using the new global/local system.
+   * Falls back to legacy config if no global group is selected.
+   *
+   * @param {string} companyId - The company ID
+   * @param {string} inputText - The caller's utterance
+   * @param {Object} legacyConfig - Legacy agent2 config for fallback
+   * @param {Object} options - Matching options
+   * @returns {Promise<TriggerMatchResult>}
+   */
+  static async matchForCompany(companyId, inputText, legacyConfig = null, options = {}) {
+    try {
+      const TriggerService = require('./TriggerService');
+      
+      const triggers = await TriggerService.loadTriggersWithLegacyFallback(companyId, legacyConfig);
+      
+      return this.match(inputText, triggers, options);
+    } catch (error) {
+      logger.warn('[TriggerCardMatcher] Failed to load triggers, using legacy fallback', {
+        companyId,
+        error: error.message
+      });
+      
+      const legacyCards = legacyConfig?.discovery?.playbook?.rules || [];
+      return this.match(inputText, legacyCards, options);
+    }
+  }
+
+  /**
+   * Get compiled triggers for a company (for external use/debugging).
+   *
+   * @param {string} companyId
+   * @param {Object} legacyConfig - Legacy config for fallback
+   * @returns {Promise<Array>}
+   */
+  static async getCompiledTriggers(companyId, legacyConfig = null) {
+    try {
+      const TriggerService = require('./TriggerService');
+      return await TriggerService.loadTriggersWithLegacyFallback(companyId, legacyConfig);
+    } catch (error) {
+      logger.warn('[TriggerCardMatcher] Failed to load triggers', {
+        companyId,
+        error: error.message
+      });
+      return legacyConfig?.discovery?.playbook?.rules || [];
+    }
+  }
 }
 
 module.exports = { TriggerCardMatcher };

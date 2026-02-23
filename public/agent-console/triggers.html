@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trigger Console — Agent 2.0</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/agent-console/styles.css">
+  <style>
+    /* ════════════════════════════════════════════════════════════════════════
+       TRIGGER CONSOLE SPECIFIC STYLES
+       ════════════════════════════════════════════════════════════════════════ */
+    
+    /* Group Selector Header */
+    .group-console {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+    
+    .group-console-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    
+    .group-selector-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+    
+    .group-selector-label {
+      font-weight: 500;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    
+    .group-selector {
+      min-width: 200px;
+      max-width: 300px;
+    }
+    
+    .group-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+    
+    .group-info-icon {
+      font-size: 1.25rem;
+    }
+    
+    .group-actions {
+      display: flex;
+      gap: 8px;
+    }
+    
+    /* Trigger Stats Bar */
+    .trigger-stats-bar {
+      display: flex;
+      gap: 24px;
+      padding: 12px 0;
+      margin-top: 12px;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    .trigger-stat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .trigger-stat-value {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    
+    .trigger-stat-label {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+    }
+    
+    /* Trigger List */
+    .trigger-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    .trigger-row {
+      display: grid;
+      grid-template-columns: 40px 1fr 100px 80px 120px 100px;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    .trigger-row:hover {
+      border-color: var(--border-hover);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .trigger-row.disabled {
+      opacity: 0.6;
+    }
+    
+    .trigger-priority {
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      text-align: center;
+    }
+    
+    .trigger-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+    
+    .trigger-label {
+      font-weight: 500;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .trigger-keywords {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    /* Scope Badge */
+    .scope-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    
+    .scope-badge.global {
+      background: var(--blue-bg);
+      color: var(--blue-text);
+    }
+    
+    .scope-badge.local {
+      background: var(--green-bg);
+      color: var(--green-text);
+    }
+    
+    .scope-badge.override {
+      background: var(--orange-bg);
+      color: var(--orange-text);
+    }
+    
+    /* Status indicators */
+    .trigger-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .audio-indicator {
+      color: var(--text-muted);
+    }
+    
+    .audio-indicator.has-audio {
+      color: var(--green-text);
+    }
+    
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--bg-tertiary);
+      transition: 0.3s;
+      border-radius: 24px;
+    }
+    
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+    
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: var(--primary);
+    }
+    
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+    }
+    
+    /* Trigger Actions */
+    .trigger-actions {
+      display: flex;
+      gap: 4px;
+      justify-content: flex-end;
+    }
+    
+    .trigger-actions .btn-icon {
+      padding: 6px;
+      border-radius: 4px;
+    }
+    
+    /* Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+    
+    .empty-state-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    
+    .empty-state-title {
+      font-size: 1.125rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+    
+    .empty-state-text {
+      max-width: 400px;
+      line-height: 1.5;
+    }
+    
+    /* Duplicate Warning Banner */
+    .duplicate-warning {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    
+    .duplicate-warning-icon {
+      color: var(--red-text);
+      font-size: 1.25rem;
+    }
+    
+    .duplicate-warning-text {
+      flex: 1;
+      color: var(--red-text);
+    }
+    
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+    
+    .modal-backdrop.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    
+    .modal {
+      background: var(--bg-primary);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform: translateY(20px);
+      transition: transform 0.2s;
+    }
+    
+    .modal-backdrop.active .modal {
+      transform: translateY(0);
+    }
+    
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .modal-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+    }
+    
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 16px 20px;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    /* Form Groups in Modal */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    
+    .form-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-color);
+    }
+    
+    .form-section-title {
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    
+    /* Approval Modal */
+    .approval-modal .modal {
+      max-width: 400px;
+    }
+    
+    .approval-warning {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 20px 0;
+    }
+    
+    .approval-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+    
+    .approval-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    
+    .approval-text {
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+    
+    /* Color Variables */
+    :root {
+      --blue-bg: #dbeafe;
+      --blue-text: #1d4ed8;
+      --green-bg: #dcfce7;
+      --green-text: #15803d;
+      --orange-bg: #ffedd5;
+      --orange-text: #c2410c;
+      --red-bg: #fee2e2;
+      --red-text: #dc2626;
+      --red-border: #fecaca;
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --blue-bg: #1e3a5f;
+        --blue-text: #93c5fd;
+        --green-bg: #14532d;
+        --green-text: #86efac;
+        --orange-bg: #431407;
+        --orange-text: #fdba74;
+        --red-bg: #450a0a;
+        --red-text: #fca5a5;
+        --red-border: #7f1d1d;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- ================================================================
+         HEADER — STICKY TOP BAR
+         ================================================================ -->
+    <header class="header">
+      <div class="header-left">
+        <button class="btn btn-ghost btn-icon" id="btn-back-to-agent2" title="Back to Agent 2.0">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 17H16C16.5304 17 17.0391 16.7893 17.4142 16.4142C17.7893 16.0391 18 15.5304 18 15V5C18 4.46957 17.7893 3.96086 17.4142 3.58579C17.0391 3.21071 16.5304 3 16 3H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M7 14L3 10L7 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 10H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <a href="#" id="header-logo-link" class="header-logo" title="Back to Company Profile">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
+            <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <span class="header-logo-text">ClientVia</span>
+        </a>
+        <div class="header-divider"></div>
+        <span class="header-title">Trigger Console</span>
+      </div>
+      
+      <div class="header-center">
+        <span class="company-name" id="header-company-name">Loading...</span>
+        <span class="company-id-pill" id="header-company-id">—</span>
+      </div>
+      
+      <div class="header-right">
+        <button class="btn btn-secondary" id="btn-check-duplicates" title="Check for duplicates">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12Z" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8 5v3M8 11h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Health Check
+        </button>
+        <button class="btn btn-primary" id="btn-add-trigger">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Add Trigger
+        </button>
+      </div>
+    </header>
+
+    <!-- ================================================================
+         MAIN CONTENT
+         ================================================================ -->
+    <main class="main-content">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="page-header-left">
+          <a href="#" class="back-button" id="btn-back">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Back to Agent 2.0
+          </a>
+          <div>
+            <h1 class="page-title">Trigger Cards</h1>
+            <p class="page-subtitle">Manage global and local trigger cards for caller intent matching</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Group Console (Header) -->
+      <div class="group-console" id="group-console">
+        <div class="group-console-header">
+          <div class="group-selector-wrapper">
+            <span class="group-selector-label">Global Trigger Group:</span>
+            <select class="form-select group-selector" id="group-selector">
+              <option value="">— No group selected —</option>
+            </select>
+            <div class="group-info" id="group-info">
+              <span class="group-info-icon" id="group-icon"></span>
+              <span id="group-trigger-count"></span>
+            </div>
+          </div>
+          <div class="group-actions">
+            <button class="btn btn-secondary btn-sm" id="btn-create-group" title="Create New Group">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M7 2v10M2 7h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              New Group
+            </button>
+          </div>
+        </div>
+        
+        <div class="trigger-stats-bar" id="stats-bar">
+          <div class="trigger-stat">
+            <span class="trigger-stat-value" id="stat-global">0</span>
+            <span class="trigger-stat-label">Global</span>
+          </div>
+          <div class="trigger-stat">
+            <span class="trigger-stat-value" id="stat-local">0</span>
+            <span class="trigger-stat-label">Local</span>
+          </div>
+          <div class="trigger-stat">
+            <span class="trigger-stat-value" id="stat-overrides">0</span>
+            <span class="trigger-stat-label">Overrides</span>
+          </div>
+          <div class="trigger-stat">
+            <span class="trigger-stat-value" id="stat-hidden">0</span>
+            <span class="trigger-stat-label">Hidden</span>
+          </div>
+          <div class="trigger-stat">
+            <span class="trigger-stat-value" id="stat-total">0</span>
+            <span class="trigger-stat-label">Total Active</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Duplicate Warning Banner (hidden by default) -->
+      <div class="duplicate-warning" id="duplicate-warning" style="display: none;">
+        <span class="duplicate-warning-icon">⚠️</span>
+        <span class="duplicate-warning-text" id="duplicate-warning-text">Duplicate triggers detected!</span>
+        <button class="btn btn-secondary btn-sm" id="btn-fix-duplicates">View Details</button>
+      </div>
+
+      <!-- Trigger List Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Trigger Cards</h2>
+          <div class="flex gap-2">
+            <input type="text" class="form-input" id="trigger-search" placeholder="Search triggers..." style="width: 200px;">
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="trigger-list" id="trigger-list">
+            <!-- Triggers will be rendered here -->
+          </div>
+          
+          <!-- Empty State -->
+          <div class="empty-state" id="empty-state" style="display: none;">
+            <div class="empty-state-icon">📋</div>
+            <div class="empty-state-title">No Triggers Yet</div>
+            <div class="empty-state-text">
+              Select a global trigger group above to load shared triggers, or click "Add Trigger" to create a local trigger for this company.
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Trigger Console v1.0.0</span>
+      <span> · </span>
+      <span>Agent 2.0</span>
+    </footer>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════
+       MODALS
+       ════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Trigger Edit Modal -->
+  <div class="modal-backdrop" id="modal-trigger-edit">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modal-trigger-title">Add Trigger</h3>
+        <button class="btn btn-ghost btn-icon" id="modal-trigger-close">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-trigger">
+          <!-- Basic Info -->
+          <div class="form-group">
+            <label class="form-label">Label *</label>
+            <input type="text" class="form-input" id="input-trigger-label" placeholder="e.g., Service call pricing" required>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Rule ID *</label>
+              <input type="text" class="form-input" id="input-trigger-ruleid" placeholder="e.g., pricing.service_call" required>
+              <p class="form-hint">Lowercase, alphanumeric with dots/underscores</p>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Priority</label>
+              <input type="number" class="form-input" id="input-trigger-priority" value="50" min="1" max="1000">
+              <p class="form-hint">Lower = higher priority</p>
+            </div>
+          </div>
+          
+          <!-- Matching -->
+          <div class="form-section">
+            <div class="form-section-title">Matching Rules</div>
+            
+            <div class="form-group">
+              <label class="form-label">Keywords</label>
+              <textarea class="form-textarea" id="input-trigger-keywords" rows="2" placeholder="service call, diagnostic fee, trip charge"></textarea>
+              <p class="form-hint">Comma-separated. All words must appear (flexible order).</p>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Phrases</label>
+              <textarea class="form-textarea" id="input-trigger-phrases" rows="2" placeholder="how much is, what does it cost"></textarea>
+              <p class="form-hint">Comma-separated. Exact phrase must appear.</p>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Negative Keywords</label>
+              <textarea class="form-textarea" id="input-trigger-negative" rows="2" placeholder="cancel, refund"></textarea>
+              <p class="form-hint">Comma-separated. If matched, trigger won't fire.</p>
+            </div>
+          </div>
+          
+          <!-- Response -->
+          <div class="form-section">
+            <div class="form-section-title">Response</div>
+            
+            <div class="form-group">
+              <label class="form-label">Answer Text *</label>
+              <textarea class="form-textarea" id="input-trigger-answer" rows="3" placeholder="Our service call is $89..." required></textarea>
+            </div>
+            
+            <div class="form-group">
+              <label class="form-label">Audio URL</label>
+              <input type="text" class="form-input" id="input-trigger-audio" placeholder="https://...">
+              <p class="form-hint">Optional. If provided, plays audio instead of TTS.</p>
+            </div>
+          </div>
+          
+          <!-- Follow-up -->
+          <div class="form-section">
+            <div class="form-section-title">Follow-up</div>
+            
+            <div class="form-group">
+              <label class="form-label">Follow-up Question</label>
+              <textarea class="form-textarea" id="input-trigger-followup" rows="2" placeholder="Would you like to schedule a visit?"></textarea>
+            </div>
+          </div>
+          
+          <!-- Scope (for new triggers) -->
+          <div class="form-section" id="scope-section">
+            <div class="form-section-title">Scope</div>
+            <div class="form-group">
+              <label class="form-label checkbox-label">
+                <input type="checkbox" id="input-trigger-local" checked>
+                Create as Local Trigger
+              </label>
+              <p class="form-hint">Local triggers are specific to this company only.</p>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-trigger-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-trigger-save">Save Trigger</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Approval Modal -->
+  <div class="modal-backdrop approval-modal" id="modal-approval">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Admin Approval Required</h3>
+        <button class="btn btn-ghost btn-icon" id="modal-approval-close">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="approval-warning">
+          <div class="approval-icon">⚠️</div>
+          <div class="approval-title" id="approval-title">Confirm Action</div>
+          <div class="approval-text" id="approval-text">This action requires admin approval.</div>
+          <div class="form-group" style="width: 100%;">
+            <label class="form-label">Type "approved" to confirm:</label>
+            <input type="text" class="form-input" id="input-approval" placeholder="approved" autocomplete="off">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-approval-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="btn-approval-confirm">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Group Modal -->
+  <div class="modal-backdrop" id="modal-create-group">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Create Global Trigger Group</h3>
+        <button class="btn btn-ghost btn-icon" id="modal-group-close">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="form-group">
+          <div class="form-group">
+            <label class="form-label">Group ID *</label>
+            <input type="text" class="form-input" id="input-group-id" placeholder="e.g., hvac, dental, plumbing" required>
+            <p class="form-hint">Lowercase, alphanumeric with hyphens/underscores only</p>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Name *</label>
+              <input type="text" class="form-input" id="input-group-name" placeholder="e.g., HVAC Triggers" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Icon</label>
+              <input type="text" class="form-input" id="input-group-icon" placeholder="e.g., ❄️" value="📋">
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea class="form-textarea" id="input-group-description" rows="2" placeholder="Standard triggers for..."></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btn-group-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-group-create">Create Group</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/agent-console/lib/auth.js"></script>
+  <script src="/agent-console/triggers.js"></script>
+</body>
+</html>

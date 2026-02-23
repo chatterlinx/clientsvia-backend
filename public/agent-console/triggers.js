@@ -1,0 +1,778 @@
+/**
+ * ============================================================================
+ * TRIGGER CONSOLE — Page Controller
+ * ClientVia Platform · Agent 2.0 · Global/Local Trigger Management
+ * 
+ * ISOLATION: This module uses IIFE + strict mode to prevent global leakage.
+ * NO window.* assignments. All state is module-scoped.
+ * 
+ * ============================================================================
+ */
+
+(function() {
+  'use strict';
+
+  /* --------------------------------------------------------------------------
+     CONFIGURATION
+     -------------------------------------------------------------------------- */
+  const CONFIG = {
+    API_BASE_COMPANY: '/api/admin/agent2/company',
+    API_BASE_GLOBAL: '/api/admin/agent2/global'
+  };
+
+  /* --------------------------------------------------------------------------
+     STATE (Module-scoped, NOT global)
+     -------------------------------------------------------------------------- */
+  const state = {
+    companyId: null,
+    companyName: null,
+    
+    activeGroupId: null,
+    activeGroupName: null,
+    availableGroups: [],
+    
+    triggers: [],
+    stats: null,
+    permissions: null,
+    
+    editingTrigger: null,
+    pendingApproval: null,
+    
+    searchQuery: ''
+  };
+
+  /* --------------------------------------------------------------------------
+     DOM REFERENCES
+     -------------------------------------------------------------------------- */
+  const DOM = {
+    headerCompanyName: document.getElementById('header-company-name'),
+    headerCompanyId: document.getElementById('header-company-id'),
+    btnBack: document.getElementById('btn-back'),
+    btnBackToAgent2: document.getElementById('btn-back-to-agent2'),
+    btnAddTrigger: document.getElementById('btn-add-trigger'),
+    btnCheckDuplicates: document.getElementById('btn-check-duplicates'),
+    btnCreateGroup: document.getElementById('btn-create-group'),
+    
+    groupSelector: document.getElementById('group-selector'),
+    groupIcon: document.getElementById('group-icon'),
+    groupTriggerCount: document.getElementById('group-trigger-count'),
+    groupInfo: document.getElementById('group-info'),
+    
+    statGlobal: document.getElementById('stat-global'),
+    statLocal: document.getElementById('stat-local'),
+    statOverrides: document.getElementById('stat-overrides'),
+    statHidden: document.getElementById('stat-hidden'),
+    statTotal: document.getElementById('stat-total'),
+    
+    triggerList: document.getElementById('trigger-list'),
+    emptyState: document.getElementById('empty-state'),
+    triggerSearch: document.getElementById('trigger-search'),
+    duplicateWarning: document.getElementById('duplicate-warning'),
+    duplicateWarningText: document.getElementById('duplicate-warning-text'),
+    
+    modalTriggerEdit: document.getElementById('modal-trigger-edit'),
+    modalTriggerTitle: document.getElementById('modal-trigger-title'),
+    modalTriggerClose: document.getElementById('modal-trigger-close'),
+    btnTriggerCancel: document.getElementById('btn-trigger-cancel'),
+    btnTriggerSave: document.getElementById('btn-trigger-save'),
+    
+    inputTriggerLabel: document.getElementById('input-trigger-label'),
+    inputTriggerRuleId: document.getElementById('input-trigger-ruleid'),
+    inputTriggerPriority: document.getElementById('input-trigger-priority'),
+    inputTriggerKeywords: document.getElementById('input-trigger-keywords'),
+    inputTriggerPhrases: document.getElementById('input-trigger-phrases'),
+    inputTriggerNegative: document.getElementById('input-trigger-negative'),
+    inputTriggerAnswer: document.getElementById('input-trigger-answer'),
+    inputTriggerAudio: document.getElementById('input-trigger-audio'),
+    inputTriggerFollowup: document.getElementById('input-trigger-followup'),
+    inputTriggerLocal: document.getElementById('input-trigger-local'),
+    scopeSection: document.getElementById('scope-section'),
+    
+    modalApproval: document.getElementById('modal-approval'),
+    approvalTitle: document.getElementById('approval-title'),
+    approvalText: document.getElementById('approval-text'),
+    inputApproval: document.getElementById('input-approval'),
+    btnApprovalCancel: document.getElementById('btn-approval-cancel'),
+    btnApprovalConfirm: document.getElementById('btn-approval-confirm'),
+    modalApprovalClose: document.getElementById('modal-approval-close'),
+    
+    modalCreateGroup: document.getElementById('modal-create-group'),
+    modalGroupClose: document.getElementById('modal-group-close'),
+    btnGroupCancel: document.getElementById('btn-group-cancel'),
+    btnGroupCreate: document.getElementById('btn-group-create'),
+    inputGroupId: document.getElementById('input-group-id'),
+    inputGroupName: document.getElementById('input-group-name'),
+    inputGroupIcon: document.getElementById('input-group-icon'),
+    inputGroupDescription: document.getElementById('input-group-description'),
+    
+    toastContainer: document.getElementById('toast-container')
+  };
+
+  /* --------------------------------------------------------------------------
+     INITIALIZATION
+     -------------------------------------------------------------------------- */
+  function init() {
+    if (!AgentConsoleAuth.requireAuth()) {
+      return;
+    }
+
+    extractCompanyId();
+    
+    if (!state.companyId) {
+      showToast('error', 'Missing Company ID', 'No companyId found in URL.');
+      return;
+    }
+    
+    setupEventListeners();
+    loadTriggers();
+  }
+
+  function extractCompanyId() {
+    const params = new URLSearchParams(window.location.search);
+    state.companyId = params.get('companyId');
+    
+    if (state.companyId) {
+      DOM.headerCompanyId.textContent = truncateId(state.companyId);
+      DOM.headerCompanyId.title = state.companyId;
+      DOM.btnBack.href = `/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}`;
+      
+      const logoLink = document.getElementById('header-logo-link');
+      if (logoLink) {
+        logoLink.href = `/company-profile.html?companyId=${encodeURIComponent(state.companyId)}`;
+      }
+    }
+  }
+
+  function truncateId(id) {
+    if (id.length <= 12) {
+      return id;
+    }
+    return `${id.slice(0, 6)}...${id.slice(-4)}`;
+  }
+
+  function setupEventListeners() {
+    DOM.btnBack.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.location.href = `/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}`;
+    });
+    
+    DOM.btnBackToAgent2.addEventListener('click', () => {
+      window.location.href = `/agent-console/agent2.html?companyId=${encodeURIComponent(state.companyId)}`;
+    });
+    
+    DOM.groupSelector.addEventListener('change', handleGroupChange);
+    DOM.btnCreateGroup.addEventListener('click', openCreateGroupModal);
+    DOM.btnAddTrigger.addEventListener('click', () => openTriggerModal(null));
+    DOM.btnCheckDuplicates.addEventListener('click', checkDuplicates);
+    
+    DOM.triggerSearch.addEventListener('input', (e) => {
+      state.searchQuery = e.target.value.toLowerCase();
+      renderTriggers();
+    });
+    
+    DOM.modalTriggerClose.addEventListener('click', closeTriggerModal);
+    DOM.btnTriggerCancel.addEventListener('click', closeTriggerModal);
+    DOM.btnTriggerSave.addEventListener('click', saveTrigger);
+    
+    DOM.modalApprovalClose.addEventListener('click', closeApprovalModal);
+    DOM.btnApprovalCancel.addEventListener('click', closeApprovalModal);
+    DOM.btnApprovalConfirm.addEventListener('click', confirmApproval);
+    
+    DOM.modalGroupClose.addEventListener('click', closeCreateGroupModal);
+    DOM.btnGroupCancel.addEventListener('click', closeCreateGroupModal);
+    DOM.btnGroupCreate.addEventListener('click', createGroup);
+    
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeTriggerModal();
+        closeApprovalModal();
+        closeCreateGroupModal();
+      }
+    });
+  }
+
+  /* --------------------------------------------------------------------------
+     DATA LOADING
+     -------------------------------------------------------------------------- */
+  async function loadTriggers() {
+    try {
+      const data = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/triggers`);
+      
+      const companyName = data.companyName;
+      const activeGroupId = data.activeGroupId;
+      const activeGroupName = data.activeGroupName;
+      const triggers = data.triggers || [];
+      const stats = data.stats;
+      const permissions = data.permissions;
+      const availableGroups = data.availableGroups || [];
+      
+      state.companyName = companyName;
+      state.activeGroupId = activeGroupId;
+      state.activeGroupName = activeGroupName;
+      state.triggers = triggers;
+      state.stats = stats;
+      state.permissions = permissions;
+      state.availableGroups = availableGroups;
+      
+      DOM.headerCompanyName.textContent = state.companyName;
+      
+      renderGroupSelector();
+      renderStats();
+      renderTriggers();
+      
+    } catch (error) {
+      console.error('[Triggers] Failed to load:', error);
+      showToast('error', 'Load Failed', 'Could not load trigger data.');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     RENDERING
+     -------------------------------------------------------------------------- */
+  function renderGroupSelector() {
+    DOM.groupSelector.innerHTML = '<option value="">— No group selected —</option>';
+    
+    for (const group of state.availableGroups) {
+      const option = document.createElement('option');
+      option.value = group.groupId;
+      option.textContent = `${group.icon || '📋'} ${group.name}`;
+      if (group.groupId === state.activeGroupId) {
+        option.selected = true;
+      }
+      DOM.groupSelector.appendChild(option);
+    }
+    
+    if (state.activeGroupId) {
+      const activeGroup = state.availableGroups.find(g => g.groupId === state.activeGroupId);
+      if (activeGroup) {
+        DOM.groupIcon.textContent = activeGroup.icon || '📋';
+        DOM.groupTriggerCount.textContent = `${activeGroup.triggerCount || 0} triggers`;
+        DOM.groupInfo.style.display = 'flex';
+      }
+    } else {
+      DOM.groupInfo.style.display = 'none';
+    }
+  }
+
+  function renderStats() {
+    if (!state.stats) {
+      return;
+    }
+    
+    DOM.statGlobal.textContent = state.stats.globalEnabledCount || 0;
+    DOM.statLocal.textContent = state.stats.localCount || 0;
+    DOM.statOverrides.textContent = state.stats.overrideCount || 0;
+    DOM.statHidden.textContent = state.stats.globalHiddenCount || 0;
+    DOM.statTotal.textContent = state.stats.totalActiveCount || 0;
+  }
+
+  function renderTriggers() {
+    const filtered = state.triggers.filter(t => {
+      if (!state.searchQuery) {
+        return true;
+      }
+      const label = (t.label || '').toLowerCase();
+      const ruleId = (t.ruleId || '').toLowerCase();
+      const keywords = (t.match?.keywords || []).join(' ').toLowerCase();
+      return label.includes(state.searchQuery) || 
+             ruleId.includes(state.searchQuery) || 
+             keywords.includes(state.searchQuery);
+    });
+    
+    if (filtered.length === 0) {
+      DOM.triggerList.innerHTML = '';
+      DOM.emptyState.style.display = 'flex';
+      return;
+    }
+    
+    DOM.emptyState.style.display = 'none';
+    DOM.triggerList.innerHTML = filtered.map(renderTriggerRow).join('');
+    
+    DOM.triggerList.querySelectorAll('.btn-edit-trigger').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const triggerId = btn.dataset.triggerId;
+        const trigger = state.triggers.find(t => t.triggerId === triggerId);
+        if (trigger) {
+          openTriggerModal(trigger);
+        }
+      });
+    });
+    
+    DOM.triggerList.querySelectorAll('.btn-delete-trigger').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const triggerId = btn.dataset.triggerId;
+        const trigger = state.triggers.find(t => t.triggerId === triggerId);
+        if (trigger) {
+          confirmDeleteTrigger(trigger);
+        }
+      });
+    });
+    
+    DOM.triggerList.querySelectorAll('.toggle-enabled').forEach(toggle => {
+      toggle.addEventListener('change', async (e) => {
+        const triggerId = e.target.dataset.triggerId;
+        const scope = e.target.dataset.scope;
+        const enabled = e.target.checked;
+        
+        if (scope === 'GLOBAL') {
+          await toggleGlobalTriggerVisibility(triggerId, enabled);
+        } else {
+          await toggleLocalTriggerEnabled(triggerId, enabled);
+        }
+      });
+    });
+  }
+
+  function renderTriggerRow(trigger) {
+    let scopeClass = 'local';
+    let scopeLabel = 'LOCAL';
+    if (trigger.scope === 'GLOBAL') {
+      scopeClass = 'global';
+      scopeLabel = 'GLOBAL';
+    } else if (trigger.isOverridden) {
+      scopeClass = 'override';
+      scopeLabel = 'OVERRIDE';
+    }
+    
+    const keywords = (trigger.match?.keywords || []).slice(0, 3).join(', ');
+    const hasAudio = trigger.answer?.hasAudio;
+    const isEnabled = trigger.isEnabled !== false;
+    
+    return `
+      <div class="trigger-row ${isEnabled ? '' : 'disabled'}">
+        <div class="trigger-priority">#${trigger.priority || 50}</div>
+        <div class="trigger-info">
+          <div class="trigger-label">${escapeHtml(trigger.label || 'Untitled')}</div>
+          <div class="trigger-keywords">${escapeHtml(keywords) || 'No keywords'}</div>
+        </div>
+        <div>
+          <span class="scope-badge ${scopeClass}">${scopeLabel}</span>
+        </div>
+        <div class="trigger-status">
+          <span class="audio-indicator ${hasAudio ? 'has-audio' : ''}" title="${hasAudio ? 'Has audio' : 'No audio'}">
+            ${hasAudio ? '🔊' : '🔇'}
+          </span>
+        </div>
+        <div>
+          <label class="toggle-switch">
+            <input type="checkbox" class="toggle-enabled" 
+                   data-trigger-id="${trigger.triggerId}" 
+                   data-scope="${trigger.scope}"
+                   ${isEnabled ? 'checked' : ''}>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="trigger-actions">
+          <button class="btn btn-ghost btn-icon btn-edit-trigger" data-trigger-id="${trigger.triggerId}" title="Edit">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M11.333 2A1.886 1.886 0 0 1 14 4.667l-9 9-3.667 1 1-3.667 9-9Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="btn btn-ghost btn-icon btn-delete-trigger" data-trigger-id="${trigger.triggerId}" title="Delete">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 0 1 1.334-1.334h2.666a1.333 1.333 0 0 1 1.334 1.334V4m2 0v9.333a1.333 1.333 0 0 1-1.334 1.334H4.667a1.333 1.333 0 0 1-1.334-1.334V4h9.334Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  /* --------------------------------------------------------------------------
+     GROUP MANAGEMENT
+     -------------------------------------------------------------------------- */
+  async function handleGroupChange(e) {
+    const newGroupId = e.target.value || null;
+    
+    try {
+      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/active-group`, {
+        method: 'PUT',
+        body: { groupId: newGroupId }
+      });
+      
+      showToast('success', 'Group Changed', newGroupId ? `Now using "${newGroupId}" triggers` : 'No group selected');
+      await loadTriggers();
+      
+    } catch (error) {
+      console.error('[Triggers] Failed to change group:', error);
+      showToast('error', 'Failed', 'Could not change trigger group.');
+      DOM.groupSelector.value = state.activeGroupId || '';
+    }
+  }
+
+  function openCreateGroupModal() {
+    if (!state.permissions?.canCreateGroup) {
+      showToast('error', 'Permission Denied', 'You do not have permission to create global groups.');
+      return;
+    }
+    
+    DOM.inputGroupId.value = '';
+    DOM.inputGroupName.value = '';
+    DOM.inputGroupIcon.value = '📋';
+    DOM.inputGroupDescription.value = '';
+    DOM.modalCreateGroup.classList.add('active');
+  }
+
+  function closeCreateGroupModal() {
+    DOM.modalCreateGroup.classList.remove('active');
+  }
+
+  async function createGroup() {
+    const groupId = DOM.inputGroupId.value.trim().toLowerCase();
+    const name = DOM.inputGroupName.value.trim();
+    const icon = DOM.inputGroupIcon.value.trim() || '📋';
+    const description = DOM.inputGroupDescription.value.trim();
+    
+    if (!groupId || !name) {
+      showToast('error', 'Validation Error', 'Group ID and Name are required.');
+      return;
+    }
+    
+    if (!/^[a-z0-9_-]+$/.test(groupId)) {
+      showToast('error', 'Invalid Group ID', 'Use lowercase letters, numbers, hyphens, underscores only.');
+      return;
+    }
+    
+    try {
+      await apiFetch(`${CONFIG.API_BASE_GLOBAL}/trigger-groups`, {
+        method: 'POST',
+        body: { groupId, name, icon, description }
+      });
+      
+      showToast('success', 'Group Created', `"${name}" is now available.`);
+      closeCreateGroupModal();
+      await loadTriggers();
+      
+    } catch (error) {
+      console.error('[Triggers] Failed to create group:', error);
+      showToast('error', 'Failed', error.message || 'Could not create group.');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     TRIGGER MANAGEMENT
+     -------------------------------------------------------------------------- */
+  function openTriggerModal(trigger) {
+    state.editingTrigger = trigger;
+    
+    if (trigger) {
+      DOM.modalTriggerTitle.textContent = 'Edit Trigger';
+      DOM.inputTriggerLabel.value = trigger.label || '';
+      DOM.inputTriggerRuleId.value = trigger.ruleId || '';
+      DOM.inputTriggerRuleId.disabled = true;
+      DOM.inputTriggerPriority.value = trigger.priority || 50;
+      DOM.inputTriggerKeywords.value = (trigger.match?.keywords || []).join(', ');
+      DOM.inputTriggerPhrases.value = (trigger.match?.phrases || []).join(', ');
+      DOM.inputTriggerNegative.value = (trigger.match?.negativeKeywords || []).join(', ');
+      DOM.inputTriggerAnswer.value = trigger.answer?.answerText || '';
+      DOM.inputTriggerAudio.value = trigger.answer?.audioUrl || '';
+      DOM.inputTriggerFollowup.value = trigger.followUp?.question || '';
+      DOM.scopeSection.style.display = 'none';
+    } else {
+      DOM.modalTriggerTitle.textContent = 'Add Trigger';
+      DOM.inputTriggerLabel.value = '';
+      DOM.inputTriggerRuleId.value = '';
+      DOM.inputTriggerRuleId.disabled = false;
+      DOM.inputTriggerPriority.value = 50;
+      DOM.inputTriggerKeywords.value = '';
+      DOM.inputTriggerPhrases.value = '';
+      DOM.inputTriggerNegative.value = '';
+      DOM.inputTriggerAnswer.value = '';
+      DOM.inputTriggerAudio.value = '';
+      DOM.inputTriggerFollowup.value = '';
+      DOM.inputTriggerLocal.checked = true;
+      DOM.scopeSection.style.display = 'block';
+    }
+    
+    DOM.modalTriggerEdit.classList.add('active');
+    DOM.inputTriggerLabel.focus();
+  }
+
+  function closeTriggerModal() {
+    DOM.modalTriggerEdit.classList.remove('active');
+    state.editingTrigger = null;
+  }
+
+  async function saveTrigger() {
+    const label = DOM.inputTriggerLabel.value.trim();
+    const ruleId = DOM.inputTriggerRuleId.value.trim().toLowerCase();
+    const priority = parseInt(DOM.inputTriggerPriority.value, 10) || 50;
+    const keywords = parseCommaSeparated(DOM.inputTriggerKeywords.value);
+    const phrases = parseCommaSeparated(DOM.inputTriggerPhrases.value);
+    const negativeKeywords = parseCommaSeparated(DOM.inputTriggerNegative.value);
+    const answerText = DOM.inputTriggerAnswer.value.trim();
+    const audioUrl = DOM.inputTriggerAudio.value.trim();
+    const followUpQuestion = DOM.inputTriggerFollowup.value.trim();
+    
+    if (!label || !ruleId || !answerText) {
+      showToast('error', 'Validation Error', 'Label, Rule ID, and Answer Text are required.');
+      return;
+    }
+    
+    if (!/^[a-z0-9_.]+$/.test(ruleId)) {
+      showToast('error', 'Invalid Rule ID', 'Use lowercase letters, numbers, dots, underscores only.');
+      return;
+    }
+    
+    const payload = {
+      ruleId,
+      label,
+      priority,
+      keywords,
+      phrases,
+      negativeKeywords,
+      answerText,
+      audioUrl,
+      followUpQuestion
+    };
+    
+    try {
+      if (state.editingTrigger) {
+        const scope = state.editingTrigger.scope;
+        
+        if (scope === 'GLOBAL') {
+          if (!state.permissions?.canEditGlobalTriggers) {
+            showToast('error', 'Permission Denied', 'You cannot edit global triggers.');
+            return;
+          }
+          
+          const groupId = state.editingTrigger.originGroupId;
+          await apiFetch(`${CONFIG.API_BASE_GLOBAL}/trigger-groups/${groupId}/triggers/${ruleId}`, {
+            method: 'PATCH',
+            body: payload
+          });
+        } else {
+          await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers/${ruleId}`, {
+            method: 'PATCH',
+            body: payload
+          });
+        }
+        
+        showToast('success', 'Saved', 'Trigger updated successfully.');
+      } else {
+        await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers`, {
+          method: 'POST',
+          body: payload
+        });
+        
+        showToast('success', 'Created', 'Trigger created successfully.');
+      }
+      
+      closeTriggerModal();
+      await loadTriggers();
+      
+    } catch (error) {
+      console.error('[Triggers] Save failed:', error);
+      showToast('error', 'Save Failed', error.message || 'Could not save trigger.');
+    }
+  }
+
+  function confirmDeleteTrigger(trigger) {
+    state.pendingApproval = {
+      action: 'delete',
+      trigger
+    };
+    
+    DOM.approvalTitle.textContent = 'Delete Trigger';
+    DOM.approvalText.textContent = `Are you sure you want to delete "${trigger.label}"?`;
+    DOM.inputApproval.value = '';
+    DOM.modalApproval.classList.add('active');
+    DOM.inputApproval.focus();
+  }
+
+  function closeApprovalModal() {
+    DOM.modalApproval.classList.remove('active');
+    state.pendingApproval = null;
+  }
+
+  async function confirmApproval() {
+    const approvalText = DOM.inputApproval.value.trim().toLowerCase();
+    
+    if (approvalText !== 'approved') {
+      showToast('error', 'Approval Required', 'Please type "approved" to confirm.');
+      return;
+    }
+    
+    if (!state.pendingApproval) {
+      return;
+    }
+    
+    const { action, trigger } = state.pendingApproval;
+    
+    try {
+      if (action === 'delete') {
+        if (trigger.scope === 'GLOBAL') {
+          const groupId = trigger.originGroupId;
+          await apiFetch(`${CONFIG.API_BASE_GLOBAL}/trigger-groups/${groupId}/triggers/${trigger.ruleId}`, {
+            method: 'DELETE',
+            body: { approvalText: 'approved' }
+          });
+        } else {
+          await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers/${trigger.ruleId}`, {
+            method: 'DELETE'
+          });
+        }
+        
+        showToast('success', 'Deleted', `Trigger "${trigger.label}" deleted.`);
+      }
+      
+      closeApprovalModal();
+      await loadTriggers();
+      
+    } catch (error) {
+      console.error('[Triggers] Action failed:', error);
+      showToast('error', 'Failed', error.message || 'Action could not be completed.');
+    }
+  }
+
+  async function toggleGlobalTriggerVisibility(triggerId, visible) {
+    try {
+      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/trigger-visibility`, {
+        method: 'PUT',
+        body: { triggerId, visible }
+      });
+      
+      showToast('success', visible ? 'Enabled' : 'Disabled', `Trigger ${visible ? 'enabled' : 'hidden'} for this company.`);
+      await loadTriggers();
+      
+    } catch (error) {
+      console.error('[Triggers] Visibility toggle failed:', error);
+      showToast('error', 'Failed', 'Could not change trigger visibility.');
+      await loadTriggers();
+    }
+  }
+
+  async function toggleLocalTriggerEnabled(triggerId, enabled) {
+    const trigger = state.triggers.find(t => t.triggerId === triggerId);
+    if (!trigger) {
+      return;
+    }
+    
+    try {
+      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/local-triggers/${trigger.ruleId}`, {
+        method: 'PATCH',
+        body: { enabled }
+      });
+      
+      showToast('success', enabled ? 'Enabled' : 'Disabled', `Trigger ${enabled ? 'enabled' : 'disabled'}.`);
+      await loadTriggers();
+      
+    } catch (error) {
+      console.error('[Triggers] Enable toggle failed:', error);
+      showToast('error', 'Failed', 'Could not change trigger status.');
+      await loadTriggers();
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     HEALTH CHECK
+     -------------------------------------------------------------------------- */
+  async function checkDuplicates() {
+    try {
+      const data = await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/duplicates`);
+      
+      if (data.healthy) {
+        DOM.duplicateWarning.style.display = 'none';
+        showToast('success', 'All Clear', 'No duplicate triggers found.');
+      } else {
+        const count = (data.localDuplicates?.length || 0) + (data.mergedDuplicates?.length || 0);
+        DOM.duplicateWarningText.textContent = `${count} duplicate rule ID(s) detected. This may cause unexpected behavior.`;
+        DOM.duplicateWarning.style.display = 'flex';
+        showToast('warning', 'Duplicates Found', `${count} duplicate(s) detected.`);
+      }
+      
+    } catch (error) {
+      console.error('[Triggers] Health check failed:', error);
+      showToast('error', 'Check Failed', 'Could not check for duplicates.');
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     UTILITIES
+     -------------------------------------------------------------------------- */
+  function parseCommaSeparated(str) {
+    return (str || '').split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  async function apiFetch(url, options = {}) {
+    const token = localStorage.getItem('adminToken') ||
+                  localStorage.getItem('token') ||
+                  sessionStorage.getItem('token');
+    
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || data.message || 'Request failed');
+    }
+    
+    return data.data || data;
+  }
+
+  function showToast(type, title, message) {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    
+    const iconSvg = getToastIcon(type);
+    
+    toast.innerHTML = `
+      <div class="toast-icon">${iconSvg}</div>
+      <div class="toast-content">
+        <div class="toast-title">${escapeHtml(title)}</div>
+        ${message ? `<div class="toast-message">${escapeHtml(message)}</div>` : ''}
+      </div>
+      <button class="toast-close" onclick="this.parentElement.remove()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M9 3L3 9M3 3L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    `;
+    
+    DOM.toastContainer.appendChild(toast);
+    setTimeout(() => { 
+      if (toast.parentElement) {
+        toast.remove();
+      }
+    }, 5000);
+  }
+
+  function getToastIcon(type) {
+    switch (type) {
+      case 'success':
+        return `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#22c55e" stroke-width="1.5"/><path d="M6 10L9 13L14 7" stroke="#22c55e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      case 'error':
+        return `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#ef4444" stroke-width="1.5"/><path d="M7 7L13 13M13 7L7 13" stroke="#ef4444" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+      case 'warning':
+        return `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3L18 17H2L10 3Z" stroke="#f59e0b" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 8V11M10 14V14.5" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+      default:
+        return `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#3b82f6" stroke-width="1.5"/><path d="M10 6V10M10 14V14.5" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+    }
+  }
+
+  /* --------------------------------------------------------------------------
+     BOOTSTRAP
+     -------------------------------------------------------------------------- */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+})();

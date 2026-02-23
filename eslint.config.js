@@ -3,7 +3,7 @@ export default [
     ignores: [
       'node_modules/**',
       'logs/**',
-      'public/**',
+      'public/**/vendor/**', // Ignore third-party libraries in public
       '*.min.js',
       'coverage/**',
       '.nyc_output/**',
@@ -141,6 +141,62 @@ export default [
       'no-console': 'off', // Allow console in tests
       'security/detect-child-process': 'off', // Allow in tests
       'node/no-extraneous-require': 'off' // Allow dev dependencies in tests
+    }
+  },
+  // ════════════════════════════════════════════════════════════════════════════
+  // FRONTEND ISOLATION RULES (Agent 2.0 Trigger Console)
+  // ════════════════════════════════════════════════════════════════════════════
+  // These rules enforce strict isolation for frontend modules to prevent
+  // global namespace pollution and ensure proper IIFE encapsulation.
+  {
+    files: ['public/agent-console/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'script', // Enforce script mode (not module) for IIFE pattern
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        console: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        fetch: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        Blob: 'readonly',
+        Date: 'readonly',
+        JSON: 'readonly',
+        Array: 'readonly',
+        Object: 'readonly',
+        Map: 'readonly',
+        Set: 'readonly',
+        Promise: 'readonly',
+        // Allow AgentConsoleAuth as a global (loaded via script tag)
+        AgentConsoleAuth: 'readonly'
+      }
+    },
+    rules: {
+      // ═══════════════════════════════════════════════════════════════════════
+      // ISOLATION RULES - Prevent global namespace pollution
+      // ═══════════════════════════════════════════════════════════════════════
+      'strict': ['error', 'function'], // Require 'use strict' at function level (IIFE)
+      'no-implicit-globals': 'error', // Prevent implicit global variable creation
+      'no-var': 'error', // Prevent var (use const/let in IIFE scope)
+      
+      // Allow console for frontend debugging
+      'no-console': 'off',
+      
+      // Disable require-atomic-updates for frontend (false positives with module state)
+      'require-atomic-updates': 'off',
+      
+      // Relaxed rules for frontend code
+      'max-lines': 'off', // Frontend files can be larger
+      'max-lines-per-function': 'off', // Render functions can be long
+      'complexity': ['warn', 20], // Allow slightly higher complexity
+      'no-magic-numbers': 'off' // Frontend often uses magic numbers for UI
     }
   }
 ];

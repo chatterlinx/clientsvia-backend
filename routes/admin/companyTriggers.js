@@ -1,0 +1,1265 @@
+/**
+ * ============================================================================
+ * COMPANY TRIGGERS - Admin API Routes (Company-Scoped Resources)
+ * ============================================================================
+ *
+ * These routes manage company-specific trigger configurations.
+ * All routes require companyId in the path for isolation.
+ *
+ * ISOLATION RULES:
+ * - Every route scoped by companyId
+ * - No cross-company data access possible
+ * - Merged view combines global + local without data leakage
+ *
+ * ENDPOINTS:
+ * - GET    /:companyId/triggers           - Get merged trigger list (UI view)
+ * - PUT    /:companyId/active-group       - Select/change active global group
+ * - GET    /:companyId/active-group       - Get current active group info
+ *
+ * - GET    /:companyId/local-triggers     - List local triggers only
+ * - POST   /:companyId/local-triggers     - Create local trigger
+ * - GET    /:companyId/local-triggers/:id - Get local trigger
+ * - PATCH  /:companyId/local-triggers/:id - Update local trigger
+ * - DELETE /:companyId/local-triggers/:id - Delete local trigger
+ *
+ * - PUT    /:companyId/trigger-visibility - Hide/show global triggers
+ * - PUT    /:companyId/trigger-override   - Set partial override
+ * - DELETE /:companyId/trigger-override/:triggerId - Remove partial override
+ *
+ * - GET    /:companyId/duplicates         - Check for duplicate triggers
+ *
+ * ============================================================================
+ */
+
+const express = require('express');
+const router = express.Router();
+const logger = require('../../utils/logger');
+const { authenticateJWT } = require('../../middleware/auth');
+const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
+
+const GlobalTriggerGroup = require('../../models/GlobalTriggerGroup');
+const GlobalTrigger = require('../../models/GlobalTrigger');
+const CompanyLocalTrigger = require('../../models/CompanyLocalTrigger');
+const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
+const v2Company = require('../../models/v2Company');
+
+// ════════════════════════════════════════════════════════════════════════════════
+// CANONICALIZATION RULES
+// ════════════════════════════════════════════════════════════════════════════════
+// All identifiers must be normalized at the API boundary to prevent semantic duplicates.
+// ruleId: ^[a-z0-9]+(\.[a-z0-9_-]+)*$ (e.g., "pricing.freon", "hvac.thermostat_blank")
+// groupId: ^[a-z0-9_-]+$ (e.g., "hvac", "dental-office")
+// companyId: preserved as-is (already normalized upstream)
+
+const RULE_ID_REGEX = /^[a-z0-9]+(\.[a-z0-9_-]+)*$/;
+
+function normalizeRuleId(ruleId) {
+  if (!ruleId || typeof ruleId !== 'string') {
+    return null;
+  }
+  const normalized = ruleId.trim().toLowerCase();
+  if (!RULE_ID_REGEX.test(normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+function validateRuleId(ruleId, fieldName = 'ruleId') {
+  const normalized = normalizeRuleId(ruleId);
+  if (!normalized) {
+    return {
+      valid: false,
+      error: `Invalid ${fieldName}: must be lowercase alphanumeric with dots/underscores/hyphens (e.g., "pricing.freon", "hvac.thermostat_blank")`
+    };
+  }
+  return { valid: true, normalized };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// HELPER: Build merged trigger list for UI
+// ════════════════════════════════════════════════════════════════════════════════
+
+async function buildMergedTriggerList(companyId) {
+  const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+  
+  let globalTriggers = [];
+  let groupInfo = null;
+  
+  if (settings && settings.activeGroupId) {
+    globalTriggers = await GlobalTrigger.findByGroupId(settings.activeGroupId);
+    const group = await GlobalTriggerGroup.findByGroupId(settings.activeGroupId);
+    if (group) {
+      groupInfo = {
+        groupId: group.groupId,
+        name: group.name,
+        icon: group.icon,
+        version: group.version,
+        publishedVersion: group.publishedVersion,
+        triggerCount: group.triggerCount
+      };
+    }
+  }
+
+  const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+
+  const hiddenSet = new Set(settings?.hiddenGlobalTriggerIds || []);
+  
+  // partialOverrides is now a Map (keyed by globalTriggerId)
+  // Convert to regular Map if it's a Mongoose Map
+  const partialOverrideMap = new Map();
+  if (settings?.partialOverrides) {
+    const overrides = settings.partialOverrides instanceof Map 
+      ? settings.partialOverrides 
+      : new Map(Object.entries(settings.partialOverrides || {}));
+    overrides.forEach((value, key) => {
+      partialOverrideMap.set(key, value);
+    });
+  }
+
+  // Full overrides: Map by overrideOfRuleId (canonical key, never parse IDs)
+  const fullOverrideByRuleId = new Map();
+  localTriggers.forEach(lt => {
+    if (lt.isOverride && lt.overrideOfRuleId) {
+      fullOverrideByRuleId.set(lt.overrideOfRuleId, lt);
+    }
+  });
+
+  const triggerMap = new Map();
+
+  for (const gt of globalTriggers) {
+    if (hiddenSet.has(gt.triggerId)) {
+      continue;
+    }
+
+    // Check for full override by ruleId (not by parsing triggerId)
+    if (fullOverrideByRuleId.has(gt.ruleId)) {
+      continue;
+    }
+
+    const partialOverride = partialOverrideMap.get(gt.triggerId);
+    
+    triggerMap.set(gt.ruleId, {
+      triggerId: gt.triggerId,
+      ruleId: gt.ruleId,
+      label: gt.label,
+      scope: 'GLOBAL',
+      originGroupId: gt.groupId,
+      originGroupName: groupInfo?.name || null,
+      isEnabled: true,
+      isOverridden: Boolean(partialOverride),
+      overrideType: partialOverride ? 'PARTIAL' : null,
+      priority: gt.priority,
+      match: {
+        keywords: gt.keywords || [],
+        phrases: gt.phrases || [],
+        negativeKeywords: gt.negativeKeywords || []
+      },
+      answer: {
+        answerText: partialOverride?.answerText || gt.answerText,
+        audioUrl: partialOverride?.audioUrl || gt.audioUrl || '',
+        hasAudio: Boolean(partialOverride?.audioUrl || gt.audioUrl)
+      },
+      followUp: {
+        question: gt.followUpQuestion || '',
+        nextAction: gt.followUpNextAction || ''
+      },
+      createdAt: gt.createdAt,
+      createdBy: gt.createdBy,
+      lastEditedAt: partialOverride?.updatedAt || gt.updatedAt,
+      lastEditedBy: partialOverride?.updatedBy || gt.updatedBy,
+      version: gt.version
+    });
+  }
+
+  for (const lt of localTriggers) {
+    triggerMap.set(lt.ruleId, {
+      triggerId: lt.triggerId,
+      ruleId: lt.ruleId,
+      label: lt.label,
+      scope: 'LOCAL',
+      originGroupId: lt.overrideOfGroupId || null,
+      originGroupName: null,
+      isEnabled: lt.enabled,
+      isOverridden: lt.isOverride,
+      overrideType: lt.isOverride ? 'FULL' : null,
+      overrideOfTriggerId: lt.overrideOfTriggerId || null,
+      overrideOfGroupId: lt.overrideOfGroupId || null,
+      overrideOfRuleId: lt.overrideOfRuleId || null,
+      priority: lt.priority,
+      match: {
+        keywords: lt.keywords || [],
+        phrases: lt.phrases || [],
+        negativeKeywords: lt.negativeKeywords || []
+      },
+      answer: {
+        answerText: lt.answerText,
+        audioUrl: lt.audioUrl || '',
+        hasAudio: Boolean(lt.audioUrl)
+      },
+      followUp: {
+        question: lt.followUpQuestion || '',
+        nextAction: lt.followUpNextAction || ''
+      },
+      createdAt: lt.createdAt,
+      createdBy: lt.createdBy,
+      lastEditedAt: lt.updatedAt,
+      lastEditedBy: lt.updatedBy,
+      version: 1
+    });
+  }
+
+  const triggers = Array.from(triggerMap.values())
+    .sort((a, b) => a.priority - b.priority);
+
+  const globalCount = globalTriggers.length;
+  const globalHiddenCount = hiddenSet.size;
+  const globalEnabledCount = globalCount - globalHiddenCount - overrideMap.size;
+  const localCount = localTriggers.filter(lt => !lt.isOverride).length;
+  const overrideCount = localTriggers.filter(lt => lt.isOverride).length + partialOverrideMap.size;
+
+  return {
+    companyId,
+    activeGroupId: settings?.activeGroupId || null,
+    activeGroupName: groupInfo?.name || null,
+    activeGroupIcon: groupInfo?.icon || null,
+    activeGroupVersion: groupInfo?.publishedVersion || null,
+    triggers,
+    stats: {
+      globalCount,
+      globalEnabledCount,
+      globalHiddenCount,
+      localCount,
+      overrideCount,
+      totalActiveCount: triggers.length
+    }
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// MERGED TRIGGER LIST (UI VIEW)
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/triggers
+ * Get merged trigger list for UI display
+ */
+router.get('/:companyId/triggers',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+
+      const company = await v2Company.findById(companyId).select('companyName').lean();
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+
+      const result = await buildMergedTriggerList(companyId);
+
+      const groups = await GlobalTriggerGroup.listActiveGroups();
+
+      return res.json({
+        success: true,
+        data: {
+          ...result,
+          companyName: company.companyName,
+          availableGroups: groups,
+          permissions: {
+            canEditGlobalTriggers: req.user.role === 'super_admin' || req.user.role === 'platform_admin',
+            canEditLocalTriggers: true,
+            canSwitchGroup: true,
+            canCreateGroup: req.user.role === 'super_admin' || req.user.role === 'platform_admin'
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Get triggers error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
+// ACTIVE GROUP SELECTION
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/active-group
+ * Get current active group info
+ */
+router.get('/:companyId/active-group',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+
+      const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+      
+      if (!settings || !settings.activeGroupId) {
+        return res.json({
+          success: true,
+          data: {
+            activeGroupId: null,
+            activeGroupName: null,
+            groupSelectedAt: null,
+            groupSelectedBy: null
+          }
+        });
+      }
+
+      const group = await GlobalTriggerGroup.findByGroupId(settings.activeGroupId);
+
+      return res.json({
+        success: true,
+        data: {
+          activeGroupId: settings.activeGroupId,
+          activeGroupName: group?.name || null,
+          activeGroupIcon: group?.icon || null,
+          activeGroupVersion: group?.publishedVersion || null,
+          triggerCount: group?.triggerCount || 0,
+          groupSelectedAt: settings.groupSelectedAt,
+          groupSelectedBy: settings.groupSelectedBy
+        }
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Get active group error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * PUT /:companyId/active-group
+ * Select/change active global group
+ */
+router.put('/:companyId/active-group',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { groupId } = req.body;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      const company = await v2Company.findById(companyId).select('companyName').lean();
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+
+      if (groupId) {
+        const group = await GlobalTriggerGroup.findByGroupId(groupId);
+        if (!group) {
+          return res.status(404).json({
+            success: false,
+            error: 'Group not found'
+          });
+        }
+
+        if (!group.isActive) {
+          return res.status(400).json({
+            success: false,
+            error: 'Cannot select inactive group'
+          });
+        }
+      }
+
+      const previousSettings = await CompanyTriggerSettings.findByCompanyId(companyId);
+      const previousGroupId = previousSettings?.activeGroupId;
+
+      const settings = await CompanyTriggerSettings.setActiveGroup(companyId, groupId, userId);
+
+      if (previousGroupId && previousGroupId !== groupId) {
+        await GlobalTriggerGroup.updateOne(
+          { groupId: previousGroupId },
+          { $inc: { companyCount: -1 } }
+        );
+      }
+      if (groupId && groupId !== previousGroupId) {
+        await GlobalTriggerGroup.updateOne(
+          { groupId: groupId.toLowerCase() },
+          { $inc: { companyCount: 1 } }
+        );
+      }
+
+      logger.info('[CompanyTriggers] Active group changed', {
+        companyId,
+        previousGroupId,
+        newGroupId: groupId,
+        changedBy: userId
+      });
+
+      const group = groupId ? await GlobalTriggerGroup.findByGroupId(groupId) : null;
+
+      return res.json({
+        success: true,
+        data: {
+          activeGroupId: settings.activeGroupId,
+          activeGroupName: group?.name || null,
+          activeGroupIcon: group?.icon || null,
+          triggerCount: group?.triggerCount || 0,
+          groupSelectedAt: settings.groupSelectedAt,
+          groupSelectedBy: settings.groupSelectedBy
+        }
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Set active group error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
+// LOCAL TRIGGERS CRUD
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/local-triggers
+ * List local triggers only (not merged)
+ */
+router.get('/:companyId/local-triggers',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+
+      const triggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+
+      return res.json({
+        success: true,
+        data: triggers,
+        total: triggers.length
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] List local triggers error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /:companyId/local-triggers
+ * Create a local trigger
+ * 
+ * OVERRIDE RULES:
+ * - If isOverride=true, client MUST provide overrideOfTriggerId
+ * - The ruleId MUST equal the global trigger's ruleId (enforced)
+ * - We store overrideOfGroupId and overrideOfRuleId explicitly (never parse IDs)
+ */
+router.post('/:companyId/local-triggers',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+      const {
+        ruleId: rawRuleId,
+        label,
+        description,
+        enabled,
+        priority,
+        keywords,
+        phrases,
+        negativeKeywords,
+        answerText,
+        audioUrl,
+        followUpQuestion,
+        followUpNextAction,
+        isOverride,
+        overrideOfTriggerId,
+        tags
+      } = req.body;
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // VALIDATION: Required fields
+      // ═══════════════════════════════════════════════════════════════════════
+      if (!rawRuleId || !label || !answerText) {
+        return res.status(400).json({
+          success: false,
+          error: 'ruleId, label, and answerText are required'
+        });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // CANONICALIZATION: Normalize ruleId at API boundary
+      // ═══════════════════════════════════════════════════════════════════════
+      const ruleIdValidation = validateRuleId(rawRuleId);
+      if (!ruleIdValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: 'INVALID_RULE_ID',
+          message: ruleIdValidation.error
+        });
+      }
+      const ruleId = ruleIdValidation.normalized;
+
+      const company = await v2Company.findById(companyId).select('_id').lean();
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // OVERRIDE VALIDATION: Enforce strict rules for overrides
+      // ═══════════════════════════════════════════════════════════════════════
+      let overrideOfGroupId = null;
+      let overrideOfRuleId = null;
+
+      if (isOverride) {
+        if (!overrideOfTriggerId) {
+          return res.status(400).json({
+            success: false,
+            error: 'MISSING_OVERRIDE_TARGET',
+            message: 'isOverride=true requires overrideOfTriggerId'
+          });
+        }
+
+        const globalTrigger = await GlobalTrigger.findByTriggerId(overrideOfTriggerId);
+        if (!globalTrigger) {
+          return res.status(400).json({
+            success: false,
+            error: 'INVALID_OVERRIDE_TARGET',
+            message: `Cannot override non-existent global trigger "${overrideOfTriggerId}"`
+          });
+        }
+
+        // CRITICAL: Enforce ruleId === global trigger's ruleId
+        // This guarantees Map key behavior is correct at runtime
+        if (ruleId !== globalTrigger.ruleId) {
+          return res.status(400).json({
+            success: false,
+            error: 'RULE_ID_MISMATCH',
+            message: `Override ruleId must match global trigger's ruleId. Expected "${globalTrigger.ruleId}", got "${ruleId}"`
+          });
+        }
+
+        // Store explicit references (never parse IDs at runtime)
+        overrideOfGroupId = globalTrigger.groupId;
+        overrideOfRuleId = globalTrigger.ruleId;
+
+        const overrideExists = await CompanyLocalTrigger.overrideExists(companyId, overrideOfTriggerId);
+        if (overrideExists) {
+          return res.status(409).json({
+            success: false,
+            error: 'DUPLICATE_OVERRIDE',
+            message: `Override for "${overrideOfTriggerId}" already exists`
+          });
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // DUPLICATE CHECK: Prevent duplicate ruleId for this company
+      // ═══════════════════════════════════════════════════════════════════════
+      const exists = await CompanyLocalTrigger.existsForCompany(companyId, ruleId);
+      if (exists) {
+        // Idempotent create: return existing trigger instead of error
+        const existing = await CompanyLocalTrigger.findOne({ companyId, ruleId });
+        logger.info('[CompanyTriggers] Idempotent create - returning existing', {
+          companyId,
+          ruleId,
+          existingTriggerId: existing?.triggerId
+        });
+        return res.status(200).json({
+          success: true,
+          data: existing,
+          alreadyExisted: true
+        });
+      }
+
+      const triggerId = CompanyLocalTrigger.generateTriggerId(
+        companyId, 
+        ruleId, 
+        isOverride, 
+        overrideOfTriggerId
+      );
+
+      const trigger = await CompanyLocalTrigger.create({
+        companyId,
+        ruleId,
+        triggerId,
+        label,
+        description: description || '',
+        enabled: enabled !== false,
+        priority: priority || 50,
+        keywords: keywords || [],
+        phrases: phrases || [],
+        negativeKeywords: negativeKeywords || [],
+        answerText,
+        audioUrl: audioUrl || '',
+        followUpQuestion: followUpQuestion || '',
+        followUpNextAction: followUpNextAction || '',
+        isOverride: Boolean(isOverride),
+        overrideOfGroupId,
+        overrideOfRuleId,
+        overrideOfTriggerId: isOverride ? overrideOfTriggerId : null,
+        overrideType: isOverride ? 'FULL' : null,
+        tags: tags || [],
+        createdBy: userId,
+        updatedBy: userId
+      });
+
+      logger.info('[CompanyTriggers] Local trigger created', {
+        companyId,
+        ruleId,
+        triggerId,
+        isOverride: Boolean(isOverride),
+        overrideOfRuleId,
+        createdBy: userId
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: trigger
+      });
+    } catch (error) {
+      // Idempotent create: if duplicate key error, return existing doc
+      if (error.code === 11000) {
+        try {
+          const { companyId } = req.params;
+          const rawRuleId = req.body.ruleId;
+          const ruleId = normalizeRuleId(rawRuleId);
+          const existing = await CompanyLocalTrigger.findOne({ companyId, ruleId });
+          if (existing) {
+            logger.info('[CompanyTriggers] Idempotent create (race) - returning existing', {
+              companyId,
+              ruleId,
+              existingTriggerId: existing.triggerId
+            });
+            return res.status(200).json({
+              success: true,
+              data: existing,
+              alreadyExisted: true
+            });
+          }
+        } catch (lookupError) {
+          logger.error('[CompanyTriggers] Failed to lookup existing on duplicate', lookupError);
+        }
+        return res.status(409).json({
+          success: false,
+          error: 'DUPLICATE_RULE_ID',
+          message: 'Trigger already exists'
+        });
+      }
+      logger.error('[CompanyTriggers] Create local trigger error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * GET /:companyId/local-triggers/:ruleId
+ * Get a specific local trigger
+ */
+router.get('/:companyId/local-triggers/:ruleId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId, ruleId } = req.params;
+
+      const trigger = await CompanyLocalTrigger.findOne({ companyId, ruleId }).lean();
+
+      if (!trigger) {
+        return res.status(404).json({
+          success: false,
+          error: 'Trigger not found'
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: trigger
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Get local trigger error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * PATCH /:companyId/local-triggers/:ruleId
+ * Update a local trigger
+ */
+router.patch('/:companyId/local-triggers/:ruleId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId, ruleId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+      const updates = req.body;
+
+      const trigger = await CompanyLocalTrigger.findOne({ companyId, ruleId });
+
+      if (!trigger) {
+        return res.status(404).json({
+          success: false,
+          error: 'Trigger not found'
+        });
+      }
+
+      const allowedFields = [
+        'label', 'description', 'enabled', 'priority',
+        'keywords', 'phrases', 'negativeKeywords',
+        'answerText', 'audioUrl',
+        'followUpQuestion', 'followUpNextAction',
+        'tags'
+      ];
+
+      const cleanUpdates = {};
+      for (const field of allowedFields) {
+        if (updates[field] !== undefined) {
+          cleanUpdates[field] = updates[field];
+        }
+      }
+
+      Object.assign(trigger, cleanUpdates);
+      trigger.updatedAt = new Date();
+      trigger.updatedBy = userId;
+
+      await trigger.save();
+
+      logger.info('[CompanyTriggers] Local trigger updated', {
+        companyId,
+        ruleId,
+        updatedFields: Object.keys(cleanUpdates),
+        updatedBy: userId
+      });
+
+      return res.json({
+        success: true,
+        data: trigger
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Update local trigger error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /:companyId/local-triggers/:ruleId
+ * Delete a local trigger
+ */
+router.delete('/:companyId/local-triggers/:ruleId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId, ruleId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      const trigger = await CompanyLocalTrigger.findOne({ companyId, ruleId });
+
+      if (!trigger) {
+        return res.status(404).json({
+          success: false,
+          error: 'Trigger not found'
+        });
+      }
+
+      await CompanyLocalTrigger.deleteOne({ _id: trigger._id });
+
+      logger.info('[CompanyTriggers] Local trigger deleted', {
+        companyId,
+        ruleId,
+        triggerId: trigger.triggerId,
+        deletedBy: userId
+      });
+
+      return res.json({
+        success: true,
+        message: `Trigger "${ruleId}" deleted`
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Delete local trigger error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
+// VISIBILITY & OVERRIDES
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /:companyId/trigger-visibility
+ * Hide or show a global trigger for this company
+ */
+router.put('/:companyId/trigger-visibility',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { triggerId, visible } = req.body;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      if (!triggerId) {
+        return res.status(400).json({
+          success: false,
+          error: 'triggerId is required'
+        });
+      }
+
+      const globalTrigger = await GlobalTrigger.findByTriggerId(triggerId);
+      if (!globalTrigger) {
+        return res.status(404).json({
+          success: false,
+          error: 'Global trigger not found'
+        });
+      }
+
+      let settings;
+      if (visible === false) {
+        settings = await CompanyTriggerSettings.hideGlobalTrigger(companyId, triggerId);
+      } else {
+        settings = await CompanyTriggerSettings.showGlobalTrigger(companyId, triggerId);
+      }
+
+      logger.info('[CompanyTriggers] Trigger visibility changed', {
+        companyId,
+        triggerId,
+        visible: visible !== false,
+        changedBy: userId
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          triggerId,
+          visible: visible !== false,
+          hiddenGlobalTriggerIds: settings.hiddenGlobalTriggerIds
+        }
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Set visibility error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * PUT /:companyId/trigger-override
+ * Set a partial override on a global trigger (just answer text/audio)
+ */
+router.put('/:companyId/trigger-override',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { globalTriggerId, answerText, audioUrl } = req.body;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      if (!globalTriggerId) {
+        return res.status(400).json({
+          success: false,
+          error: 'globalTriggerId is required'
+        });
+      }
+
+      if (!answerText && !audioUrl) {
+        return res.status(400).json({
+          success: false,
+          error: 'At least one of answerText or audioUrl is required'
+        });
+      }
+
+      const globalTrigger = await GlobalTrigger.findByTriggerId(globalTriggerId);
+      if (!globalTrigger) {
+        return res.status(404).json({
+          success: false,
+          error: 'Global trigger not found'
+        });
+      }
+
+      const overrideData = {};
+      if (answerText !== undefined) {
+        overrideData.answerText = answerText;
+      }
+      if (audioUrl !== undefined) {
+        overrideData.audioUrl = audioUrl;
+      }
+
+      const settings = await CompanyTriggerSettings.setPartialOverride(
+        companyId,
+        globalTriggerId,
+        overrideData,
+        userId
+      );
+
+      logger.info('[CompanyTriggers] Partial override set', {
+        companyId,
+        globalTriggerId,
+        overrideFields: Object.keys(overrideData),
+        setBy: userId
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          globalTriggerId,
+          override: settings.partialOverrides.find(po => po.globalTriggerId === globalTriggerId)
+        }
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Set override error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * DELETE /:companyId/trigger-override/:triggerId
+ * Remove a partial override
+ */
+router.delete('/:companyId/trigger-override/:triggerId',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId, triggerId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      await CompanyTriggerSettings.removePartialOverride(companyId, triggerId);
+
+      logger.info('[CompanyTriggers] Partial override removed', {
+        companyId,
+        globalTriggerId: triggerId,
+        removedBy: userId
+      });
+
+      return res.json({
+        success: true,
+        message: `Override for "${triggerId}" removed`
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Remove override error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
+// HEALTH & DUPLICATES
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /:companyId/duplicates
+ * Comprehensive integrity check:
+ * - Local ruleId duplicates (should be impossible with unique index)
+ * - Merged output duplicates (should be impossible with Map dedup)
+ * - Settings array duplicates (hiddenGlobalTriggerIds)
+ * - Orphaned overrides (pointing to non-existent global triggers)
+ * - Semantic duplicates (same keywords/answer but different ruleId)
+ * - Cross-layer collisions (local ruleId matches global but isn't an override)
+ */
+router.get('/:companyId/duplicates',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_READ),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const issues = [];
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 1. Local ruleId duplicates (should be 0 if unique index exists)
+      // ═══════════════════════════════════════════════════════════════════════
+      const localDupes = await CompanyLocalTrigger.findDuplicatesForCompany(companyId);
+      if (localDupes.length > 0) {
+        issues.push({
+          type: 'LOCAL_RULE_ID_DUPLICATE',
+          severity: 'critical',
+          message: `${localDupes.length} duplicate ruleId(s) in local triggers`,
+          items: localDupes.map(d => ({ ruleId: d._id, count: d.count, triggers: d.docs }))
+        });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 2. Settings integrity: hiddenGlobalTriggerIds duplicates
+      // ═══════════════════════════════════════════════════════════════════════
+      const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+      if (settings?.hiddenGlobalTriggerIds) {
+        const hiddenSet = new Set();
+        const hiddenDupes = [];
+        for (const id of settings.hiddenGlobalTriggerIds) {
+          if (hiddenSet.has(id)) {
+            hiddenDupes.push(id);
+          }
+          hiddenSet.add(id);
+        }
+        if (hiddenDupes.length > 0) {
+          issues.push({
+            type: 'HIDDEN_IDS_DUPLICATE',
+            severity: 'warning',
+            message: `${hiddenDupes.length} duplicate(s) in hiddenGlobalTriggerIds`,
+            items: hiddenDupes
+          });
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 3. Orphaned overrides (local override pointing to non-existent global)
+      // ═══════════════════════════════════════════════════════════════════════
+      const localTriggers = await CompanyLocalTrigger.findByCompanyId(companyId);
+      const orphanedOverrides = [];
+      for (const lt of localTriggers) {
+        if (lt.isOverride && lt.overrideOfTriggerId) {
+          const globalExists = await GlobalTrigger.findByTriggerId(lt.overrideOfTriggerId);
+          if (!globalExists) {
+            orphanedOverrides.push({
+              triggerId: lt.triggerId,
+              ruleId: lt.ruleId,
+              overrideOfTriggerId: lt.overrideOfTriggerId
+            });
+          }
+        }
+      }
+      if (orphanedOverrides.length > 0) {
+        issues.push({
+          type: 'ORPHANED_OVERRIDE',
+          severity: 'warning',
+          message: `${orphanedOverrides.length} override(s) point to non-existent global triggers`,
+          items: orphanedOverrides
+        });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 4. Cross-layer collision (local ruleId matches global but isn't override)
+      // ═══════════════════════════════════════════════════════════════════════
+      if (settings?.activeGroupId) {
+        const globalTriggers = await GlobalTrigger.findByGroupId(settings.activeGroupId);
+        const globalRuleIds = new Set(globalTriggers.map(gt => gt.ruleId));
+        
+        const collisions = localTriggers
+          .filter(lt => !lt.isOverride && globalRuleIds.has(lt.ruleId))
+          .map(lt => ({ ruleId: lt.ruleId, localTriggerId: lt.triggerId }));
+        
+        if (collisions.length > 0) {
+          issues.push({
+            type: 'CROSS_LAYER_COLLISION',
+            severity: 'info',
+            message: `${collisions.length} local trigger(s) have same ruleId as global (not overrides - will shadow global)`,
+            items: collisions
+          });
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 5. Merged output check (should always be 0 due to Map dedup)
+      // ═══════════════════════════════════════════════════════════════════════
+      const merged = await buildMergedTriggerList(companyId);
+      const ruleIdCounts = {};
+      for (const t of merged.triggers) {
+        ruleIdCounts[t.ruleId] = (ruleIdCounts[t.ruleId] || 0) + 1;
+      }
+      const mergedDupes = Object.entries(ruleIdCounts)
+        .filter(([, count]) => count > 1)
+        .map(([ruleId, count]) => ({ ruleId, count }));
+      
+      if (mergedDupes.length > 0) {
+        issues.push({
+          type: 'MERGED_OUTPUT_DUPLICATE',
+          severity: 'critical',
+          message: `${mergedDupes.length} duplicate(s) in merged output - this should not happen`,
+          items: mergedDupes
+        });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 6. Missing activeGroupId reference
+      // ═══════════════════════════════════════════════════════════════════════
+      if (settings?.activeGroupId) {
+        const group = await GlobalTriggerGroup.findByGroupId(settings.activeGroupId);
+        if (!group) {
+          issues.push({
+            type: 'MISSING_ACTIVE_GROUP',
+            severity: 'warning',
+            message: `Active group "${settings.activeGroupId}" does not exist`,
+            items: [{ activeGroupId: settings.activeGroupId }]
+          });
+        }
+      }
+
+      const criticalCount = issues.filter(i => i.severity === 'critical').length;
+      const warningCount = issues.filter(i => i.severity === 'warning').length;
+
+      return res.json({
+        success: true,
+        healthy: issues.length === 0,
+        criticalIssues: criticalCount,
+        warningIssues: warningCount,
+        infoIssues: issues.filter(i => i.severity === 'info').length,
+        issues,
+        companyId,
+        checkedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Integrity check error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+/**
+ * POST /:companyId/fix-duplicates
+ * Fix duplicate triggers (AUTO-FIX with safety controls)
+ * 
+ * SAFETY RULES:
+ * - Dry-run by default (execute=false)
+ * - Requires admin approval text
+ * - Soft deletes (marks isDeleted=true, doesn't hard delete)
+ * - Returns detailed audit log of changes
+ * - Uses "latest edited wins" rule for conflict resolution
+ */
+router.post('/:companyId/fix-duplicates',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+      const { execute, approvalText } = req.body;
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // SAFETY: Require approval for actual execution
+      // ═══════════════════════════════════════════════════════════════════════
+      const isDryRun = execute !== true;
+      
+      if (!isDryRun) {
+        if (!approvalText || approvalText.toLowerCase() !== 'approved') {
+          return res.status(400).json({
+            success: false,
+            error: 'APPROVAL_REQUIRED',
+            message: 'To execute fixes, set execute=true and approvalText="approved"'
+          });
+        }
+      }
+
+      const auditLog = [];
+      const fixes = [];
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 1. Fix hiddenGlobalTriggerIds duplicates
+      // ═══════════════════════════════════════════════════════════════════════
+      const settings = await CompanyTriggerSettings.findOne({ companyId });
+      if (settings?.hiddenGlobalTriggerIds?.length > 0) {
+        const uniqueHidden = [...new Set(settings.hiddenGlobalTriggerIds)];
+        if (uniqueHidden.length !== settings.hiddenGlobalTriggerIds.length) {
+          const removed = settings.hiddenGlobalTriggerIds.length - uniqueHidden.length;
+          fixes.push({
+            type: 'HIDDEN_IDS_DEDUPED',
+            removed,
+            before: settings.hiddenGlobalTriggerIds.length,
+            after: uniqueHidden.length
+          });
+          auditLog.push({
+            action: 'DEDUPE_HIDDEN_IDS',
+            removed,
+            timestamp: new Date()
+          });
+
+          if (!isDryRun) {
+            settings.hiddenGlobalTriggerIds = uniqueHidden;
+            await settings.save();
+          }
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 2. Find and soft-delete duplicate local triggers
+      // Latest edited wins, others get soft-deleted
+      // ═══════════════════════════════════════════════════════════════════════
+      const localTriggers = await CompanyLocalTrigger.find({ 
+        companyId, 
+        isDeleted: { $ne: true } 
+      }).sort({ updatedAt: -1 });
+
+      const seenRuleIds = new Map();
+      const toSoftDelete = [];
+
+      for (const trigger of localTriggers) {
+        if (seenRuleIds.has(trigger.ruleId)) {
+          // This is a duplicate - mark for soft delete
+          toSoftDelete.push({
+            trigger,
+            keptTriggerId: seenRuleIds.get(trigger.ruleId).triggerId,
+            reason: 'DEDUPED_LATEST_WINS'
+          });
+        } else {
+          seenRuleIds.set(trigger.ruleId, trigger);
+        }
+      }
+
+      if (toSoftDelete.length > 0) {
+        fixes.push({
+          type: 'LOCAL_TRIGGERS_DEDUPED',
+          count: toSoftDelete.length,
+          items: toSoftDelete.map(d => ({
+            triggerId: d.trigger.triggerId,
+            ruleId: d.trigger.ruleId,
+            keptTriggerId: d.keptTriggerId,
+            reason: d.reason
+          }))
+        });
+
+        for (const item of toSoftDelete) {
+          auditLog.push({
+            action: 'SOFT_DELETE_DUPLICATE',
+            triggerId: item.trigger.triggerId,
+            ruleId: item.trigger.ruleId,
+            keptTriggerId: item.keptTriggerId,
+            reason: item.reason,
+            timestamp: new Date()
+          });
+
+          if (!isDryRun) {
+            await CompanyLocalTrigger.updateOne(
+              { _id: item.trigger._id },
+              {
+                $set: {
+                  isDeleted: true,
+                  deletedAt: new Date(),
+                  deletedBy: userId,
+                  deletedReason: item.reason
+                }
+              }
+            );
+          }
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // 3. Log the operation
+      // ═══════════════════════════════════════════════════════════════════════
+      logger.info('[CompanyTriggers] Fix duplicates', {
+        companyId,
+        isDryRun,
+        fixCount: fixes.length,
+        userId
+      });
+
+      return res.json({
+        success: true,
+        isDryRun,
+        message: isDryRun 
+          ? 'Dry run complete. Set execute=true and approvalText="approved" to apply fixes.'
+          : 'Fixes applied successfully.',
+        fixes,
+        auditLog,
+        companyId,
+        fixedAt: isDryRun ? null : new Date().toISOString(),
+        fixedBy: isDryRun ? null : userId
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Fix duplicates error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+module.exports = router;
