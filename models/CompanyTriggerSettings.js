@@ -121,6 +121,17 @@ const companyTriggerSettingsSchema = new mongoose.Schema({
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // COMPANY VARIABLES (for placeholder replacement in triggers)
+  // Example: {diagnosticFee: "$89", afterHoursFee: "$125"}
+  // Used in trigger text: "Our service call is {diagnosticFee}"
+  // ─────────────────────────────────────────────────────────────────────────
+  companyVariables: {
+    type: Map,
+    of: String,
+    default: () => new Map()
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // LEGACY DATA MIGRATION
   // ─────────────────────────────────────────────────────────────────────────
   migratedFromLegacy: {

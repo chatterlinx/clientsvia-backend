@@ -40,6 +40,10 @@
     
     searchQuery: '',
     
+    // Company Variables
+    companyVariables: new Map(),
+    detectedVariables: new Set(),
+    
     // GPT Settings
     gptSettings: {
       businessType: 'hvac',
@@ -79,6 +83,10 @@
     triggerSearch: document.getElementById('trigger-search'),
     duplicateWarning: document.getElementById('duplicate-warning'),
     duplicateWarningText: document.getElementById('duplicate-warning-text'),
+    
+    variablesCard: document.getElementById('variables-card'),
+    variablesTableBody: document.getElementById('variables-table-body'),
+    variablesEmpty: document.getElementById('variables-empty'),
     
     modalTriggerEdit: document.getElementById('modal-trigger-edit'),
     modalTriggerTitle: document.getElementById('modal-trigger-title'),
@@ -246,6 +254,7 @@
       const stats = data.stats;
       const permissions = data.permissions;
       const availableGroups = data.availableGroups || [];
+      const companyVariables = data.companyVariables || {};
       
       state.companyName = companyName;
       state.activeGroupId = activeGroupId;
@@ -254,6 +263,7 @@
       state.stats = stats;
       state.permissions = permissions;
       state.availableGroups = availableGroups;
+      state.companyVariables = new Map(Object.entries(companyVariables));
       
       DOM.headerCompanyName.textContent = state.companyName;
       
@@ -386,6 +396,110 @@
         confirmToggleScope(trigger, newIsGlobal, checkbox);
       });
     });
+    
+    extractAndRenderVariables();
+  }
+  
+  function extractVariablesFromText(text) {
+    if (!text) return [];
+    const regex = /\{(\w+)\}/g;
+    const matches = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      matches.push(match[1]);
+    }
+    return matches;
+  }
+  
+  function extractAndRenderVariables() {
+    state.detectedVariables.clear();
+    
+    for (const trigger of state.triggers) {
+      const answerText = trigger.answer?.answerText || '';
+      const followUpQuestion = trigger.followUp?.question || '';
+      
+      const answerVars = extractVariablesFromText(answerText);
+      const followUpVars = extractVariablesFromText(followUpQuestion);
+      
+      [...answerVars, ...followUpVars].forEach(v => state.detectedVariables.add(v));
+    }
+    
+    renderVariables();
+  }
+  
+  function renderVariables() {
+    if (state.detectedVariables.size === 0) {
+      DOM.variablesCard.style.display = 'none';
+      return;
+    }
+    
+    DOM.variablesCard.style.display = 'block';
+    DOM.variablesEmpty.style.display = 'none';
+    
+    const sortedVars = Array.from(state.detectedVariables).sort();
+    
+    DOM.variablesTableBody.innerHTML = sortedVars.map(varName => {
+      const value = state.companyVariables.get(varName) || '';
+      const hasValue = value.trim().length > 0;
+      const statusColor = hasValue ? '#16a34a' : '#dc2626';
+      const statusText = hasValue ? '✅ Set' : '🔴 Required';
+      const varColor = hasValue ? '#111827' : '#dc2626';
+      
+      return `
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding: 12px 16px;">
+            <code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px; color: ${varColor}; font-weight: 600; font-size: 0.875rem;">{${escapeHtml(varName)}}</code>
+          </td>
+          <td style="padding: 12px 16px;">
+            <input 
+              type="text" 
+              class="form-input variable-input" 
+              data-variable="${escapeHtml(varName)}"
+              value="${escapeHtml(value)}"
+              placeholder="Enter value..."
+              style="margin: 0; ${!hasValue ? 'border-color: #dc2626; background: #fef2f2;' : ''}"
+            />
+          </td>
+          <td style="padding: 12px 16px;">
+            <span style="color: ${statusColor}; font-weight: 600; font-size: 0.875rem;">${statusText}</span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+    
+    DOM.variablesTableBody.querySelectorAll('.variable-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const varName = e.target.dataset.variable;
+        const value = e.target.value.trim();
+        await saveVariable(varName, value);
+      });
+      
+      input.addEventListener('blur', async (e) => {
+        const varName = e.target.dataset.variable;
+        const value = e.target.value.trim();
+        await saveVariable(varName, value);
+      });
+    });
+  }
+  
+  async function saveVariable(varName, value) {
+    try {
+      state.companyVariables.set(varName, value);
+      
+      await apiFetch(`${CONFIG.API_BASE_COMPANY}/${state.companyId}/variables`, {
+        method: 'PUT',
+        body: { 
+          variables: Object.fromEntries(state.companyVariables)
+        }
+      });
+      
+      renderVariables();
+      showToast('success', 'Variable Saved', `{${varName}} updated successfully`);
+      
+    } catch (error) {
+      console.error('[Variables] Save failed:', error);
+      showToast('error', 'Save Failed', 'Could not save variable.');
+    }
   }
 
   function renderTriggerRow(trigger) {

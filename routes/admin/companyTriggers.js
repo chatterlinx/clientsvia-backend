@@ -286,6 +286,9 @@ router.get('/:companyId/triggers',
       const result = await buildMergedTriggerList(companyId);
 
       const groups = await GlobalTriggerGroup.listActiveGroups();
+      
+      const settings = await CompanyTriggerSettings.findByCompanyId(companyId);
+      const companyVariables = settings?.companyVariables ? Object.fromEntries(settings.companyVariables) : {};
 
       return res.json({
         success: true,
@@ -293,6 +296,7 @@ router.get('/:companyId/triggers',
           ...result,
           companyName: company.companyName,
           availableGroups: groups,
+          companyVariables,
           permissions: {
             canEditGlobalTriggers: isPlatformAdmin(req.user),
             canEditLocalTriggers: true,
@@ -1152,6 +1156,63 @@ router.put('/:companyId/trigger-scope',
 
     } catch (error) {
       logger.error('[CompanyTriggers] Change scope error', { error: error.message });
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
+// ════════════════════════════════════════════════════════════════════════════════
+// COMPANY VARIABLES
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * PUT /:companyId/variables
+ * Save company-specific variables for placeholder replacement
+ */
+router.put('/:companyId/variables',
+  authenticateJWT,
+  requirePermission(PERMISSIONS.CONFIG_WRITE),
+  async (req, res) => {
+    try {
+      const { companyId } = req.params;
+      const { variables } = req.body;
+      const userId = req.user.id || req.user._id?.toString() || 'unknown';
+
+      if (!variables || typeof variables !== 'object') {
+        return res.status(400).json({
+          success: false,
+          error: 'variables object is required'
+        });
+      }
+
+      const company = await v2Company.findById(companyId).select('_id').lean();
+      if (!company) {
+        return res.status(404).json({ success: false, error: 'Company not found' });
+      }
+
+      let settings = await CompanyTriggerSettings.findOne({ companyId });
+      if (!settings) {
+        settings = new CompanyTriggerSettings({ companyId });
+      }
+
+      settings.companyVariables = new Map(Object.entries(variables));
+      settings.updatedAt = new Date();
+      await settings.save();
+
+      logger.info('[CompanyTriggers] Company variables updated', {
+        companyId,
+        variableCount: settings.companyVariables.size,
+        updatedBy: userId
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          companyVariables: Object.fromEntries(settings.companyVariables)
+        }
+      });
+    } catch (error) {
+      logger.error('[CompanyTriggers] Save variables error', { error: error.message });
       return res.status(500).json({ success: false, error: error.message });
     }
   }

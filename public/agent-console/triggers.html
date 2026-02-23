@@ -767,6 +767,38 @@
         </div>
       </div>
 
+      <!-- Company Variables Card -->
+      <div class="card" id="variables-card" style="display: none;">
+        <div class="card-header">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <h2 class="card-title">Company Variables</h2>
+            <span class="answer-badge" style="background: #fef3c7; color: #92400e; font-size: 0.65rem;">AUTO-DETECTED</span>
+          </div>
+          <p style="margin: 4px 0 0 0; color: var(--text-muted); font-size: 0.875rem;">
+            Variables found in your triggers. <span style="color: #dc2626; font-weight: 600;">Red variables require values!</span>
+          </p>
+        </div>
+        <div class="card-body p-0">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
+                <th style="padding: 10px 16px; text-align: left; font-size: 0.75rem; font-weight: 700; color: #111827; text-transform: uppercase;">Variable</th>
+                <th style="padding: 10px 16px; text-align: left; font-size: 0.75rem; font-weight: 700; color: #111827; text-transform: uppercase;">Value</th>
+                <th style="padding: 10px 16px; text-align: left; font-size: 0.75rem; font-weight: 700; color: #111827; text-transform: uppercase; width: 100px;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="variables-table-body">
+              <!-- Variables will be rendered here -->
+            </tbody>
+          </table>
+          <div id="variables-empty" style="padding: 40px; text-align: center; color: var(--text-muted); display: none;">
+            <div style="font-size: 2rem; margin-bottom: 12px;">📝</div>
+            <div style="font-weight: 500; margin-bottom: 4px;">No variables detected</div>
+            <div style="font-size: 0.875rem;">Use {variableName} in your trigger text to create dynamic placeholders</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Duplicate Warning Banner (hidden by default) -->
       <div class="duplicate-warning" id="duplicate-warning" style="display: none;">
         <span class="duplicate-warning-icon">⚠️</span>
