@@ -25,16 +25,20 @@ const AgentConsoleAuth = (function() {
   }
 
   /**
-   * Decode base64url string with proper padding
+   * Decode base64url string to UTF-8 (handles non-ASCII payloads)
    * @param {string} str - base64url encoded string
-   * @returns {string} - decoded string
+   * @returns {string} - decoded UTF-8 string
    */
-  function base64UrlDecode(str) {
+  function base64UrlDecodeUtf8(str) {
     // Convert base64url to base64
     let s = str.replace(/-/g, '+').replace(/_/g, '/');
     // Pad to length multiple of 4
     while (s.length % 4) s += '=';
-    return atob(s);
+    // Decode base64 to binary string
+    const binary = atob(s);
+    // Convert to bytes and decode as UTF-8
+    const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
   }
 
   /**
@@ -46,8 +50,7 @@ const AgentConsoleAuth = (function() {
     try {
       const parts = String(token || '').split('.');
       if (parts.length !== 3) return null;
-      const json = base64UrlDecode(parts[1]);
-      return JSON.parse(json);
+      return JSON.parse(base64UrlDecodeUtf8(parts[1]));
     } catch (e) {
       return null;
     }
