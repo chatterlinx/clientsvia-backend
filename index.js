@@ -191,6 +191,8 @@ async function loadAllRoutes() {
         routes.adminRoutes = await loadRouteWithTimeout('./routes/v2admin', 'adminRoutes');
         routes.controlPlaneRegistryRoutes = await loadRouteWithTimeout('./routes/controlPlane/registry', 'controlPlaneRegistryRoutes'); // 📋 Control Plane Schema Registry (Self-describing)
         routes.controlPlaneEffectiveRoutes = await loadRouteWithTimeout('./routes/controlPlane/effective', 'controlPlaneEffectiveRoutes'); // ⚡ Control Plane Effective Config (Runtime values)
+        routes.bookingLogicRoutes = await loadRouteWithTimeout('./routes/controlPlane/bookingLogic', 'bookingLogicRoutes'); // 🎯 Booking Logic (Standalone handoff engine)
+        routes.agentConsoleRoutes = await loadRouteWithTimeout('./routes/controlPlane/agentConsole', 'agentConsoleRoutes'); // 🎛️ Agent Console (Clean enterprise dashboard + Truth API)
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.templateDebugExportRoutes = await loadRouteWithTimeout('./routes/admin/templateDebugExport', 'templateDebugExportRoutes'); // 🔍 Template Debug Export (Read-Only)
         routes.goldenAutofillRoutes = await loadRouteWithTimeout('./routes/admin/goldenAutofill', 'goldenAutofillRoutes'); // ✨ Golden Autofill (Apply Best-Practice Defaults)
@@ -248,7 +250,7 @@ async function loadAllRoutes() {
         routes.llm0ControlsRoutes = await loadRouteWithTimeout('./routes/admin/llm0Controls', 'llm0ControlsRoutes'); // 🧠 LLM-0 Controls (Brain behavior settings)
         routes.callFlowEngineRoutes = await loadRouteWithTimeout('./routes/admin/callFlowEngine', 'callFlowEngineRoutes'); // 🎯 Call Flow Engine (Universal flow routing)
         // serviceTypeClarificationRoutes REMOVED Dec 2025 - redundant with Triage
-        routes.frontDeskBehaviorRoutes = await loadRouteWithTimeout('./routes/admin/frontDeskBehavior', 'frontDeskBehaviorRoutes'); // 💬 Front Desk Behavior (LLM-0 conversation style)
+        // ☢️ NUKED Feb 22, 2026: frontDeskBehaviorRoutes REMOVED - Agent 2.0 is the only discovery system
         routes.agent2Routes = await loadRouteWithTimeout('./routes/admin/agent2', 'agent2Routes'); // 🧩 Agent 2.0 (isolated, UI-controlled)
         routes.globalHubRoutes = await loadRouteWithTimeout('./routes/admin/globalHub', 'globalHubRoutes'); // 🌐 Global Hub (cross-tenant shared resources)
         routes.conversationMemoryRoutes = await loadRouteWithTimeout('./routes/admin/conversationMemory', 'conversationMemoryRoutes'); // 📊 V111 Conversation Memory Viewer
@@ -310,15 +312,7 @@ const routesPromise = loadAllRoutes();
         console.error('[BOOT] ⚠️ Strict mode will NOT work without this module!');
     }
     
-    // 2) FrontDeskRuntime
-    try {
-        const FrontDeskRuntime = require('./services/engine/FrontDeskRuntime');
-        const lanes = FrontDeskRuntime.LANES || {};
-        console.log(`[BOOT] ✅ FrontDeskRuntime OK | lanes=${Object.keys(lanes).join(',')}`);
-    } catch (err) {
-        console.error(`[BOOT] ❌ FrontDeskRuntime FAILED TO LOAD: ${err.message}`);
-        console.error('[BOOT] ⚠️ Strict mode routing will NOT work without this module!');
-    }
+    // ☢️ NUKED Feb 22, 2026: FrontDeskRuntime boot check removed - CallRuntime is the sole runtime
     
     console.log('[BOOT] Control Plane module verification complete');
 })();
@@ -637,6 +631,8 @@ function registerRoutes(routes) {
     app.use('/api/admin', routes.adminRoutes);
     app.use('/api/debug', require('./routes/debug')); // 🐛 Debug endpoints (force reload, diagnostics)
     app.use('/api/control-plane', routes.controlPlaneRegistryRoutes); // 📋 Control Plane Schema Registry (Self-describing)
+    app.use('/api/control-plane/booking-logic', routes.bookingLogicRoutes); // 🎯 Booking Logic (Standalone handoff engine)
+    app.use('/api/agent-console', routes.agentConsoleRoutes); // 🎛️ Agent Console (Clean enterprise dashboard + Truth API)
     app.use('/api/admin/global-instant-responses', routes.globalInstantResponsesRoutes); // Global AI Brain Management
     app.use('/api/trade-knowledge/templates', routes.templateDebugExportRoutes); // 🔍 Template Debug Export (Read-Only)
     app.use('/api/trade-knowledge/templates', routes.goldenAutofillRoutes); // ✨ Golden Autofill (Apply Best-Practice Defaults)
@@ -678,7 +674,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/call-center', require('./routes/admin/callCenter')); // 📞 Call Center Module V2 (Call History, Customers, Analytics)
     app.use('/api/call-center', require('./routes/callCenter/dashboard')); // 📊 V77: Call Center Dashboard (Kanban Board)
     // ☢️ NUKED Feb 2026: /api/admin/wiring-status routes removed - AW Agent Wiring tab eliminated
-    app.use('/api/admin/front-desk', require('./routes/admin/frontDeskVerification')); // ✅ V57: Front Desk Deep Verification
+    // ☢️ NUKED Feb 22, 2026: /api/admin/front-desk routes removed - Agent 2.0 is the only discovery system
     app.use('/api/v2global/admin', routes.v2GlobalAdminRoutes); // V2 Global Admin Dashboard
     // REMOVED: Legacy v2global/directory and v2global/addcompany routes - replaced with new versions
     app.use('/api/v2global/trade-categories', routes.v2GlobalTradeCategoriesRoutes); // V2 Global Trade Categories
@@ -739,7 +735,7 @@ function registerRoutes(routes) {
     app.use('/api/admin/llm0-controls', routes.llm0ControlsRoutes); // 🧠 LLM-0 Controls (Brain-1 behavior settings per company)
     app.use('/api/admin/call-flow-engine', routes.callFlowEngineRoutes); // 🎯 Call Flow Engine (Universal flow routing)
     // serviceTypeClarificationRoutes REMOVED Dec 2025 - nuked
-    app.use('/api/admin/front-desk-behavior', routes.frontDeskBehaviorRoutes); // 💬 Front Desk Behavior (LLM-0 conversation style - ALL UI controlled)
+    // ☢️ NUKED Feb 22, 2026: /api/admin/front-desk-behavior routes removed - Agent 2.0 is the only discovery system
     app.use('/api/admin/agent2', routes.agent2Routes); // 🧩 Agent 2.0 (isolated, UI-controlled)
     app.use('/api/admin/global-hub', routes.globalHubRoutes); // 🌐 Global Hub (cross-tenant shared dictionaries)
     app.use('/api/admin/conversation-memory', routes.conversationMemoryRoutes); // 📊 V111 Conversation Memory Viewer

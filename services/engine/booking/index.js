@@ -3,71 +3,50 @@
  * BOOKING ENGINE - UNIFIED EXPORTS
  * ============================================================================
  * 
- * The Booking Engine is the deterministic state machine that takes over
- * when booking mode is locked. It bypasses the scenario engine and LLM
- * to execute a checklist of booking steps.
+ * ☢️ NUKED Feb 22, 2026: Legacy booking components removed.
  * 
- * ARCHITECTURE:
+ * The new booking system is:
+ *   - BookingLogicEngine.js = The sole booking state machine
+ *   - Receives JSON payload from Agent 2.0 discovery
+ *   - No slot extraction, no flow resolution - deterministic steps
  * 
- *   v2twilio.js (phone call handler)
+ * ARCHITECTURE (New World):
+ * 
+ *   CallRuntime.processTurn()
  *         │
  *         ▼
- *   ┌───────────────────────────────────────┐
- *   │  if (bookingModeLocked) {             │  ← SHORT-CIRCUIT
- *   │      BookingFlowRunner.runStep(...)   │
- *   │      return response;  // Skip LLM    │
- *   │  }                                    │
- *   └───────────────────────────────────────┘
+ *   ┌───────────────────────────────────────────┐
+ *   │  if (session.mode === 'BOOKING') {        │  ← MODE SWITCH
+ *   │      BookingLogicEngine.computeStep(...)  │
+ *   │      return response;                     │
+ *   │  }                                        │
+ *   └───────────────────────────────────────────┘
  *         │
- *         ▼  (only if NOT in booking mode)
- *   ConversationEngine.processTurn()
- *         │
- *         ▼  (when booking intent detected)
- *   BookingFlowResolver.resolve() → sets bookingModeLocked = true
+ *         ▼  (only if in DISCOVERY mode)
+ *   Agent 2.0 handles discovery
  * 
- * USAGE:
- * 
- *   const { BookingFlowRunner, BookingFlowResolver } = require('./services/engine/booking');
- *   
- *   // 1. At TOP of turn handler (short-circuit)
- *   if (state.bookingModeLocked) {
- *       const flow = BookingFlowResolver.resolve({ companyId, company });
- *       const result = await BookingFlowRunner.runStep({ flow, state, userInput, company });
- *       return result;  // No scenarios, no LLM
- *   }
- *   
- *   // 2. When entering BOOKING mode
- *   if (mode === 'BOOKING' && !state.bookingModeLocked) {
- *       const flow = BookingFlowResolver.resolve({ companyId, company });
- *       state.bookingModeLocked = true;
- *       state.bookingFlowId = flow.flowId;
- *       state.currentStepId = flow.steps[0].id;
- *       state.bookingCollected = {};
- *   }
+ * REMOVED COMPONENTS:
+ *   - BookingFlowRunner.js (DELETED - legacy slot-based booking)
+ *   - BookingFlowResolver.js (DELETED - legacy flow resolution)
+ *   - SlotExtractor.js (DELETED - legacy slot extraction)
  * 
  * ============================================================================
  */
 
-const BookingFlowRunner = require('./BookingFlowRunner');
-const BookingFlowResolver = require('./BookingFlowResolver');
-const SlotExtractor = require('./SlotExtractor');
-// V116: DirectBookingIntentDetector REMOVED — dead code, never called at runtime.
-// FrontDeskRuntime.determineLane() is the sole booking intent detection system.
+const BookingLogicEngine = require('./BookingLogicEngine');
 const DiscoveryExtractor = require('./DiscoveryExtractor');
 const SensitiveMasker = require('./SensitiveMasker');
 
 module.exports = {
-    BookingFlowRunner,
-    BookingFlowResolver,
-    SlotExtractor,
+    // New World
+    BookingLogicEngine,
+    computeStep: BookingLogicEngine.computeStep,
+    
+    // Still needed utilities
     DiscoveryExtractor,
     SensitiveMasker,
     
     // Re-export constants for convenience
-    VALIDATION_PATTERNS: BookingFlowResolver.VALIDATION_PATTERNS,
-    SlotExtractors: BookingFlowRunner.SlotExtractors,
-    CONFIDENCE: SlotExtractor.CONFIDENCE,
-    SOURCE: SlotExtractor.SOURCE,
     HVAC_SYMPTOM_PATTERNS: DiscoveryExtractor.HVAC_SYMPTOM_PATTERNS,
     TECH_NAME_PATTERNS: DiscoveryExtractor.TECH_NAME_PATTERNS,
     TENURE_PATTERNS: DiscoveryExtractor.TENURE_PATTERNS,

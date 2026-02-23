@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent 2.0 Discovery — Agent Console</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/agent-console/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- ================================================================
+         HEADER — STICKY TOP BAR
+         ================================================================ -->
+    <header class="header">
+      <div class="header-left">
+        <div class="header-logo">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
+            <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <span class="header-logo-text">ClientVia</span>
+        </div>
+        <div class="header-divider"></div>
+        <span class="header-title">Agent 2.0 — Discovery</span>
+      </div>
+      
+      <div class="header-center">
+        <span class="company-name" id="header-company-name">Loading...</span>
+        <span class="company-id-pill" id="header-company-id">—</span>
+      </div>
+      
+      <div class="header-right">
+        <button class="btn btn-primary" id="btn-download-truth">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 10V2M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Download Truth JSON
+        </button>
+      </div>
+    </header>
+
+    <!-- ================================================================
+         MAIN CONTENT
+         ================================================================ -->
+    <main class="main-content">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="page-header-left">
+          <a href="#" class="back-button" id="btn-back">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Back to Agent Console
+          </a>
+          <div>
+            <h1 class="page-title">Agent 2.0 — Discovery Engine</h1>
+            <p class="page-subtitle">Greeting → Intent Detection → Summary → Consent → Handoff</p>
+          </div>
+        </div>
+        <div>
+          <button class="btn btn-secondary" id="btn-save-config">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.667 14H3.333A1.333 1.333 0 0 1 2 12.667V3.333A1.333 1.333 0 0 1 3.333 2h7.334L14 5.333v7.334A1.333 1.333 0 0 1 12.667 14Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M11.333 14v-4H4.667v4M4.667 2v3.333h5.333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Save Changes
+          </button>
+        </div>
+      </div>
+
+      <!-- Two Column Layout -->
+      <div class="config-layout">
+        <!-- Left: Configuration Panel -->
+        <div class="config-panel">
+          
+          <!-- Discovery Flow Status -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Discovery Status</h2>
+              <span class="badge badge-success" id="badge-discovery-status">Active</span>
+            </div>
+            <div class="card-body">
+              <p class="text-muted" style="font-size: var(--font-size-sm);">
+                Agent 2.0 Discovery is the <strong>only</strong> discovery system. It handles all incoming calls, 
+                captures caller intent, and prepares handoff payloads for Booking Logic.
+              </p>
+              <div class="flex gap-4 mt-4">
+                <div style="flex: 1; padding: var(--space-3); background: var(--color-gray-50); border-radius: var(--radius-md);">
+                  <div style="font-size: var(--font-size-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.05em;">Trigger Cards</div>
+                  <div style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-gray-900);" id="stat-trigger-cards">—</div>
+                </div>
+                <div style="flex: 1; padding: var(--space-3); background: var(--color-gray-50); border-radius: var(--radius-md);">
+                  <div style="font-size: var(--font-size-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.05em;">Clarifiers</div>
+                  <div style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-gray-900);" id="stat-clarifiers">—</div>
+                </div>
+                <div style="flex: 1; padding: var(--space-3); background: var(--color-gray-50); border-radius: var(--radius-md);">
+                  <div style="font-size: var(--font-size-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.05em;">Vocabulary</div>
+                  <div style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-gray-900);" id="stat-vocabulary">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Greeting Configuration -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Greeting Text</h2>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Initial Greeting</label>
+                <textarea class="form-textarea" id="input-greeting-initial" rows="3" placeholder="Thank you for calling [Company]. How can I help you today?"></textarea>
+                <p class="form-hint">Spoken when a new caller connects.</p>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Return Caller Greeting</label>
+                <textarea class="form-textarea" id="input-greeting-return" rows="3" placeholder="Welcome back! How can I assist you today?"></textarea>
+                <p class="form-hint">Spoken when a known caller returns (if caller ID recognition is enabled).</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Booking Consent Phrases -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Booking Consent Phrases</h2>
+            </div>
+            <div class="card-body">
+              <p class="form-hint mb-4">Phrases that trigger booking handoff when the caller says "yes" to scheduling.</p>
+              <div class="tag-list" id="consent-phrases-list">
+                <!-- Tags will be inserted here -->
+              </div>
+              <div class="tag-input-wrapper">
+                <input type="text" class="form-input" id="input-consent-phrase" placeholder="Add a consent phrase...">
+                <button class="btn btn-secondary" id="btn-add-consent-phrase">Add</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Escalation Phrases -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Escalation Phrases</h2>
+            </div>
+            <div class="card-body">
+              <p class="form-hint mb-4">Phrases that trigger immediate transfer to a human operator.</p>
+              <div class="tag-list" id="escalation-phrases-list">
+                <!-- Tags will be inserted here -->
+              </div>
+              <div class="tag-input-wrapper">
+                <input type="text" class="form-input" id="input-escalation-phrase" placeholder="Add an escalation phrase...">
+                <button class="btn btn-secondary" id="btn-add-escalation-phrase">Add</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Discovery Style -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Discovery Style</h2>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Acknowledgment Word</label>
+                <input type="text" class="form-input" id="input-ack-word" placeholder="Ok." style="max-width: 200px;">
+                <p class="form-hint">Short word spoken before responses (e.g., "Ok.", "Got it.", "Sure.")</p>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="display: flex; align-items: center; gap: var(--space-2);">
+                  <input type="checkbox" id="input-robot-challenge-enabled" style="width: 16px; height: 16px;">
+                  Enable Robot Challenge Response
+                </label>
+                <p class="form-hint">If caller says "are you a robot?", respond with a helpful clarification.</p>
+                <textarea class="form-textarea mt-2" id="input-robot-challenge-line" rows="2" placeholder="Please, I am here to help you! You can speak to me naturally..."></textarea>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Test Turn Panel -->
+        <div class="preview-panel">
+          <div class="test-panel">
+            <div class="test-panel-header">
+              <h3 class="test-panel-title">
+                <span class="status-dot active"></span>
+                Live Test Turn
+              </h3>
+            </div>
+            <div class="test-panel-body">
+              <div class="test-input-group">
+                <input type="text" class="form-input" id="test-input" placeholder="Type what the caller says...">
+                <button class="btn btn-primary" id="btn-test-turn">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M13.5 8L3 13V3L13.5 8Z" fill="currentColor"/>
+                  </svg>
+                  Send
+                </button>
+              </div>
+              
+              <div class="test-output">
+                <div class="test-output-label">Agent Reply</div>
+                <div class="test-output-text empty" id="test-output-reply">Send a message to test the discovery flow...</div>
+              </div>
+
+              <div class="mt-4">
+                <div class="test-output-label">Session State</div>
+                <div class="json-viewer" style="margin-top: var(--space-2);">
+                  <div class="json-viewer-content" style="max-height: 150px;">
+                    <pre id="test-session-state">{ "mode": "DISCOVERY", "turn": 0 }</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <div class="test-output-label">Handoff Payload Preview</div>
+                <div class="json-viewer" style="margin-top: var(--space-2);">
+                  <div class="json-viewer-content" style="max-height: 200px;">
+                    <pre id="test-handoff-payload">No handoff triggered yet...</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div class="trace-log">
+                <pre id="test-trace-log">[Trace log will appear here during testing]</pre>
+              </div>
+
+              <div class="flex justify-between mt-4">
+                <button class="btn btn-ghost btn-sm" id="btn-reset-session">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M13 7C13 10.3137 10.3137 13 7 13C3.68629 13 1 10.3137 1 7C1 3.68629 3.68629 1 7 1C9.22222 1 11.1684 2.21309 12.1892 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M10 4H12.5V1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Reset Session
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-generate-payload">
+                  Generate Sample Payload
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Handoff Contract Reference -->
+          <div class="card mt-4">
+            <div class="card-header">
+              <h2 class="card-title">Handoff Contract (AC1)</h2>
+            </div>
+            <div class="card-body">
+              <p class="form-hint">When booking consent is detected, Agent 2.0 builds this payload and hands off to Booking Logic:</p>
+              <div class="json-viewer mt-4">
+                <div class="json-viewer-content" style="max-height: 250px;">
+                  <pre id="handoff-contract-example">{
+  "handoffContractVersion": "AC1",
+  "companyId": "...",
+  "callSid": "...",
+  "fromPhone": "+1...",
+  "assumptions": {
+    "firstName": "...",
+    "lastName": "..."
+  },
+  "summary": {
+    "issue": "...",
+    "serviceType": "...",
+    "urgency": "routine|urgent|emergency"
+  }
+}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Agent Console v1.0.0</span>
+      <span> · </span>
+      <span>Agent 2.0 Discovery Engine</span>
+    </footer>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/agent-console/agent2.js"></script>
+</body>
+</html>

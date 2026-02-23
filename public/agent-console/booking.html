@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Booking Logic — Agent Console</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Styles -->
+  <link rel="stylesheet" href="/agent-console/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- ================================================================
+         HEADER
+         ================================================================ -->
+    <header class="header">
+      <div class="header-left">
+        <div class="header-logo">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="currentColor" fill-opacity="0.1"/>
+            <path d="M16 6L26 11V21L16 26L6 21V11L16 6Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M16 16V26M16 16L6 11M16 16L26 11" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <span class="header-logo-text">ClientVia</span>
+        </div>
+        <div class="header-divider"></div>
+        <span class="header-title">Booking Logic</span>
+      </div>
+      
+      <div class="header-center">
+        <span class="company-name" id="header-company-name">Loading...</span>
+        <span class="company-id-pill" id="header-company-id">—</span>
+      </div>
+      
+      <div class="header-right">
+        <button class="btn btn-primary" id="btn-download-truth">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 10V2M8 10L5 7M8 10L11 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 13H14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Download Truth JSON
+        </button>
+      </div>
+    </header>
+
+    <!-- ================================================================
+         MAIN CONTENT
+         ================================================================ -->
+    <main class="main-content">
+      <!-- Page Header -->
+      <div class="page-header">
+        <div class="page-header-left">
+          <a href="#" class="back-button" id="btn-back">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Back to Agent Console
+          </a>
+          <div>
+            <h1 class="page-title">Booking Logic Engine</h1>
+            <p class="page-subtitle">Payload → bookingCtx → Deterministic Prompts → Confirmation</p>
+          </div>
+        </div>
+        <div>
+          <button class="btn btn-secondary" id="btn-save-config">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.667 14H3.333A1.333 1.333 0 0 1 2 12.667V3.333A1.333 1.333 0 0 1 3.333 2h7.334L14 5.333v7.334A1.333 1.333 0 0 1 12.667 14Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M11.333 14v-4H4.667v4M4.667 2v3.333h5.333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Save Changes
+          </button>
+        </div>
+      </div>
+
+      <!-- Two Column Layout -->
+      <div class="config-layout">
+        <!-- Left: Configuration Panel -->
+        <div class="config-panel">
+          
+          <!-- Calendar Connection Status -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Calendar Connection</h2>
+              <span class="badge" id="badge-calendar-status">Checking...</span>
+            </div>
+            <div class="card-body">
+              <div id="calendar-connected" class="hidden">
+                <div class="flex items-center gap-4 mb-4">
+                  <div style="width: 48px; height: 48px; background: var(--color-success-50); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect x="3" y="4" width="18" height="18" rx="2" stroke="#22c55e" stroke-width="2"/>
+                      <path d="M3 10H21" stroke="#22c55e" stroke-width="2"/>
+                      <path d="M8 2V6M16 2V6" stroke="#22c55e" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Google Calendar Connected</div>
+                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);" id="calendar-id-display">Calendar ID: —</div>
+                  </div>
+                </div>
+              </div>
+              <div id="calendar-disconnected">
+                <div class="flex items-center gap-4 mb-4">
+                  <div style="width: 48px; height: 48px; background: var(--color-warning-50); border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 3L22 21H2L12 3Z" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
+                      <path d="M12 10V14M12 18V18.5" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style="font-weight: var(--font-weight-semibold); color: var(--color-gray-900);">Calendar Not Connected</div>
+                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Connect Google Calendar in Company Profile to enable booking.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Booking Parameters -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Booking Parameters</h2>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Slot Duration (minutes)</label>
+                <select class="form-select" id="input-slot-duration" style="max-width: 200px;">
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="45">45 minutes</option>
+                  <option value="60" selected>60 minutes (1 hour)</option>
+                  <option value="90">90 minutes</option>
+                  <option value="120">120 minutes (2 hours)</option>
+                </select>
+                <p class="form-hint">Default appointment slot length for new bookings.</p>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">Buffer Between Appointments (minutes)</label>
+                <select class="form-select" id="input-buffer-minutes" style="max-width: 200px;">
+                  <option value="0" selected>No buffer</option>
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="60">60 minutes</option>
+                </select>
+                <p class="form-hint">Minimum time between appointment slots.</p>
+              </div>
+              
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Advance Booking Window (days)</label>
+                <select class="form-select" id="input-advance-days" style="max-width: 200px;">
+                  <option value="7">7 days</option>
+                  <option value="14" selected>14 days (2 weeks)</option>
+                  <option value="21">21 days (3 weeks)</option>
+                  <option value="30">30 days</option>
+                  <option value="60">60 days</option>
+                </select>
+                <p class="form-hint">How far in advance callers can book appointments.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Confirmation Settings -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Confirmation Settings</h2>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <label class="form-label">Confirmation Message</label>
+                <textarea class="form-textarea" id="input-confirmation-message" rows="4" placeholder="Your appointment is confirmed for {date} at {time}. We'll see you then!"></textarea>
+                <p class="form-hint">Spoken after booking is complete. Use {date} and {time} placeholders.</p>
+              </div>
+              
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label" style="display: flex; align-items: center; gap: var(--space-2);">
+                  <input type="checkbox" id="input-sms-confirmation" style="width: 16px; height: 16px;">
+                  Send SMS Confirmation
+                </label>
+                <p class="form-hint">Text the caller a confirmation message after booking.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Flow Steps Reference -->
+          <div class="card">
+            <div class="card-header">
+              <h2 class="card-title">Booking Flow Steps</h2>
+            </div>
+            <div class="card-body">
+              <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+                <div class="flex items-center gap-3">
+                  <div style="width: 28px; height: 28px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm);">1</div>
+                  <div>
+                    <div style="font-weight: var(--font-weight-medium);">Receive Handoff Payload</div>
+                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Accept payload from Agent 2.0 with assumptions & summary</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div style="width: 28px; height: 28px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm);">2</div>
+                  <div>
+                    <div style="font-weight: var(--font-weight-medium);">Collect Missing Fields</div>
+                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Prompt for name, phone, address if not already captured</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div style="width: 28px; height: 28px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm);">3</div>
+                  <div>
+                    <div style="font-weight: var(--font-weight-medium);">Offer Available Slots</div>
+                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Query calendar and present open time slots</div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3">
+                  <div style="width: 28px; height: 28px; background: var(--color-primary-100); color: var(--color-primary-600); border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-weight: var(--font-weight-semibold); font-size: var(--font-size-sm);">4</div>
+                  <div>
+                    <div style="font-weight: var(--font-weight-medium);">Confirm & Book</div>
+                    <div style="font-size: var(--font-size-sm); color: var(--color-gray-500);">Create calendar event and confirm with caller</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Test Step Panel -->
+        <div class="preview-panel">
+          <div class="test-panel">
+            <div class="test-panel-header">
+              <h3 class="test-panel-title">
+                <span class="status-dot active"></span>
+                Booking Flow Simulator
+              </h3>
+            </div>
+            <div class="test-panel-body">
+              <div class="form-group">
+                <label class="form-label">Sample Handoff Payload</label>
+                <div class="json-viewer">
+                  <div class="json-viewer-content" style="max-height: 150px;">
+                    <textarea class="form-textarea" id="test-payload-input" rows="6" style="font-family: 'SF Mono', monospace; font-size: var(--font-size-xs); background: var(--color-gray-900); color: var(--color-gray-100); border: none;">{
+  "handoffContractVersion": "AC1",
+  "companyId": "",
+  "callSid": "TEST_123",
+  "fromPhone": "+15551234567",
+  "assumptions": {
+    "firstName": "John",
+    "lastName": "Smith"
+  },
+  "summary": {
+    "issue": "AC not cooling",
+    "serviceType": "repair",
+    "urgency": "routine"
+  }
+}</textarea>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="form-group">
+                <label class="form-label">User Input (optional)</label>
+                <input type="text" class="form-input" id="test-user-input" placeholder="Caller response to current prompt...">
+              </div>
+              
+              <div class="flex gap-2 mb-4">
+                <button class="btn btn-primary flex-1" id="btn-test-step">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M13.5 8L3 13V3L13.5 8Z" fill="currentColor"/>
+                  </svg>
+                  Run Step
+                </button>
+                <button class="btn btn-secondary" id="btn-reset-booking">
+                  Reset
+                </button>
+              </div>
+              
+              <div class="test-output">
+                <div class="test-output-label">Next Prompt</div>
+                <div class="test-output-text" id="test-next-prompt">Run a step to see the next prompt...</div>
+              </div>
+
+              <div class="mt-4">
+                <div class="test-output-label">Booking Context (bookingCtx)</div>
+                <div class="json-viewer" style="margin-top: var(--space-2);">
+                  <div class="json-viewer-content" style="max-height: 200px;">
+                    <pre id="test-booking-ctx">null</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div class="trace-log mt-4">
+                <pre id="test-booking-trace">[Booking flow trace will appear here]</pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- bookingCtx Contract -->
+          <div class="card mt-4">
+            <div class="card-header">
+              <h2 class="card-title">bookingCtx Shape</h2>
+            </div>
+            <div class="card-body">
+              <p class="form-hint">The booking context tracks progress through the booking flow:</p>
+              <div class="json-viewer mt-4">
+                <div class="json-viewer-content" style="max-height: 250px;">
+                  <pre>{
+  "step": "COLLECT_NAME|COLLECT_PHONE|OFFER_SLOTS|CONFIRM",
+  "collectedFields": {
+    "firstName": "...",
+    "lastName": "...",
+    "phone": "...",
+    "address": "..."
+  },
+  "selectedSlot": {
+    "date": "2026-02-23",
+    "time": "10:00 AM",
+    "endTime": "11:00 AM"
+  },
+  "calendarEventId": "...",
+  "completed": false
+}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span>Agent Console v1.0.0</span>
+      <span> · </span>
+      <span>Booking Logic Engine BL1.0</span>
+    </footer>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="/agent-console/booking.js"></script>
+</body>
+</html>

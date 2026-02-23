@@ -2416,7 +2416,7 @@ const companySchema = new mongoose.Schema({
                     // ═══════════════════════════════════════════════════════════════
                     // 🆕 FEB 2026: PRODUCTION HARDENING FIELDS
                     // ═══════════════════════════════════════════════════════════════
-                    // These fields are required for the deterministic BookingFlowRunner
+                    // These fields are required for the deterministic BookingLogicEngine
                     maxAttempts: { type: Number, default: 3, min: 1, max: 10 }, // Strikes before escalation
                     allowSkip: { type: Boolean, default: false }, // Can caller skip this slot?
                     sensitive: { type: Boolean, default: false }, // Mask in Call Center UI (membership#, DOB, SSN)
@@ -2822,7 +2822,7 @@ const companySchema = new mongoose.Schema({
             // Companies can add/remove names specific to their clientele.
             //
             // UI: Front Desk → Booking Prompts → Common Last Names
-            // Runtime: BookingFlowRunner name extraction & validation
+            // Runtime: BookingLogicEngine name extraction & validation
             // ═══════════════════════════════════════════════════════════════
             commonLastNames: { type: [String], default: [] },
             
@@ -2839,7 +2839,6 @@ const companySchema = new mongoose.Schema({
             //
             // UI: Front Desk → Booking Prompts → Name Rejection Words
             // Runtime: IdentitySlotFirewall.validateName()
-            //          BookingFlowRunner.isStopWord()
             // ═══════════════════════════════════════════════════════════════
             nameStopWords: { type: [String], default: [] },
             

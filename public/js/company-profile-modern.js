@@ -4077,6 +4077,16 @@ class CompanyProfileManager {
      * @param {string} tabName - Name of tab to switch to
      */
     switchTab(tabName) {
+        // Agent Console redirects to standalone platform instead of showing content
+        if (tabName === 'agent-console') {
+            const params = new URLSearchParams(window.location.search);
+            const companyId = params.get('companyId');
+            if (companyId) {
+                window.location.href = `/agent-console/index.html?companyId=${encodeURIComponent(companyId)}`;
+            }
+            return;
+        }
+        
         // Update current tab
         this.currentTab = tabName;
         

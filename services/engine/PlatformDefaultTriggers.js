@@ -13,9 +13,10 @@
  *     : PLATFORM_DEFAULTS.describingProblem;
  * 
  * ARCHITECTURE NOTE:
- * These defaults come from proven patterns in ConsentGate.js and real-world
+ * These defaults come from proven patterns in Agent 2.0 trigger cards and real-world
  * call analysis. They're intentionally generic to work across HVAC, dental,
  * plumbing, legal, medical, and other industries.
+ * ☢️ NUKED Feb 22, 2026: ConsentGate.js deleted - Agent 2.0 handles consent via trigger cards
  * 
  * Company-specific triggers can extend (not replace) these via UI config.
  * 
@@ -233,12 +234,10 @@ const PLATFORM_DEFAULTS = {
     ],
     
     /**
-     * wantsBooking - Explicit booking intent (already exists in ConsentGate)
+     * wantsBooking - Explicit booking intent
      * 
      * Triggers: Activate booking lane, may bypass consent
-     * 
-     * Note: These defaults are duplicated from ConsentGate.js for consistency.
-     * Runtime uses ConsentGate's defaults, but we document here for completeness.
+     * ☢️ NUKED Feb 22, 2026: ConsentGate deleted - Agent 2.0 handles via trigger cards
      */
     wantsBooking: [
         'schedule',
@@ -262,11 +261,10 @@ const PLATFORM_DEFAULTS = {
      * Triggers: Bypass consent gate, go straight to booking
      * 
      * Note: These are regex patterns, not strings.
-     * Documented here, but actual defaults are in ConsentGate.js.
+     * ☢️ NUKED Feb 22, 2026: ConsentGate deleted - patterns moved to Agent 2.0 trigger cards
      */
     directIntentPatterns: [
         // Documented for reference only
-        // Actual patterns are regex in ConsentGate.js lines 50-57
         'i want to schedule',
         'i need to schedule',
         'can you schedule',

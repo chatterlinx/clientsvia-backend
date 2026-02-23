@@ -242,9 +242,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryConsent.bookingRequiresExplicitConsent': {
         readers: [
             {
-                file: 'services/engine/ConsentGate.js',
-                function: 'evaluate',
-                description: 'Consent accepted only when explicit consent question is pending',
+                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+                function: 'run',
+                description: 'Agent 2.0 handles consent via trigger cards',
                 required: true
             }
         ],
@@ -257,9 +257,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryConsent.consentPhrases': {
         readers: [
             {
-                file: 'services/engine/ConsentGate.js',
-                function: 'evaluate',
-                description: 'Phrases that trigger consent detection in explicit consent turn',
+                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
+                function: 'run',
+                description: 'Agent 2.0 handles consent phrases via trigger cards',
                 required: true
             }
         ],
@@ -313,9 +313,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryFlow': {
         readers: [
             {
-                file: 'services/engine/DiscoveryFlowRunner.js',
+                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
                 function: 'run',
-                description: 'Discovery owner reads flow config and produces deterministic prompts',
+                description: 'Agent 2.0 Discovery owner reads flow config and produces responses',
                 required: true,
                 critical: true
             }
@@ -328,9 +328,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryFlow.steps': {
         readers: [
             {
-                file: 'services/engine/DiscoveryFlowRunner.js',
+                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
                 function: 'run',
-                description: 'Discovery runner evaluates and advances configured step sequence',
+                description: 'Agent 2.0 evaluates and advances configured step sequence',
                 required: true,
                 critical: true
             }
@@ -343,9 +343,9 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.discoveryFlow.enabled': {
         readers: [
             {
-                file: 'services/engine/DiscoveryFlowRunner.js',
+                file: 'services/engine/agent2/Agent2DiscoveryRunner.js',
                 function: 'run',
-                description: 'Discovery owner checks flow enabled status before speaking',
+                description: 'Agent 2.0 checks flow enabled status before speaking',
                 required: true
             }
         ],
@@ -493,7 +493,7 @@ const RUNTIME_READERS_MAP = {
                 required: false
             },
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'extractSingleNameToken (firstName)',
                 description: 'Scores first name candidates against global list',
                 required: false
@@ -524,7 +524,7 @@ const RUNTIME_READERS_MAP = {
     'frontDesk.commonLastNames': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'extractSingleNameToken (lastName)',
                 description: 'Last name recognition and confidence scoring',
                 required: false
@@ -562,7 +562,7 @@ const RUNTIME_READERS_MAP = {
                 required: false
             },
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'isStopWord',
                 description: 'Global stopwords merged with system defaults for booking name extraction',
                 required: false
@@ -765,7 +765,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 500,
                 description: 'Address verification policy object',
@@ -782,7 +782,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.enabled': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 505,
                 description: 'Master switch for address verification (must be true to enforce completeness)',
@@ -805,7 +805,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.provider': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 510,
                 description: 'Geocoding provider (google_geocode | none)',
@@ -821,7 +821,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.requireCity': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 515,
                 description: 'Require city before confirming address',
@@ -838,7 +838,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.requireState': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 520,
                 description: 'Require state before confirming address',
@@ -854,7 +854,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.requireZip': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 525,
                 description: 'Require ZIP code before confirming address (optional)',
@@ -870,7 +870,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.requireUnitQuestion': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 530,
                 description: 'Always ask "Is this a house or unit/suite?" even if no apt mentioned',
@@ -886,7 +886,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.unitQuestionMode': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 535,
                 description: 'Unit question mode: house_or_unit | always_ask | smart',
@@ -902,7 +902,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.missingCityStatePrompt': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 540,
                 description: 'Prompt when city/state missing from address',
@@ -918,7 +918,7 @@ const RUNTIME_READERS_MAP = {
     'booking.addressVerification.unitTypePrompt': {
         readers: [
             {
-                file: 'services/engine/booking/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'runStep',
                 line: 545,
                 description: 'Prompt to ask about house vs unit',
@@ -1234,7 +1234,7 @@ const RUNTIME_READERS_MAP = {
                 required: false
             },
             {
-                file: 'services/engine/BookingFlowRunner.js',
+                file: 'services/engine/booking/BookingLogicEngine.js',
                 function: 'run',
                 description: 'Booking owner uses loop prevention settings during step execution',
                 required: false

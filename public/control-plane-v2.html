@@ -1051,15 +1051,16 @@
        REMOVED: Dynamic Flow (Feb 2026 - V110 replaces it), Company Contacts, Version History, Cheat Sheets
        ═══════════════════════════════════════════════════════════════════════════ -->
   <nav class="main-nav">
-    <button class="nav-tab active" data-tab="front-desk">
-      <i class="fas fa-concierge-bell"></i>
-      <span>Front Desk</span>
-      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('front-desk')"></i>
-    </button>
-    <button class="nav-tab" data-tab="agent2">
+    <!-- ☢️ NUKED Feb 22, 2026: Front Desk nav tab REMOVED - Agent 2.0 is the only discovery system -->
+    <button class="nav-tab active" data-tab="agent2">
       <i class="fas fa-layer-group"></i>
       <span>Agent 2.0</span>
       <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('agent2')"></i>
+    </button>
+    <button class="nav-tab" data-tab="booking-logic">
+      <i class="fas fa-calendar-check"></i>
+      <span>Booking Logic</span>
+      <i class="fas fa-info-circle tab-info" onclick="event.stopPropagation(); showTabInfo('booking-logic')"></i>
     </button>
     <button class="nav-tab" data-tab="global-hub">
       <i class="fas fa-globe"></i>
@@ -1155,32 +1156,35 @@
        ═══════════════════════════════════════════════════════════════════════════ -->
   <main class="content-area">
     
-    <!-- ═══════════════════════════════════════════════════════════════════════
-         FRONT DESK - The Config Brain
-         Greeting rules, tone, confirmation, policy guardrails, booking fields,
-         escalation preferences, quick answers
-         ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel active" data-panel="front-desk">
-      <div class="card">
-        <div id="front-desk-container">
-          <div class="loading-container">
-            <i class="fas fa-concierge-bell fa-spin"></i>
-            <p>Loading Front Desk Configuration...</p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- ☢️ NUKED Feb 22, 2026: Front Desk tab panel REMOVED - Agent 2.0 is the only discovery system -->
 
     <!-- ═══════════════════════════════════════════════════════════════════════
-         AGENT 2.0 - Clean, Isolated Config Surface
+         AGENT 2.0 - THE Discovery System (ONLY)
          UI-first, modular, raw-event proof oriented
+         No Front Desk. No legacy. Agent 2.0 owns discovery.
          ═══════════════════════════════════════════════════════════════════════ -->
-    <div class="tab-panel" data-panel="agent2">
+    <div class="tab-panel active" data-panel="agent2">
       <div class="card">
         <div id="agent2-container">
           <div class="loading-container">
             <i class="fas fa-layer-group fa-spin"></i>
             <p>Loading Agent 2.0...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         BOOKING LOGIC - Standalone Booking Engine
+         Receives JSON payload from Agent 2.0, manages booking flow
+         No coupling to Agent 2.0. No legacy imports.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <div class="tab-panel" data-panel="booking-logic">
+      <div class="card">
+        <div id="booking-logic-container">
+          <div class="loading-container">
+            <i class="fas fa-calendar-check fa-spin"></i>
+            <p>Loading Booking Logic...</p>
           </div>
         </div>
       </div>
@@ -2482,11 +2486,12 @@
       
       try {
         switch (tabId) {
-          case 'front-desk':
-            await initFrontDesk();
-            break;
+          // ☢️ NUKED Feb 22, 2026: case 'front-desk' REMOVED - Agent 2.0 is the only discovery system
           case 'agent2':
             await initAgent2();
+            break;
+          case 'booking-logic':
+            await initBookingLogic();
             break;
           case 'global-hub':
             await initGlobalHub();
@@ -2508,27 +2513,10 @@
     }
 
     // ☢️ NUKED Feb 2026: WIRING INITIALIZATION removed - AW tab eliminated
+    // ☢️ NUKED Feb 22, 2026: FRONT DESK INITIALIZATION removed - Agent 2.0 is the only discovery system
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // FRONT DESK INITIALIZATION
-    // Uses existing FrontDeskBehaviorManager
-    // ═══════════════════════════════════════════════════════════════════════════
-    async function initFrontDesk() {
-      console.log('🏢 [INIT] Initializing Front Desk...');
-      // Cache-bust to avoid stale UI during rapid deploys.
-      await loadScript(`/js/ai-agent-settings/FrontDeskBehaviorManager.js?v=${Date.now()}`);
-      
-      const container = document.getElementById('front-desk-container');
-      if (container && window.FrontDeskBehaviorManager) {
-        window.frontDeskManager = new window.FrontDeskBehaviorManager(currentCompanyId);
-        await window.frontDeskManager.load();
-        window.frontDeskManager.render(container);
-        console.log('✅ [INIT] Front Desk initialized');
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════════
-    // AGENT 2.0 INITIALIZATION (Clean, Isolated)
+    // AGENT 2.0 INITIALIZATION (THE Discovery System - No Front Desk)
     // ═══════════════════════════════════════════════════════════════════════════
     async function initAgent2() {
       console.log('🧩 [INIT] Initializing Agent 2.0...');
@@ -2542,6 +2530,34 @@
         console.log('✅ [INIT] Agent 2.0 initialized');
       } else {
         console.error('❌ [INIT] Agent 2.0 container or manager missing');
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BOOKING LOGIC INITIALIZATION (Standalone Booking Engine)
+    // Receives JSON payload from Agent 2.0. No coupling. No legacy.
+    // ═══════════════════════════════════════════════════════════════════════════
+    async function initBookingLogic() {
+      console.log('📅 [INIT] Initializing Booking Logic...');
+      await loadScript(`/js/BookingLogicManager.js?v=${Date.now()}`);
+      
+      const container = document.getElementById('booking-logic-container');
+      if (container && window.BookingLogicManager) {
+        window.bookingLogicManager = new window.BookingLogicManager();
+        await window.bookingLogicManager.init();
+        window.bookingLogicManager.render(container);
+        console.log('✅ [INIT] Booking Logic initialized');
+      } else {
+        console.error('❌ [INIT] Booking Logic container or manager missing');
+        if (container) {
+          container.innerHTML = `
+            <div style="padding: 24px; text-align: center; color: #94a3b8;">
+              <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px; color: #f59e0b;"></i>
+              <h3 style="margin-bottom: 8px; color: #f1f5f9;">Booking Logic Loading Error</h3>
+              <p>Could not load the Booking Logic manager. Check the browser console.</p>
+            </div>
+          `;
+        }
       }
     }
     
@@ -3387,14 +3403,7 @@
         await switchDataConfigSubtab(go.subtab);
       }
 
-      if (go.tab === 'front-desk' && go.frontDeskTab) {
-        await initializeTab('front-desk');
-        // Switch to front desk tab and then switch internal tab
-        const container = document.getElementById('front-desk-container');
-        if (window.frontDeskManager && container) {
-          window.frontDeskManager.switchTab(go.frontDeskTab, container);
-        }
-      }
+      // ☢️ NUKED Feb 22, 2026: front-desk tab handling removed - Agent 2.0 is the only discovery system
     }
 
     // =========================================================================
@@ -7119,19 +7128,19 @@
       });
     });
 
-      // Auto-initialize Front Desk (default tab)
+      // Auto-initialize Agent 2.0 (default tab - Front Desk NUKED Feb 22, 2026)
       if (currentCompanyId) {
-        initializeTab('front-desk');
+        initializeTab('agent2');
         
         // Handle deep-link URL params (tab, section, field)
-        // This must run AFTER front-desk is initialized
+        // This must run AFTER agent2 is initialized
         setTimeout(() => {
           if (window.ControlPlaneNav) {
             window.ControlPlaneNav.handleUrlParams();
           }
         }, 600);
       } else {
-        document.getElementById('front-desk-container').innerHTML = `
+        document.getElementById('agent2-container').innerHTML = `
           <div style="padding: 60px; text-align: center; color: #ef4444;">
             <i class="fas fa-exclamation-triangle" style="font-size: 48px; margin-bottom: 16px;"></i>
             <h3>No Company Selected</h3>

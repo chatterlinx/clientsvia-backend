@@ -256,6 +256,15 @@ router.post('/first-names', authenticateJWT, async (req, res) => {
         // Sync to Redis for fast runtime lookups
         await GlobalHubService.syncFirstNamesToRedis(normalizedNames);
         
+        // Invalidate BookingLogicEngine cache
+        try {
+            const BookingLogicEngine = require('../../services/engine/booking/BookingLogicEngine');
+            BookingLogicEngine.invalidateCache();
+            logger.info(`🔄 [GLOBAL HUB] ${requestId} - BookingLogicEngine cache invalidated`);
+        } catch (cacheErr) {
+            logger.warn(`⚠️ [GLOBAL HUB] ${requestId} - Failed to invalidate BookingLogicEngine cache:`, cacheErr.message);
+        }
+        
         logger.info(`✅ [GLOBAL HUB] ${requestId} - First names dictionary updated successfully`);
         
         return res.json({
@@ -384,6 +393,15 @@ router.post('/last-names', authenticateJWT, async (req, res) => {
         
         // Sync to Redis for fast runtime lookups
         await GlobalHubService.syncLastNamesToRedis(normalizedNames);
+        
+        // Invalidate BookingLogicEngine cache
+        try {
+            const BookingLogicEngine = require('../../services/engine/booking/BookingLogicEngine');
+            BookingLogicEngine.invalidateCache();
+            logger.info(`🔄 [GLOBAL HUB] ${requestId} - BookingLogicEngine cache invalidated`);
+        } catch (cacheErr) {
+            logger.warn(`⚠️ [GLOBAL HUB] ${requestId} - Failed to invalidate BookingLogicEngine cache:`, cacheErr.message);
+        }
         
         logger.info(`✅ [GLOBAL HUB] ${requestId} - Last names dictionary updated successfully`);
         

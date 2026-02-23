@@ -1,0 +1,247 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# NUKE PLAN - ZERO OLD CODE POLICY
+# Generated: Feb 22, 2026
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# NORTH STAR:
+# Only THREE modules exist conceptually:
+#   1. Agent 2.0 = Discovery ONLY
+#   2. Booking Logic = Booking ONLY  
+#   3. Global Hub = Shared dictionaries ONLY
+#
+# Everything else that touches call flow gets REMOVED.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE A: ROUTING GATES (ALREADY DONE)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# ✅ FrontDeskCoreRuntime.js now has:
+#    - If session.mode === "DISCOVERY" → only Agent 2.0 executes
+#    - If session.mode === "BOOKING" → only BookingLogicEngine executes
+#    - ROUTING_MODE_ENFORCED event emitted when in BOOKING
+#    - No other routing paths allowed
+#
+# STATUS: COMPLETE
+#
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE B: KILL LIST - FILES TO DELETE
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B1. FRONT DESK UI FILES (delete immediately)
+# ─────────────────────────────────────────────────────────────────────────────
+
+DELETE: public/js/ai-agent-settings/FrontDeskBehaviorManager.js
+REASON: Legacy Front Desk UI. Agent 2.0 is the only discovery system.
+
+DELETE: routes/admin/frontDeskBehavior.js
+REASON: Legacy API routes. Front Desk tab should not exist.
+
+DELETE: routes/admin/frontDeskVerification.js  
+REASON: Legacy verification routes. Not needed.
+
+DELETE: services/verification/FrontDeskVerifier.js
+REASON: Legacy verifier. Not needed.
+
+DELETE: scripts/commissioning/frontDeskCommissionCheck.js
+REASON: Legacy commissioning. Not needed.
+
+DELETE: config/frontDeskPrompt.js
+REASON: Legacy prompts. Not needed.
+
+DELETE: FRONT_DESK_TAB_CONFIG_MAP.md
+REASON: Legacy documentation. Out of date.
+
+DELETE: FRONT_DESK_AUDIT_REPORT.md
+REASON: Legacy audit. Obsolete.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B2. LEGACY BOOKING FILES (delete after confirming BookingLogicEngine works)
+# ─────────────────────────────────────────────────────────────────────────────
+
+DELETE: services/engine/booking/BookingFlowRunner.js
+REASON: Replaced by BookingLogicEngine.js. Legacy slot-based booking.
+
+DELETE: services/engine/booking/BookingFlowResolver.js
+REASON: Legacy flow resolver. BookingLogicEngine has its own logic.
+
+DELETE: services/engine/booking/SlotExtractor.js
+REASON: Legacy slot extraction. Not needed for BookingLogicEngine.
+
+DELETE: services/engine/booking/index.js
+REASON: Legacy exports. Will need to be rewritten.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B3. LEGACY DISCOVERY FILES (delete after Agent 2.0 is sole owner)
+# ─────────────────────────────────────────────────────────────────────────────
+
+DELETE: services/engine/DiscoveryFlowRunner.js
+REASON: Legacy discovery. Agent 2.0 is the only discovery system.
+
+DELETE: services/engine/ConsentGate.js
+REASON: Legacy consent. Agent 2.0 handles consent via trigger cards.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B4. LEGACY RUNTIME FILES (delete after confirming new runtime works)
+# ─────────────────────────────────────────────────────────────────────────────
+
+REVIEW: services/engine/FrontDeskRuntime.js
+REASON: May be duplicate of FrontDeskCoreRuntime. Check usage.
+
+REVIEW: services/ConversationEngine.js
+REASON: Check if still used. May be legacy.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# B5. INDEX.JS ROUTE REGISTRATIONS TO REMOVE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Line ~683:
+REMOVE: app.use('/api/admin/front-desk', require('./routes/admin/frontDeskVerification'));
+
+# Line ~744:
+REMOVE: app.use('/api/admin/front-desk-behavior', routes.frontDeskBehaviorRoutes);
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE C: CONTROL PLANE UI CHANGES
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C1. NAVIGATION TABS TO KEEP (control-plane-v2.html)
+# ─────────────────────────────────────────────────────────────────────────────
+
+KEEP: Agent 2.0 tab
+KEEP: Booking Logic tab  
+KEEP: Global Hub tab (dictionaries)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C2. NAVIGATION TABS TO REMOVE
+# ─────────────────────────────────────────────────────────────────────────────
+
+REMOVE: Front Desk Behavior tab (if exists)
+REMOVE: Discovery Flow tab (if exists, legacy)
+REMOVE: Booking Prompts tab (if exists, legacy)
+REMOVE: Any other tabs pointing to old configs
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE D: FORBIDDEN STRINGS (CI ENFORCEMENT)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# After deletions, these must return ZERO results:
+# grep -Rni --exclude-dir=node_modules --exclude-dir=.git "FrontDesk|frontdesk|BehaviorManager|BookingFlowRunner|SlotExtractor" .
+
+FORBIDDEN_STRINGS:
+  - FrontDeskBehavior
+  - frontDeskBehavior  
+  - BehaviorManager
+  - BookingFlowRunner (after migration complete)
+  - SlotExtractor (after migration complete)
+  - DiscoveryFlowRunner (after Agent 2.0 is sole owner)
+  - ConsentGate (after consent moved to Agent 2.0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE E: FILES TO KEEP (DO NOT DELETE)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E1. AGENT 2.0 FILES (keep all)
+# ─────────────────────────────────────────────────────────────────────────────
+
+KEEP: services/engine/agent2/* (entire folder)
+KEEP: public/js/ai-agent-settings/Agent2Manager.js
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E2. BOOKING LOGIC FILES (keep all)
+# ─────────────────────────────────────────────────────────────────────────────
+
+KEEP: services/engine/booking/BookingLogicEngine.js
+KEEP: routes/controlPlane/bookingLogic.js
+KEEP: public/js/BookingLogicManager.js
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E3. GLOBAL HUB FILES (keep all)
+# ─────────────────────────────────────────────────────────────────────────────
+
+KEEP: routes/admin/globalHub.js
+KEEP: public/js/GlobalHubManager.js (if exists)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E4. CORE RUNTIME (keep but clean)
+# ─────────────────────────────────────────────────────────────────────────────
+
+KEEP: services/engine/FrontDeskCoreRuntime.js
+ACTION: Remove imports of deleted modules after Phase B
+
+# ─────────────────────────────────────────────────────────────────────────────
+# E5. FRONTLINE (DIFFERENT SYSTEM - NOT LEGACY)
+# ─────────────────────────────────────────────────────────────────────────────
+
+KEEP: services/FrontlineIntel.js
+KEEP: services/FrontlineScriptBuilder.js
+KEEP: routes/admin/frontlineScriptBuilder.js
+KEEP: public/frontline-intel-editor.html
+KEEP: public/js/ai-agent-settings/FrontlineScriptBuilder.js
+KEEP: models/FrontlineScriptDraft.js
+KEEP: templates/FrontlineSystemPromptV23.js
+NOTE: "Frontline" is a DIFFERENT feature, not "Front Desk"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PHASE F: MODEL CLEANUP (v2Company.js)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# The v2Company model has frontDeskBehavior schema definitions.
+# These should be marked as DEPRECATED but kept for backward compat.
+# Do NOT delete from model yet - existing data still uses these paths.
+
+REVIEW: models/v2Company.js
+ACTION: Mark frontDeskBehavior section as DEPRECATED in comments
+ACTION: Do NOT remove from schema (breaks existing documents)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# EXECUTION ORDER
+# ═══════════════════════════════════════════════════════════════════════════
+
+# STEP 1: Verify BookingLogicEngine works end-to-end (fake booking test)
+# STEP 2: Remove Front Desk UI (tabs, nav items, JS files)
+# STEP 3: Remove Front Desk routes from index.js
+# STEP 4: Delete Front Desk route files
+# STEP 5: Delete Front Desk service files  
+# STEP 6: Remove legacy booking imports from FrontDeskCoreRuntime
+# STEP 7: Delete legacy booking files (BookingFlowRunner, etc.)
+# STEP 8: Run proof gates (server boots, grep returns zero)
+# STEP 9: Add CI script to fail on forbidden strings
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROOF GATES (must pass before declaring victory)
+# ═══════════════════════════════════════════════════════════════════════════
+
+GATE_1_COMPILE:
+  - Server must boot with zero missing module errors
+  - No route mount referencing deleted files
+
+GATE_2_RUNTIME:
+  - Fake booking flow works (NAME → PHONE → REASON → CONFIRM → DONE)
+  - Mode switch works (DISCOVERY → BOOKING)
+  - Payload handoff works
+
+GATE_3_SEARCH:
+  - grep "FrontDeskBehavior" returns zero
+  - grep "frontDeskBehavior" returns zero  
+  - grep "BehaviorManager" returns zero
+  - (After migration) grep "BookingFlowRunner" returns zero
+  - (After migration) grep "SlotExtractor" returns zero
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# END OF NUKE PLAN
+# ═══════════════════════════════════════════════════════════════════════════

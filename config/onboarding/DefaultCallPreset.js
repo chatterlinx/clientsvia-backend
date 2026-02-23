@@ -1,5 +1,6 @@
 /**
- * DefaultFrontDeskPreset.js
+ * DefaultCallPreset.js
+ * ☢️ NUKED Feb 22, 2026: Renamed from DefaultFrontDeskPreset.js
  * V59: COMPREHENSIVE preset for new company onboarding
  * 
  * PHILOSOPHY (per memory 12148303):

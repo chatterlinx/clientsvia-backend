@@ -26,7 +26,8 @@ const MatchDiagnostics = require('../services/MatchDiagnostics');
 const AdminNotificationService = require('../services/AdminNotificationService');  // 🚨 Critical error reporting
 // 🚀 V2 SYSTEM: Using V2 AI Agent Runtime for call initialization
 const { initializeCall } = require('../services/v2AIAgentRuntime');
-const { FrontDeskCoreRuntime } = require('../services/engine/FrontDeskCoreRuntime');
+// ☢️ NUKED Feb 22, 2026: FrontDeskCoreRuntime renamed to CallRuntime - all legacy deleted
+const { CallRuntime, FrontDeskCoreRuntime } = require('../services/engine/CallRuntime');
 const { StateStore } = require('../services/engine/StateStore');
 // NOTE: processUserInput REMOVED - HybridReceptionistLLM is the only brain now
 // V2 DELETED: Legacy aiAgentRuntime - replaced with v2AIAgentRuntime
@@ -2827,13 +2828,51 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     }
 
     if (cached?.twimlString) {
-      twimlString = cached.twimlString;
       voiceProviderUsed = cached.voiceProviderUsed || voiceProviderUsed;
+
+      // ═══════════════════════════════════════════════════════════════════════════
+      // V130: BUILD BRIDGE-SAFE TWIML
+      // ═══════════════════════════════════════════════════════════════════════════
+      // The cached TwiML has <Gather> wrapping the response, which causes issues:
+      // - Caller speech during playback triggers the Gather's action URL
+      // - This cuts off the intended response and starts a new turn
+      //
+      // FIX: Build new TwiML that:
+      // 1. Plays the response WITHOUT Gather (so it can't be interrupted)
+      // 2. Redirects to a listen endpoint that sets up the Gather for next input
+      // ═══════════════════════════════════════════════════════════════════════════
+      const hostHeader = req.get('host');
+      const twiml = new twilio.twiml.VoiceResponse();
+      
+      // Play or Say the response WITHOUT Gather wrapping
+      if (cached.audioUrl) {
+        twiml.play(cached.audioUrl);
+      } else if (cached.responseText) {
+        twiml.say(escapeTwiML(cached.responseText));
+      } else {
+        // Fallback: extract from cached TwiML (legacy cache entries)
+        const playUrlMatch = cached.twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
+        const sayMatch = cached.twimlString.match(/<Say[^>]*>([^<]+)<\/Say>/);
+        if (playUrlMatch) {
+          twiml.play(playUrlMatch[1]);
+        } else if (sayMatch) {
+          twiml.say(sayMatch[1]);
+        } else {
+          // Last resort: use the full cached TwiML (may have Gather issues)
+          twimlString = cached.twimlString;
+          res.type('text/xml');
+          return res.send(twimlString);
+        }
+      }
+      
+      // Redirect to listen endpoint which sets up Gather for next caller input
+      const listenUrl = `${getSecureBaseUrl(req)}/api/twilio/v2-agent-listen/${companyID}`;
+      twiml.redirect({ method: 'POST' }, listenUrl);
+      
+      twimlString = twiml.toString();
 
       // TWIML_SENT (final answer) - CRITICAL - MUST AWAIT
       if (CallLogger && callSid) {
-        const playUrlMatch = twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
-        const playUrl = playUrlMatch ? playUrlMatch[1] : null;
         await CallLogger.logEvent({
           callId: callSid,
           companyId: companyID,
@@ -2850,11 +2889,12 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
             responsePreview: `${cached.responsePreview || ''}`.substring(0, 80),
             matchSource: cached.matchSource || null,
             twimlPreview: twimlString.substring(0, 800),
-            playUrl,
+            playUrl: cached.audioUrl || null,
             bridge: {
               token: token ? `${token}`.slice(0, 8) : null,
               attempt,
-              elapsedMs
+              elapsedMs,
+              v130Fix: true  // Flag to track V130 fix usage
             },
             timings: cached.timings || { totalMs: elapsedMs }
           }
@@ -2933,6 +2973,83 @@ router.post('/v2-agent-bridge-continue/:companyID', async (req, res) => {
     });
     const twiml = new twilio.twiml.VoiceResponse();
     twiml.say("I'm connecting you to our team.");
+    twimlString = twiml.toString();
+    res.type('text/xml');
+    return res.send(twimlString);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// V130: LISTEN ENDPOINT (POST-BRIDGE GATHER)
+// ═══════════════════════════════════════════════════════════════════════════
+// Called after bridge continuation plays the response.
+// Sets up a Gather to capture the caller's next input.
+// This is a lightweight endpoint - no core runtime, just TwiML generation.
+// ═══════════════════════════════════════════════════════════════════════════
+router.post('/v2-agent-listen/:companyID', async (req, res) => {
+  const companyID = req.params.companyID;
+  const callSid = req.body.CallSid;
+  
+  let twimlString = '';
+  
+  try {
+    const hostHeader = req.get('host');
+    
+    const twiml = new twilio.twiml.VoiceResponse();
+    const gather = twiml.gather({
+      input: 'speech',
+      action: `/api/twilio/v2-agent-respond/${companyID}`,
+      method: 'POST',
+      actionOnEmptyResult: true,
+      timeout: 7,
+      speechTimeout: 'auto',
+      speechModel: 'phone_call',
+      partialResultCallback: `https://${hostHeader}/api/twilio/v2-agent-partial/${companyID}`,
+      partialResultCallbackMethod: 'POST'
+    });
+    
+    // No prompt - just listen for the next input
+    // The response was already played by the bridge-continue endpoint
+    
+    twimlString = twiml.toString();
+    
+    if (CallLogger && callSid) {
+      CallLogger.logEvent({
+        callId: callSid,
+        companyId: companyID,
+        type: 'TWIML_SENT',
+        data: {
+          section: 'S7_VOICE_PROVIDER',
+          route: '/v2-agent-listen',
+          twimlLength: twimlString.length,
+          hasGather: true,
+          hasPlay: false,
+          hasSay: false,
+          voiceProviderUsed: 'none',
+          purpose: 'post_bridge_gather'
+        }
+      }).catch(() => {});
+    }
+    
+    res.type('text/xml');
+    return res.send(twimlString);
+  } catch (error) {
+    logger.error('[V2 LISTEN] Route crashed', {
+      callSid,
+      companyID,
+      error: error.message
+    });
+    
+    // Fallback: just gather without partial callbacks
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.gather({
+      input: 'speech',
+      action: `/api/twilio/v2-agent-respond/${companyID}`,
+      method: 'POST',
+      actionOnEmptyResult: true,
+      timeout: 7,
+      speechTimeout: 'auto'
+    });
     twimlString = twiml.toString();
     res.type('text/xml');
     return res.send(twimlString);
@@ -3710,12 +3827,20 @@ router.post('/v2-agent-respond/:companyID', async (req, res) => {
 
     computeTurnPromise
       .then(async (result) => {
+        // V130: Extract audio URL from TwiML for bridge continuation
+        // The continuation needs raw audio/text to build non-Gather TwiML
+        const playUrlMatch = result.twimlString.match(/<Play[^>]*>([^<]+)<\/Play>/);
+        const audioUrl = playUrlMatch ? playUrlMatch[1] : null;
+        
         const payload = {
           twimlString: result.twimlString,
           voiceProviderUsed: result.voiceProviderUsed,
           responsePreview: `${result.responseText || ''}`.substring(0, 120),
           matchSource: result.matchSource,
-          timings: result.timings
+          timings: result.timings,
+          // V130: Include raw data for bridge continuation to rebuild TwiML
+          audioUrl,
+          responseText: result.responseText
         };
         // Idempotency: write-once. Continuation must never see a partial write.
         await redis.set(cacheKey, JSON.stringify(payload), { EX: 90, NX: true });

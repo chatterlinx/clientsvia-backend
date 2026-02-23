@@ -398,7 +398,7 @@ class Agent2DiscoveryRunner {
       uiBuild: agent2?.meta?.uiBuild || null,
       configHash,
       turn: typeof turn === 'number' ? turn : null,
-      legacyBlocked: enabled ? ['DiscoveryFlowRunner', 'ScenarioEngine_auto'] : [],
+      legacyBlocked: enabled ? ['ALL_LEGACY_DELETED'] : [],
       scenarioFallbackEnabled: useScenarioFallback,
       inputPreview: clip(input, 60),
       hasCallerName: !!callerName,

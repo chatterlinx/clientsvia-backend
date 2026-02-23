@@ -33,7 +33,8 @@
  */
 
 const logger = require('../../utils/logger');
-const { DEFAULT_SLOT_REGISTRY, DEFAULT_DISCOVERY_FLOW, DEFAULT_BOOKING_FLOW, DEFAULT_FLOW_POLICIES } = require('../../config/onboarding/DefaultFrontDeskPreset');
+// ☢️ NUKED Feb 22, 2026: DefaultFrontDeskPreset renamed to DefaultCallPreset
+const { DEFAULT_SLOT_REGISTRY, DEFAULT_DISCOVERY_FLOW, DEFAULT_BOOKING_FLOW, DEFAULT_FLOW_POLICIES } = require('../../config/onboarding/DefaultCallPreset');
 const { renderSlotTemplateOrFallback, defaultSlotConfirmFallback, hasUnresolvedPlaceholders } = require('./TemplateRenderer');
 
 const VERSION = 'STEP_ENGINE_V110';
