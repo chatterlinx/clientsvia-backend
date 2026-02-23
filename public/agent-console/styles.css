@@ -356,6 +356,8 @@ input, textarea, select {
 }
 
 .card:hover {
+  border-color: var(--color-primary-200);
+  background: var(--color-primary-50);
   box-shadow: var(--shadow-md);
 }
 
