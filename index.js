@@ -192,7 +192,7 @@ async function loadAllRoutes() {
         routes.controlPlaneRegistryRoutes = await loadRouteWithTimeout('./routes/controlPlane/registry', 'controlPlaneRegistryRoutes'); // 📋 Control Plane Schema Registry (Self-describing)
         routes.controlPlaneEffectiveRoutes = await loadRouteWithTimeout('./routes/controlPlane/effective', 'controlPlaneEffectiveRoutes'); // ⚡ Control Plane Effective Config (Runtime values)
         routes.bookingLogicRoutes = await loadRouteWithTimeout('./routes/controlPlane/bookingLogic', 'bookingLogicRoutes'); // 🎯 Booking Logic (Standalone handoff engine)
-        routes.agentConsoleRoutes = await loadRouteWithTimeout('./routes/controlPlane/agentConsole', 'agentConsoleRoutes'); // 🎛️ Agent Console (Clean enterprise dashboard + Truth API)
+        routes.agentConsoleRoutes = await loadRouteWithTimeout('./routes/agentConsole/agentConsole', 'agentConsoleRoutes'); // 🎛️ Agent Console (standalone admin platform)
         routes.globalInstantResponsesRoutes = await loadRouteWithTimeout('./routes/admin/globalInstantResponses', 'globalInstantResponsesRoutes');
         routes.templateDebugExportRoutes = await loadRouteWithTimeout('./routes/admin/templateDebugExport', 'templateDebugExportRoutes'); // 🔍 Template Debug Export (Read-Only)
         routes.goldenAutofillRoutes = await loadRouteWithTimeout('./routes/admin/goldenAutofill', 'goldenAutofillRoutes'); // ✨ Golden Autofill (Apply Best-Practice Defaults)

@@ -1154,18 +1154,152 @@ input, textarea, select {
 .text-center { text-align: center; }
 .text-right { text-align: right; }
 .text-muted { color: var(--color-gray-500); }
+.text-sm { font-size: var(--font-size-sm); }
+.text-xs { font-size: var(--font-size-xs); }
+.text-lg { font-size: var(--font-size-lg); }
+.text-xl { font-size: var(--font-size-xl); }
+.text-2xl { font-size: var(--font-size-2xl); }
+.font-medium { font-weight: var(--font-weight-medium); }
+.font-semibold { font-weight: var(--font-weight-semibold); }
+.font-bold { font-weight: var(--font-weight-bold); }
+.uppercase { text-transform: uppercase; }
+.tracking-wide { letter-spacing: 0.05em; }
 .mt-2 { margin-top: var(--space-2); }
 .mt-4 { margin-top: var(--space-4); }
 .mt-6 { margin-top: var(--space-6); }
+.mb-0 { margin-bottom: 0; }
 .mb-2 { margin-bottom: var(--space-2); }
 .mb-4 { margin-bottom: var(--space-4); }
 .mb-6 { margin-bottom: var(--space-6); }
+.p-0 { padding: 0; }
+.p-3 { padding: var(--space-3); }
+.p-4 { padding: var(--space-4); }
 .flex { display: flex; }
+.flex-1 { flex: 1; }
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
 .gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
 .gap-4 { gap: var(--space-4); }
+.max-w-200 { max-width: 200px; }
+.w-16 { width: 16px; }
+.h-16 { height: 16px; }
+.bg-gray-50 { background: var(--color-gray-50); }
+.rounded-md { border-radius: var(--radius-md); }
+.rounded-lg { border-radius: var(--radius-lg); }
+
+/* --------------------------------------------------------------------------
+   STAT BOX — Dashboard metrics display
+   -------------------------------------------------------------------------- */
+.stat-box {
+  flex: 1;
+  padding: var(--space-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-md);
+}
+
+.stat-box-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stat-box-value {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-gray-900);
+}
+
+.stat-box-centered {
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   ICON BOX — Colored icon containers
+   -------------------------------------------------------------------------- */
+.icon-box {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+}
+
+.icon-box-40 {
+  width: 40px;
+  height: 40px;
+}
+
+.icon-box-primary {
+  background: var(--color-primary-100);
+  color: var(--color-primary-600);
+}
+
+.icon-box-success {
+  background: var(--color-success-50);
+  color: var(--color-success-600);
+}
+
+.icon-box-warning {
+  background: var(--color-warning-50);
+  color: var(--color-warning-600);
+}
+
+/* --------------------------------------------------------------------------
+   FLOW STEPS — Numbered step indicators
+   -------------------------------------------------------------------------- */
+.flow-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.flow-step-number {
+  width: 28px;
+  height: 28px;
+  background: var(--color-primary-100);
+  color: var(--color-primary-600);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+}
+
+.flow-step-title {
+  font-weight: var(--font-weight-medium);
+}
+
+.flow-step-description {
+  font-size: var(--font-size-sm);
+  color: var(--color-gray-500);
+}
+
+/* --------------------------------------------------------------------------
+   CHECKBOX LABEL — Inline checkbox with label text
+   -------------------------------------------------------------------------- */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   JSON VIEWER HEIGHT VARIANTS
+   -------------------------------------------------------------------------- */
+.json-viewer-content-sm { max-height: 150px; }
+.json-viewer-content-md { max-height: 200px; }
+.json-viewer-content-lg { max-height: 250px; }
+.json-viewer-content-xl { max-height: 400px; }
 
 /* --------------------------------------------------------------------------
    SCROLLBAR STYLING

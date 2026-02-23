@@ -89,22 +89,22 @@
               <span class="badge badge-success" id="badge-discovery-status">Active</span>
             </div>
             <div class="card-body">
-              <p class="text-muted" style="font-size: var(--font-size-sm);">
+              <p class="text-muted text-sm">
                 Agent 2.0 Discovery is the <strong>only</strong> discovery system. It handles all incoming calls, 
                 captures caller intent, and prepares handoff payloads for Booking Logic.
               </p>
               <div class="flex gap-4 mt-4">
-                <div style="flex: 1; padding: var(--space-3); background: var(--color-gray-50); border-radius: var(--radius-md);">
-                  <div style="font-size: var(--font-size-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.05em;">Trigger Cards</div>
-                  <div style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-gray-900);" id="stat-trigger-cards">—</div>
+                <div class="stat-box">
+                  <div class="stat-box-label">Trigger Cards</div>
+                  <div class="stat-box-value" id="stat-trigger-cards">—</div>
                 </div>
-                <div style="flex: 1; padding: var(--space-3); background: var(--color-gray-50); border-radius: var(--radius-md);">
-                  <div style="font-size: var(--font-size-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.05em;">Clarifiers</div>
-                  <div style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-gray-900);" id="stat-clarifiers">—</div>
+                <div class="stat-box">
+                  <div class="stat-box-label">Clarifiers</div>
+                  <div class="stat-box-value" id="stat-clarifiers">—</div>
                 </div>
-                <div style="flex: 1; padding: var(--space-3); background: var(--color-gray-50); border-radius: var(--radius-md);">
-                  <div style="font-size: var(--font-size-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.05em;">Vocabulary</div>
-                  <div style="font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-gray-900);" id="stat-vocabulary">—</div>
+                <div class="stat-box">
+                  <div class="stat-box-label">Vocabulary</div>
+                  <div class="stat-box-value" id="stat-vocabulary">—</div>
                 </div>
               </div>
             </div>
@@ -121,7 +121,7 @@
                 <textarea class="form-textarea" id="input-greeting-initial" rows="3" placeholder="Thank you for calling [Company]. How can I help you today?"></textarea>
                 <p class="form-hint">Spoken when a new caller connects.</p>
               </div>
-              <div class="form-group" style="margin-bottom: 0;">
+              <div class="form-group mb-0">
                 <label class="form-label">Return Caller Greeting</label>
                 <textarea class="form-textarea" id="input-greeting-return" rows="3" placeholder="Welcome back! How can I assist you today?"></textarea>
                 <p class="form-hint">Spoken when a known caller returns (if caller ID recognition is enabled).</p>
@@ -171,12 +171,12 @@
             <div class="card-body">
               <div class="form-group">
                 <label class="form-label">Acknowledgment Word</label>
-                <input type="text" class="form-input" id="input-ack-word" placeholder="Ok." style="max-width: 200px;">
+                <input type="text" class="form-input max-w-200" id="input-ack-word" placeholder="Ok.">
                 <p class="form-hint">Short word spoken before responses (e.g., "Ok.", "Got it.", "Sure.")</p>
               </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label" style="display: flex; align-items: center; gap: var(--space-2);">
-                  <input type="checkbox" id="input-robot-challenge-enabled" style="width: 16px; height: 16px;">
+              <div class="form-group mb-0">
+                <label class="form-label checkbox-label">
+                  <input type="checkbox" id="input-robot-challenge-enabled">
                   Enable Robot Challenge Response
                 </label>
                 <p class="form-hint">If caller says "are you a robot?", respond with a helpful clarification.</p>
@@ -214,8 +214,8 @@
 
               <div class="mt-4">
                 <div class="test-output-label">Session State</div>
-                <div class="json-viewer" style="margin-top: var(--space-2);">
-                  <div class="json-viewer-content" style="max-height: 150px;">
+                <div class="json-viewer mt-2">
+                  <div class="json-viewer-content json-viewer-content-sm">
                     <pre id="test-session-state">{ "mode": "DISCOVERY", "turn": 0 }</pre>
                   </div>
                 </div>
@@ -223,8 +223,8 @@
 
               <div class="mt-4">
                 <div class="test-output-label">Handoff Payload Preview</div>
-                <div class="json-viewer" style="margin-top: var(--space-2);">
-                  <div class="json-viewer-content" style="max-height: 200px;">
+                <div class="json-viewer mt-2">
+                  <div class="json-viewer-content json-viewer-content-md">
                     <pre id="test-handoff-payload">No handoff triggered yet...</pre>
                   </div>
                 </div>
@@ -257,7 +257,7 @@
             <div class="card-body">
               <p class="form-hint">When booking consent is detected, Agent 2.0 builds this payload and hands off to Booking Logic:</p>
               <div class="json-viewer mt-4">
-                <div class="json-viewer-content" style="max-height: 250px;">
+                <div class="json-viewer-content json-viewer-content-lg">
                   <pre id="handoff-contract-example">{
   "handoffContractVersion": "AC1",
   "companyId": "...",

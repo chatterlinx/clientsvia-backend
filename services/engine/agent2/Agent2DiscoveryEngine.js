@@ -14,9 +14,15 @@
  * 
  * Handoff Contract:
  * When booking consent is detected:
- * 1. Agent says: "Please hold while I pull up the calendar."
- * 2. Build AC1 payload with assumptions + summary
- * 3. Hand off to Booking Logic
+ * 1. AC1_CONSENT_DETECTED event
+ * 2. AC1_HANDOFF_PAYLOAD_BUILT event
+ * 3. AC1_BOOKING_MODE_SET event
+ * 4. AC1_BOOKING_NEXT_PROMPT_SPOKEN event
+ * 
+ * HARD RULES:
+ * - Discovery MUST emit payload ONLY when booking consent is explicit
+ * - Discovery MUST NOT ask booking questions (phone, address) once consent is met
+ * - Discovery MUST set session.mode = 'BOOKING' and NEVER fall back
  * 
  * ============================================================================
  */
@@ -26,6 +32,21 @@ const v2Company = require('../../../models/v2Company');
 
 const ENGINE_ID = 'AGENT2_DISCOVERY_ENGINE';
 const CONTRACT_VERSION = 'AC1';
+
+/* ============================================================================
+   AC1 PROOF EVENTS — These are the gates that verify correct behavior
+   ============================================================================ */
+
+const AC1_EVENTS = {
+  CONSENT_DETECTED: 'AC1_CONSENT_DETECTED',
+  HANDOFF_PAYLOAD_BUILT: 'AC1_HANDOFF_PAYLOAD_BUILT',
+  BOOKING_MODE_SET: 'AC1_BOOKING_MODE_SET',
+  BOOKING_NEXT_PROMPT_SPOKEN: 'AC1_BOOKING_NEXT_PROMPT_SPOKEN',
+  ESCALATION_REQUESTED: 'AC1_ESCALATION_REQUESTED',
+  DISCOVERY_TURN_PROCESSED: 'AC1_DISCOVERY_TURN_PROCESSED',
+  BOOKING_INTENT_DETECTED: 'AC1_BOOKING_INTENT_DETECTED',
+  AWAITING_CONSENT: 'AC1_AWAITING_CONSENT'
+};
 
 /* ============================================================================
    DEFAULT CONFIGURATION
@@ -67,10 +88,11 @@ const DEFAULT_CONFIG = {
  * @param {string} params.fromPhone - Caller's phone number
  * @param {boolean} params.isTest - Whether this is a test turn
  * 
- * @returns {Object} { replyText, sessionUpdates, handoffPayload? }
+ * @returns {Object} { replyText, sessionUpdates, handoffPayload?, events[] }
  */
 async function processTurn({ session, text, companyId, callSid, fromPhone, isTest = false }) {
   const turnId = `turn_${Date.now()}`;
+  const events = [];
   
   logger.info(`[${ENGINE_ID}] Processing turn`, {
     turnId,
@@ -82,37 +104,97 @@ async function processTurn({ session, text, companyId, callSid, fromPhone, isTes
   });
   
   try {
-    // Load company config
     const config = await loadCompanyConfig(companyId);
-    
-    // Normalize input
     const normalizedText = normalizeText(text);
-    
-    // Initialize session if needed
     const currentSession = initializeSession(session);
     
-    // Check for escalation first
+    // GATE: Check for escalation first
     if (detectEscalation(normalizedText, config)) {
+      events.push({ type: AC1_EVENTS.ESCALATION_REQUESTED, timestamp: Date.now(), callSid });
       logger.info(`[${ENGINE_ID}] Escalation detected`, { turnId, callSid });
-      return buildEscalationResponse(currentSession);
+      
+      const result = buildEscalationResponse(currentSession);
+      return { ...result, events };
     }
     
-    // Check for booking consent
+    // GATE: Check for booking consent (ONLY if we were awaiting it)
     if (currentSession.awaitingBookingConsent && detectConsent(normalizedText, config)) {
-      logger.info(`[${ENGINE_ID}] Booking consent detected`, { turnId, callSid });
-      return buildHandoffResponse(currentSession, config, companyId, callSid, fromPhone);
+      // ═══════════════════════════════════════════════════════════════════════
+      // AC1 HANDOFF SEQUENCE — These events MUST fire in order
+      // ═══════════════════════════════════════════════════════════════════════
+      
+      // 1. Consent detected
+      events.push({ 
+        type: AC1_EVENTS.CONSENT_DETECTED, 
+        timestamp: Date.now(), 
+        callSid,
+        consentText: normalizedText
+      });
+      logger.info(`[${ENGINE_ID}] AC1_CONSENT_DETECTED`, { turnId, callSid, text: normalizedText });
+      
+      // 2. Build handoff payload
+      const handoffPayload = buildHandoffPayload(currentSession, companyId, callSid, fromPhone);
+      events.push({ 
+        type: AC1_EVENTS.HANDOFF_PAYLOAD_BUILT, 
+        timestamp: Date.now(), 
+        callSid,
+        payloadVersion: CONTRACT_VERSION,
+        hasFirstName: !!handoffPayload.assumptions.firstName,
+        hasSummary: !!handoffPayload.summary.issue
+      });
+      logger.info(`[${ENGINE_ID}] AC1_HANDOFF_PAYLOAD_BUILT`, { turnId, callSid });
+      
+      // 3. Set booking mode (IRREVERSIBLE within this call)
+      const sessionUpdates = {
+        ...currentSession,
+        mode: 'BOOKING',
+        awaitingBookingConsent: false,
+        handoffTimestamp: Date.now()
+      };
+      events.push({ 
+        type: AC1_EVENTS.BOOKING_MODE_SET, 
+        timestamp: Date.now(), 
+        callSid,
+        previousMode: currentSession.mode
+      });
+      logger.info(`[${ENGINE_ID}] AC1_BOOKING_MODE_SET`, { turnId, callSid });
+      
+      // 4. Speak the hold line
+      const replyText = config.style.holdLine;
+      events.push({ 
+        type: AC1_EVENTS.BOOKING_NEXT_PROMPT_SPOKEN, 
+        timestamp: Date.now(), 
+        callSid,
+        prompt: replyText
+      });
+      logger.info(`[${ENGINE_ID}] AC1_BOOKING_NEXT_PROMPT_SPOKEN`, { turnId, callSid });
+      
+      return {
+        replyText,
+        sessionUpdates,
+        handoffPayload,
+        events
+      };
     }
     
-    // Process based on current state
-    const result = await processDiscoveryState(currentSession, normalizedText, config, companyId);
+    // GATE: Normal discovery processing
+    const result = await processDiscoveryState(currentSession, normalizedText, config, companyId, events);
+    
+    events.push({ 
+      type: AC1_EVENTS.DISCOVERY_TURN_PROCESSED, 
+      timestamp: Date.now(),
+      turn: result.sessionUpdates.turn,
+      intent: result.sessionUpdates.intent
+    });
     
     logger.info(`[${ENGINE_ID}] Turn processed`, {
       turnId,
       replyLength: result.replyText?.length || 0,
-      hasHandoff: !!result.handoffPayload
+      hasHandoff: !!result.handoffPayload,
+      eventsCount: events.length
     });
     
-    return result;
+    return { ...result, events };
     
   } catch (error) {
     logger.error(`[${ENGINE_ID}] Turn processing failed`, {
@@ -123,10 +205,13 @@ async function processTurn({ session, text, companyId, callSid, fromPhone, isTes
       stack: error.stack
     });
     
+    events.push({ type: 'AC1_ERROR', error: error.message, timestamp: Date.now() });
+    
     return {
       replyText: "I'm sorry, I'm having trouble processing that. Could you please repeat?",
       sessionUpdates: session || {},
-      error: error.message
+      error: error.message,
+      events
     };
   }
 }
@@ -225,7 +310,6 @@ function detectQuestionIntent(text) {
 }
 
 function extractCallerName(text) {
-  // Simple name extraction patterns
   const patterns = [
     /my name is (\w+)/i,
     /this is (\w+)/i,
@@ -252,21 +336,30 @@ function capitalizeFirst(str) {
    DISCOVERY STATE PROCESSING
    ============================================================================ */
 
-async function processDiscoveryState(session, text, config, companyId) {
+async function processDiscoveryState(session, text, config, companyId, events) {
   const sessionUpdates = { ...session };
   sessionUpdates.turn = (session.turn || 0) + 1;
   
-  // Extract caller name if present
   const detectedName = extractCallerName(text);
   if (detectedName && !sessionUpdates.callerName) {
     sessionUpdates.callerName = detectedName;
   }
   
-  // Detect intent
+  // Detect booking intent → set awaitingBookingConsent flag
   if (detectBookingIntent(text)) {
     sessionUpdates.intent = 'booking';
     sessionUpdates.awaitingBookingConsent = true;
     sessionUpdates.summary = { issue: text, serviceType: 'service', urgency: 'routine' };
+    
+    events.push({ 
+      type: AC1_EVENTS.BOOKING_INTENT_DETECTED, 
+      timestamp: Date.now(),
+      issue: text.slice(0, 100)
+    });
+    events.push({ 
+      type: AC1_EVENTS.AWAITING_CONSENT, 
+      timestamp: Date.now()
+    });
     
     const nameGreeting = sessionUpdates.callerName ? `, ${sessionUpdates.callerName}` : '';
     return {
@@ -283,7 +376,6 @@ async function processDiscoveryState(session, text, config, companyId) {
     };
   }
   
-  // Default: Ask for clarification
   sessionUpdates.summary = { issue: text, serviceType: 'general', urgency: 'routine' };
   return {
     replyText: `${config.style.ackWord} I understand. Is there something specific I can help you with today, or would you like to schedule a service appointment?`,
@@ -306,8 +398,8 @@ function buildEscalationResponse(session) {
   };
 }
 
-function buildHandoffResponse(session, config, companyId, callSid, fromPhone) {
-  const handoffPayload = {
+function buildHandoffPayload(session, companyId, callSid, fromPhone) {
+  return {
     handoffContractVersion: CONTRACT_VERSION,
     companyId,
     callSid,
@@ -322,16 +414,6 @@ function buildHandoffResponse(session, config, companyId, callSid, fromPhone) {
       urgency: 'routine'
     }
   };
-  
-  return {
-    replyText: config.style.holdLine,
-    sessionUpdates: {
-      ...session,
-      mode: 'BOOKING',
-      awaitingBookingConsent: false
-    },
-    handoffPayload
-  };
 }
 
 /* ============================================================================
@@ -341,5 +423,6 @@ function buildHandoffResponse(session, config, companyId, callSid, fromPhone) {
 module.exports = {
   processTurn,
   CONTRACT_VERSION,
-  ENGINE_ID
+  ENGINE_ID,
+  AC1_EVENTS
 };

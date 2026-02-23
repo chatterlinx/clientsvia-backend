@@ -1,13 +1,17 @@
 /**
  * ============================================================================
  * AGENT CONSOLE — API ROUTES
- * ClientVia Platform · Clean Architecture · Production Grade
+ * ClientVia Platform · Standalone Admin Platform
  * 
- * This is a CLEAN module — no legacy imports, no registry dependencies.
- * All truth data is assembled directly from canonical DB documents.
+ * RULES:
+ * - Truth reads from canonical Mongo docs (NOT runtime caches)
+ * - Short TTL cache (10s) prevents Mongo spam on UI refresh
+ * - All secrets stripped recursively before response
+ * - Runtime never uses these endpoints (admin JWT only)
  * 
  * ENDPOINTS:
- * - GET /:companyId/truth — Master Truth JSON (complete platform snapshot)
+ * - GET /:companyId/truth — Master Truth JSON (cached, sanitized)
+ * - GET /:companyId/truth?force=true — Force refresh (bypass cache)
  * - POST /:companyId/agent2/test-turn — Test Agent 2.0 discovery turn
  * - POST /:companyId/booking/test-step — Test Booking Logic step
  * 
@@ -25,12 +29,90 @@ const MODULE_ID = 'AGENT_CONSOLE_API';
 const VERSION = 'AC1.0';
 
 /* ============================================================================
+   TRUTH CACHE — Short TTL to prevent Mongo hammering
+   ============================================================================ */
+
+const TRUTH_CACHE_TTL_MS = 10000; // 10 seconds
+
+const truthCache = new Map();
+
+function getCachedTruth(companyId) {
+  const entry = truthCache.get(companyId);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    truthCache.delete(companyId);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedTruth(companyId, data) {
+  truthCache.set(companyId, {
+    data,
+    expiresAt: Date.now() + TRUTH_CACHE_TTL_MS,
+    cachedAt: new Date().toISOString()
+  });
+}
+
+/* ============================================================================
+   SECRET SANITIZER — Strip sensitive keys recursively
+   ============================================================================ */
+
+const BANNED_KEYS = new Set([
+  'token', 'secret', 'apikey', 'api_key', 'password', 'passwd',
+  'auth', 'authtoken', 'auth_token', 'accesstoken', 'access_token',
+  'refreshtoken', 'refresh_token', 'twilioauthtoken', 'elevenlabsapikey',
+  'openaiapikey', 'mongouri', 'mongo_uri', 'connectionstring',
+  'privatekey', 'private_key', 'secretkey', 'secret_key',
+  'credentials', 'apiSecret', 'apisecret'
+]);
+
+function sanitizeTruth(obj, path = '', strippedKeys = []) {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj !== 'object') return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map((item, i) => sanitizeTruth(item, `${path}[${i}]`, strippedKeys));
+  }
+  
+  const sanitized = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const keyLower = key.toLowerCase().replace(/[^a-z]/g, '');
+    
+    if (BANNED_KEYS.has(keyLower)) {
+      strippedKeys.push(`${path}.${key}`);
+      continue;
+    }
+    
+    if (typeof value === 'object' && value !== null) {
+      sanitized[key] = sanitizeTruth(value, `${path}.${key}`, strippedKeys);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  
+  return sanitized;
+}
+
+function sanitizeAndLog(data, companyId) {
+  const strippedKeys = [];
+  const sanitized = sanitizeTruth(data, 'truth', strippedKeys);
+  
+  if (strippedKeys.length > 0) {
+    logger.warn(`[${MODULE_ID}] Secrets stripped from truth response`, {
+      companyId,
+      strippedCount: strippedKeys.length,
+      strippedPaths: strippedKeys
+    });
+  }
+  
+  return sanitized;
+}
+
+/* ============================================================================
    TRUTH ASSEMBLY — Canonical Document Readers
    ============================================================================ */
 
-/**
- * Reads company profile truth from canonical v2Company document
- */
 async function readCompanyProfileTruth(companyId) {
   const company = await v2Company.findById(companyId).lean();
   if (!company) {
@@ -62,9 +144,6 @@ async function readCompanyProfileTruth(companyId) {
   };
 }
 
-/**
- * Reads Agent 2.0 discovery config truth
- */
 async function readAgent2Truth(companyId) {
   const company = await v2Company.findById(companyId)
     .select('aiAgentSettings.agent2')
@@ -102,9 +181,6 @@ async function readAgent2Truth(companyId) {
   };
 }
 
-/**
- * Reads Booking Logic truth
- */
 async function readBookingLogicTruth(companyId) {
   const company = await v2Company.findById(companyId)
     .select('aiAgentSettings.bookingLogic googleCalendar')
@@ -120,7 +196,7 @@ async function readBookingLogicTruth(companyId) {
     version: 'BL1.0',
     calendarConnected: !!company.googleCalendar?.accessToken,
     calendarId: company.googleCalendar?.calendarId || null,
-    slotDuration: bookingLogic.slotDuration || 60,
+    appointmentDuration: bookingLogic.slotDuration || 60,
     bufferMinutes: bookingLogic.bufferMinutes || 0,
     advanceBookingDays: bookingLogic.advanceBookingDays || 14,
     businessHoursOverride: bookingLogic.businessHoursOverride || null,
@@ -129,9 +205,6 @@ async function readBookingLogicTruth(companyId) {
   };
 }
 
-/**
- * Reads Global Hub truth (dictionary counts, platform defaults status)
- */
 async function readGlobalHubTruth() {
   let firstNamesCount = 0;
   let platformDefaultsLoaded = false;
@@ -170,9 +243,11 @@ async function readGlobalHubTruth() {
 
 /**
  * GET /:companyId/truth
+ * GET /:companyId/truth?force=true (bypass cache)
  * 
  * Master Download Truth JSON — Complete platform state snapshot
- * Used by the "Master Download Truth JSON" button in Agent Console
+ * - Uses 10s TTL cache to prevent Mongo spam
+ * - All secrets stripped recursively
  */
 router.get(
   '/:companyId/truth',
@@ -180,11 +255,32 @@ router.get(
   requirePermission(PERMISSIONS.CONFIG_READ),
   async (req, res) => {
     const { companyId } = req.params;
+    const forceRefresh = req.query.force === 'true';
     const requestId = `truth_${Date.now()}`;
     
-    logger.info(`[${MODULE_ID}] Truth request: companyId=${companyId}, requestId=${requestId}`);
+    logger.info(`[${MODULE_ID}] Truth request`, {
+      companyId,
+      requestId,
+      forceRefresh
+    });
     
     try {
+      // Check cache unless force refresh
+      if (!forceRefresh) {
+        const cached = getCachedTruth(companyId);
+        if (cached) {
+          logger.info(`[${MODULE_ID}] Truth served from cache`, { companyId, requestId });
+          return res.json({
+            ...cached,
+            _meta: {
+              ...cached._meta,
+              fromCache: true,
+              cacheHitAt: new Date().toISOString()
+            }
+          });
+        }
+      }
+      
       // Assemble truth from all sources in parallel
       const [companyProfile, agent2, bookingLogic, globalHub] = await Promise.all([
         readCompanyProfileTruth(companyId),
@@ -193,12 +289,13 @@ router.get(
         readGlobalHubTruth()
       ]);
       
-      const truthPayload = {
+      const rawPayload = {
         _meta: {
           version: VERSION,
           requestId,
           timestamp: new Date().toISOString(),
-          companyId
+          companyId,
+          fromCache: false
         },
         companyProfile,
         agent2,
@@ -206,9 +303,20 @@ router.get(
         globalHub
       };
       
-      logger.info(`[${MODULE_ID}] Truth assembled: companyId=${companyId}, sections=4`);
+      // Sanitize secrets before caching and responding
+      const sanitizedPayload = sanitizeAndLog(rawPayload, companyId);
       
-      res.json(truthPayload);
+      // Cache the sanitized result
+      setCachedTruth(companyId, sanitizedPayload);
+      
+      logger.info(`[${MODULE_ID}] Truth assembled and cached`, {
+        companyId,
+        requestId,
+        sections: 4,
+        cacheTTL: TRUTH_CACHE_TTL_MS
+      });
+      
+      res.json(sanitizedPayload);
     } catch (error) {
       logger.error(`[${MODULE_ID}] Truth assembly failed: ${error.message}`, {
         companyId,
@@ -229,7 +337,7 @@ router.get(
  * POST /:companyId/agent2/test-turn
  * 
  * Test a single Agent 2.0 discovery turn
- * Returns: replyText, sessionUpdates, handoffPayload (if booking triggered)
+ * Returns: replyText, sessionUpdates, handoffPayload (if booking triggered), events
  */
 router.post(
   '/:companyId/agent2/test-turn',
@@ -240,7 +348,11 @@ router.post(
     const { text, session } = req.body;
     const requestId = `test_${Date.now()}`;
     
-    logger.info(`[${MODULE_ID}] Test turn: companyId=${companyId}, text="${text?.slice(0, 50)}..."`);
+    logger.info(`[${MODULE_ID}] Test turn`, {
+      companyId,
+      requestId,
+      textLength: text?.length || 0
+    });
     
     if (!text || typeof text !== 'string') {
       return res.status(400).json({
@@ -296,7 +408,7 @@ router.post(
     const { payload, bookingCtx, userInput } = req.body;
     const requestId = `booking_test_${Date.now()}`;
     
-    logger.info(`[${MODULE_ID}] Booking test step: companyId=${companyId}`);
+    logger.info(`[${MODULE_ID}] Booking test step`, { companyId, requestId });
     
     try {
       const BookingLogicEngine = require('../../services/engine/booking/BookingLogicEngine');
@@ -376,7 +488,7 @@ router.patch(
     const { companyId } = req.params;
     const updates = req.body;
     
-    logger.info(`[${MODULE_ID}] Updating Agent 2 config: companyId=${companyId}`);
+    logger.info(`[${MODULE_ID}] Updating Agent 2 config`, { companyId });
     
     try {
       const company = await v2Company.findById(companyId);
@@ -384,7 +496,6 @@ router.patch(
         return res.status(404).json({ error: 'Company not found' });
       }
       
-      // Initialize aiAgentSettings.agent2 if missing
       if (!company.aiAgentSettings) {
         company.aiAgentSettings = {};
       }
@@ -392,10 +503,11 @@ router.patch(
         company.aiAgentSettings.agent2 = {};
       }
       
-      // Merge updates
       Object.assign(company.aiAgentSettings.agent2, updates);
-      
       await company.save();
+      
+      // Invalidate truth cache for this company
+      truthCache.delete(companyId);
       
       res.json({
         success: true,
