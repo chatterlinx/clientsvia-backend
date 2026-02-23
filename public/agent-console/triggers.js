@@ -548,6 +548,13 @@
       return;
     }
     
+    // Require confirmation
+    const confirmation = prompt('⚠️ WARNING: You are creating a GLOBAL TRIGGER GROUP (not a trigger).\n\nType "yes global" to confirm:');
+    if (!confirmation || confirmation.toLowerCase().trim() !== 'yes global') {
+      showToast('warning', 'Cancelled', 'Group creation cancelled.');
+      return;
+    }
+    
     try {
       await apiFetch(`${CONFIG.API_BASE_GLOBAL}/trigger-groups`, {
         method: 'POST',
