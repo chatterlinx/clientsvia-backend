@@ -381,7 +381,14 @@ router.put('/:companyId/active-group',
       const previousSettings = await CompanyTriggerSettings.findByCompanyId(companyId);
       const previousGroupId = previousSettings?.activeGroupId;
 
-      const settings = await CompanyTriggerSettings.setActiveGroup(companyId, groupId, userId);
+      // Get the group's publishedVersion for informational tracking
+      let publishedVersion = null;
+      if (groupId) {
+        const groupForVersion = await GlobalTriggerGroup.findByGroupId(groupId);
+        publishedVersion = groupForVersion?.publishedVersion || null;
+      }
+
+      const settings = await CompanyTriggerSettings.setActiveGroup(companyId, groupId, publishedVersion, userId);
 
       if (previousGroupId && previousGroupId !== groupId) {
         await GlobalTriggerGroup.updateOne(
