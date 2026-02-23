@@ -68,12 +68,15 @@
         </div>
       </div>
 
-      <!-- Two Column Layout -->
-      <div class="config-layout">
-        <!-- Left: Connection & Calendar Selection -->
-        <div class="config-panel">
-          
-          <!-- Connection Status Card -->
+      <!-- ═══════════════════════════════════════════════════════════════
+           SINGLE-PAGE LAYOUT — CLEAN CARD-BASED DESIGN (FULL WIDTH)
+           ═══════════════════════════════════════════════════════════════ -->
+      <div class="single-column-layout-full">
+        
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Connection Status
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
           <div class="card">
             <div class="card-header">
               <h2 class="card-title">Connection Status</h2>
@@ -174,9 +177,12 @@
               </div>
             </div>
           </div>
+        </div>
 
-          <!-- Calendar Selection Card (only when connected) -->
-          <div class="card" id="card-calendar-selection">
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Primary Calendar Selection
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card" id="card-calendar-selection">
             <div class="card-header">
               <h2 class="card-title">Primary Calendar</h2>
             </div>
@@ -194,19 +200,19 @@
               </button>
             </div>
           </div>
-
         </div>
 
-        <!-- Right: Test Availability Panel -->
-        <div class="preview-panel">
-          <div class="test-panel">
-            <div class="test-panel-header">
-              <h3 class="test-panel-title">
-                <span class="status-dot" id="availability-status-dot"></span>
-                Test Availability
-              </h3>
-            </div>
-            <div class="test-panel-body">
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Test Availability
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <span class="status-dot" id="availability-status-dot"></span>
+              Test Availability
+            </h2>
+          </div>
+          <div class="card-body">
               <p class="text-sm text-muted mb-4">
                 Preview what time options Booking Logic will offer to callers.
               </p>
@@ -247,9 +253,12 @@
               </div>
             </div>
           </div>
+        </div>
 
-          <!-- Booking Logic Integration Note -->
-          <div class="card mt-4">
+        <!-- ───────────────────────────────────────────────────────────
+             CARD: Booking Logic Integration
+             ─────────────────────────────────────────────────────────── -->
+        <div class="card">
             <div class="card-header">
               <h2 class="card-title">Booking Logic Integration</h2>
             </div>
@@ -264,6 +273,7 @@
             </div>
           </div>
         </div>
+
       </div>
     </main>
 
