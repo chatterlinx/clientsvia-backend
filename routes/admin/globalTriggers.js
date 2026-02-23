@@ -113,7 +113,15 @@ function requireGlobalTriggerPermission(permission) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
-    if (user.role === 'super_admin' || user.role === 'platform_admin') {
+    // Platform-level admins have full access
+    // Note: This system uses 'admin' role for platform admins (not 'super_admin')
+    const isPlatformAdmin = user.role === 'admin' || 
+                            user.role === 'super_admin' || 
+                            user.role === 'platform_admin' ||
+                            user.isSuperAdmin === true ||
+                            user.isPlatformAdmin === true;
+    
+    if (isPlatformAdmin) {
       return next();
     }
 
@@ -123,12 +131,13 @@ function requireGlobalTriggerPermission(permission) {
     }
 
     if (permission === GLOBAL_TRIGGER_PERMISSIONS.READ && 
-        (userPermissions.includes(PERMISSIONS.CONFIG_READ) || user.role === 'admin')) {
+        userPermissions.includes(PERMISSIONS.CONFIG_READ)) {
       return next();
     }
 
     logger.warn('[GlobalTriggers] Permission denied', {
       userId: user.id || user._id,
+      role: user.role,
       required: permission,
       userPermissions
     });

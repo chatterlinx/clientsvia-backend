@@ -44,6 +44,19 @@ const CompanyTriggerSettings = require('../../models/CompanyTriggerSettings');
 const v2Company = require('../../models/v2Company');
 
 // ════════════════════════════════════════════════════════════════════════════════
+// PERMISSION HELPERS
+// ════════════════════════════════════════════════════════════════════════════════
+
+function isPlatformAdmin(user) {
+  if (!user) { return false; }
+  return user.role === 'admin' || 
+         user.role === 'super_admin' || 
+         user.role === 'platform_admin' ||
+         user.isSuperAdmin === true ||
+         user.isPlatformAdmin === true;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 // CANONICALIZATION RULES
 // ════════════════════════════════════════════════════════════════════════════════
 // All identifiers must be normalized at the API boundary to prevent semantic duplicates.
@@ -266,10 +279,10 @@ router.get('/:companyId/triggers',
           companyName: company.companyName,
           availableGroups: groups,
           permissions: {
-            canEditGlobalTriggers: req.user.role === 'super_admin' || req.user.role === 'platform_admin',
+            canEditGlobalTriggers: isPlatformAdmin(req.user),
             canEditLocalTriggers: true,
             canSwitchGroup: true,
-            canCreateGroup: req.user.role === 'super_admin' || req.user.role === 'platform_admin'
+            canCreateGroup: isPlatformAdmin(req.user)
           }
         }
       });
