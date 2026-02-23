@@ -77,188 +77,183 @@
         </div>
       </div>
 
-      <!-- Two Column Layout -->
-      <div class="config-layout">
-        <!-- Left: Configuration Panel -->
-        <div class="config-panel">
-          
-          <!-- Discovery Flow Status -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Discovery Status</h2>
-              <span class="badge badge-success" id="badge-discovery-status">Active</span>
-            </div>
-            <div class="card-body">
-              <p class="text-muted text-sm">
-                Agent 2.0 Discovery is the <strong>only</strong> discovery system. It handles all incoming calls, 
-                captures caller intent, and prepares handoff payloads for Booking Logic.
-              </p>
-              <div class="flex gap-4 mt-4">
-                <div class="stat-box">
-                  <div class="stat-box-label">Trigger Cards</div>
-                  <div class="stat-box-value" id="stat-trigger-cards">—</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-box-label">Clarifiers</div>
-                  <div class="stat-box-value" id="stat-clarifiers">—</div>
-                </div>
-                <div class="stat-box">
-                  <div class="stat-box-label">Vocabulary</div>
-                  <div class="stat-box-value" id="stat-vocabulary">—</div>
-                </div>
+      <!-- Single Column Layout -->
+      <div class="single-column-layout">
+        
+        <!-- Discovery Flow Status -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Discovery Status</h2>
+            <span class="badge badge-success" id="badge-discovery-status">Active</span>
+          </div>
+          <div class="card-body">
+            <p class="text-muted text-sm">
+              Agent 2.0 Discovery is the <strong>only</strong> discovery system. It handles all incoming calls, 
+              captures caller intent, and prepares handoff payloads for Booking Logic.
+            </p>
+            <div class="flex gap-4 mt-4">
+              <div class="stat-box">
+                <div class="stat-box-label">Trigger Cards</div>
+                <div class="stat-box-value" id="stat-trigger-cards">—</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-box-label">Clarifiers</div>
+                <div class="stat-box-value" id="stat-clarifiers">—</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-box-label">Vocabulary</div>
+                <div class="stat-box-value" id="stat-vocabulary">—</div>
               </div>
             </div>
           </div>
-
-          <!-- Greeting Configuration -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Greeting Text</h2>
-            </div>
-            <div class="card-body">
-              <div class="form-group">
-                <label class="form-label">Initial Greeting</label>
-                <textarea class="form-textarea" id="input-greeting-initial" rows="3" placeholder="Thank you for calling [Company]. How can I help you today?"></textarea>
-                <p class="form-hint">Spoken when a new caller connects.</p>
-              </div>
-              <div class="form-group mb-0">
-                <label class="form-label">Return Caller Greeting</label>
-                <textarea class="form-textarea" id="input-greeting-return" rows="3" placeholder="Welcome back! How can I assist you today?"></textarea>
-                <p class="form-hint">Spoken when a known caller returns (if caller ID recognition is enabled).</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Booking Consent Phrases -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Booking Consent Phrases</h2>
-            </div>
-            <div class="card-body">
-              <p class="form-hint mb-4">Phrases that trigger booking handoff when the caller says "yes" to scheduling.</p>
-              <div class="tag-list" id="consent-phrases-list">
-                <!-- Tags will be inserted here -->
-              </div>
-              <div class="tag-input-wrapper">
-                <input type="text" class="form-input" id="input-consent-phrase" placeholder="Add a consent phrase...">
-                <button class="btn btn-secondary" id="btn-add-consent-phrase">Add</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Escalation Phrases -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Escalation Phrases</h2>
-            </div>
-            <div class="card-body">
-              <p class="form-hint mb-4">Phrases that trigger immediate transfer to a human operator.</p>
-              <div class="tag-list" id="escalation-phrases-list">
-                <!-- Tags will be inserted here -->
-              </div>
-              <div class="tag-input-wrapper">
-                <input type="text" class="form-input" id="input-escalation-phrase" placeholder="Add an escalation phrase...">
-                <button class="btn btn-secondary" id="btn-add-escalation-phrase">Add</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Discovery Style -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">Discovery Style</h2>
-            </div>
-            <div class="card-body">
-              <div class="form-group">
-                <label class="form-label">Acknowledgment Word</label>
-                <input type="text" class="form-input max-w-200" id="input-ack-word" placeholder="Ok.">
-                <p class="form-hint">Short word spoken before responses (e.g., "Ok.", "Got it.", "Sure.")</p>
-              </div>
-              <div class="form-group mb-0">
-                <label class="form-label checkbox-label">
-                  <input type="checkbox" id="input-robot-challenge-enabled">
-                  Enable Robot Challenge Response
-                </label>
-                <p class="form-hint">If caller says "are you a robot?", respond with a helpful clarification.</p>
-                <textarea class="form-textarea mt-2" id="input-robot-challenge-line" rows="2" placeholder="Please, I am here to help you! You can speak to me naturally..."></textarea>
-              </div>
-            </div>
-          </div>
-
         </div>
 
-        <!-- Right: Test Turn Panel -->
-        <div class="preview-panel">
-          <div class="test-panel">
-            <div class="test-panel-header">
-              <h3 class="test-panel-title">
-                <span class="status-dot active"></span>
-                Live Test Turn
-              </h3>
+        <!-- Greeting Configuration -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Greeting Text</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Initial Greeting</label>
+              <textarea class="form-textarea" id="input-greeting-initial" rows="3" placeholder="Thank you for calling [Company]. How can I help you today?"></textarea>
+              <p class="form-hint">Spoken when a new caller connects.</p>
             </div>
-            <div class="test-panel-body">
-              <div class="test-input-group">
-                <input type="text" class="form-input" id="test-input" placeholder="Type what the caller says...">
-                <button class="btn btn-primary" id="btn-test-turn">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M13.5 8L3 13V3L13.5 8Z" fill="currentColor"/>
-                  </svg>
-                  Send
-                </button>
-              </div>
-              
-              <div class="test-output">
-                <div class="test-output-label">Agent Reply</div>
-                <div class="test-output-text empty" id="test-output-reply">Send a message to test the discovery flow...</div>
-              </div>
-
-              <div class="mt-4">
-                <div class="test-output-label">Session State</div>
-                <div class="json-viewer mt-2">
-                  <div class="json-viewer-content json-viewer-content-sm">
-                    <pre id="test-session-state">{ "mode": "DISCOVERY", "turn": 0 }</pre>
-                  </div>
-                </div>
-              </div>
-
-              <div class="mt-4">
-                <div class="test-output-label">Handoff Payload Preview</div>
-                <div class="json-viewer mt-2">
-                  <div class="json-viewer-content json-viewer-content-md">
-                    <pre id="test-handoff-payload">No handoff triggered yet...</pre>
-                  </div>
-                </div>
-              </div>
-
-              <div class="trace-log">
-                <pre id="test-trace-log">[Trace log will appear here during testing]</pre>
-              </div>
-
-              <div class="flex justify-between mt-4">
-                <button class="btn btn-ghost btn-sm" id="btn-reset-session">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M13 7C13 10.3137 10.3137 13 7 13C3.68629 13 1 10.3137 1 7C1 3.68629 3.68629 1 7 1C9.22222 1 11.1684 2.21309 12.1892 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                    <path d="M10 4H12.5V1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  Reset Session
-                </button>
-                <button class="btn btn-secondary btn-sm" id="btn-generate-payload">
-                  Generate Sample Payload
-                </button>
-              </div>
+            <div class="form-group mb-0">
+              <label class="form-label">Return Caller Greeting</label>
+              <textarea class="form-textarea" id="input-greeting-return" rows="3" placeholder="Welcome back! How can I assist you today?"></textarea>
+              <p class="form-hint">Spoken when a known caller returns (if caller ID recognition is enabled).</p>
             </div>
           </div>
+        </div>
 
-          <!-- Handoff Contract Reference -->
-          <div class="card mt-4">
-            <div class="card-header">
-              <h2 class="card-title">Handoff Contract (AC1)</h2>
+        <!-- Booking Consent Phrases -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Booking Consent Phrases</h2>
+          </div>
+          <div class="card-body">
+            <p class="form-hint mb-4">Phrases that trigger booking handoff when the caller says "yes" to scheduling.</p>
+            <div class="tag-list" id="consent-phrases-list">
+              <!-- Tags will be inserted here -->
             </div>
-            <div class="card-body">
-              <p class="form-hint">When booking consent is detected, Agent 2.0 builds this payload and hands off to Booking Logic:</p>
-              <div class="json-viewer mt-4">
-                <div class="json-viewer-content json-viewer-content-lg">
-                  <pre id="handoff-contract-example">{
+            <div class="tag-input-wrapper">
+              <input type="text" class="form-input" id="input-consent-phrase" placeholder="Add a consent phrase...">
+              <button class="btn btn-secondary" id="btn-add-consent-phrase">Add</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Escalation Phrases -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Escalation Phrases</h2>
+          </div>
+          <div class="card-body">
+            <p class="form-hint mb-4">Phrases that trigger immediate transfer to a human operator.</p>
+            <div class="tag-list" id="escalation-phrases-list">
+              <!-- Tags will be inserted here -->
+            </div>
+            <div class="tag-input-wrapper">
+              <input type="text" class="form-input" id="input-escalation-phrase" placeholder="Add an escalation phrase...">
+              <button class="btn btn-secondary" id="btn-add-escalation-phrase">Add</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Discovery Style -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Discovery Style</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Acknowledgment Word</label>
+              <input type="text" class="form-input max-w-200" id="input-ack-word" placeholder="Ok.">
+              <p class="form-hint">Short word spoken before responses (e.g., "Ok.", "Got it.", "Sure.")</p>
+            </div>
+            <div class="form-group mb-0">
+              <label class="form-label checkbox-label">
+                <input type="checkbox" id="input-robot-challenge-enabled">
+                Enable Robot Challenge Response
+              </label>
+              <p class="form-hint">If caller says "are you a robot?", respond with a helpful clarification.</p>
+              <textarea class="form-textarea mt-2" id="input-robot-challenge-line" rows="2" placeholder="Please, I am here to help you! You can speak to me naturally..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Test Turn Panel -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <span class="status-dot active"></span>
+              Live Test Turn
+            </h2>
+          </div>
+          <div class="card-body">
+            <div class="test-input-group">
+              <input type="text" class="form-input" id="test-input" placeholder="Type what the caller says...">
+              <button class="btn btn-primary" id="btn-test-turn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M13.5 8L3 13V3L13.5 8Z" fill="currentColor"/>
+                </svg>
+                Send
+              </button>
+            </div>
+            
+            <div class="test-output mt-4">
+              <div class="test-output-label">Agent Reply</div>
+              <div class="test-output-text empty" id="test-output-reply">Send a message to test the discovery flow...</div>
+            </div>
+
+            <div class="mt-4">
+              <div class="test-output-label">Session State</div>
+              <div class="json-viewer mt-2">
+                <div class="json-viewer-content json-viewer-content-sm">
+                  <pre id="test-session-state">{ "mode": "DISCOVERY", "turn": 0 }</pre>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <div class="test-output-label">Handoff Payload Preview</div>
+              <div class="json-viewer mt-2">
+                <div class="json-viewer-content json-viewer-content-md">
+                  <pre id="test-handoff-payload">No handoff triggered yet...</pre>
+                </div>
+              </div>
+            </div>
+
+            <div class="trace-log">
+              <pre id="test-trace-log">[Trace log will appear here during testing]</pre>
+            </div>
+
+            <div class="flex justify-between mt-4">
+              <button class="btn btn-ghost btn-sm" id="btn-reset-session">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M13 7C13 10.3137 10.3137 13 7 13C3.68629 13 1 10.3137 1 7C1 3.68629 3.68629 1 7 1C9.22222 1 11.1684 2.21309 12.1892 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M10 4H12.5V1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Reset Session
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-generate-payload">
+                Generate Sample Payload
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Handoff Contract Reference -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">Handoff Contract (AC1)</h2>
+          </div>
+          <div class="card-body">
+            <p class="form-hint">When booking consent is detected, Agent 2.0 builds this payload and hands off to Booking Logic:</p>
+            <div class="json-viewer mt-4">
+              <div class="json-viewer-content json-viewer-content-lg">
+                <pre id="handoff-contract-example">{
   "handoffContractVersion": "AC1",
   "companyId": "...",
   "callSid": "...",
@@ -273,11 +268,11 @@
     "urgency": "routine|urgent|emergency"
   }
 }</pre>
-                </div>
               </div>
             </div>
           </div>
         </div>
+
       </div>
     </main>
 
