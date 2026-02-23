@@ -24,6 +24,7 @@ const logger = require('../../utils/logger');
 const v2Company = require('../../models/v2Company');
 const { authenticateJWT } = require('../../middleware/auth');
 const { requirePermission, PERMISSIONS } = require('../../middleware/rbac');
+const ConfigCacheService = require('../../services/ConfigCacheService');
 
 const MODULE_ID = 'AGENT_CONSOLE_API';
 const VERSION = 'AC1.0';
@@ -517,6 +518,9 @@ router.patch(
       // Invalidate truth cache for this company
       truthCache.delete(companyId);
       
+      // Invalidate Redis cache so runtime sees changes immediately
+      await ConfigCacheService.invalidateAgent2Config(companyId);
+      
       res.json({
         success: true,
         agent2: company.aiAgentSettings.agent2
@@ -619,9 +623,9 @@ router.post(
         });
       }
       
-      const authUrl = GoogleCalendarService.generateAuthUrl(companyId);
+      const authUrl = GoogleCalendarService.generateAuthUrl(companyId, 'agent-console');
       
-      logger.info(`[${MODULE_ID}] Calendar OAuth started`, { companyId });
+      logger.info(`[${MODULE_ID}] Calendar OAuth started`, { companyId, source: 'agent-console' });
       
       res.json({ authUrl });
     } catch (error) {
@@ -648,6 +652,10 @@ router.post(
       
       // Invalidate truth cache
       truthCache.delete(companyId);
+      
+      // Invalidate Redis cache so runtime sees changes immediately
+      await ConfigCacheService.invalidateCalendarStatus(companyId);
+      await ConfigCacheService.invalidateBookingConfig(companyId);
       
       logger.info(`[${MODULE_ID}] Calendar disconnected`, { companyId });
       
@@ -736,6 +744,10 @@ router.post(
       // Invalidate truth cache
       truthCache.delete(companyId);
       
+      // Invalidate Redis cache so runtime sees changes immediately
+      await ConfigCacheService.invalidateCalendarStatus(companyId);
+      await ConfigCacheService.invalidateBookingConfig(companyId);
+      
       logger.info(`[${MODULE_ID}] Calendar selected`, { 
         companyId, 
         calendarId,
@@ -755,6 +767,8 @@ router.post(
  * 
  * Preview available time options for a given date range
  * This is what Booking Logic will consume
+ * 
+ * Returns BOTH UTC and local times to ensure DST correctness
  */
 router.post(
   '/:companyId/calendar/test-availability',
@@ -769,32 +783,55 @@ router.post(
     }
     
     try {
+      // Get company timezone
+      const company = await v2Company.findById(companyId).select('timezone').lean();
+      const timezone = company?.timezone || 'America/New_York';
+      
       const start = new Date(startDate);
       const end = new Date(start);
       end.setDate(end.getDate() + 7); // Look ahead 7 days
       
       const result = await GoogleCalendarService.findAvailableSlots(companyId, {
-        startDate: start,
-        endDate: end,
+        dayPreference: 'asap',
         durationMinutes: durationMinutes || 60,
         maxSlots: 20
       });
       
-      // Transform to our "time options" format (no "slots" terminology)
-      const availableTimeOptions = (result || []).map(slot => ({
-        start: slot.start,
-        end: slot.end,
-        displayText: slot.displayText || null,
-        duration: durationMinutes || 60
+      // Helper to format local time
+      const formatLocal = (date, tz) => {
+        return new Date(date).toLocaleString('en-US', {
+          timeZone: tz,
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+      };
+      
+      // Transform to our "time options" format with both UTC and local
+      const slots = result.slots || [];
+      const availableTimeOptions = slots.map(slot => ({
+        startUtc: slot.start.toISOString(),
+        endUtc: slot.end.toISOString(),
+        startLocal: formatLocal(slot.start, timezone),
+        endLocal: formatLocal(slot.end, timezone),
+        displayText: slot.display || null,
+        duration: durationMinutes || 60,
+        timezone
       }));
       
       res.json({
         success: true,
+        timezone,
         startDate: start.toISOString(),
         endDate: end.toISOString(),
         durationMinutes: durationMinutes || 60,
         availableTimeOptions,
-        count: availableTimeOptions.length
+        count: availableTimeOptions.length,
+        message: result.message || null,
+        fallback: result.fallback || false
       });
     } catch (error) {
       logger.error(`[${MODULE_ID}] Test availability failed: ${error.message}`);

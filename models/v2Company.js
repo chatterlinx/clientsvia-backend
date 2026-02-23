@@ -434,7 +434,12 @@ const googleCalendarSchema = new mongoose.Schema({
     // Error tracking
     lastError: { type: String, default: null },
     lastErrorAt: { type: Date, default: null },
-    consecutiveErrors: { type: Number, default: 0 }
+    consecutiveErrors: { type: Number, default: 0 },
+    
+    // Token robustness (V89)
+    tokenUpdatedAt: { type: Date, default: null },
+    lastTokenRefreshError: { type: String, default: null },
+    healthy: { type: Boolean, default: true }
 }, { _id: false });
 
 // V2 DELETED: Legacy aiSettingsSchema - replaced by aiAgentSettings system

@@ -1350,6 +1350,29 @@ router.post('/voice', async (req, res) => {
     logger.info(`[AI AGENT LOGIC] Using new AI Agent Logic system for company: ${company._id}`);
     
     // ════════════════════════════════════════════════════════════════════════════
+    // 🔥 CONFIG PRE-WARM: Load configs into Redis cache at call start
+    // ════════════════════════════════════════════════════════════════════════════
+    // This eliminates cold-start latency spikes on first turn.
+    // Loads: agent2Config, bookingConfig, calendarStatus, globalFirstNames
+    // ════════════════════════════════════════════════════════════════════════════
+    let prewarmResult = null;
+    try {
+      const ConfigCacheService = require('../services/ConfigCacheService');
+      prewarmResult = await ConfigCacheService.prewarmForCall(company._id.toString());
+      logger.info('[CONFIG PRE-WARM] Complete', {
+        companyId: company._id.toString(),
+        t_total_ms: prewarmResult?.perf?.t_total_ms,
+        cacheHits: prewarmResult?.perf?.cacheHit
+      });
+    } catch (prewarmErr) {
+      // Non-blocking: Log but continue with call
+      logger.warn('[CONFIG PRE-WARM] Failed (non-blocking)', {
+        error: prewarmErr.message,
+        companyId: company._id.toString()
+      });
+    }
+    
+    // ════════════════════════════════════════════════════════════════════════════
     // 📞 CALL CENTER MODULE V2: Customer Recognition
     // ════════════════════════════════════════════════════════════════════════════
     // Identify returning customers for personalized experience

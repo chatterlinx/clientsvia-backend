@@ -122,6 +122,9 @@ async function getOAuth2ClientForCompany(companyId) {
                             'googleCalendar.tokenExpiresAt': tokens.expiry_date 
                                 ? new Date(tokens.expiry_date) 
                                 : null,
+                            'googleCalendar.tokenUpdatedAt': new Date(),
+                            'googleCalendar.lastTokenRefreshError': null,
+                            'googleCalendar.healthy': true,
                             // Only update refresh token if a new one was provided
                             ...(tokens.refresh_token && { 
                                 'googleCalendar.refreshToken': tokens.refresh_token 
@@ -134,6 +137,16 @@ async function getOAuth2ClientForCompany(companyId) {
                     companyId, 
                     error: err.message 
                 });
+                // Mark as unhealthy on save failure
+                await v2Company.updateOne(
+                    { _id: companyId },
+                    {
+                        $set: {
+                            'googleCalendar.lastTokenRefreshError': err.message,
+                            'googleCalendar.healthy': false
+                        }
+                    }
+                ).catch(() => {}); // Ignore secondary failures
             }
         });
         
@@ -147,6 +160,48 @@ async function getOAuth2ClientForCompany(companyId) {
     }
 }
 
+/**
+ * Handle token errors - mark calendar as unhealthy
+ * Called when API requests fail with 401 or invalid_grant
+ */
+async function handleTokenError(companyId, err) {
+    logger.error('[GOOGLE CALENDAR] ❌ Token error - marking unhealthy', {
+        companyId,
+        error: err.message,
+        code: err.code
+    });
+    
+    try {
+        await v2Company.updateOne(
+            { _id: companyId },
+            {
+                $set: {
+                    'googleCalendar.healthy': false,
+                    'googleCalendar.lastTokenRefreshError': err.message,
+                    'googleCalendar.lastError': `Token error: ${err.message}`,
+                    'googleCalendar.lastErrorAt': new Date()
+                },
+                $inc: { 'googleCalendar.consecutiveErrors': 1 }
+            }
+        );
+        
+        // If too many consecutive errors, mark as disconnected
+        const company = await v2Company.findById(companyId).select('googleCalendar.consecutiveErrors').lean();
+        if (company?.googleCalendar?.consecutiveErrors >= 5) {
+            logger.error('[GOOGLE CALENDAR] ❌ Too many errors - marking disconnected', { companyId });
+            await v2Company.updateOne(
+                { _id: companyId },
+                { $set: { 'googleCalendar.connected': false } }
+            );
+        }
+    } catch (updateErr) {
+        logger.error('[GOOGLE CALENDAR] ❌ Failed to update token error state', {
+            companyId,
+            error: updateErr.message
+        });
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // OAUTH2 FLOW
 // ════════════════════════════════════════════════════════════════════════════════
@@ -154,18 +209,22 @@ async function getOAuth2ClientForCompany(companyId) {
 /**
  * Generate OAuth2 authorization URL for company to connect calendar
  * @param {string} companyId - Company ID (passed as state parameter)
+ * @param {string} source - Source of the request ('agent-console' or 'profile')
  * @returns {string} Authorization URL
  */
-function generateAuthUrl(companyId) {
+function generateAuthUrl(companyId, source = 'agent-console') {
     const oauth2Client = createOAuth2Client();
     if (!oauth2Client) {
         return null;
     }
     
+    // State format: companyId:source (e.g., "abc123:agent-console")
+    const stateParam = source ? `${companyId}:${source}` : companyId;
+    
     return oauth2Client.generateAuthUrl({
         access_type: 'offline', // Required for refresh token
         scope: SCOPES,
-        state: companyId, // Pass company ID to callback
+        state: stateParam, // Pass company ID and source to callback
         prompt: 'consent' // Always show consent screen to get refresh token
     });
 }
