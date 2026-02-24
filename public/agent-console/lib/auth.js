@@ -167,7 +167,13 @@ const AgentConsoleAuth = (function() {
     if (!response.ok) {
       const errorMsg = data?.error || data?.message || `HTTP ${response.status}`;
       console.error(`[AgentConsoleAuth] API error: ${response.status}`, errorMsg);
-      throw new Error(errorMsg);
+      // Include full response data for debugging (e.g., laneFailures from truth export)
+      if (data?.laneFailures) {
+        console.error('[AgentConsoleAuth] Lane failures:', data.laneFailures);
+      }
+      const error = new Error(errorMsg);
+      error.data = data; // Attach full response data
+      throw error;
     }
 
     return data;

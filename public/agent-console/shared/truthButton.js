@@ -285,18 +285,34 @@
       }
       
     } catch (error) {
-      console.error('[TRUTH EXPORT] ❌ Export failed', {
+      // Log detailed error info including lane failures if available
+      const errorDetails = {
         error: error.message,
         stack: error.stack,
         companyId,
         page: window.location.pathname
-      });
+      };
+      
+      // Check for lane failures (from improved API error response)
+      if (error.data?.laneFailures) {
+        errorDetails.laneFailures = error.data.laneFailures;
+        console.error('[TRUTH EXPORT] ❌ Lane failures detected:', error.data.laneFailures);
+      }
+      
+      console.error('[TRUTH EXPORT] ❌ Export failed', errorDetails);
+      
+      // Build user-friendly error message
+      let userMessage = error.message || 'Could not generate Truth JSON';
+      if (error.data?.laneFailures?.length > 0) {
+        const failedLanes = error.data.laneFailures.map(f => `${f.lane}: ${f.error}`).join('; ');
+        userMessage = `Lane errors: ${failedLanes}`;
+      }
       
       // Visual feedback
       if (typeof showToast === 'function') {
-        showToast('error', 'Export Failed', error.message || 'Could not generate Truth JSON');
+        showToast('error', 'Export Failed', userMessage);
       } else {
-        alert('Truth export failed: ' + error.message);
+        alert('Truth export failed: ' + userMessage);
       }
       
     } finally {

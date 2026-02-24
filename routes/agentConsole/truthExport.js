@@ -401,7 +401,8 @@ async function buildRuntimeTruth(companyId) {
   
   logger.debug(`[${MODULE_ID}] Building Runtime Truth`, { companyId });
   
-  const company = await v2Company.findById(companyId);
+  // Use .lean() to get plain JS object (avoids Mongoose document circular refs)
+  const company = await v2Company.findById(companyId).lean();
   
   if (!company) {
     throw new Error(`Company ${companyId} not found`);
@@ -492,21 +493,36 @@ async function buildRuntimeTruth(companyId) {
 /**
  * ───────────────────────────────────────────────────────────────────────────
  * SORT KEYS DEEP (for deterministic JSON)
+ * Handles circular references and Mongoose documents safely
  * ───────────────────────────────────────────────────────────────────────────
  */
-function sortKeysDeep(obj) {
+function sortKeysDeep(obj, seen = new WeakSet()) {
+  // Handle primitives and null
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  
+  // Handle circular references
+  if (seen.has(obj)) {
+    return '[Circular]';
+  }
+  seen.add(obj);
+  
+  // Handle Date objects
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+  
+  // Handle arrays
   if (Array.isArray(obj)) {
-    return obj.map(sortKeysDeep);
+    return obj.map(item => sortKeysDeep(item, seen));
   }
   
-  if (obj !== null && typeof obj === 'object') {
-    return Object.keys(obj).sort().reduce((sorted, key) => {
-      sorted[key] = sortKeysDeep(obj[key]);
-      return sorted;
-    }, {});
-  }
-  
-  return obj;
+  // Handle plain objects
+  return Object.keys(obj).sort().reduce((sorted, key) => {
+    sorted[key] = sortKeysDeep(obj[key], seen);
+    return sorted;
+  }, {});
 }
 
 /**
@@ -565,7 +581,8 @@ async function buildComplianceTruth(companyId) {
   
   logger.debug(`[${MODULE_ID}] Building Compliance Truth`, { companyId });
   
-  const company = await v2Company.findById(companyId);
+  // Use .lean() to get plain JS object (avoids Mongoose document circular refs)
+  const company = await v2Company.findById(companyId).lean();
   
   // Build UI coverage report
   const uiCoverageReport = await checkUiCoverage(company);
