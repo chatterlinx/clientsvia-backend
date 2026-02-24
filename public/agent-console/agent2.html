@@ -608,10 +608,11 @@
           <label class="form-label">Match Type</label>
           <select class="form-input" id="input-rule-match-type">
             <option value="EXACT">EXACT - Exact phrase match</option>
-            <option value="CONTAINS">CONTAINS - Partial match</option>
+            <option value="FUZZY">FUZZY - Similar words (hi matches hey, hello, hiya)</option>
+            <option value="CONTAINS">CONTAINS - Input contains trigger</option>
             <option value="REGEX">REGEX - Advanced pattern (use carefully)</option>
           </select>
-          <p class="form-hint">How the greeting triggers should be matched against caller input</p>
+          <p class="form-hint">FUZZY is recommended for greetings - handles variations like "hi", "hey", "hiya" automatically</p>
         </div>
         
         <!-- Triggers -->

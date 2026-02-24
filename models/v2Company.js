@@ -4205,7 +4205,7 @@ const companySchema = new mongoose.Schema({
                         },
                         matchType: { 
                             type: String, 
-                            enum: ['EXACT', 'CONTAINS', 'REGEX'], 
+                            enum: ['EXACT', 'FUZZY', 'CONTAINS', 'REGEX'], 
                             default: 'EXACT' 
                         },
                         triggers: { 

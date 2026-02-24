@@ -104,11 +104,97 @@ function containsIntentWord(text, intentWords) {
 }
 
 /**
+ * Calculate Levenshtein edit distance between two strings.
+ * Used for fuzzy matching.
+ */
+function levenshteinDistance(a, b) {
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Common greeting variations - maps canonical triggers to acceptable variants.
+ * Used for FUZZY matching to handle "hi" → "hey", "hiya", "howdy", etc.
+ */
+const GREETING_VARIANTS = {
+  'hi': ['hey', 'hiya', 'heya', 'yo', 'hii', 'hiii', 'hiiii', 'sup', 'wassup', 'whats up'],
+  'hello': ['helo', 'helloo', 'hellooo', 'hullo', 'hallo', 'ello', 'allo'],
+  'hey': ['hi', 'hiya', 'heya', 'hay', 'heyy', 'heyyy'],
+  'good morning': ['morning', 'mornin', 'good mornin', 'gm', 'g morning'],
+  'good afternoon': ['afternoon', 'good aft', 'g afternoon'],
+  'good evening': ['evening', 'evenin', 'good evenin', 'g evening'],
+  'howdy': ['howdee', 'howdie', 'hi', 'hey'],
+  'greetings': ['greeting', 'greets'],
+  'whats up': ['wassup', 'wazzup', 'sup', 'what up', 'whatsup']
+};
+
+/**
+ * Check if two words are fuzzy matches.
+ * Uses Levenshtein distance and known greeting variants.
+ * 
+ * @param {string} input - The input word (normalized)
+ * @param {string} trigger - The trigger word (normalized)
+ * @returns {boolean} True if fuzzy match
+ */
+function isFuzzyMatch(input, trigger) {
+  // Exact match
+  if (input === trigger) return true;
+  
+  // Check if input is a known variant of the trigger
+  const variants = GREETING_VARIANTS[trigger];
+  if (variants && variants.includes(input)) return true;
+  
+  // Check if trigger is a known variant of input (reverse lookup)
+  for (const [canonical, variantList] of Object.entries(GREETING_VARIANTS)) {
+    if (variantList.includes(trigger) && (input === canonical || variantList.includes(input))) {
+      return true;
+    }
+  }
+  
+  // Levenshtein distance: allow 1 edit for short words, 2 for longer
+  const maxDistance = trigger.length <= 3 ? 1 : 2;
+  const distance = levenshteinDistance(input, trigger);
+  if (distance <= maxDistance) return true;
+  
+  // Input contains trigger (handles "hiiii" → "hi")
+  if (input.includes(trigger) || trigger.includes(input)) {
+    // But only if the lengths are reasonably close
+    const lengthRatio = Math.min(input.length, trigger.length) / Math.max(input.length, trigger.length);
+    if (lengthRatio >= 0.5) return true;
+  }
+  
+  return false;
+}
+
+/**
  * Check if input matches a greeting rule.
  *
  * @param {string} input - Normalized caller input
  * @param {Object} rule - Greeting rule
- * @returns {{ matched: boolean, trigger: string|null }}
+ * @returns {{ matched: boolean, trigger: string|null, matchMethod: string|null }}
  */
 function matchesRule(input, rule) {
   const inputNorm = normalizeText(input);
@@ -122,19 +208,47 @@ function matchesRule(input, rule) {
     if (matchType === 'EXACT' || matchType === MATCH_MODES.EXACT) {
       // EXACT: Input must exactly equal the trigger (after normalization)
       if (inputNorm === trigger) {
-        return { matched: true, trigger };
+        return { matched: true, trigger, matchMethod: 'EXACT' };
       }
-    } else if (matchType === 'FUZZY' || matchType === MATCH_MODES.FUZZY || matchType === 'CONTAINS') {
-      // FUZZY/CONTAINS: Input must contain the trigger as a substring
+    } else if (matchType === 'FUZZY' || matchType === MATCH_MODES.FUZZY) {
+      // FUZZY: Smart matching using variants and Levenshtein distance
+      // For multi-word inputs, check each word against trigger
+      const inputWords = inputNorm.split(/\s+/).filter(w => w.length > 0);
+      const triggerWords = trigger.split(/\s+/).filter(w => w.length > 0);
+      
+      if (triggerWords.length === 1) {
+        // Single-word trigger: check if any input word fuzzy-matches
+        for (const inputWord of inputWords) {
+          if (isFuzzyMatch(inputWord, triggerWords[0])) {
+            return { matched: true, trigger, matchMethod: 'FUZZY' };
+          }
+        }
+      } else {
+        // Multi-word trigger: all trigger words must fuzzy-match input words in order
+        let matchCount = 0;
+        for (const triggerWord of triggerWords) {
+          for (const inputWord of inputWords) {
+            if (isFuzzyMatch(inputWord, triggerWord)) {
+              matchCount++;
+              break;
+            }
+          }
+        }
+        if (matchCount === triggerWords.length) {
+          return { matched: true, trigger, matchMethod: 'FUZZY' };
+        }
+      }
+    } else if (matchType === 'CONTAINS') {
+      // CONTAINS: Input must contain the trigger as a substring
       if (inputNorm.includes(trigger)) {
-        return { matched: true, trigger };
+        return { matched: true, trigger, matchMethod: 'CONTAINS' };
       }
     } else if (matchType === 'REGEX') {
       // REGEX: Advanced pattern matching
       try {
         const regex = new RegExp(trigger, 'i');
         if (regex.test(inputNorm)) {
-          return { matched: true, trigger };
+          return { matched: true, trigger, matchMethod: 'REGEX' };
         }
       } catch (err) {
         logger.warn('[Agent2GreetingInterceptor] Invalid regex in rule', { trigger });
@@ -142,7 +256,7 @@ function matchesRule(input, rule) {
     }
   }
 
-  return { matched: false, trigger: null };
+  return { matched: false, trigger: null, matchMethod: null };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
