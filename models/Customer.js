@@ -85,6 +85,15 @@ const customerSchema = new Schema({
     // ═══════════════════════════════════════════════════════════════════════════
     // IDENTIFIERS - How we find this customer across channels
     // ═══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Primary lookup phone (E.164, denormalized from phoneNumbers[0]).
+     * This field is the target of the production unique index
+     * idx_company_phone_unique on (companyId, phone).
+     * It must be set on every create/upsert so inserts never collide on phone=null.
+     */
+    phone: { type: String, trim: true, default: null },
+
     phoneNumbers: [{
         number: { type: String, trim: true, required: true }, // Normalized: +16025551234
         label: { type: String, trim: true, default: 'Primary' }, // Primary, Work, Mobile
@@ -207,7 +216,15 @@ const customerSchema = new Schema({
 // INDEXES for fast lookups
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// Primary lookup: company + phone number
+// Primary lookup by top-level phone — matches the production unique index
+// idx_company_phone_unique that already exists on the customers collection.
+// sparse: true ensures documents with phone: null don't compete with each other.
+customerSchema.index(
+    { companyId: 1, phone: 1 },
+    { name: 'idx_company_phone_unique', unique: true, sparse: true }
+);
+
+// Secondary lookup via phoneNumbers array
 customerSchema.index({ companyId: 1, 'phoneNumbers.number': 1 });
 
 // Email lookup
@@ -352,9 +369,9 @@ customerSchema.statics._enrichForServiceLayer = function(doc, phone) {
                       [firstName, lastName].filter(Boolean).join(' ') ||
                       null;
 
-    // Prefer the phone that was used for the lookup so the service layer
-    // always gets back exactly what it passed in.
+    // Resolve phone: prefer explicit arg, then top-level field, then phoneNumbers array.
     const primaryPhone = phone ||
+        doc.phone ||
         doc.phoneNumbers?.find(p => p.isPrimary)?.number ||
         doc.phoneNumbers?.[0]?.number ||
         null;
@@ -365,7 +382,6 @@ customerSchema.statics._enrichForServiceLayer = function(doc, phone) {
 
     return {
         ...doc,
-        // Flat convenience fields consumed by service layer
         phone:          primaryPhone,
         fullName,
         firstName,
@@ -386,9 +402,10 @@ customerSchema.statics._enrichForServiceLayer = function(doc, phone) {
  * @returns {Promise<Object|null>} Enriched customer object or null
  */
 customerSchema.statics.findByPhone = async function(companyId, normalizedPhone) {
+    // Query the top-level phone field (covered by idx_company_phone_unique).
     const doc = await this.findOne({
         companyId,
-        'phoneNumbers.number': normalizedPhone
+        phone: normalizedPhone
     }).lean();
 
     if (!doc) return null;
@@ -413,10 +430,10 @@ customerSchema.statics.findByPhone = async function(companyId, normalizedPhone) 
  * @returns {Promise<{customer: Object, isNew: boolean}>}
  */
 customerSchema.statics.getOrCreatePlaceholder = async function(companyId, normalizedPhone) {
-    // ── 1. Check for existing customer ───────────────────────────────────────
+    // ── 1. Check for existing customer via the indexed phone field ────────────
     let doc = await this.findOne({
         companyId,
-        'phoneNumbers.number': normalizedPhone
+        phone: normalizedPhone
     }).lean();
 
     if (doc) {
@@ -426,18 +443,23 @@ customerSchema.statics.getOrCreatePlaceholder = async function(companyId, normal
         };
     }
 
-    // ── 2. Create new placeholder customer ───────────────────────────────────
+    // ── 2. Create new placeholder – always set top-level phone ───────────────
+    // The production unique index idx_company_phone_unique is on (companyId, phone).
+    // Omitting phone causes phone=null which collides when a second placeholder
+    // for the same company is inserted. Setting phone=normalizedPhone satisfies
+    // the unique constraint and makes the lookup in step 1 hit the index.
     try {
         const created = await this.create({
             companyId,
+            phone: normalizedPhone,
             phoneNumbers: [{
-                number:    normalizedPhone,
-                label:     'Primary',
-                isPrimary: true,
-                addedAt:   new Date(),
+                number:     normalizedPhone,
+                label:      'Primary',
+                isPrimary:  true,
+                addedAt:    new Date(),
                 lastUsedAt: new Date()
             }],
-            status:        'placeholder',
+            status:         'placeholder',
             firstContactAt: new Date()
         });
 
@@ -447,20 +469,24 @@ customerSchema.statics.getOrCreatePlaceholder = async function(companyId, normal
         };
 
     } catch (err) {
-        // ── 3. Concurrent create race: another request won – fall back to find ──
-        doc = await this.findOne({
-            companyId,
-            'phoneNumbers.number': normalizedPhone
-        }).lean();
+        // ── 3. Race: another concurrent request created this customer first ───
+        // The unique index on (companyId, phone) will produce E11000 in that case.
+        // Fall back to a find so we still return a valid customer object.
+        if (err.code === 11000) {
+            doc = await this.findOne({
+                companyId,
+                phone: normalizedPhone
+            }).lean();
 
-        if (doc) {
-            return {
-                customer: this._enrichForServiceLayer(doc, normalizedPhone),
-                isNew: false
-            };
+            if (doc) {
+                return {
+                    customer: this._enrichForServiceLayer(doc, normalizedPhone),
+                    isNew: false
+                };
+            }
         }
 
-        // Unexpected error – re-throw so the caller can log/handle it.
+        // Unexpected error – re-throw so the caller can log it.
         throw err;
     }
 };
