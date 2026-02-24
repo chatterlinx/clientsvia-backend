@@ -54,7 +54,7 @@
     API_ENDPOINT: '/api/agent-console/truth/export',
     BUTTON_ID: 'btn-truth-export',
     EXISTING_BUTTON_ID: 'btn-download-truth', // Legacy button to replace
-    INCLUDE_CONTENTS: true,
+    INCLUDE_CONTENTS: false,
     INCLUDE_BACKEND: true,
     
     // Mount point cascade (tries in order)
@@ -235,8 +235,10 @@
       const truth = await AgentConsoleAuth.apiFetch(url);
       const fetchTime = Date.now() - startTime;
 
-      // Verify embedded content integrity (sha256 must match contentBase64)
-      await verifyEmbeddedContentIntegrity(truth);
+      // Verify embedded content integrity only for debug/full-content exports
+      if (CONFIG.INCLUDE_CONTENTS) {
+        await verifyEmbeddedContentIntegrity(truth);
+      }
       
       // Validate truth structure
       if (!truth.truthVersion) {

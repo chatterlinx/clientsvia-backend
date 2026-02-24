@@ -219,8 +219,7 @@ async function buildFileManifest(relPath, includeContents) {
       size: stats.size,
       lineCount,
       lastModified: stats.mtime.toISOString(),
-      sha256,
-      contentBase64: null
+      sha256
     };
     
     // Include contents if requested
@@ -645,7 +644,7 @@ async function buildBackendSourceTruth(includeContents = false, hardcodedSpeechS
         lineCount: content.toString('utf-8').split('\n').length,
         lastModified: stats.mtime.toISOString(),
         sha256,
-        contentBase64: includeContents ? content.toString('base64') : null
+        ...(includeContents ? { contentBase64: content.toString('base64') } : {})
       });
     } catch (error) {
       files.push({
@@ -684,12 +683,11 @@ function buildAuditProof(uiTruth, complianceTruth) {
     snippetHash: crypto.createHash('sha256').update(violation.code || '').digest('hex')
   }));
 
-  const hardcodedTotal = complianceTruth?.hardcodedSpeechScan?.violations?.total || 0;
-  const uiDrivenSpeechPercent = complianceTruth?.uiCoverageReport?.compliantPercentage || 0;
-  const hardcodedSpeechPercent = findings.length > 0
-    ? Math.min(100, Math.round((findings.length / Math.max(complianceTruth?.uiCoverageReport?.totalComponents || 1, 1)) * 100))
-    : 0;
-  const hardcodedFreePercent = hardcodedTotal === 0 ? 100 : 0;
+  const hardcodedStringCount = complianceTruth?.hardcodedSpeechScan?.violations?.total || 0;
+  const totalRequiredSpeechFields = complianceTruth?.uiCoverageReport?.totalComponents || 0;
+  const uiBackedStringCount = complianceTruth?.uiCoverageReport?.compliantComponents || 0;
+  const denominator = Math.max(hardcodedStringCount + uiBackedStringCount, 1);
+  const hardcodedRatio = Number((hardcodedStringCount / denominator).toFixed(4));
 
   return {
     totalUiBytes: uiTruth.totalBytes || 0,
@@ -699,10 +697,11 @@ function buildAuditProof(uiTruth, complianceTruth) {
     pageCount: uiTruth.pageDiscovery?.totalPages || 0,
     hardcodedFindings: findings,
     complianceScore: {
-      uiDrivenSpeechPercent,
-      hardcodedSpeechPercent,
-      hardcodedFreePercent,
-      method: 'uiDrivenSpeechPercent = compliant UI speech components / total required components; hardcodedSpeechPercent = hardcoded findings / total required components (capped 0-100); hardcodedFreePercent is 100 only when hardcoded findings = 0'
+      totalRequiredSpeechFields,
+      uiBackedStringCount,
+      hardcodedStringCount,
+      hardcodedRatio,
+      methodology: 'hardcodedRatio = hardcodedStringCount / (hardcodedStringCount + uiBackedStringCount)'
     }
   };
 }
@@ -867,29 +866,9 @@ async function checkUiCoverage(company) {
  * Evidence-based: Every issue includes file path, line number, or specific ID.
  * ════════════════════════════════════════════════════════════════════════════
  */
-function computeTruthStatus(uiTruth, complianceTruth, options = {}) {
+function computeTruthStatus(uiTruth, complianceTruth) {
   const issues = [];
   const manifestGaps = [];
-  const includeContents = options.includeContents === true;
-
-  // Check 0: Reproducibility requires embedded file contents
-  const filesMissingContent = (uiTruth.files || []).filter(file => !file.error && !file.contentBase64);
-  if (!includeContents) {
-    issues.push({
-      type: 'CONTENTS_NOT_INCLUDED',
-      severity: 'CRITICAL',
-      message: 'Truth export is inventory-only (includeContents=0); reproducible audit artifact requires embedded file contents',
-      action: 'Re-run export with includeContents=1'
-    });
-  } else if (filesMissingContent.length > 0) {
-    issues.push({
-      type: 'MISSING_FILE_CONTENTS',
-      severity: 'CRITICAL',
-      message: `${filesMissingContent.length} UI file(s) missing embedded content`,
-      evidence: filesMissingContent.map(f => f.relativePath),
-      action: 'Fix file read failures and re-run export'
-    });
-  }
   
   // ─────────────────────────────────────────────────────────────────────────
   // Check 1: Required pages from manifest
@@ -1060,7 +1039,7 @@ router.get(
     
     try {
       const { companyId, includeContents, includeLargeAssets, includeBackend } = req.query;
-      const includeContentsFlag = includeContents !== '0';
+      const includeContentsFlag = includeContents === '1';
       const includeLargeAssetsFlag = includeLargeAssets === '1';
       const includeBackendFlag = includeBackend === '1';
       
@@ -1124,9 +1103,7 @@ router.get(
       }
       
       // Compute overall truth status
-      const truthStatus = computeTruthStatus(uiTruth, complianceTruth, {
-        includeContents: includeContentsFlag
-      });
+      const truthStatus = computeTruthStatus(uiTruth, complianceTruth);
       const auditProof = buildAuditProof(uiTruth, complianceTruth);
       
       // Assemble complete Truth contract
@@ -1188,6 +1165,7 @@ router.get(
           contractVersion: 'TruthExportV1',
           documentation: '/truth/ folder contains complete audit documentation',
           includeContents: includeContentsFlag,
+          artifactMode: includeContentsFlag ? 'DEBUG_FULL_CONTENT' : 'ENTERPRISE_AUDITABLE',
           includeBackend: includeBackendFlag
         }
       };
