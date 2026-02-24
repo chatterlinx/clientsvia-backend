@@ -784,20 +784,31 @@
     const sortedRules = [...rules].sort((a, b) => (b.priority || 50) - (a.priority || 50));
     
     const rowsHtml = sortedRules.map(rule => {
-      console.log('[Greetings] Rendering rule:', rule);
+      console.log('[Greetings] Rendering rule - ALL FIELDS:', JSON.stringify(rule, null, 2));
+      console.log('[Greetings] Rule keys:', Object.keys(rule));
+      
       const isEnabled = rule.enabled !== false;
       const hasAudio = Boolean(rule.audioUrl);
       const matchBadgeColor = rule.matchType === 'EXACT' ? '#16a34a' : (rule.matchType === 'CONTAINS' ? '#3b82f6' : '#a855f7');
       
       const triggersDisplay = (rule.triggers || []).join(', ') || '—';
-      const responseDisplay = rule.response || '—';
-      console.log('[Greetings] Rule response field:', { response: rule.response, responseDisplay });
+      // Check both new and old field names
+      const responseDisplay = rule.response || rule.responseText || '—';
+      const actualRuleId = rule.ruleId || rule.id || `rule-${Date.now()}`;
+      
+      console.log('[Greetings] Rule fields:', { 
+        ruleId: rule.ruleId, 
+        id: rule.id,
+        response: rule.response,
+        responseText: rule.responseText,
+        responseDisplay 
+      });
       
       return `
         <div style="display: grid; grid-template-columns: 50px 60px 80px 1fr 1fr 100px 80px; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; align-items: center; ${!isEnabled ? 'opacity: 0.5;' : ''}">
           <div>
             <label class="toggle-switch" style="margin: 0; transform: scale(0.8);">
-              <input type="checkbox" class="toggle-rule-enabled" data-rule-id="${rule.ruleId}" ${isEnabled ? 'checked' : ''}>
+              <input type="checkbox" class="toggle-rule-enabled" data-rule-id="${actualRuleId}" ${isEnabled ? 'checked' : ''}>
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -820,12 +831,12 @@
             }
           </div>
           <div style="display: flex; gap: 4px; justify-content: flex-end;">
-            <button class="btn btn-ghost btn-icon btn-edit-rule" data-rule-id="${rule.ruleId}" title="Edit">
+            <button class="btn btn-ghost btn-icon btn-edit-rule" data-rule-id="${actualRuleId}" title="Edit">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M11.333 2A1.886 1.886 0 0 1 14 4.667l-9 9-3.667 1 1-3.667 9-9Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </button>
-            <button class="btn btn-ghost btn-icon btn-delete-rule" data-rule-id="${rule.ruleId}" title="Delete">
+            <button class="btn btn-ghost btn-icon btn-delete-rule" data-rule-id="${actualRuleId}" title="Delete">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 0 1 1.334-1.334h2.666a1.333 1.333 0 0 1 1.334 1.334V4m2 0v9.333a1.333 1.333 0 0 1-1.334 1.334H4.667a1.333 1.333 0 0 1-1.334-1.334V4h9.334Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -1080,18 +1091,24 @@
    */
   function handleEditRule(e) {
     const ruleId = e.currentTarget.dataset.ruleId;
-    const rule = state.greetings.interceptor.rules.find(r => r.ruleId === ruleId);
+    const rule = state.greetings.interceptor.rules.find(r => (r.ruleId || r.id) === ruleId);
     
-    if (!rule) return;
+    console.log('[Greetings] Edit rule:', { ruleId, found: !!rule, rule });
+    
+    if (!rule) {
+      showToast('error', 'Rule Not Found', 'Could not find rule to edit.');
+      return;
+    }
     
     state.currentGreetingRule = rule;
     
     DOM.greetingRuleModalTitle.textContent = 'Edit Greeting Rule';
-    DOM.inputRuleIdEdit.value = rule.ruleId;
+    DOM.inputRuleIdEdit.value = rule.ruleId || rule.id || '';
     DOM.inputRulePriority.value = rule.priority || 50;
     DOM.inputRuleMatchType.value = rule.matchType || 'EXACT';
     DOM.inputRuleTriggers.value = (rule.triggers || []).join(', ');
-    DOM.inputRuleResponse.value = rule.response || '';
+    // Support both new and old field names
+    DOM.inputRuleResponse.value = rule.response || rule.responseText || '';
     DOM.inputRuleAudio.value = rule.audioUrl || '';
     DOM.btnPlayRuleAudio.style.display = rule.audioUrl ? 'block' : 'none';
     DOM.ruleAudioStatus.textContent = rule.audioUrl ? 'Audio ready' : 'No audio yet';
@@ -1193,6 +1210,15 @@
     const ruleId = e.target.dataset.ruleId;
     const enabled = e.target.checked;
     
+    console.log('[Greetings] Toggle rule:', { ruleId, enabled });
+    
+    if (!ruleId || ruleId === 'undefined') {
+      console.error('[Greetings] Invalid ruleId for toggle');
+      e.target.checked = !enabled;
+      showToast('error', 'Invalid Rule', 'Rule ID is missing. Please reload the page.');
+      return;
+    }
+    
     try {
       const response = await AgentConsoleAuth.apiFetch(
         `/api/admin/agent2/${state.companyId}/greetings/rules/${ruleId}`,
@@ -1203,7 +1229,7 @@
       );
       
       if (response.success) {
-        const ruleIndex = state.greetings.interceptor.rules.findIndex(r => r.ruleId === ruleId);
+        const ruleIndex = state.greetings.interceptor.rules.findIndex(r => (r.ruleId || r.id) === ruleId);
         if (ruleIndex !== -1) {
           state.greetings.interceptor.rules[ruleIndex] = response.data;
         }
