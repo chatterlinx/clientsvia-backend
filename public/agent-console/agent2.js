@@ -56,7 +56,29 @@
       callerName: null,
       intent: null
     },
-    isDirty: false
+    isDirty: false,
+    
+    // ═══════════════════════════════════════════════════════════════
+    // 🎙️ GREETINGS STATE (NEW - Feb 2026)
+    // ═══════════════════════════════════════════════════════════════
+    greetings: {
+      callStart: {
+        enabled: true,
+        text: '',
+        audioUrl: null
+      },
+      interceptor: {
+        enabled: true,
+        shortOnlyGate: {
+          maxWords: 2,
+          blockIfIntentWords: true
+        },
+        intentWords: [],
+        rules: []
+      }
+    },
+    currentGreetingRule: null,
+    currentAudioPlayer: null
   };
 
   /* --------------------------------------------------------------------------
@@ -78,9 +100,47 @@
     statVocabulary: document.getElementById('stat-vocabulary'),
     badgeDiscoveryStatus: document.getElementById('badge-discovery-status'),
     
-    // Greeting
+    // Legacy Greeting (old return caller system - kept for backward compatibility)
     inputGreetingInitial: document.getElementById('input-greeting-initial'),
     inputGreetingReturn: document.getElementById('input-greeting-return'),
+    
+    // ═══════════════════════════════════════════════════════════════
+    // 🎙️ GREETINGS SYSTEM (NEW - Feb 2026)
+    // ═══════════════════════════════════════════════════════════════
+    
+    // Call Start Greeting
+    toggleCallStartEnabled: document.getElementById('toggle-call-start-enabled'),
+    inputCallStartText: document.getElementById('input-call-start-text'),
+    inputCallStartAudio: document.getElementById('input-call-start-audio'),
+    btnPlayCallStartAudio: document.getElementById('btn-play-call-start-audio'),
+    btnGenerateCallStartAudio: document.getElementById('btn-generate-call-start-audio'),
+    callStartAudioStatus: document.getElementById('call-start-audio-status'),
+    linkElevenLabsSetupCallStart: document.getElementById('link-elevenlabs-setup-callstart'),
+    
+    // Greeting Interceptor
+    toggleInterceptorEnabled: document.getElementById('toggle-interceptor-enabled'),
+    inputMaxWords: document.getElementById('input-max-words'),
+    toggleBlockIntentWords: document.getElementById('toggle-block-intent-words'),
+    inputIntentWords: document.getElementById('input-intent-words'),
+    btnSeedGreetings: document.getElementById('btn-seed-greetings'),
+    greetingRulesList: document.getElementById('greeting-rules-list'),
+    btnAddGreetingRule: document.getElementById('btn-add-greeting-rule'),
+    
+    // Greeting Rule Modal
+    modalGreetingRule: document.getElementById('modal-greeting-rule'),
+    greetingRuleModalTitle: document.getElementById('greeting-rule-modal-title'),
+    btnCloseGreetingRuleModal: document.getElementById('btn-close-greeting-rule-modal'),
+    inputRuleIdEdit: document.getElementById('input-rule-id-edit'),
+    inputRulePriority: document.getElementById('input-rule-priority'),
+    inputRuleMatchType: document.getElementById('input-rule-match-type'),
+    inputRuleTriggers: document.getElementById('input-rule-triggers'),
+    inputRuleResponse: document.getElementById('input-rule-response'),
+    inputRuleAudio: document.getElementById('input-rule-audio'),
+    btnPlayRuleAudio: document.getElementById('btn-play-rule-audio'),
+    btnGenerateRuleAudio: document.getElementById('btn-generate-rule-audio'),
+    ruleAudioStatus: document.getElementById('rule-audio-status'),
+    btnCancelGreetingRule: document.getElementById('btn-cancel-greeting-rule'),
+    btnSaveGreetingRule: document.getElementById('btn-save-greeting-rule'),
     
     // Consent Phrases
     consentPhrasesList: document.getElementById('consent-phrases-list'),
@@ -128,7 +188,9 @@
     }
     
     setupEventListeners();
+    setupGreetingsEventListeners();
     loadConfig();
+    loadGreetings();
   }
 
   function extractCompanyId() {
@@ -590,6 +652,775 @@
         return `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3L18 17H2L10 3Z" stroke="#f59e0b" stroke-width="1.5" stroke-linejoin="round"/><path d="M10 8V11M10 14V14.5" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg>`;
       default:
         return `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="8" stroke="#3b82f6" stroke-width="1.5"/><path d="M10 6V10M10 14V14.5" stroke="#3b82f6" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     🎙️ GREETINGS MANAGEMENT - ENTERPRISE LEVEL (Feb 2026)
+     ══════════════════════════════════════════════════════════════════════════
+     
+     Complete greetings system for Agent 2.0:
+     - Call Start Greeting (outbound, before caller speaks)
+     - Greeting Interceptor (inbound, responds to "hi", "hello", etc.)
+     - Short-Only Gate (prevents hijacking real intent)
+     - Intent Word Blocking (filters business keywords)
+     - Greeting Rules (priority-based matching with audio support)
+     
+     ══════════════════════════════════════════════════════════════════════════ */
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * LOAD GREETINGS CONFIGURATION
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function loadGreetings() {
+    try {
+      const response = await AgentConsoleAuth.apiFetch(`/api/admin/agent2/${state.companyId}/greetings`);
+      
+      if (response.success && response.data) {
+        state.greetings = response.data;
+        renderGreetings();
+      }
+    } catch (error) {
+      console.error('[Greetings] Load failed:', error);
+      showToast('error', 'Load Failed', 'Could not load greetings configuration.');
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * RENDER GREETINGS UI
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function renderGreetings() {
+    // Call Start Greeting
+    if (DOM.toggleCallStartEnabled && state.greetings.callStart) {
+      DOM.toggleCallStartEnabled.checked = state.greetings.callStart.enabled !== false;
+      DOM.inputCallStartText.value = state.greetings.callStart.text || '';
+      DOM.inputCallStartAudio.value = state.greetings.callStart.audioUrl || '';
+      
+      // Show/hide play button based on audio availability
+      if (DOM.btnPlayCallStartAudio) {
+        DOM.btnPlayCallStartAudio.style.display = state.greetings.callStart.audioUrl ? 'block' : 'none';
+      }
+      
+      // Update audio status
+      updateCallStartAudioStatus();
+    }
+    
+    // Greeting Interceptor
+    if (DOM.toggleInterceptorEnabled && state.greetings.interceptor) {
+      DOM.toggleInterceptorEnabled.checked = state.greetings.interceptor.enabled !== false;
+      DOM.inputMaxWords.value = state.greetings.interceptor.shortOnlyGate?.maxWords || 2;
+      DOM.toggleBlockIntentWords.checked = state.greetings.interceptor.shortOnlyGate?.blockIfIntentWords !== false;
+      
+      // Intent words (array to comma-separated string)
+      const intentWords = state.greetings.interceptor.intentWords || [];
+      DOM.inputIntentWords.value = intentWords.join(', ');
+      
+      // Render greeting rules
+      renderGreetingRules();
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * UPDATE CALL START AUDIO STATUS
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function updateCallStartAudioStatus() {
+    if (!DOM.callStartAudioStatus) return;
+    
+    const hasAudio = Boolean(state.greetings.callStart?.audioUrl);
+    const hasText = Boolean(state.greetings.callStart?.text);
+    
+    if (hasAudio) {
+      DOM.callStartAudioStatus.innerHTML = '<span style="color: #16a34a;">✅ Audio ready</span>';
+      if (DOM.btnGenerateCallStartAudio) {
+        DOM.btnGenerateCallStartAudio.textContent = 'Regenerate';
+      }
+    } else if (hasText) {
+      DOM.callStartAudioStatus.innerHTML = '<span style="color: #6b7280;">No audio - will use TTS</span>';
+      if (DOM.btnGenerateCallStartAudio) {
+        DOM.btnGenerateCallStartAudio.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M13.5 3.5L6 11L2.5 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Generate';
+      }
+    } else {
+      DOM.callStartAudioStatus.innerHTML = '<span style="color: #9ca3af;">Enter greeting text first</span>';
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * RENDER GREETING RULES TABLE
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function renderGreetingRules() {
+    if (!DOM.greetingRulesList) return;
+    
+    const rules = state.greetings.interceptor?.rules || [];
+    
+    if (rules.length === 0) {
+      DOM.greetingRulesList.innerHTML = `
+        <div style="padding: 40px 20px; text-align: center; color: #6b7280;">
+          <p>No greeting rules yet. Click "Add Rule" or "Seed From Global" to get started.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Sort by priority (higher first)
+    const sortedRules = [...rules].sort((a, b) => (b.priority || 50) - (a.priority || 50));
+    
+    const rowsHtml = sortedRules.map(rule => {
+      const isEnabled = rule.enabled !== false;
+      const hasAudio = Boolean(rule.audioUrl);
+      const matchBadgeColor = rule.matchType === 'EXACT' ? '#16a34a' : (rule.matchType === 'CONTAINS' ? '#3b82f6' : '#a855f7');
+      
+      const triggersDisplay = (rule.triggers || []).join(', ') || '—';
+      const responseDisplay = rule.response || '—';
+      
+      return `
+        <div style="display: grid; grid-template-columns: 50px 60px 80px 1fr 1fr 100px 80px; gap: 8px; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; align-items: center; ${!isEnabled ? 'opacity: 0.5;' : ''}">
+          <div>
+            <label class="toggle-switch" style="margin: 0; transform: scale(0.8);">
+              <input type="checkbox" class="toggle-rule-enabled" data-rule-id="${rule.ruleId}" ${isEnabled ? 'checked' : ''}>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div style="font-weight: 600; font-size: 0.875rem;">${rule.priority || 50}</div>
+          <div>
+            <span style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; background: ${matchBadgeColor}; color: white;">
+              ${rule.matchType || 'EXACT'}
+            </span>
+          </div>
+          <div style="font-size: 0.875rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(triggersDisplay)}">
+            ${escapeHtml(triggersDisplay)}
+          </div>
+          <div style="font-size: 0.875rem; color: #374151; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(responseDisplay)}">
+            ${escapeHtml(responseDisplay)}
+          </div>
+          <div style="text-align: center;">
+            ${hasAudio 
+              ? '<span style="color: #16a34a; font-size: 0.75rem; font-weight: 600;">✓ Audio</span>' 
+              : '<span style="color: #9ca3af; font-size: 0.75rem;">—</span>'
+            }
+          </div>
+          <div style="display: flex; gap: 4px; justify-content: flex-end;">
+            <button class="btn btn-ghost btn-icon btn-edit-rule" data-rule-id="${rule.ruleId}" title="Edit">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M11.333 2A1.886 1.886 0 0 1 14 4.667l-9 9-3.667 1 1-3.667 9-9Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button class="btn btn-ghost btn-icon btn-delete-rule" data-rule-id="${rule.ruleId}" title="Delete">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 0 1 1.334-1.334h2.666a1.333 1.333 0 0 1 1.334 1.334V4m2 0v9.333a1.333 1.333 0 0 1-1.334 1.334H4.667a1.333 1.333 0 0 1-1.334-1.334V4h9.334Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    DOM.greetingRulesList.innerHTML = rowsHtml;
+    
+    // Attach event listeners
+    DOM.greetingRulesList.querySelectorAll('.toggle-rule-enabled').forEach(toggle => {
+      toggle.addEventListener('change', handleRuleToggle);
+    });
+    
+    DOM.greetingRulesList.querySelectorAll('.btn-edit-rule').forEach(btn => {
+      btn.addEventListener('click', handleEditRule);
+    });
+    
+    DOM.greetingRulesList.querySelectorAll('.btn-delete-rule').forEach(btn => {
+      btn.addEventListener('click', handleDeleteRule);
+    });
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * SAVE CALL START GREETING
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function saveCallStartGreeting() {
+    try {
+      const enabled = DOM.toggleCallStartEnabled.checked;
+      const text = DOM.inputCallStartText.value.trim();
+      
+      const response = await AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/${state.companyId}/greetings/call-start`,
+        {
+          method: 'PUT',
+          body: { enabled, text }
+        }
+      );
+      
+      if (response.success) {
+        state.greetings.callStart = response.data;
+        
+        if (response.audioInvalidated) {
+          showToast('warning', 'Audio Invalidated', 'Text changed — please regenerate audio to match new content.');
+          DOM.inputCallStartAudio.value = '';
+          DOM.btnPlayCallStartAudio.style.display = 'none';
+        } else {
+          showToast('success', 'Saved', 'Call start greeting updated successfully.');
+        }
+        
+        updateCallStartAudioStatus();
+      }
+    } catch (error) {
+      console.error('[Greetings] Save call start failed:', error);
+      showToast('error', 'Save Failed', error.message || 'Could not save call start greeting.');
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * GENERATE CALL START AUDIO
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function generateCallStartAudio() {
+    const text = DOM.inputCallStartText.value.trim();
+    
+    if (!text) {
+      showToast('error', 'Text Required', 'Enter greeting text first');
+      return;
+    }
+    
+    const btn = DOM.btnGenerateCallStartAudio;
+    const originalHtml = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    DOM.callStartAudioStatus.innerHTML = '<span style="color: #3b82f6;">Generating audio with your ElevenLabs voice...</span>';
+    
+    try {
+      const response = await AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/${state.companyId}/greetings/call-start/audio`,
+        {
+          method: 'POST',
+          body: { text }
+        }
+      );
+      
+      if (response.success && response.audioUrl) {
+        state.greetings.callStart.audioUrl = response.audioUrl;
+        DOM.inputCallStartAudio.value = response.audioUrl;
+        DOM.btnPlayCallStartAudio.style.display = 'block';
+        btn.textContent = 'Regenerate';
+        DOM.callStartAudioStatus.innerHTML = '<span style="color: #16a34a;">✅ Audio generated! Click Save Changes to keep it.</span>';
+        
+        showToast('success', 'Audio Generated', response.cached ? 'Using cached audio' : 'Audio created with your ElevenLabs voice');
+      }
+    } catch (error) {
+      console.error('[Greetings] Audio generation failed:', error);
+      btn.innerHTML = originalHtml;
+      
+      const errorMsg = error.message || 'Generation failed';
+      const hint = errorMsg.includes('voice') 
+        ? 'Configure your ElevenLabs voice in Company Profile first.'
+        : 'Could not generate audio.';
+      DOM.callStartAudioStatus.innerHTML = `<span style="color: #dc2626;">❌ ${errorMsg}</span> ${hint}`;
+      
+      showToast('error', 'Generation Failed', error.message || 'Could not generate audio');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * PLAY CALL START AUDIO
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function playCallStartAudio() {
+    let audioUrl = DOM.inputCallStartAudio.value.trim();
+    
+    if (!audioUrl) {
+      showToast('error', 'No Audio', 'Generate audio first');
+      return;
+    }
+    
+    // Stop any currently playing audio
+    if (state.currentAudioPlayer) {
+      state.currentAudioPlayer.pause();
+      state.currentAudioPlayer = null;
+      DOM.btnPlayCallStartAudio.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M4 3L12 8L4 13V3Z" fill="currentColor"/></svg>Play';
+      return;
+    }
+    
+    // Add cache-busting parameter
+    const cacheBuster = `_cb=${Date.now()}`;
+    audioUrl = audioUrl.includes('?') ? `${audioUrl}&${cacheBuster}` : `${audioUrl}?${cacheBuster}`;
+    
+    state.currentAudioPlayer = new Audio(audioUrl);
+    DOM.btnPlayCallStartAudio.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><rect x="4" y="3" width="3" height="10" fill="currentColor"/><rect x="9" y="3" width="3" height="10" fill="currentColor"/></svg>Stop';
+    
+    state.currentAudioPlayer.onended = () => {
+      state.currentAudioPlayer = null;
+      DOM.btnPlayCallStartAudio.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M4 3L12 8L4 13V3Z" fill="currentColor"/></svg>Play';
+    };
+    
+    state.currentAudioPlayer.play();
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * SAVE GREETING INTERCEPTOR SETTINGS
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function saveGreetingInterceptor() {
+    try {
+      const enabled = DOM.toggleInterceptorEnabled.checked;
+      const maxWords = parseInt(DOM.inputMaxWords.value) || 2;
+      const blockIfIntentWords = DOM.toggleBlockIntentWords.checked;
+      
+      // Parse intent words (comma-separated to array)
+      const intentWordsText = DOM.inputIntentWords.value || '';
+      const intentWords = intentWordsText
+        .split(',')
+        .map(word => word.trim().toLowerCase())
+        .filter(Boolean);
+      
+      const response = await AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/${state.companyId}/greetings/interceptor`,
+        {
+          method: 'PUT',
+          body: {
+            enabled,
+            shortOnlyGate: { maxWords, blockIfIntentWords },
+            intentWords
+          }
+        }
+      );
+      
+      if (response.success) {
+        state.greetings.interceptor = response.data;
+        showToast('success', 'Saved', 'Greeting interceptor settings updated successfully.');
+      }
+    } catch (error) {
+      console.error('[Greetings] Save interceptor failed:', error);
+      showToast('error', 'Save Failed', error.message || 'Could not save interceptor settings.');
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * SEED FROM GLOBAL (Load Default Greeting Rules)
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function seedGlobalGreetings() {
+    if (!confirm('Load default greeting rules?\n\nThis will add 4 standard greeting rules (hi/hello, good morning, good afternoon, good evening) if they don\'t already exist.')) {
+      return;
+    }
+    
+    try {
+      const response = await AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/${state.companyId}/greetings/seed-global`,
+        { method: 'POST' }
+      );
+      
+      if (response.success) {
+        const { rulesAdded, rules } = response.data;
+        
+        if (rulesAdded === 0) {
+          showToast('info', 'Already Loaded', 'All default greeting rules already exist.');
+        } else {
+          showToast('success', 'Rules Added', `${rulesAdded} default greeting rules added successfully.`);
+          
+          // Reload greetings to show new rules
+          await loadGreetings();
+        }
+      }
+    } catch (error) {
+      console.error('[Greetings] Seed global failed:', error);
+      showToast('error', 'Seed Failed', error.message || 'Could not load default greeting rules.');
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * OPEN ADD GREETING RULE MODAL
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function openAddGreetingRuleModal() {
+    state.currentGreetingRule = null;
+    
+    DOM.greetingRuleModalTitle.textContent = 'Add Greeting Rule';
+    DOM.inputRuleIdEdit.value = '';
+    DOM.inputRulePriority.value = '50';
+    DOM.inputRuleMatchType.value = 'EXACT';
+    DOM.inputRuleTriggers.value = '';
+    DOM.inputRuleResponse.value = '';
+    DOM.inputRuleAudio.value = '';
+    DOM.btnPlayRuleAudio.style.display = 'none';
+    DOM.ruleAudioStatus.textContent = 'Save the rule first, then generate audio.';
+    
+    DOM.modalGreetingRule.classList.add('active');
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * HANDLE EDIT RULE
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function handleEditRule(e) {
+    const ruleId = e.currentTarget.dataset.ruleId;
+    const rule = state.greetings.interceptor.rules.find(r => r.ruleId === ruleId);
+    
+    if (!rule) return;
+    
+    state.currentGreetingRule = rule;
+    
+    DOM.greetingRuleModalTitle.textContent = 'Edit Greeting Rule';
+    DOM.inputRuleIdEdit.value = rule.ruleId;
+    DOM.inputRulePriority.value = rule.priority || 50;
+    DOM.inputRuleMatchType.value = rule.matchType || 'EXACT';
+    DOM.inputRuleTriggers.value = (rule.triggers || []).join(', ');
+    DOM.inputRuleResponse.value = rule.response || '';
+    DOM.inputRuleAudio.value = rule.audioUrl || '';
+    DOM.btnPlayRuleAudio.style.display = rule.audioUrl ? 'block' : 'none';
+    DOM.ruleAudioStatus.textContent = rule.audioUrl ? 'Audio ready' : 'No audio yet';
+    
+    DOM.modalGreetingRule.classList.add('active');
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * SAVE GREETING RULE (Create or Update)
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function saveGreetingRule() {
+    try {
+      const priority = parseInt(DOM.inputRulePriority.value) || 50;
+      const matchType = DOM.inputRuleMatchType.value || 'EXACT';
+      const triggersText = DOM.inputRuleTriggers.value.trim();
+      const response = DOM.inputRuleResponse.value.trim();
+      
+      // Validation
+      if (!triggersText) {
+        showToast('error', 'Triggers Required', 'Enter at least one trigger phrase.');
+        return;
+      }
+      
+      if (!response) {
+        showToast('error', 'Response Required', 'Enter a response text.');
+        return;
+      }
+      
+      const triggers = triggersText.split(',').map(t => t.trim()).filter(Boolean);
+      
+      if (triggers.length === 0) {
+        showToast('error', 'Triggers Required', 'Enter at least one trigger phrase.');
+        return;
+      }
+      
+      const isEditing = Boolean(state.currentGreetingRule);
+      
+      if (isEditing) {
+        // Update existing rule
+        const ruleId = state.currentGreetingRule.ruleId;
+        
+        const updateResponse = await AgentConsoleAuth.apiFetch(
+          `/api/admin/agent2/${state.companyId}/greetings/rules/${ruleId}`,
+          {
+            method: 'PATCH',
+            body: { priority, matchType, triggers, response }
+          }
+        );
+        
+        if (updateResponse.success) {
+          // Update local state
+          const ruleIndex = state.greetings.interceptor.rules.findIndex(r => r.ruleId === ruleId);
+          if (ruleIndex !== -1) {
+            state.greetings.interceptor.rules[ruleIndex] = updateResponse.data;
+          }
+          
+          if (updateResponse.audioInvalidated) {
+            showToast('warning', 'Audio Invalidated', 'Response changed — please regenerate audio.');
+          } else {
+            showToast('success', 'Saved', 'Greeting rule updated successfully.');
+          }
+          
+          renderGreetingRules();
+          closeGreetingRuleModal();
+        }
+      } else {
+        // Create new rule
+        const ruleId = `greeting-rule-${Date.now()}`;
+        
+        const createResponse = await AgentConsoleAuth.apiFetch(
+          `/api/admin/agent2/${state.companyId}/greetings/rules`,
+          {
+            method: 'POST',
+            body: { ruleId, priority, matchType, triggers, response }
+          }
+        );
+        
+        if (createResponse.success) {
+          state.greetings.interceptor.rules.push(createResponse.data);
+          showToast('success', 'Created', 'Greeting rule created successfully.');
+          renderGreetingRules();
+          closeGreetingRuleModal();
+        }
+      }
+    } catch (error) {
+      console.error('[Greetings] Save rule failed:', error);
+      showToast('error', 'Save Failed', error.message || 'Could not save greeting rule.');
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * HANDLE RULE TOGGLE (Enable/Disable)
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function handleRuleToggle(e) {
+    const ruleId = e.target.dataset.ruleId;
+    const enabled = e.target.checked;
+    
+    try {
+      const response = await AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/${state.companyId}/greetings/rules/${ruleId}`,
+        {
+          method: 'PATCH',
+          body: { enabled }
+        }
+      );
+      
+      if (response.success) {
+        const ruleIndex = state.greetings.interceptor.rules.findIndex(r => r.ruleId === ruleId);
+        if (ruleIndex !== -1) {
+          state.greetings.interceptor.rules[ruleIndex] = response.data;
+        }
+        renderGreetingRules();
+        showToast('success', enabled ? 'Enabled' : 'Disabled', 'Greeting rule updated.');
+      }
+    } catch (error) {
+      console.error('[Greetings] Toggle rule failed:', error);
+      e.target.checked = !enabled; // Revert toggle
+      showToast('error', 'Toggle Failed', error.message || 'Could not update rule.');
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * HANDLE DELETE RULE
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function handleDeleteRule(e) {
+    const ruleId = e.currentTarget.dataset.ruleId;
+    const rule = state.greetings.interceptor.rules.find(r => r.ruleId === ruleId);
+    
+    if (!rule) return;
+    
+    if (!confirm(`Delete greeting rule?\n\nTriggers: ${(rule.triggers || []).join(', ')}\nResponse: ${rule.response}\n\nThis cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      const response = await AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/${state.companyId}/greetings/rules/${ruleId}`,
+        { method: 'DELETE' }
+      );
+      
+      if (response.success) {
+        state.greetings.interceptor.rules = state.greetings.interceptor.rules.filter(r => r.ruleId !== ruleId);
+        renderGreetingRules();
+        showToast('success', 'Deleted', 'Greeting rule deleted successfully.');
+      }
+    } catch (error) {
+      console.error('[Greetings] Delete rule failed:', error);
+      showToast('error', 'Delete Failed', error.message || 'Could not delete greeting rule.');
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * GENERATE RULE AUDIO
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  async function generateRuleAudio() {
+    const ruleId = DOM.inputRuleIdEdit.value;
+    const text = DOM.inputRuleResponse.value.trim();
+    
+    if (!ruleId) {
+      showToast('error', 'Save First', 'Save the rule before generating audio');
+      return;
+    }
+    
+    if (!text) {
+      showToast('error', 'Text Required', 'Enter response text first');
+      return;
+    }
+    
+    const btn = DOM.btnGenerateRuleAudio;
+    const originalHtml = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    DOM.ruleAudioStatus.textContent = 'Generating audio with your ElevenLabs voice...';
+    
+    try {
+      const response = await AgentConsoleAuth.apiFetch(
+        `/api/admin/agent2/${state.companyId}/greetings/rules/${ruleId}/audio`,
+        {
+          method: 'POST',
+          body: { text }
+        }
+      );
+      
+      if (response.success && response.audioUrl) {
+        DOM.inputRuleAudio.value = response.audioUrl;
+        DOM.btnPlayRuleAudio.style.display = 'block';
+        btn.textContent = 'Regenerate';
+        DOM.ruleAudioStatus.textContent = '✅ Audio generated! Click Save Rule to keep it.';
+        
+        showToast('success', 'Audio Generated', response.cached ? 'Using cached audio' : 'Audio created with your ElevenLabs voice');
+      }
+    } catch (error) {
+      console.error('[Greetings] Audio generation failed:', error);
+      btn.innerHTML = originalHtml;
+      
+      const errorMsg = error.message || 'Generation failed';
+      DOM.ruleAudioStatus.textContent = `❌ ${errorMsg}`;
+      
+      showToast('error', 'Generation Failed', error.message || 'Could not generate audio');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * PLAY RULE AUDIO
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function playRuleAudio() {
+    let audioUrl = DOM.inputRuleAudio.value.trim();
+    
+    if (!audioUrl) {
+      showToast('error', 'No Audio', 'Generate audio first');
+      return;
+    }
+    
+    // Stop any currently playing audio
+    if (state.currentAudioPlayer) {
+      state.currentAudioPlayer.pause();
+      state.currentAudioPlayer = null;
+      DOM.btnPlayRuleAudio.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M4 3L12 8L4 13V3Z" fill="currentColor"/></svg>Play';
+      return;
+    }
+    
+    // Add cache-busting parameter
+    const cacheBuster = `_cb=${Date.now()}`;
+    audioUrl = audioUrl.includes('?') ? `${audioUrl}&${cacheBuster}` : `${audioUrl}?${cacheBuster}`;
+    
+    state.currentAudioPlayer = new Audio(audioUrl);
+    DOM.btnPlayRuleAudio.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><rect x="4" y="3" width="3" height="10" fill="currentColor"/><rect x="9" y="3" width="3" height="10" fill="currentColor"/></svg>Stop';
+    
+    state.currentAudioPlayer.onended = () => {
+      state.currentAudioPlayer = null;
+      DOM.btnPlayRuleAudio.innerHTML = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;"><path d="M4 3L12 8L4 13V3Z" fill="currentColor"/></svg>Play';
+    };
+    
+    state.currentAudioPlayer.play();
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * CLOSE GREETING RULE MODAL
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function closeGreetingRuleModal() {
+    DOM.modalGreetingRule.classList.remove('active');
+    state.currentGreetingRule = null;
+  }
+  
+  /**
+   * ───────────────────────────────────────────────────────────────────────
+   * SETUP GREETINGS EVENT LISTENERS
+   * ───────────────────────────────────────────────────────────────────────
+   */
+  function setupGreetingsEventListeners() {
+    // Call Start Greeting
+    if (DOM.toggleCallStartEnabled) {
+      DOM.toggleCallStartEnabled.addEventListener('change', saveCallStartGreeting);
+    }
+    
+    if (DOM.inputCallStartText) {
+      DOM.inputCallStartText.addEventListener('blur', saveCallStartGreeting);
+      DOM.inputCallStartText.addEventListener('input', updateCallStartAudioStatus);
+    }
+    
+    if (DOM.btnGenerateCallStartAudio) {
+      DOM.btnGenerateCallStartAudio.addEventListener('click', generateCallStartAudio);
+    }
+    
+    if (DOM.btnPlayCallStartAudio) {
+      DOM.btnPlayCallStartAudio.addEventListener('click', playCallStartAudio);
+    }
+    
+    if (DOM.linkElevenLabsSetupCallStart) {
+      DOM.linkElevenLabsSetupCallStart.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.open(`/company-profile.html?companyId=${encodeURIComponent(state.companyId)}#elevenlabs`, '_blank');
+      });
+    }
+    
+    // Greeting Interceptor
+    if (DOM.toggleInterceptorEnabled) {
+      DOM.toggleInterceptorEnabled.addEventListener('change', saveGreetingInterceptor);
+    }
+    
+    if (DOM.inputMaxWords) {
+      DOM.inputMaxWords.addEventListener('blur', saveGreetingInterceptor);
+    }
+    
+    if (DOM.toggleBlockIntentWords) {
+      DOM.toggleBlockIntentWords.addEventListener('change', saveGreetingInterceptor);
+    }
+    
+    if (DOM.inputIntentWords) {
+      DOM.inputIntentWords.addEventListener('blur', saveGreetingInterceptor);
+    }
+    
+    if (DOM.btnSeedGreetings) {
+      DOM.btnSeedGreetings.addEventListener('click', seedGlobalGreetings);
+    }
+    
+    if (DOM.btnAddGreetingRule) {
+      DOM.btnAddGreetingRule.addEventListener('click', openAddGreetingRuleModal);
+    }
+    
+    // Modal controls
+    if (DOM.btnCloseGreetingRuleModal) {
+      DOM.btnCloseGreetingRuleModal.addEventListener('click', closeGreetingRuleModal);
+    }
+    
+    if (DOM.btnCancelGreetingRule) {
+      DOM.btnCancelGreetingRule.addEventListener('click', closeGreetingRuleModal);
+    }
+    
+    if (DOM.btnSaveGreetingRule) {
+      DOM.btnSaveGreetingRule.addEventListener('click', saveGreetingRule);
+    }
+    
+    if (DOM.btnGenerateRuleAudio) {
+      DOM.btnGenerateRuleAudio.addEventListener('click', generateRuleAudio);
+    }
+    
+    if (DOM.btnPlayRuleAudio) {
+      DOM.btnPlayRuleAudio.addEventListener('click', playRuleAudio);
+    }
+    
+    // Close modal on backdrop click
+    if (DOM.modalGreetingRule) {
+      DOM.modalGreetingRule.addEventListener('click', (e) => {
+        if (e.target === DOM.modalGreetingRule) {
+          closeGreetingRuleModal();
+        }
+      });
     }
   }
 
