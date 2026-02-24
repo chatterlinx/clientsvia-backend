@@ -339,7 +339,13 @@
     
     // Legacy Greeting (backward compatibility - these fields may not exist in new UI)
     if (DOM.inputGreetingInitial) DOM.inputGreetingInitial.value = config.greetings?.initial || '';
-    if (DOM.inputGreetingReturn) DOM.inputGreetingReturn.value = config.greetings?.returnCaller || '';
+    if (DOM.inputGreetingReturn) {
+      const returnCallerValue = config.greetings?.returnCaller;
+      const returnCallerText = typeof returnCallerValue === 'string'
+        ? returnCallerValue
+        : (returnCallerValue?.text || '');
+      DOM.inputGreetingReturn.value = returnCallerText;
+    }
     
     // Discovery style
     if (DOM.inputAckWord) DOM.inputAckWord.value = config.discovery?.style?.ackWord || 'Ok.';
@@ -426,10 +432,14 @@
      SAVE CONFIG
      -------------------------------------------------------------------------- */
   async function saveConfig() {
+    const returnCallerText = DOM.inputGreetingReturn ? DOM.inputGreetingReturn.value.trim() : '';
     const updates = {
       greetings: {
-        initial: DOM.inputGreetingInitial.value.trim(),
-        returnCaller: DOM.inputGreetingReturn.value.trim()
+        initial: DOM.inputGreetingInitial ? DOM.inputGreetingInitial.value.trim() : '',
+        returnCaller: {
+          enabled: Boolean(returnCallerText),
+          text: returnCallerText
+        }
       },
       discovery: {
         ...state.config.discovery,

@@ -54,6 +54,8 @@
     API_ENDPOINT: '/api/agent-console/truth/export',
     BUTTON_ID: 'btn-truth-export',
     EXISTING_BUTTON_ID: 'btn-download-truth', // Legacy button to replace
+    INCLUDE_CONTENTS: true,
+    INCLUDE_BACKEND: true,
     
     // Mount point cascade (tries in order)
     MOUNT_SELECTORS: [
@@ -218,7 +220,12 @@
       const startTime = Date.now();
       
       // Fetch truth JSON using centralized auth (same as other Agent Console endpoints)
-      const url = `${CONFIG.API_ENDPOINT}?companyId=${encodeURIComponent(companyId)}`;
+      const params = new URLSearchParams({
+        companyId,
+        includeContents: CONFIG.INCLUDE_CONTENTS ? '1' : '0',
+        includeBackend: CONFIG.INCLUDE_BACKEND ? '1' : '0'
+      });
+      const url = `${CONFIG.API_ENDPOINT}?${params.toString()}`;
       
       // Check if AgentConsoleAuth is available (should be loaded before this script)
       if (typeof AgentConsoleAuth === 'undefined' || !AgentConsoleAuth.apiFetch) {
@@ -227,6 +234,9 @@
       
       const truth = await AgentConsoleAuth.apiFetch(url);
       const fetchTime = Date.now() - startTime;
+
+      // Verify embedded content integrity (sha256 must match contentBase64)
+      await verifyEmbeddedContentIntegrity(truth);
       
       // Validate truth structure
       if (!truth.truthVersion) {
@@ -330,6 +340,45 @@
       button.innerHTML = originalHtml;
       style.remove();
     }
+  }
+
+  async function verifyEmbeddedContentIntegrity(truth) {
+    const uiFiles = truth?.uiSource?.files || [];
+    const missingContents = [];
+    const hashMismatches = [];
+
+    for (const file of uiFiles) {
+      if (file.error) continue;
+      if (!file.contentBase64) {
+        missingContents.push(file.relativePath || file.path);
+        continue;
+      }
+
+      const computed = await sha256FromBase64(file.contentBase64);
+      if (computed !== file.sha256) {
+        hashMismatches.push({
+          file: file.relativePath || file.path,
+          expected: file.sha256,
+          actual: computed
+        });
+      }
+    }
+
+    if (missingContents.length > 0 || hashMismatches.length > 0) {
+      throw new Error(
+        `Proof verification failed (missingContents=${missingContents.length}, hashMismatches=${hashMismatches.length})`
+      );
+    }
+  }
+
+  async function sha256FromBase64(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   /* --------------------------------------------------------------------------

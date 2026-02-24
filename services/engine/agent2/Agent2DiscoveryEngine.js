@@ -55,7 +55,7 @@ const AC1_EVENTS = {
 const DEFAULT_CONFIG = {
   greetings: {
     initial: 'Thank you for calling. How can I help you today?',
-    returnCaller: 'Welcome back! How can I assist you today?'
+    returnCaller: ''
   },
   consentPhrases: [
     'yes', 'yeah', 'sure', 'ok', 'okay', 'yes please',
@@ -237,7 +237,9 @@ async function loadCompanyConfig(companyId) {
       companyName: company.companyName || 'our company',
       greetings: {
         initial: agent2.greetings?.initial || DEFAULT_CONFIG.greetings.initial,
-        returnCaller: agent2.greetings?.returnCaller || DEFAULT_CONFIG.greetings.returnCaller
+        returnCaller: typeof agent2.greetings?.returnCaller === 'object'
+          ? (agent2.greetings?.returnCaller?.text || '')
+          : (agent2.greetings?.returnCaller || DEFAULT_CONFIG.greetings.returnCaller)
       },
       consentPhrases: agent2.consentPhrases || DEFAULT_CONFIG.consentPhrases,
       escalationPhrases: agent2.escalationPhrases || DEFAULT_CONFIG.escalationPhrases,

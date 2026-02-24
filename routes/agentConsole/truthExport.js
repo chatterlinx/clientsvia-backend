@@ -80,6 +80,14 @@ const truthManifest = require('../../config/truthManifest');
 const MODULE_ID = 'TRUTH_EXPORT';
 const TRUTH_VERSION = '1.1.0'; // Bumped for manifest-based completeness
 const AGENT_CONSOLE_DIR = path.join(__dirname, '../../public/agent-console');
+const REPO_ROOT = path.join(__dirname, '../../');
+const BACKEND_SOURCE_FILES = [
+  'routes/v2twilio.js',
+  'services/engine/booking/BookingLogicEngine.js',
+  'services/engine/agent2/Agent2DiscoveryEngine.js',
+  'routes/agentConsole/agentConsole.js',
+  'routes/agentConsole/truthExport.js'
+];
 
 /**
  * ════════════════════════════════════════════════════════════════════════════
@@ -175,6 +183,9 @@ async function buildUiSourceTruth(includeContents = false, includeLargeAssets = 
   
   return {
     totalFiles: fileManifests.length,
+    totalBytes: fileManifests.reduce((sum, file) => sum + (file.size || 0), 0),
+    totalLines: fileManifests.reduce((sum, file) => sum + (file.lineCount || 0), 0),
+    includeContents,
     files: fileManifests,
     pageDiscovery,
     modalDiscovery,
@@ -201,10 +212,12 @@ async function buildFileManifest(relPath, includeContents) {
     hash.update(content);
     const sha256 = hash.digest('hex');
     
+    const lineCount = content.toString('utf-8').split('\n').length;
     const manifest = {
       path: `/agent-console/${relPath}`,
       relativePath: relPath,
       size: stats.size,
+      lineCount,
       lastModified: stats.mtime.toISOString(),
       sha256,
       contentBase64: null
@@ -445,6 +458,7 @@ async function buildRuntimeTruth(companyId) {
   }
   
   // Extract effective configuration (what will actually run)
+  const returnCallerGreeting = normalizeReturnCallerGreeting(company.aiAgentSettings?.agent2?.greetings?.returnCaller);
   const effectiveConfig = {
     companyId: company._id.toString(),
     companyName: company.companyName || company.businessName || 'Unknown',
@@ -454,7 +468,7 @@ async function buildRuntimeTruth(companyId) {
       greetings: {
         callStart: company.aiAgentSettings?.agent2?.greetings?.callStart || {},
         interceptor: company.aiAgentSettings?.agent2?.greetings?.interceptor || {},
-        returnCaller: company.aiAgentSettings?.agent2?.greetings?.returnCaller || {}
+        returnCaller: returnCallerGreeting
       },
       triggers: {
         activeGroupId: company.aiAgentSettings?.agent2?.globalTriggerGroupId || null,
@@ -523,6 +537,19 @@ async function buildRuntimeTruth(companyId) {
     effectiveConfigVersion: company.updatedAt?.toISOString() || null,
     capturedAt: new Date().toISOString(),
     buildDuration: `${duration}ms`
+  };
+}
+
+function normalizeReturnCallerGreeting(value) {
+  if (!value) {
+    return { enabled: false, text: '' };
+  }
+  if (typeof value === 'string') {
+    return { enabled: Boolean(value.trim()), text: value.trim() };
+  }
+  return {
+    enabled: value.enabled !== false && Boolean((value.text || '').trim()),
+    text: (value.text || '').trim()
   };
 }
 
@@ -596,6 +623,84 @@ function getServerVersion() {
   } catch {
     return 'unknown';
   }
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * BACKEND SOURCE TRUTH (Optional)
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+async function buildBackendSourceTruth(includeContents = false, hardcodedSpeechScan = null) {
+  const files = [];
+
+  for (const relPath of BACKEND_SOURCE_FILES) {
+    const fullPath = path.join(REPO_ROOT, relPath);
+    try {
+      const stats = await fs.stat(fullPath);
+      const content = await fs.readFile(fullPath);
+      const sha256 = crypto.createHash('sha256').update(content).digest('hex');
+      files.push({
+        path: relPath,
+        size: stats.size,
+        lineCount: content.toString('utf-8').split('\n').length,
+        lastModified: stats.mtime.toISOString(),
+        sha256,
+        contentBase64: includeContents ? content.toString('base64') : null
+      });
+    } catch (error) {
+      files.push({
+        path: relPath,
+        error: error.message
+      });
+    }
+  }
+
+  return {
+    includeContents,
+    totalFiles: files.length,
+    totalBytes: files.reduce((sum, file) => sum + (file.size || 0), 0),
+    files,
+    hardcodedResponsesScan: hardcodedSpeechScan ? {
+      total: hardcodedSpeechScan.violations?.total || 0,
+      critical: hardcodedSpeechScan.violations?.critical || 0,
+      high: hardcodedSpeechScan.violations?.high || 0,
+      medium: hardcodedSpeechScan.violations?.medium || 0,
+      list: hardcodedSpeechScan.violations?.list || []
+    } : null
+  };
+}
+
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ * AUDIT PROOF BLOCK
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+function buildAuditProof(uiTruth, complianceTruth) {
+  const findings = (complianceTruth?.hardcodedSpeechScan?.violations?.list || []).map((violation, index) => ({
+    id: `HCS-${String(index + 1).padStart(4, '0')}`,
+    severity: violation.severity,
+    filePath: violation.file,
+    lineRange: `${violation.line}-${violation.line}`,
+    snippetHash: crypto.createHash('sha256').update(violation.code || '').digest('hex')
+  }));
+
+  const hardcodedTotal = complianceTruth?.hardcodedSpeechScan?.violations?.total || 0;
+  const uiDrivenPercent = complianceTruth?.uiCoverageReport?.compliantPercentage || 0;
+  const hardcodedPercent = hardcodedTotal === 0 ? 100 : 0;
+
+  return {
+    totalUiBytes: uiTruth.totalBytes || 0,
+    totalUiFiles: uiTruth.totalFiles || 0,
+    totalUiLines: uiTruth.totalLines || 0,
+    modalCount: uiTruth.modalDiscovery?.totalModals || 0,
+    pageCount: uiTruth.pageDiscovery?.totalPages || 0,
+    hardcodedFindings: findings,
+    complianceScore: {
+      uiDrivenPercent,
+      hardcodedPercent,
+      method: 'uiDrivenPercent from UI coverage report; hardcodedPercent is 100 only when hardcoded findings total is 0'
+    }
+  };
 }
 
 /**
@@ -701,8 +806,8 @@ async function checkUiCoverage(company) {
   }
   
   // Check 4: Return Caller Greeting (HIGH)
-  const returnCaller = company.aiAgentSettings?.agent2?.greetings?.returnCaller;
-  if (!returnCaller || !returnCaller.text || !returnCaller.text.trim()) {
+  const returnCaller = normalizeReturnCallerGreeting(company.aiAgentSettings?.agent2?.greetings?.returnCaller);
+  if (!returnCaller.enabled || !returnCaller.text) {
     issues.push({
       component: 'returnCallerGreeting',
       severity: 'HIGH',
@@ -758,9 +863,29 @@ async function checkUiCoverage(company) {
  * Evidence-based: Every issue includes file path, line number, or specific ID.
  * ════════════════════════════════════════════════════════════════════════════
  */
-function computeTruthStatus(uiTruth, complianceTruth) {
+function computeTruthStatus(uiTruth, complianceTruth, options = {}) {
   const issues = [];
   const manifestGaps = [];
+  const includeContents = options.includeContents === true;
+
+  // Check 0: Reproducibility requires embedded file contents
+  const filesMissingContent = (uiTruth.files || []).filter(file => !file.error && !file.contentBase64);
+  if (!includeContents) {
+    issues.push({
+      type: 'CONTENTS_NOT_INCLUDED',
+      severity: 'CRITICAL',
+      message: 'Truth export is inventory-only (includeContents=0); reproducible audit artifact requires embedded file contents',
+      action: 'Re-run export with includeContents=1'
+    });
+  } else if (filesMissingContent.length > 0) {
+    issues.push({
+      type: 'MISSING_FILE_CONTENTS',
+      severity: 'CRITICAL',
+      message: `${filesMissingContent.length} UI file(s) missing embedded content`,
+      evidence: filesMissingContent.map(f => f.relativePath),
+      action: 'Fix file read failures and re-run export'
+    });
+  }
   
   // ─────────────────────────────────────────────────────────────────────────
   // Check 1: Required pages from manifest
@@ -930,7 +1055,10 @@ router.get(
     const requestStartTime = Date.now();
     
     try {
-      const { companyId, includeContents, includeLargeAssets } = req.query;
+      const { companyId, includeContents, includeLargeAssets, includeBackend } = req.query;
+      const includeContentsFlag = includeContents !== '0';
+      const includeLargeAssetsFlag = includeLargeAssets === '1';
+      const includeBackendFlag = includeBackend === '1';
       
       // Validate required parameters
       if (!companyId) {
@@ -943,8 +1071,9 @@ router.get(
       
       logger.info(`[${MODULE_ID}] Truth export requested`, {
         companyId,
-        includeContents: includeContents === '1',
-        includeLargeAssets: includeLargeAssets === '1',
+        includeContents: includeContentsFlag,
+        includeLargeAssets: includeLargeAssetsFlag,
+        includeBackend: includeBackendFlag,
         user: req.user?.email || 'unknown',
         userAgent: req.get('user-agent')
       });
@@ -952,14 +1081,15 @@ router.get(
       // Build all lanes in parallel (maximum performance)
       // Wrap each lane in try-catch for better error diagnostics
       const results = await Promise.allSettled([
-        buildUiSourceTruth(includeContents === '1', includeLargeAssets === '1'),
+        buildUiSourceTruth(includeContentsFlag, includeLargeAssetsFlag),
         buildRuntimeTruth(companyId),
         Promise.resolve(buildBuildTruth()),
-        buildComplianceTruth(companyId)
+        buildComplianceTruth(companyId),
+        includeBackendFlag ? buildBackendSourceTruth(includeContentsFlag) : Promise.resolve(null)
       ]);
       
       // Check for failures and provide detailed error info
-      const laneNames = ['uiSource', 'runtime', 'build', 'compliance'];
+      const laneNames = ['uiSource', 'runtime', 'build', 'compliance', 'backendSource'];
       const failures = results
         .map((r, i) => r.status === 'rejected' ? { lane: laneNames[i], error: r.reason?.message || 'Unknown error' } : null)
         .filter(Boolean);
@@ -978,10 +1108,22 @@ router.get(
         });
       }
       
-      const [uiTruth, runtimeTruth, buildTruth, complianceTruth] = results.map(r => r.value);
+      const [uiTruth, runtimeTruth, buildTruth, complianceTruth, backendTruth] = results.map(r => r.value);
+      if (backendTruth) {
+        backendTruth.hardcodedResponsesScan = {
+          total: complianceTruth.hardcodedSpeechScan?.violations?.total || 0,
+          critical: complianceTruth.hardcodedSpeechScan?.violations?.critical || 0,
+          high: complianceTruth.hardcodedSpeechScan?.violations?.high || 0,
+          medium: complianceTruth.hardcodedSpeechScan?.violations?.medium || 0,
+          list: complianceTruth.hardcodedSpeechScan?.violations?.list || []
+        };
+      }
       
       // Compute overall truth status
-      const truthStatus = computeTruthStatus(uiTruth, complianceTruth);
+      const truthStatus = computeTruthStatus(uiTruth, complianceTruth, {
+        includeContents: includeContentsFlag
+      });
+      const auditProof = buildAuditProof(uiTruth, complianceTruth);
       
       // Assemble complete Truth contract
       const truth = {
@@ -1001,7 +1143,7 @@ router.get(
           linkValidation: uiTruth.linkValidation,
           scannedAt: uiTruth.scannedAt,
           scanDuration: uiTruth.scanDuration,
-          includeContents: includeContents === '1'
+          includeContents: includeContentsFlag
         },
         
         // Lane B: Runtime Truth
@@ -1018,6 +1160,12 @@ router.get(
         
         // Lane D: Compliance Truth
         compliance: complianceTruth,
+
+        // Optional backend source lane
+        backendSource: backendTruth,
+
+        // Reproducibility proof block
+        auditProof,
         
         // Aggregated status (combines all lanes)
         truthStatusDetails: truthStatus,
@@ -1034,7 +1182,9 @@ router.get(
             'Debugging: Understand complete system state'
           ],
           contractVersion: 'TruthExportV1',
-          documentation: '/truth/ folder contains complete audit documentation'
+          documentation: '/truth/ folder contains complete audit documentation',
+          includeContents: includeContentsFlag,
+          includeBackend: includeBackendFlag
         }
       };
       
