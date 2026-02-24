@@ -104,84 +104,74 @@
             </button>
           </div>
           <div class="card-body" style="padding: 12px;">
-            <!-- Compact Health Status Flow -->
-            <div style="display: flex; flex-direction: column; gap: 2px;">
+            <!-- 2-Column Health Status Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
               
-              <!-- Gate 1: Twilio -->
-              <div id="health-twilio" class="health-gate" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
-                <span style="font-size: 1rem;">📞</span>
-                <div style="flex: 1; min-width: 0;">
-                  <span style="font-weight: 500; font-size: 0.8rem;">Twilio</span>
-                  <span class="health-status" style="font-size: 0.7rem; color: #6b7280; margin-left: 8px;">Checking...</span>
+              <!-- Col 1: Twilio -->
+              <div id="health-twilio" class="health-gate" style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 5px; background: #f9fafb;">
+                <span style="font-size: 0.9rem;">📞</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden;">
+                  <div style="font-weight: 500; font-size: 0.75rem;">Twilio</div>
+                  <div class="health-status" style="font-size: 0.65rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Checking...</div>
                 </div>
-                <span id="health-twilio-badge" class="health-badge" style="padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; font-weight: 600;">—</span>
+                <span id="health-twilio-badge" class="health-badge" style="padding: 2px 6px; border-radius: 8px; font-size: 0.6rem; font-weight: 600;">—</span>
               </div>
               
-              <div style="text-align: center; color: #d1d5db; font-size: 0.7rem;">↓</div>
-              
-              <!-- Gate 2: Spam -->
-              <div id="health-spam" class="health-gate" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
-                <span style="font-size: 1rem;">🛡️</span>
-                <div style="flex: 1; min-width: 0;">
-                  <span style="font-weight: 500; font-size: 0.8rem;">Spam Filter</span>
-                  <span class="health-status" style="font-size: 0.7rem; color: #6b7280; margin-left: 8px;">Checking...</span>
+              <!-- Col 2: Spam -->
+              <div id="health-spam" class="health-gate" style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 5px; background: #f9fafb;">
+                <span style="font-size: 0.9rem;">🛡️</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden;">
+                  <div style="font-weight: 500; font-size: 0.75rem;">Spam</div>
+                  <div class="health-status" style="font-size: 0.65rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Checking...</div>
                 </div>
-                <span id="health-spam-badge" class="health-badge" style="padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; font-weight: 600;">—</span>
+                <span id="health-spam-badge" class="health-badge" style="padding: 2px 6px; border-radius: 8px; font-size: 0.6rem; font-weight: 600;">—</span>
               </div>
               
-              <div style="text-align: center; color: #d1d5db; font-size: 0.7rem;">↓</div>
-              
-              <!-- Gate 3: Call Start -->
-              <div id="health-callstart" class="health-gate" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
-                <span style="font-size: 1rem;">🎙️</span>
-                <div style="flex: 1; min-width: 0;">
-                  <span style="font-weight: 500; font-size: 0.8rem;">Call Start</span>
-                  <span class="health-status" style="font-size: 0.7rem; color: #6b7280; margin-left: 8px;">Checking...</span>
+              <!-- Col 1: Call Start -->
+              <div id="health-callstart" class="health-gate" style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 5px; background: #f9fafb;">
+                <span style="font-size: 0.9rem;">🎙️</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden;">
+                  <div style="font-weight: 500; font-size: 0.75rem;">Call Start</div>
+                  <div class="health-status" style="font-size: 0.65rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Checking...</div>
                 </div>
-                <span id="health-callstart-badge" class="health-badge" style="padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; font-weight: 600;">—</span>
+                <span id="health-callstart-badge" class="health-badge" style="padding: 2px 6px; border-radius: 8px; font-size: 0.6rem; font-weight: 600;">—</span>
               </div>
               
-              <div style="text-align: center; color: #d1d5db; font-size: 0.7rem;">↓</div>
-              
-              <!-- Gate 4: Interceptor -->
-              <div id="health-interceptor" class="health-gate" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
-                <span style="font-size: 1rem;">👋</span>
-                <div style="flex: 1; min-width: 0;">
-                  <span style="font-weight: 500; font-size: 0.8rem;">Interceptor</span>
-                  <span class="health-status" style="font-size: 0.7rem; color: #6b7280; margin-left: 8px;">Checking...</span>
+              <!-- Col 2: Interceptor -->
+              <div id="health-interceptor" class="health-gate" style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 5px; background: #f9fafb;">
+                <span style="font-size: 0.9rem;">👋</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden;">
+                  <div style="font-weight: 500; font-size: 0.75rem;">Interceptor</div>
+                  <div class="health-status" style="font-size: 0.65rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Checking...</div>
                 </div>
-                <span id="health-interceptor-badge" class="health-badge" style="padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; font-weight: 600;">—</span>
+                <span id="health-interceptor-badge" class="health-badge" style="padding: 2px 6px; border-radius: 8px; font-size: 0.6rem; font-weight: 600;">—</span>
               </div>
               
-              <div style="text-align: center; color: #d1d5db; font-size: 0.7rem;">↓</div>
-              
-              <!-- Gate 5: Voice -->
-              <div id="health-elevenlabs" class="health-gate" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
-                <span style="font-size: 1rem;">🎤</span>
-                <div style="flex: 1; min-width: 0;">
-                  <span style="font-weight: 500; font-size: 0.8rem;">Voice</span>
-                  <span class="health-status" style="font-size: 0.7rem; color: #6b7280; margin-left: 8px;">Checking...</span>
+              <!-- Col 1: Voice -->
+              <div id="health-elevenlabs" class="health-gate" style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 5px; background: #f9fafb;">
+                <span style="font-size: 0.9rem;">🎤</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden;">
+                  <div style="font-weight: 500; font-size: 0.75rem;">Voice</div>
+                  <div class="health-status" style="font-size: 0.65rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Checking...</div>
                 </div>
-                <span id="health-elevenlabs-badge" class="health-badge" style="padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; font-weight: 600;">—</span>
+                <span id="health-elevenlabs-badge" class="health-badge" style="padding: 2px 6px; border-radius: 8px; font-size: 0.6rem; font-weight: 600;">—</span>
               </div>
               
-              <div style="text-align: center; color: #d1d5db; font-size: 0.7rem;">↓</div>
-              
-              <!-- Gate 6: Triggers -->
-              <div id="health-triggers" class="health-gate" style="display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f9fafb;">
-                <span style="font-size: 1rem;">🎯</span>
-                <div style="flex: 1; min-width: 0;">
-                  <span style="font-weight: 500; font-size: 0.8rem;">Triggers</span>
-                  <span class="health-status" style="font-size: 0.7rem; color: #6b7280; margin-left: 8px;">Checking...</span>
+              <!-- Col 2: Triggers -->
+              <div id="health-triggers" class="health-gate" style="display: flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #e5e7eb; border-radius: 5px; background: #f9fafb;">
+                <span style="font-size: 0.9rem;">🎯</span>
+                <div style="flex: 1; min-width: 0; overflow: hidden;">
+                  <div style="font-weight: 500; font-size: 0.75rem;">Triggers</div>
+                  <div class="health-status" style="font-size: 0.65rem; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Checking...</div>
                 </div>
-                <span id="health-triggers-badge" class="health-badge" style="padding: 2px 8px; border-radius: 10px; font-size: 0.65rem; font-weight: 600;">—</span>
+                <span id="health-triggers-badge" class="health-badge" style="padding: 2px 6px; border-radius: 8px; font-size: 0.6rem; font-weight: 600;">—</span>
               </div>
               
             </div>
             
             <!-- Compact Summary -->
-            <div id="health-summary" style="margin-top: 8px; padding: 8px 10px; background: #f0fdf4; border-radius: 6px; border-left: 3px solid #22c55e;">
-              <span id="health-summary-text" style="font-size: 0.75rem; color: #166534;">Loading...</span>
+            <div id="health-summary" style="margin-top: 8px; padding: 6px 10px; background: #f0fdf4; border-radius: 5px; border-left: 3px solid #22c55e;">
+              <span id="health-summary-text" style="font-size: 0.7rem; color: #166534;">Loading...</span>
             </div>
           </div>
         </div>
