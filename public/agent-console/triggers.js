@@ -39,6 +39,7 @@
     pendingApproval: null,
     
     searchQuery: '',
+    scopeFilter: 'all',
     
     // Company Variables
     companyVariables: new Map(),
@@ -83,6 +84,10 @@
     triggerSearch: document.getElementById('trigger-search'),
     duplicateWarning: document.getElementById('duplicate-warning'),
     duplicateWarningText: document.getElementById('duplicate-warning-text'),
+    
+    filterAll: document.getElementById('filter-all'),
+    filterGlobal: document.getElementById('filter-global'),
+    filterLocal: document.getElementById('filter-local'),
     
     variablesCard: document.getElementById('variables-card'),
     variablesTableBody: document.getElementById('variables-table-body'),
@@ -199,6 +204,22 @@
     DOM.triggerSearch.addEventListener('input', (e) => {
       state.searchQuery = e.target.value.toLowerCase();
       renderTriggers();
+    });
+    
+    // Scope filter buttons
+    [DOM.filterAll, DOM.filterGlobal, DOM.filterLocal].forEach(btn => {
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          const scope = e.target.dataset.scope;
+          state.scopeFilter = scope;
+          
+          // Update active state
+          document.querySelectorAll('.scope-filter-btn').forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+          
+          renderTriggers();
+        });
+      }
     });
     
     DOM.modalTriggerClose.addEventListener('click', closeTriggerModal);
@@ -324,6 +345,15 @@
 
   function renderTriggers() {
     const filtered = state.triggers.filter(t => {
+      // Apply scope filter
+      if (state.scopeFilter === 'global' && t.scope !== 'GLOBAL') {
+        return false;
+      }
+      if (state.scopeFilter === 'local' && t.scope !== 'LOCAL') {
+        return false;
+      }
+      
+      // Apply search filter
       if (!state.searchQuery) {
         return true;
       }

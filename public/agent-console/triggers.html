@@ -436,6 +436,28 @@
       border-radius: 4px;
     }
     
+    /* Scope Filter Buttons */
+    .scope-filter-btn {
+      background: transparent;
+      color: #6b7280;
+      border: none;
+      transition: all 0.2s;
+    }
+    
+    .scope-filter-btn:hover {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    
+    .scope-filter-btn.active {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .scope-filter-btn.active:hover {
+      background: #2563eb;
+    }
+    
     /* Empty State */
     .empty-state {
       display: flex;
@@ -810,7 +832,18 @@
       <div class="card">
         <div class="card-header">
           <h2 class="card-title">Trigger Cards</h2>
-          <div class="flex gap-2">
+          <div class="flex gap-2" style="align-items: center;">
+            <div style="display: flex; gap: 4px; background: #f3f4f6; padding: 4px; border-radius: 6px;">
+              <button class="btn btn-sm scope-filter-btn active" data-scope="all" id="filter-all" style="padding: 6px 12px; font-size: 0.75rem; font-weight: 600;">
+                All
+              </button>
+              <button class="btn btn-sm scope-filter-btn" data-scope="global" id="filter-global" style="padding: 6px 12px; font-size: 0.75rem; font-weight: 600;">
+                Global
+              </button>
+              <button class="btn btn-sm scope-filter-btn" data-scope="local" id="filter-local" style="padding: 6px 12px; font-size: 0.75rem; font-weight: 600;">
+                Local
+              </button>
+            </div>
             <input type="text" class="form-input" id="trigger-search" placeholder="Search triggers..." style="width: 200px;">
           </div>
         </div>
