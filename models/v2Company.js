@@ -4318,10 +4318,135 @@ const companySchema = new mongoose.Schema({
                 
                 updatedAt: { type: Date, default: null }
             },
-            // Greetings system (Agent 2.0 owned - completely isolated from legacy)
+            // ═══════════════════════════════════════════════════════════════
+            // 🎙️ GREETINGS SYSTEM - Agent 2.0 Owned (Feb 2026)
+            // ═══════════════════════════════════════════════════════════════
+            // Two-phase greeting system: Call Start + Greeting Interceptor
+            // Completely isolated from legacy greeting logic.
+            // ═══════════════════════════════════════════════════════════════
             greetings: {
-                callStart: { type: mongoose.Schema.Types.Mixed, default: {} },
-                interceptor: { type: mongoose.Schema.Types.Mixed, default: {} }
+                // ───────────────────────────────────────────────────────────
+                // CALL START GREETING
+                // ───────────────────────────────────────────────────────────
+                // First thing agent says when call connects (before caller speaks)
+                // Example: "Penguin Air! This is John, how can I help you?"
+                // ───────────────────────────────────────────────────────────
+                callStart: {
+                    enabled: { type: Boolean, default: true },
+                    text: { 
+                        type: String, 
+                        trim: true, 
+                        default: '',
+                        maxlength: 500
+                    },
+                    audioUrl: { 
+                        type: String, 
+                        trim: true, 
+                        default: null 
+                    },
+                    audioTextHash: { 
+                        type: String, 
+                        default: null 
+                    },
+                    audioGeneratedAt: { 
+                        type: Date, 
+                        default: null 
+                    }
+                },
+                
+                // ───────────────────────────────────────────────────────────
+                // GREETING INTERCEPTOR
+                // ───────────────────────────────────────────────────────────
+                // Responds to short caller greetings ("hi", "hello", "good morning")
+                // Runs BEFORE trigger cards to handle pleasantries
+                // ───────────────────────────────────────────────────────────
+                interceptor: {
+                    enabled: { type: Boolean, default: true },
+                    
+                    // Short-Only Gate (prevents hijacking real intent)
+                    // Example: "hi" triggers greeting, but "hi my AC is broken" does not
+                    shortOnlyGate: {
+                        maxWords: { 
+                            type: Number, 
+                            default: 2, 
+                            min: 1, 
+                            max: 5 
+                        },
+                        blockIfIntentWords: { 
+                            type: Boolean, 
+                            default: true 
+                        }
+                    },
+                    
+                    // Intent Words (comma-separated list)
+                    // If caller input contains ANY of these words, greeting is blocked
+                    // Falls through to trigger cards instead
+                    intentWords: {
+                        type: [String],
+                        default: [
+                            'repair', 'maintenance', 'tune-up', 'not cooling', 'no cool',
+                            'no heat', 'leak', 'water', 'dripping', 'thermostat', 'blank',
+                            'schedule', 'appointment', 'price', 'cost', 'how much',
+                            'service call', 'diagnostic', 'emergency'
+                        ]
+                    },
+                    
+                    // Greeting Rules (priority-based matching)
+                    // Each rule can have its own triggers, response, and audio
+                    rules: [{
+                        ruleId: { 
+                            type: String, 
+                            required: true, 
+                            trim: true 
+                        },
+                        enabled: { 
+                            type: Boolean, 
+                            default: true 
+                        },
+                        priority: { 
+                            type: Number, 
+                            default: 50, 
+                            min: 1, 
+                            max: 1000 
+                        },
+                        matchType: { 
+                            type: String, 
+                            enum: ['EXACT', 'CONTAINS', 'REGEX'], 
+                            default: 'EXACT' 
+                        },
+                        triggers: { 
+                            type: [String], 
+                            default: [] 
+                        },
+                        response: { 
+                            type: String, 
+                            trim: true, 
+                            required: true,
+                            maxlength: 300
+                        },
+                        audioUrl: { 
+                            type: String, 
+                            trim: true, 
+                            default: null 
+                        },
+                        audioTextHash: { 
+                            type: String, 
+                            default: null 
+                        },
+                        audioGeneratedAt: { 
+                            type: Date, 
+                            default: null 
+                        },
+                        createdAt: { 
+                            type: Date, 
+                            default: Date.now 
+                        },
+                        updatedAt: { 
+                            type: Date, 
+                            default: Date.now 
+                        }
+                    }]
+                }
             },
             // V126: Emergency Fallback Line - UI-OWNED LAST RESORT
             // This is the ONLY hardcoded-looking fallback allowed in the system.
