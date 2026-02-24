@@ -977,7 +977,8 @@ input, textarea, select {
 /* --------------------------------------------------------------------------
    MODALS
    -------------------------------------------------------------------------- */
-.modal-overlay {
+.modal-overlay,
+.modal-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.5);
@@ -990,7 +991,8 @@ input, textarea, select {
   transition: all var(--transition-base);
 }
 
-.modal-overlay.open {
+.modal-overlay.open,
+.modal-backdrop.active {
   opacity: 1;
   visibility: visible;
 }
@@ -1009,7 +1011,8 @@ input, textarea, select {
   transition: transform var(--transition-base);
 }
 
-.modal-overlay.open .modal {
+.modal-overlay.open .modal,
+.modal-backdrop.active .modal {
   transform: scale(1);
 }
 
